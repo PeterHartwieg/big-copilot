@@ -153,6 +153,15 @@
     document.addEventListener("drop", (e) => take(e.dataTransfer.files));
     $("savePick").addEventListener("change", (e) => take(e.target.files));
     $("localePick").addEventListener("change", (e) => take(e.target.files));
+    // A hidden folder cannot be browsed to; a copied path pasted into the
+    // dialog's File name box opens it. The %USERPROFILE% form is expanded by
+    // the dialog itself on Windows.
+    document.querySelectorAll("button.copy").forEach((btn) => btn.addEventListener("click", async () => {
+      const text = $(btn.dataset.copy).textContent;
+      try { await navigator.clipboard.writeText(text); btn.textContent = "copied"; }
+      catch (e) { btn.textContent = "select and copy it"; }
+      setTimeout(() => { btn.textContent = "copy path"; }, 1800);
+    }));
     $("forgetHistory").addEventListener("click", () => {
       try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
       note("History forgotten. The next save starts a fresh record.", "");

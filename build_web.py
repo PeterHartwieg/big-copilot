@@ -40,6 +40,11 @@ BANNER = r"""<style>
 .landing .st[data-tone="warn"]{color:var(--warn)}
 .landing .never{font-size:12px;color:var(--ink-3);margin-top:10px}
 .landing .never b{color:var(--ink-2);font-weight:600}
+.landing .never p{margin:0 0 6px;max-width:none}
+.landing .never code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;background:var(--raised);padding:2px 6px;border-radius:3px;user-select:all}
+.landing .never .muted{color:var(--ink-3)}
+.landing button.copy{font:inherit;font-size:11px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:3px;padding:1px 7px;cursor:pointer;margin-left:4px}
+.landing button.copy:hover{border-color:var(--ink-3)}
 body:not(.has-board) .wrap{display:none}
 body.has-board .landing p.lede, body.has-board .landing .never{display:none}
 body.has-board .landing{padding-bottom:6px}
@@ -60,9 +65,19 @@ body.has-board .landing{padding-bottom:6px}
     <button type="button" class="link" id="forgetHistory" title="The board keeps sixty days of demand and cash history in this browser so it can show trends. Forgetting it starts a fresh record.">forget history</button>
   </div>
   <p class="st" id="srcNote" hidden></p>
-  <p class="never"><b>Where the save is:</b> %USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions\ on Windows,
-    ~/Library/Application Support/Hovgaard Games/Big Ambitions/ on a Mac. The game writes a Recover save every five minutes while you play.
-    <b>Checked on game build __BUILD__.</b> Runs in any current browser; the Python runtime it needs is about 6 MB, fetched once and cached.</p>
+  <div class="never">
+    <p><b>Where the save is.</b> The folder is hidden in Explorer, so browsing will not find it. Copy the path, paste it into the
+      file dialog's <i>File name</i> box, press Enter, and the folder opens. Pick the newest <code>Recover</code> file; the game
+      writes one every five minutes while you play.</p>
+    <p class="path"><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code>
+      <button type="button" class="copy" data-copy="savePath">copy path</button> <span class="muted">Windows. On a Mac:
+      ~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</span></p>
+    <p class="path"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code>
+      <button type="button" class="copy" data-copy="localePath">copy path</button> <span class="muted">where en.json lives, for the
+      game's product names, recipes and station capacities</span></p>
+    <p><b>Checked on game build __BUILD__.</b> Runs in any current browser; the Python runtime it needs is about 6 MB, fetched
+      once and cached.</p>
+  </div>
 </section>
 """.replace("__BUILD__", str(VERIFIED_BUILD))
 
