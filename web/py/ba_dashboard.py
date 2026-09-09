@@ -587,6 +587,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "hours": grids,
         "hourFindings": hour_findings,
         "plan": plan,
+        # Every item name the text knows, so a material that no recipe or shop
+        # line mentions is still named where the tables list it.
+        "itemNames": {k: v for k, v in names.locale.items() if k.startswith("ba:itemname_")},
         "expansion": expansion,
         "cashFlow": _cash_flow(ledger, daily, day),
         "ledgerDays": len(ledger),
@@ -1797,6 +1800,51 @@ def _ceil_hundred(value: float) -> int:
     return int(math.ceil(value / 100.0) * 100)
 
 
+def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tuple:
+    """What each depot imports a week, and what leaves it for the shops.
+
+    Both come from the delivery log alone, so they are known even when the
+    recipe pages are missing and no factory line can be read. That is why
+    this sits apart from the line analysis: the import table must never go
+    blank just because en.json was not loaded.
+    """
+    depots = collections.defaultdict(dict)
+    for (depot, slug), supply in flow["imports"].items():
+        if depot in index:
+            depots[index[depot]][slug] = {"weekly": supply["weekly"]}
+    # A depot's outflow that is not a factory's intake: the shops it also
+    # serves, so an import order can be sized to the whole of what leaves.
+    # Matched day by day: a single 2,500 of hops sent on Sunday must not turn
+    # into "417 a week to the shops" because the depot's log holds six days
+    # and the factory's seven. What the factories took that day comes off what
+    # the depot sent that day; only a remainder is the shops', and a remainder
+    # too small to size an order on is nothing.
+    depot_other = collections.defaultdict(dict)
+    pairs = set(flow["imports"]) | {
+        (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
+    }
+    for depot, slug in pairs:
+        if depot not in index:
+            continue
+        days = flow["roundDays"](depot)
+        if len(days) < SHIPPED_MIN_DAYS:
+            continue
+        sent = flow["byDay"](depot, slug)
+        taken = [
+            flow["byDay"](fkey, slug)
+            for fkey in machines
+            if flow["targets"].get((fkey, slug), (0, None))[1] == depot
+        ]
+        rest = sum(
+            max(0.0, -sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
+            for d in days
+        )
+        week = rest / len(days) * 7
+        need = depot_need.get((depot, slug), 0.0)
+        depot_other[index[depot]][slug] = 0 if week < max(need * FEED_SLACK, 50) else round(week)
+    return depots, depot_other
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -1857,7 +1905,16 @@ def _factories(
                 {"slot": slot, "hours": len(covered[post]), "off": _off_hours(covered[post])}
             )
     if not machines or not recipes:
-        return empty
+        # No line can be read (no machines, or no recipe pages to read them
+        # with), but the depots' orders and outflow are still the log's.
+        depots, depot_other = _depot_flow(flow, index, machines, {})
+        return {
+            **empty,
+            "character": character,
+            "aliases": {},
+            "depots": depots,
+            "depotOther": depot_other,
+        }
 
     def station_name(slug: str) -> str:
         text = names.locale.get(f"help_factory_workstation_{slug}_content", "")
@@ -2330,40 +2387,7 @@ def _factories(
             key=lambda r: ({"critical": 0, "warn": 1, "info": 2, "ok": 3}[r["level"]], -r["perDay"])
         )
     sites.sort(key=lambda s: -s["machines"])
-    depots = collections.defaultdict(dict)
-    for (depot, slug), supply in flow["imports"].items():
-        if depot in index:
-            depots[index[depot]][slug] = {"weekly": supply["weekly"]}
-    # A depot's outflow that is not a factory's intake — the shops it also
-    # serves — so an import order can be sized to the whole of what leaves.
-    # Matched day by day: a single 2,500 of hops sent on Sunday must not turn
-    # into "417 a week to the shops" because the depot's log holds six days
-    # and the factory's seven. What the factories took that day comes off what
-    # the depot sent that day; only a remainder is the shops', and a remainder
-    # too small to size an order on is nothing.
-    depot_other = collections.defaultdict(dict)
-    pairs = set(flow["imports"]) | {
-        (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
-    }
-    for depot, slug in pairs:
-        if depot not in index:
-            continue
-        days = flow["roundDays"](depot)
-        if len(days) < SHIPPED_MIN_DAYS:
-            continue
-        sent = flow["byDay"](depot, slug)
-        taken = [
-            flow["byDay"](fkey, slug)
-            for fkey in machines
-            if flow["targets"].get((fkey, slug), (0, None))[1] == depot
-        ]
-        rest = sum(
-            max(0.0, -sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
-            for d in days
-        )
-        week = rest / len(days) * 7
-        need = depot_need.get((depot, slug), 0.0)
-        depot_other[index[depot]][slug] = 0 if week < max(need * FEED_SLACK, 50) else round(week)
+    depots, depot_other = _depot_flow(flow, index, machines, depot_need)
     return {
         "sites": sites,
         "machines": sum(s["machines"] for s in sites),
@@ -6407,11 +6431,13 @@ function drawLogistics(){
   const other = (D.supply.factories && D.supply.factories.depotOther) || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
-  const label = (s, slug, fallback) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || fallback;
+  const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
   $("logisticsNote").textContent = f.sites.length
     ? `What to set the managers to, from ${f.machines} machines on ${
         f.sites.reduce((n, s) => n + s.lines.length, 0)} lines${f.unnamed ? `, ${f.unnamed} still unnamed` : ""}`
-    : "No factory to feed.";
+    : D.meta.locale === false
+      ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders below are read from the delivery log and are complete."
+      : "No factory to feed.";
 
   /* --- imports, one table per depot ------------------------------------ */
   const depots = {}, loose = {};
@@ -6428,7 +6454,7 @@ function drawLogistics(){
   Object.entries(depotsKnown).forEach(([si, items]) => {
     const d = depots[si] = depots[si] || {};
     Object.keys(items).forEach(slug => {
-      d[slug] = d[slug] || {item: label(+si, slug, slug), slug, factoryWeek: 0, users: []};
+      d[slug] = d[slug] || {item: label(+si, slug), slug, factoryWeek: 0, users: []};
     });
   });
   const importRows = [];
@@ -6734,7 +6760,11 @@ function indexPlan(){
   for(const k in RECIPE_BY) delete RECIPE_BY[k];
   (D.plan.recipes || []).forEach(r => RECIPE_BY[r.slug] = r);
 }
-const itemName = slug => (D.plan.items || {})[slug] || slug;
+/* A slug becomes a name through the plan's own list, then the full name map,
+   then, if nobody named it, the slug made readable. */
+const prettySlug = slug => slug.replace(/^ba:[a-z]+_/, "").replace(/([a-z])(\d)/g, "$1 $2")
+  .replace(/^./, c => c.toUpperCase());
+const itemName = slug => (D.plan.items || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
 const HOURS = 24;  // a workstation keeps running while the shops are shut
 
 function planTypes(){

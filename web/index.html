@@ -853,8 +853,8 @@ details.help[open] summary::after{content:"\2013"}
     <div class="foot-links" id="footerLinks"></div>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "7d453dea63";</script>
-<script src="app.js?v=7d453dea63"></script>
+<script>window.LEDGER_BUILD = "9d0e6461e3";</script>
+<script src="app.js?v=9d0e6461e3"></script>
 
 <script>
 let D = null;
@@ -2357,11 +2357,13 @@ function drawLogistics(){
   const other = (D.supply.factories && D.supply.factories.depotOther) || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
-  const label = (s, slug, fallback) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || fallback;
+  const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
   $("logisticsNote").textContent = f.sites.length
     ? `What to set the managers to, from ${f.machines} machines on ${
         f.sites.reduce((n, s) => n + s.lines.length, 0)} lines${f.unnamed ? `, ${f.unnamed} still unnamed` : ""}`
-    : "No factory to feed.";
+    : D.meta.locale === false
+      ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders below are read from the delivery log and are complete."
+      : "No factory to feed.";
 
   /* --- imports, one table per depot ------------------------------------ */
   const depots = {}, loose = {};
@@ -2378,7 +2380,7 @@ function drawLogistics(){
   Object.entries(depotsKnown).forEach(([si, items]) => {
     const d = depots[si] = depots[si] || {};
     Object.keys(items).forEach(slug => {
-      d[slug] = d[slug] || {item: label(+si, slug, slug), slug, factoryWeek: 0, users: []};
+      d[slug] = d[slug] || {item: label(+si, slug), slug, factoryWeek: 0, users: []};
     });
   });
   const importRows = [];
@@ -2684,7 +2686,11 @@ function indexPlan(){
   for(const k in RECIPE_BY) delete RECIPE_BY[k];
   (D.plan.recipes || []).forEach(r => RECIPE_BY[r.slug] = r);
 }
-const itemName = slug => (D.plan.items || {})[slug] || slug;
+/* A slug becomes a name through the plan's own list, then the full name map,
+   then, if nobody named it, the slug made readable. */
+const prettySlug = slug => slug.replace(/^ba:[a-z]+_/, "").replace(/([a-z])(\d)/g, "$1 $2")
+  .replace(/^./, c => c.toUpperCase());
+const itemName = slug => (D.plan.items || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
 const HOURS = 24;  // a workstation keeps running while the shops are shut
 
 function planTypes(){
