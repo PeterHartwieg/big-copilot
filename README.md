@@ -27,7 +27,7 @@ while you play, so there is almost always a recent save to read.
 
 ### In the browser
 
-Open the page at [https://ba-ledger.peter-hartwieg.workers.dev](https://ba-ledger.peter-hartwieg.workers.dev) and drop a save on it, or click *Choose the save folder* and pick the `Big Ambitions` folder inside `SaveGames`: the page looks through every company folder there and takes the newest save, since the company folders have generated names and cannot be told apart by eye. The `AppData` folder is hidden in Explorer, so paste the path into the dialog's *File name* box to open it. Your browser may ask whether to "upload" the folder; that is its wording for letting the page read it, and nothing leaves your computer.
+Open the page at [https://ba-ledger.peter-hartwieg.workers.dev](https://ba-ledger.peter-hartwieg.workers.dev) and drop a save on it, or click *Choose the save folder* and pick the `Big Ambitions` folder inside `SaveGames`: the page looks through every company folder there and takes the newest save, since the company folders have generated names and cannot be told apart by eye. The `AppData` folder is hidden in Explorer, so paste the path into the dialog's *File name* box to open it. Your browser may ask whether to "upload" the folder; that is its wording for letting the page read it, and nothing leaves your computer. In Chrome and Edge the folder stays connected: *Update* reads the newest save again in one click, and on the next visit one permission click brings the folder back. In Firefox and Safari the folder choice is a snapshot, so *Update* opens the picker again.
 
 The board is built inside the browser. The same Python that runs locally runs in a Web
 Worker through Pyodide, so the save never leaves your machine. Nothing is uploaded.

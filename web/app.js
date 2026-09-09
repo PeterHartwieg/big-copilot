@@ -1,14 +1,25 @@
 /* The page side of the in-browser board.
  *
- * Owns the worker, the drop zone, the locale file, and what the browser
- * remembers between visits. Hands the board its numbers through
+ * Owns the worker, the source bar at the top, the locale file, and what the
+ * browser remembers between visits. Hands the board its numbers through
  * window.LEDGER_SOURCE, which the board's own script picks up instead of the
  * local server it would otherwise poll.
+ *
+ * Two ways in. Where the browser has the File System Access API (Chrome,
+ * Edge) the folder button takes a live directory handle: Update rescans it
+ * for the newest save, and the handle is kept in IndexedDB so the next visit
+ * needs one permission click, not the picker. Elsewhere the folder button is
+ * a plain directory input, which is a snapshot: Update reopens the picker.
  */
 (function () {
   const LOCALE_KEY = "ledger_locale";
   const HISTORY_KEY = "ledger_history";
+  const DB = "ledger";
+  const STORE = "handles";
   const $ = (id) => document.getElementById(id);
+  const isSave = (f) => f && /\.hsg$/i.test(f.name);
+  const isLocale = (f) => f && /\.json$/i.test(f.name);
+  const canHandle = typeof window.showDirectoryPicker === "function";
 
   const stored = {
     get(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } },
@@ -18,18 +29,52 @@
     },
   };
 
-  let handlers = null;   // what the board wants told: changed(data), stale(why), lost()
-  let lastFile = null;   // the File most recently dropped, for rebuilds after naming
-  let pending = new Map();
+  /* A directory handle survives a reload only through IndexedDB. */
+  const handles = {
+    open() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    },
+    async get(key) {
+      try {
+        const db = await this.open();
+        return await new Promise((resolve, reject) => {
+          const req = db.transaction(STORE).objectStore(STORE).get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (e) { return null; }
+    },
+    async set(key, value) {
+      try {
+        const db = await this.open();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE, "readwrite");
+          tx.objectStore(STORE).put(value, key);
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) {}
+    },
+  };
+
+  let handlers = null;    // what the board wants told: changed(data), stale(why), lost()
+  let lastFile = null;    // the File most recently built, for rebuilds after naming
+  let dirHandle = null;   // live folder handle, Chromium only
+  let busy = false;
+  const pending = new Map();
   let nextId = 1;
-  let workerReady = false;
 
   const worker = new Worker("worker.js", {type: "module"});
   worker.onmessage = (e) => {
     const msg = e.data;
     if (msg.kind === "progress") {
-      if (msg.stage === "ready") { workerReady = true; status("Ready. Drop a save to begin.", ""); }
-      else status(msg.detail, "busy");
+      if (msg.stage === "ready") setStatus("ready", "Ready");
+      else setStatus("busy", msg.detail);
       return;
     }
     const p = pending.get(msg.id);
@@ -42,7 +87,7 @@
       p.reject(new Error(msg.error));
     }
   };
-  worker.onerror = (e) => status(`The worker failed: ${e.message}`, "bad");
+  worker.onerror = (e) => setStatus("bad", `The worker failed: ${e.message}`);
 
   function ask(msg, transfer) {
     return new Promise((resolve, reject) => {
@@ -52,52 +97,133 @@
     });
   }
 
-  function status(text, tone) {
-    const el = $("srcStatus");
-    if (!el) return;
-    el.textContent = text;
-    el.dataset.tone = tone || "";
+  /* --- the source card ---------------------------------------------- */
+  const fmtTime = (ms) => new Date(ms).toLocaleString(undefined, {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+
+  function setStatus(tone, text) {
+    $("srcCard").dataset.tone = tone;
+    $("srcStatus").textContent = text;
+    $("updateBtn").disabled = busy || !(dirHandle || lastFile);
+  }
+  function setSource(file, secs) {
+    $("srcFile").textContent = file ? file.name : "No save loaded";
+    $("srcMeta").textContent = file
+      ? `saved ${fmtTime(file.lastModified)}${secs ? ` · built in ${secs} s` : ""}`
+      : "";
   }
   function note(text, tone) {
     const el = $("srcNote");
-    if (!el) return;
     el.textContent = text;
     el.dataset.tone = tone || "";
     el.hidden = !text;
   }
 
   async function buildFrom(file) {
+    if (busy) return;
+    busy = true;
     lastFile = file;
-    const bytes = await file.arrayBuffer();
+    setSource(file, null);
+    setStatus("busy", `Reading ${file.name}`);
     const t = performance.now();
-    status(`Reading ${file.name}`, "busy");
     try {
+      const bytes = await file.arrayBuffer();
       const data = await ask({
         kind: "build", name: file.name, bytes, mtime: file.lastModified,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes]);
-      const secs = ((performance.now() - t) / 1000).toFixed(1);
-      status(`${file.name} · built in ${secs} s`, "");
+      busy = false;
+      setSource(file, ((performance.now() - t) / 1000).toFixed(1));
+      setStatus("ok", "Up to date");
+      note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
       document.body.classList.add("has-board");
     } catch (err) {
-      status(`${file.name} could not be read`, "bad");
-      note(err.message, "bad");
+      busy = false;
+      setStatus("bad", "Could not read the save");
+      note(err.name === "NotReadableError"
+        ? "The game has rewritten this file since it was chosen. Choose the folder again."
+        : err.message, "bad");
       if (handlers) handlers.stale(err.message);
     }
   }
 
-  function localeState() {
-    const text = stored.get(LOCALE_KEY);
-    const el = $("localeState");
-    if (!el) return;
-    if (text) {
-      el.textContent = "Game text loaded";
-      el.dataset.tone = "";
-    } else {
-      el.textContent = "No game text yet: names will be slugs, and recipes and capacities unknown";
-      el.dataset.tone = "warn";
+  /* --- finding the newest save --------------------------------------- */
+  function newestOf(files) {
+    const saves = files.filter(isSave);
+    if (!saves.length) return null;
+    return saves.reduce((a, b) => (b.lastModified > a.lastModified ? b : a));
+  }
+
+  async function scanHandle(handle) {
+    const files = [];
+    async function walk(dir, depth) {
+      for await (const entry of dir.values()) {
+        if (entry.kind === "directory") { if (depth < 3) await walk(entry, depth + 1); }
+        else if (isSave(entry)) files.push(await entry.getFile());
+      }
     }
+    await walk(handle, 0);
+    return files;
+  }
+
+  async function loadFromHandle(handle, why) {
+    setStatus("busy", why || "Looking for the newest save");
+    const files = await scanHandle(handle);
+    const newest = newestOf(files);
+    if (!newest) {
+      setStatus("bad", "No save found");
+      note("No .hsg save in that folder. Choose the folder named Big Ambitions inside SaveGames.", "warn");
+      return;
+    }
+    if (lastFile && newest.name === lastFile.name && newest.lastModified === lastFile.lastModified) {
+      setStatus("ok", `No newer save than ${newest.name}`);
+      return;
+    }
+    await buildFrom(newest);
+  }
+
+  async function pickFolder() {
+    if (canHandle) {
+      let handle;
+      try {
+        handle = await window.showDirectoryPicker({id: "ba-saves", mode: "read"});
+      } catch (e) { return; }  // the picker was dismissed
+      dirHandle = handle;
+      handles.set("saves", handle);
+      await loadFromHandle(handle, "Looking through the folder");
+    } else {
+      $("folderPick").click();
+    }
+  }
+
+  async function update() {
+    if (busy) return;
+    if (dirHandle) {
+      const state = await dirHandle.queryPermission({mode: "read"});
+      if (state !== "granted") {
+        const asked = await dirHandle.requestPermission({mode: "read"});
+        if (asked !== "granted") { setStatus("bad", "Folder access was not granted"); return; }
+      }
+      await loadFromHandle(dirHandle, "Checking for a newer save");
+    } else if (canHandle) {
+      await pickFolder();
+    } else {
+      // A file input is a snapshot, so the only honest update is a new pick.
+      $("folderPick").click();
+    }
+  }
+
+  /* --- the game's text ----------------------------------------------- */
+  function localeState() {
+    const has = !!stored.get(LOCALE_KEY);
+    const chip = $("localeChip");
+    chip.dataset.state = has ? "ok" : "missing";
+    chip.querySelector("span").textContent = has ? "Game text loaded" : "Game text missing";
+    chip.title = has
+      ? "Product names, recipes and station capacities come from the game's en.json. Click to replace it."
+      : "Pick the game's en.json so product names, recipes and station capacities are known. Without it names are slugs.";
   }
 
   async function takeLocale(file) {
@@ -117,6 +243,7 @@
     if (lastFile) buildFrom(lastFile);
   }
 
+  /* --- what the board asks for ----------------------------------------- */
   window.LEDGER_SOURCE = {
     label: "In browser",
     data: async () => {
@@ -130,57 +257,63 @@
     watch: (h) => { handlers = h; },
   };
 
-  window.addEventListener("DOMContentLoaded", () => {
+  /* --- wiring ------------------------------------------------------------ */
+  window.addEventListener("DOMContentLoaded", async () => {
     localeState();
-    status("Starting the Python runtime", "busy");
+    setSource(null);
+    setStatus("busy", "Starting the Python runtime");
+    if (!canHandle) $("folderBtn").title = "Pick the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
 
-    const zone = $("drop");
-    const isSave = (f) => f && /\.hsg$/i.test(f.name);
-    const isLocale = (f) => f && /\.json$/i.test(f.name);
     const take = (files) => {
-      for (const f of files) {
-        if (isSave(f)) buildFrom(f);
-        else if (isLocale(f)) takeLocale(f);
-        else note(`${f.name} is neither a .hsg save nor en.json.`, "warn");
+      const list = [...files];
+      const save = newestOf(list);
+      const locale = list.find(isLocale);
+      if (locale) takeLocale(locale);
+      if (save) {
+        const n = list.filter(isSave).length;
+        if (n > 1) note(`Newest of ${n} saves: ${save.webkitRelativePath || save.name}.`, "");
+        buildFrom(save);
+      } else if (!locale) {
+        note("That is neither a .hsg save nor en.json.", "warn");
       }
     };
-    ["dragenter", "dragover"].forEach((ev) => document.addEventListener(ev, (e) => {
-      e.preventDefault(); zone.classList.add("over");
-    }));
-    ["dragleave", "drop"].forEach((ev) => document.addEventListener(ev, (e) => {
-      e.preventDefault(); zone.classList.remove("over");
-    }));
-    document.addEventListener("drop", (e) => take(e.dataTransfer.files));
+
+    $("folderBtn").addEventListener("click", pickFolder);
+    $("updateBtn").addEventListener("click", update);
+    $("folderPick").addEventListener("change", (e) => take(e.target.files));
     $("savePick").addEventListener("change", (e) => take(e.target.files));
-    // A whole folder: every company keeps its own generated-name folder under
-    // the save root and they all look alike, so the page does what the local
-    // script does and takes the newest save across all of them. Only that
-    // one file is ever read; the rest contribute a name and a date.
-    $("folderPick").addEventListener("change", (e) => {
-      const saves = [...e.target.files].filter(isSave);
-      if (!saves.length) {
-        note("No .hsg save in that folder. Pick the folder named Big Ambitions inside SaveGames.", "warn");
-        return;
-      }
-      const newest = saves.reduce((a, b) => (b.lastModified > a.lastModified ? b : a));
-      const where = newest.webkitRelativePath || newest.name;
-      const when = new Date(newest.lastModified);
-      note(`Newest of ${saves.length} saves: ${where}, written ${when.toLocaleString()}.`, "");
-      buildFrom(newest);
-    });
     $("localePick").addEventListener("change", (e) => take(e.target.files));
-    // A hidden folder cannot be browsed to; a copied path pasted into the
-    // dialog's File name box opens it. The %USERPROFILE% form is expanded by
-    // the dialog itself on Windows.
+    $("localeChip").addEventListener("click", () => $("localePick").click());
+
+    // Drop anywhere on the page. The veil says so while a file is over it.
+    const veil = $("dropVeil");
+    let depth = 0;
+    document.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; veil.hidden = false; });
+    document.addEventListener("dragover", (e) => { e.preventDefault(); });
+    document.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; veil.hidden = true; } });
+    document.addEventListener("drop", (e) => { e.preventDefault(); depth = 0; veil.hidden = true; take(e.dataTransfer.files); });
+
     document.querySelectorAll("button.copy").forEach((btn) => btn.addEventListener("click", async () => {
       const text = $(btn.dataset.copy).textContent;
       try { await navigator.clipboard.writeText(text); btn.textContent = "copied"; }
       catch (e) { btn.textContent = "select and copy it"; }
-      setTimeout(() => { btn.textContent = "copy path"; }, 1800);
+      setTimeout(() => { btn.textContent = "copy"; }, 1800);
     }));
     $("forgetHistory").addEventListener("click", () => {
       try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
       note("History forgotten. The next save starts a fresh record.", "");
     });
+
+    // A folder chosen on an earlier visit: Update brings it back with one
+    // permission click. The browser will not grant it without a click.
+    if (canHandle) {
+      const kept = await handles.get("saves");
+      if (kept) {
+        dirHandle = kept;
+        $("srcFile").textContent = "Folder remembered";
+        $("srcMeta").textContent = "click Update to load the newest save";
+        $("updateBtn").disabled = false;
+      }
+    }
   });
 })();
