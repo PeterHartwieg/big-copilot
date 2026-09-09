@@ -169,14 +169,11 @@ Done and checked:
   cross-origin importScripts, and every current browser supports the module form).
   The local `--watch` server runs unchanged against the same page.
 
-Left for you:
+Done later the same day, after your logins: deployed to
+https://ba-ledger.peter-hartwieg.workers.dev (assets-only Worker `ba-ledger`), pushed to
+https://github.com/PeterHartwieg/big-ambitions-ledger, page URL in the README, source
+link on the page. The Cloudflare skills plugin was installed into Claude Code as
+Cloudflare's agent-setup page instructs.
 
-1. `npx wrangler login`, then `npx wrangler deploy` from the project folder. The Worker
-   is named `ba-ledger` in `wrangler.jsonc`, so the page lands at
-   `https://ba-ledger.<your-subdomain>.workers.dev`.
-2. Create the GitHub repository and push `main`.
-3. Put the page URL into README.md where it says `<the page URL>`.
-4. The forum post.
-
-Not yet done, by choice: a test in Firefox and Safari, and the second-release folder
-watcher.
+Left for you: the forum post. Not yet done, by choice: a test in Firefox and Safari, and
+the second-release folder watcher.
