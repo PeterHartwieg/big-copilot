@@ -74,6 +74,13 @@
   let dirHandle = null;   // live folder handle, Chromium only
   let busy = false;
   let runtimeReady = false;
+  // Watching the folder: Chromium only, and only after this visit's
+  // permission click, since the browser lets a page read a folder only
+  // after a click. The preference survives; the timer does not.
+  let watching = stored.get("ledger_watch") !== "off";
+  let watchTimer = null;
+  let lastCheck = null;
+  const WATCH_MS = 30000;
   const pending = new Map();
   let nextId = 1;
 
@@ -158,7 +165,9 @@
       if (!row.contains($("srcCard"))) {
         row.appendChild($("srcCard"));
         row.appendChild($("boardControls").content.cloneNode(true));
-        $("sourceActions").insertBefore($("updateBtn"), $("srcMenu"));
+        $("sourceActions").insertBefore($("updateBtn"), $("watchBtn"));
+        $("watchBtn").addEventListener("click", toggleWatch);
+        syncWatchBtn();
         $("menuSourceSlot").append($("folderBtn"), $("savePickLabel"));
         $("menuChipSlot").appendChild($("localeChip"));
         $("menuHelpSlot").appendChild($("help"));
@@ -282,9 +291,11 @@
     }
     if (lastGood && newest.name === lastGood.name && newest.lastModified === lastGood.lastModified) {
       state("ok", "No newer save found", fileLine(newest));
-      return;
+    } else {
+      await buildFrom(newest);
     }
-    await buildFrom(newest);
+    lastCheck = Date.now();
+    armWatch();  // the folder is readable now, so watching can begin
   }
 
   async function pickFolder() {
@@ -316,6 +327,53 @@
       // A file input is a snapshot, so the only honest update is a new pick.
       $("folderPick").click();
     }
+  }
+
+  /* --- watching the folder ---------------------------------------------- */
+  async function checkFolder() {
+    if (!dirHandle || busy) return;
+    try {
+      if (await dirHandle.queryPermission({mode: "read"}) !== "granted") { stopWatch(); return; }
+      const newest = newestOf(await scanHandle(dirHandle));
+      lastCheck = Date.now();
+      const same = newest && lastGood && newest.name === lastGood.name && newest.lastModified === lastGood.lastModified;
+      if (newest && !same) await buildFrom(newest);
+    } catch (e) {
+      // A folder that vanished or a file mid-write; the next check, or Update, says so.
+    }
+    syncWatchBtn();
+  }
+  function armWatch() {
+    if (watching && dirHandle && !watchTimer) watchTimer = setInterval(checkFolder, WATCH_MS);
+    syncWatchBtn();
+  }
+  function stopWatch() {
+    clearInterval(watchTimer);
+    watchTimer = null;
+    syncWatchBtn();
+  }
+  function syncWatchBtn() {
+    const b = $("watchBtn");
+    if (!b) return;
+    b.hidden = !(canHandle && dirHandle);
+    const on = !!watchTimer;
+    b.dataset.on = String(on);
+    const at = lastCheck ? new Date(lastCheck).toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}) : "";
+    b.textContent = on ? `Watching${at ? " · " + at : ""}` : "Watch";
+    b.title = on
+      ? "Checking the folder every 30 seconds; the board rebuilds when the game writes a newer save. Click to pause."
+      : "Check the folder every 30 seconds and rebuild on every autosave.";
+  }
+  async function toggleWatch() {
+    if (watchTimer) {
+      watching = false;
+      try { localStorage.setItem("ledger_watch", "off"); } catch (e) {}
+      stopWatch();
+      return;
+    }
+    watching = true;
+    try { localStorage.setItem("ledger_watch", "on"); } catch (e) {}
+    await update();  // the permission click, the newest save, and then the timer
   }
 
   /* --- the game's text ----------------------------------------------- */
@@ -395,6 +453,8 @@
     $("localeChip").addEventListener("click", () => $("localePick").click());
     document.addEventListener("click", closeMenu);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+    // Back from the game: check at once rather than waiting out the interval.
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && watchTimer) checkFolder(); });
 
     // Drop anywhere on the page. The veil says so while a file is over it.
     const veil = $("dropVeil");

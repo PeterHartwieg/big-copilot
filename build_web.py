@@ -182,6 +182,12 @@ details.help[open] summary::after{content:"\2013"}
 .source-row{display:flex;align-items:center;gap:24px;min-height:68px;padding:10px 0;border-bottom:1px solid var(--rule)}
 .source-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
 .source-actions .lg-btn.primary{min-width:98px}
+.lg-btn.watch{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;color:var(--ink-2)}
+.lg-btn.watch::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-3);margin-right:2px}
+.lg-btn.watch[data-on="true"]{color:var(--pos);border-color:var(--pos)}
+.lg-btn.watch[data-on="true"]::before{background:var(--pos);animation:lgpulse 2.4s infinite}
+@keyframes lgpulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.lg-btn.watch::before{animation:none!important}}
 .menu{position:relative}
 .menu-panel{display:none;position:absolute;right:0;top:calc(100% + 8px);width:320px;padding:10px;background:var(--surface);
   border:1px solid var(--rule);border-radius:5px;box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);z-index:40;
@@ -271,6 +277,7 @@ details.help[open] summary::after{content:"\2013"}
      card and the Update button here and the rest into the More menu. -->
 <template id="boardControls">
   <div class="source-actions" id="sourceActions">
+    <button type="button" class="lg-btn watch" id="watchBtn" hidden>Watch</button>
     <div class="menu" id="srcMenu">
       <button type="button" class="lg-btn" id="menuBtn" aria-haspopup="true" aria-expanded="false">More <span aria-hidden="true">&#8964;</span></button>
       <div class="menu-panel">

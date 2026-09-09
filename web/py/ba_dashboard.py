@@ -3626,7 +3626,9 @@ def _alerts(
     # --- a site that has not started trading is one finding, not four
     silent = set()
     for b in businesses:
-        if b["status"] == "vacant" or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
+        # Only a shop can fail to trade. A warehouse, factory or head office
+        # never books a sale, so silence there is its normal state.
+        if b["status"] != "retail" or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
             continue
         silent.add(b["key"])
         priced = [l for l in b["lines"] if l["price"] > 0]
