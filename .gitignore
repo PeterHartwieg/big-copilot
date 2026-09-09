@@ -1,0 +1,20 @@
+# Save games and anything generated from them
+*.hsg
+market_history.json
+dashboard.html
+
+# Python
+__pycache__/
+*.pyc
+
+# Cloudflare and Node
+.wrangler/
+node_modules/
+web/pyodide/
+dist/
+
+# OS
+.DS_Store
+web/test-*
+watch.log
+watch.err

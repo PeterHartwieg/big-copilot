@@ -1,0 +1,4 @@
+# Kept out of wrangler deploys: local test fixtures and Python caches
+*.hsg
+test-*
+__pycache__/

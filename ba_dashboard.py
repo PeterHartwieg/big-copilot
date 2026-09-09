@@ -1,0 +1,7598 @@
+"""Build a progress dashboard from a Big Ambitions save game.
+
+    python ba_dashboard.py                          # newest save in the default folder
+    python ba_dashboard.py "path\\to\\Costy Co.hsg"  # a specific save
+    python ba_dashboard.py -o board.html            # choose the output file
+    python ba_dashboard.py --watch                  # serve it and follow the save
+
+The dashboard is a single self-contained HTML file. In watch mode it is also served
+from 127.0.0.1 and refreshes itself whenever the game writes a new save.
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import datetime as dt
+import http.server
+import json
+import math
+import os
+import re
+import statistics
+import sys
+import threading
+import time
+import traceback
+import webbrowser
+from html import escape as html_escape
+
+from ba_save import Names, Save, load_locale, load_save
+
+SAVE_ROOT = os.path.join(
+    os.environ.get("USERPROFILE", ""),
+    r"AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions",
+)
+VERIFIED_BUILD = 3674  # the game build every number here was last checked against
+MIN_BUILD = 3540  # saves older than this lack fields the board relies on (checked over 57 saves)
+
+# The player tags each business with its neighbourhood, e.g. "[MT] Costco 38 1stAV".
+NEIGHBOURHOODS = {
+    "MT": "Midtown",
+    "HK": "Hell's Kitchen",
+    "MH": "Murray Hill",
+    "LM": "Lower Manhattan",
+    "GD": "Garment District",
+    "IC": "Industry City",
+    "HA": "The Hamptons",
+}
+
+# Business types that sell to walk-in customers; the rest are support sites.
+# Every physical retail floor the game documents with an F1 help page (the
+# handful of pure office agencies — law firm, travel agency and the like — say
+# outright that "customers are handled digitally and are not physically
+# present", so they stay out). This used to carry six slugs that do not exist
+# anywhere in the game's own type registry — "grocerystore", "restaurant",
+# "cafe", "bar", "fastfood", "hairsalon" — which silently misclassified every
+# jewelry, bookstore, florist, theater, nightclub, fast food, coffee shop,
+# fruit/veg, and hairdresser business as "support", so none of them ever got a
+# satisfaction, no-staff, or amenity alert. Checked against
+# BigAmbitions_Data/StreamingAssets/locale/en.json.
+RETAIL_TYPES = {
+    "ba:businesstype_bookstore",
+    "ba:businesstype_cinema",
+    "ba:businesstype_clothingstore",
+    "ba:businesstype_coffeeshop",
+    "ba:businesstype_electronicsstore",
+    "ba:businesstype_fastfoodrestaurant",
+    "ba:businesstype_florist",
+    "ba:businesstype_fruitandvegetablestore",
+    "ba:businesstype_giftshop",
+    "ba:businesstype_gym",
+    "ba:businesstype_hairdresser",
+    "ba:businesstype_jewelrystore",
+    "ba:businesstype_liquorstore",
+    "ba:businesstype_nightclub",
+    "ba:businesstype_supermarket",
+    "ba:businesstype_theater",
+}
+
+# Shops that resell goods bought in, so running out is a restocking problem.
+# Factories make their own output; a cinema, theater, gym or hairdresser's
+# real line is a ticket or a service fee, not stock that can run out, even
+# though each also carries a couple of incidental wholesaler-sourced drinks.
+RESELLER_TYPES = RETAIL_TYPES - {
+    "ba:businesstype_cinema",
+    "ba:businesstype_gym",
+    "ba:businesstype_hairdresser",
+    "ba:businesstype_theater",
+}
+
+# Sites that exist to carry cost for the rest of the chain.
+OVERHEAD_TYPES = {
+    "ba:businesstype_headquarters",
+    "ba:businesstype_warehouse",
+    "ba:businesstype_distributioncenter",
+}
+
+# Cost centres: most of what a factory makes leaves as goods for the shops rather
+# than as sales, so its books run negative by design. Overhead sites likewise.
+# A red line at any of these is the plan working, not a problem to report.
+COST_CENTRE_TYPES = OVERHEAD_TYPES | {
+    "ba:businesstype_factory",
+    "ba:businesstype_foodfactory",
+    "ba:businesstype_electronicsfactory",
+}
+
+STOCK_COVER_DAYS = 7  # window used for the average daily sales rate
+
+# Vending-machine drinks and the free checkout bag ride along in almost every
+# business's price list regardless of what it actually specialises in. Left in,
+# they pad every business type's product count by the same handful and drown
+# out what the type is actually built around.
+AMENITY_ITEMS = {
+    "ba:itemname_paperbag",
+    "ba:itemname_sodacan",
+    "ba:itemname_energydrink",
+    "ba:itemname_cupofcoffee",
+}
+
+# The per-type product range used to live here as a hand-typed table. It now
+# comes straight from the game's own F1 help pages instead — see
+# _type_catalogue_from_help() — so there is nothing to maintain by hand.
+
+# Every customer-facing amenity the game itself checks for, keyed by what
+# cachedFulfilledCustomerDemands calls it when present. Only ever populated for
+# a business that is open, retail, and trading — see hasAmenity in _business().
+AMENITY_DEMANDS = {
+    "ba:customerdemand_employeeuniforms": (
+        "uniform",
+        "No staff uniforms set — customers notice the bare-clothes look",
+    ),
+    "ba:customerdemand_toilet": ("bathroom", "No customer bathroom here"),
+    "ba:customerdemand_toiletprivacy": (
+        "toiletprivacy",
+        "Customer bathroom has no privacy — no stall or door",
+    ),
+    "ba:customerdemand_sink": ("sink", "No sink for customers to wash up"),
+    "ba:customerdemand_music": ("music", "No music playing for customers"),
+    "ba:customerdemand_interiordesign": (
+        "interior",
+        "Interior design falls short of what customers expect here",
+    ),
+}
+
+# Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
+# against payroll (hours logged this week) and against import delivery days.
+WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+# Idle stock thresholds: enough weeks of cover, and enough units, to be worth saying.
+IDLE_WEEKS = 4.0
+IDLE_UNITS = 500
+DEAD_UNITS = 1000  # held but with nothing flowing out at all
+
+# Materiality. A finding with a dollar figure on it has to be worth a fraction of
+# a day's profit before it is worth a line; below that it is counted, not read
+# out. The floor keeps the gate meaningful on a day when profit is near zero.
+MATERIAL_SHARE = 0.005
+MATERIAL_FLOOR = 500.0
+
+NEW_SITE_DAYS = 7  # "just opened" — old enough to judge starts here
+GRAPH_MIN_STOCK = 100  # below this a holding is a drawer, not a depot
+HYPE_BASELINE_DAYS = 3  # trading days needed before a wave to call it a baseline
+TREND_MIN_DAYS = 14  # a week-on-week comparison needs two full weeks behind it
+TREND_MOVE = 0.15  # how far a site's week has to move before it is news
+PROMOTION_CAP = 100  # promotion and marketing both stop counting here
+PROMOTION_GAP = 10  # a shortfall smaller than this is an opportunity, not a warning
+
+
+def weekday(day: int) -> str:
+    return WEEKDAYS[day % 7]
+
+
+# --- what the game's own help text knows -------------------------------
+# The save stores ids and counts; the rules behind them live in the locale
+# file the game ships. Both are parsed here rather than written down, so a
+# patch that changes a recipe changes the dashboard with it.
+
+# "**Bacon** is a special *employee station* that requires employees with
+# [Customer Service](skill-customerservice) skill." — only those serve a queue.
+# Fridges and shelves carry a Customer Capacity too and must never be summed.
+_STATION_RE = re.compile(
+    r"special \*employee station\* that requires employees with \[([^\]]+)\]"
+)
+_CAPACITY_RE = re.compile(r"\*\*Customer Capacity:\*\*\s*([\d,]+)")
+_ITEM_HELP_RE = re.compile(r"^help_(ba:itemname_[a-z0-9_]+)_content$")
+
+# "* 40 X [Cheese](products-cheese)" against "* 200 [Burger](products-burger)"
+_INGREDIENT_RE = re.compile(
+    r"^\*\s*([\d,]+)\s*X\s*\[([^\]]+)\]\(products-([a-z0-9_]+)\)", re.M
+)
+_OUTPUT_RE = re.compile(r"^\*\s*([\d,]+)\s*\[([^\]]+)\]\(products-([a-z0-9_]+)\)", re.M)
+_WORKSTATION_RE = re.compile(r"\[([^\]]+)\]\(furniture-([a-z0-9_]+)workstation\)")
+_FURNITURE_RE = re.compile(r"\[([^\]]+)\]\(furniture-([a-z0-9_]+)\)")
+_RECIPE_LINK_RE = re.compile(r"\[([^\]]+)\]\(recipes-([a-z0-9_]+)\)")
+
+# A business type's F1 help page — the same text the in-game help menu shows —
+# splits its range into "primarily sell" (or, for a one-product type, "can
+# sell") and a separate "can additionally sell" for cross-sell extras. Goods
+# link as [Label](products-slug), service fees as [Label](fees-slug); both use
+# the same ba:itemname_ slug underneath.
+_BUSINESS_HELP_RE = re.compile(r"^help_(ba:businesstype_[a-z0-9_]+)_content$")
+_SELLS_HEADER_RE = re.compile(r"Businesses of this type (?:primarily sell|can sell):")
+_SOLD_ITEM_RE = re.compile(r"\[([^\]]+)\]\((?:products|fees)-([a-z0-9_]+)\)")
+
+SERVICE_SKILL = "ba:skill_customerservice"
+CLEANING_SHIFT = 0  # a roaming cleaning-station duty
+STATION_SHIFT = 1  # a post at one named station
+
+
+def _int(text: str) -> int:
+    return int(text.replace(",", ""))
+
+
+def _service_stations(names: Names) -> dict:
+    """Which furniture serves a customer queue, and how many an hour."""
+    out = {}
+    for key, text in names.locale.items():
+        match = _ITEM_HELP_RE.match(key)
+        if not match:
+            continue
+        station = _STATION_RE.search(text)
+        capacity = _CAPACITY_RE.search(text)
+        if station and capacity and "Customer Service" in station.group(1):
+            out[match.group(1)] = _int(capacity.group(1))
+    return out
+
+
+def _recipes(names: Names) -> dict:
+    """Every recipe the game documents, keyed by the product it makes."""
+    out = {}
+    for key, text in names.locale.items():
+        if not (key.startswith("help_recipes_") and key.endswith("_content")):
+            continue
+        head, _, tail = text.partition("**Max Production Rate Per Hour:**")
+        made = _OUTPUT_RE.findall(tail)
+        if not made:
+            continue
+        rate, label, slug = made[0]
+        station = _WORKSTATION_RE.search(head)
+        out["ba:itemname_" + slug] = {
+            "slug": "ba:itemname_" + slug,
+            "item": label,
+            "out": _int(rate),
+            "workstation": station.group(2) if station else None,
+            "ingredients": [
+                {
+                    "slug": "ba:itemname_" + ing,
+                    "item": name,
+                    "per": _int(amount),
+                }
+                for amount, name, ing in _INGREDIENT_RE.findall(head)
+            ],
+        }
+    return out
+
+
+def _type_catalogue_from_help(names: Names) -> dict:
+    """The primary range for each business type, straight from its own F1 help page.
+
+    That page also lists what it "can additionally sell" — a florist's spare
+    umbrellas, a gift shop's headphones — and that part is deliberately left
+    out: those extras belong to whichever type sells them as its main line,
+    not to every type that happens to carry a few on the side.
+    """
+    out = {}
+    for key, text in names.locale.items():
+        match = _BUSINESS_HELP_RE.match(key)
+        if not match:
+            continue
+        header = _SELLS_HEADER_RE.search(text)
+        if not header:
+            continue
+        block = text[header.end() :].lstrip("\n").split("\n\n", 1)[0]
+        items = {"ba:itemname_" + slug for _, slug in _SOLD_ITEM_RE.findall(block)}
+        if items:
+            out[match.group(1)] = items
+    return out
+
+
+def _workstations(names: Names) -> dict:
+    """Which machines make up each workstation, and what it can run."""
+    out = {}
+    for key, text in names.locale.items():
+        match = re.match(r"^help_factory_workstation_([a-z0-9]+)_content$", key)
+        if not match:
+            continue
+        machines, _, rest = text.partition("To an Assembly Machine")
+        assembly, _, makes = rest.partition("can be used to create")
+        out[match.group(1)] = {
+            "slug": match.group(1),
+            "name": f"{match.group(1).title()} Workstation",
+            "machines": [n for n, _s in _FURNITURE_RE.findall(machines)],
+            "assembly": [n for n, _s in _FURNITURE_RE.findall(assembly)],
+            "makes": [n for n, _s in _RECIPE_LINK_RE.findall(makes)],
+        }
+    return out
+
+
+def site_key(address) -> str:
+    return f"{address[0]}#{address[1]}" if address else ""
+
+
+RHYTHM_MIN_DAYS = 10  # below this there is not enough to separate cycle from noise
+RHYTHM_MIN_WEEKS = 2  # every weekday needs at least this many observations
+# Steady growth is fine — the centred mean tracks it. A jump this large between
+# neighbouring baselines is a level shift (a shop opening, a hype spike), and a
+# weekly cycle cannot be told apart from one.
+RHYTHM_MAX_STEP = 1.6
+# Two-sided t at 95% by sample size. Two observations of a weekday say very
+# little, eight say a good deal, and the threshold should reflect that rather
+# than treating every sample as if it were large.
+T_95 = {2: 12.71, 3: 4.30, 4: 3.18, 5: 2.78, 6: 2.57, 7: 2.45, 8: 2.36, 9: 2.31}
+
+
+# Consumption is measured, not declared, so two figures this close are the same
+# figure. Below the first band it is rounding; below the second it is worth
+# knowing but not worth an alarm.
+FIT_NOISE = 0.01
+FIT_TIGHT = 0.05
+FIT_FLOOR = 5  # units, so tiny lines are not judged on fractions
+# A holding that empties a few hours before its delivery is an order sized to
+# consumption, which is what a well set-up chain looks like.
+COVER_NOISE_DAYS = 0.5
+# Every site keeps its last sixty delivery transactions. Averaged over the days
+# a logistics round actually ran, that log is the draw as it happened; below
+# this many days it is an anecdote.
+SHIPPED_WINDOW = 7
+SHIPPED_MIN_DAYS = 3
+# A factory input topped up every morning and holding less than this many
+# rounds' worth is a buffer the machines eat through, not a pile.
+BUFFER_DAYS = 2
+# Naming a machine's recipe from what leaves the factory: within this of the
+# rated output it is identified; with only the product in stock it is likely.
+LINE_MEASURED = 0.15
+LINE_LIKELY = 1.0
+LINE_STARVED = 0.75  # a line fed less than this share of its need is losing hours
+# The week's arrivals are measured backwards; the need is counted from the
+# machines standing there today. A recipe switched on yesterday has six days of
+# zeroes behind it and nothing wrong with it, so an input drawn on fewer than
+# this share of the window is read from its last completed round instead of
+# from an average that describes a factory which no longer exists.
+FEED_SETTLED = 0.7
+FEED_SLACK = 0.02  # a top-up within this of the need is sized to it
+PILE_DAYS = 3  # output held beyond this many days of making it is piling up
+LINE_OVERDRAW = 0.3  # a recipe that would eat this much more than arrives is not running
+STAFF_HOURS = 168  # a machine runs only while a factory worker is posted to it
+STAFF_CRITICAL = 0.5  # below this share of the week a line is barely running
+WS_PREFIX = "ba:factoryworkstationtype_"
+FLAT_WEEK = {wd: 1.0 for wd in range(7)}
+
+
+def _fit(need: float, provision: float) -> str:
+    """Whether a standing order covers a cycle: 'ok', 'tight' or 'short'."""
+    if not need or not provision:
+        return "ok"
+    gap = need - provision
+    if gap <= max(need * FIT_NOISE, FIT_FLOOR):
+        return "ok"
+    return "tight" if gap <= need * FIT_TIGHT else "short"
+
+
+def _weekday_profile(points: list) -> list | None:
+    """How each weekday compares with its own week, as a percentage.
+
+    A business that grew tenfold over the sample would otherwise make late
+    weekdays look strong purely because they happened later. Each day is divided
+    by a centred seven-day mean first, which cancels the trend and leaves the
+    weekly cycle behind.
+    """
+    values = {day: float(value) for day, value in points}
+    if len(values) < RHYTHM_MIN_DAYS:
+        return None
+
+    baselines = {}
+    for day, value in values.items():
+        window = [values[d] for d in range(day - 3, day + 4) if d in values]
+        if len(window) >= 5:  # enough neighbours to say what a normal week looked like
+            baseline = sum(window) / len(window)
+            if baseline > 0:
+                baselines[day] = baseline
+
+    ordered = sorted(baselines)
+    for earlier, later in zip(ordered, ordered[1:]):
+        step = baselines[later] / baselines[earlier]
+        if step > RHYTHM_MAX_STEP or step < 1 / RHYTHM_MAX_STEP:
+            return None
+
+    indexed = collections.defaultdict(list)
+    for day, baseline in baselines.items():
+        indexed[day % 7].append(values[day] / baseline)
+
+    if len(indexed) < 7 or sum(len(v) for v in indexed.values()) < RHYTHM_MIN_DAYS:
+        return None
+    if min(len(v) for v in indexed.values()) < RHYTHM_MIN_WEEKS:
+        return None
+
+    # Signal against noise: the gap between the best and worst weekday has to
+    # clear the uncertainty in those weekday averages, or the pattern is drift
+    # dressed up as a cycle. Standard error is used rather than raw spread so
+    # that a long, noisy history is not penalised for simply having more of it.
+    means = {wd: sum(v) / len(v) for wd, v in indexed.items()}
+    signal = max(means.values()) - min(means.values())
+    errors = [
+        statistics.stdev(v) / math.sqrt(len(v)) for v in indexed.values() if len(v) > 1
+    ]
+    noise = sum(errors) / len(errors) if errors else 0.0
+    thinnest = min(len(v) for v in indexed.values())
+    if signal <= T_95.get(thinnest, 2.26) * noise:
+        return None
+    return [
+        {
+            "day": WEEKDAYS[wd],
+            "short": WEEKDAYS[wd][:3],
+            "index": round(sum(indexed[wd]) / len(indexed[wd]) * 100),
+            "n": len(indexed[wd]),
+        }
+        for wd in (1, 2, 3, 4, 5, 6, 0)
+    ]
+
+
+def _weeks(profile: list | None) -> int:
+    """How many observations back the thinnest weekday of a profile."""
+    return min((p["n"] for p in profile), default=0) if profile else 0
+
+
+def _swing(profile: list | None) -> int:
+    """How far the best weekday sits above the worst, in points."""
+    if not profile:
+        return 0
+    return max(p["index"] for p in profile) - min(p["index"] for p in profile)
+
+
+def _peak_day(profile: list | None) -> str | None:
+    return max(profile, key=lambda p: p["index"])["day"] if profile else None
+
+
+def money(x: float) -> float:
+    return round(float(x or 0), 2)
+
+
+# ---------------------------------------------------------------- extraction
+def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
+    root = save.root
+    day = root["Day"]
+
+    buildings = [
+        b for b in save.items(root["BuildingRegistrations"]) if b.get("RentedByPlayer")
+    ]
+    summaries = sorted(
+        save.items(root["financialSummaries"]), key=lambda s: s["dayNumber"]
+    )
+
+    stations = _service_stations(names)
+    recipes = _recipes(names)
+    staff_by_addr, staff = _staff(save, names)
+    crew_skill = {p["id"]: p["skill"] for p in staff}
+    residential = _residential_addresses(save, summaries)
+    stmt_history = _statement_history(save, summaries)
+    latest = stmt_history[-1][1] if stmt_history else {}
+
+    businesses = []
+    for b in buildings:
+        addr = (b["StreetName"], b["StreetNumber"])
+        if addr in residential:
+            continue
+        businesses.append(
+            _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
+        )
+    businesses.sort(key=lambda x: -x["profit"])
+
+    daily = _daily_series(save, summaries)
+    loans = _loans(save, names)
+    products = _products(businesses)
+    history = History(history_path)
+    character = root.get("characterId") or "default"
+    rhythm = _chain_rhythm(save, buildings, daily, day)
+    supply = _supply(save, names, businesses, day, rhythm, recipes, history, character)
+    product_rhythm = _product_rhythm(save, buildings, names)
+    for entry in products:
+        beat = product_rhythm.get(entry["item"])
+        entry["peak"] = beat["peak"] if beat else None
+        entry["swing"] = beat["swing"] if beat else 0
+    market = _market(save, names, businesses, day, history, character)
+
+    profits = [d["profit"] for d in daily]
+    last7 = profits[-7:] or [0]
+    prev7 = profits[-14:-7] or last7
+    profit_avg7 = sum(last7) / len(last7)
+
+    active = [b for b in businesses if b["status"] != "vacant"]
+    rent_total = sum(b["rent"] for b in businesses)
+    wage_total = sum(b["wages"] for b in businesses)
+
+    # A rolling seven-day profit line, so the purchase calendar's sawtooth does
+    # not read as trading moving up and down.
+    for i, row in enumerate(daily):
+        window = [d["profit"] for d in daily[max(0, i - 6) : i + 1]]
+        row["profit7"] = money(sum(window) / len(window))
+
+    trends = _site_trends(businesses, day)
+    chains = _chains(save, businesses, trends)
+    hype = _hype_exposure(businesses, market)
+
+    grids = _hourly(save, buildings, businesses, stations, crew_skill)
+    service_wage = collections.defaultdict(float)
+    for person in staff:
+        if person["skill"] == SERVICE_SKILL and person["addr"]:
+            service_wage[site_key(person["addr"])] = max(
+                service_wage[site_key(person["addr"])], person["wage"]
+            )
+    hour_findings = _hour_findings(grids, businesses, service_wage)
+    plan = _plan(
+        save,
+        names,
+        businesses,
+        market.pop("catalogue"),
+        recipes,
+        stations,
+        _ingredient_prices(save, names, supply, businesses),
+        rhythm,
+    )
+    expansion = _expansion(hour_findings, market, businesses)
+    net_worth = _net_worth(root, history, character)
+    entry = {
+        "hour": root["Hour"],
+        "cash": money(root["Money"]),
+        "profit": profits[-1] if profits else 0,
+    }
+    if root.get("NetWorth") is not None:
+        entry["netWorth"] = money(root["NetWorth"])
+    ledger = history.ledger(character, day, entry)
+    history.write()
+    gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
+    alerts = _alerts(
+        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate
+    )
+
+    return {
+        "meta": {
+            "save": root.get("SaveGameName") or "Save",
+            "day": day,
+            "hour": root["Hour"],
+            "minute": int(root["Minute"]),
+            "cityDate": _city_date(save, day),
+            "build": root.get("buildNumberAtLastSave"),
+            "verifiedBuild": VERIFIED_BUILD,
+            "locale": bool(names.locale),
+            "difficulty": _difficulty(save)["label"],
+            "houseRules": _difficulty(save),
+            "generated": dt.datetime.now().strftime("%d %b %Y, %H:%M"),
+            "source": os.path.basename(save.path),
+            "saved": dt.datetime.fromtimestamp(os.path.getmtime(save.path)).strftime(
+                "%d %b %Y, %H:%M"
+            ),
+        },
+        "kpi": {
+            "cash": money(root["Money"]),
+            "netWorth": net_worth["value"],
+            "netWorthAsOf": net_worth["asOf"],
+            "debt": sum(l["remaining"] for l in loans),
+            "profitYesterday": profits[-1] if profits else 0,
+            "profitAvg7": profit_avg7,
+            "profitPrev7": sum(prev7) / len(prev7),
+            "profitSum7": sum(last7),
+            "materiality": round(gate, 2),
+            "revenue": daily[-1]["revenue"] if daily else 0,
+            "businesses": len(active),
+            "vacant": len(businesses) - len(active),
+            "employees": len(staff),
+            "wageBill": wage_total,
+            "rentBill": rent_total,
+            "customers": sum(b["customers"] for b in businesses),
+        },
+        "daily": daily,
+        "businesses": businesses,
+        "products": products,
+        "staff": _staff_summary(staff, businesses),
+        "loans": loans,
+        "supply": supply,
+        "rhythm": rhythm,
+        "market": market,
+        "chains": chains,
+        "trends": trends,
+        "hypeExposure": hype,
+        "hours": grids,
+        "hourFindings": hour_findings,
+        "plan": plan,
+        "expansion": expansion,
+        "cashFlow": _cash_flow(ledger, daily, day),
+        "ledgerDays": len(ledger),
+        "alerts": alerts["lines"],
+        "minor": alerts["minor"],
+        "goals": _goals(save, names),
+        "weekly": _weekly(save),
+    }
+
+
+def _net_worth(root: dict, history, character: str) -> dict:
+    """Net worth, or the last one the game told us.
+
+    Build 3672 dropped ``NetWorth`` from the save (``midnightBankBalances``
+    appeared in its place). There is no honest way to recompute the game's own
+    figure from what is left, so the last recorded one is carried forward and
+    labelled with the day it came from rather than passed off as today's.
+    """
+    live = root.get("NetWorth")
+    if live is not None:
+        return {"value": money(live), "asOf": None}
+    for entry in reversed(history.ledger_entries(character)):
+        if entry.get("netWorth"):
+            return {"value": money(entry["netWorth"]), "asOf": entry["day"]}
+    return {"value": None, "asOf": None}
+
+
+def _city_date(save: Save, day: int) -> str:
+    """In-game day number rendered as a year/day-of-year, using the save's calendar."""
+    per_year = save.deref(save.root.get("gameVariables")).get("daysPerYear") or 60
+    year = (day - 1) // per_year + 1
+    return f"Year {year}, day {(day - 1) % per_year + 1} of {per_year}"
+
+
+# The custom-game sliders, with the direction that makes the game harder. Names
+# and effects are the game's own, from main_menu_custom_game_* in the locale.
+HOUSE_RULES = [
+    ("marketPriceMultiplier", "Public prices", 1.0, "up",
+     "cost of wholesale and imported goods, hospital fees and the like"),
+    ("employeeHourlySalaryMultiplier", "Salary demands", 1.0, "up", "what staff cost an hour"),
+    ("bankInterestMultiplier", "Bank interest", 1.0, "up", "interest on loans and investments"),
+    ("rivalsDifficultyMultiplier", "Rival attacks", 1.0, "up",
+     "severity of rival attacks; 0 switches them off entirely"),
+    ("baseCustomerPromotionMultiplier", "Base customers", 1.0, "down",
+     "customers you get before any traffic or marketing"),
+    ("exportMultiplier", "Export income", 1.0, "down", "what exporting pays"),
+    ("sellingMultiplier", "Resale value", 1.0, "down", "what selling something back returns"),
+    ("wholesaleUrgentFeeMultiplier", "Urgent wholesale fee", 1.0, "up",
+     "surcharge for rushing a wholesale order"),
+    ("importerUrgentFeeMultiplier", "Urgent import fee", 1.0, "up",
+     "surcharge for rushing an import"),
+    ("taxPercentage", "Tax rate", 30, "up", "annual rate from the IRS"),
+]
+
+
+def _difficulty(save: Save) -> dict:
+    """The house rules, read off the save rather than guessed from a preset id.
+
+    The stored ``difficulty`` is only a slot number, and a custom game keeps its
+    own multipliers regardless of what that slot says — so the settings
+    themselves are the honest answer to "how hard is this game".
+    """
+    gv = save.deref(save.root.get("gameVariables")) or {}
+    rules = []
+    for key, name, neutral, harder, what in HOUSE_RULES:
+        value = gv.get(key)
+        if value is None:
+            continue
+        value = round(value, 3)
+        # An unset multiplier reads as 0 in older saves; that is absence, not a
+        # setting, except for rival attacks where 0 genuinely means "off".
+        if not value and key != "rivalsDifficultyMultiplier":
+            continue
+        if value == neutral:
+            lean = "level"
+        else:
+            up = value > neutral
+            lean = "harder" if (up == (harder == "up")) else "easier"
+        rules.append({"name": name, "value": value, "neutral": neutral,
+                      "lean": lean, "what": what})
+
+    tougher = sum(1 for r in rules if r["lean"] == "harder")
+    softer = sum(1 for r in rules if r["lean"] == "easier")
+    custom = bool(tougher or softer)
+    return {
+        "label": "Custom" if custom else "Stock settings",
+        "slot": gv.get("difficulty"),
+        "harder": tougher,
+        "easier": softer,
+        "startingMoney": gv.get("startingMoney"),
+        "rules": rules,
+    }
+
+
+def _residential_addresses(save: Save, summaries: list) -> set:
+    """Apartments are billed as residences, not businesses."""
+    out = set()
+    for s in summaries[-5:]:
+        for r in save.items(s.get("residentialStatements")):
+            addr = save.address(r.get("Address"))
+            if addr:
+                out.add(addr)
+    return out
+
+
+def _statement_history(save: Save, summaries: list) -> list:
+    history = []
+    for s in summaries:
+        by_addr = {}
+        for st in save.items(s["businessIncomeStatements"]):
+            addr = save.address(st.get("Address"))
+            if addr:
+                by_addr[addr] = st
+        history.append((s["dayNumber"], by_addr))
+    return history
+
+
+def _staff(save: Save, names: Names):
+    by_addr = collections.defaultdict(list)
+    staff = []
+    for e in save.items(save.root["EmployeeInstances"]):
+        char = save.deref(e.get("characterData")) or {}
+        skills = save.items(char.get("skills"))
+        top = max(skills, key=lambda s: s["value"], default=None)
+        rec = {
+            "id": e.get("id"),
+            "name": char.get("name", "?"),
+            "role": names.label(top["name"]) if top else "-",
+            "skill": top["name"] if top else None,
+            "level": round(top["value"], 0) if top else 0,
+            "wage": money(e.get("hourlyWage", 0)),
+            "hours": e.get("assignedWeeklyHours", 0),
+            "satisfaction": round(e.get("satisfaction", 0)),
+            "hired": e.get("dayHired", 0),
+            "addr": save.address(e.get("assignedAddress")),
+            "absent": bool(e.get("isAbsent")),
+            "complaining": bool(
+                (save.deref(e.get("complaintData")) or {}).get("isComplaining")
+            ),
+        }
+        rec["daily"] = rec["wage"] * rec["hours"] / 7
+        staff.append(rec)
+        by_addr[rec["addr"]].append(rec)
+    return by_addr, staff
+
+
+def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
+    st = latest.get(addr, {})
+    name = b.get("BusinessName")
+    tag = ""
+    if name and name.startswith("[") and "]" in name:
+        tag = name[1 : name.index("]")]
+
+    orders = save.items(b["orderHistory"])
+    customer_days = [
+        (e["dayNumber"], e.get("totalCustomers", 0))
+        for e in orders
+        if e.get("totalCustomers")
+    ]
+    revenue_days = [
+        (dayno, by_addr[addr]["TotalSales"])
+        for dayno, by_addr in history
+        if addr in by_addr and by_addr[addr]["TotalSales"] > 0
+    ]
+    rhythm = _weekday_profile(revenue_days)
+    customer_rhythm = _weekday_profile(customer_days)
+    recent = orders[-STOCK_COVER_DAYS:]
+    customers = recent[-1]["totalCustomers"] if recent else 0
+
+    units_sold = collections.Counter()
+    revenue_by_item = collections.Counter()
+    for entry in recent:
+        for sale in save.items(entry.get("itemSales")):
+            units_sold[sale["itemName"]] += sale.get("amountSold", 0)
+            revenue_by_item[sale["itemName"]] += sale.get("totalPrice", 0)
+    span = max(len(recent), 1)
+
+    stock = collections.Counter()
+    for holder in save.items(b["itemInstances"]):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if not item:
+            continue
+        for cargo in save.items(item.get("cargoInstances")):
+            stock[cargo["itemName"]] += cargo.get("amount", 0)
+
+    prices = {
+        p["itemName"]: p["price"] for p in save.items(b["retailPrices"]) if p
+    }
+
+    lines = []
+    for item in set(stock) | set(units_sold) | set(prices):
+        rate = units_sold[item] / span
+        lines.append(
+            {
+                "item": names.label(item),
+                "slug": item,
+                "units": int(stock[item]),
+                "rate": round(rate, 1),
+                "cover": round(stock[item] / rate, 1) if rate > 0.5 else None,
+                "price": money(prices.get(item, 0)),
+                "revenue": money(revenue_by_item[item] / span),
+                "soldPerDay": round(units_sold[item] / span),
+            }
+        )
+    lines.sort(key=lambda x: (x["cover"] is None, x["cover"] if x["cover"] else 0))
+
+    series = []
+    for dayno, by_addr in history[-30:]:
+        s = by_addr.get(addr)
+        if s:
+            series.append(
+                {
+                    "day": dayno,
+                    "profit": money(s["TotalProfit"]),
+                    "revenue": money(s["TotalSales"]),
+                }
+            )
+
+    crew = staff_by_addr.get(addr, [])
+    sat = save.deref(b.get("satisfaction")) or {}
+    promo = save.deref(b.get("promotion")) or {}
+    btype = b.get("businessTypeName", "")
+    revenue = money(st.get("TotalSales", 0))
+    profit = money(st.get("TotalProfit", 0))
+
+    if not name:
+        status = "vacant"
+    elif btype in RETAIL_TYPES:
+        status = "retail"
+    elif btype in OVERHEAD_TYPES:
+        status = "overhead"
+    else:
+        status = "support"
+
+    # What customers currently find when they walk in. The game tracks this
+    # itself and only for a business that is open and trading — a factory or
+    # warehouse never has it, so a missing entry only means something for a
+    # retail floor that is actually seeing customers.
+    demands = set(save.items(b.get("cachedFulfilledCustomerDemands")))
+    missing_amenities = (
+        [slug for slug in AMENITY_DEMANDS if slug not in demands]
+        if status == "retail"
+        else []
+    )
+
+    return {
+        "name": name or "Vacant lease",
+        "tag": tag,
+        "neighbourhood": NEIGHBOURHOODS.get(tag, ""),
+        "type": names.label(btype, "Empty"),
+        "typeSlug": btype,
+        "status": status,
+        "costCentre": btype in COST_CENTRE_TYPES,
+        "key": site_key(addr),
+        "restocks": btype in RESELLER_TYPES,
+        "address": f"{b['StreetNumber']} {names.street(b['StreetName'])}",
+        "opened": b.get("creationDay", 0),
+        "rent": money(b.get("RentPerDay", 0)),
+        "capacity": b.get("customerCapacity", 0),
+        "revenue": revenue,
+        "cogs": money(st.get("TotalResources", 0)),
+        "wages": money(st.get("SalaryExpenses", 0)),
+        "marketing": money(st.get("MarketingExpenses", 0)),
+        "theft": money(st.get("Theft", 0)),
+        "licensing": money(st.get("LicensingFees", 0)),
+        "profit": profit,
+        "margin": round(profit / revenue * 100, 1) if revenue else None,
+        "satisfaction": {
+            "overall": sat.get("overall", 0) if status == "retail" else None,
+            "service": sat.get("customerService", 0),
+            "pricing": sat.get("pricing", 0),
+            "cleanliness": sat.get("cleanliness", 0),
+            "facility": sat.get("facility", 0),
+        },
+        "promotion": promo.get("total", 0),
+        "traffic": promo.get("trafficIndex", 0),
+        "marketingIndex": promo.get("marketing", 0),
+        "missingAmenities": missing_amenities,
+        "staff": len(crew),
+        "staffCost": sum(c["daily"] for c in crew),
+        "crew": _crew(crew),
+        "rhythm": rhythm,
+        "customerRhythm": customer_rhythm,
+        "swing": _swing(rhythm or customer_rhythm),
+        "peakDay": _peak_day(rhythm or customer_rhythm),
+        "customers": customers,
+        # customerCapacity is how many shoppers fit inside at once, not a daily
+        # figure, so spend per visit is the honest derived number here.
+        "basket": round(revenue / customers, 2) if customers else None,
+        "security": round(b.get("securityLevelPercentage", 0)),
+        "lines": lines,
+        "series": series,
+        "daysOpen": max(day - b.get("creationDay", day), 1),
+    }
+
+
+def _crew(crew: list) -> list:
+    """Who works here, folded into roles."""
+    roles = collections.OrderedDict()
+    for person in sorted(crew, key=lambda c: (c["role"], -c["level"])):
+        entry = roles.setdefault(
+            person["role"], {"role": person["role"], "count": 0, "daily": 0.0, "skill": 0}
+        )
+        entry["count"] += 1
+        entry["daily"] += person["daily"]
+        entry["skill"] = max(entry["skill"], person["level"])
+    for entry in roles.values():
+        entry["daily"] = money(entry["daily"])
+    return sorted(roles.values(), key=lambda r: -r["count"])
+
+
+def _chain_rhythm(save: Save, buildings: list, daily: list, day: int) -> dict:
+    """The weekly cycle across the whole chain, in revenue and in footfall."""
+    customers = collections.Counter()
+    for b in buildings:
+        for entry in save.items(b["orderHistory"]):
+            customers[entry["dayNumber"]] += entry.get("totalCustomers", 0)
+    profiles = {
+        "revenue": _weekday_profile([(d["day"], d["revenue"]) for d in daily]),
+        "profit": _weekday_profile(
+            [(d["day"], d["profit"]) for d in daily if d["profit"] > 0]
+        ),
+        "customers": _weekday_profile(sorted(customers.items())),
+    }
+    # What today and yesterday are normally worth, so a single day's figure can
+    # be read against its own weekday rather than a flat average.
+    reference = profiles["customers"] or profiles["revenue"]
+    by_name = {p["day"]: p["index"] for p in reference} if reference else {}
+    today = WEEKDAYS[day % 7]
+    yesterday = WEEKDAYS[(day - 1) % 7]
+    profiles["today"] = {"day": today, "index": by_name.get(today)}
+    profiles["yesterday"] = {"day": yesterday, "index": by_name.get(yesterday)}
+    profiles["basis"] = "customers" if profiles["customers"] else "revenue"
+    return profiles
+
+
+def _product_rhythm(save: Save, buildings: list, names: Names) -> dict:
+    """Which weekday each product peaks on, across every shop that sells it."""
+    units = collections.defaultdict(collections.Counter)
+    for b in buildings:
+        for entry in save.items(b["orderHistory"]):
+            for sale in save.items(entry.get("itemSales")):
+                units[sale["itemName"]][entry["dayNumber"]] += sale.get("amountSold", 0)
+    out = {}
+    for item, by_day in units.items():
+        profile = _weekday_profile(sorted(by_day.items()))
+        if profile:
+            out[names.label(item)] = {
+                "profile": profile,
+                "peak": _peak_day(profile),
+                "swing": _swing(profile),
+            }
+    return out
+
+
+def _daily_series(save: Save, summaries: list) -> list:
+    out = []
+    for s in summaries:
+        revenue = cogs = wages = rent = marketing = theft = 0.0
+        for st in save.items(s["businessIncomeStatements"]):
+            revenue += st.get("TotalSales", 0)
+            cogs += st.get("TotalResources", 0)
+            wages += st.get("SalaryExpenses", 0)
+            rent += st.get("RentExpenses", 0)
+            marketing += st.get("MarketingExpenses", 0)
+            theft += st.get("Theft", 0)
+        out.append(
+            {
+                "day": s["dayNumber"],
+                "profit": money(s.get("totalProfit", 0)),
+                "business": money(s.get("totalBusinessProfit", 0)),
+                "revenue": money(revenue),
+                "cogs": money(cogs),
+                "wages": money(wages),
+                "rent": money(rent),
+                "marketing": money(marketing),
+                "theft": money(theft),
+                "loans": money(-s.get("totalLoanExpenses", 0)),
+            }
+        )
+    return out
+
+
+def _loans(save: Save, names: Names) -> list:
+    out = []
+    for l in save.items(save.root["Loans"]):
+        remaining = money(l.get("remainingAmount", 0))
+        total = money(l.get("totalAmount", 0))
+        out.append(
+            {
+                "bank": names.addr(save.address(l.get("bankAddress"))),
+                "total": total,
+                "remaining": remaining,
+                "repaid": round((1 - remaining / total) * 100, 1) if total else 0,
+                "dailyPayment": money(l.get("dailyPayment", 0)),
+                "dailyInterest": money(l.get("dailyInterest", 0)),
+            }
+        )
+    return sorted(out, key=lambda x: -x["remaining"])
+
+
+def _products(businesses: list) -> list:
+    agg = collections.defaultdict(
+        lambda: {"revenue": 0.0, "units": 0, "stock": 0, "stores": 0}
+    )
+    for b in businesses:
+        for line in b["lines"]:
+            if not line["revenue"] and not line["units"]:
+                continue
+            rec = agg[line["item"]]
+            rec["revenue"] += line["revenue"]
+            rec["units"] += line["soldPerDay"]
+            rec["stock"] += line["units"]
+            rec["stores"] += 1 if line["revenue"] else 0
+    out = [{"item": k, **v} for k, v in agg.items()]
+    for rec in out:
+        rec["revenue"] = money(rec["revenue"])
+        rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
+    return sorted(out, key=lambda x: -x["revenue"])
+
+
+def _staff_summary(staff: list, businesses: list) -> dict:
+    by_role = collections.Counter(s["role"] for s in staff)
+    by_site = collections.Counter()
+    for b in businesses:
+        by_site[b["name"]] = b["staff"]
+    return {
+        "total": len(staff),
+        "dailyCost": sum(s["daily"] for s in staff),
+        "avgSatisfaction": round(sum(s["satisfaction"] for s in staff) / len(staff), 1)
+        if staff
+        else 0,
+        "unhappy": sum(1 for s in staff if s["satisfaction"] < 70),
+        "absent": sum(1 for s in staff if s["absent"]),
+        "complaining": sum(1 for s in staff if s["complaining"]),
+        "roles": sorted(
+            ({"role": r, "count": c} for r, c in by_role.items()),
+            key=lambda x: -x["count"],
+        ),
+        "sites": sorted(
+            ({"site": s, "count": c} for s, c in by_site.items() if c),
+            key=lambda x: -x["count"],
+        ),
+    }
+
+
+def _weekly(save: Save) -> list:
+    income = {
+        t["m_Item1"]: t["m_Item2"] for t in save.items(save.root["playerWeeklyIncomeHistory"])
+    }
+    count = {
+        t["m_Item1"]: t["m_Item2"]
+        for t in save.items(save.root["playerNumberOfBusinessesHistory"])
+    }
+    return [
+        {"day": d, "income": money(income[d]), "businesses": count.get(d, 0)}
+        for d in sorted(income)
+    ]
+
+
+def _goals(save: Save, names: Names) -> dict:
+    ach = save.deref(save.root.get("achievementsData")) or {}
+    return {
+        "completed": len(save.items(save.root["completedPersonalGoals"])),
+        "diplomas": sum(
+            1 for d in save.items(save.root["PlayerDiplomas"]) if d.get("completed")
+        ),
+        "goodsProduced": ach.get("goodsProducedInFactories", 0),
+        "taxesPaid": money(ach.get("taxesPaid", 0)),
+    }
+
+
+def _supply(
+    save: Save,
+    names: Names,
+    businesses: list,
+    day: int,
+    rhythm: dict,
+    recipes: dict | None = None,
+    history: "History | None" = None,
+    character: str = "default",
+) -> dict:
+    """How the goods actually move: a daily top-up round, and a weekly import.
+
+    The logistics manager refills every shop to a per-item target each morning,
+    so a shop only runs dry if it sells more in a day than that target. Imports
+    land once a week, so a warehouse only runs dry if its holding cannot cover
+    the daily draw until the next delivery. Those are the two questions worth
+    asking, plus: what is piling up and never moving?
+    """
+    index = {b["key"]: i for i, b in enumerate(businesses)}
+    sold = {b["key"]: {l["slug"]: l["rate"] for l in b["lines"]} for b in businesses}
+    held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
+
+    # Most of today is already spent. A save taken at 23:00 on a Saturday has one
+    # hour of Saturday's selling left in it, not a whole day of it, and charging
+    # the full day would report a warehouse running dry that is in fact fine.
+    # Everything that walks forward from now starts with this fraction.
+    left_today = max(0.0, (24 - save.root["Hour"] - int(save.root["Minute"]) / 60) / 24)
+    spent_today = 1 - left_today
+
+    # A flat daily average under-provisions a Saturday and over-provisions a
+    # Wednesday, so every consumption figure below is read through the weekday
+    # profile of the site doing the consuming.
+    chain_beat = rhythm.get("customers") or rhythm.get("revenue")
+
+    def beat(business: dict) -> dict:
+        profile = business.get("rhythm") or chain_beat
+        if not profile:
+            return {wd: 1.0 for wd in range(7)}
+        by_name = {p["day"]: p["index"] / 100 for p in profile}
+        return {wd: by_name.get(WEEKDAYS[wd], 1.0) for wd in range(7)}
+
+    def peak_of(business: dict):
+        profile = business.get("rhythm") or chain_beat
+        if not profile:
+            return 1.0, None
+        top = max(profile, key=lambda p: p["index"])
+        return top["index"] / 100, top["day"]
+
+    # The distribution graph: factory -> warehouse -> shop, with a stock target
+    # on every edge.
+    edges = collections.defaultdict(list)
+    target_at = {}
+    for plan in save.items(save.root["logisticsManagerPlans"]):
+        source = site_key(save.address(plan["targetAddress"]))
+        for dest in save.items(plan["destinations"]):
+            dest_key = site_key(save.address(dest["deliveryTargetAddress"]))
+            for target in save.items(dest["stockTargets"]):
+                item, amount = target["itemName"], target["targetAmount"]
+                edges[source].append((dest_key, item, amount))
+                target_at[(dest_key, item)] = (amount, source)
+
+    drawn = {}
+
+    def draw(key: str, item: str, seen: frozenset = frozenset()) -> float:
+        """Units of `item` leaving this site per day, following the chain down."""
+        if key not in index or key in seen:
+            return 0.0  # a pier or someone else's address: an export, not a draw
+        if (key, item) in drawn:
+            return drawn[(key, item)]
+        total = sold.get(key, {}).get(item, 0.0)
+        for dest_key, dest_item, _ in edges.get(key, []):
+            if dest_item == item:
+                total += draw(dest_key, item, seen | {key})
+        drawn[(key, item)] = total
+        return total
+
+    def customer_driven(key: str, item: str, seen: frozenset = frozenset()) -> bool:
+        """Whether this holding ends up on a shop floor.
+
+        A shelf follows the week's rhythm; a machine fed to a target every
+        morning takes the same amount on a Saturday as on a Tuesday.
+        """
+        if key not in index or key in seen:
+            return False
+        if businesses[index[key]]["status"] == "retail":
+            return True
+        return any(
+            customer_driven(dest_key, item, seen | {key})
+            for dest_key, dest_item, _ in edges.get(key, [])
+            if dest_item == item
+        )
+
+    # What each depot actually shipped, from the game's own delivery log. A
+    # negative amount is a logistics round leaving, a positive one an import or
+    # a factory run arriving. Following sales down the chain cannot see a
+    # factory that turns tobacco into cigarettes without selling either, and
+    # last week's order is an order, not a measurement; this log is the draw.
+    shipped = collections.defaultdict(lambda: collections.defaultdict(float))
+    received = collections.defaultdict(lambda: collections.defaultdict(float))
+    by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    round_days = collections.defaultdict(set)
+    inbound_days = collections.defaultdict(set)
+    for building in save.items(save.root["BuildingRegistrations"]):
+        if not building.get("RentedByPlayer"):
+            continue
+        key = site_key((building["StreetName"], building["StreetNumber"]))
+        for transaction in save.items(building.get("deliveryTransactions")):
+            when = transaction.get("dayOfDelivery")
+            # Today's round may still be on the road; yesterday's is complete.
+            if when is None or when >= day or when < day - SHIPPED_WINDOW:
+                continue
+            for entry in save.items(transaction.get("deliveryItems")):
+                amount = entry.get("amountDelivered", 0)
+                if not entry.get("itemName"):
+                    continue
+                if amount < 0:
+                    shipped[key][entry["itemName"]] -= amount
+                    round_days[key].add(when)
+                elif amount > 0:
+                    received[key][entry["itemName"]] += amount
+                    inbound_days[key].add(when)
+                by_day[key][entry["itemName"]][when] += amount
+
+    def shipped_per_day(key: str, item: str) -> float | None:
+        """Measured daily outflow, or None when too few rounds are on record."""
+        days = round_days.get(key, ())
+        if len(days) < SHIPPED_MIN_DAYS:
+            return None
+        return shipped[key].get(item, 0.0) / len(days)
+
+    def received_per_day(key: str, item: str) -> float | None:
+        """Measured daily inflow, or None when too few rounds are on record."""
+        days = inbound_days.get(key, ())
+        if len(days) < SHIPPED_MIN_DAYS:
+            return None
+        return received[key].get(item, 0.0) / len(days)
+
+    # --- imports: what lands weekly, and when
+    imports = {}
+    next_day = None
+    for partnership in save.items(save.root["importPartnerships"]):
+        arrives = partnership.get("nextDeliveryDay") or 0
+        active = bool(partnership.get("isActive"))
+        if active and arrives >= day:
+            next_day = arrives if next_day is None else min(next_day, arrives)
+        for product in save.items(partnership["products"]):
+            warehouse = site_key(save.address(product["assignedWarehouse"]))
+            ordered = product.get("amountOrderedLastWeek", 0)
+            if not warehouse or not ordered:
+                continue
+            imports[(warehouse, product["itemName"])] = {
+                "weekly": product.get("amount", 0),
+                "lastWeek": ordered,
+                "arrives": arrives,
+                "active": active,
+                "from": names.addr(save.address(partnership.get("importAddress"))),
+            }
+
+    days_to_import = (next_day - day) if next_day is not None else None
+    # The delivery lands at the start of its day, so the stock has to reach it
+    # from now — the rest of today plus the whole days in between.
+    hours_to_import = (
+        max(days_to_import - spent_today, 0.0) if days_to_import is not None else None
+    )
+    depot_days = hours_to_import if hours_to_import else 7.0
+
+    # --- 1. shops: does a day of selling outrun the morning top-up?
+    shop_rows = []
+    for business in businesses:
+        if business["status"] != "retail":
+            continue
+        for line in business["lines"]:
+            item, rate = line["slug"], line["rate"]
+            if rate <= 0:
+                continue
+            target, source = target_at.get((business["key"], item), (0, None))
+            factor, peak_day = peak_of(business)
+            peak_rate = rate * factor
+            if target:
+                pressure = peak_rate / target
+                fit = _fit(peak_rate, target)
+                level = (
+                    "critical" if fit == "short"
+                    else "warn" if fit == "tight" or pressure >= 0.85
+                    else "ok"
+                )
+            elif not line["units"]:
+                continue  # never held here, so it is made on demand, not stocked
+            else:
+                # Nothing refills this shelf on a schedule, so the old
+                # days-of-cover question is the right one after all.
+                cover = line["units"] / peak_rate
+                pressure = None
+                level = "critical" if cover < 1 else "warn" if cover < 2 else "ok"
+            shop_rows.append(
+                {
+                    "s": index[business["key"]],
+                    "item": line["item"],
+                    "sold": round(rate),
+                    "peakSold": round(peak_rate),
+                    "peakDay": peak_day,
+                    "target": target,
+                    "pressure": round(pressure * 100) if pressure is not None else None,
+                    "stock": line["units"],
+                    "from": index.get(source) if source else None,
+                    "level": level,
+                }
+            )
+    shop_rows.sort(
+        key=lambda r: -(r["pressure"] if r["pressure"] is not None else 999)
+    )
+
+    # --- 2. depots: does the holding reach the next delivery?
+    import_rows = []
+    for business in businesses:
+        if business["status"] not in ("overhead", "support"):
+            continue
+        for line in business["lines"]:
+            item = line["slug"]
+            supply = imports.get((business["key"], item))
+            if not supply or not line["units"] and not supply["lastWeek"]:
+                continue
+            # The draw, in order of trust: what the delivery log says left,
+            # then what the shops down the chain sell, then last week's order
+            # as the only figure there is. The last is a guess and is labelled
+            # as one below rather than judged.
+            logged = shipped_per_day(business["key"], item)
+            if logged is not None:
+                per_day, basis = logged, "shipped"
+            elif draw(business["key"], item) > 0:
+                per_day, basis = draw(business["key"], item), "sales"
+            else:
+                per_day, basis = supply["lastWeek"] / 7, "order"
+            if per_day <= 0:
+                continue
+            driven = customer_driven(business["key"], item)
+
+            # Walk real days forward rather than dividing by an average: three
+            # days that land on a weekend eat more than three ordinary ones. Today
+            # is charged for the hours it has left, not for a whole day, so cover
+            # is measured from now rather than from this morning.
+            weekly = beat(business) if driven else FLAT_WEEK
+            factor, peak_day = peak_of(business) if driven else (1.0, None)
+            remaining, cover, runs_out = line["units"], 0.0, None
+            for ahead in range(60):
+                share = left_today if ahead == 0 else 1.0
+                today_use = per_day * weekly[(day + ahead) % 7] * share
+                if today_use <= 0:
+                    cover += share
+                    continue
+                if remaining <= today_use:
+                    cover += share * remaining / today_use
+                    runs_out = day + ahead
+                    break
+                remaining -= today_use
+                cover += share
+            else:
+                cover = 60.0
+
+            due = (
+                max(supply["arrives"] - day - spent_today, 0.0)
+                if supply["active"]
+                else None
+            )
+
+            # Is the standing order the right size? Last week's draw is not the
+            # test — an order that exactly matched last week's use is a well
+            # sized order, not a warning. The test is the week the order has to
+            # cover, charged day by day at each weekday's own rate, the same
+            # walk the cover figure above uses.
+            start = supply["arrives"] if supply["active"] else day
+            week_need = sum(per_day * weekly[(start + ahead) % 7] for ahead in range(7))
+            # Last week's order against this week's is a change of mind, not a
+            # shortfall; without a measured draw the order is not judged.
+            order_fit = _fit(week_need, supply["weekly"]) if basis != "order" else "ok"
+
+            # An order sized to consumption always looks as though it runs out a
+            # few hours before the next drop — that is the design, not a finding.
+            # So the same tolerance the order fit uses applies to the walk: a gap
+            # under half a day, or under 5% of the week the order covers, is
+            # tight rather than short.
+            slack = max(COVER_NOISE_DAYS, FIT_TIGHT * week_need / per_day)
+            short_by = max(due - cover, 0.0) if due is not None else 0.0
+            cover_fit = (
+                "short" if short_by > slack else "tight" if short_by > 0 else "ok"
+            )
+
+            # An order too small for its week and a shelf that runs dry before
+            # the next drop are usually the same fact at two stages: the order
+            # loses ground every week, and the buffer hides it until it cannot.
+            # Naming the order first keeps them one finding with one fix, and
+            # leaves 'shortfall' for the case that really is different — an
+            # order sized right, and stock that still will not reach the drop.
+            if not supply["active"]:
+                level, reason = ("critical" if cover < 7 else "warn"), "paused"
+            elif order_fit == "short":
+                level, reason = "critical", "order"
+            elif cover_fit == "short":
+                level, reason = "critical", "shortfall"
+            elif order_fit == "tight":
+                level, reason = "warn", "order"
+            elif cover_fit == "tight":
+                level, reason = "warn", "shortfall"
+            else:
+                level, reason = "ok", None
+            import_rows.append(
+                {
+                    "s": index[business["key"]],
+                    "item": line["item"],
+                    "stock": line["units"],
+                    "perDay": round(per_day),
+                    "basis": basis,
+                    "peakDay": peak_day,
+                    "peakPerDay": round(per_day * factor),
+                    "cover": round(cover, 1),
+                    "runsOut": WEEKDAYS[runs_out % 7] if runs_out is not None else None,
+                    "weekly": supply["weekly"],
+                    "lastWeek": supply["lastWeek"],
+                    "weekNeed": round(week_need),
+                    "orderFit": order_fit,
+                    "coverFit": cover_fit,
+                    "due": round(due, 2) if due is not None else None,
+                    "shortBy": round(short_by, 2),
+                    "paused": not supply["active"],
+                    "arrives": supply["arrives"],
+                    "from": supply["from"],
+                    "level": level,
+                    "reason": reason,
+                }
+            )
+    import_rows.sort(key=lambda r: r["cover"])
+
+    # --- 3. anything just sitting there
+    idle_rows = []
+    for business in businesses:
+        for line in business["lines"]:
+            item, units = line["slug"], line["units"]
+            if units < IDLE_UNITS:
+                continue
+            per_week = draw(business["key"], item) * 7
+            if per_week <= 0:
+                logged = shipped_per_day(business["key"], item)
+                supply = imports.get((business["key"], item))
+                taken = received_per_day(business["key"], item)
+                if logged:
+                    per_week = logged * 7
+                elif supply:
+                    per_week = supply["lastWeek"]
+                elif taken and units < taken * BUFFER_DAYS:
+                    # A factory neither sells nor ships its inputs. What the
+                    # round brings in each morning is what the machines used
+                    # the day before, and a holding smaller than two rounds is
+                    # the end-of-day buffer that keeps them running, not stock
+                    # that has stopped moving.
+                    per_week = taken * 7
+                else:
+                    per_week = 0
+            target = target_at.get((business["key"], item), (0, None))[0]
+            if per_week <= 0:
+                if units >= DEAD_UNITS:
+                    idle_rows.append(
+                        {
+                            "s": index[business["key"]],
+                            "item": line["item"],
+                            "slug": item,
+                            "stock": units,
+                            "perWeek": 0,
+                            "weeks": None,
+                            "target": target,
+                            "price": line["price"],
+                            "value": money(units * line["price"]),
+                            "dead": True,
+                            "level": "warn",
+                        }
+                    )
+                continue
+            weeks = units / per_week
+            if weeks >= IDLE_WEEKS:
+                idle_rows.append(
+                    {
+                        "s": index[business["key"]],
+                        "item": line["item"],
+                        "slug": item,
+                        "stock": units,
+                        "perWeek": round(per_week),
+                        "weeks": round(weeks, 1),
+                        "target": target,
+                        "price": line["price"],
+                        "value": money(units * line["price"]),
+                        "dead": False,
+                        "level": "warn" if weeks >= IDLE_WEEKS * 2 else "info",
+                    }
+                )
+    idle_rows.sort(key=lambda r: -(r["weeks"] or 999))
+
+    # --- 3b. the factories: what each line makes and eats, against the flow
+    flow = {
+        "index": index,
+        "held": held,
+        "targets": target_at,
+        "imports": imports,
+        "edges": edges,
+        "shipped": shipped_per_day,
+        "received": received_per_day,
+        "byDay": lambda key, item: by_day[key][item],
+        "roundDays": lambda key: round_days.get(key, set()),
+    }
+    factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
+
+    # --- 4. the chain as a graph, with what each node holds against what it needs
+    COLUMN = {"import": 0, "factory": 1, "depot": 2, "shop": 3}
+    nodes, links = {}, []
+
+    def node(key, name, kind, tag="", hood="", sub=""):
+        if key not in nodes:
+            nodes[key] = {
+                "id": key,
+                "name": name,
+                "kind": kind,
+                "col": COLUMN[kind],
+                "tag": tag,
+                "hood": hood,
+                "sub": sub,
+                "items": [],
+                "site": index.get(key),
+            }
+        return nodes[key]
+
+    def kind_of(business):
+        if business["status"] == "retail":
+            return "shop"
+        if "factory" in (business["typeSlug"] or ""):
+            return "factory"
+        return "depot"
+
+    for business in businesses:
+        if business["status"] == "vacant":
+            continue
+        node(
+            business["key"],
+            business["name"],
+            kind_of(business),
+            business["tag"],
+            business["neighbourhood"],
+            business["type"],
+        )
+
+    # Importers sit outside the company: they are where the week's goods enter.
+    for partnership in save.items(save.root["importPartnerships"]):
+        source = save.address(partnership.get("importAddress"))
+        if not source:
+            continue
+        source_key = "import:" + site_key(source)
+        arrives = partnership.get("nextDeliveryDay") or 0
+        node(
+            source_key,
+            names.addr(source),
+            "import",
+            "",
+            "",
+            "Weekly import" if partnership.get("isActive") else "Import paused",
+        )
+        moved = collections.defaultdict(lambda: [0, 0])
+        for product in save.items(partnership["products"]):
+            warehouse = site_key(save.address(product["assignedWarehouse"]))
+            if warehouse not in nodes or not product.get("amountOrderedLastWeek"):
+                continue
+            entry = moved[warehouse]
+            entry[0] += product["amountOrderedLastWeek"]
+            entry[1] += 1
+        for warehouse, (amount, count) in moved.items():
+            links.append(
+                {
+                    "from": source_key,
+                    "to": warehouse,
+                    "perDay": round(amount / 7),
+                    "items": count,
+                    "cadence": "weekly",
+                    "paused": not partnership.get("isActive"),
+                    "arrives": arrives,
+                }
+            )
+
+    for source, destinations in edges.items():
+        if source not in nodes:
+            continue
+        moved = collections.defaultdict(lambda: [0.0, 0])
+        for dest_key, item, _target in destinations:
+            if dest_key not in nodes:
+                continue  # a pier: that is an export, not an internal move
+            entry = moved[dest_key]
+            entry[0] += draw(dest_key, item)
+            entry[1] += 1
+        for dest_key, (per_day, count) in moved.items():
+            links.append(
+                {
+                    "from": source,
+                    "to": dest_key,
+                    "perDay": round(per_day),
+                    "items": count,
+                    "cadence": "daily",
+                    "paused": False,
+                    "arrives": None,
+                }
+            )
+
+    # What each node holds, against what it has to cover before its next refill.
+    shop_need = collections.defaultdict(dict)
+    for row in shop_rows:
+        shop_need[businesses[row["s"]]["key"]][row["item"]] = row
+    depot_need = collections.defaultdict(dict)
+    for row in import_rows:
+        depot_need[businesses[row["s"]]["key"]][row["item"]] = row
+
+    for business in businesses:
+        entry = nodes.get(business["key"])
+        if not entry:
+            continue
+        weekly = beat(business)
+        factor, _peak_day = peak_of(business)
+        for line in business["lines"]:
+            shop = shop_need[business["key"]].get(line["item"])
+            depot = depot_need[business["key"]].get(line["item"])
+            if shop:
+                need = shop["peakSold"]
+                provision = shop["target"]
+                # A shelf is refilled daily, so a day's peak is the whole test.
+                cycle_need, cadence = need, "daily"
+            elif depot:
+                need = round(depot["perDay"] * max(depot_days, 0.0) * factor)
+                provision = depot["weekly"]
+                # The order arrives weekly, so it has to cover a week — comparing
+                # it with the days left until the next one would flatter it.
+                cycle_need, cadence = round(depot["perDay"] * 7), "weekly"
+            else:
+                out = draw(business["key"], line["item"])
+                if out <= 0 and line["units"] <= 0:
+                    continue
+                target = next(
+                    (
+                        amount
+                        for (dest, item), (amount, _src) in target_at.items()
+                        if dest == business["key"] and item == line["slug"]
+                    ),
+                    0,
+                )
+                need = round(out * factor)
+                provision, cycle_need, cadence = target, need, "daily"
+            if not need and not line["units"]:
+                continue
+            # A depot line already carries its verdict, weekday-walked and
+            # withheld where no draw has been measured; do not second-guess it.
+            fit = depot["orderFit"] if depot else _fit(cycle_need, provision)
+            entry["items"].append(
+                {
+                    "item": line["item"],
+                    "stock": line["units"],
+                    "need": need,
+                    "cycleNeed": cycle_need,
+                    "provision": provision,
+                    "cadence": cadence,
+                    "fit": fit,
+                    "short": fit == "short",
+                    # Only worth flagging where the next refill is days away. A
+                    # half-empty shelf at teatime is tomorrow morning's business.
+                    "low": bool(
+                        cadence == "weekly" and need and line["units"] < need
+                    ),
+                }
+            )
+        rank = {"short": 0, "tight": 1, "ok": 2}
+        entry["items"].sort(
+            key=lambda i: (rank[i["fit"]], not i["low"], -i["need"])
+        )
+        entry["short"] = sum(1 for i in entry["items"] if i["fit"] == "short")
+        entry["tight"] = sum(1 for i in entry["items"] if i["fit"] == "tight")
+        entry["low"] = sum(1 for i in entry["items"] if i["low"])
+        entry["stock"] = sum(i["stock"] for i in entry["items"])
+
+    for entry in nodes.values():
+        entry.setdefault("tight", 0)
+        entry.setdefault("short", 0)
+        entry.setdefault("low", 0)
+        entry.setdefault("stock", 0)
+
+    # A site earns a place on the diagram by being on a plan or by holding
+    # something worth drawing. Head office keeps a dozen paper bags in a drawer;
+    # that is not a depot.
+    reached = {l["from"] for l in links} | {l["to"] for l in links}
+    graph = {
+        "nodes": [
+            n
+            for n in nodes.values()
+            if n["id"] in reached or n["stock"] >= GRAPH_MIN_STOCK
+        ],
+        "links": links,
+    }
+
+    return {
+        "day": day,
+        "today": weekday(day),
+        "graph": graph,
+        "nextImportDay": next_day,
+        "nextImportWeekday": weekday(next_day) if next_day else None,
+        "daysToImport": days_to_import,
+        "hoursToImport": round(hours_to_import, 2)
+        if hours_to_import is not None
+        else None,
+        "leftToday": round(left_today, 3),
+        "shops": shop_rows,
+        "imports": import_rows,
+        "idle": idle_rows,
+        "idleWeeks": IDLE_WEEKS,
+        "factories": factories,
+    }
+
+
+# --- staffing by hour ---------------------------------------------------
+HOUR_WEEKS_THIN = 2  # a weekday resting on fewer weeks than this is marked thin
+AT_CAP = 0.95  # this close to the ceiling is at the ceiling
+IDLE_RATIO = 2.0  # capacity this many times the queue is capacity doing nothing
+IDLE_RUN = 3  # ...for at least this many hours in a row
+IDLE_STAFF = 2  # ...with at least this many people on
+HYPE_TIGHT = 0.90  # a wave arriving at a shop already this full is being turned away
+PHRASE_SHAPES = 2  # how many weekday-hour patterns to name before counting the rest
+
+
+def _hour_phrase(hours_by_day: dict) -> str:
+    """"Mon-Sun 8-11, 18-20" — the shape of a set of weekday-hours in words."""
+    def runs(hours):
+        out, start = [], None
+        for h in range(25):
+            if h in hours and start is None:
+                start = h
+            elif h not in hours and start is not None:
+                out.append(f"{start}-{h}" if h - start > 1 else f"{start}")
+                start = None
+        return out
+
+    shapes = collections.defaultdict(list)
+    for wd, hours in hours_by_day.items():
+        shapes[tuple(runs(hours))].append(wd)
+    parts, spare = [], 0
+    ranked = sorted(shapes.items(), key=lambda kv: (-len(kv[1]), -len(kv[0])))
+    for shape, days in ranked:
+        order = [1, 2, 3, 4, 5, 6, 0]
+        picked = sorted(days, key=order.index)
+        if len(parts) >= PHRASE_SHAPES:
+            spare += sum(len(h) for d, h in hours_by_day.items() if d in picked)
+            continue
+        if len(picked) == 7:
+            label = "every day"
+        elif len(picked) > 2 and [order.index(d) for d in picked] == list(
+            range(order.index(picked[0]), order.index(picked[0]) + len(picked))
+        ):
+            label = f"{WEEKDAYS[picked[0]][:3]}-{WEEKDAYS[picked[-1]][:3]}"
+        else:
+            label = ", ".join(WEEKDAYS[d][:3] for d in picked)
+        parts.append(f"{label} {', '.join(shape)}")
+    phrase = "; ".join(parts)
+    # A list of every scattered hour is not a shape. Name the pattern and count
+    # the rest.
+    return f"{phrase} and {spare} scattered hours" if spare else phrase
+
+
+def _assign(cost: list) -> list:
+    """Hungarian assignment: the column for each row, at least total cost.
+
+    Rows are recipe ids and columns candidate recipes. There are never more ids
+    than recipes on a workstation, but if there were, the extra rows get None.
+    """
+    n = len(cost)
+    if not n:
+        return []
+    width = max(len(row) for row in cost)
+    m = max(width, n)
+    big = 1e6
+    a = [[row[j] if j < len(row) else big for j in range(m)] for row in cost]
+    u, v = [0.0] * (n + 1), [0.0] * (m + 1)
+    p, way = [0] * (m + 1), [0] * (m + 1)
+    for i in range(1, n + 1):
+        p[0], j0 = i, 0
+        minv, used = [float("inf")] * (m + 1), [False] * (m + 1)
+        while True:
+            used[j0] = True
+            i0, delta, j1 = p[j0], float("inf"), 0
+            for j in range(1, m + 1):
+                if used[j]:
+                    continue
+                cur = a[i0 - 1][j - 1] - u[i0] - v[j]
+                if cur < minv[j]:
+                    minv[j], way[j] = cur, j0
+                if minv[j] < delta:
+                    delta, j1 = minv[j], j
+            for j in range(m + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+            j0 = j1
+            if p[j0] == 0:
+                break
+        while True:
+            j1 = way[j0]
+            p[j0] = p[j1]
+            j0 = j1
+            if j0 == 0:
+                break
+    out = [None] * n
+    for j in range(1, m + 1):
+        if p[j] and j - 1 < len(cost[p[j] - 1]):
+            out[p[j] - 1] = j - 1
+    return out
+
+
+def _off_hours(covered: set) -> str:
+    """The hours nobody is posted, as 'Tue 16-24, Thu 16-24'."""
+    parts = []
+    for wd in (1, 2, 3, 4, 5, 6, 0):
+        gaps = [h for h in range(24) if (wd, h) not in covered]
+        if not gaps:
+            continue
+        runs, start, prev = [], gaps[0], gaps[0]
+        for h in gaps[1:]:
+            if h != prev + 1:
+                runs.append(f"{start}-{prev + 1}")
+                start = h
+            prev = h
+        runs.append(f"{start}-{prev + 1}")
+        parts.append(f"{WEEKDAYS[wd][:3]} {', '.join(runs)}")
+    return "; ".join(parts)
+
+
+def _ceil_hundred(value: float) -> int:
+    return int(math.ceil(value / 100.0) * 100)
+
+
+def _factories(
+    save: Save,
+    names: Names,
+    businesses: list,
+    recipes: dict,
+    flow: dict,
+    history: "History | None",
+    character: str,
+) -> dict:
+    """What each factory line makes and eats, against the flow set up to feed it.
+
+    A machine's recipe is stored in the save only as an opaque id, so it is named
+    from the flow instead: two machines rated 60 an hour that ship 2,880 garments
+    a day are the cheap-clothing line. An id named once is remembered, so a line
+    that stops for want of an ingredient keeps its name. Every assembly machine
+    runs its recipe around the clock at the rated rate — the delivery log shows
+    four tobacco machines at 100 an hour drawing exactly 9,600 a day — so a
+    line's need is machines × rate × 24, and the question is whether the top-up
+    and the import behind it are set to that.
+    """
+    index = flow["index"]
+    empty = {"sites": [], "machines": 0, "unnamed": 0}
+    machines = collections.defaultdict(collections.Counter)
+    # Where each machine sits in the factory's workstation list — the one
+    # handle the player can match against the game screen — and the hours a
+    # factory worker is posted to it. A machine runs only while someone is on
+    # it: the wine machine rostered 144 of 168 hours draws 86% of its grapes.
+    slots = collections.defaultdict(lambda: collections.defaultdict(list))
+    roster = collections.defaultdict(lambda: collections.defaultdict(list))
+    for building in save.items(save.root["BuildingRegistrations"]):
+        if not building.get("RentedByPlayer"):
+            continue
+        key = site_key((building["StreetName"], building["StreetNumber"]))
+        if key not in index:
+            continue
+        posts = {}
+        for holder in save.items(building["itemInstances"]):
+            item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+            if not item or not item.get("workstationType"):
+                continue
+            station = item["workstationType"].replace(WS_PREFIX, "").removesuffix("workstation")
+            line = (station, item.get("selectedRecipeId"))
+            slot = (item.get("priority") or 0) + 1
+            machines[key][line] += 1
+            slots[key][line].append(slot)
+            posts[item.get("id")] = (line, slot)
+        covered = collections.defaultdict(set)
+        for scheduled in save.items(building.get("scheduleDays")):
+            wd = scheduled["day"] % 7
+            for shift in save.items(scheduled.get("workShifts")):
+                post = shift.get("itemInstanceId")
+                if post not in posts or shift.get("type") != STATION_SHIFT:
+                    continue
+                for hour in range(max(0, shift["startingHour"]), min(24, shift["endingHour"])):
+                    covered[post].add((wd, hour))
+        for post, (line, slot) in posts.items():
+            roster[key][line].append(
+                {"slot": slot, "hours": len(covered[post]), "off": _off_hours(covered[post])}
+            )
+    if not machines or not recipes:
+        return empty
+
+    def station_name(slug: str) -> str:
+        text = names.locale.get(f"help_factory_workstation_{slug}_content", "")
+        match = re.search(r"\*\*([^*]+)\*\*", text)
+        return match.group(1) if match else f"{slug.title()} Workstation"
+
+    by_station = collections.defaultdict(list)
+    for slug, rec in recipes.items():
+        by_station[rec["workstation"]].append(slug)
+
+    def held(key, slug):
+        return flow["held"].get(key, {}).get(slug, 0)
+
+    def out_of(key, slug):
+        return flow["shipped"](key, slug) or 0.0
+
+    def arrives(key, slug):
+        """The daily feed this line is actually getting.
+
+        The week behind an input only describes it if the input was drawn all
+        week. Where the record is younger than the window the average is of a
+        factory that has since changed, and the last completed round is the
+        honest measure of what the logistics brings in.
+        """
+        # The log is already cut to the window and to completed days.
+        seen = flow["byDay"](key, slug)
+        drawn = [d for d, amount in seen.items() if amount > 0]
+        if len(drawn) >= SHIPPED_WINDOW * FEED_SETTLED:
+            return flow["received"](key, slug) or 0.0
+        return seen[max(drawn)] if drawn else 0.0
+
+    def hours_a_day(key, station, rid) -> float:
+        """Machine-hours a day this line actually runs, from the roster."""
+        return sum(m["hours"] for m in roster[key][(station, rid)]) / 7.0
+
+    # The help text links an ingredient under one name and the game moves it
+    # under another — "Bag of Tomatoes" is rawtomato on the page and tomato in
+    # every warehouse — so each ingredient is matched to the item the city
+    # actually holds, by label when the slug itself is never seen.
+    seen = {slug for lines in flow["held"].values() for slug in lines}
+    seen |= {slug for _key, slug in flow["targets"]} | {slug for _key, slug in flow["imports"]}
+    by_label = collections.defaultdict(list)
+    for slug, label in names.locale.items():
+        if slug.startswith("ba:itemname_"):
+            by_label[label].append(slug)
+
+    def resolve(ing: dict) -> str:
+        if ing["slug"] in seen:
+            return ing["slug"]
+        return next((alt for alt in by_label.get(ing["item"], []) if alt in seen), ing["slug"])
+
+    # --- name the recipe ids: first from what the lines ship
+    remembered = history.recipes(character, {}) if history else {}
+    sites_of = collections.defaultdict(lambda: collections.defaultdict(dict))
+    for key, counter in machines.items():
+        for (station, rid), n in counter.items():
+            if rid:
+                sites_of[station][rid][key] = n
+    named, basis, learned, guessed, recalled = {}, {}, {}, {}, {}
+    fits = {}  # rid -> recipes whose rated output matches what the id ships
+    for station, rid_sites in sites_of.items():
+        candidates = by_station.get(station, [])
+        rids = list(rid_sites)
+        if not candidates:
+            continue
+        cost, total = [], []
+        for rid in rids:
+            row, row_total = [], []
+            for slug in candidates:
+                rec = recipes[slug]
+                # A line measured at any one site is measured; the same id
+                # standing idle elsewhere does not weaken that. But every
+                # site votes on which id is which: the one that also stands
+                # at the liquor factory beside 12,000 bottles of wine is the
+                # wine id, however alike two single machines look elsewhere.
+                best, summed = None, 0.0
+                for key, n in rid_sites[rid].items():
+                    predicted = hours_a_day(key, station, rid) * rec["out"]
+                    shipped = out_of(key, slug)
+                    if predicted <= 0:
+                        here = 2.0  # nobody rostered: it makes nothing
+                    elif shipped > 0:
+                        here = min(abs(predicted - shipped) / predicted, 1.0)
+                    elif held(key, slug) > 0:
+                        here = LINE_LIKELY
+                    else:
+                        here = 2.0
+                    # An ingredient never seen at the site argues against it.
+                    here += 0.1 * sum(
+                        1
+                        for ing in rec["ingredients"]
+                        if not held(key, resolve(ing)) and not arrives(key, resolve(ing))
+                    )
+                    best = here if best is None else min(best, here)
+                    summed += here
+                row.append(best)
+                row_total.append(summed)
+            cost.append(row)
+            total.append(row_total)
+            consistent = [slug for slug, c in zip(candidates, row) if c <= LINE_MEASURED]
+            if consistent:
+                fits[rid] = consistent
+        # A name learnt earlier only breaks ties; fresh evidence outranks it.
+        biased = [
+            [c - (0.3 if remembered.get(rid) == slug else 0.0) for c, slug in zip(row, candidates)]
+            for row, rid in zip(total, rids)
+        ]
+        assignment = _assign(biased)
+        own = [cost[i][j] if j is not None else 9.0 for i, j in enumerate(assignment)]
+        if os.environ.get("BA_DEBUG"):
+            print("STAGE1", station, [r[:6] for r in rids])
+            for i, rid in enumerate(rids):
+                print("   ", rid[:6], "->", candidates[assignment[i]].split("_")[-1] if assignment[i] is not None else None,
+                      "best", [round(c, 2) for c in cost[i]], "total", [round(c, 2) for c in total[i]])
+        for i, j in enumerate(assignment):
+            if j is None:
+                continue
+            rid, slug, c = rids[i], candidates[j], cost[i][j]
+            # Two ids that could swap recipes at no cost cannot be told apart;
+            # calling either a measurement would put a need on the wrong
+            # machines and be remembered as fact.
+            tied = any(
+                k != i
+                and assignment[k] is not None
+                and abs(
+                    (total[i][assignment[k]] + total[k][j]) - (total[i][j] + total[k][assignment[k]])
+                ) < 0.02
+                for k in range(len(rids))
+            )
+            if c <= LINE_MEASURED:
+                # Same rate, same machine count, same shipment: the recipes
+                # are certain as a set, and the needs follow from the set. Only
+                # which id is which is a guess, so a tie is named but never
+                # remembered.
+                named[rid], basis[rid] = slug, "paired" if tied else "measured"
+                if not tied:
+                    learned[rid] = slug
+            elif remembered.get(rid) == slug:
+                # Kept back too: what the line eats today outranks what it
+                # shipped on an earlier build.
+                recalled[rid] = slug
+            elif c <= LINE_LIKELY + 0.2 and not tied:
+                # Held but never shipped: a guess, kept back until what the
+                # line eats has had its say.
+                guessed[rid] = slug
+
+    # A name the player gave by hand outranks a guess, never a measurement.
+    chosen = history.named(character) if history else {}
+    for rid, slug in chosen.items():
+        if (
+            slug in recipes
+            and (rid not in named or basis[rid] != "measured")
+            and slug not in named.values()
+        ):
+            named[rid], basis[rid] = slug, "you"
+
+    # --- then from what they eat: a line whose output never leaves the
+    # factory still draws its ingredients every morning. Cigars and cigarettes
+    # sit unsold, but 960 cigar paper a day is two machines at 20 an hour and
+    # nothing else on that workstation. What the named lines eat is taken off
+    # first; what is left has to be explained by the lines still unnamed. An
+    # ingredient only one candidate could be eating decides before a shared
+    # one: fresh food and french fries both take potatoes, but only fresh food
+    # takes the ground beef that is also arriving.
+    def missing(key, slug):
+        """Inputs of a recipe that neither arrive nor are held at the site."""
+        if flow["received"](key, "") is None:
+            return []
+        return [
+            ing["item"]
+            for ing in recipes[slug]["ingredients"]
+            if not arrives(key, resolve(ing)) and not held(key, resolve(ing))
+        ]
+
+    for key, counter in machines.items():
+        residual = {}
+
+        def left(slug):
+            if slug not in residual:
+                residual[slug] = arrives(key, slug)
+            return residual[slug]
+
+        def eat(slug, station, rid):
+            for ing in recipes[slug]["ingredients"]:
+                item = resolve(ing)
+                residual[item] = left(item) - hours_a_day(key, station, rid) * ing["per"]
+
+        for (station, rid), n in counter.items():
+            # A line stopped for want of one input eats none of the others.
+            if rid and rid in named and not missing(key, named[rid]):
+                eat(named[rid], station, rid)
+        pending = [(st, rid, n) for (st, rid), n in counter.items() if rid and rid not in named]
+        paired = set()
+        while pending:
+            options = {}
+            for station, rid, n in pending:
+                # First the recipes its shipments allow; if every one of those
+                # is already another line's, anything on the workstation.
+                pool = [
+                    s for s in fits.get(rid, [])
+                    if s in by_station.get(station, []) and s not in named.values()
+                ]
+                restricted = bool(pool)
+                pool = pool or [s for s in by_station.get(station, []) if s not in named.values()]
+                feasible = {}
+                for slug in pool:
+                    errors, over = {}, False
+                    for ing in recipes[slug]["ingredients"]:
+                        item = resolve(ing)
+                        predicted = hours_a_day(key, station, rid) * ing["per"]
+                        have = max(left(item), 0.0)
+                        if predicted <= 0:
+                            over = True
+                            break
+                        if have <= 0 or predicted > have * (1 + LINE_OVERDRAW):
+                            over = True
+                            break
+                        errors[item] = abs(predicted - have) / predicted
+                    if not over and errors:
+                        feasible[slug] = errors
+                scored = []
+                for slug, errors in feasible.items():
+                    shared = {
+                        resolve(ing)
+                        for other in feasible
+                        if other != slug
+                        for ing in recipes[other]["ingredients"]
+                    }
+                    own = [e for item, e in errors.items() if item not in shared]
+                    scored.append((0, min(own), slug) if own else (1, min(errors.values()), slug))
+                options[rid] = sorted(scored)
+                if restricted:
+                    fits[rid] = pool
+                else:
+                    fits.pop(rid, None)
+            best = None
+            for station, rid, n in pending:
+                scored = options.get(rid) or []
+                if not scored:
+                    continue
+                rank, err, slug = scored[0]
+                # Sure when the anchor fits, or when the output already matched
+                # and this is the only recipe left that it could be.
+                if err > LINE_MEASURED and not (len(scored) == 1 and rid in fits):
+                    continue
+                if best is None or (rank, err) < best[:2]:
+                    best = (rank, err, rid, station, n, slug)
+            if best is None:
+                break
+            _rank, _err, rid, station, n, slug = best
+            # A twin — same workstation, same machine count, and this recipe
+            # open to it too — would fit exactly as well. The pair of lines is
+            # certain; which id is which is not, so neither is remembered.
+            twins = [
+                r for st, r, m in pending
+                if r != rid and st == station and m == n
+                and any(s == slug for _r, _e, s in options.get(r, []))
+            ]
+            if twins:
+                paired.update(twins)
+                paired.add(rid)
+            named[rid] = slug
+            basis[rid] = "paired" if rid in paired else "measured"
+            if rid not in paired:
+                learned[rid] = slug
+            eat(slug, station, rid)
+            pending = [p for p in pending if p[1] != rid]
+    for rid, slug in recalled.items():
+        if rid not in named and slug not in named.values():
+            named[rid], basis[rid] = slug, "remembered"
+    for rid, slug in guessed.items():
+        if rid not in named and slug not in named.values():
+            named[rid], basis[rid] = slug, "likely"
+    if history and learned:
+        history.recipes(character, learned)
+
+    # --- each factory: its lines, and what they eat
+    made_by = collections.defaultdict(set)
+    sites, depot_need = [], collections.defaultdict(float)
+    for key, counter in machines.items():
+        lines, unnamed, needs = [], [], {}
+        for (station, rid), n in sorted(counter.items(), key=lambda kv: -kv[1]):
+            slug = named.get(rid) if rid else None
+            staffing = {
+                "hoursWeek": sum(m["hours"] for m in roster[key][(station, rid)]),
+                "fullWeek": n * STAFF_HOURS,
+                "gaps": [
+                    m for m in sorted(roster[key][(station, rid)], key=lambda m: m["hours"])
+                    if m["hours"] < STAFF_HOURS
+                ],
+            }
+            if not slug:
+                # The plan still speaks: a recipe whose every input has a
+                # top-up into this factory is what the machines were set up
+                # for, even if what they need never turns up.
+                hint, best_score, best = None, 0.0, []
+                for cand in by_station.get(station, []):
+                    ings = recipes[cand]["ingredients"]
+                    if cand in named.values() or not ings:
+                        continue
+                    covered = sum(
+                        1
+                        for ing in ings
+                        if (key, resolve(ing)) in flow["targets"]
+                        or held(key, resolve(ing))
+                        or arrives(key, resolve(ing))
+                    )
+                    score = covered / len(ings)
+                    if score > best_score:
+                        best_score, best = score, [cand]
+                    elif score == best_score:
+                        best.append(cand)
+                if rid and best_score == 1.0 and len(best) == 1:
+                    hint = {
+                        "item": recipes[best[0]]["item"],
+                        "missing": [
+                            ing["item"]
+                            for ing in recipes[best[0]]["ingredients"]
+                            if not arrives(key, resolve(ing))
+                        ],
+                    }
+                unnamed.append(
+                    {
+                        "rid": rid,
+                        "workstation": station_name(station),
+                        "slots": sorted(slots[key][(station, rid)]),
+                        "machines": n,
+                        "idle": rid is None,
+                        "candidates": [
+                            {"slug": c, "item": recipes[c]["item"]}
+                            for c in by_station.get(station, [])
+                            if c not in named.values()
+                        ],
+                        "hint": hint,
+                        **staffing,
+                    }
+                )
+                continue
+            rec = recipes[slug]
+            makes = n * rec["out"] * 24
+            share = staffing["hoursWeek"] / staffing["fullWeek"] if staffing["fullWeek"] else 0.0
+            ships = out_of(key, slug)
+            stock = held(key, slug)
+            to_city = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d in index)
+            to_pier = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d not in index)
+            stopped = missing(key, slug)
+            lines.append(
+                {
+                    "rid": rid,
+                    "item": rec["item"],
+                    "slug": slug,
+                    "missing": stopped,
+                    "workstation": station_name(station),
+                    "slots": sorted(slots[key][(station, rid)]),
+                    # A line named without a measurement can be corrected.
+                    "candidates": [
+                        {"slug": c, "item": recipes[c]["item"]}
+                        for c in by_station.get(station, [])
+                        if c == slug or (c not in named.values())
+                    ] if basis[rid] != "measured" else [],
+                    "machines": n,
+                    "rate": rec["out"],
+                    "makes": round(makes),
+                    "ships": round(ships),
+                    "stock": stock,
+                    "toCity": to_city,
+                    "toPier": to_pier,
+                    "basis": basis[rid],
+                    "piling": stock > makes * PILE_DAYS and ships < makes * share * 0.8,
+                    "atRoster": round(makes * share),
+                    **staffing,
+                }
+            )
+            made_by[slug].add(key)
+            for ing in rec["ingredients"]:
+                item = resolve(ing)
+                row = needs.setdefault(
+                    item,
+                    {"item": ing["item"], "slug": item, "perDay": 0.0, "lines": [], "staffedDay": 0.0},
+                )
+                row["perDay"] += n * ing["per"] * 24
+                row["staffedDay"] += n * ing["per"] * 24 * share
+                if rec["item"] not in row["lines"]:
+                    row["lines"].append(rec["item"])
+        stopped_lines = {line["item"]: line["missing"] for line in lines if line["missing"]}
+        for slug, row in needs.items():
+            target, source = flow["targets"].get((key, slug), (0, None))
+            # An input that only sits because every line using it is stopped
+            # for want of something else is waiting, not being ignored.
+            row["waitingOn"] = (
+                sorted({m for line in row["lines"] for m in stopped_lines[line] if m != row["item"]})
+                if all(line in stopped_lines for line in row["lines"])
+                else []
+            )
+            row["target"] = target
+            row["source"] = source
+            row["from"] = index.get(source) if source else None
+            row["known"] = flow["received"](key, slug) is not None
+            row["arrives"] = round(arrives(key, slug))
+            row["stock"] = held(key, slug)
+            row["depotStock"] = held(source, slug) if source else 0
+            # Planned, stocked at the depot, and yet nothing came all week.
+            row["stalled"] = bool(row["known"] and not row["arrives"] and row["depotStock"] > 0)
+            if source:
+                depot_need[(source, slug)] += row["perDay"] * 7
+        # What the page needs to work out a line the player names by hand:
+        # every top-up into this factory, and what arrived over the week.
+        into = {
+            slug: [amount, index.get(source)]
+            for (dest, slug), (amount, source) in flow["targets"].items()
+            if dest == key
+        }
+        watched = set(into) | set(flow["held"].get(key, {}))
+        sites.append(
+            {
+                "s": index[key],
+                "machines": sum(counter.values()),
+                "lines": lines,
+                "unnamed": unnamed,
+                "needs": list(needs.values()),
+                "targets": into,
+                "known": flow["received"](key, "") is not None,
+                "arrivals": {slug: round(arrives(key, slug)) for slug in watched},
+            }
+        )
+
+    # --- the verdict on each input, once the depot totals are known
+    for site in sites:
+        for row in site["needs"]:
+            per_day, source = row["perDay"], row.pop("source")
+            supply = flow["imports"].get((source, row["slug"])) if source else None
+            weekly_need = depot_need.get((source, row["slug"]), 0.0)
+            staffed = row.pop("staffedDay", per_day)
+            row["staffedShare"] = round(staffed / per_day, 2) if per_day else 1.0
+            row["perDay"] = round(per_day)
+            row["perWeek"] = round(per_day * 7)
+            row["depotNeed"] = round(weekly_need)
+            row["importWeekly"] = supply["weekly"] if supply else None
+            row["importFit"] = _fit(weekly_need, supply["weekly"]) if supply else None
+            row["madeAt"] = sorted(index[k] for k in made_by.get(row["slug"], ()) if k in index)
+            row["raiseTarget"] = row["raiseImport"] = None
+            if not row["target"]:
+                status, level = "unplanned", "critical"
+            elif row["target"] < per_day * (1 - FEED_SLACK):
+                status, level = "target", "critical"
+                row["raiseTarget"] = _ceil_hundred(per_day)
+            elif row["known"] and row["arrives"] < per_day * LINE_STARVED:
+                if row["waitingOn"]:
+                    status, level = "waiting", "info"
+                elif row["arrives"] >= staffed * 0.85:
+                    # The line takes what its roster lets it take.
+                    status, level = "staffing", "warn"
+                elif row["depotStock"] < per_day:
+                    status, level = "dry", "critical"
+                else:
+                    status, level = "idle", "warn"
+            elif supply and row["importFit"] == "short":
+                status, level = "import", "critical"
+                row["raiseImport"] = _ceil_hundred(weekly_need)
+            elif supply and row["importFit"] == "tight":
+                status, level = "import", "warn"
+            elif not supply and row["madeAt"]:
+                status, level = "made", "ok"
+            elif not supply and row["depotStock"] < weekly_need:
+                status, level = "noimport", "warn"
+            else:
+                status, level = "ok", "ok"
+            row["status"], row["level"] = status, level
+        site["needs"].sort(
+            key=lambda r: ({"critical": 0, "warn": 1, "info": 2, "ok": 3}[r["level"]], -r["perDay"])
+        )
+    sites.sort(key=lambda s: -s["machines"])
+    depots = collections.defaultdict(dict)
+    for (depot, slug), supply in flow["imports"].items():
+        if depot in index:
+            depots[index[depot]][slug] = {"weekly": supply["weekly"]}
+    # A depot's outflow that is not a factory's intake — the shops it also
+    # serves — so an import order can be sized to the whole of what leaves.
+    # Matched day by day: a single 2,500 of hops sent on Sunday must not turn
+    # into "417 a week to the shops" because the depot's log holds six days
+    # and the factory's seven. What the factories took that day comes off what
+    # the depot sent that day; only a remainder is the shops', and a remainder
+    # too small to size an order on is nothing.
+    depot_other = collections.defaultdict(dict)
+    pairs = set(flow["imports"]) | {
+        (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
+    }
+    for depot, slug in pairs:
+        if depot not in index:
+            continue
+        days = flow["roundDays"](depot)
+        if len(days) < SHIPPED_MIN_DAYS:
+            continue
+        sent = flow["byDay"](depot, slug)
+        taken = [
+            flow["byDay"](fkey, slug)
+            for fkey in machines
+            if flow["targets"].get((fkey, slug), (0, None))[1] == depot
+        ]
+        rest = sum(
+            max(0.0, -sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
+            for d in days
+        )
+        week = rest / len(days) * 7
+        need = depot_need.get((depot, slug), 0.0)
+        depot_other[index[depot]][slug] = 0 if week < max(need * FEED_SLACK, 50) else round(week)
+    return {
+        "sites": sites,
+        "machines": sum(s["machines"] for s in sites),
+        "unnamed": sum(u["machines"] for s in sites for u in s["unnamed"]),
+        "character": character,
+        "aliases": {
+            ing["slug"]: resolve(ing)
+            for rec in recipes.values()
+            for ing in rec["ingredients"]
+            if resolve(ing) != ing["slug"]
+        },
+        "depots": depots,
+        "depotOther": depot_other,
+    }
+
+
+def _hourly(save: Save, buildings: list, businesses: list, stations: dict, crew: dict) -> list:
+    """What each shop-front took per hour, against the capacity that was on.
+
+    Three numbers meet in one grid. The customers are measured, an hour at a
+    time, over the fortnight the save keeps. The registers are whatever service
+    staff were rostered on that hour, at the capacity of the exact counters they
+    were posted to. The door cap is the building's own limit. The smallest of
+    them is the one that decides, and the finding is which.
+    """
+    by_key = {b["key"]: b for b in businesses}
+    out = []
+    for b in buildings:
+        key = site_key((b["StreetName"], b["StreetNumber"]))
+        business = by_key.get(key)
+        if not business or business["status"] != "retail":
+            continue
+
+        seen = [[[] for _ in range(24)] for _ in range(7)]
+        for entry in save.items(b["orderHistory"]):
+            wd = entry["dayNumber"] % 7
+            for report in save.items(entry.get("hourReports")):
+                hour = report.get("hour")
+                if hour is not None and 0 <= hour < 24:
+                    seen[wd][hour].append(report.get("customers", 0))
+        weeks = [max((len(h) for h in row), default=0) for row in seen]
+        if not any(weeks):
+            continue
+        customers = [
+            [round(sum(h) / len(h), 1) if h else None for h in row] for row in seen
+        ]
+
+        here = {}
+        for holder in save.items(b["itemInstances"]):
+            item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+            if item and item.get("itemName") in stations:
+                here[item.get("id")] = stations[item["itemName"]]
+        counters = sum(here.values())
+
+        # The roster, read the same way the game reads it: scheduleDay.day is the
+        # game day modulo 7, with 7 standing in for Sunday's 0.
+        staffed = [[0] * 24 for _ in range(7)]
+        on_shift = [[0] * 24 for _ in range(7)]
+        for scheduled in save.items(b.get("scheduleDays")):
+            wd = scheduled["day"] % 7
+            manned = [set() for _ in range(24)]
+            for shift in save.items(scheduled.get("workShifts")):
+                if shift.get("type") != STATION_SHIFT:
+                    continue
+                if crew.get(shift.get("employeeId")) != SERVICE_SKILL:
+                    continue
+                post = shift.get("itemInstanceId")
+                if post not in here:
+                    continue
+                for hour in range(
+                    max(0, shift["startingHour"]), min(24, shift["endingHour"])
+                ):
+                    manned[hour].add(post)
+                    on_shift[wd][hour] += 1
+            for hour in range(24):
+                staffed[wd][hour] = sum(here[post] for post in manned[hour])
+
+        door = b.get("customerCapacity", 0) or 0
+        effective = [
+            [min(staffed[wd][h], door) if door else staffed[wd][h] for h in range(24)]
+            for wd in range(7)
+        ]
+        out.append(
+            {
+                "key": key,
+                "name": business["name"],
+                "customers": customers,
+                "weeks": weeks,
+                "thin": [w < HOUR_WEEKS_THIN for w in weeks],
+                "staffed": staffed,
+                "onShift": on_shift,
+                "effective": effective,
+                "door": door,
+                "counters": counters,
+                "stationCount": len(here),
+                "basket": business["basket"],
+                "peak": max(
+                    (c for row in customers for c in row if c is not None), default=0
+                ),
+            }
+        )
+    return out
+
+
+def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
+    """The two things an hourly grid can tell you that a daily total cannot."""
+    by_key = {b["key"]: b for b in businesses}
+    out = []
+    for grid in grids:
+        business = by_key[grid["key"]]
+        basket = grid["basket"] or 0
+        door, counters = grid["door"], grid["counters"]
+
+        capped = collections.defaultdict(set)
+        for wd in range(7):
+            for hour in range(24):
+                seen = grid["customers"][wd][hour]
+                cap = grid["effective"][wd][hour]
+                if seen is None or not cap or grid["thin"][wd]:
+                    continue
+                if seen >= cap * AT_CAP:
+                    capped[wd].add(hour)
+        hours = sum(len(h) for h in capped.values())
+        if hours:
+            staffed_at = [
+                grid["staffed"][wd][h] for wd, hs in capped.items() for h in hs
+            ]
+            typical = min(staffed_at) if staffed_at else 0
+            if door and door <= typical:
+                limit, fix = "the building", "a bigger site or a second shop nearby"
+            elif typical < counters:
+                limit, fix = "staffing", "more service staff on those hours"
+            else:
+                limit, fix = "registers", "another counter"
+            at_cap = min(door or 10**9, typical or 10**9)
+            out.append(
+                {
+                    "kind": "cap",
+                    "key": grid["key"],
+                    "site": grid["name"],
+                    "hours": hours,
+                    "when": _hour_phrase(capped),
+                    "limit": limit,
+                    "fix": fix,
+                    "cap": at_cap,
+                    "basket": basket,
+                    # What is measurably flowing through the ceiling. What is
+                    # being turned away above it is not in the save at all.
+                    "throughput": money(hours * at_cap * basket / 7),
+                }
+            )
+
+        best = None
+        service_wage = wages.get(grid["key"], 0)
+        for wd in range(7):
+            if grid["thin"][wd]:
+                continue
+            run = []
+            for hour in range(25):
+                seen = grid["customers"][wd][hour] if hour < 24 else None
+                on = grid["onShift"][wd][hour] if hour < 24 else 0
+                cap = grid["staffed"][wd][hour] if hour < 24 else 0
+                slack = (
+                    seen is not None
+                    and on >= IDLE_STAFF
+                    and cap > max(seen, 0.5) * IDLE_RATIO
+                )
+                if slack:
+                    per_post = cap / on if on else 0
+                    needed = max(1, math.ceil(seen / per_post)) if per_post else 1
+                    run.append((hour, on - needed, seen, on))
+                    continue
+                if len(run) >= IDLE_RUN:
+                    spare = sum(r[1] for r in run)
+                    if not best or spare > best["spare"]:
+                        best = {
+                            "wd": wd,
+                            "from": run[0][0],
+                            "to": run[-1][0] + 1,
+                            "spare": spare,
+                            "staff": max(r[3] for r in run),
+                            "seen": round(sum(r[2] for r in run) / len(run)),
+                        }
+                run = []
+        if best and service_wage:
+            out.append(
+                {
+                    "kind": "idle",
+                    "key": grid["key"],
+                    "site": grid["name"],
+                    "day": WEEKDAYS[best["wd"]],
+                    "from": best["from"],
+                    "to": best["to"],
+                    "staff": best["staff"],
+                    "seen": best["seen"],
+                    "spare": best["spare"],
+                    "worth": money(best["spare"] * service_wage / 7),
+                }
+            )
+    return out
+
+
+GLOBAL_HOOD = "ba:neighborhood_global"
+HYPE_EVENT = 2  # "Citizens in {hood} are showing strong demand for {item}"
+SUPPLIER_EVENTS = {
+    3: "Product shortage",
+    4: "Supplier strain",
+    5: "Backorder",
+    6: "Supplier strain",
+}
+HISTORY_DAYS = 60  # how much demand history to keep on disk
+TREND_WINDOW = 7  # compare against this many days back when the history reaches it
+
+
+def _market(
+    save: Save, names: Names, businesses: list, day: int, history, character: str
+) -> dict:
+    """Demand per product per neighbourhood, plus what is moving and why.
+
+    The save stores only today's demand, so a rolling snapshot is kept on disk
+    next to the dashboard. Until that fills up, the game's own hype events are
+    the trend signal — they are authoritative about what just rose.
+    """
+    hood_of = {v: k for k, v in NEIGHBOURHOODS.items()}
+
+    # What we sell, and where. What we make, anywhere.
+    sells = collections.defaultdict(set)
+    for b in businesses:
+        if b["status"] != "retail" or not b["neighbourhood"]:
+            continue
+        for line in b["lines"]:
+            if line["price"]:
+                sells[line["slug"]].add(b["neighbourhood"])
+    makes = set()
+    for plan in save.items(save.root["logisticsManagerPlans"]):
+        if not plan.get("isFactory"):
+            continue
+        for dest in save.items(plan["destinations"]):
+            for target in save.items(dest["stockTargets"]):
+                makes.add(target["itemName"])
+
+    # Active events.
+    hype = {}
+    starts = {}
+    shortages = []
+    for event in save.items(save.root["marketEvents"]):
+        span = event.get("durationInDays") or 0
+        start = event.get("startDay") or 0
+        left = start + span - day
+        if event.get("stopped") or left <= 0 or start > day:
+            continue
+        item = event.get("itemName")
+        if event["type"] == HYPE_EVENT and item:
+            hood = names.label(event.get("neighbourhood"), "")
+            hype[(item, hood)] = left
+            starts[(item, hood)] = start
+        elif event["type"] in SUPPLIER_EVENTS and item:
+            shortages.append(
+                {
+                    "item": names.label(item),
+                    "kind": SUPPLIER_EVENTS[event["type"]],
+                    "where": names.addr(save.address(event.get("address")))
+                    if event.get("address")
+                    else names.label(event.get("neighbourhood"), "-"),
+                    "daysLeft": left,
+                    "mine": item in sells or item in makes,
+                }
+            )
+    shortages.sort(key=lambda s: (not s["mine"], s["daysLeft"]))
+
+    # Today's demand, and the trend against whatever history exists.
+    hoods, today_snapshot, rows = [], {}, []
+    for entry in save.items(save.root["productMarketEntries"]):
+        item = entry["itemName"]
+        cells = []
+        for value in save.items(entry["demandValues"]):
+            if value["neighborhood"] == GLOBAL_HOOD:
+                continue
+            hood = names.label(value["neighborhood"])
+            if hood not in hoods:
+                hoods.append(hood)
+            today_snapshot[f"{item}|{hood}"] = value["demand"]
+            cells.append(
+                {
+                    "hood": hood,
+                    "demand": value["demand"],
+                    "providers": value["providers"],
+                    "monopoly": bool(value["hasPlayerMonopoly"]),
+                    "sell": hood in sells.get(item, ()),
+                    "hype": hype.get((item, hood)),
+                }
+            )
+        if cells:
+            rows.append(
+                {
+                    "item": names.label(item),
+                    "slug": item,
+                    "sell": bool(sells.get(item)),
+                    "make": item in makes,
+                    "cells": cells,
+                }
+            )
+
+    by_item_hood = {
+        (row["slug"], cell["hood"]): cell for row in rows for cell in row["cells"]
+    }
+    catalogue = _type_catalogue(save, names, {row["slug"] for row in rows})
+    mine_types = {
+        b["typeSlug"] for b in businesses if b["status"] in ("retail", "support")
+    }
+
+    seen = history.demand(character, day, today_snapshot)
+    span = seen["span"]
+    for row in rows:
+        for cell in row["cells"]:
+            was = seen["was"].get(f"{row['slug']}|{cell['hood']}")
+            cell["delta"] = (cell["demand"] - was) if was is not None else None
+
+    hoods.sort()
+    for row in rows:
+        by_hood = {c["hood"]: c for c in row["cells"]}
+        row["cells"] = [by_hood.get(h) for h in hoods]
+        live = [c for c in row["cells"] if c]
+        row["peak"] = max((c["demand"] for c in live), default=0)
+        row["rising"] = max((c["delta"] or 0 for c in live), default=0)
+        row["hyped"] = any(c["hype"] for c in live)
+        open_cells = [c for c in live if not c["sell"]]
+        best = max(
+            open_cells, key=lambda c: (c["demand"], -c["providers"]), default=None
+        )
+        row["gap"] = (
+            {
+                "hood": best["hood"],
+                "demand": best["demand"],
+                "providers": best["providers"],
+            }
+            if best
+            else None
+        )
+    # What we touch first, then the loudest demand.
+    rows.sort(key=lambda r: (not (r["sell"] or r["make"]), -r["peak"]))
+
+    # Somewhere with real demand and few sellers that we are not in yet.
+    gaps = []
+    for row in rows:
+        for cell in row["cells"]:
+            if not cell or cell["sell"] or cell["demand"] < 50:
+                continue
+            gaps.append(
+                {
+                    "item": row["item"],
+                    "hood": cell["hood"],
+                    "demand": cell["demand"],
+                    "providers": cell["providers"],
+                    "make": row["make"],
+                    "hype": cell["hype"],
+                }
+            )
+    gaps.sort(key=lambda g: (g["providers"], -g["demand"]))
+
+    singles = []
+    if span:
+        for row in rows:
+            for cell in row["cells"]:
+                if cell and cell["delta"] and abs(cell["delta"]) >= 5:
+                    singles.append(
+                        {
+                            "item": row["item"],
+                            "slug": row["slug"],
+                            "hood": cell["hood"],
+                            "demand": cell["demand"],
+                            "delta": cell["delta"],
+                            "sell": cell["sell"],
+                        }
+                    )
+    # One hype wave, or one shop opening, moves a whole family of products in one
+    # neighbourhood at once. That is one event, so it gets one line.
+    opened_in = collections.defaultdict(list)
+    if span:
+        for b in businesses:
+            if b["status"] == "retail" and day - b["opened"] <= span:
+                opened_in[(b["neighbourhood"], b["type"])].append(b)
+    movers = _group_movers(
+        singles, _family_of(catalogue, names, mine_types), opened_in
+    )
+
+    types = _type_demand(catalogue, by_item_hood, hoods, names, mine_types)
+    return {
+        "hoods": hoods,
+        "rows": rows,
+        # The planner needs the same catalogue, so it travels once and extract
+        # moves it across rather than deriving it twice.
+        "catalogue": {kind: sorted(items) for kind, items in catalogue.items()},
+        # A type with one or two products says nothing about opening a shop: the
+        # cell reads "1/1" whatever the city wants.
+        "types": [t for t in types if t["products"] >= TYPE_MIN_PRODUCTS],
+        "typesHidden": sum(1 for t in types if t["products"] < TYPE_MIN_PRODUCTS),
+        "openings": _openings(types, mine_types),
+        "movers": movers,
+        "hype": _group_hype(hype, starts, names, sells, makes),
+        "shortages": _group_shortages(shortages),
+        "gaps": gaps[:20],
+        "trendDays": span,
+        "trackedDays": seen["days"],
+    }
+
+
+TYPE_MIN_PRODUCTS = 3  # below this the by-type grid is describing a single product
+
+
+def _family_of(catalogue: dict, names: Names, mine: set) -> dict:
+    """Which kind of shop a product belongs to, learned from the city's shops.
+
+    A smartwatch is stocked by jewellers as well as electronics stores. Where we
+    run one of the shops that sells it, that is the family it belongs to here —
+    otherwise a single wave across one shop's range would still read as several
+    unrelated moves. Failing that, the narrowest catalogue wins.
+    """
+    best = {}
+    ordered = sorted(catalogue.items(), key=lambda kv: (kv[0] not in mine, len(kv[1])))
+    for kind, items in ordered:
+        for item in items:
+            best.setdefault(item, names.label(kind))
+    return best
+
+
+def _group_movers(singles: list, family: dict, opened_in: dict) -> list:
+    """Group demand moves by neighbourhood and product family."""
+    buckets = collections.OrderedDict()
+    for row in sorted(singles, key=lambda m: (not m["sell"], -abs(m["delta"]))):
+        key = (row["hood"], row["delta"] > 0, family.get(row["slug"], row["item"]))
+        bucket = buckets.setdefault(
+            key,
+            {
+                "hood": row["hood"],
+                "family": family.get(row["slug"], row["item"]),
+                "up": row["delta"] > 0,
+                "items": [],
+                "deltas": [],
+                "sell": False,
+            },
+        )
+        bucket["items"].append(row["item"])
+        bucket["deltas"].append(row["delta"])
+        bucket["demand"] = row["demand"]
+        bucket["sell"] = bucket["sell"] or row["sell"]
+
+    out = []
+    for bucket in buckets.values():
+        deltas = bucket["deltas"]
+        # A drop across a whole family where we just opened a shop of that very
+        # kind is our own shop taking the unmet demand, not the market cooling.
+        # A phone shop opening does not explain apples getting cheaper, so the
+        # kind has to match before the note is worth making.
+        opened = opened_in.get((bucket["hood"], bucket["family"]), [])
+        blame = opened[0] if opened and not bucket["up"] else None
+        out.append(
+            {
+                "hood": bucket["hood"],
+                "family": bucket["family"],
+                "up": bucket["up"],
+                "count": len(deltas),
+                "items": bucket["items"][:3],
+                "delta": round(sum(deltas) / len(deltas)),
+                "worst": max(deltas) if bucket["up"] else min(deltas),
+                "demand": bucket["demand"],
+                "sell": bucket["sell"],
+                "openedHere": blame["name"] if blame else None,
+                "openedDay": blame["opened"] if blame else None,
+            }
+        )
+    out.sort(key=lambda m: (not m["sell"], -abs(m["delta"]) * m["count"]))
+    return out[:6]
+
+
+def _openings(types: list, mine: set) -> list:
+    """The three business types worth opening next, and why each one ranks.
+
+    Most of the range wanted first, then the emptiest market, then the loudest
+    demand — the order the decision is actually made in.
+    """
+    ranked = []
+    for row in types:
+        if row["products"] < TYPE_MIN_PRODUCTS:
+            continue
+        for cell in row["cells"]:
+            if not cell or cell["sell"]:
+                continue
+            ranked.append(
+                {
+                    "type": row["type"],
+                    "hood": cell["hood"],
+                    "strong": cell["strong"],
+                    "count": cell["count"],
+                    "demand": cell["demand"],
+                    "providers": cell["providers"],
+                    "mine": row["slug"] in mine,
+                }
+            )
+    ranked.sort(
+        key=lambda r: (
+            -(r["strong"] / r["count"]),
+            r["providers"],
+            -r["demand"],
+        )
+    )
+    return ranked[:3]
+
+
+def _type_catalogue(save: Save, names: Names, tradeable: set) -> dict:
+    """Which products each kind of business sells.
+
+    The game's own F1 help page for a type is the answer wherever it has one
+    — see _type_catalogue_from_help() — so a store restocked with something
+    unrelated to its licence can never skew it. For a type that page does not
+    cover (a license this city has not built, or the game files are not on
+    this machine), the range is learned from the city itself instead: every
+    rival shop of that type contributes its price list, and an item only
+    counts once at least two of them carry it — one repurposed shop cannot
+    flood a type's whole range with its own one-off restock. A type with only
+    one business in the city keeps whatever that one business has, for lack
+    of anything to check it against.
+    """
+    known = _type_catalogue_from_help(names)
+
+    counts = collections.defaultdict(collections.Counter)
+    carriers = collections.Counter()
+    for b in save.items(save.root["BuildingRegistrations"]):
+        kind = b.get("businessTypeName")
+        if not kind or kind == "ba:businesstype_empty" or kind in known:
+            continue
+        items = set()
+        for price in save.items(b.get("retailPrices")):
+            if price and price["itemName"] in tradeable and price["itemName"] not in AMENITY_ITEMS:
+                items.add(price["itemName"])
+        for item in save.items(b.get("cachedAvailableProducts")):
+            if isinstance(item, str) and item in tradeable and item not in AMENITY_ITEMS:
+                items.add(item)
+        if not items:
+            continue
+        carriers[kind] += 1
+        for item in items:
+            counts[kind][item] += 1
+
+    catalogue = {}
+    for kind, item_counts in counts.items():
+        threshold = min(2, carriers[kind])
+        kept = {item for item, n in item_counts.items() if n >= threshold}
+        if kept:
+            catalogue[kind] = kept
+
+    for kind, items in known.items():
+        kept = items & tradeable
+        if kept:
+            catalogue[kind] = kept
+    return catalogue
+
+
+def _type_demand(
+    catalogue: dict, demand: dict, hoods: list, names: Names, mine: set
+) -> list:
+    """Demand for a business type is the whole basket it sells, not one product.
+
+    Opening a shop is a commitment to its entire range, so the useful reading is
+    how much of that range a neighbourhood wants at once.
+    """
+    rows = []
+    for kind, items in catalogue.items():
+        cells = []
+        for hood in hoods:
+            scores = [
+                demand[(item, hood)]
+                for item in items
+                if (item, hood) in demand
+            ]
+            if not scores:
+                cells.append(None)
+                continue
+            strong = [x for x in scores if x["demand"] >= 60]
+            cells.append(
+                {
+                    "hood": hood,
+                    "demand": round(sum(x["demand"] for x in scores) / len(scores)),
+                    "strong": len(strong),
+                    "count": len(scores),
+                    "providers": round(
+                        sum(x["providers"] for x in scores) / len(scores)
+                    ),
+                    "sell": sum(1 for x in scores if x["sell"]),
+                }
+            )
+        live = [c for c in cells if c]
+        if not live:
+            continue
+        rows.append(
+            {
+                "type": names.label(kind),
+                "slug": kind,
+                "products": len(items),
+                "mine": kind in mine,
+                "cells": cells,
+                "peak": max(c["demand"] for c in live),
+                "bestStrong": max(c["strong"] for c in live),
+            }
+        )
+    return sorted(rows, key=lambda r: (-r["bestStrong"], -r["peak"]))
+
+
+def _group_hype(hype: dict, starts: dict, names: Names, sells: dict, makes: set) -> list:
+    """A hype wave usually hits a whole product family at once; say it once."""
+    waves = collections.defaultdict(list)
+    for (item, hood), left in hype.items():
+        waves[(hood, left)].append(item)
+    out = []
+    for (hood, left), items in waves.items():
+        began = min(starts.get((i, hood), 0) for i in items)
+        out.append(
+            {
+                "hood": hood,
+                "daysLeft": left,
+                "startDay": began,
+                "items": [names.label(i) for i in sorted(items)],
+                "slugs": sorted(items),
+                "count": len(items),
+                "mine": any(i in sells or i in makes for i in items),
+                "sellHere": any(hood in sells.get(i, ()) for i in items),
+            }
+        )
+    return sorted(out, key=lambda h: (not h["mine"], -h["daysLeft"]))
+
+
+def _group_shortages(shortages: list) -> list:
+    """One product short at three suppliers is one problem, not three."""
+    grouped = collections.OrderedDict()
+    for row in shortages:
+        key = (row["item"], row["kind"])
+        if key in grouped:
+            grouped[key]["count"] += 1
+            grouped[key]["daysLeft"] = max(grouped[key]["daysLeft"], row["daysLeft"])
+        else:
+            grouped[key] = dict(row, count=1)
+    return sorted(grouped.values(), key=lambda s: (not s["mine"], -s["daysLeft"]))
+
+
+class History:
+    """The on-disk record the save itself does not keep.
+
+    The save stores only today: today's demand, today's cash, today's net worth.
+    Anything that compares one day with another has to be remembered here. Every
+    character is a separately generated city and a separate company, so the
+    histories are kept apart; mixing them would invent movement that never
+    happened.
+
+    Two records live side by side under each character: ``days`` holds a demand
+    snapshot per game day, ``ledger`` holds cash, net worth and that day's profit.
+    Both are keyed by the game day, so rebuilding twice on the same day updates
+    the entry rather than adding a second one.
+    """
+
+    def __init__(self, path: str | None):
+        self.path = path
+        self.book = self._load()
+        self._touched = set()  # (character, rid) names this instance changed
+
+    def _load(self) -> dict:
+        if self.path and os.path.exists(self.path):
+            try:
+                with open(self.path, encoding="utf-8") as fh:
+                    return json.load(fh).get("characters", {})
+            except (OSError, ValueError):
+                pass
+        return {}
+
+    def _for(self, character: str) -> dict:
+        return self.book.setdefault(character, {})
+
+    def demand(self, character: str, day: int, snapshot: dict) -> dict:
+        store = self._for(character).setdefault("days", {})
+        store[str(day)] = snapshot
+        for old in sorted(store, key=int)[:-HISTORY_DAYS]:
+            del store[old]
+
+        earlier = [d for d in sorted(store, key=int) if int(d) < day]
+        if not earlier:
+            return {"was": {}, "span": 0, "days": len(store)}
+        target = day - TREND_WINDOW
+        reference = min(earlier, key=lambda d: abs(int(d) - target))
+        return {
+            "was": store[reference],
+            "span": day - int(reference),
+            "days": len(store),
+        }
+
+    def ledger_entries(self, character: str) -> list:
+        """The balance sheets already on record, oldest first, without writing."""
+        store = self._for(character).get("ledger", {})
+        return [dict(store[d], day=int(d)) for d in sorted(store, key=int)]
+
+    def ledger(self, character: str, day: int, entry: dict) -> list:
+        """Record today's balance sheet and hand back the whole run of them.
+
+        Merged rather than replaced: a later save on the same day may carry
+        fewer fields than an earlier one, and dropping a figure the game has
+        since stopped reporting would lose it for good.
+        """
+        store = self._for(character).setdefault("ledger", {})
+        store[str(day)] = {**store.get(str(day), {}), **entry}
+        for old in sorted(store, key=int)[:-HISTORY_DAYS]:
+            del store[old]
+        return [dict(store[d], day=int(d)) for d in sorted(store, key=int)]
+
+    def recipes(self, character: str, learned: dict) -> dict:
+        """Recipe ids the flow has identified, kept so an idle line stays named."""
+        store = self._for(character).setdefault("recipes", {})
+        store.update(learned)
+        return dict(store)
+
+    def named(self, character: str, updates: dict | None = None) -> dict:
+        """Lines the player named by hand, by recipe id; a None clears one."""
+        store = self._for(character).setdefault("lineNames", {})
+        for rid, slug in (updates or {}).items():
+            self._touched.add((character, rid))
+            if slug:
+                store[rid] = slug
+            else:
+                store.pop(rid, None)
+        return dict(store)
+
+    def write(self) -> None:
+        if not self.path:
+            return
+        # A build takes seconds and loads this file at its start; a name given
+        # in between must not be undone by the build writing what it loaded.
+        # Names and learnt recipes are merged with the file as it is now: only
+        # the names this instance itself changed overrule it.
+        disk = self._load()
+        for character, ours in self.book.items():
+            theirs = disk.get(character, {})
+            names = dict(theirs.get("lineNames", {}))
+            mine = ours.get("lineNames", {})
+            for rid in list(names) + list(mine):
+                if (character, rid) in self._touched:
+                    if rid in mine:
+                        names[rid] = mine[rid]
+                    else:
+                        names.pop(rid, None)
+            ours["lineNames"] = names
+            learnt = dict(theirs.get("recipes", {}))
+            learnt.update(ours.get("recipes", {}))
+            ours["recipes"] = learnt
+        try:
+            with open(self.path, "w", encoding="utf-8") as fh:
+                json.dump({"characters": self.book}, fh, separators=(",", ":"))
+        except OSError:
+            pass
+
+
+def _cash_flow(ledger: list, daily: list, day: int) -> dict | None:
+    """Where the profit went: what the books earned against what cash did.
+
+    Profit is a claim about trading; cash is what is left after paying for the
+    next shop and the next week's stock. The gap between them is the number
+    worth seeing, and it needs at least two readings to exist at all.
+    """
+    if len(ledger) < 2:
+        return None
+    latest = ledger[-1]
+    earlier = [e for e in ledger if e["day"] < day]
+    if not earlier:
+        return None
+    target = day - TREND_WINDOW
+    ref = min(earlier, key=lambda e: abs(e["day"] - target))
+    booked = sum(d["profit"] for d in daily if ref["day"] <= d["day"] < day)
+    change = latest["cash"] - ref["cash"]
+    flow = {
+        "days": day - ref["day"],
+        "fromDay": ref["day"],
+        "cashFrom": ref["cash"],
+        "cashTo": latest["cash"],
+        "cashChange": money(change),
+        "profit": money(booked),
+        "reinvested": money(booked - change),
+        "netWorthFrom": None,
+        "netWorthTo": None,
+        "netWorthChange": None,
+    }
+    # Build 3672 stopped reporting net worth, so the ledger carries it only for
+    # the days the game still did. Cash and profit stand on their own.
+    if ref.get("netWorth") is not None and latest.get("netWorth") is not None:
+        flow["netWorthFrom"] = ref["netWorth"]
+        flow["netWorthTo"] = latest["netWorth"]
+        flow["netWorthChange"] = money(latest["netWorth"] - ref["netWorth"])
+    return flow
+
+
+def _chains(save: Save, businesses: list, trends: list) -> list:
+    """Which sites work as one business, read off the logistics plans.
+
+    A shop, the depot that fills it and the factory behind that depot are one
+    trading operation; judged apart, a 98% shop margin sits next to a factory
+    running -80% and neither figure means anything.
+
+    Connected components would put everything in one bucket — the food factory
+    sends soda to the electronics depot, which links the two chains through a
+    side line. So a chain is named by the kind of shop at the end of it, and each
+    warehouse and factory joins the kind of shop it mostly feeds: follow its
+    plans downstream, count where the goods actually end up, and let the majority
+    decide. Nothing here is hand-written; it all comes out of the plans.
+    """
+    by_key = {b["key"]: b for b in businesses}
+    edges = collections.defaultdict(set)
+    fed_by = {}
+    for plan in save.items(save.root["logisticsManagerPlans"]):
+        source = site_key(save.address(plan["targetAddress"]))
+        if source not in by_key:
+            continue
+        for dest in save.items(plan["destinations"]):
+            target = site_key(save.address(dest["deliveryTargetAddress"]))
+            if target not in by_key or target == source:
+                continue
+            fed_by.setdefault(target, source)
+            edges[source].add((target, len(save.items(dest["stockTargets"]))))
+
+    served = {}
+
+    def downstream(key: str, seen: frozenset) -> collections.Counter:
+        """Which kinds of shop this site's goods end up in, and how heavily."""
+        if key in served:
+            return served[key]
+        counts = collections.Counter()
+        for target, lines in edges.get(key, ()):
+            if target in seen:
+                continue
+            site = by_key[target]
+            if site["status"] == "retail":
+                counts[site["typeSlug"]] += lines
+            else:
+                counts += downstream(target, seen | {key})
+        if not seen:
+            served[key] = counts
+        return counts
+
+    groups = collections.OrderedDict()
+    for b in businesses:
+        if b["status"] == "vacant":
+            key = "\0vacant"
+        elif b["status"] == "retail":
+            key = b["typeSlug"]
+        else:
+            reach = downstream(b["key"], frozenset())
+            key = reach.most_common(1)[0][0] if reach else "\0support"
+        groups.setdefault(key, []).append(b)
+
+    by_trend = {t["key"]: t for t in trends}
+    chains = []
+    for key, members in groups.items():
+        shops = [b for b in members if b["status"] == "retail"]
+        if key == "\0vacant":
+            name = "Vacant leases"
+        elif key == "\0support":
+            name = "Head office and support"
+        else:
+            name = _plural(shops[0]["type"]) if shops else members[0]["type"]
+        chains.append(_chain(name, members, fed_by, by_key, by_trend))
+    chains.sort(key=lambda c: -c["profit"])
+    return chains
+
+
+def _plural(label: str) -> str:
+    return label if label.endswith("s") else label + "s"
+
+
+COST_KEYS = ("cogs", "wages", "rent", "marketing", "theft", "licensing")
+
+
+def _chain(name: str, members: list, fed_by: dict, by_key: dict, by_trend: dict) -> dict:
+    index = {b["key"]: b for b in members}
+    revenue = sum(b["revenue"] for b in members)
+    cost = sum(sum(b[k] for k in COST_KEYS) for b in members)
+    profit = sum(b["profit"] for b in members)
+    # Revenue booked away from the shop counter is a sale to somebody outside the
+    # company — a factory shipping to a pier. It is real money, but it is not
+    # what the shops took, so it is named rather than folded in.
+    external = sum(b["revenue"] for b in members if b["status"] != "retail")
+    outside = {
+        fed_by[b["key"]]
+        for b in members
+        if b["key"] in fed_by and fed_by[b["key"]] not in index
+    }
+    # A chain's week only compares with the week before it if every member that
+    # traded has both weeks behind it. One shop opened mid-window and the whole
+    # comparison is measuring the opening, not the trading.
+    earners = [b for b in members if b["revenue"] > 0]
+    rows = [by_trend[b["key"]] for b in earners if b["key"] in by_trend]
+    ready = bool(rows) and len(rows) == len(earners) and all(r["ready"] for r in rows)
+    last7 = money(sum(r["last7"] for r in rows)) if ready else None
+    prev7 = money(sum(r["prev7"] for r in rows)) if ready else None
+    return {
+        "name": name,
+        "sites": [b["key"] for b in members],
+        "count": len(members),
+        "revenue": money(revenue),
+        "retailRevenue": money(revenue - external),
+        "external": money(external),
+        "cost": money(cost),
+        "profit": money(profit),
+        "margin": round(profit / revenue * 100, 1) if revenue else None,
+        "last7": last7,
+        "prev7": prev7,
+        "change": round((last7 - prev7) / prev7, 4) if ready and prev7 else None,
+        "staff": sum(b["staff"] for b in members),
+        "suppliedBy": sorted(
+            by_key[k]["name"] for k in outside if k in by_key
+        ),
+        **{k: money(sum(b[k] for b in members)) for k in COST_KEYS},
+    }
+
+
+def _site_trends(businesses: list, day: int) -> list:
+    """Each site's last seven days of revenue against the seven before them."""
+    out = []
+    for i, b in enumerate(businesses):
+        if b["status"] == "vacant":
+            continue
+        series = {s["day"]: s["revenue"] for s in b["series"]}
+        last = [series[d] for d in range(day - 7, day) if d in series]
+        prev = [series[d] for d in range(day - 14, day - 7) if d in series]
+        # A shop open under two weeks has no previous week to be compared with,
+        # and its first days are a ramp, not a trend.
+        ready = (
+            day - b["opened"] >= TREND_MIN_DAYS and len(last) == 7 and len(prev) == 7
+        )
+        row = {
+            "s": i,
+            "key": b["key"],
+            "ready": ready,
+            "last7": money(sum(last)),
+            "prev7": money(sum(prev)),
+        }
+        row["change"] = (
+            round((row["last7"] - row["prev7"]) / row["prev7"], 4)
+            if ready and row["prev7"]
+            else None
+        )
+        out.append(row)
+    return out
+
+
+def _hype_exposure(businesses: list, market: dict) -> list:
+    """What each running hype wave is worth, and what the day after looks like.
+
+    The game says a wave is running and when it ends; it does not say what it is
+    worth. The only honest answer is the same kind of shop where no wave is
+    running — and where there is no such shop, the answer is that we cannot say.
+    """
+    retail = [b for b in businesses if b["status"] == "retail" and b["revenue"] > 0]
+    hyped_hoods = {w["hood"] for w in market.get("hype", [])}
+
+    out = []
+    for wave in market.get("hype", []):
+        slugs = set(wave.get("slugs", []))
+        sites = []
+        for b in retail:
+            if b["neighbourhood"] != wave["hood"]:
+                continue
+            hyped = sum(l["revenue"] for l in b["lines"] if l["slug"] in slugs)
+            whole = sum(l["revenue"] for l in b["lines"]) or 1
+            if hyped <= 0:
+                continue
+            sites.append(
+                {
+                    "key": b["key"],
+                    "name": b["name"],
+                    "type": b["typeSlug"],
+                    "revenue": b["revenue"],
+                    "profit": b["profit"],
+                    "share": round(hyped / whole * 100),
+                }
+            )
+        if not sites:
+            continue
+        top = max(sites, key=lambda s: s["revenue"])
+        best = next(b for b in retail if b["key"] == top["key"])
+
+        # First choice is the shop's own trading before the wave landed: same
+        # shop, same street, nothing else changed. Failing that, the same kind of
+        # shop somewhere no wave is running — never a different kind of shop, and
+        # never nothing dressed up as a number.
+        before = [
+            s["revenue"]
+            for s in best["series"]
+            if s["day"] < wave["startDay"] and s["revenue"] > 0
+        ][-7:]
+        if len(before) >= HYPE_BASELINE_DAYS:
+            baseline = {
+                "name": best["name"],
+                "hood": best["neighbourhood"],
+                "revenue": money(sum(before) / len(before)),
+                "basis": f"its own {len(before)} days before day {wave['startDay']}",
+            }
+        else:
+            pool = [
+                b
+                for b in retail
+                if b["typeSlug"] in {s["type"] for s in sites}
+                and b["neighbourhood"] not in hyped_hoods
+            ]
+            other = max(pool, key=lambda b: b["revenue"], default=None)
+            baseline = (
+                {
+                    "name": other["name"],
+                    "hood": other["neighbourhood"],
+                    "revenue": other["revenue"],
+                    "basis": f"the no-hype {other['name']}",
+                }
+                if other
+                else None
+            )
+        out.append(
+            {
+                "hood": wave["hood"],
+                "daysLeft": wave["daysLeft"],
+                "startDay": wave["startDay"],
+                "count": wave["count"],
+                "items": wave["items"],
+                "sites": sites,
+                "top": top["key"],
+                "revenue": money(sum(s["revenue"] for s in sites)),
+                "profit": money(sum(s["profit"] for s in sites)),
+                "baseline": baseline,
+            }
+        )
+    out.sort(key=lambda w: w["daysLeft"])
+    return out
+
+
+def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list) -> dict:
+    """What a unit of each raw material actually cost, from the owner's books.
+
+    The save carries no importer price list — `importPartnerships.products` holds
+    an item, an amount and a warehouse, and nothing about money. What it does
+    carry is what was paid: yesterday's goods cost per line, against the units
+    drawn that day. Dividing one by the other gives a real unit price for every
+    material this company already buys, and nothing at all for one it does not.
+    Guessing the rest would be inventing a price list.
+    """
+    summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
+    if not summaries:
+        return {"unit": {}, "day": None}
+    spend = collections.defaultdict(float)
+    for statement in save.items(summaries[-1]["businessIncomeStatements"]):
+        addr = save.address(statement.get("Address"))
+        for line in save.items(statement.get("Resources")):
+            if line.get("Amount"):
+                spend[(site_key(addr), line["ItemName"])] += line["Amount"]
+
+    by_label = {b["key"]: {} for b in businesses}
+    for row in supply["imports"]:
+        by_label[businesses[row["s"]]["key"]][row["item"]] = row["perDay"]
+
+    prices = {}
+    for (key, slug), paid in spend.items():
+        units = by_label.get(key, {}).get(names.label(slug))
+        if units and units > 0:
+            prices.setdefault(slug, []).append(paid / units)
+    return {
+        "unit": {s: round(sum(v) / len(v), 4) for s, v in prices.items()},
+        "day": summaries[-1]["dayNumber"],
+    }
+
+
+def _plan(
+    save: Save,
+    names: Names,
+    businesses: list,
+    catalogue: dict,
+    recipes: dict,
+    stations: dict,
+    prices: dict,
+    rhythm: dict,
+) -> dict:
+    """Everything a chain calculator needs, so the sliders can run in the browser.
+
+    Nothing is decided here. The recipes, the workstations and the prices go
+    across as they were read, and the arithmetic happens where the slider is.
+    """
+    catalogue_out = {}
+    for kind, items in catalogue.items():
+        catalogue_out[kind] = {
+            "type": names.label(kind),
+            "products": sorted(items),
+        }
+
+    # What the owner's own shops of each type actually sell, per product per day,
+    # so the default target is his trading rather than a guess.
+    mine = collections.defaultdict(lambda: collections.defaultdict(list))
+    sites = collections.Counter()
+    for b in businesses:
+        if b["status"] != "retail" or not b["revenue"]:
+            continue
+        sites[b["typeSlug"]] += 1
+        for line in b["lines"]:
+            if line["price"] and line["rate"] > 0:
+                mine[b["typeSlug"]][line["slug"]].append(line["rate"])
+    own = {
+        kind: {
+            "sites": sites[kind],
+            "perDay": {s: round(sum(v) / len(v), 1) for s, v in products.items()},
+        }
+        for kind, products in mine.items()
+    }
+
+    labels = {}
+    for recipe in recipes.values():
+        labels[recipe["slug"]] = recipe["item"]
+        for ing in recipe["ingredients"]:
+            labels[ing["slug"]] = ing["item"]
+    for items in catalogue.values():
+        for slug in items:
+            labels.setdefault(slug, names.label(slug))
+
+    # Orders are placed importer by importer in the game, and each one already
+    # has a number in the box. Carrying both across turns the shopping list into
+    # something that can be typed straight in rather than added up by hand.
+    sources = {}
+    for partnership in save.items(save.root["importPartnerships"]):
+        who = names.addr(save.address(partnership.get("importAddress")))
+        for product in save.items(partnership["products"]):
+            sources[product["itemName"]] = {
+                "from": who,
+                "warehouse": names.addr(save.address(product["assignedWarehouse"])),
+                "ordered": product.get("amount", 0),
+                "active": bool(partnership.get("isActive")),
+            }
+
+    beat = rhythm.get("customers") or rhythm.get("revenue")
+    uplift = (max(p["index"] for p in beat) / 100) if beat else 1.0
+    return {
+        "sources": sources,
+        "recipes": list(recipes.values()),
+        "workstations": _workstations(names),
+        "catalogue": catalogue_out,
+        "items": labels,
+        "own": own,
+        "prices": prices["unit"],
+        "priceDay": prices["day"],
+        "priceCount": len(prices["unit"]),
+        "peak": round(uplift, 3),
+        "stations": {names.label(s): c for s, c in stations.items()},
+    }
+
+
+def _expansion(findings: list, market: dict, businesses: list) -> list:
+    """Where to put the next dollar, measured first and inferred second.
+
+    A shop turning people away at the door is a fact with a date on it. A gap in
+    the demand grid is an inference about a shop that does not exist yet. They
+    answer the same question, so they belong in one list — with the measured
+    ones above the inferred ones, always.
+    """
+    by_key = {b["key"]: b for b in businesses}
+    out = []
+    for finding in findings:
+        if finding["kind"] != "cap" or finding["limit"] != "the building":
+            continue
+        b = by_key[finding["key"]]
+        out.append(
+            {
+                "measured": True,
+                "what": b["name"],
+                "where": b["neighbourhood"] or b["address"],
+                "reason": f"at its {finding['cap']}/h door cap for {finding['hours']} "
+                f"hours a week ({finding['when']})",
+                "number": f"{finding['hours']} h/week at the ceiling, "
+                f"${finding['basket']:,.2f} a customer",
+                "worth": finding["throughput"],
+                "action": finding["fix"],
+            }
+        )
+    out.sort(key=lambda r: -r["worth"])
+
+    for opening in market.get("openings", []):
+        out.append(
+            {
+                "measured": False,
+                "what": opening["type"],
+                "where": opening["hood"],
+                "reason": f"{opening['strong']} of {opening['count']} products in "
+                f"strong demand, {opening['providers']} rival"
+                f"{'' if opening['providers'] == 1 else 's'} on average",
+                "number": f"demand {opening['demand']}",
+                "worth": None,
+                "action": "open one"
+                + (" — you run this type already" if opening["mine"] else ""),
+            }
+        )
+    return out
+
+
+def _alerts(
+    businesses: list,
+    supply: dict,
+    chains: list,
+    trends: list,
+    hype: list,
+    hours: list,
+    grids: list,
+    day: int,
+    gate: float,
+) -> dict:
+    """Only things worth acting on, with a number and a deadline where one exists.
+
+    Two filters run over everything below. Findings that repeat across many
+    products at one site collapse into a single counted line, and findings that
+    carry a dollar figure have to clear the materiality gate — a fraction of a
+    day's profit — or they are counted at the foot of the panel instead of read
+    out. A site that cannot trade at all is never counted away.
+    """
+    found = []
+
+    def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False):
+        found.append(
+            {
+                "level": level,
+                "site": site,
+                "group": group,
+                "text": text,
+                "rank": rank,
+                "subject": subject,
+                "worth": worth,
+                "always": always,
+            }
+        )
+
+    planned = {link["to"] for link in supply["graph"]["links"]}
+
+    # --- a site that has not started trading is one finding, not four
+    silent = set()
+    for b in businesses:
+        if b["status"] == "vacant" or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
+            continue
+        silent.add(b["key"])
+        priced = [l for l in b["lines"] if l["price"] > 0]
+        stocked = [l for l in priced if l["units"] > 0]
+        reasons = []
+        if b["staff"] == 0:
+            reasons.append("no staff")
+        if priced and not stocked:
+            reasons.append("no stock")
+        elif priced and len(stocked) * 2 < len(priced):
+            reasons.append(f"{len(priced) - len(stocked)} of {len(priced)} shelves bare")
+        if b["key"] not in planned:
+            reasons.append("no delivery plan")
+        if not reasons:
+            reasons.append("staffed and stocked, no trading day booked yet")
+        note(
+            "critical",
+            b["name"],
+            "notrading",
+            f"{b['name']} opened day {b['opened']}, not trading yet: "
+            f"{', '.join(reasons)}, ${b['rent']:,.0f}/day rent",
+            always=True,
+        )
+
+    vacant = [b for b in businesses if b["status"] == "vacant"]
+    if vacant:
+        rent = sum(b["rent"] for b in vacant)
+        note(
+            "warn",
+            f"{len(vacant)} leases",
+            "vacant",
+            f"{len(vacant)} vacant leases costing ${rent:,.0f}/day in rent",
+            worth=rent,
+        )
+
+    for b in businesses:
+        if b["status"] == "vacant" or b["key"] in silent:
+            continue
+        if b["profit"] < 0 and not b["costCentre"]:
+            note(
+                "critical" if b["profit"] < -1000 else "warn",
+                b["name"],
+                "loss",
+                f"Lost ${abs(b['profit']):,.0f} yesterday",
+                worth=abs(b["profit"]),
+            )
+        if b["status"] == "retail" and b["staff"] == 0:
+            note("critical", b["name"], "staff", "No staff assigned", always=True)
+        sat = b["satisfaction"]["overall"]
+        if sat is not None and b["customers"] and sat < 80:
+            note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%")
+        for slug in b["missingAmenities"]:
+            group, text = AMENITY_DEMANDS[slug]
+            note("warn", b["name"], group, text, always=True)
+
+    # --- the promotion cap, which is reached with campaigns or not at all
+    # Promotion is the foot traffic the address comes with plus whatever the
+    # marketing campaigns add, held at 100. The address is fixed, so a shop
+    # short of the cap has only one lever: more campaigns. A shop already at
+    # 100% marketing has pulled that lever all the way and is done, whatever
+    # its total reads.
+    short = []
+    for b in businesses:
+        if b["status"] != "retail" or b["key"] in silent:
+            continue
+        if not (b["customers"] or b["revenue"]):
+            continue
+        if b["promotion"] >= PROMOTION_CAP or b["marketingIndex"] >= PROMOTION_CAP:
+            continue
+        short.append(b)
+    short.sort(key=lambda b: b["promotion"])
+    if short:
+        worst = PROMOTION_CAP - short[0]["promotion"]
+        level = "warn" if worst >= PROMOTION_GAP else "info"
+        where = short[0]["name"] if len(short) == 1 else f"{len(short)} shops"
+        if len(short) == 1:
+            b = short[0]
+            text = (
+                f"{b['name']} promotes at {b['promotion']}% of the 100% cap — "
+                f"{b['traffic']}% foot traffic and {b['marketingIndex']}% marketing. "
+                f"The address sets the traffic, so the missing "
+                f"{PROMOTION_CAP - b['promotion']} points have to come from campaigns"
+            )
+        else:
+            who = ", ".join(
+                f"{b['name']} {b['promotion']}% ({b['marketingIndex']}% marketing)"
+                for b in short
+            )
+            text = (
+                f"{len(short)} shops promote below the 100% cap with marketing not yet "
+                f"maxed — {who}. The address sets the foot traffic, so campaigns are "
+                f"the only lever"
+            )
+        note(level, where, "promotion", text, rank=-worst, always=True)
+
+    # --- what a hype wave is carrying, and what the day it ends costs
+    grid_of = {g["key"]: g for g in grids}
+
+    def full_hours(key: str) -> int:
+        """Hours of a normal week this shop spends within 10% of its ceiling."""
+        grid = grid_of.get(key)
+        if not grid:
+            return 0
+        return sum(
+            1
+            for wd in range(7)
+            if not grid["thin"][wd]
+            for hour in range(24)
+            if grid["customers"][wd][hour] is not None
+            and grid["effective"][wd][hour]
+            and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * HYPE_TIGHT
+        )
+
+    for wave in hype:
+        top = max(wave["sites"], key=lambda s: s["revenue"])
+        when = (
+            "ends today"
+            if wave["daysLeft"] <= 0
+            else "ends tomorrow"
+            if wave["daysLeft"] == 1
+            else f"has {wave['daysLeft']} days left"
+        )
+        # Pricing is somebody else's job in this company. When a wave lands on a
+        # shop that is already full, the only lever left is capacity — and it has
+        # the wave's end date on it.
+        full = full_hours(top["key"])
+        queue = (
+            f" It is already within 10% of capacity for {full} hour"
+            f"{'' if full == 1 else 's'} of a normal week, so part of the wave is "
+            f"being turned away at the door and capacity is the only lever left."
+            if full
+            else ""
+        )
+        base = wave["baseline"]
+        if base:
+            drop = max(top["revenue"] - base["revenue"], 0)
+            note(
+                "critical" if wave["daysLeft"] <= 2 else "warn",
+                top["name"],
+                "hype",
+                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
+                f"${base['revenue']:,.0f} for {base['basis']} — "
+                f"about ${drop:,.0f}/day of revenue rides on the wave.{queue}",
+                worth=drop,
+            )
+        else:
+            note(
+                "warn",
+                top["name"],
+                "hype",
+                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
+                f"shop of the same kind trading without a wave and no trading days "
+                f"before this one started, so there is no baseline to say what the "
+                f"drop will be",
+                always=True,
+            )
+
+    # --- a site whose week moved, against the week before it
+    riding = {w["top"] for w in hype}
+    for row in trends:
+        if not row["ready"] or row["change"] is None:
+            continue
+        if abs(row["change"]) < TREND_MOVE:
+            continue
+        b = businesses[row["s"]]
+        # A factory's takings are batch exports on the purchase calendar, not
+        # trading; and a shop up under its own hype wave is the line above this
+        # one said twice.
+        if b["status"] != "retail":
+            continue
+        if row["change"] > 0 and b["key"] in riding:
+            continue
+        direction = "up" if row["change"] > 0 else "down"
+        note(
+            "warn" if row["change"] < 0 else "info",
+            b["name"],
+            "trend",
+            f"Revenue {direction} {abs(row['change']) * 100:.0f}% week on week — "
+            f"${row['last7']:,.0f} over days {day - 7}-{day - 1} against "
+            f"${row['prev7']:,.0f} the week before",
+            worth=abs(row["last7"] - row["prev7"]) / 7,
+        )
+
+    # A shop only runs dry if a day of selling outruns the morning top-up.
+    for row in supply["shops"]:
+        if row["level"] == "ok" or businesses[row["s"]]["key"] in silent:
+            continue
+        site = businesses[row["s"]]["name"]
+        if row["pressure"] is None:
+            note(
+                row["level"],
+                site,
+                "unplanned",
+                f"{row['item']} is on no distribution plan — {row['stock']:,} left "
+                f"at {row['sold']:,}/day",
+                -row["stock"],
+                row["item"],
+            )
+        elif row["level"] == "critical":
+            note(
+                "critical",
+                site,
+                "outruns",
+                f"{row['item']} sells {row['peakSold']:,} on a {row['peakDay']} against "
+                f"a {row['target']:,} top-up — empties before the next drop",
+                -row["pressure"],
+                row["item"],
+            )
+
+    # A depot only runs dry if it cannot reach the next delivery by more than a
+    # few hours, and an order is only wrong if it cannot cover the week it has to
+    # cover.
+    arrives = supply["nextImportWeekday"] or "the next"
+    for row in supply["imports"]:
+        if row["level"] != "critical" or businesses[row["s"]]["key"] in silent:
+            continue
+        site = businesses[row["s"]]["name"]
+        when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
+        if row["reason"] == "paused":
+            note(
+                "critical",
+                site,
+                "paused",
+                f"{row['item']} import is paused — {row['cover']:.0f} days left "
+                f"at {row['perDay']:,}/day",
+                row["cover"],
+                row["item"],
+            )
+        elif row["reason"] == "shortfall":
+            note(
+                "critical",
+                site,
+                "shortfall",
+                f"{row['item']} runs dry {when}, {row['shortBy']:.1f} days before "
+                f"{arrives}'s import ({row['perDay']:,}/day, {row['peakPerDay']:,} at peak)",
+                row["cover"],
+                row["item"],
+            )
+        else:
+            note(
+                "critical",
+                site,
+                "order",
+                f"{row['item']} orders {row['weekly']:,} a week against a "
+                f"{row['weekNeed']:,} week of use — {row['weekNeed'] - row['weekly']:,} short"
+                + (
+                    f"; already runs dry {when}, {row['shortBy']:.1f} days before "
+                    f"{arrives}'s import"
+                    if row["coverFit"] == "short"
+                    else ""
+                ),
+                row["cover"],
+                row["item"],
+            )
+
+    # --- what the hour-by-hour grid says that a daily total cannot
+    # Five shops hitting the same 30/h ceiling in the same hours is one finding
+    # about five shops, not five findings.
+    same = collections.OrderedDict()
+    for finding in hours:
+        if finding["kind"] == "cap" and finding["key"] not in silent:
+            same.setdefault(
+                (finding["limit"], finding["cap"], finding["when"], finding["hours"]),
+                [],
+            ).append(finding)
+    for (limit, cap, when, per_week), group in same.items():
+        worth = sum(f["throughput"] for f in group)
+        where = (
+            group[0]["site"]
+            if len(group) == 1
+            else f"{len(group)} shops"
+        )
+        who = "" if len(group) == 1 else " — " + ", ".join(f["site"] for f in group)
+        subject = "is" if len(group) == 1 else "are"
+        if limit == "the building":
+            text = (
+                f"{where} {subject} at the {cap}/h door cap {when}, {per_week} hours a "
+                f"week at the ceiling with ${worth:,.0f}/day of trade going through it. "
+                f"The building is the limit, so the answer is {group[0]['fix']}{who}"
+            )
+        else:
+            text = (
+                f"{where} fill{'s' if len(group) == 1 else ''} the counters {when}, "
+                f"{per_week} hours a week at {cap}/h and ${worth:,.0f}/day through the "
+                f"ceiling. {limit.capitalize()} is the limit, so the answer is "
+                f"{group[0]['fix']}{who}"
+            )
+        note("warn", where, "atcap", text, worth=worth)
+
+    for finding in hours:
+        if finding["key"] in silent or finding["kind"] != "idle":
+            continue
+        site = finding["site"]
+        note(
+            "info",
+            site,
+            "idlestaff",
+            f"{site} runs {finding['staff']} counters "
+            f"{finding['from']:02d}:00-{finding['to']:02d}:00 on a "
+            f"{finding['day']} for {finding['seen']} customers an hour — "
+            f"{finding['spare']} staff-hours a week that buy nothing",
+            worth=finding["worth"],
+        )
+
+    found.extend(_idle_notes(businesses, supply["idle"], silent))
+    found.extend(_feed_notes(businesses, supply.get("factories", {}), silent))
+    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent))
+    found.extend(_unnamed_notes(businesses, supply.get("factories", {}), silent))
+    return _condense(found, gate)
+
+
+def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
+    """A machine whose recipe the board cannot read, and the needs it hides.
+
+    Two different things wear the same badge on the lines table. A machine with
+    no recipe selected at all is standing still and costing rent; one that is
+    running a recipe the flow cannot pin down is working perfectly well, but
+    every input need at that site is short by whatever it eats — which is worth
+    saying out loud, because nothing else on the board looks wrong.
+    """
+    notes = []
+    for site in factories.get("sites", []):
+        business = businesses[site["s"]]
+        if business["key"] in silent:
+            continue
+        for kind, group, level in (("idle", "unset", "critical"), ("blind", "unnamed", "warn")):
+            rows = [u for u in site["unnamed"] if u["idle"] == (kind == "idle")]
+            machines = sum(u["machines"] for u in rows)
+            if not machines:
+                continue
+            many = machines != 1
+            where = ", ".join(
+                sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
+            )
+            if kind == "idle":
+                text = (
+                    f"{machines} machine{'s' if many else ''} at {where} "
+                    f"{'have' if many else 'has'} no recipe set — staffed and rented, making nothing"
+                )
+            else:
+                guesses = sorted({u["hint"]["item"] for u in rows if u.get("hint")})
+                likely = f"; the flow reads {' and '.join(guesses)}" if guesses else ""
+                text = (
+                    f"{machines} machine{'s' if many else ''} at {where} "
+                    f"{'run' if many else 'runs'} a recipe the board cannot name{likely}. "
+                    f"Every input need here is short by what it eats — name the line to "
+                    f"put it in the numbers"
+                )
+            notes.append(
+                {
+                    "level": level,
+                    "site": business["name"],
+                    "group": group,
+                    "text": text,
+                    "rank": -machines,
+                    "subject": where,
+                    "worth": None,
+                    "always": False,
+                }
+            )
+    return notes
+
+
+def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
+    """A factory machine nobody is posted to for part of the week stands still."""
+    notes = []
+    for site in factories.get("sites", []):
+        business = businesses[site["s"]]
+        if business["key"] in silent:
+            continue
+        for line in site["lines"] + site["unnamed"]:
+            name = line.get("item") or line["workstation"]
+            for machine in line.get("gaps", []):
+                share = machine["hours"] / STAFF_HOURS
+                lost = round((STAFF_HOURS - machine["hours"]) / 7 * line.get("rate", 0))
+                text = (
+                    f"{name} machine at list position {machine['slot']} is staffed "
+                    f"{machine['hours']} of {STAFF_HOURS} hours — nobody on it {machine['off']}"
+                    + (f"; {lost:,} a day not made" if lost else "")
+                )
+                notes.append(
+                    {
+                        "level": "critical" if share < STAFF_CRITICAL else "warn",
+                        "site": business["name"],
+                        "group": "staff",
+                        "text": text,
+                        "rank": machine["hours"],
+                        "subject": f"{name} at position {machine['slot']}",
+                        "worth": None,
+                        "always": False,
+                    }
+                )
+    return notes
+
+
+def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
+    """A factory input the flow does not cover, with the number to change."""
+    notes = []
+    said = set()
+    for site in factories.get("sites", []):
+        business = businesses[site["s"]]
+        if business["key"] in silent:
+            continue
+        for row in site["needs"]:
+            # Staffing has its own line, per machine and hour.
+            if row["level"] == "ok" or row["status"] in ("waiting", "staffing"):
+                continue
+            depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
+            # An import sized wrong is one finding about the depot, however
+            # many factories draw on it.
+            where = business["name"]
+            if row["status"] in ("import", "noimport"):
+                if (row["from"], row["slug"]) in said:
+                    continue
+                said.add((row["from"], row["slug"]))
+                where = depot
+            lines = ", ".join(row["lines"][:3])
+            status = row["status"]
+            if status == "unplanned":
+                text = (
+                    f"{row['item']} feeds {lines} at {row['perDay']:,}/day "
+                    f"but no depot tops it up"
+                )
+            elif status == "target":
+                hours = row["target"] / row["perDay"] * 24
+                text = (
+                    f"{row['item']} top-up of {row['target']:,} covers {hours:.0f} hours "
+                    f"of a {row['perDay']:,}/day line — raise it to {row['raiseTarget']:,}"
+                )
+                if row["stalled"]:
+                    text += (
+                        f"; and none arrived last week though {depot} holds "
+                        f"{row['depotStock']:,}"
+                    )
+            elif status == "dry":
+                text = (
+                    f"{row['item']} arrives at {row['arrives']:,}/day against "
+                    f"{row['perDay']:,} needed and {depot} holds {row['depotStock']:,} — "
+                    f"the import is not keeping up"
+                )
+            elif status == "idle":
+                text = (
+                    f"{row['item']} arrives at {row['arrives']:,}/day against "
+                    f"{row['perDay']:,} needed while {depot} holds {row['depotStock']:,} — "
+                    f"the line is not drawing it"
+                )
+            elif status == "staffing":
+                text = (
+                    f"{row['item']} arrives at {row['arrives']:,}/day against {row['perDay']:,} "
+                    f"the machines could eat — the roster runs them {round(row['staffedShare'] * 100)}% "
+                    f"of the week"
+                )
+            elif status == "import" and row["raiseImport"]:
+                text = (
+                    f"{row['item']}: the factories eat {row['depotNeed']:,} a week and the "
+                    f"import order is {row['importWeekly']:,} — raise it to {row['raiseImport']:,}"
+                )
+            elif status == "import":
+                text = (
+                    f"{row['item']} import of {row['importWeekly']:,} is within 5% of the "
+                    f"{row['depotNeed']:,} the factories eat a week"
+                )
+            else:
+                weeks = row["depotStock"] / row["depotNeed"] if row["depotNeed"] else 0
+                text = (
+                    f"{row['item']} has no standing import; {depot} holds "
+                    f"{row['depotStock']:,}, {weeks:.1f} weeks of the {row['depotNeed']:,} a week "
+                    f"the factories eat"
+                )
+            notes.append(
+                {
+                    "level": row["level"],
+                    "site": where,
+                    "group": "feed",
+                    "text": text,
+                    "rank": -row["perDay"],
+                    "subject": row["item"],
+                    "worth": None,
+                    "always": False,
+                }
+            )
+    return notes
+
+
+def _idle_notes(businesses: list, idle: list, silent: set) -> list:
+    """Stock standing still, said once per cause rather than once per shelf.
+
+    Six shops holding a thousand cupcakes each is not six findings; it is one
+    top-up target set too high. Anything with nothing at all flowing out is a
+    different problem and stays one line per site.
+    """
+    live = [r for r in idle if businesses[r["s"]]["key"] not in silent]
+    notes = []
+
+    dead_by_site = collections.OrderedDict()
+    for row in (r for r in live if r["dead"]):
+        dead_by_site.setdefault(row["s"], []).append(row)
+    for site_index, rows in dead_by_site.items():
+        name = businesses[site_index]["name"]
+        for row in rows:
+            # Raw materials carry no retail price, so there is no honest dollar
+            # figure to gate them by — the units are the finding.
+            worth = (
+                row["value"] / max(1.0, (row["stock"] / max(row["perWeek"], 1)) * 7)
+                if row["price"]
+                else None
+            )
+            notes.append(
+                {
+                    "level": "info",
+                    "site": name,
+                    "group": "dead",
+                    "text": f"{row['stock']:,} {row['item']} held with nothing moving out",
+                    "rank": -row["stock"],
+                    "subject": row["item"],
+                    "worth": worth,
+                    "always": False,
+                }
+            )
+
+    # Everything else groups by the top-up target behind it: the same number in
+    # the same plan, repeated across shops, is one setting to change.
+    by_target = collections.OrderedDict()
+    for row in (r for r in live if not r["dead"]):
+        by_target.setdefault(row["target"] or 0, []).append(row)
+    for target, rows in by_target.items():
+        items = sorted({r["item"] for r in rows})
+        sites = len({r["s"] for r in rows})
+        daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
+        stock = sum(r["stock"] for r in rows)
+        # Value the excess at what it sells for, spread over how long it takes to
+        # sell — a rate, so it can be read against a day's profit.
+        worth = sum(
+            r["value"] / max(1.0, r["weeks"] * 7) for r in rows if r["price"]
+        ) or None
+        if target and daily:
+            text = (
+                f"{', '.join(items)} top-up target of {target:,} is "
+                f"{target / daily:.0f}x daily sales in {sites} "
+                f"shop{'s' if sites > 1 else ''}; lower the target"
+            )
+        else:
+            text = (
+                f"{stock:,} units of {', '.join(items)} across {sites} "
+                f"site{'s' if sites > 1 else ''} is "
+                f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
+            )
+        notes.append(
+            {
+                "level": "info",
+                "site": f"{sites} shops" if sites > 1 else businesses[rows[0]["s"]]["name"],
+                "group": "target",
+                "text": text,
+                "rank": -stock,
+                "subject": items[0],
+                "worth": worth,
+                "always": False,
+            }
+        )
+    return notes
+
+
+# How a pile of same-shaped findings at one site reads as a single line.
+SUMMARIES = {
+    "shortfall": "{n} items run dry before the next import — soonest {subject}",
+    "order": "{n} weekly orders cannot cover their own week — worst {subject}",
+    "paused": "{n} imports are paused — soonest to run out is {subject}",
+    "outruns": "{n} products outsell their daily top-up — worst {subject}",
+    "unplanned": "{n} stocked products are on no distribution plan — largest {subject}",
+    "dead": "{n} products are held with nothing moving out — largest {subject}",
+    "feed": "{n} factory inputs are not fed as the machines need — largest {subject}",
+    "staff": "{n} factory machines are not staffed round the clock — worst {subject}",
+    "unnamed": "{n} factory machines run recipes the board cannot name — {subject} the largest",
+    "unset": "{n} factory machines have no recipe set — {subject} the largest",
+    "target": "{n} top-up targets are set far above what sells — {subject} the deepest",
+}
+CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
+
+
+def _condense(found: list, gate: float) -> dict:
+    buckets = collections.OrderedDict()
+    for item in found:
+        buckets.setdefault((item["site"], item["group"]), []).append(item)
+
+    out = []
+    for (site, group), rows in buckets.items():
+        if len(rows) < CONDENSE_AT or group not in SUMMARIES:
+            out.extend(rows)
+            continue
+        rows.sort(key=lambda r: r["rank"])
+        worst = rows[0]
+        worths = [r["worth"] for r in rows if r["worth"] is not None]
+        out.append(
+            {
+                "level": worst["level"],
+                "site": site,
+                "group": group,
+                "text": SUMMARIES[group].format(n=len(rows), subject=worst["subject"]),
+                "detail": worst["text"],
+                "worth": sum(worths) if worths else None,
+                "always": any(r["always"] for r in rows),
+            }
+        )
+
+    order = {"critical": 0, "warn": 1, "info": 2}
+    lines, minor = [], []
+    for row in out:
+        for key in ("rank", "subject"):
+            row.pop(key, None)
+        small = (
+            not row["always"]
+            and row["worth"] is not None
+            and abs(row["worth"]) < gate
+        )
+        row.pop("always")
+        if row["worth"] is not None:
+            row["worth"] = money(row["worth"])
+        (minor if small else lines).append(row)
+
+    lines.sort(key=lambda a: order[a["level"]])
+    minor.sort(key=lambda a: -(a["worth"] or 0))
+    return {
+        "lines": lines,
+        "minor": {
+            "count": len(minor),
+            "gate": round(gate, 2),
+            "worth": money(sum(m["worth"] or 0 for m in minor)),
+            "rows": minor,
+        },
+    }
+
+
+# ------------------------------------------------------------------- render
+def render(
+    data: dict | None,
+    live: bool = False,
+    *,
+    banner: str = "",
+    before_script: str = "",
+) -> str:
+    """The page. With live=True it asks its data source for fresh numbers.
+
+    ``data`` may be None for a page that receives its numbers later, as the
+    in-browser board does. ``banner`` is markup placed above the board and
+    ``before_script`` goes just ahead of the board's own script, which is where
+    a host page defines ``window.LEDGER_SOURCE``.
+
+    A save name is the player's own text, so it is escaped on the way into the
+    title, and ``</`` is escaped inside the JSON so a name can never close the
+    script tag it sits in.
+    """
+    if data is None:
+        payload, title = "null", "Ledger"
+    else:
+        payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
+        title = f"{data['meta']['save']} Ledger"
+    return (
+        TEMPLATE.replace("/*__DATA__*/null", payload)
+        .replace("/*__LIVE__*/false", "true" if live else "false")
+        .replace("__TITLE__", html_escape(title))
+        .replace("<!--__BANNER__-->", banner)
+        .replace("<!--__BEFORE_SCRIPT__-->", before_script)
+    )
+
+
+TEMPLATE = r"""<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#e8eae4; --surface:#fdfdfb; --raised:#f3f4ef;
+  --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
+  --rule:#d2d6cd; --rule-soft:#e0e3da;
+  --accent:#00703a; --accent-soft:#00703a1f;
+  --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
+  --shadow:0 1px 2px #15181a0f;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0d100f; --surface:#151917; --raised:#1c211e;
+    --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#6b756f;
+    --rule:#262c28; --rule-soft:#1e2320;
+    --accent:#43c07a; --accent-soft:#43c07a26;
+    --pos:#43c07a; --neg:#ff6257; --warn:#f0913a; --info:#6ea8ff;
+    --shadow:0 1px 2px #00000059;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0d100f; --surface:#151917; --raised:#1c211e;
+  --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#6b756f;
+  --rule:#262c28; --rule-soft:#1e2320;
+  --accent:#43c07a; --accent-soft:#43c07a26;
+  --pos:#43c07a; --neg:#ff6257; --warn:#f0913a; --info:#6ea8ff;
+  --shadow:0 1px 2px #00000059;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1240px; margin:0 auto; padding:0 24px 72px}
+/* The board runs to a dozen screens, most of it off-view at any moment, and it
+   is read on a second monitor while the game has the GPU. Sections that are not
+   on screen are skipped entirely; the reserved height keeps the scrollbar
+   honest. The daily chart opts out because it sizes its viewBox from its own
+   rendered width, which is zero while skipped. */
+section{content-visibility:auto; contain-intrinsic-size:auto 620px}
+section.measured{content-visibility:visible}
+.num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .warnc{color:var(--warn)}
+
+/* masthead ---------------------------------------------------------- */
+.mast{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:20px 32px;
+  padding:34px 0 20px; border-bottom:3px solid var(--ink);
+}
+.mast h1{
+  margin:0; font-size:clamp(34px,5.5vw,58px); font-weight:800;
+  letter-spacing:-.03em; line-height:.94; text-wrap:balance;
+}
+.mast h1 span{color:var(--accent)}
+.mast-meta{display:flex; gap:26px; margin-left:auto; flex-wrap:wrap}
+.mast-meta div{display:flex; flex-direction:column; gap:2px}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:500;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
+}
+.mast-meta strong{font-size:17px; font-weight:600; letter-spacing:-.01em}
+
+/* kpi --------------------------------------------------------------- */
+/* Four tiles, one row; two-up on a narrow window. */
+.kpis{
+  display:grid; grid-template-columns:repeat(4,1fr);
+  gap:1px; background:var(--rule); border-bottom:1px solid var(--rule);
+}
+@media (max-width:860px){ .kpis{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:460px){ .kpis{grid-template-columns:1fr} }
+.kpi{background:var(--surface); padding:18px 18px 16px; display:flex; flex-direction:column; gap:6px}
+.kpi .v{font-size:26px; font-weight:600; letter-spacing:-.025em; line-height:1.1}
+.kpi .d{font-size:12.5px; color:var(--ink-2)}
+.spark{height:26px; width:100%; margin-top:2px}
+
+/* sections ---------------------------------------------------------- */
+section{margin-top:44px}
+.head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px}
+.head h2{margin:0; font-size:19px; font-weight:600; letter-spacing:-.015em}
+.head p{margin:0; color:var(--ink-2); font-size:13px}
+.head .tools{margin-left:auto; display:flex; gap:6px}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:3px; box-shadow:var(--shadow)}
+.pad{padding:18px 20px}
+
+/* controls ---------------------------------------------------------- */
+button{
+  font:inherit; font-size:12px; font-weight:500; color:var(--ink-2);
+  background:var(--surface); border:1px solid var(--rule); border-radius:2px;
+  padding:5px 11px; cursor:pointer; transition:color .12s, border-color .12s;
+}
+button:hover{color:var(--ink); border-color:var(--ink-3)}
+button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--ground)}
+button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* pages -------------------------------------------------------------- */
+/* Five places to be, one at a time. The bar stays pinned so the next page is
+   always one click away, wherever the reader has scrolled to on this one. */
+.pages{
+  position:sticky; top:0; z-index:20; display:flex; gap:2px; flex-wrap:wrap;
+  padding:6px 0 0; background:var(--ground); border-bottom:1px solid var(--rule);
+}
+.pages button{
+  border:none; border-radius:0; background:none; padding:9px 14px 10px;
+  font-size:13.5px; font-weight:500; color:var(--ink-2); margin-bottom:-1px;
+  border-bottom:2px solid transparent;
+}
+.pages button:hover{color:var(--ink); background:none}
+.pages button[aria-pressed="true"]{
+  color:var(--ink); background:none; border-color:transparent; border-bottom-color:var(--accent);
+}
+.page > .kpis{margin-top:24px}
+.page > section:first-child{margin-top:28px}
+.subnav{display:flex; gap:6px; flex-wrap:wrap; margin-top:24px}
+.subnav + section{margin-top:18px}
+
+/* which kinds of finding make the list ------------------------------- */
+.settings-panel{margin:0 0 14px; padding:14px 20px}
+.settings-panel .minor{margin:0 0 10px}
+.settings-grid{display:flex; flex-wrap:wrap; gap:8px}
+.settings-grid button{font-size:11.5px}
+
+/* alerts ------------------------------------------------------------ */
+.alerts{display:grid; gap:1px; background:var(--rule)}
+.alert{
+  background:var(--surface); display:grid; grid-template-columns:4px 1fr auto;
+  gap:14px; align-items:center; padding:11px 16px 11px 0;
+}
+.alert i{display:block; height:100%; min-height:26px; background:var(--info)}
+.alert.warn i{background:var(--warn)} .alert.critical i{background:var(--neg)}
+.alert b{font-weight:600; font-size:14px}
+.alert .detail{display:block; font-weight:400; font-size:12.5px; color:var(--ink-3); margin-top:2px}
+.alert .goto, .minor .goto{
+  font-size:12px; font-weight:500; color:var(--accent); text-decoration:none;
+  margin-left:8px; white-space:nowrap;
+}
+.alert .goto:hover, .minor .goto:hover{text-decoration:underline}
+section{scroll-margin-top:60px}
+.alert .who{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3);
+  text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;
+}
+/* Findings too small to be worth a line still get counted, never dropped. */
+.minor{margin:10px 2px 0; font-size:12.5px; color:var(--ink-3)}
+.minor button{margin-left:8px; padding:2px 8px; font-size:11px}
+.minor ul{margin:8px 0 0; padding-left:18px}
+.minor li{margin:3px 0}
+/* One sentence where a table used to be. */
+.verdict{
+  margin:0 2px 14px; font-size:13.5px; color:var(--ink-2);
+}
+.verdict b{color:var(--ink); font-weight:600}
+
+/* chart ------------------------------------------------------------- */
+.chartbox{position:relative; padding:18px 20px 8px}
+svg{display:block; width:100%; overflow:visible}
+.tip{
+  position:absolute; pointer-events:none; opacity:0; transform:translate(-50%,-100%);
+  background:var(--ink); color:var(--ground); padding:7px 10px; border-radius:3px;
+  font-size:12px; white-space:nowrap; transition:opacity .1s; z-index:5;
+}
+.tip .num{font-weight:600}
+.legend{display:flex; gap:18px; padding:0 20px 16px; flex-wrap:wrap}
+.legend span{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2)}
+.legend i{width:14px; height:3px; border-radius:2px}
+
+/* tables ------------------------------------------------------------ */
+.scroll{overflow-x:auto}
+table{width:100%; border-collapse:collapse; font-size:13.5px}
+th,td{padding:9px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--rule-soft)}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+thead th{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:500;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3);
+  border-bottom:1px solid var(--rule); position:sticky; top:0; background:var(--surface);
+  cursor:pointer; user-select:none;
+}
+thead th:hover{color:var(--ink)}
+thead th[data-dir]::after{content:"↓"; margin-left:5px; color:var(--accent)}
+thead th[data-dir="asc"]::after{content:"↑"}
+tbody tr:hover{background:var(--raised)}
+tbody tr:last-child td{border-bottom:none}
+tfoot td{
+  font-weight:600; border-top:2px solid var(--ink); border-bottom:none;
+  padding-top:11px; background:var(--surface);
+}
+/* chain rows -------------------------------------------------------- */
+tbody tr.chain > td{
+  background:var(--raised); font-weight:600; border-bottom:1px solid var(--rule);
+  cursor:pointer;
+}
+tbody tr.chain:hover > td{background:var(--accent-soft)}
+tbody tr.chain td.l{font-size:14.5px}
+tbody tr.kid > td:first-child{padding-left:30px}
+.chainname{display:flex; align-items:baseline; gap:8px}
+.chainname .twist{
+  font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-3); width:9px;
+}
+.chainname .sub{font-weight:400}
+.site{display:flex; align-items:center; gap:10px}
+.bullet{
+  flex:none; width:26px; height:26px; border-radius:50%; display:grid; place-items:center;
+  font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:600;
+  color:#fff; letter-spacing:.02em;
+}
+.site .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
+td.l .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
+.site b{font-weight:600}
+.bar{
+  display:inline-block; vertical-align:middle; width:52px; height:5px; border-radius:3px;
+  background:var(--rule); margin-left:8px; overflow:hidden;
+}
+.bar i{display:block; height:100%; background:var(--accent)}
+.chip{
+  display:inline-block; padding:1px 7px; border-radius:2px; font-size:11px; font-weight:500;
+  font-family:"IBM Plex Mono",monospace; letter-spacing:.04em;
+}
+.chip.ok{background:var(--accent-soft); color:var(--accent)}
+.chip.warn{background:#c254001f; color:var(--warn)}
+.chip.bad{background:#cc2a201f; color:var(--neg)}
+.chip.neutral{background:#8b94991f; color:var(--ink-2)}
+:root[data-theme="dark"] .chip.warn,
+:root[data-theme="dark"] .chip.bad{background:#ffffff14}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .chip.warn,
+  :root:not([data-theme="light"]) .chip.bad{background:#ffffff14}
+}
+
+/* two-up ------------------------------------------------------------ */
+.duo{display:grid; grid-template-columns:1fr 1fr; gap:20px}
+.trio{display:grid; grid-template-columns:repeat(3,1fr); gap:20px}
+@media (max-width:900px){ .duo,.trio{grid-template-columns:1fr} }
+
+.stat{display:flex; justify-content:space-between; gap:16px; padding:7px 0; border-bottom:1px solid var(--rule-soft)}
+.stat:last-child{border-bottom:none}
+.stat span{color:var(--ink-2); font-size:13.5px}
+
+footer{
+  margin-top:56px; padding-top:18px; border-top:1px solid var(--rule);
+  display:flex; gap:20px; flex-wrap:wrap; color:var(--ink-3); font-size:12px;
+}
+.flowbox{padding:16px 20px 4px; overflow-x:auto}
+#flow{min-width:760px}
+.flownode rect{fill:var(--raised); stroke:var(--rule); stroke-width:1; transition:stroke .12s}
+.flownode{cursor:pointer}
+.flownode:hover rect{stroke:var(--ink-3)}
+.flownode.on rect{fill:var(--surface); stroke:var(--accent); stroke-width:2}
+.flownode.dim{opacity:.32}
+.flowlink{transition:opacity .15s}
+.flowpipes{display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; margin:18px 0 4px}
+@media (max-width:900px){ .flowpipes{grid-template-columns:1fr} }
+.weekbars{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; align-items:end}
+.wb{display:flex; flex-direction:column; align-items:center; gap:5px}
+.wbtrack{
+  position:relative; width:100%; height:96px; border-radius:2px; background:var(--raised);
+}
+.wbtrack::after{
+  content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--rule);
+}
+.wbtrack i{position:absolute; left:22%; right:22%; border-radius:2px}
+.wbtrack i.up{background:var(--accent)}
+.wbtrack i.down{background:var(--warn)}
+.wbv{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600;
+  font-variant-numeric:tabular-nums; color:var(--ink-2);
+}
+.wbd{
+  font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.wb.now .wbd{color:var(--ink); font-weight:600}
+.wb.now .wbtrack{outline:1px solid var(--rule); outline-offset:2px}
+.weekbars.compact{gap:3px}
+.weekbars.compact .wbtrack{height:34px}
+.weekbars.compact .wbv{display:none}
+.weekbars.compact .wbd{font-size:9px}
+/* A site opens from its portfolio row; the picker is for moving between sites
+   without the trip back up. */
+tbody tr.kid{cursor:pointer}
+tbody tr.kid.on > td{background:var(--accent-soft)}
+tbody tr.kid > td.l .site b::after{content:" \203A"; color:var(--ink-3); font-weight:400}
+select.sitepick{
+  font:inherit; font-size:12.5px; color:var(--ink); background:var(--surface);
+  border:1px solid var(--rule); border-radius:2px; padding:4px 8px; max-width:260px;
+}
+.expand-more{padding:10px 16px; font-size:12.5px; color:var(--ink-3); background:var(--surface)}
+.expand-more button{margin-left:8px; padding:2px 8px; font-size:11px}
+.sitehead{display:flex; align-items:center; gap:14px; margin-bottom:18px}
+.sitehead .bullet{width:38px; height:38px; font-size:12px}
+.sitehead h3{margin:0; font-size:21px; font-weight:600; letter-spacing:-.02em}
+.sitehead .sub{font-size:13px; color:var(--ink-2)}
+.sstats{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+  background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden;
+}
+.sstat{background:var(--surface); padding:12px 14px; display:flex; flex-direction:column; gap:3px}
+.sstat b{font-size:19px; font-weight:600; letter-spacing:-.02em}
+.sitegrid{display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; align-items:start}
+.sitegrid > .panel{margin-top:20px}
+.panel{margin-top:20px}
+.panel:first-child{margin-top:0}
+.panel > .eyebrow{display:block; margin-bottom:8px}
+.panel svg{width:100%}
+.muted{color:var(--ink-3); font-size:13px; margin:4px 0}
+@media (max-width:900px){
+  .sitegrid{grid-template-columns:1fr}
+  .sstats{grid-template-columns:repeat(2,1fr)}
+}
+/* hour grid ---------------------------------------------------------- */
+.hourgrid{border-collapse:separate; border-spacing:1px; width:100%; table-layout:fixed}
+.hourgrid th{
+  font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:500; color:var(--ink-3);
+  padding:0 0 3px; border:none; text-align:center; background:none; position:static;
+  letter-spacing:0; text-transform:none; cursor:default;
+}
+.hourgrid th.l{text-align:left; padding-right:6px; width:34px}
+.hourgrid td{
+  padding:0; border:none; height:15px; border-radius:1px;
+  background:var(--raised); position:relative;
+}
+/* An outline, not a colour: the cell is already carrying a shade for volume. */
+.hourgrid td.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
+.hourgrid td.slack{box-shadow:inset 0 0 0 1px var(--info)}
+.hourgrid tr.thin td{opacity:.4}
+.hourgrid tr.thin th.l{color:var(--ink-3); font-style:italic}
+.hourkey{
+  display:flex; gap:16px; flex-wrap:wrap; margin-top:8px;
+  font-size:11.5px; color:var(--ink-3);
+}
+.hourkey i{display:inline-block; width:11px; height:11px; border-radius:2px;
+  vertical-align:-1px; margin-right:5px}
+
+/* planner ------------------------------------------------------------ */
+.impblock{margin-top:16px}
+.impblock:first-of-type{margin-top:10px}
+.imphead{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  padding-bottom:6px; border-bottom:1px solid var(--rule);
+}
+.imphead b{font-size:14px}
+.imphead .sub{font-size:12px; color:var(--ink-3)}
+.impblock tfoot td{border-top:1px solid var(--rule); font-weight:600}
+input.mcount{
+  width:58px; font:inherit; font-family:"IBM Plex Mono",monospace; font-size:13px;
+  text-align:right; padding:3px 6px; border-radius:2px;
+  border:1px solid var(--rule); background:var(--surface); color:var(--ink);
+}
+input.mcount:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+select.linepick{
+  font:inherit; font-size:12px; color:var(--ink); background:var(--surface);
+  border:1px solid var(--rule); border-radius:2px; padding:2px 6px; margin-left:6px;
+}
+button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
+.planrow{display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap}
+.planrow label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--ink-2)}
+.planrow select, .planrow input[type=number]{
+  font:inherit; font-size:13px; color:var(--ink); background:var(--surface);
+  border:1px solid var(--rule); border-radius:2px; padding:5px 8px; min-width:200px;
+}
+.planrow input[type=range]{width:220px; accent-color:var(--accent)}
+.planrow output{
+  font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:15px; color:var(--ink);
+}
+.rollup{display:grid; gap:1px}
+
+.expand{display:grid; gap:1px; background:var(--rule)}
+.exline{
+  background:var(--surface); display:grid; grid-template-columns:26px 1fr auto;
+  gap:14px; align-items:baseline; padding:12px 16px;
+}
+.exline .rank{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-3); font-weight:600;
+}
+.exline b{font-weight:600}
+.exline .why{display:block; font-size:12.5px; color:var(--ink-2); margin-top:2px}
+.exline .num{white-space:nowrap; font-size:13px; font-weight:600}
+.exline .tagme{
+  font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.06em;
+  border:1px solid currentColor; border-radius:2px; padding:0 5px; margin-left:8px;
+  text-transform:uppercase;
+}
+.exline.measured .tagme{color:var(--accent)}
+.exline.guess .tagme{color:var(--ink-3)}
+.movers{display:grid; gap:1px; background:var(--rule); padding:0}
+.mover{
+  background:var(--surface); display:grid; grid-template-columns:auto 1fr auto;
+  gap:12px; align-items:baseline; padding:10px 16px;
+}
+.mover .dir{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600}
+.mover .dir.up{color:var(--pos)} .mover .dir.down{color:var(--neg)}
+.mover .where{font-size:13px; color:var(--ink-2)}
+.mover .when{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3);
+  letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+}
+.mover b{font-weight:600}
+.mover .tagme{
+  font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.06em;
+  color:var(--accent); border:1px solid var(--accent); border-radius:2px;
+  padding:0 5px; margin-left:8px; text-transform:uppercase;
+}
+.heat{text-align:center; font-variant-numeric:tabular-nums; position:relative; min-width:64px}
+.heat .v{font-weight:600; font-size:13px}
+.heat .mk{font-size:10px; color:var(--ink-3); display:block; line-height:1.1; letter-spacing:.06em}
+/* An accent underline rather than accent text: a green number on a green-tinted
+   cell drops below readable contrast at high demand. */
+.heat.here{box-shadow:inset 0 -3px 0 var(--accent)}
+.heat.none{color:var(--ink-3)}
+.legend-note{
+  margin:10px 2px 0; font-size:12px; color:var(--ink-3);
+  display:flex; gap:18px; flex-wrap:wrap;
+}
+.live{
+  display:inline-flex; align-items:center; gap:6px; margin-left:14px; color:var(--accent);
+  transition:color .3s;
+}
+.live b{width:6px; height:6px; border-radius:50%; background:currentColor; animation:pulse 2.4s infinite}
+.live em{font-style:normal}
+.live.just{color:var(--info)}
+.live.off{color:var(--ink-3)}
+.live.off b{animation:none}
+.live.stale{color:var(--warn)}
+.live.stale b{animation:none}
+@keyframes pulse{0%,100%{opacity:1} 50%{opacity:.2}}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} .live b{animation:none} }
+</style>
+<!--__BANNER__-->
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title"></h1>
+    </div>
+    <div class="mast-meta" id="mastMeta"></div>
+  </header>
+
+  <nav class="pages" id="pages" aria-label="Board pages"></nav>
+
+  <div class="page" id="pageToday">
+    <div class="kpis" id="kpis"></div>
+
+    <section id="alertSection">
+      <div class="head">
+        <h2>Needs attention</h2>
+        <p id="alertCount"></p>
+        <div class="tools" id="alertTools"></div>
+        <button type="button" id="alertKindsToggle" aria-pressed="false"
+          title="Choose which kinds of finding make the list">Filter kinds</button>
+      </div>
+      <div class="card settings-panel" id="alertSettingsPanel" hidden>
+        <p class="minor">Which kinds of finding make the list — saved on this device.</p>
+        <div class="settings-grid" id="alertSettingsGrid"></div>
+      </div>
+      <div class="alerts card" id="alerts"></div>
+      <p class="minor" id="alertMinor"></p>
+    </section>
+  </div>
+
+  <div class="page" id="pageResults" hidden>
+    <section class="measured" id="secDaily">
+      <div class="head">
+        <h2>Daily result</h2>
+        <p id="chartNote"></p>
+        <div class="tools" id="chartTools"></div>
+      </div>
+      <div class="card">
+        <div class="chartbox"><svg id="chart" height="260"></svg><div class="tip" id="tip"></div></div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </section>
+
+    <section id="secRhythm">
+      <div class="head">
+        <h2>Weekly rhythm</h2>
+        <p id="rhythmNote"></p>
+        <div class="tools" id="rhythmTools"></div>
+      </div>
+      <p class="verdict" id="rhythmVerdict"></p>
+      <div id="rhythmCards" hidden>
+        <div class="duo">
+          <div class="card pad"><div id="rhythmChart"></div></div>
+          <div class="card pad" id="rhythmToday"></div>
+        </div>
+      </div>
+      <div class="card scroll" id="rhythmSitesBox" style="margin-top:20px" hidden>
+        <table id="rhythmSites"></table></div>
+    </section>
+
+    <section id="secPortfolio">
+      <div class="head">
+        <h2>Portfolio</h2>
+        <p id="portfolioNote"></p>
+        <div class="tools" id="portTools"></div>
+      </div>
+      <div class="card scroll"><table id="portfolio"></table></div>
+    </section>
+
+    <section id="secDetail" hidden>
+      <div class="head">
+        <h2>Business detail</h2>
+        <p id="siteNote"></p>
+        <div class="tools" id="siteTools"></div>
+      </div>
+      <div class="card pad" id="sitePanel"></div>
+    </section>
+  </div>
+
+  <div class="page" id="pageSupply" hidden>
+    <nav class="subnav" id="supplyNav" aria-label="Supply views"></nav>
+
+    <section id="secLogistics" data-sub="orders">
+      <div class="head">
+        <h2>Logistics set-up</h2>
+        <p id="logisticsNote"></p>
+        <div class="tools" id="logisticsTools"></div>
+      </div>
+      <p class="verdict" id="importVerdict"></p>
+      <div class="card scroll"><table id="importPlan"></table></div>
+      <p class="verdict" id="topupVerdict" style="margin-top:24px"></p>
+      <div class="card scroll"><table id="topupPlan"></table></div>
+    </section>
+
+    <section id="secStock" data-sub="checks">
+      <div class="head">
+        <h2>Supply chain</h2>
+        <p id="stockNote"></p>
+        <div class="tools" id="stockTools"></div>
+      </div>
+      <p class="verdict" id="stockVerdict"></p>
+      <div class="card scroll"><table id="stock"></table></div>
+    </section>
+
+    <section id="secFlow" data-sub="map">
+      <div class="head">
+        <h2>How goods move</h2>
+        <p>Click a site to see what it holds against what it has to cover</p>
+        <div class="tools"><button id="flowClear" type="button">Clear selection</button></div>
+      </div>
+      <div class="card"><div class="flowbox"><svg id="flow"></svg></div>
+        <p class="legend-note" style="padding:0 20px 14px; margin:0">
+          <span>Line width = units per day</span>
+          <span style="color:var(--accent)">Solid = daily distribution</span>
+          <span style="color:var(--info)">Dashed = weekly import</span>
+          <span style="color:var(--warn)">Amber dot = order running tight</span>
+          <span style="color:var(--neg)">Red dot = order too small</span>
+        </p>
+      </div>
+      <div class="card pad" id="flowDetail" style="margin-top:20px"></div>
+    </section>
+  </div>
+
+  <div class="page" id="pageGrowth" hidden>
+    <nav class="subnav" id="growthNav" aria-label="Growth views"></nav>
+
+    <section id="secExpand" data-sub="expand">
+      <div class="head">
+        <h2>Where to expand</h2>
+        <p id="expandNote"></p>
+      </div>
+      <div class="card" id="expansion"></div>
+    </section>
+
+    <section id="secMarket" data-sub="market">
+      <div class="head">
+        <h2>Market demand</h2>
+        <p id="marketNote"></p>
+        <div class="tools" id="marketTools"></div>
+      </div>
+      <div class="movers card pad" id="movers"></div>
+      <div class="card scroll" style="margin-top:14px"><table id="market"></table></div>
+      <p class="legend-note" id="marketLegend"></p>
+    </section>
+
+    <section id="secPlan" data-sub="plan">
+      <div class="head">
+        <h2>Plan a chain</h2>
+        <p id="planNote"></p>
+        <div class="tools" id="planTools"></div>
+      </div>
+      <div class="card pad" id="planPicker"></div>
+      <div class="card scroll" style="margin-top:14px"><table id="planTable"></table></div>
+      <div class="duo" style="margin-top:14px">
+        <div class="card pad" id="planMachines"></div>
+        <div class="card pad" id="planImports"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="page" id="pageCompany" hidden>
+    <div class="duo" style="margin-top:28px">
+      <section style="margin:0" id="secProducts">
+        <div class="head"><h2>Products</h2><p id="productNote"></p></div>
+        <div class="card scroll"><table id="products"></table></div>
+      </section>
+      <section style="margin:0" id="secPayroll">
+        <div class="head"><h2>Payroll</h2><p id="payrollNote"></p></div>
+        <div class="card pad" id="payroll"></div>
+      </section>
+    </div>
+
+    <section id="secGoals">
+      <div class="head"><h2>Milestones</h2><p id="goalsNote">Career totals</p></div>
+      <div class="card pad" id="goals"></div>
+    </section>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+<!--__BEFORE_SCRIPT__-->
+<script>
+let D = /*__DATA__*/null;
+const LIVE = /*__LIVE__*/false;
+/* Where fresh numbers come from. By default the local server that wrote this
+   page. A page that embeds the board sets window.LEDGER_SOURCE before this
+   script runs, and then the board never touches the network. Either way the
+   contract is the same: data() resolves to a fresh data object, name() records
+   a factory-line name and resolves to the data that follows, and watch() is
+   handed the callbacks changed(data), stale(why) and lost(). */
+const SOURCE = window.LEDGER_SOURCE || {
+  label: "Live",
+  data: async () => (await fetch("data.json", {cache:"no-store"})).json(),
+  name: async (rid, slug) => {
+    await fetch("name", {method:"POST", headers:{"Content-Type":"application/json"},
+                         body: JSON.stringify({rid, slug: slug || null})});
+    return SOURCE.data();
+  },
+  /* The save on disk only changes when the game writes one, so this polls a
+     cheap stamp and pulls fresh numbers only when that stamp moves. */
+  watch(h){
+    let stamp = null, misses = 0;
+    const timer = setInterval(async () => {
+      try{
+        const res = await fetch("stamp", {cache:"no-store"});
+        if(!res.ok) throw new Error(res.status);
+        const body = await res.json();
+        misses = 0;
+        h.stale(body.error);
+        if(stamp === null){ stamp = body.stamp; return; }
+        if(body.stamp === stamp) return;
+        stamp = body.stamp;
+        h.changed(await SOURCE.data());
+      }catch(err){
+        if(++misses >= 5){ clearInterval(timer); h.lost(); }
+      }
+    }, 15000);  // the game writes a save every five minutes; this is plenty
+  }
+};
+
+const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
+                      GD:"#7a8f27", IC:"#5c6f7a", HA:"#0f8f86", "":"#8b9499"};
+const fmt = n => (n<0?"-":"") + "$" + Math.abs(Math.round(n)).toLocaleString("en-US");
+const compact = n => {
+  const a = Math.abs(n), s = n<0?"-":"";
+  if(a>=1e6) return s+"$"+(a/1e6).toFixed(a>=1e7?1:2)+"M";
+  if(a>=1e3) return s+"$"+Math.round(a/1e3)+"k";
+  return s+"$"+Math.round(a);
+};
+const el = (t,c,h) => { const e=document.createElement(t); if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e; };
+const sign = n => n>0?"pos":n<0?"neg":"";
+const sum = (rows,key) => rows.reduce((a,b)=>a+(b[key]||0),0);
+const $ = id => document.getElementById(id);
+
+/* Graded meter: red through green, for numbers where higher is better. */
+function meter(v){
+  const cls = v>=85?"ok":v>=60?"warn":"bad";
+  return `<span class="chip ${cls}">${v}%</span><span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>`;
+}
+/* Load gauge: unlike meter(), a high number here is the bad one — at 100% a
+   day of selling has drained the whole daily delivery. */
+const load = (v, level) => `<span class="chip ${
+  level === "critical" ? "bad" : level === "warn" ? "warn" : "ok"}">${v}%</span>`
+  + `<span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>`;
+
+/* Neutral gauge: for numbers that describe a situation rather than grade it,
+   like how much of a loan is paid off or how busy a street is. */
+const gauge = (v,dp=0) => `<span class="chip neutral">${v.toFixed(dp)}%</span>`
+  + `<span class="bar"><i style="width:${Math.min(100,Math.max(v,1.5))}%"></i></span>`;
+
+/* A neighbourhood badge only where the player put a [XX] prefix in the name. */
+const bullet = b => b.tag ? `<span class="bullet" style="background:${LINE_COLOURS[b.tag]||LINE_COLOURS[""]}"
+  title="${b.neighbourhood||"Unassigned"}">${b.tag}</span>` : "";
+const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
+  <span class="sub">${b.type} · ${b.address}</span></span></div>`;
+
+function sparkline(values, colour){
+  if(values.length < 2) return "";
+  const w=160, h=26, lo=Math.min(...values,0), hi=Math.max(...values,1);
+  const x=i=>i/(values.length-1)*w, y=v=>h-2-(v-lo)/(hi-lo||1)*(h-4);
+  const pts=values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const zero=lo<0?`<line x1="0" y1="${y(0).toFixed(1)}" x2="${w}" y2="${y(0).toFixed(1)}" stroke="var(--rule)" stroke-width="1"/>`:"";
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    ${zero}<polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="1.6"
+      vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    <circle cx="${x(values.length-1).toFixed(1)}" cy="${y(values[values.length-1]).toFixed(1)}" r="2.4" fill="${colour}"/>
+  </svg>`;
+}
+
+/* View state lives out here so a live refresh redraws the numbers without
+   resetting whichever tab, filter or sort order the reader had chosen. */
+let alertFilter="all", chartWindow=30, shown=new Set(["profit7","profit"]);
+let view="pnl", sortKey=null, sortDir=-1, stockView="shops", marketView="types";
+let rhythmView="customers";
+let flowPick = null;
+/* Everything that is folded away by default, so a refresh does not re-fold what
+   the reader has just opened. */
+let openChains = new Set(), showMinor = false, showRhythmSites = false;
+let showAllStock = false, showAllShelves = false, showAllExpand = false, showRhythmCards = false;
+/* Which kinds of "Needs attention" finding to show, set by buildAlertSettingsPanel()
+   before the first render. */
+let alertGroupPrefs = {};
+/* No site is open until one is chosen from the portfolio or a finding. The
+   roster re-sorts by profit on every refresh, so the open site is held by
+   address — an index would silently point at a different shop after an update. */
+let siteKey = null, siteTab = -1, siteOpen = false;
+let chartRows=[];
+
+const SERIES = {
+  profit7: {label:"Profit, 7-day average", colour:"var(--accent)", key:"profit7", wide:true},
+  profit:  {label:"Net profit", colour:"var(--ink-3)", key:"profit"},
+  revenue: {label:"Revenue",    colour:"var(--info)",   key:"revenue"},
+  cogs:    {label:"Goods",      colour:"var(--warn)",   key:"cogs"},
+  wages:   {label:"Wages",      colour:"var(--neg)",    key:"wages"},
+};
+
+/* Week on week per site, keyed by address so it survives a re-sort. */
+const TREND = {};
+function indexTrends(){
+  for(const k in TREND) delete TREND[k];
+  (D.trends||[]).forEach(t => TREND[t.key] = t);
+}
+const pct = v => `${v>0?"+":""}${(v*100).toFixed(0)}%`;
+const wowCell = b => {
+  const t = TREND[b.key];
+  if(!t || !t.ready || t.change === null)
+    return `<span class="sub" title="Needs two full weeks of trading">—</span>`;
+  return `<span class="${sign(t.change)}">${pct(t.change)}</span>
+    <span class="sub">${compact(t.last7)} vs ${compact(t.prev7)}</span>`;
+};
+
+const VIEWS = {
+  pnl: {
+    label: "Profit & loss",
+    note: "Yesterday’s income statement, by chain",
+    cols: [
+      ["Business", b=>siteCell(b), "l", null],
+      ["Revenue", b=>fmt(b.revenue), "", b=>b.revenue],
+      ["Week / week", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
+      ["Goods", b=>fmt(-b.cogs), "", b=>b.cogs],
+      ["Wages", b=>fmt(-b.wages), "", b=>b.wages],
+      ["Rent", b=>fmt(-b.rent), "", b=>b.rent],
+      ["Marketing", b=>fmt(-b.marketing), "", b=>b.marketing],
+      ["Theft", b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
+      ["Profit", b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
+      ["Margin", b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+    ],
+    /* The point of the chain row: revenue, every cost, and the margin the whole
+       operation actually runs at. */
+    chain: c => [null, fmt(c.revenue),
+                 c.change === null || c.change === undefined
+                   ? `<span class="sub" title="A site here has under two weeks of trading">—</span>`
+                   : `<span class="${sign(c.change)}">${pct(c.change)}</span>
+                      <span class="sub">${compact(c.last7)} vs ${compact(c.prev7)}</span>`,
+                 fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
+                 fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
+                 `<span class="${sign(c.profit)}">${fmt(c.profit)}</span>`,
+                 c.margin===null?"—":`${c.margin.toFixed(1)}%`],
+    total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
+                  fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
+                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, ""],
+  },
+  ops: {
+    label: "Operations",
+    note: "Who shops here, and what pulls them in",
+    cols: [
+      ["Business", b=>siteCell(b), "l", null],
+      ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
+      ["Staff", b=>b.staff||"—", "", b=>b.staff],
+      ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
+      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "", b=>b.satisfaction.overall??-1],
+      ["Promotion", b=>b.customers?meter(b.promotion):"—", "", b=>b.promotion],
+      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "", b=>b.traffic],
+      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "", b=>b.marketingIndex],
+      ["Security", b=>b.security?`${b.security}%`:"—", "", b=>b.security],
+    ],
+    chain: c => [null, "", c.staff||"—", "", "", "", "", "", "", ""],
+    total: null,
+  },
+};
+
+/* --- the weekly cycle ------------------------------------------------- */
+const weeksOf = p => p ? Math.min(...p.map(d => d.n)) : 0;
+
+/* Seven bars against a 100 baseline. Height encodes distance from a normal
+   day in both directions, so a trough reads as clearly as a peak. */
+function weekBars(profile, opts){
+  if(!profile) return `<p class="muted">${(opts && opts.empty)
+    || "Not enough history to separate a weekly cycle from noise."}</p>`;
+  const today = D.rhythm.today && D.rhythm.today.day;
+  const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
+  return `<div class="weekbars${opts && opts.compact ? " compact" : ""}">
+    ${profile.map(d => {
+      const off = d.index - 100;
+      const h = Math.min(Math.abs(off) / span, 1) * 50;
+      const isToday = d.day === today;
+      return `<div class="wb${isToday ? " now" : ""}" title="${d.day}: ${d.index}% of a normal day, from ${d.n} weeks">
+        <span class="wbv">${off > 0 ? "+" : ""}${off}</span>
+        <div class="wbtrack">
+          <i class="${off >= 0 ? "up" : "down"}" style="height:${h.toFixed(1)}%;
+             ${off >= 0 ? "bottom:50%" : "top:50%"}"></i>
+        </div>
+        <span class="wbd">${d.short}</span>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+const RHYTHM_VIEWS = {
+  customers: {label:"Customers", note:"Footfall across every shop"},
+  revenue:   {label:"Revenue",   note:"Takings across every site"},
+  profit:    {label:"Profit",    note:"Daily profit across every site"},
+};
+
+function drawRhythm(){
+  const r = D.rhythm;
+  const profile = r[rhythmView];
+  const weeks = weeksOf(profile);
+  $("rhythmNote").textContent = profile
+    ? `${RHYTHM_VIEWS[rhythmView].note}, against a normal day — ${weeks} weeks of history`
+    : RHYTHM_VIEWS[rhythmView].note;
+  $("rhythmChart").innerHTML = weekBars(profile);
+
+  const today = r.today, yest = r.yesterday;
+  $("rhythmToday").innerHTML = [
+    today && today.index ? `<div class="stat"><span>Today is ${today.day}</span>
+      <b class="num ${today.index >= 100 ? "pos" : "neg"}">${today.index > 100 ? "+" : ""}${
+        today.index - 100}% vs a normal day</b></div>` : "",
+    yest && yest.index ? `<div class="stat"><span>Yesterday was ${yest.day}</span>
+      <b class="num ${yest.index >= 100 ? "pos" : "neg"}">${yest.index > 100 ? "+" : ""}${
+        yest.index - 100}% vs a normal day</b></div>` : "",
+  ].join("");
+
+  const swingy = D.businesses.filter(b => b.rhythm)
+    .sort((a,z) => z.swing - a.swing);
+
+  /* Nine rows saying the same thing is a sentence, not a table. When most sites
+     peak on the same day within a narrow band, say that; the table stays a
+     click away for the sites that break the pattern. */
+  const byDay = {};
+  swingy.forEach(b => (byDay[b.peakDay] = byDay[b.peakDay] || []).push(b));
+  const ranked = Object.entries(byDay).sort((a,z) => z[1].length - a[1].length);
+  const [topDay, pack] = ranked[0] || ["", []];
+  const swings = pack.map(b => b.swing);
+  const spread = swings.length ? Math.max(...swings) - Math.min(...swings) : 0;
+  const rest = ranked.slice(1);
+  const verdict = (pack.length >= 7 && spread <= 15)
+    ? `<b>${pack.length} site${pack.length===1?"":"s"} peak ${topDay}</b>, +${
+        Math.min(...swings)} to +${Math.max(...swings)} points between their best and
+        worst day. ${rest.length
+          ? rest.map(([d,bs]) => `${bs.map(b => shortName(b)).join(", ")} peak${
+              bs.length===1?"s":""} ${d}`).join("; ") + "."
+          : "Nothing runs the other way."}
+      <button type="button" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
+        showRhythmSites ? "hide the table" : "site by site"}</button>`
+    : swingy.length
+      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.
+         <button type="button" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
+           showRhythmSites ? "hide the table" : "site by site"}</button>`
+      : `No site has enough history to separate a weekly cycle from noise yet.`;
+  /* The sentence is the decision; the bars are the shape behind it, and they
+     wait for a click. */
+  $("rhythmVerdict").innerHTML = verdict + (profile
+    ? ` <button type="button" id="rhythmCardsToggle" aria-expanded="${showRhythmCards}">${
+        showRhythmCards ? "hide the week's shape" : "the week's shape"}</button>` : "");
+  $("rhythmCards").hidden = !showRhythmCards;
+  $("rhythmTools").hidden = !showRhythmCards;
+  const cardsToggle = $("rhythmCardsToggle");
+  if(cardsToggle) cardsToggle.onclick = () => { showRhythmCards = !showRhythmCards; drawRhythm(); };
+  const toggle = $("rhythmToggle");
+  if(toggle) toggle.onclick = () => { showRhythmSites = !showRhythmSites; drawRhythm(); };
+  $("rhythmSitesBox").hidden = !showRhythmSites || !swingy.length;
+
+  $("rhythmSites").innerHTML = swingy.length ? `
+    <thead><tr><th class="l">Business</th><th class="l">Peaks</th><th>Swing</th>
+      <th class="l" style="width:38%">Across the week</th></tr></thead>
+    <tbody>${swingy.map(b => `<tr>
+      <td class="l">${siteCell(b)}</td>
+      <td class="l">${b.peakDay}</td>
+      <td class="num">${b.swing} pts</td>
+      <td>${weekBars(b.rhythm, {compact:true})}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="l muted">No site has enough history yet.</td></tr></tbody>`;
+}
+
+/* --- the chain as a picture ------------------------------------------- */
+const FLOW_COLS = ["Importers", "Factories", "Depots", "Shops"];
+const NODE_W = 168, NODE_H = 40, ROW_GAP = 12, COL_GAP = 92;
+
+function flowLayout(){
+  const g = D.supply.graph;
+  const columns = [[], [], [], []];
+  g.nodes.forEach(n => columns[n.col].push(n));
+  // Keep each column near the sites it feeds, so the lines stay untangled.
+  columns[3].sort((a, b) => b.stock - a.stock);
+  const tallest = Math.max(...columns.map(c => c.length), 1);
+  const height = tallest * (NODE_H + ROW_GAP) + 34;
+  const width = 4 * NODE_W + 3 * COL_GAP;
+  const at = {};
+  columns.forEach((col, ci) => {
+    const span = col.length * (NODE_H + ROW_GAP);
+    const top = (height - 34 - span) / 2 + 34;
+    col.forEach((n, ri) => {
+      at[n.id] = {
+        x: ci * (NODE_W + COL_GAP),
+        y: top + ri * (NODE_H + ROW_GAP),
+        node: n,
+      };
+    });
+  });
+  return {at, width, height, columns};
+}
+
+function drawFlow(){
+  const g = D.supply.graph;
+  const {at, width, height} = flowLayout();
+  const flows = g.links.map(l => l.perDay).filter(v => v > 0);
+  const heaviest = Math.max(...flows, 1);
+  const parts = [];
+
+  FLOW_COLS.forEach((label, i) => parts.push(
+    `<text x="${i * (NODE_W + COL_GAP) + NODE_W/2}" y="16" text-anchor="middle"
+      fill="var(--ink-3)" font-family="IBM Plex Mono, monospace" font-size="10"
+      letter-spacing="1.4">${label.toUpperCase()}</text>`));
+
+  g.links.forEach((l, i) => {
+    const a = at[l.from], b = at[l.to];
+    if(!a || !b) return;
+    const x1 = a.x + NODE_W, y1 = a.y + NODE_H/2;
+    const x2 = b.x, y2 = b.y + NODE_H/2;
+    const mid = (x1 + x2) / 2;
+    const on = !flowPick || flowPick === l.from || flowPick === l.to;
+    const w = 1 + Math.sqrt(l.perDay / heaviest) * 9;
+    parts.push(`<path class="flowlink${on ? "" : " dim"}" data-link="${i}"
+      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}"
+      stroke="${l.paused ? "var(--neg)" : l.cadence === "weekly"
+        ? "var(--info)" : "var(--accent)"}"
+      stroke-width="${w.toFixed(1)}" fill="none" opacity="${on ? .42 : .08}"
+      stroke-dasharray="${l.cadence === "weekly" ? "7 5" : "none"}">
+      <title>${l.perDay.toLocaleString()} units/day · ${l.items} products · ${l.cadence}</title>
+    </path>`);
+  });
+
+  Object.values(at).forEach(({x, y, node}) => {
+    const on = !flowPick || flowPick === node.id
+      || g.links.some(l => (l.from === flowPick && l.to === node.id)
+                        || (l.to === flowPick && l.from === node.id));
+    const flag = node.short ? "var(--neg)"
+      : (node.tight || node.low) ? "var(--warn)" : null;
+    parts.push(`<g class="flownode${on ? "" : " dim"}${flowPick === node.id ? " on" : ""}"
+      data-node="${node.id}" transform="translate(${x},${y})">
+      <rect width="${NODE_W}" height="${NODE_H}" rx="3"/>
+      ${node.tag ? `<circle cx="18" cy="${NODE_H/2}" r="9"
+        fill="${LINE_COLOURS[node.tag] || LINE_COLOURS[""]}"/>
+        <text x="18" y="${NODE_H/2 + 3}" text-anchor="middle" fill="#fff"
+          font-family="IBM Plex Mono, monospace" font-size="8"
+          font-weight="600">${node.tag}</text>` : ""}
+      <text x="${node.tag ? 33 : 12}" y="${NODE_H/2 - 2}" font-size="11.5"
+        font-weight="600" fill="var(--ink)">${shortText(node.name, node.tag ? 17 : 20)}</text>
+      <text x="${node.tag ? 33 : 12}" y="${NODE_H/2 + 12}" font-size="9.5"
+        fill="var(--ink-3)" font-family="IBM Plex Mono, monospace">${
+        node.stock ? node.stock.toLocaleString() + " held" : node.sub}</text>
+      ${flag ? `<circle cx="${NODE_W - 11}" cy="11" r="4" fill="${flag}"/>` : ""}
+    </g>`);
+  });
+
+  $("flow").setAttribute("viewBox", `0 0 ${width} ${height}`);
+  $("flow").style.height = height + "px";
+  $("flow").innerHTML = parts.join("");
+  $("flow").querySelectorAll(".flownode").forEach(el => {
+    el.onclick = () => { flowPick = flowPick === el.dataset.node ? null : el.dataset.node;
+      drawFlow(); drawFlowDetail(); };
+  });
+  drawFlowDetail();
+}
+
+const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
+
+function drawFlowDetail(){
+  const g = D.supply.graph;
+  const node = g.nodes.find(n => n.id === flowPick);
+  if(!node){
+    $("flowDetail").innerHTML = `<p class="muted">Pick a site to see what it holds
+      against what it has to cover before its next delivery.</p>`;
+    return;
+  }
+  const inbound = g.links.filter(l => l.to === node.id);
+  const outbound = g.links.filter(l => l.from === node.id);
+  const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
+
+  const rows = node.items.length ? `
+    <div class="scroll"><table>
+      <thead><tr><th class="l">Product</th><th>On hand</th>
+        <th>Needs before next refill</th><th>Refill brings</th>
+        <th class="l">Does the order cover a full cycle?</th></tr></thead>
+      <tbody>${node.items.map(i => `<tr>
+        <td class="l">${i.item}</td>
+        <td class="num">${i.stock.toLocaleString()}</td>
+        <td class="num">${i.need ? i.need.toLocaleString() : "—"}</td>
+        <td class="num">${i.provision ? i.provision.toLocaleString() : "—"}</td>
+        <td class="l">${i.fit === "ok"
+          ? (i.low ? `<span class="chip warn">below need</span>`
+                   : `<span class="chip ok">covered</span>`)
+          : `<span class="chip ${i.fit === "short" ? "bad" : "warn"}">${
+              i.fit === "short" ? "order too small" : "tight"}</span>
+             <span class="sub">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
+               i.cycleNeed.toLocaleString()}, ${
+               (i.cycleNeed - i.provision).toLocaleString()} more</span>`
+        }</td></tr>`).join("")}</tbody>
+    </table></div>` : `<p class="muted">Nothing stocked here — it only passes goods along.</p>`;
+
+  $("flowDetail").innerHTML = `
+    <div class="sitehead">
+      ${node.tag ? `<span class="bullet" style="background:${
+        LINE_COLOURS[node.tag] || LINE_COLOURS[""]}">${node.tag}</span>` : ""}
+      <div><h3>${node.name}</h3>
+        <span class="sub">${node.sub}${node.hood ? ` · ${node.hood}` : ""}</span></div>
+    </div>
+    <div class="flowpipes">
+      <div><span class="eyebrow">Comes in from</span>
+        ${inbound.length ? inbound.map(l => `<div class="stat"><span>${named(l.from)}
+          ${l.paused ? `<span class="chip bad">paused</span>` : ""}</span>
+          <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
+          : `<p class="muted">Nothing — this is where goods enter.</p>`}</div>
+      <div><span class="eyebrow">Goes out to</span>
+        ${outbound.length ? outbound.map(l => `<div class="stat"><span>${named(l.to)}</span>
+          <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
+          : `<p class="muted">Nothing — this is the end of the line.</p>`}</div>
+    </div>
+    <div class="panel"><span class="eyebrow">Held against need${
+      node.short ? ` — ${node.short} order${node.short > 1 ? "s" : ""} too small`
+      : node.tight ? ` — ${node.tight} order${node.tight > 1 ? "s" : ""} running tight`
+      : ""}</span>${rows}</div>`;
+}
+
+/* --- supply chain ---------------------------------------------------- */
+const SUPPLY_VIEWS = {
+  shops: {
+    label: "Before the drop",
+    note: () => `Does the busiest day of the week outrun tomorrow morning's top-up?`,
+    empty: "Every shelf is refilled faster than it sells.",
+    /* One line first: the count, and the single tightest shelf in it. The rows
+       below are only the ones near the ceiling. */
+    verdict: rows => {
+      if(!rows.length) return "No shelf is on a top-up plan yet.";
+      const worst = rows.filter(r => r.pressure !== null)
+        .sort((a,b) => b.pressure - a.pressure)[0];
+      const bad = rows.filter(r => r.level !== "ok").length;
+      return `<b>${rows.length} shelves</b> clear their top-up${
+        bad ? `, ${bad} do not` : ""}${worst
+        ? `; tightest ${worst.item} at ${shortName(D.businesses[worst.s])}, ${
+            worst.pressure}% on a ${worst.peakDay || "normal day"}` : ""}.`;
+    },
+    keep: r => r.level !== "ok" || r.pressure === null || r.pressure >= 85,
+    head: `<th class="l">Shop</th><th class="l">Product</th><th>Sells / day</th>
+           <th>Busiest day</th><th>Daily top-up</th><th>Pressure</th><th>On hand</th>`,
+    rows: () => D.supply.shops,
+    row: r => `
+      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${r.item}</td>
+      <td class="num">${r.sold.toLocaleString()}</td>
+      <td class="num">${r.peakSold.toLocaleString()}${r.peakDay
+        ? `<span class="sub"> ${r.peakDay.slice(0,3)}</span>` : ""}</td>
+      <td class="num">${r.target ? r.target.toLocaleString() : "—"}</td>
+      <td class="num">${r.pressure === null
+        ? `<span class="chip bad">no plan</span>`
+        : load(r.pressure, r.level)}</td>
+      <td class="num">${r.stock.toLocaleString()}</td>`,
+  },
+  imports: {
+    label: "Before the import",
+    note: () => {
+      const s = D.supply;
+      if (s.daysToImport === null) return "No active import partnership.";
+      // On delivery day the holdings are at their weekly low by design, so
+      // "days left" stops being the question worth asking.
+      if (s.daysToImport === 0)
+        return `${s.nextImportWeekday}'s import arrives today — holdings are at their weekly low`;
+      // Counted from now, not from this morning: most of today is already spent.
+      return `Counting the real days ahead, does each holding reach ${s.nextImportWeekday}'s import, ${s.hoursToImport} days away from now?`;
+    },
+    empty: "Everything reaches the next import.",
+    verdict: rows => {
+      if(!rows.length) return "Nothing here is filled by import.";
+      const short = rows.filter(r => r.coverFit === "short").length;
+      const close = rows.filter(r => r.coverFit === "tight").length;
+      const tight = rows.filter(r => r.orderFit === "tight").length;
+      const worst = rows.slice().sort((a,b) => a.cover - b.cover)[0];
+      return `<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
+        D.supply.nextImportWeekday || "the next"}'s import, ${
+        D.supply.hoursToImport} days off; thinnest ${worst.item} at ${
+        shortName(D.businesses[worst.s])}, ${worst.cover} days${
+        close ? `. ${close} land within half a day of it` : ""}${
+        tight ? `. ${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : ""}.`;
+    },
+    keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
+    head: `<th class="l">Site</th><th class="l">Product</th><th>On hand</th>
+           <th>Uses / day</th><th>Busiest day</th><th>Runs out</th><th>Weekly order</th>
+           <th>A week takes</th>`,
+    rows: () => D.supply.imports,
+    row: r => {
+      const due = r.due;
+      /* A holding that empties a few hours early is an order sized to
+         consumption, so it gets a chip and not a red one. */
+      const cls = !due ? "neutral"
+        : r.coverFit === "short" ? "bad" : r.coverFit === "tight" ? "warn" : "ok";
+      return `
+      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${r.item}${r.paused ? ` <span class="chip bad">paused</span>` : ""}</td>
+      <td class="num">${r.stock.toLocaleString()}</td>
+      <td class="num">${r.perDay.toLocaleString()}${r.basis === "order"
+        ? `<span class="sub"> est.</span>` : ""}</td>
+      <td class="num">${r.peakPerDay.toLocaleString()}${r.peakDay
+        ? `<span class="sub"> ${r.peakDay.slice(0,3)}</span>` : ""}</td>
+      <td class="num"><span class="chip ${cls}">${r.runsOut
+        ? r.runsOut.slice(0,3) : `${r.cover}d`}</span><span class="sub"> ${r.cover}d${
+        due ? ` of ${due}` : ""}${r.coverFit === "tight"
+          ? `, ${r.shortBy}d early` : ""}</span></td>
+      <td class="num">${r.weekly.toLocaleString()}</td>
+      <td class="num">${r.basis === "order"
+        ? `<span class="chip neutral" title="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
+        : `${r.weekNeed.toLocaleString()}${r.orderFit !== "ok"
+          ? ` <span class="chip ${r.orderFit === "short" ? "bad" : "warn"}">${
+              r.orderFit === "short" ? "order too small" : "tight"}</span>` : ""}`}</td>`;
+    },
+  },
+  idle: {
+    label: "Idle stock",
+    note: () => "Goods held far beyond what flows through them",
+    empty: "Nothing is piling up.",
+    verdict: rows => {
+      if(!rows.length) return "Nothing is piling up.";
+      const dead = rows.filter(r => r.dead);
+      const deepest = rows.filter(r => !r.dead).sort((a,b) => b.weeks - a.weeks)[0];
+      return `<b>${rows.length} holding${rows.length===1?"":"s"}</b> above ${
+        D.supply.idleWeeks} weeks of cover${dead.length
+        ? `, ${dead.length} with nothing flowing out at all` : ""}${deepest
+        ? `; deepest ${deepest.item} at ${shortName(D.businesses[deepest.s])}, ${
+            deepest.weeks} weeks` : ""}.`;
+    },
+    keep: r => r.dead || r.weeks >= 5,
+    head: `<th class="l">Site</th><th class="l">Product</th><th>Units held</th>
+           <th>Out / week</th><th>Weeks of supply</th><th>Top-up target</th>`,
+    rows: () => D.supply.idle,
+    row: r => `
+      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${r.item}</td>
+      <td class="num">${r.stock.toLocaleString()}</td>
+      <td class="num">${r.perWeek ? r.perWeek.toLocaleString() : "—"}</td>
+      <td class="num">${r.weeks === null
+        ? `<span class="chip bad">not moving</span>`
+        : `<span class="chip ${r.weeks >= 8 ? "warn" : "neutral"}">${r.weeks}</span>`}</td>
+      <td class="num">${r.target ? r.target.toLocaleString() : "—"}</td>`,
+  },
+  lines: {
+    label: "Factory lines",
+    note: () => `Every assembly machine runs its recipe round the clock at the rated rate; the recipe is read from what the line ships`,
+    empty: "No factory machine is set up.",
+    verdict: rows => {
+      const f = factoryView();
+      if(!f || !f.sites.length) return "No factory is set up.";
+      const piling = rows.filter(r => r.piling).length;
+      const guessed = rows.filter(r => !r.unnamed && r.basis !== "measured" && r.basis !== "paired").length;
+      const short = rows.filter(r => r.fullWeek && r.hoursWeek < r.fullWeek).length;
+      return `<b>${f.sites.length} factor${f.sites.length===1?"y":"ies"}, ${f.machines} assembly machines</b> on ${
+        rows.filter(r => !r.unnamed).length} lines${
+        f.unnamed ? `; ${f.unnamed} machine${f.unnamed===1?"":"s"} on recipes the flow has not identified` : ""}${
+        guessed ? `; ${guessed} named from what they eat or hold rather than ship` : ""}${
+        piling ? `. ${piling} line${piling===1?"":"s"} make more than leaves` : ""}${
+        short ? `. <b>${short} line${short===1?" is":"s are"} not staffed round the clock</b>` : ""}.`;
+    },
+    keep: r => r.unnamed || r.piling || (r.basis !== "measured" && r.basis !== "paired") || (r.missing && r.missing.length)
+              || (r.fullWeek && r.hoursWeek < r.fullWeek),
+    head: `<th class="l">Factory</th><th class="l">Line</th><th>Machines</th><th>Staffed</th>
+           <th>Makes / day</th><th>Ships / day</th><th>Held</th><th>Top-up out</th>`,
+    rows: () => factoryView().sites.flatMap(s => [
+      ...s.lines.map(l => ({...l, s: s.s})),
+      ...s.unnamed.map(u => ({...u, s: s.s, unnamed: true}))]),
+    row: r => r.unnamed ? `
+      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${r.workstation}${slotText(r)} <span class="chip neutral">${
+          r.idle ? "no recipe chosen" : "recipe not identified"}</span>${r.rid && r.candidates.length
+          ? ` <select class="linepick" data-rid="${r.rid}" title="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
+              r.candidates.map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}<span class="sub">${
+          r.idle ? "the machines stand idle"
+          : r.hint ? `set up as ${r.hint.item} by the look of the top-up plan${r.hint.missing.length
+              ? `, but ${r.hint.missing.join(", ")} never arrive${r.hint.missing.length === 1 ? "s" : ""}` : ""}`
+          : `nothing it could make has shipped or been fed in a week — one of ${r.candidates.length} recipes`}</span></td>
+      <td class="num">${r.machines}</td>
+      <td class="num">${staffCell(r)}</td>
+      <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>` : `
+      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${r.item}${r.basis !== "measured" && r.basis !== "paired"
+          ? ` <span class="chip neutral" title="${r.basis === "likely"
+              ? "Nothing has shipped; named from the product held at the factory"
+              : r.basis === "paired"
+              ? "Twin lines with the same machine count: the pair is certain from what it eats, which is which is not"
+              : r.basis === "you" ? "You named this line; the board takes your word for it"
+              : "Identified on an earlier build and remembered"}">${
+              r.basis === "you" ? "named by you" : r.basis}</span>` : ""}${r.basis === "you" && r.rid
+          ? ` <button type="button" class="unname" data-rid="${r.rid}" title="Forget this name">×</button>` : ""}${
+          LIVE && r.basis !== "you" && r.basis !== "measured" && r.candidates && r.candidates.length
+          ? ` <select class="linepick" data-rid="${r.rid}" title="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
+              r.candidates.filter(c => c.slug !== r.slug).map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}
+        <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine${r.basis === "paired"
+          ? ` · one of a twin pair: which id is which cannot be told` : ""}</span></td>
+      <td class="num">${r.machines}</td>
+      <td class="num">${staffCell(r)}</td>
+      <td class="num">${r.makes.toLocaleString()}${r.missing && r.missing.length
+          ? `<span class="sub">stopped: no ${r.missing.join(", ")}</span>`
+          : r.fullWeek && r.hoursWeek < r.fullWeek
+          ? `<span class="sub">${r.atRoster.toLocaleString()} at this roster</span>` : ""}</td>
+      <td class="num">${r.ships.toLocaleString()}${r.piling
+          ? ` <span class="chip warn">piling up</span>` : ""}</td>
+      <td class="num">${r.stock.toLocaleString()}</td>
+      <td class="num">${r.toCity ? r.toCity.toLocaleString() : "—"}${r.toPier
+          ? `<span class="sub"> +${r.toPier.toLocaleString()} export</span>` : ""}</td>`,
+  },
+  feed: {
+    label: "Feed the factories",
+    note: () => `What the lines eat a day and a week, against the top-up and the import set up to bring it`,
+    empty: "No factory line to feed.",
+    verdict: rows => {
+      if(!rows.length) return "No factory line to feed.";
+      const bad = rows.filter(r => r.level === "critical").length;
+      const watch = rows.filter(r => r.level === "warn").length;
+      const wait = rows.filter(r => r.level === "info").length;
+      const worst = rows.filter(r => r.level === "critical" || r.level === "warn").sort((a,b) => b.perDay - a.perDay)[0];
+      return `<b>${rows.length - bad - watch - wait} of ${rows.length} inputs</b> are fed as the machines need${
+        bad ? `; ${bad} ${bad===1?"is":"are"} not` : ""}${
+        watch ? `; ${watch} worth watching` : ""}${
+        wait ? `; ${wait} wait on a stopped line` : ""}${
+        worst ? ` — largest ${worst.item} at ${shortName(D.businesses[worst.s])}` : ""}.`;
+    },
+    keep: r => r.level !== "ok",
+    head: `<th class="l">Factory</th><th class="l">Input</th><th>Needs / day</th>
+           <th>Needs / week</th><th>Daily top-up</th><th>Arrives / day</th>
+           <th>Import / week</th><th class="l">Change</th>`,
+    rows: () => factoryView().sites.flatMap(s => s.needs.map(n => ({...n, s: s.s}))),
+    row: r => {
+      const depot = r.from !== null ? shortName(D.businesses[r.from]) : "a depot";
+      const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
+      const stalled = r.stalled ? `; none arrived last week though ${depot} holds ${r.depotStock.toLocaleString()}` : "";
+      const change = {
+        unplanned: () => `${chip("bad", "no top-up")} put ${r.item} on a plan at ${r.perDay.toLocaleString()} a day`,
+        target: () => `${chip("bad", "top-up short")} raise ${depot}'s top-up to ${r.raiseTarget.toLocaleString()}${stalled}`,
+        waiting: () => `${chip("neutral", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
+        staffing: () => `${chip("warn", "understaffed")} the roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week; staff them and the need is the full ${r.perDay.toLocaleString()}`,
+        dry: () => `${chip("bad", "depot out")} ${depot} holds ${r.depotStock.toLocaleString()}; the import is not keeping up`,
+        idle: () => `${chip("warn", "not drawn")} ${depot} holds ${r.depotStock.toLocaleString()} but the line takes ${
+                       Math.round(r.arrives / r.perDay * 100)}% of its need`,
+        import: () => r.raiseImport
+          ? `${chip("bad", "import short")} raise the weekly import to ${r.raiseImport.toLocaleString()}`
+          : `${chip("warn", "import tight")} within 5% of what the factories eat`,
+        noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.depotNeed, 1)).toFixed(1)} weeks of it`,
+        made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => shortName(D.businesses[i])).join(", ")}`,
+        ok: () => chip("ok", "covered"),
+      }[r.status]();
+      return `
+      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${r.item}<span class="sub">${r.lines.map(l => {
+          const line = (factoryView().sites.find(s => s.s === r.s) || {lines: []}).lines.find(x => x.item === l);
+          return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ")}</span></td>
+      <td class="num">${r.perDay.toLocaleString()}</td>
+      <td class="num">${r.perWeek.toLocaleString()}</td>
+      <td class="num">${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
+          ? `<span class="sub"> from ${depot}</span>` : ""}</td>
+      <td class="num">${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay
+          ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
+      <td class="num">${r.importWeekly !== null ? r.importWeekly.toLocaleString() : "—"}${
+          r.depotNeed && r.depotNeed !== r.perWeek
+          ? `<span class="sub"> all factories ${r.depotNeed.toLocaleString()}</span>` : ""}</td>
+      <td class="l">${change}</td>`;
+    },
+  },
+};
+
+/* Hours a factory worker is posted to a line's machines, out of every hour
+   of the week; a machine with nobody on it stands still. */
+const staffCell = r => {
+  if(!r.fullWeek) return "—";
+  const full = r.hoursWeek >= r.fullWeek;
+  const pct = Math.round(r.hoursWeek / r.fullWeek * 100);
+  return `<span class="chip ${full ? "ok" : pct < 50 ? "bad" : "warn"}">${pct}%</span>${full ? "" :
+    `<span class="sub">${r.gaps.slice(0, 3).map(m => `#${m.slot} off ${m.off}`).join("; ")}${
+      r.gaps.length > 3 ? ` +${r.gaps.length - 3} more` : ""}</span>`}`;
+};
+/* Where a line's machines sit in the factory's workstation list, so a row
+   here can be matched to a machine on the game screen. */
+const slotText = r => r.slots && r.slots.length
+  ? ` · list position${r.slots.length > 1 ? "s" : ""} ${r.slots.join(", ")}` : "";
+
+/* --- naming a factory line by hand ------------------------------------
+   The flow can only name a line that ships or eats something. One set up
+   before its ingredients arrive — beer waiting on hops — is named here, kept
+   in this browser, and sent to the watcher when the page is live so the
+   alerts follow too. The needs of a line named here are worked out on the
+   page from the same recipes the planner uses. */
+const LINE_NAMES_KEY = "ba_line_names";
+function localNames(){
+  try{ return JSON.parse(localStorage.getItem(LINE_NAMES_KEY)) || {}; }catch(e){ return {}; }
+}
+function nameLine(rid, slug){
+  const names = localNames();
+  if(slug) names[rid] = slug; else delete names[rid];
+  try{ localStorage.setItem(LINE_NAMES_KEY, JSON.stringify(names)); }catch(e){}
+  if(!LIVE){ drawStock(); drawLogistics(); return; }
+  SOURCE.name(rid, slug)
+    .then(data => { if(data){ D = data; renderAll(); } })
+    .catch(() => { drawStock(); drawLogistics(); });
+}
+const feedFit = (need, have) => {
+  if(!need || !have) return "ok";
+  const gap = need - have;
+  if(gap <= Math.max(need * 0.01, 5)) return "ok";
+  return gap <= need * 0.05 ? "tight" : "short";
+};
+/* The same verdict the board gives a factory input, for rows the page built. */
+function feedVerdict(n){
+  const ceil100 = v => Math.ceil(v / 100) * 100;
+  n.importFit = n.importWeekly !== null ? feedFit(n.depotNeed, n.importWeekly) : null;
+  n.raiseTarget = n.raiseImport = null;
+  n.stalled = !!(n.known && !n.arrives && n.depotStock > 0);
+  let status, level;
+  if(!n.target){ status = "unplanned"; level = "critical"; }
+  else if(n.target < n.perDay * 0.98){ status = "target"; level = "critical"; n.raiseTarget = ceil100(n.perDay); }
+  else if(n.known && n.arrives < n.perDay * 0.75){
+    [status, level] = n.waitingOn.length ? ["waiting", "info"]
+      : n.arrives >= n.perDay * (n.staffedShare ?? 1) * 0.85 ? ["staffing", "warn"]
+      : n.depotStock < n.perDay ? ["dry", "critical"] : ["idle", "warn"]; }
+  else if(n.importWeekly !== null && n.importFit === "short"){
+    status = "import"; level = "critical"; n.raiseImport = ceil100(n.depotNeed); }
+  else if(n.importWeekly !== null && n.importFit === "tight"){ status = "import"; level = "warn"; }
+  else if(n.importWeekly === null && n.madeAt.length){ status = "made"; level = "ok"; }
+  else if(n.importWeekly === null && n.depotStock < n.depotNeed){ status = "noimport"; level = "warn"; }
+  else { status = "ok"; level = "ok"; }
+  n.status = status; n.level = level;
+}
+/* A name kept in this browser that the live board does not yet have — the
+   watcher was down when it was picked, or it was picked on the published copy
+   — is sent across once, so the alerts and the tables agree with the page. */
+const syncedNames = new Set();
+function syncLocalNames(view){
+  if(!LIVE) return;
+  const names = localNames();
+  const missing = view.sites.flatMap(s => s.unnamed).filter(u => u.rid && names[u.rid] && !syncedNames.has(u.rid));
+  if(!missing.length) return;
+  missing.forEach(u => syncedNames.add(u.rid));
+  Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
+    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderAll(); } })
+    .catch(() => {});
+}
+
+/* The factories as the board built them, plus any line named in this browser. */
+function factoryView(){
+  const f = D.supply.factories;
+  if(!f || !f.sites) return {sites: [], machines: 0, unnamed: 0};
+  const view = JSON.parse(JSON.stringify(f));
+  const names = localNames();
+  syncLocalNames(view);
+  const recipes = {};
+  (D.plan?.recipes || []).forEach(r => recipes[r.slug] = r);
+  const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
+  const taken = new Set();
+  view.sites.forEach(s => s.lines.forEach(l => taken.add(l.slug)));
+  const touched = new Set();
+  view.sites.forEach(s => {
+    s.unnamed = s.unnamed.filter(u => {
+      const slug = u.rid && names[u.rid], rec = slug && recipes[slug];
+      if(!rec || taken.has(slug)){
+        u.candidates = u.candidates.filter(c => !taken.has(c.slug));
+        return true;
+      }
+      taken.add(slug);
+      const makes = u.machines * rec.out * 24, stock = held(s.s, slug);
+      const missing = s.known ? rec.ingredients
+        .filter(ing => { const a = view.aliases[ing.slug] || ing.slug;
+                         return !(s.arrivals[a] || 0) && !held(s.s, a); })
+        .map(ing => ing.item) : [];
+      const share = u.fullWeek ? u.hoursWeek / u.fullWeek : 1;
+      s.lines.push({rid: u.rid, item: rec.item, slug, missing, workstation: u.workstation, slots: u.slots,
+        machines: u.machines, rate: rec.out, makes, ships: 0, stock, toCity: 0, toPier: 0,
+        basis: "you", piling: stock > makes * 3, atRoster: Math.round(makes * share),
+        hoursWeek: u.hoursWeek, fullWeek: u.fullWeek, gaps: u.gaps || []});
+      rec.ingredients.forEach(ing => {
+        const islug = view.aliases[ing.slug] || ing.slug, perDay = u.machines * ing.per * 24;
+        let row = s.needs.find(n => n.slug === islug);
+        if(!row){
+          const t = s.targets[islug], from = t ? t[1] : null;
+          row = {item: ing.item, slug: islug, perDay: 0, perWeek: 0, lines: [],
+            target: t ? t[0] : 0, from, known: s.known, arrives: s.arrivals[islug] || 0,
+            stock: held(s.s, islug), depotStock: 0, importWeekly: null, depotNeed: 0, madeAt: []};
+          if(from !== null){
+            const d = (view.depots[from] || {})[islug];
+            row.depotStock = held(from, islug);
+            row.importWeekly = d ? d.weekly : null;
+          }
+          s.needs.push(row);
+        }
+        const before = row.perDay * (row.staffedShare ?? 1);
+        row.perDay += perDay; row.perWeek += perDay * 7;
+        row.staffedShare = row.perDay ? (before + perDay * share) / row.perDay : 1;
+        if(!row.lines.includes(rec.item)) row.lines.push(rec.item);
+        touched.add(row);
+      });
+      return false;
+    });
+  });
+  if(touched.size){
+    const depotNeed = {}, madeAt = {};
+    view.sites.forEach(s => {
+      s.needs.forEach(n => { if(n.from !== null){
+        const k = n.from + "|" + n.slug; depotNeed[k] = (depotNeed[k] || 0) + n.perWeek; } });
+      s.lines.forEach(l => (madeAt[l.slug] = madeAt[l.slug] || []).push(s.s));
+    });
+    const shares = new Set([...touched].map(t => t.from + "|" + t.slug));
+    view.sites.forEach(s => {
+      const stopped = {};
+      s.lines.forEach(l => { if(l.missing && l.missing.length) stopped[l.item] = l.missing; });
+      s.needs.forEach(n => {
+        if(!touched.has(n) && !shares.has(n.from + "|" + n.slug)) return;
+        n.depotNeed = Math.round(depotNeed[n.from + "|" + n.slug] || 0);
+        n.madeAt = madeAt[n.slug] || [];
+        n.waitingOn = n.lines.every(l => stopped[l])
+          ? [...new Set(n.lines.flatMap(l => stopped[l]).filter(m => m !== n.item))].sort() : [];
+        feedVerdict(n);
+      });
+      const rank = {critical: 0, warn: 1, info: 2, ok: 3};
+      s.needs.sort((a, b) => rank[a.level] - rank[b.level] || b.perDay - a.perDay);
+    });
+  }
+  // A recipe one line now runs is no longer on offer to the others.
+  view.sites.forEach(s => s.unnamed.forEach(u => {
+    u.candidates = u.candidates.filter(c => !taken.has(c.slug)); }));
+  view.unnamed = view.sites.reduce((n, s) => n + s.unnamed.reduce((m, u) => m + u.machines, 0), 0);
+  return view;
+}
+
+/* --- chrome, wired up once ----------------------------------------- */
+function toolbar(host, options, read, write, redraw){
+  options.forEach(([id,label]) => {
+    const b = el("button", null, label);
+    b.dataset.id = id;
+    b.setAttribute("aria-pressed", id === read());
+    b.onclick = () => {
+      write(id);
+      [...host.children].forEach(c => c.setAttribute("aria-pressed", c === b));
+      redraw();
+    };
+    host.append(b);
+  });
+}
+
+toolbar($("alertTools"), [["all","All"],["critical","Urgent"],["warn","Watch"],["info","Opportunity"]],
+  () => alertFilter, v => alertFilter = v, () => drawAlerts());
+toolbar($("chartTools"), [[30,"30 days"],[0,"All"]],
+  () => chartWindow, v => chartWindow = v, () => drawChart());
+toolbar($("portTools"), Object.entries(VIEWS).map(([id,v]) => [id, v.label]),
+  () => view, v => { view = v; sortKey = null; }, () => drawPortfolio());
+toolbar($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
+  () => rhythmView, v => rhythmView = v, () => drawRhythm());
+toolbar($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id,v]) => [id, v.label]),
+  () => stockView, v => stockView = v, () => drawStock());
+let logisticsView = "changes";
+toolbar($("logisticsTools"), [["changes","Needs a change"],["all","Everything"]],
+  () => logisticsView, v => logisticsView = v, () => drawLogistics());
+toolbar($("marketTools"), [["types","By business type"],["mine","What I sell"],
+                           ["new","Not selling yet"],["all","Everything"]],
+  () => marketView, v => marketView = v, () => drawMarket());
+
+$("legend").innerHTML = Object.entries(SERIES).map(([id,s]) =>
+  `<span data-s="${id}" role="button" tabindex="0" style="cursor:pointer">
+     <i style="background:${s.colour}"></i>${s.label}</span>`).join("");
+document.querySelectorAll("#legend span").forEach(node => {
+  const toggle = () => {
+    const id = node.dataset.s;
+    shown.has(id) ? shown.delete(id) : shown.add(id);
+    if(!shown.size) shown.add(id);
+    drawChart();
+  };
+  node.onclick = toggle;
+  node.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } };
+});
+
+$("flowClear").onclick = () => { flowPick = null; drawFlow(); };
+
+const chart = $("chart"), tip = $("tip");
+
+chart.addEventListener("pointermove", e => {
+  if(!chartRows.length) return;
+  const box = chart.getBoundingClientRect();
+  const {W,P} = chart._geom;
+  const px = (e.clientX-box.left) / box.width * W;
+  const i = Math.max(0, Math.min(chartRows.length-1,
+    Math.round((px-P.l)/((W-P.l-P.r)/(chartRows.length-1||1)))));
+  const r = chartRows[i], cx = chart._x(i);
+  const cross = chart.querySelector("#cross");
+  cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("opacity", ".5");
+  tip.style.opacity = 1;
+  tip.style.left = (cx/W*box.width) + "px";
+  tip.style.top = (e.clientY-box.top-14) + "px";
+  tip.innerHTML = `<b>Day ${r.day}</b>` + [...shown].map(id =>
+    `<br>${SERIES[id].label} <span class="num">${fmt(r[SERIES[id].key])}</span>`).join("");
+});
+chart.addEventListener("pointerleave", () => {
+  tip.style.opacity = 0;
+  const c = chart.querySelector("#cross"); if(c) c.setAttribute("opacity", 0);
+});
+window.addEventListener("resize", () => { if(D) drawChart(); });
+/* A width change the window never sees — a scrollbar appearing, a panel
+   opening — would otherwise leave the chart drawn to the old geometry. */
+if(window.ResizeObserver){
+  let lastW = 0;
+  new ResizeObserver(entries => {
+    const w = Math.round(entries[0].contentRect.width);
+    if(w && w !== lastW){ lastW = w; drawChart(); }
+  }).observe(chart);
+}
+
+/* --- draw ----------------------------------------------------------- */
+function drawMast(){
+  const m = D.meta;
+  $("eyebrow").innerHTML =
+    `Day ${m.day} · ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")} · ${m.cityDate}`
+    + (LIVE ? ` <span class="live" id="live"><b></b><em>${SOURCE.label}</em></span>` : "");
+  /* The save name is the player's own text: set it as text, never as markup. */
+  {
+    const t = $("title");
+    const words = m.save.trim().split(/\s+/);
+    const last = words.pop();
+    t.textContent = words.length ? words.join(" ") + " " : "";
+    const em = document.createElement("span");
+    em.textContent = last;
+    t.appendChild(em);
+  }
+  /* Cash and net worth are tiles; repeating them up here only made the reader
+     check whether the two copies agreed. */
+  const k = D.kpi;
+  /* Two things the reader should know before trusting a number: whether the
+     game's own text was available (without it names are slugs and recipes and
+     station capacities are unknown), and whether the save comes from a newer
+     game build than the one every figure here was checked against. */
+  const notices = [];
+  if(m.locale === false)
+    notices.push(["Game text", `<span class="muted" title="Load the game's en.json for product names, recipes and station capacities">not loaded</span>`]);
+  if(m.verifiedBuild && m.build > m.verifiedBuild)
+    notices.push(["Game build", `<span class="muted" title="This board was checked on build ${m.verifiedBuild}; a newer game may have changed what the save records">${m.build}, unchecked</span>`]);
+  $("mastMeta").innerHTML = [
+    ["Sites", `${k.businesses}${k.vacant ? ` <span class="muted">+${k.vacant} vacant</span>` : ""}`],
+    ["Staff", k.employees.toLocaleString()],
+    ...notices,
+  ].map(([l,v]) => `<div><span class="eyebrow">${l}</span><strong class="num">${v}</strong></div>`).join("");
+}
+
+function drawKpis(){
+  const k = D.kpi;
+  /* This is the change in average daily profit, not the change in net worth —
+     it belongs under Profit and it says so. */
+  const trend = k.profitAvg7 - k.profitPrev7;
+  const cf = D.cashFlow;
+  const profits = D.daily.map(d => d.profit);
+  const revenues = D.daily.map(d => d.revenue);
+  /* Four tiles: what the day made, what it took, what is in the bank, and the
+     pace metric once the game reports it again — until then, the cost base.
+     Site and staff counts sit in the masthead; debt only appears when there is any. */
+  const fixed = k.rentBill + D.staff.dailyCost;
+  const owed = k.debt > 0
+    ? ` · ${fmt(k.debt)} owed on ${D.loans.length} loan${D.loans.length===1?"":"s"}` : "";
+  const tiles = [
+    {v: fmt(k.profitYesterday), l: "Profit yesterday",
+     d: `7-day avg ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs previous 7`,
+     cls: sign(k.profitYesterday), spark: profits},
+    {v: fmt(k.revenue), l: "Revenue yesterday",
+     d: `${k.customers.toLocaleString()} customers served`, spark: revenues},
+    {v: fmt(k.cash), l: "Cash on hand",
+     d: (cf
+       ? `${cf.days}d: profit ${compact(cf.profit)}, cash ${cf.cashChange>=0?"+":""}${
+           compact(cf.cashChange)} — ${cf.reinvested>=0
+             ? `${compact(cf.reinvested)} went into set-up and stock`
+             : `${compact(-cf.reinvested)} more than the books earned`}`
+       : `profit ${compact(k.profitSum7)} over 7 days · no cash history yet`) + owed},
+    k.netWorth === null
+      ? {v: fmt(fixed), l: "Fixed cost per day",
+         d: `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`}
+      /* Build 3672 stopped reporting net worth. Rather than quietly showing a
+         stale number as if it were today's, the tile says which day it is from. */
+      : {v: fmt(k.netWorth), l: "Net worth",
+         d: k.netWorthAsOf
+           ? `as of day ${k.netWorthAsOf} — the game stopped reporting it`
+           : cf && cf.netWorthChange !== null
+           ? `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${
+               cf.days===1?"":"s"}`
+           : "no net worth history yet — starts building today",
+         cls: k.netWorthAsOf ? "" : (cf && cf.netWorthChange !== null ? sign(cf.netWorthChange) : "")},
+  ];
+  $("kpis").innerHTML = tiles.map(t => `
+    <div class="kpi">
+      <span class="eyebrow">${t.l}</span>
+      <span class="v num ${t.cls||""}">${t.v}</span>
+      <span class="d">${t.d}</span>
+      ${t.spark ? sparkline(t.spark, "var(--accent)") : ""}
+    </div>`).join("");
+}
+
+/* Where each kind of finding is spelt out on the board: a supply-chain view,
+   the logistics set-up, or the site's own tab. A finding is a headline; the
+   link is the rest of the story. */
+const ALERT_LINKS = {
+  shortfall: {sec:"secStock", view:"imports"}, order: {sec:"secStock", view:"imports"},
+  paused: {sec:"secStock", view:"imports"},
+  outruns: {sec:"secStock", view:"shops"}, unplanned: {sec:"secStock", view:"shops"},
+  dead: {sec:"secStock", view:"idle"}, target: {sec:"secStock", view:"idle"},
+  feed: {sec:"secStock", view:"feed"}, staff: {sec:"secStock", view:"lines"},
+  unnamed: {sec:"secStock", view:"lines"}, unset: {sec:"secStock", view:"lines"},
+  atcap: {sec:"secDetail", site:true}, idlestaff: {sec:"secDetail", site:true},
+  trend: {sec:"secDetail", site:true}, loss: {sec:"secDetail", site:true},
+  notrading: {sec:"secDetail", site:true}, satisfaction: {sec:"secDetail", site:true},
+  uniform: {sec:"secDetail", site:true}, bathroom: {sec:"secDetail", site:true},
+  toiletprivacy: {sec:"secDetail", site:true}, sink: {sec:"secDetail", site:true},
+  music: {sec:"secDetail", site:true}, interior: {sec:"secDetail", site:true},
+  hype: {sec:"secMarket"}, vacant: {sec:"secPortfolio"},
+  promotion: {sec:"secPortfolio", port:"ops"},
+};
+/* Which page, and which view on it, each section lives on. A finding's link
+   opens that page first, then scrolls; the reader never lands on a hidden
+   section. */
+const SEC_PAGE = {
+  alertSection:["today"],
+  secDaily:["results"], secRhythm:["results"], secPortfolio:["results"], secDetail:["results"],
+  secLogistics:["supply","orders"], secStock:["supply","checks"], secFlow:["supply","map"],
+  secExpand:["growth","expand"], secMarket:["growth","market"], secPlan:["growth","plan"],
+  secProducts:["company"], secPayroll:["company"], secGoals:["company"],
+};
+function reveal(secId){
+  const [p, sv] = SEC_PAGE[secId] || ["today"];
+  showPage(p, false);
+  if(sv) showSub(p, sv);
+  const sec = $(secId);
+  if(sec && !sec.hidden) requestAnimationFrame(() => sec.scrollIntoView({behavior:"smooth", block:"start"}));
+}
+function goToAlert(a){
+  const link = ALERT_LINKS[a.group];
+  if(!link) return;
+  if(link.view){
+    stockView = link.view; showAllStock = false;
+    [...$("stockTools").children].forEach(c => c.setAttribute("aria-pressed", c.dataset.id === stockView));
+    drawStock();
+  }
+  if(link.port){
+    view = link.port; sortKey = null;
+    [...$("portTools").children].forEach(c => c.setAttribute("aria-pressed", c.dataset.id === view));
+    drawPortfolio();
+  }
+  if(link.site){
+    const b = D.businesses.find(x => x.name === a.site);
+    if(b) openSite(b.key, false);
+  }
+  reveal(link.sec);
+}
+const alertLink = (a, i) => ALERT_LINKS[a.group]
+  ? ` <a href="#${(SEC_PAGE[ALERT_LINKS[a.group].sec] || ["today"])[0]}" class="goto" data-i="${i}">details ›</a>` : "";
+
+function drawAlerts(){
+  const kindOn = a => alertGroupPrefs[a.group] !== false;
+  const alerts = D.alerts.filter(kindOn);
+  const counts = {critical:0, warn:0, info:0};
+  alerts.forEach(a => counts[a.level]++);
+  $("alertCount").textContent =
+    `${counts.critical} urgent · ${counts.warn} watch · ${counts.info} opportunity`;
+  const list = alerts.filter(a => alertFilter==="all" || a.level===alertFilter);
+  $("alerts").innerHTML = list.length ? list.map((a, i) => `
+    <div class="alert ${a.level}"><i></i><b>${a.text}${alertLink(a, i)}${
+      a.detail ? `<span class="detail">${a.detail}</span>` : ""}</b>
+      <span class="who">${a.site}</span></div>`).join("")
+    : `<div class="alert"><i style="background:var(--accent)"></i><b>Nothing to flag here.</b><span class="who"></span></div>`;
+  document.querySelectorAll("#alerts .goto").forEach(node => {
+    node.onclick = e => { e.preventDefault(); goToAlert(list[+node.dataset.i]); };
+  });
+
+  /* Anything worth less than the materiality gate is counted rather than read
+     out. It is never dropped — the count and the money are both here. Hidden
+     kinds are dropped from both the count and the total, the same as above. */
+  const rows = ((D.minor || {}).rows || []).filter(kindOn);
+  const host = $("alertMinor");
+  if(!rows.length){ host.innerHTML = ""; return; }
+  const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
+  const gate = (D.minor || {}).gate || 0;
+  host.innerHTML = `${rows.length} smaller finding${rows.length===1?"":"s"} worth
+    ${fmt(worth)}/day in total, below the ${fmt(gate)}/day line
+    <button type="button" id="minorToggle" aria-expanded="${showMinor}">${
+      showMinor ? "hide" : "show"}</button>`
+    + (showMinor ? `<ul>${rows.map((r, i) =>
+        `<li><b>${r.site}</b> — ${r.text}${
+          r.worth ? ` <span class="num">(${fmt(r.worth)}/day)</span>` : ""}${alertLink(r, i)}</li>`).join("")}</ul>` : "");
+  $("minorToggle").onclick = () => { showMinor = !showMinor; drawAlerts(); };
+  document.querySelectorAll("#alertMinor .goto").forEach(node => {
+    node.onclick = e => { e.preventDefault(); goToAlert(rows[+node.dataset.i]); };
+  });
+}
+
+function drawChart(){
+  chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
+  const rows = chartRows;
+  /* Daily profit swings by a million between a weekend and a Tuesday purely
+     because that is when the week's goods are paid for. The rolling line is the
+     one that says whether trading moved. */
+  $("chartNote").textContent = `Day ${rows[0].day} to ${rows[rows.length-1].day} — `
+    + `daily profit follows the purchase calendar, so the 7-day line is the trend`;
+  document.querySelectorAll("#legend span").forEach(n =>
+    n.style.opacity = shown.has(n.dataset.s) ? 1 : .38);
+
+  const W = chart.clientWidth || 900, H = 260, P = {t:12,r:8,b:26,l:62};
+  const keys = [...shown];
+  let lo = 0, hi = 0;
+  rows.forEach(r => keys.forEach(id => { lo=Math.min(lo,r[SERIES[id].key]); hi=Math.max(hi,r[SERIES[id].key]); }));
+  hi = hi || 1;
+  const pad = (hi-lo)*0.08;
+  lo -= pad; hi += pad;
+  const x = i => P.l + i/(rows.length-1||1)*(W-P.l-P.r);
+  const y = v => P.t + (1-(v-lo)/(hi-lo))*(H-P.t-P.b);
+
+  const ticks = 4, out = [];
+  for(let i=0;i<=ticks;i++){
+    const v = lo + (hi-lo)*i/ticks, yy = y(v).toFixed(1);
+    out.push(`<line x1="${P.l}" y1="${yy}" x2="${W-P.r}" y2="${yy}" stroke="var(--rule-soft)" stroke-width="1"/>`);
+    out.push(`<text x="${P.l-10}" y="${+yy+4}" text-anchor="end" fill="var(--ink-3)"
+      font-family="IBM Plex Mono, monospace" font-size="10.5">${compact(v)}</text>`);
+  }
+  if(lo<0) out.push(`<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}" stroke="var(--ink-3)" stroke-width="1"/>`);
+
+  const step = Math.max(1, Math.ceil(rows.length/10));
+  rows.forEach((r,i) => { if(i%step===0 || i===rows.length-1)
+    out.push(`<text x="${x(i)}" y="${H-6}" text-anchor="middle" fill="var(--ink-3)"
+      font-family="IBM Plex Mono, monospace" font-size="10.5">${r.day}</text>`); });
+
+  keys.forEach(id => {
+    const s = SERIES[id];
+    const pts = rows.map((r,i)=>`${x(i).toFixed(1)},${y(r[s.key]).toFixed(1)}`).join(" ");
+    if(s.wide){
+      out.push(`<polygon points="${x(0).toFixed(1)},${y(Math.max(lo,0)).toFixed(1)} ${pts} ${x(rows.length-1).toFixed(1)},${y(Math.max(lo,0)).toFixed(1)}"
+        fill="${s.colour}" opacity=".10"/>`);
+    }
+    out.push(`<polyline points="${pts}" fill="none" stroke="${s.colour}"
+      stroke-width="${s.wide ? 2.6 : 1.4}" stroke-linejoin="round" stroke-linecap="round"
+      opacity="${s.wide ? 1 : .8}"/>`);
+    const last = rows.length-1;
+    out.push(`<circle cx="${x(last).toFixed(1)}" cy="${y(rows[last][s.key]).toFixed(1)}" r="3.4"
+      fill="var(--surface)" stroke="${s.colour}" stroke-width="2"/>`);
+  });
+  out.push(`<line id="cross" x1="0" y1="${P.t}" x2="0" y2="${H-P.b}" stroke="var(--ink-3)"
+    stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`);
+  chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  chart.innerHTML = out.join("");
+  chart._x = x; chart._geom = {W,H,P};
+}
+
+/* A shop, its depot and the factory behind it are one operation. Reading them
+   apart puts a 98% shop margin next to a factory at -80% and neither number
+   means anything, so the chain total comes first and the sites fold underneath. */
+function chainRow(c, v){
+  const open = openChains.has(c.name);
+  const cells = v.chain(c);
+  const note = c.external
+    ? `${compact(c.external)} of that is sold outside the company by the factory`
+    : c.suppliedBy.length ? `supplied from ${c.suppliedBy.join(", ")}` : "";
+  const name = `<div class="chainname"><span class="twist">${open?"▾":"▸"}</span>
+    <span><b>${c.name}</b> <span class="sub">${c.count} site${c.count===1?"":"s"}${
+      note ? ` · ${note}` : ""}</span></span></div>`;
+  return `<tr class="chain" data-chain="${c.name}">${
+    cells.map((cell,i) => `<td class="${i?"num":"l"}">${i===0?name:cell}</td>`).join("")}</tr>`;
+}
+
+function drawPortfolio(){
+  const v = VIEWS[view];
+  $("portfolioNote").textContent = `${v.note} — open a chain, then a site for its detail`;
+  const byKey = {};
+  D.businesses.forEach(b => byKey[b.key] = b);
+  const sorter = (sortKey !== null && v.cols[sortKey] && v.cols[sortKey][3])
+    ? (a,z) => (v.cols[sortKey][3](a) - v.cols[sortKey][3](z)) * sortDir : null;
+
+  const body = [];
+  (D.chains||[]).forEach(c => {
+    body.push(chainRow(c, v));
+    if(!openChains.has(c.name)) return;
+    let kids = c.sites.map(k => byKey[k]).filter(Boolean);
+    if(sorter) kids = kids.slice().sort(sorter);
+    kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-key="${
+      b.key}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
+      `<td class="${cls||"num"}">${f(b)}</td>`).join("")}</tr>`));
+  });
+
+  const t = $("portfolio");
+  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls],i) =>
+      `<th class="${cls||""}" data-i="${i}" ${i===sortKey?`data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}</th>`).join("")}</tr></thead>
+    <tbody>${body.join("")}</tbody>
+    ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
+      `<td class="${i?"num":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr></tfoot>` : ""}`;
+  t.querySelectorAll("thead th").forEach(th => th.onclick = () => {
+    const i = +th.dataset.i;
+    if(!v.cols[i][3]) return;
+    if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
+    drawPortfolio();
+  });
+  t.querySelectorAll("tr.chain").forEach(tr => tr.onclick = () => {
+    const name = tr.dataset.chain;
+    openChains.has(name) ? openChains.delete(name) : openChains.add(name);
+    drawPortfolio();
+  });
+  t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
+}
+
+/* --- one business at a time ------------------------------------------ */
+const baseName = b => b.name.replace(/^\[[^\]]*\]\s*/, "");
+/* The bracket prefix moves into the bullet, but three shops can still share a
+   name — those get their neighbourhood back so the tabs stay tellable apart. */
+let NAME_USES = {}, NAME_USES_FOR = null;
+/* Counted on demand, and again whenever the data object is replaced, so a
+   page that receives its numbers after loading is counted too. */
+const nameUses = () => {
+  if(NAME_USES_FOR !== D){
+    NAME_USES = {};
+    D.businesses.forEach(b => { NAME_USES[baseName(b)] = (NAME_USES[baseName(b)] || 0) + 1; });
+    NAME_USES_FOR = D;
+  }
+  return NAME_USES;
+};
+const shortName = b => nameUses()[baseName(b)] > 1 && b.neighbourhood
+  ? `${baseName(b)} · ${b.neighbourhood}`
+  : baseName(b);
+
+/* A warehouse has no customers, no basket and no shelves worth reading; it is a
+   pipe. Trading sites lead the picker, the rest sit in their own group. */
+const trades = b => b.status !== "vacant" && b.revenue > 0;
+
+/* A site opens from its portfolio row or from a finding; nothing is open until
+   someone asks. The picker moves between sites without the trip back up. */
+function drawSitePicker(){
+  const all = D.businesses.filter(b => b.status !== "vacant");
+  const trading = all.filter(trades), support = all.filter(b => !trades(b));
+  const opt = b => `<option value="${b.key}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
+  $("siteTools").innerHTML = `
+    <select class="sitepick" id="sitePick" aria-label="Which site">
+      <option value="" disabled${siteKey ? "" : " selected"}>Pick a site</option>
+      ${trading.map(opt).join("")}
+      ${support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}
+    </select>
+    <button type="button" id="siteClose" title="Close the detail">close</button>`;
+  $("sitePick").onchange = e => openSite(e.target.value);
+  $("siteClose").onclick = closeSite;
+}
+function openSite(key, scroll = true){
+  if(!D.businesses.some(b => b.key === key)) return;
+  siteKey = key; siteOpen = true;
+  drawSitePicker(); drawSite(); drawPortfolio();
+  if(scroll) reveal("secDetail");
+}
+function closeSite(){
+  siteOpen = false;
+  drawSite(); drawPortfolio();
+}
+
+/* A small area chart for one site's history: same grammar as the big one,
+   without the axes it does not have room for. */
+function miniChart(series, key, colour){
+  if(series.length < 2) return `<p class="muted">Not enough history yet.</p>`;
+  const W = 640, H = 108, P = {t:8, r:6, b:16, l:4};
+  const vals = series.map(d => d[key]);
+  let lo = Math.min(...vals, 0), hi = Math.max(...vals, 1);
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+  const x = i => P.l + i/(series.length-1) * (W-P.l-P.r);
+  const y = v => P.t + (1-(v-lo)/(hi-lo)) * (H-P.t-P.b);
+  const pts = series.map((d,i) => `${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
+  const base = y(Math.max(lo, 0)).toFixed(1);
+  const last = series.length - 1;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:108px">
+    ${lo < 0 ? `<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}"
+        stroke="var(--ink-3)" stroke-width="1"/>` : ""}
+    <polygon points="${x(0).toFixed(1)},${base} ${pts} ${x(last).toFixed(1)},${base}"
+      fill="${colour}" opacity=".10"/>
+    <polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="2"
+      stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(last).toFixed(1)}" cy="${y(series[last][key]).toFixed(1)}" r="3.2"
+      fill="var(--surface)" stroke="${colour}" stroke-width="2"/>
+    <text x="${P.l}" y="${H-4}" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
+      font-size="10">day ${series[0].day}</text>
+    <text x="${W-P.r}" y="${H-4}" text-anchor="end" fill="var(--ink-3)"
+      font-family="IBM Plex Mono, monospace" font-size="10">day ${series[last].day}</text>
+  </svg>`;
+}
+
+/* --- the shop's week, hour by hour ------------------------------------
+   Three numbers meet here. Customers are measured an hour at a time over the
+   fortnight the save keeps. The registers are whatever service staff were
+   rostered that hour, at the capacity of the counters they were posted to. The
+   door cap is the building's own limit. Shade is how busy; a red outline is an
+   hour spent at the ceiling, a blue one an hour with capacity doing nothing. */
+const HOUR_ROWS = [1,2,3,4,5,6,0];
+
+function hourGrid(g){
+  if(!g) return "";
+  const peak = Math.max(g.peak, 1);
+  const head = `<tr><th class="l"></th>${
+    [...Array(24).keys()].map(h => `<th>${h%3===0?h:""}</th>`).join("")}</tr>`;
+  const body = HOUR_ROWS.map(wd => {
+    const cells = [...Array(24).keys()].map(h => {
+      const seen = g.customers[wd][h], cap = g.effective[wd][h];
+      if(seen === null) return `<td title="${WEEK_SHORT[wd]} ${h}:00 — no reading"></td>`;
+      const shade = Math.round(Math.min(seen / peak, 1) * 42);
+      const atCap = cap && seen >= cap * 0.95;
+      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
+      return `<td class="${atCap?"cap":slack?"slack":""}"
+        style="background:color-mix(in srgb, var(--accent) ${shade}%, var(--raised))"
+        title="${WEEK_SHORT[wd]} ${String(h).padStart(2,"0")}:00 — ${seen} customers, ${
+          g.staffed[wd][h]} of ${g.counters} register capacity staffed, ${
+          g.door||"no"} door cap${atCap?" — at the ceiling":slack?" — capacity idle":""}"></td>`;
+    }).join("");
+    return `<tr class="${g.thin[wd]?"thin":""}"><th class="l">${WEEK_SHORT[wd]}${
+      g.thin[wd]?"*":""}</th>${cells}</tr>`;
+  }).join("");
+  const weeks = Math.min(...g.weeks.filter(w => w));
+  const thin = g.thin.some(Boolean);
+  return `<table class="hourgrid">${head}${body}</table>
+    <div class="hourkey">
+      <span><i style="background:color-mix(in srgb, var(--accent) 42%, var(--raised))"></i>busiest hour ${
+        Math.round(g.peak)} customers</span>
+      <span><i style="box-shadow:inset 0 0 0 1.5px var(--neg)"></i>at the ceiling</span>
+      <span><i style="box-shadow:inset 0 0 0 1px var(--info)"></i>capacity idle</span>
+      <span>${g.counters} register capacity across ${g.stationCount} counter${
+        g.stationCount===1?"":"s"}${g.door?`, ${g.door}/h door cap`:""}</span>
+      <span>${weeks} week${weeks===1?"":"s"} behind each hour${
+        thin?" — starred days rest on under 2 weeks":""}</span>
+    </div>`;
+}
+const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function siteStat(label, value, cls){
+  return `<div class="sstat"><span class="eyebrow">${label}</span>
+    <b class="num ${cls || ""}">${value}</b></div>`;
+}
+
+/* A vending-machine side item earns a rounding error next to a store's real
+   line — this is the cutoff, as a share of the best-selling line's revenue. */
+const SHELF_MAIN_SHARE = 0.02;
+
+function drawSite(){
+  siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
+  const b = siteTab >= 0 ? D.businesses[siteTab] : null;
+  const sec = $("secDetail");
+  if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
+  sec.hidden = false;
+  $("siteNote").textContent = "One site at a time — pick another, or close it";
+
+  const targets = {};
+  D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.item] = r; });
+  const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
+  const depot = feeds ? D.businesses[feeds.from] : null;
+  const grid = (D.hours || []).find(h => h.key === b.key);
+  const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
+    f.kind === "cap"
+      ? `At the ceiling ${f.hours} hours a week (${f.when}) — ${f.limit} is the limit, so
+         the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
+         hours; what is turned away above them is not recorded anywhere in the save.`
+      : `${f.staff} counters are on ${String(f.from).padStart(2,"0")}:00-${
+         String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour —
+         ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
+
+  const stats = [
+    siteStat("Revenue / day", fmt(b.revenue)),
+    siteStat("Profit / day", fmt(b.profit), sign(b.profit)),
+    siteStat("Margin", b.margin === null ? "—" : `${b.margin.toFixed(1)}%`),
+    siteStat("Customers", b.customers ? b.customers.toLocaleString() : "—"),
+    siteStat("Spend / visit", b.basket === null ? "—" : `$${b.basket.toFixed(2)}`),
+    siteStat("Staff", b.staff || "—"),
+    siteStat("Rent / day", fmt(b.rent)),
+    siteStat("Opened", `day ${b.opened}`),
+  ].join("");
+
+  const costs = [
+    ["Goods", b.cogs], ["Wages", b.wages], ["Rent", b.rent],
+    ["Marketing", b.marketing], ["Theft", b.theft], ["Licensing", b.licensing],
+  ].filter(([, v]) => v);
+
+  const crew = b.crew.length ? `
+    <div class="panel">
+      <span class="eyebrow">Who works here — ${fmt(b.staffCost)}/day</span>
+      ${b.crew.map(c => `<div class="stat"><span>${c.role}${
+        c.count > 1 ? ` ×${c.count}` : ""}</span><b class="num">${fmt(c.daily)}</b></div>`).join("")}
+    </div>` : "";
+
+  /* A store's real shelves are what its type is built around; the paper bag
+     handed out at every checkout and the odd soda/coffee machine are amenities
+     the save logs as sales too, at a sliver of what the real lines move. They
+     stay out of the main table and fold into a "show more" rather than
+     vanishing outright. */
+  const shelvesAll = b.lines.filter(l => l.rate > 0 || l.units > 0);
+  const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
+  const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
+  const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
+  const shelves = showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
+  const products = shelves.length ? `
+    <div class="scroll"><table>
+      <thead><tr><th class="l">Product</th><th>Price</th><th>Sold / day</th>
+        <th>Revenue / day</th><th>On hand</th><th>Top-up</th><th>Pressure</th></tr></thead>
+      <tbody>${shelves.map(l => {
+        const t = targets[l.item];
+        return `<tr>
+          <td class="l">${l.item}</td>
+          <td class="num">${l.price ? fmt(l.price) : "—"}</td>
+          <td class="num">${l.soldPerDay.toLocaleString()}</td>
+          <td class="num">${fmt(l.revenue)}</td>
+          <td class="num">${l.units.toLocaleString()}</td>
+          <td class="num">${t && t.target ? t.target.toLocaleString() : "—"}</td>
+          <td class="num">${t && t.pressure !== null ? load(t.pressure, t.level) : "—"}</td></tr>`;
+      }).join("")}</tbody></table></div>` : `<p class="muted">Nothing stocked here.</p>`;
+  const shelfMore = sideShelves.length ? `
+    <button type="button" id="shelfToggle" aria-expanded="${showAllShelves}">${
+      showAllShelves ? "hide" : `show ${sideShelves.length} more — bags, drinks, odds and ends`}</button>` : "";
+
+  $("sitePanel").innerHTML = `
+    <div class="sitehead">
+      ${bullet(b)}
+      <div>
+        <h3>${b.name}</h3>
+        <span class="sub">${b.type} · ${b.address}${
+          b.neighbourhood ? ` · ${b.neighbourhood}` : ""}${
+          depot ? ` · supplied from ${shortName(depot)}` : ""}</span>
+      </div>
+    </div>
+    <div class="sstats">${stats}</div>
+    <div class="panel">
+      <span class="eyebrow">Profit, last ${b.series.length} days</span>
+      ${miniChart(b.series, "profit", "var(--accent)")}
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Its week${b.rhythm
+        ? ` — peaks ${b.peakDay}, ${b.swing} points between best and worst`
+        : ""}</span>
+      ${weekBars(b.rhythm, {empty:"Not enough trading history here yet."})}
+    </div>
+    ${grid ? `<div class="panel">
+      <span class="eyebrow">Every hour of the week — customers against the capacity on shift</span>
+      ${hourGrid(grid)}
+      ${notes.length ? notes.map(n => `<p class="muted">${n}</p>`).join("") : ""}
+    </div>` : ""}
+    <div class="sitegrid">
+      <div class="panel">
+        <span class="eyebrow">Yesterday's costs</span>
+        ${costs.length ? costs.map(([l,v]) =>
+          `<div class="stat"><span>${l}</span><b class="num neg">${fmt(-v)}</b></div>`).join("")
+          : `<p class="muted">No costs recorded.</p>`}
+        <div class="stat"><span><b>Profit</b></span>
+          <b class="num ${sign(b.profit)}">${fmt(b.profit)}</b></div>
+      </div>
+      ${crew || `<div class="panel"><span class="eyebrow">Who works here</span>
+        <p class="muted">Nobody assigned.</p></div>`}
+    </div>
+    <div class="panel"><span class="eyebrow">Shelves</span>${products}${shelfMore}</div>`;
+  if($("shelfToggle")) $("shelfToggle").onclick = () => { showAllShelves = !showAllShelves; drawSite(); };
+}
+
+function drawStock(){
+  const v = SUPPLY_VIEWS[stockView];
+  const all = v.rows();
+  const worth = all.filter(v.keep);
+  const rows = showAllStock ? all : worth;
+  $("stockNote").textContent = v.note();
+  $("stockVerdict").innerHTML = v.verdict(all)
+    + (all.length > worth.length
+       ? ` <button type="button" id="stockToggle" aria-expanded="${showAllStock}">${
+           showAllStock ? `just the ${worth.length} worth reading`
+                        : `show all ${all.length}`}</button>` : "");
+  const toggle = $("stockToggle");
+  if(toggle) toggle.onclick = () => { showAllStock = !showAllStock; drawStock(); };
+  const nothing = all.length
+    ? `Nothing here needs reading — the ${all.length} row${all.length===1?"":"s"} are all
+       inside their limits, and the line above is the whole story.`
+    : v.empty;
+  $("stock").innerHTML = rows.length
+    ? `<thead><tr>${v.head}</tr></thead>
+       <tbody>${rows.slice(0,40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${nothing}</td></tr></tbody>`;
+  document.querySelectorAll("#stock select.linepick").forEach(sel => {
+    sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
+  });
+  document.querySelectorAll("#stock button.unname").forEach(b => {
+    b.onclick = () => nameLine(b.dataset.rid, null);
+  });
+}
+
+/* --- logistics set-up ------------------------------------------------ */
+/* The two numbers a logistics manager is set with: the weekly import order
+   at each depot, consolidated across every factory drawing on it, and the
+   daily top-up into each factory. Both come from the factory lines as the
+   board reads them (or as you named them), so a line named a minute ago is
+   already in the totals. */
+const ceil100 = v => Math.ceil(v / 100) * 100;
+function drawLogistics(){
+  const changesOnly = logisticsView === "changes";
+  const f = factoryView();
+  const other = (D.supply.factories && D.supply.factories.depotOther) || {};
+  const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
+  const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
+  const label = (s, slug, fallback) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || fallback;
+  $("logisticsNote").textContent = f.sites.length
+    ? `What to set the managers to: import orders per depot, top-ups per factory — from ${f.machines} machines on ${
+        f.sites.reduce((n, s) => n + s.lines.length, 0)} lines${f.unnamed ? `, ${f.unnamed} still unnamed` : ""}`
+    : "No factory to feed.";
+
+  /* --- imports, one table per depot ------------------------------------ */
+  const depots = {}, loose = {};
+  f.sites.forEach(s => s.needs.forEach(n => {
+    if(n.from === null){
+      const row = loose[n.slug] = loose[n.slug] || {item: n.item, slug: n.slug, week: 0, users: []};
+      row.week += n.perWeek; row.users.push({s: s.s, perDay: n.perDay, lines: n.lines});
+      return;
+    }
+    const d = depots[n.from] = depots[n.from] || {};
+    const row = d[n.slug] = d[n.slug] || {item: n.item, slug: n.slug, factoryWeek: 0, users: []};
+    row.factoryWeek += n.perWeek; row.users.push({s: s.s, perDay: n.perDay, lines: n.lines});
+  }));
+  Object.entries(depotsKnown).forEach(([si, items]) => {
+    const d = depots[si] = depots[si] || {};
+    Object.keys(items).forEach(slug => {
+      d[slug] = d[slug] || {item: label(+si, slug, slug), slug, factoryWeek: 0, users: []};
+    });
+  });
+  const importRows = [];
+  Object.entries(depots).forEach(([si, items]) => {
+    const s = +si;
+    const rows = Object.values(items).map(r => {
+      const otherWeek = (other[si] || {})[r.slug] || 0;
+      const total = r.factoryWeek + otherWeek;
+      const current = ((depotsKnown[si] || {})[r.slug] || {}).weekly;
+      const fit = current === undefined ? (total ? "none" : "idle") : feedFit(total, current);
+      // A weekly order carries a buffer by design; only half again over is worth a word.
+      const surplus = current !== undefined && total && current > total * 1.5;
+      return {...r, s, otherWeek, total, current, fit, surplus, stock: held(s, r.slug),
+              setTo: total ? ceil100(total) : null};
+    }).sort((a, b) => b.total - a.total);
+    importRows.push({s, rows});
+  });
+  const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
+  const short = importRows.reduce((n, d) => n + d.rows.filter(r => r.fit === "short" || r.fit === "none").length, 0);
+  const importAll = importRows.reduce((n, d) => n + d.rows.length, 0);
+  if(changesOnly){
+    importRows.forEach(d => { d.rows = d.rows.filter(r => r.fit === "short" || r.fit === "none" || r.fit === "tight"); });
+  }
+  const importShown = importRows.filter(d => d.rows.length);
+  $("importVerdict").innerHTML = importRows.length
+    ? `<b>Weekly import orders.</b> Every material each depot ships, what the factories eat of it a week, what else leaves, and the order to set${
+        short ? ` — <b>${short}</b> ${short === 1 ? "is" : "are"} short or missing` : " — all covered"}${
+        looseRows.length ? `. ${looseRows.length} material${looseRows.length === 1 ? "" : "s"} the factories need are on no depot's plan at all` : ""}.`
+    : "No depot imports anything yet.";
+  const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
+  const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
+  const importHead = `<thead><tr><th class="l">Material</th><th class="l">Eaten by</th>
+      <th>Factories / week</th><th>Shops / week</th><th>Total / week</th>
+      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
+  const importBody = importShown.map(d => `
+    <tr class="chain"><td class="l" colspan="8">${siteCell(D.businesses[d.s])}</td></tr>
+    ${d.rows.map(r => `<tr class="kid">
+      <td class="l">${r.item}</td>
+      <td class="l"><span class="sub" style="display:inline">${r.users.length ? users(r) : "no factory line"}</span></td>
+      <td class="num">${r.factoryWeek ? r.factoryWeek.toLocaleString() : "—"}</td>
+      <td class="num">${r.otherWeek ? r.otherWeek.toLocaleString() : "—"}</td>
+      <td class="num">${r.total ? r.total.toLocaleString() : "—"}</td>
+      <td class="num">${r.current !== undefined ? r.current.toLocaleString() : chip("bad", "not imported")}</td>
+      <td class="num">${r.setTo === null ? chip("neutral", "nothing draws it")
+        : r.fit === "short" || r.fit === "none" ? `<b>${r.setTo.toLocaleString()}</b> ${chip("bad", r.fit === "none" ? "add" : "raise")}`
+        : r.fit === "tight" ? `${r.setTo.toLocaleString()} ${chip("warn", "tight")}`
+        : r.surplus ? `${r.setTo.toLocaleString()} ${chip("neutral", "could lower")}`
+        : chip("ok", "covered")}</td>
+      <td class="num">${r.stock.toLocaleString()}</td></tr>`).join("")}`).join("")
+    + (looseRows.length ? `
+    <tr class="chain"><td class="l" colspan="8"><div class="site"><span><b>On no depot's plan</b>
+      <span class="sub">needed by a factory line, but no top-up brings it from anywhere — add it to a depot's plan and import it there</span></span></div></td></tr>
+    ${looseRows.map(r => `<tr class="kid">
+      <td class="l">${r.item}</td>
+      <td class="l"><span class="sub" style="display:inline">${users(r)}</span></td>
+      <td class="num">${r.week.toLocaleString()}</td><td class="num">—</td>
+      <td class="num">${r.week.toLocaleString()}</td>
+      <td class="num">${chip("bad", "not imported")}</td>
+      <td class="num"><b>${ceil100(r.week).toLocaleString()}</b> ${chip("bad", "add")}</td>
+      <td class="num">—</td></tr>`).join("")}` : "");
+  $("importPlan").innerHTML = importShown.length || looseRows.length
+    ? importHead + `<tbody>${importBody}</tbody>`
+    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && importAll
+        ? `Every import order covers what leaves — all ${importAll} of them.` : "Nothing to import."}</td></tr></tbody>`;
+
+  /* --- top-ups, one table per factory ----------------------------------- */
+  const needsChange = r => r.status === "unplanned" || r.status === "target" || r.stalled;
+  const allSites = f.sites.map(s => ({s: s.s, rows: s.needs.slice().sort((a, b) => b.perDay - a.perDay)}))
+    .filter(x => x.rows.length);
+  const topShort = allSites.reduce((n, x) => n + x.rows.filter(r => r.status === "unplanned" || r.status === "target").length, 0);
+  const topAll = allSites.reduce((n, x) => n + x.rows.length, 0);
+  const sites = changesOnly
+    ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
+    : allSites;
+  $("topupVerdict").innerHTML = allSites.length
+    ? `<b>Daily top-ups.</b> What each factory eats a day, per material, and the top-up to set on the plan that feeds it${
+        topShort ? ` — <b>${topShort}</b> ${topShort === 1 ? "is" : "are"} below the day's need or missing` : " — all covered"}.`
+    : "No factory line to feed.";
+  const lineText = (s, r) => r.lines.map(l => {
+    const line = s.lines.find(x => x.item === l);
+    return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ");
+  $("topupPlan").innerHTML = sites.length ? `
+    <thead><tr><th class="l">Material</th><th class="l">Lines</th><th>Eats / day</th>
+      <th>Top-up now</th><th>Set top-up to</th><th>From</th><th>Arrives / day</th></tr></thead>
+    <tbody>${sites.map(x => {
+      const site = f.sites.find(s => s.s === x.s);
+      return `
+      <tr class="chain"><td class="l" colspan="7">${siteCell(D.businesses[x.s])}</td></tr>
+      ${x.rows.map(r => {
+        const over = r.target && r.target > r.perDay * 1.5;
+        return `<tr class="kid">
+        <td class="l">${r.item}</td>
+        <td class="l"><span class="sub" style="display:inline">${lineText(site, r)}</span></td>
+        <td class="num">${r.perDay.toLocaleString()}</td>
+        <td class="num">${r.target ? r.target.toLocaleString() : chip("bad", "none")}</td>
+        <td class="num">${r.status === "unplanned" ? `<b>${ceil100(r.perDay).toLocaleString()}</b> ${chip("bad", "add")}`
+          : r.status === "target" ? `<b>${ceil100(r.perDay).toLocaleString()}</b> ${chip("bad", "raise")}`
+          : over ? `${ceil100(r.perDay).toLocaleString()} ${chip("neutral", "could lower")}`
+          : chip("ok", "covered")}</td>
+        <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
+        <td class="num">${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
+          ? ` ${chip("neutral", "waiting")}` : r.status === "staffing" ? ` ${chip("warn", "understaffed")}`
+          : r.stalled ? ` ${chip("warn", "none arrived")}` : ""}</td></tr>`; }).join("")}`;
+    }).join("")}</tbody>`
+    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && topAll
+        ? `Every top-up covers its day — all ${topAll} of them.` : "No factory line to feed."}</td></tr></tbody>`;
+}
+
+/* --- market demand ---------------------------------------------------- */
+function drawMovers(){
+  const m = D.market;
+  const out = [];
+  m.hype.slice(0,5).forEach(h => out.push(`
+    <div class="mover">
+      <span class="dir up">▲ hype</span>
+      <span><b>${h.count > 1 ? `${h.count} products` : h.items[0]}</b>
+        <span class="where">in ${h.hood}${
+          h.count > 1 ? ` — ${h.items.slice(0,3).join(", ")}${h.count > 3 ? "…" : ""}` : ""}</span>${
+        h.sellHere ? `<span class="tagme">you sell here</span>`
+        : h.mine ? `<span class="tagme">you stock it</span>` : ""}</span>
+      <span class="when">${h.daysLeft} day${h.daysLeft === 1 ? "" : "s"} left</span>
+    </div>`));
+  m.shortages.slice(0,5).forEach(x => out.push(`
+    <div class="mover">
+      <span class="dir down">▼ ${x.kind.toLowerCase()}</span>
+      <span><b>${x.item}</b> <span class="where">at ${
+        x.count > 1 ? `${x.count} suppliers` : x.where}</span>${
+        x.mine ? `<span class="tagme">affects you</span>` : ""}</span>
+      <span class="when">${x.daysLeft} day${x.daysLeft === 1 ? "" : "s"} left</span>
+    </div>`));
+  /* One wave, or one shop opening, moves a whole range at once — so it reads as
+     one line, and where our own shop opened in that window it says so. */
+  (m.movers || []).slice(0,6).forEach(x => out.push(`
+    <div class="mover">
+      <span class="dir ${x.up ? "up" : "down"}">${x.up ? "▲" : "▼"} ${
+        x.delta > 0 ? "+" : ""}${x.delta}</span>
+      <span><b>${x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]}</b>
+        <span class="where">in ${x.hood}${x.count > 1
+          ? ` — ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""}` : ""}${
+          x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window`
+                       : ""}</span>${
+        x.sell ? `<span class="tagme">you sell here</span>` : ""}</span>
+      <span class="when">over ${m.trendDays} day${m.trendDays === 1 ? "" : "s"}</span>
+    </div>`));
+  $("movers").innerHTML = out.length
+    ? out.join("")
+    : `<div class="mover"><span class="dir">—</span><span class="where">No demand events running right now.</span><span class="when"></span></div>`;
+}
+
+function heatCell(cell){
+  if(!cell) return `<td class="heat none">—</td>`;
+  // Demand is a magnitude, not a grade, so this ramps one hue rather than
+  // running red-to-green.
+  const pct = Math.round(Math.min(cell.demand, 100) * 0.32);
+  const marks = [];
+  if(cell.monopoly) marks.push("only you");
+  else if(cell.sell) marks.push(`${cell.providers} sellers`);
+  else marks.push(`${cell.providers} sellers`);
+  if(cell.hype) marks.push("▲hype");
+  if(cell.delta) marks.push(`${cell.delta > 0 ? "+" : ""}${cell.delta}`);
+  return `<td class="heat ${cell.sell ? "here" : ""}"
+    style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
+    title="${cell.hood}: demand ${cell.demand}, ${cell.providers} sellers${
+      cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">
+    <span class="v">${cell.demand}</span><span class="mk">${marks.join(" · ")}</span></td>`;
+}
+
+/* A business type is only worth opening if most of its range sells, so the cell
+   leads with how much of the range is in strong demand. */
+function typeCell(cell){
+  if(!cell) return `<td class="heat none">—</td>`;
+  const share = cell.strong / cell.count;
+  const pct = Math.round(share * 40);
+  return `<td class="heat ${cell.sell ? "here" : ""}"
+    style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
+    title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average">
+    <span class="v">${cell.strong}/${cell.count}</span>
+    <span class="mk">avg ${cell.demand} · ${cell.providers} rivals</span></td>`;
+}
+
+/* --- where to expand --------------------------------------------------
+   One list, two kinds of evidence. A shop turning people away at the door is a
+   fact with a date on it; a gap in the demand grid is an inference about a shop
+   that does not exist yet. Measured always outranks inferred. */
+function drawExpansion(){
+  const list = D.expansion || [];
+  const measured = list.filter(e => e.measured).length;
+  const TOP = 5;
+  const shown = showAllExpand ? list : list.slice(0, TOP);
+  $("expandNote").textContent = list.length
+    ? `${measured} measured at the ceiling, ${list.length - measured} inferred from demand`
+    : "Nothing is at its ceiling and nothing unserved ranks.";
+  const line = (e, i) => `
+        <div class="exline ${e.measured ? "measured" : "guess"}">
+          <span class="rank">${i+1}</span>
+          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>
+            <span class="tagme">${e.measured ? "measured" : "demand grid"}</span>
+            <span class="why">${e.reason} — ${e.action}</span></span>
+          <span class="num">${e.worth ? fmt(e.worth) + "/day" : e.number}</span>
+        </div>`;
+  /* The top of the list is the decision; the tail is there for checking it. */
+  const more = list.length > TOP ? `<div class="expand-more">${showAllExpand
+      ? `All ${list.length} shown`
+      : `${list.length - TOP} more below the top ${TOP}`}
+      <button type="button" id="expandToggle" aria-expanded="${showAllExpand}">${
+        showAllExpand ? `just the top ${TOP}` : `show all ${list.length}`}</button></div>` : "";
+  $("expansion").innerHTML = list.length
+    ? `<div class="expand">${shown.map(line).join("")}</div>${more}`
+    : `<p class="pad muted">Nothing to rank yet.</p>`;
+  const toggle = $("expandToggle");
+  if(toggle) toggle.onclick = () => { showAllExpand = !showAllExpand; drawExpansion(); };
+}
+
+function drawMarket(){
+  const m = D.market;
+  const trend = m.trendDays
+    ? `change over the last ${m.trendDays} days`
+    : `trend history starts building from today`;
+  $("marketNote").textContent = marketView === "types"
+    ? `How much of each business type's whole range is wanted, by neighbourhood`
+    : marketView === "new"
+    ? `Products you do not stock yet, strongest demand first`
+    : `Demand by neighbourhood, ${trend}`;
+  $("marketLegend").innerHTML = (marketView === "types"
+    ? [`<span>Cell shows how many of the range are in strong demand (60+)</span>`,
+       `<span>Darker cell = more of the range wanted</span>`,
+       `<span>Green underline = you already sell some of it there</span>`]
+    : [`<span>Darker cell = stronger demand</span>`,
+       `<span>Green underline = you sell it there</span>`,
+       `<span>▲hype = the game flagged rising demand</span>`]).join("");
+
+  if(marketView === "types"){
+    const t = D.market.types;
+    if(m.typesHidden) $("marketNote").textContent +=
+      ` — ${m.typesHidden} type${m.typesHidden===1?"":"s"} with under 3 products left out`;
+    $("market").innerHTML = t.length ? `
+      <thead><tr><th class="l">Business type</th>${
+        D.market.hoods.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${t.map(r => `<tr>
+        <td class="l"><b>${r.type}</b>${r.mine ? ` <span class="chip ok">you run one</span>` : ""}
+          <span class="sub">${r.products} products</span></td>
+        ${r.cells.map(typeCell).join("")}</tr>`).join("")}</tbody>`
+      : `<tbody><tr><td class="l muted">No business types matched.</td></tr></tbody>`;
+    return;
+  }
+
+  if(marketView === "gaps"){
+    const gaps = m.gaps;
+    $("market").innerHTML = gaps.length ? `
+      <thead><tr><th class="l">Product</th><th class="l">Neighbourhood</th>
+        <th>Demand</th><th>Sellers</th><th class="l">You</th></tr></thead>
+      <tbody>${gaps.map(g => `<tr>
+        <td class="l">${g.item}</td>
+        <td class="l">${g.hood}</td>
+        <td class="num">${meter(g.demand)}</td>
+        <td class="num">${g.providers === 0
+          ? `<span class="chip ok">none</span>` : g.providers}</td>
+        <td class="l">${g.make
+          ? `<span class="chip ok">you make this</span>`
+          : `<span style="color:var(--ink-3)">not stocked</span>`}</td></tr>`).join("")}</tbody>`
+      : `<tbody><tr><td class="l" style="color:var(--ink-3)">No unserved demand above 50.</td></tr></tbody>`;
+    return;
+  }
+
+  let rows = m.rows, limit = 30;
+  if(marketView === "mine"){
+    rows = m.rows.filter(r => r.sell || r.make);
+    limit = 60;
+  } else if(marketView === "new"){
+    // Strongest unserved demand first, and among equals the emptiest market.
+    rows = m.rows.filter(r => !r.sell)
+      .sort((a,b) => (b.gap?.demand ?? 0) - (a.gap?.demand ?? 0)
+                  || (a.gap?.providers ?? 99) - (b.gap?.providers ?? 99));
+    limit = 40;
+  }
+  $("market").innerHTML = rows.length ? `
+    <thead><tr><th class="l">Product</th>${
+      m.hoods.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows.slice(0, limit).map(r => `<tr>
+      <td class="l"><b>${r.item}</b>${
+        r.make && !r.sell ? ` <span class="chip warn">you make this</span>`
+        : r.make ? ` <span class="chip ok">make</span>`
+        : r.sell ? ` <span class="chip neutral">sell</span>` : ""}</td>
+      ${r.cells.map(heatCell).join("")}</tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="l" style="color:var(--ink-3)">Nothing here.</td></tr></tbody>`;
+}
+
+/* --- plan a chain -----------------------------------------------------
+   The recipes, the workstations and the prices come across from the save as
+   they were read; every number below is worked out here, so a slider is
+   instant and nothing about the plan is decided in Python.
+
+   Two facts set the shape of this. A workstation runs flat out around the
+   clock, so a line's output is fixed by how many machines are on it and never
+   by what the shops happen to want. And anything the shops do not take is
+   exported rather than wasted. So the number that has to be right is the raw
+   material a week — order short and the machines stop; the shop count is a
+   consequence, not the plan. */
+let planType = null, planRate = null, planShops = null, planCounts = {};
+
+const RECIPE_BY = {};
+function indexPlan(){
+  for(const k in RECIPE_BY) delete RECIPE_BY[k];
+  (D.plan.recipes || []).forEach(r => RECIPE_BY[r.slug] = r);
+}
+const itemName = slug => (D.plan.items || {})[slug] || slug;
+const HOURS = 24;  // a workstation keeps running while the shops are shut
+
+function planTypes(){
+  const cat = D.plan.catalogue || {};
+  return Object.keys(cat)
+    .filter(k => (cat[k].products || []).length >= 2)
+    .sort((a,b) => cat[a].type.localeCompare(cat[b].type));
+}
+
+/* What one shop actually shifts is measured where the owner runs the type, so
+   the split between shelf and export starts from his trading, not a guess. */
+function defaultRate(kind){
+  const own = (D.plan.own || {})[kind];
+  const vals = own ? Object.values(own.perDay || {}) : [];
+  if(!vals.length) return null;
+  return Math.max(1, Math.round(vals.reduce((a,b) => a+b, 0) / vals.length));
+}
+const machinesOn = slug => Math.max(0, planCounts[slug] ?? 1);
+
+function planFor(kind, perShop, shops){
+  const products = ((D.plan.catalogue || {})[kind] || {}).products || [];
+  const peak = D.plan.peak || 1;
+  const shelfDay = perShop * peak;          // one shop, on its busiest day
+  const shelfWeek = perShop * 7;            // a week of ordinary trading
+  const rows = [], kitCount = {}, ingredients = {};
+  let madeWeek = 0, shelfDemandWeek = 0, exportWeek = 0;
+
+  products.forEach(slug => {
+    const r = RECIPE_BY[slug];
+    const wantWeek = shelfWeek * shops;
+    shelfDemandWeek += wantWeek;
+    if(!r){
+      rows.push({slug, item:itemName(slug), made:false, wantWeek, shelfDay});
+      return;
+    }
+    const ws = (D.plan.workstations || {})[r.workstation] || {};
+    const machines = machinesOn(slug);
+    const oneHour = r.out, oneDay = oneHour * HOURS;
+    /* Full tilt, always: the line does not idle because a shelf is full. */
+    const perDay = oneDay * machines, perWeek = perDay * 7;
+    madeWeek += perWeek;
+    const surplus = perWeek - wantWeek;
+    if(surplus > 0) exportWeek += surplus;
+    const kit = [...(ws.assembly || []), ...(ws.machines || [])];
+    kit.forEach(m => kitCount[m] = (kitCount[m] || 0) + machines);
+    const ings = r.ingredients.map(i => {
+      const weekly = perWeek * i.per / r.out;
+      ingredients[i.slug] = (ingredients[i.slug] || 0) + weekly;
+      return {...i, weekly, hourly: weekly / 7 / HOURS};
+    });
+    rows.push({
+      slug, item:r.item, made:true, machines, out:oneHour, oneDay, perDay, perWeek,
+      wantWeek, surplus, kit, ings, shelfDay,
+      workstation: ws.name || r.workstation,
+      covers: shelfDay > 0 ? perDay / shelfDay : Infinity,
+      short: surplus < 0,
+    });
+  });
+
+  const prices = D.plan.prices || {};
+  let cash = 0, priced = 0, total = 0;
+  const sources = D.plan.sources || {};
+  const imports = Object.entries(ingredients).map(([slug, weekly]) => {
+    const unit = prices[slug];
+    total++;
+    if(unit !== undefined){ priced++; cash += weekly * unit; }
+    const src = sources[slug];
+    return {slug, item:itemName(slug), weekly, daily: weekly / 7, unit,
+            value: unit === undefined ? null : weekly * unit,
+            from: src ? src.from : null, warehouse: src ? src.warehouse : null,
+            ordered: src ? src.ordered : null, active: src ? src.active : false,
+            gap: src ? weekly - src.ordered : null};
+  }).sort((a,b) => b.weekly - a.weekly);
+
+  return {rows, machines: kitCount, imports, cash, priced, total,
+          madeWeek, shelfDemandWeek, exportWeek,
+          totalMachines: rows.reduce((a,r) => a + (r.machines || 0), 0),
+          bought: rows.filter(r => !r.made).length,
+          shortLines: rows.filter(r => r.short).length};
+}
+
+function drawPlan(){
+  indexPlan();
+  const types = planTypes();
+  if(!types.length){ $("planNote").textContent = "No product catalogue in this save."; return; }
+  if(!types.includes(planType))
+    planType = types.includes("ba:businesstype_supermarket")
+      ? "ba:businesstype_supermarket" : types[0];
+  if(planRate === null) planRate = defaultRate(planType) || 200;
+  if(planShops === null) planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
+
+  const cat = D.plan.catalogue[planType], own = (D.plan.own || {})[planType];
+  $("planNote").textContent =
+    `What a week of running these machines needs delivered, and what it leaves over`;
+  $("planPicker").innerHTML = `
+    <div class="planrow">
+      <label>Business type
+        <select id="planPick">${types.map(k =>
+          `<option value="${k}" ${k===planType?"selected":""}>${D.plan.catalogue[k].type} · ${
+            D.plan.catalogue[k].products.length} products</option>`).join("")}</select></label>
+      <label>Shops taking the output
+        <input type="range" id="planShopSlide" min="1" max="30" step="1" value="${planShops}"></label>
+      <label>Sales per product, in each shop
+        <input type="range" id="planSlide" min="10" max="2000" step="10" value="${planRate}"></label>
+      <label>&nbsp;<output id="planOut"></output></label>
+    </div>
+    <p class="muted" style="margin:10px 0 0" id="planSummary"></p>
+    <p class="muted" style="margin:10px 0 0">Machines run ${HOURS} hours at their rated rate,
+      so every line makes its full quantity whether or not the shelves need it — the
+      ingredient order is sized on that, never on demand. What the shops do not take is
+      surplus for export. Set the machines per line in the table below. ${own
+      ? `Your ${own.sites} ${cat.type.toLowerCase()}${own.sites===1?"":"s"} average ${
+          defaultRate(planType).toLocaleString()} a day per product, which is where the
+         shop figures started.`
+      : "You do not run this type, so the shop figures are yours to choose — nothing there is measured."}</p>`;
+  $("planPick").onchange = e => {
+    planType = e.target.value;
+    planRate = defaultRate(planType) || planRate;
+    planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
+    planCounts = {};
+    drawPlan();
+  };
+  $("planShopSlide").oninput = e => { planShops = +e.target.value; paintPlan(); };
+  $("planSlide").oninput = e => { planRate = +e.target.value; paintPlan(); };
+  paintPlan();
+}
+
+function paintPlan(){
+  const p = planFor(planType, planRate, planShops);
+  const cat = D.plan.catalogue[planType];
+  const focused = document.activeElement;
+  const keep = focused && focused.dataset ? focused.dataset.slug : null;
+
+  $("planOut").textContent = `${Math.round(p.madeWeek).toLocaleString()} units/week`;
+  $("planSummary").innerHTML = p.totalMachines
+    ? `<b>${p.totalMachines} machine${p.totalMachines === 1 ? "" : "s"}</b> across the range
+       turn out <b>${Math.round(p.madeWeek).toLocaleString()}</b> units a week and need
+       <b class="num">${Math.round(p.imports.reduce((a,i)=>a+i.weekly,0)).toLocaleString()}</b>
+       units of raw material delivered to keep going${p.priced
+         ? `, costing <b class="num">${fmt(p.cash)}</b> a week` : ""}.
+       ${planShops} ${cat.type.toLowerCase()}${planShops === 1 ? "" : "s"} would take
+       ${Math.round(p.shelfDemandWeek).toLocaleString()} of it${p.exportWeek > 0
+         ? `, leaving <b>${Math.round(p.exportWeek).toLocaleString()}</b> a week for export`
+         : ""}.${p.shortLines
+         ? ` ${p.shortLines} line${p.shortLines === 1 ? " does" : "s do"} not keep up with
+             the shelves — those need more machines.` : ""}`
+    : `No machines set, so nothing is being made.`;
+
+  $("planTable").innerHTML = `
+    <thead><tr><th class="l">Product</th><th>Machines</th><th class="l">Workstation</th>
+      <th>One machine / day</th><th>Made / week</th><th>Shops take</th><th>Surplus / week</th>
+      <th class="l">Raw material per week</th></tr></thead>
+    <tbody>${p.rows.map(r => r.made ? `<tr>
+      <td class="l"><b>${r.item}</b><span class="sub">${r.out.toLocaleString()}/h rated · one
+        machine covers ${r.covers.toFixed(1)} shop${r.covers === 1 ? "" : "s"}</span></td>
+      <td class="num"><input class="mcount" type="number" min="0" max="99" step="1"
+        data-slug="${r.slug}" value="${r.machines}"></td>
+      <td class="l">${r.workstation}<span class="sub">${r.kit.join(" + ")}</span></td>
+      <td class="num">${r.oneDay.toLocaleString()}</td>
+      <td class="num">${Math.round(r.perWeek).toLocaleString()}</td>
+      <td class="num">${Math.round(r.wantWeek).toLocaleString()}</td>
+      <td class="num">${r.surplus >= 0
+        ? `<span class="chip ok">+${Math.round(r.surplus).toLocaleString()}</span>`
+        : `<span class="chip bad">${Math.round(r.surplus).toLocaleString()}</span>`}</td>
+      <td class="l">${r.ings.map(i =>
+        `${Math.round(i.weekly).toLocaleString()} ${i.item}`).join(", ")}</td></tr>`
+    : `<tr><td class="l"><b>${r.item}</b><span class="sub">shops want ${
+        Math.round(r.wantWeek).toLocaleString()}/week</span></td>
+       <td class="l" colspan="7"><span class="chip neutral">imported, no recipe</span>
+       <span class="sub">the game documents no way to make this one — buy it in</span></td></tr>`
+    ).join("")}</tbody>`;
+
+  $("planTable").querySelectorAll(".mcount").forEach(el => {
+    el.oninput = e => {
+      planCounts[e.target.dataset.slug] = Math.max(0, +e.target.value || 0);
+      paintPlan();
+    };
+  });
+  if(keep){
+    const back = $("planTable").querySelector(`.mcount[data-slug="${keep}"]`);
+    if(back){ back.focus(); back.select?.(); }
+  }
+
+  const machines = Object.entries(p.machines).sort((a,b) => b[1]-a[1]);
+  $("planMachines").innerHTML = `<span class="eyebrow">Machines to buy</span>` + (machines.length
+    ? machines.map(([m,n]) =>
+        `<div class="stat"><span>${m}</span><b class="num">${n}</b></div>`).join("")
+      + `<div class="stat"><span><b>Total</b></span><b class="num">${
+          machines.reduce((a,b)=>a+b[1],0)}</b></div>`
+    : `<p class="muted">Nothing in this range is manufactured — it is all bought in.</p>`);
+
+  /* Orders are placed one importer at a time, so the list is cut the same way.
+     Each line carries what is on order now and the difference, which is the
+     only number that actually has to be typed. */
+  const byImporter = new Map();
+  p.imports.forEach(i => {
+    const key = i.from || "Not on any import contract";
+    if(!byImporter.has(key)) byImporter.set(key, []);
+    byImporter.get(key).push(i);
+  });
+  const blocks = [...byImporter.entries()].sort((a,b) =>
+    (a[0] === "Not on any import contract" ? 1 : 0) - (b[0] === "Not on any import contract" ? 1 : 0)
+    || b[1].reduce((x,i)=>x+i.weekly,0) - a[1].reduce((x,i)=>x+i.weekly,0));
+
+  $("planImports").innerHTML = `<span class="eyebrow">Weekly import order — what the machines
+    eat, by importer</span>` + (p.imports.length
+    ? blocks.map(([who, list]) => {
+        const sum = list.reduce((a,i) => a+i.weekly, 0);
+        const money = list.reduce((a,i) => a + (i.value || 0), 0);
+        const raise = list.filter(i => i.gap !== null && i.gap > 0);
+        return `<div class="impblock">
+          <div class="imphead"><b>${who}</b>
+            <span class="sub">${list.length} ingredient${list.length===1?"":"s"} ·
+              ${Math.round(sum).toLocaleString()} units a week${
+              money ? ` · ${fmt(money)}` : ""}${
+              raise.length ? ` · ${raise.length} to raise` : ""}</span></div>
+          <div class="scroll"><table>
+            <thead><tr><th class="l">Ingredient</th><th>Order / week</th>
+              <th>On order now</th><th>Change</th><th>Cash</th></tr></thead>
+            <tbody>${list.map(i => `<tr>
+              <td class="l">${i.item}${i.from && !i.active
+                ? ` <span class="chip bad">paused</span>` : ""}</td>
+              <td class="num"><b>${Math.ceil(i.weekly).toLocaleString()}</b></td>
+              <td class="num">${i.ordered === null
+                ? `<span class="sub">not ordered</span>` : i.ordered.toLocaleString()}</td>
+              <td class="num">${i.gap === null ? "—"
+                : Math.abs(i.gap) < 1 ? `<span class="chip ok">as is</span>`
+                : i.gap > 0 ? `<span class="chip warn">+${Math.ceil(i.gap).toLocaleString()}</span>`
+                : `<span class="chip neutral">${Math.floor(i.gap).toLocaleString()}</span>`}</td>
+              <td class="num">${i.value === null
+                ? `<span class="sub">no price</span>` : fmt(i.value)}</td></tr>`).join("")}</tbody>
+            <tfoot><tr><td class="l">Total</td>
+              <td class="num">${Math.round(sum).toLocaleString()}</td>
+              <td class="num"></td><td class="num"></td>
+              <td class="num">${money ? fmt(money) : ""}</td></tr></tfoot>
+          </table></div></div>`;
+      }).join("")
+      + `<p class="muted" style="margin-top:12px">Sized for machines running flat out, which
+         is what they do — order to demand instead and the lines stop mid-week. ${p.priced
+          ? `A week costs <b class="num">${fmt(p.cash)}</b> across the ${
+              p.priced} of ${p.total} ingredients this company already buys.`
+          : `No cash figure here: none of these ${p.total} ingredients appear in your own
+             goods costs.`}${p.priced < p.total
+           ? ` Unit prices are what you actually paid on day ${D.plan.priceDay}; the other ${
+               p.total - p.priced} ${p.total - p.priced === 1 ? "is" : "are"} shown as
+               quantities only.` : ""}</p>`
+    : `<p class="muted">Nothing to import — this range is bought as finished goods.</p>`);
+}
+
+function drawProducts(){
+  const rows = D.products.slice(0,14);
+  /* A column that is empty on two rows in three is not a column. When most
+     products do have a weekday peak it stays; otherwise it moves into the
+     row's own tooltip. */
+  const withPeak = rows.filter(p => p.peak).length;
+  const showPeak = withPeak * 2 >= rows.length;
+  $("productNote").textContent = `Daily revenue across every store`
+    + (showPeak ? "" : ` — weekday peaks on hover, ${withPeak} of ${rows.length} have one`);
+  $("products").innerHTML = `
+    <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
+      <th>Avg price</th><th>Stores</th>${showPeak?`<th class="l">Peaks</th>`:""}</tr></thead>
+    <tbody>${rows.map(p=>`<tr title="${p.peak
+        ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
+        : "No weekly cycle clears the noise test"}">
+      <td class="l">${p.item}</td>
+      <td class="num">${fmt(p.revenue)}</td>
+      <td class="num">${p.units.toLocaleString()}</td>
+      <td class="num">$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="num">${p.stores}</td>
+      ${showPeak?`<td class="l">${p.peak
+        ? `${p.peak} <span class="muted">+${p.swing} pts</span>`
+        : `<span class="muted">—</span>`}</td>`:""}</tr>`).join("")}</tbody>`;
+}
+
+/* Payroll, debt and milestones only earn their space when something needs
+   doing. With nobody unhappy and nothing owed they are one line each. */
+function drawPayroll(){
+  const st = D.staff;
+  $("payrollNote").textContent = `${st.total} people · ${fmt(st.dailyCost)} per day`;
+  const trouble = [["unhappy, below 70%", st.unhappy], ["absent today", st.absent],
+                   ["with an open complaint", st.complaining]].filter(([,v]) => v);
+  if(!trouble.length){
+    $("payroll").innerHTML = `<p class="muted" style="margin:0">Nothing to do here:
+      ${st.total} staff averaging ${st.avgSatisfaction}% satisfaction, none unhappy,
+      none absent, no complaints. ${st.roles.map(r => `${r.count} ${r.role.toLowerCase()}`)
+        .join(", ")}.</p>`;
+    return;
+  }
+  $("payroll").innerHTML =
+    [["Average satisfaction", `${st.avgSatisfaction}%`],
+     ...trouble.map(([l,v]) => [l[0].toUpperCase()+l.slice(1), v])]
+      .map(([l,v])=>`<div class="stat"><span>${l}</span><b class="num">${v}</b></div>`).join("")
+    + `<div class="stat" style="border-top:1px solid var(--rule); margin-top:8px; padding-top:12px">
+         <span class="eyebrow">Headcount by role</span></div>`
+    + st.roles.map(r=>`<div class="stat"><span>${r.role}</span><b class="num">${r.count}</b></div>`).join("");
+}
+
+function drawGoals(){
+  const g = D.goals, h = D.meta.houseRules;
+  $("goalsNote").textContent = `Career totals · playing on ${D.meta.difficulty}`;
+  /* The stored difficulty is only a slot number, so the settings themselves are
+     what answers "how hard is this game" — and they are worth stating, because
+     several of them are doing real work here. */
+  const moved = (h?.rules || []).filter(r => r.lean !== "level");
+  $("goals").innerHTML = `<p class="muted" style="margin:0 0 12px">${g.completed} personal
+    goal${g.completed===1?"":"s"} completed, ${g.diplomas} diploma${g.diplomas===1?"":"s"},
+    ${g.goodsProduced.toLocaleString()} goods produced in the factories,
+    ${fmt(g.taxesPaid)} paid in tax.</p>`
+    + (h && moved.length ? `<div class="stat" style="border-top:1px solid var(--rule);
+         padding-top:12px"><span class="eyebrow">House rules — ${h.label.toLowerCase()},
+         ${h.harder} harder${h.easier ? `, ${h.easier} easier` : ""}, started on ${
+         fmt(h.startingMoney)}</span></div>`
+      + moved.map(r => `<div class="stat" title="${r.what}">
+          <span>${r.name} <span class="muted">${r.what}</span></span>
+          <b class="num"><span class="chip ${r.lean === "harder" ? "warn" : "ok"}">×${
+            r.value}</span></b></div>`).join("")
+      : "");
+}
+
+function drawFooter(){
+  const m = D.meta;
+  $("footer").innerHTML =
+    `<span>Read from <b>${m.source}</b>, saved ${m.saved}</span>
+     <span>Dashboard built ${m.generated}</span>
+     <span>Game build ${m.build}</span>`;
+}
+
+function renderAll(){
+  indexTrends();
+  drawMast(); drawKpis(); drawAlerts();
+  drawChart(); drawRhythm(); drawPortfolio(); drawSitePicker(); drawSite();
+  drawLogistics(); drawStock(); drawFlow();
+  drawExpansion(); drawMovers(); drawMarket(); drawPlan();
+  drawProducts(); drawPayroll(); drawGoals(); drawFooter();
+}
+
+/* --- pages ------------------------------------------------------------ */
+/* One page at a time. Today is the daily check: four tiles and the list.
+   Everything else is a place you go on purpose — results by chain and site,
+   the supply round, growth planning, the company's reference tables. Which
+   page and which view are remembered on this device and mirrored in the hash. */
+const PAGES = [
+  {id:"today",   label:"Today",   host:"pageToday",   hint:"The four numbers and what needs attention"},
+  {id:"results", label:"Results", host:"pageResults", hint:"Daily result, the week, the portfolio by chain, one site at a time"},
+  {id:"supply",  label:"Supply",  host:"pageSupply",  hint:"Orders to set, stock checks, how goods move"},
+  {id:"growth",  label:"Growth",  host:"pageGrowth",  hint:"Where to expand, market demand, plan a chain"},
+  {id:"company", label:"Company", host:"pageCompany", hint:"Products, payroll, milestones"},
+];
+const SUBS = {
+  supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
+           items:[["orders","Orders to set"],["checks","Stock checks"],["map","How goods move"]]},
+  growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"expand",
+           items:[["expand","Where to expand"],["market","Market demand"],["plan","Plan a chain"]]},
+};
+const PAGE_KEY = "ba_dash_page";
+const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
+const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
+let page = "today";
+const sub = {};
+Object.entries(SUBS).forEach(([id, sv]) => {
+  const saved = remembered(sv.key);
+  sub[id] = sv.items.some(([k]) => k === saved) ? saved : sv.start;
+});
+
+function showSub(pageId, id){
+  const sv = SUBS[pageId];
+  if(!sv || !sv.items.some(([k]) => k === id)) return;
+  sub[pageId] = id;
+  document.querySelectorAll(`#${sv.host} section[data-sub]`).forEach(sec => { sec.hidden = sec.dataset.sub !== id; });
+  [...$(sv.nav).children].forEach(b => b.setAttribute("aria-pressed", b.dataset.id === id));
+  remember(sv.key, id);
+}
+function showPage(id, scroll = true){
+  if(!PAGES.some(p => p.id === id)) id = "today";
+  page = id;
+  PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
+  [...$("pages").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.id === id));
+  remember(PAGE_KEY, id);
+  try{ if(location.hash !== "#" + id) history.replaceState(null, "", "#" + id); }catch(e){}
+  /* The chart sizes itself from its rendered width, which was zero while its
+     page was hidden. */
+  if(id === "results") drawChart();
+  if(scroll){
+    const top = $("pages").offsetTop;
+    if(window.scrollY > top) window.scrollTo(0, top);
+  }
+}
+$("pages").innerHTML = PAGES.map(p =>
+  `<button type="button" data-id="${p.id}" aria-pressed="false" title="${p.hint}">${p.label}</button>`).join("");
+$("pages").addEventListener("click", e => {
+  const b = e.target.closest("button[data-id]");
+  if(b) showPage(b.dataset.id);
+});
+Object.entries(SUBS).forEach(([id, sv]) =>
+  toolbar($(sv.nav), sv.items, () => sub[id], v => sub[id] = v, () => showSub(id, sub[id])));
+window.addEventListener("hashchange", () => {
+  const h = location.hash.slice(1);
+  if(PAGES.some(p => p.id === h)) showPage(h, false);
+  else if(SEC_PAGE[h]) reveal(h);
+});
+
+/* --- which kinds of finding make the list ------------------------------- */
+/* Every "group" a finding in the Needs attention panel can carry — see note()
+   and _idle_notes() in the Python build. Kept in sync by hand since the two
+   sides only share the group key, not a label. */
+const ALERT_GROUPS = [
+  {id:"notrading",    label:"Not trading yet",        on:true},
+  {id:"vacant",       label:"Vacant leases",          on:true},
+  {id:"loss",         label:"Losing money",           on:true},
+  {id:"staff",        label:"Staffing",               on:true},
+  {id:"satisfaction", label:"Low satisfaction",       on:true},
+  {id:"promotion",    label:"Promotion below cap",   on:true},
+  {id:"uniform",      label:"No staff uniforms",      on:true},
+  {id:"bathroom",     label:"No customer bathroom",   on:true},
+  {id:"toiletprivacy",label:"Bathroom has no privacy",on:true},
+  {id:"sink",         label:"No customer sink",       on:true},
+  {id:"music",        label:"No music playing",       on:true},
+  {id:"interior",     label:"Interior design too low",on:true},
+  {id:"hype",         label:"Demand wave ending",     on:true},
+  {id:"trend",        label:"Revenue trend",          on:true},
+  {id:"unplanned",    label:"No distribution plan",   on:true},
+  {id:"outruns",      label:"Outsells its top-up",    on:true},
+  {id:"paused",       label:"Import paused",          on:true},
+  {id:"feed",         label:"Factory inputs",         on:true},
+  {id:"unnamed",      label:"Unnamed factory line",   on:true},
+  {id:"unset",        label:"Machine with no recipe", on:true},
+  {id:"shortfall",    label:"Import shortfall",       on:true},
+  {id:"order",        label:"Weekly order too small", on:true},
+  {id:"atcap",        label:"At capacity (door/staff/registers)", on:false},
+  {id:"idlestaff",    label:"Overstaffed hours",      on:false},
+  {id:"dead",         label:"Stock not moving",       on:true},
+  {id:"target",       label:"Top-up target too high", on:true},
+];
+const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
+
+function buildAlertSettingsPanel(){
+  let saved = {};
+  try{ saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)) || {}; }catch(e){}
+  ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = saved.hasOwnProperty(g.id) ? !!saved[g.id] : g.on; });
+  $("alertSettingsGrid").innerHTML = ALERT_GROUPS.map(g =>
+    `<button type="button" data-kind="${g.id}" aria-pressed="${alertGroupPrefs[g.id]}">${g.label}</button>`
+  ).join("");
+  $("alertSettingsGrid").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-kind]");
+    if(!btn) return;
+    const id = btn.dataset.kind;
+    alertGroupPrefs[id] = !alertGroupPrefs[id];
+    btn.setAttribute("aria-pressed", String(alertGroupPrefs[id]));
+    try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
+    drawAlerts();
+  });
+}
+buildAlertSettingsPanel();
+$("alertKindsToggle").onclick = () => {
+  const panel = $("alertSettingsPanel");
+  panel.hidden = !panel.hidden;
+  $("alertKindsToggle").setAttribute("aria-pressed", String(!panel.hidden));
+};
+
+function boot(){
+  renderAll();
+  Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
+  const h = location.hash.slice(1);
+  showPage(PAGES.some(p => p.id === h) ? h
+    : SEC_PAGE[h] ? SEC_PAGE[h][0]
+    : remembered(PAGE_KEY) || "today", false);
+}
+/* A page written with its numbers boots now. One that receives them later,
+   as the in-browser board does, boots on the first delivery. */
+if(D) boot();
+
+/* --- live refresh --------------------------------------------------- */
+/* The save on disk only changes when the game writes one, so this polls a
+   cheap stamp and pulls fresh numbers only when that stamp moves. */
+function startWatching(){
+  /* A failing rebuild otherwise reads as "nothing has changed" -- a pulsing
+     Live dot over an hour-old board -- so the source says why it is stuck and
+     the dot shows it. The last good board stays on screen. */
+  const markStale = (why) => {
+    const dot = $("live");
+    if(!dot || dot.classList.contains("off")) return;
+    dot.classList.toggle("stale", !!why);
+    dot.querySelector("em").textContent = why ? "Stale" : SOURCE.label;
+    dot.title = why ? "The save moved on but the board would not rebuild: " + why : "";
+  };
+  SOURCE.watch({
+    changed(data){
+      const first = !D;
+      D = data;
+      if(first) boot(); else renderAll();
+      const dot = $("live");
+      if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
+    },
+    stale: markStale,
+    lost(){
+      const dot = $("live");
+      if(dot){ dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
+    },
+  });
+}
+if(LIVE) startWatching();
+</script>
+"""
+
+
+def newest_under(target: str) -> str:
+    """The most recently written save at or below `target`."""
+    if os.path.isfile(target):
+        return target
+    folders = [target] + [
+        os.path.join(target, n)
+        for n in os.listdir(target)
+        if os.path.isdir(os.path.join(target, n))
+    ]
+    saves = [
+        os.path.join(f, n)
+        for f in folders
+        for n in os.listdir(f)
+        if n.endswith(".hsg")
+    ]
+    if not saves:
+        raise SystemExit(f"no .hsg saves under {target}")
+    return max(saves, key=os.path.getmtime)
+
+
+class SaveShapeError(Exception):
+    """The save parsed, but a field the board relies on was not where expected."""
+
+
+def safe_extract(save: Save, names: Names, history_path: str | None) -> dict:
+    """extract(), with a game-patch failure turned into one readable sentence.
+
+    The format is reverse-engineered, so a renamed field surfaces as a KeyError
+    deep inside a helper. Nobody can act on that; the game build and the build
+    this tool was checked against are what a report needs.
+    """
+    build = save.root.get("buildNumberAtLastSave")
+    if build is not None and build < MIN_BUILD:
+        raise SaveShapeError(
+            f"this save is from game build {build}; the board understands saves "
+            f"from build {MIN_BUILD} onward. Load the game and save again to bring it "
+            "up to date"
+        )
+    try:
+        return extract(save, names, history_path)
+    except (KeyError, TypeError, AttributeError, IndexError, ValueError) as exc:
+        newer = build is not None and build > VERIFIED_BUILD
+        raise SaveShapeError(
+            "the save does not have the shape this board expects "
+            f"({type(exc).__name__}: {exc}). Game build {build}, board checked on "
+            f"build {VERIFIED_BUILD}"
+            + (": the game has probably changed its save format" if newer else "")
+        ) from exc
+
+
+def browser_build(save_path: str, locale_path: str, history_path: str) -> str:
+    """One rebuild for the in-browser board: parse, extract, JSON.
+
+    Everything arrives as a path on Pyodide's virtual filesystem, so the same
+    extract() runs unchanged; only this wrapper knows it is in a browser. The
+    character id is kept beside the history so a later browser_name() can
+    file the name under the right company without parsing the save again.
+    """
+    names = Names(load_locale(locale_path))
+    save = load_save(save_path)
+    data = safe_extract(save, names, history_path)
+    with open(history_path + ".character", "w", encoding="utf-8") as fh:
+        fh.write(save.root.get("characterId") or "default")
+    return json.dumps(data, separators=(",", ":"))
+
+
+def browser_name(history_path: str, rid: str, slug: str | None) -> None:
+    """A factory line the player named in the browser; the next build follows."""
+    try:
+        with open(history_path + ".character", encoding="utf-8") as fh:
+            character = fh.read().strip() or "default"
+    except OSError:
+        character = "default"
+    history = History(history_path)
+    history.named(character, {rid: slug})
+    history.write()
+
+
+BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+
+
+def backfill_history(target: str, history_path: str, names: Names) -> int:
+    """Seed demand history from the other saves of the same character.
+
+    Older saves are real snapshots of the same city, so the trend line starts
+    populated instead of waiting a week for its first comparison. Only the folder
+    holding the newest save is read: every other folder is a different character,
+    and a different city.
+    """
+    folder = os.path.dirname(newest_under(target))
+    saves = sorted(
+        os.path.join(folder, n) for n in os.listdir(folder) if n.endswith(".hsg")
+    )
+    print(f"Seeding demand history from {len(saves)} saves in {os.path.basename(folder)}")
+    recorded = 0
+    for path in saves:
+        try:
+            save = load_save(path)
+            extract(save, names, history_path)
+            print(f"  day {save.root['Day']:>4}  {os.path.basename(path)}", flush=True)
+            recorded += 1
+        except Exception as exc:
+            print(f"  skipped {os.path.basename(path)}: {exc}", flush=True)
+    return recorded
+
+
+def yield_to_the_game() -> bool:
+    """Drop below normal priority so the game always gets the core first."""
+    try:
+        if sys.platform != "win32":
+            os.nice(10)
+            return True
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel32.SetPriorityClass.restype = ctypes.c_int
+        # -1 is the pseudo-handle for the current process. It has to be passed
+        # as a real pointer-width value or the call fails with a bad handle.
+        current_process = ctypes.c_void_p(-1)
+        return bool(
+            kernel32.SetPriorityClass(current_process, BELOW_NORMAL_PRIORITY_CLASS)
+        )
+    except Exception:  # priority is a nicety, never a reason to fail
+        return False
+
+
+class Board:
+    """Holds the current dashboard, and rebuilds it when the save changes."""
+
+    def __init__(self, target: str, out: str):
+        self.target = target
+        self.out = out
+        self.names = Names()
+        self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
+        self.lock = threading.Lock()
+        self.html = b""
+        self.data = b"{}"
+        self.stamp = b'{"stamp":""}'
+        self.source = None
+        self.error = None
+        self._stamp = ""
+        self._fingerprint = None
+        self.character = None
+        self.revision = 0  # bumps when the player names a line, so the page refetches
+        self.build = threading.Lock()
+
+    def name_line(self, rid: str, slug: str | None) -> None:
+        """A recipe the player named by hand; rebuild so the needs follow."""
+        with self.build:
+            history = History(self.history)
+            history.named(self.character or "default", {rid: slug})
+            history.write()
+            with self.lock:
+                self.revision += 1
+                self._fingerprint = None
+            self._refresh(settle=False)
+
+    def refresh(self, settle: bool = True) -> bool:
+        """Rebuild if a newer save has appeared. True if anything changed."""
+        with self.build:
+            return self._refresh(settle)
+
+    def _refresh(self, settle: bool) -> bool:
+        path = newest_under(self.target)
+        mark = (path, os.path.getmtime(path), os.path.getsize(path))
+        if mark == self._fingerprint:
+            return False
+        if settle:
+            # The game may still be writing; only read once the file holds still.
+            time.sleep(0.75)
+            if (os.path.getmtime(path), os.path.getsize(path)) != mark[1:]:
+                return False
+
+        try:
+            data = safe_extract(load_save(path), self.names, self.history)
+            live_page = render(data, live=True).encode("utf-8")
+            static_page = render(data).encode("utf-8")
+        except Exception as exc:
+            # Fingerprint it anyway. Without this a save that will not build is
+            # re-read every interval -- a 26 MB parse every few seconds, which
+            # is precisely the CPU the game is supposed to get. The next save
+            # the game writes clears the mark and we try again.
+            with self.lock:
+                self._fingerprint = mark
+                self.error = f"{os.path.basename(path)}: {exc}"
+                self._publish_stamp()
+            raise
+
+        with self.lock:
+            self._fingerprint = mark
+            self.source = path
+            self.error = None
+            self.html = live_page
+            self.data = json.dumps(data, separators=(",", ":")).encode("utf-8")
+            self.character = data["supply"].get("factories", {}).get("character")
+            self._stamp = f"{os.path.basename(path)}@{mark[1]:.0f}#{self.revision}"
+            self._publish_stamp()
+
+        with open(self.out, "wb") as fh:
+            fh.write(static_page)
+        return True
+
+    def _publish_stamp(self) -> None:
+        """What the open page polls: the build it has, and why it is stuck.
+
+        Called with the lock already held.
+        """
+        body = {"stamp": self._stamp}
+        if self.error:
+            body["error"] = self.error
+        self.stamp = json.dumps(body).encode("utf-8")
+
+
+class BoardHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    board: Board = None
+
+    def do_GET(self):
+        route = self.path.split("?")[0].rstrip("/") or "/"
+        with self.board.lock:
+            body, ctype = {
+                "/": (self.board.html, "text/html; charset=utf-8"),
+                "/index.html": (self.board.html, "text/html; charset=utf-8"),
+                "/data.json": (self.board.data, "application/json"),
+                "/stamp": (self.board.stamp, "application/json"),
+            }.get(route, (None, None))
+        if body is None:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        """The page naming a factory line by hand: {rid, slug}, slug null to clear."""
+        route = self.path.split("?")[0].rstrip("/")
+        if route != "/name":
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(length) or b"{}")
+            rid, slug = str(body["rid"]), body.get("slug") or None
+        except (ValueError, KeyError, TypeError):
+            self.send_error(400)
+            return
+        try:
+            self.board.name_line(rid, slug)
+        except Exception as exc:  # the board keeps serving the last build
+            print(f"  naming a line failed -- {exc}", flush=True)
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, *args):
+        pass  # the watcher prints what matters
+
+
+def watch(target: str, out: str, port: int, interval: int, open_browser: bool) -> None:
+    lowered = yield_to_the_game()
+    board = Board(target, out)
+    board.refresh(settle=False)
+    BoardHandler.board = board
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), BoardHandler)
+    url = f"http://127.0.0.1:{port}/"
+
+    def poll():
+        last_failure = None
+        while True:
+            try:
+                if board.refresh():
+                    print(
+                        f"  {time.strftime('%H:%M:%S')}  rebuilt from "
+                        f"{os.path.basename(board.source)}",
+                        flush=True,
+                    )
+                    last_failure = None
+            except Exception as exc:
+                signature = f"{type(exc).__name__}: {exc}"
+                print(
+                    f"  {time.strftime('%H:%M:%S')}  skipped a rebuild -- "
+                    f"{board.error or signature}",
+                    flush=True,
+                )
+                # The traceback the first time each failure appears. A page of
+                # bare "skipped a rebuild: 'NetWorth'" says nothing about where
+                # it came from, and that is the only record there is.
+                if signature != last_failure:
+                    last_failure = signature
+                    traceback.print_exc()
+                    print(
+                        "  serving the last board that built; retrying when "
+                        "the game writes a new save",
+                        flush=True,
+                    )
+            time.sleep(interval)
+
+    threading.Thread(target=poll, daemon=True).start()
+
+    print(f"Watching {target}", flush=True)
+    print(f"  serving {url}  (checks every {interval}s, rebuilds only on a new save)")
+    print(f"  priority {'lowered, the game gets the CPU first' if lowered else 'unchanged'}")
+    print("  Ctrl+C to stop", flush=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+        server.shutdown()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("save", nargs="?", help="a .hsg file or a save folder")
+    ap.add_argument(
+        "-o", "--out", default="dashboard.html", help="where to write the page"
+    )
+    ap.add_argument(
+        "--watch",
+        action="store_true",
+        help="serve the board locally and rebuild it whenever the game saves",
+    )
+    ap.add_argument(
+        "--port", type=int, default=8770, help="port for the local server in watch mode"
+    )
+    ap.add_argument(
+        "--interval", type=int, default=5, help="seconds between save-file checks"
+    )
+    ap.add_argument("--no-open", action="store_true", help="do not open a browser")
+    ap.add_argument(
+        "--backfill",
+        action="store_true",
+        help="seed demand history from every save on disk, then build",
+    )
+    args = ap.parse_args()
+
+    target = args.save or SAVE_ROOT
+    out = os.path.abspath(args.out)
+    history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
+
+    if args.backfill:
+        recorded = backfill_history(target, history, Names())
+        print(f"  merged {recorded} snapshots into {os.path.basename(history)}")
+
+    if args.watch:
+        watch(target, out, args.port, args.interval, not args.no_open)
+        return
+
+    path = newest_under(target)
+    data = safe_extract(load_save(path), Names(), history)
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write(render(data))
+
+    k = data["kpi"]
+    minor = data["minor"]
+    print(
+        f"{data['meta']['save']} - day {data['meta']['day']}  "
+        f"(from {os.path.basename(path)}, game build {data['meta']['build']}, "
+        f"board checked on {VERIFIED_BUILD})"
+    )
+    worth = f"{k['netWorth']:>14,.0f}" if k["netWorth"] is not None else "   not reported"
+    print(f"  cash {k['cash']:>14,.0f}   net worth {worth}")
+    print(f"  profit yesterday {k['profitYesterday']:>+11,.0f}   7-day avg {k['profitAvg7']:>+11,.0f}")
+    print(
+        f"  {k['businesses']} businesses, {k['employees']} staff, "
+        f"{len(data['alerts'])} alerts "
+        f"({minor['count']} more below the ${minor['gate']:,.0f}/day line)"
+    )
+    print(f"  wrote {out}")
+
+
+if __name__ == "__main__":
+    main()
