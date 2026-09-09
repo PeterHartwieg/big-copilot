@@ -432,7 +432,9 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 </style>
 <style>
 [hidden]{display:none!important}
-.landing{max-width:1180px;margin:0 auto;padding:18px 24px 0}
+/* The board gives every section content-visibility:auto, which implies paint
+   containment and would clip the dropdown to the strip. Not here. */
+.landing{max-width:1180px;margin:0 auto;padding:18px 24px 0;content-visibility:visible;contain:none}
 .landing h1{font-size:22px;margin:0;letter-spacing:-.01em;line-height:1.2}
 .landing h1 span{color:var(--accent)}
 .landing .lede{margin:6px 0 0;color:var(--ink-2);max-width:70ch}
@@ -488,7 +490,7 @@ body:not(.has-board) #updateBtn:disabled{display:none}
 
 body:not(.has-board) .wrap{display:none}
 body.has-board .landing h1, body.has-board .landing .lede{display:none}
-body.has-board .landing{padding:10px 24px 0}
+body.has-board .landing{padding:10px 24px 0;position:relative;z-index:60}
 body.has-board .src{margin-top:0;gap:8px}
 body.has-board .src .card{padding:5px 10px;min-width:220px;flex:0 1 460px}
 body.has-board .src .card .txt b{font-size:13px}
