@@ -218,7 +218,7 @@
     busy = true;
     lastFile = file;
     state("busy", "Reading the save…", fileLine(file));
-    if (lastGood) note("info", `${fmtTime(lastGood.lastModified)} snapshot still shown below. It will update when this save is ready.`);
+    if (lastGood) note("info", `${fmtTime(lastGood.lastModified)} snapshot still shown below; the board updates when this save is ready.`);
     else note("");
     const t = performance.now();
     try {
@@ -322,7 +322,7 @@
     chip.querySelector("span").textContent = has ? "Game text loaded" : "Game text: names only";
     chip.title = has
       ? "Recipes and station capacities come from the game's en.json. Click to replace it."
-      : "Product and business names are built in. Pick the game's en.json for recipes and station capacities as well.";
+      : "Product and business names are built in. Choose the game's en.json for recipes and station capacities as well.";
     $("asideEyebrow").textContent = has ? "Remembered on this device" : "One-time set-up";
     $("asideText").innerHTML = has
       ? "Recipes and station capacities are ready."
@@ -331,7 +331,7 @@
       ? "Click the chip to replace en.json."
       : "Remembered in this browser. Without it the factory and capacity views stay empty.";
     const hint = $("menuChipHint");
-    if (hint) hint.textContent = has ? "en.json remembered · click to replace" : "Pick en.json for recipes and capacities";
+    if (hint) hint.textContent = has ? "en.json remembered · click to replace" : "Choose en.json for recipes and capacities";
   }
 
   async function takeLocale(file) {
@@ -369,7 +369,7 @@
   window.addEventListener("DOMContentLoaded", async () => {
     localeState();
     state("busy", "Preparing the reader…", "Loading the Python runtime · about 6 MB, cached after the first visit");
-    if (!canHandle) $("folderBtn").title = "Pick the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
+    if (!canHandle) $("folderBtn").title = "Choose the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
 
     const take = (files) => {
       const list = [...files];

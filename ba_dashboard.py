@@ -127,12 +127,12 @@ AMENITY_ITEMS = {
 AMENITY_DEMANDS = {
     "ba:customerdemand_employeeuniforms": (
         "uniform",
-        "No staff uniforms set — customers notice the bare-clothes look",
+        "No staff uniforms set; customers notice the bare-clothes look",
     ),
     "ba:customerdemand_toilet": ("bathroom", "No customer bathroom here"),
     "ba:customerdemand_toiletprivacy": (
         "toiletprivacy",
-        "Customer bathroom has no privacy — no stall or door",
+        "Customer bathroom has no privacy: no stall or door",
     ),
     "ba:customerdemand_sink": ("sink", "No sink for customers to wash up"),
     "ba:customerdemand_music": ("music", "No music playing for customers"),
@@ -3556,8 +3556,7 @@ def _expansion(findings: list, market: dict, businesses: list) -> list:
                 f"{'' if opening['providers'] == 1 else 's'} on average",
                 "number": f"demand {opening['demand']}",
                 "worth": None,
-                "action": "open one"
-                + (" — you run this type already" if opening["mine"] else ""),
+                "action": "open a second one" if opening["mine"] else "open one",
             }
         )
     return out
@@ -3682,9 +3681,9 @@ def _alerts(
         if len(short) == 1:
             b = short[0]
             text = (
-                f"{b['name']} promotes at {b['promotion']}% of the 100% cap — "
+                f"{b['name']} promotes at {b['promotion']}% of the 100% cap: "
                 f"{b['traffic']}% foot traffic and {b['marketingIndex']}% marketing. "
-                f"The address sets the traffic, so the missing "
+                f"The address sets the foot traffic, so the missing "
                 f"{PROMOTION_CAP - b['promotion']} points have to come from campaigns"
             )
         else:
@@ -3694,7 +3693,7 @@ def _alerts(
             )
             text = (
                 f"{len(short)} shops promote below the 100% cap with marketing not yet "
-                f"maxed — {who}. The address sets the foot traffic, so campaigns are "
+                f"maxed: {who}. The address sets the foot traffic, so campaigns are "
                 f"the only lever"
             )
         note(level, where, "promotion", text, rank=-worst, always=True)
@@ -3731,9 +3730,9 @@ def _alerts(
         # the wave's end date on it.
         full = full_hours(top["key"])
         queue = (
-            f" It is already within 10% of capacity for {full} hour"
-            f"{'' if full == 1 else 's'} of a normal week, so part of the wave is "
-            f"being turned away at the door and capacity is the only lever left."
+            f" It already runs within 10% of capacity for {full} hour"
+            f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
+            f"of the wave away and capacity is the only lever left."
             if full
             else ""
         )
@@ -3746,7 +3745,7 @@ def _alerts(
                 "hype",
                 f"{wave['hood']} hype on {wave['count']} lines {when}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
-                f"${base['revenue']:,.0f} for {base['basis']} — "
+                f"${base['revenue']:,.0f} for {base['basis']}; "
                 f"about ${drop:,.0f}/day of revenue rides on the wave.{queue}",
                 worth=drop,
             )
@@ -3783,7 +3782,7 @@ def _alerts(
             "warn" if row["change"] < 0 else "info",
             b["name"],
             "trend",
-            f"Revenue {direction} {abs(row['change']) * 100:.0f}% week on week — "
+            f"Revenue {direction} {abs(row['change']) * 100:.0f}% week on week: "
             f"${row['last7']:,.0f} over days {day - 7}-{day - 1} against "
             f"${row['prev7']:,.0f} the week before",
             worth=abs(row["last7"] - row["prev7"]) / 7,
@@ -3799,7 +3798,7 @@ def _alerts(
                 row["level"],
                 site,
                 "unplanned",
-                f"{row['item']} is on no distribution plan — {row['stock']:,} left "
+                f"{row['item']} is on no distribution plan: {row['stock']:,} left "
                 f"at {row['sold']:,}/day",
                 -row["stock"],
                 row["item"],
@@ -3810,7 +3809,7 @@ def _alerts(
                 site,
                 "outruns",
                 f"{row['item']} sells {row['peakSold']:,} on a {row['peakDay']} against "
-                f"a {row['target']:,} top-up — empties before the next drop",
+                f"a {row['target']:,} top-up; empties before the next drop",
                 -row["pressure"],
                 row["item"],
             )
@@ -3829,7 +3828,7 @@ def _alerts(
                 "critical",
                 site,
                 "paused",
-                f"{row['item']} import is paused — {row['cover']:.0f} days left "
+                f"{row['item']} import is paused: {row['cover']:.0f} days left "
                 f"at {row['perDay']:,}/day",
                 row["cover"],
                 row["item"],
@@ -3850,7 +3849,7 @@ def _alerts(
                 site,
                 "order",
                 f"{row['item']} orders {row['weekly']:,} a week against a "
-                f"{row['weekNeed']:,} week of use — {row['weekNeed'] - row['weekly']:,} short"
+                f"{row['weekNeed']:,} week of use, {row['weekNeed'] - row['weekly']:,} short"
                 + (
                     f"; already runs dry {when}, {row['shortBy']:.1f} days before "
                     f"{arrives}'s import"
@@ -3878,7 +3877,7 @@ def _alerts(
             if len(group) == 1
             else f"{len(group)} shops"
         )
-        who = "" if len(group) == 1 else " — " + ", ".join(f["site"] for f in group)
+        who = "" if len(group) == 1 else ": " + ", ".join(f["site"] for f in group)
         subject = "is" if len(group) == 1 else "are"
         if limit == "the building":
             text = (
@@ -3905,7 +3904,7 @@ def _alerts(
             "idlestaff",
             f"{site} runs {finding['staff']} counters "
             f"{finding['from']:02d}:00-{finding['to']:02d}:00 on a "
-            f"{finding['day']} for {finding['seen']} customers an hour — "
+            f"{finding['day']} for {finding['seen']} customers an hour; "
             f"{finding['spare']} staff-hours a week that buy nothing",
             worth=finding["worth"],
         )
@@ -3943,7 +3942,7 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             if kind == "idle":
                 text = (
                     f"{machines} machine{'s' if many else ''} at {where} "
-                    f"{'have' if many else 'has'} no recipe set — staffed and rented, making nothing"
+                    f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
                 )
             else:
                 guesses = sorted({u["hint"]["item"] for u in rows if u.get("hint")})
@@ -3951,7 +3950,7 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
                 text = (
                     f"{machines} machine{'s' if many else ''} at {where} "
                     f"{'run' if many else 'runs'} a recipe the board cannot name{likely}. "
-                    f"Every input need here is short by what it eats — name the line to "
+                    f"Every input need here is short by what it eats; name the line to "
                     f"put it in the numbers"
                 )
             notes.append(
@@ -3983,7 +3982,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
                 lost = round((STAFF_HOURS - machine["hours"]) / 7 * line.get("rate", 0))
                 text = (
                     f"{name} machine at list position {machine['slot']} is staffed "
-                    f"{machine['hours']} of {STAFF_HOURS} hours — nobody on it {machine['off']}"
+                    f"{machine['hours']} of {STAFF_HOURS} hours; nobody on it {machine['off']}"
                     + (f"; {lost:,} a day not made" if lost else "")
                 )
                 notes.append(
@@ -4033,7 +4032,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                 hours = row["target"] / row["perDay"] * 24
                 text = (
                     f"{row['item']} top-up of {row['target']:,} covers {hours:.0f} hours "
-                    f"of a {row['perDay']:,}/day line — raise it to {row['raiseTarget']:,}"
+                    f"of a {row['perDay']:,}/day line; raise it to {row['raiseTarget']:,}"
                 )
                 if row["stalled"]:
                     text += (
@@ -4043,25 +4042,25 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
             elif status == "dry":
                 text = (
                     f"{row['item']} arrives at {row['arrives']:,}/day against "
-                    f"{row['perDay']:,} needed and {depot} holds {row['depotStock']:,} — "
+                    f"{row['perDay']:,} needed and {depot} holds {row['depotStock']:,}; "
                     f"the import is not keeping up"
                 )
             elif status == "idle":
                 text = (
                     f"{row['item']} arrives at {row['arrives']:,}/day against "
-                    f"{row['perDay']:,} needed while {depot} holds {row['depotStock']:,} — "
+                    f"{row['perDay']:,} needed while {depot} holds {row['depotStock']:,}; "
                     f"the line is not drawing it"
                 )
             elif status == "staffing":
                 text = (
                     f"{row['item']} arrives at {row['arrives']:,}/day against {row['perDay']:,} "
-                    f"the machines could eat — the roster runs them {round(row['staffedShare'] * 100)}% "
+                    f"the machines could eat; the roster runs them {round(row['staffedShare'] * 100)}% "
                     f"of the week"
                 )
             elif status == "import" and row["raiseImport"]:
                 text = (
                     f"{row['item']}: the factories eat {row['depotNeed']:,} a week and the "
-                    f"import order is {row['importWeekly']:,} — raise it to {row['raiseImport']:,}"
+                    f"import order is {row['importWeekly']:,}; raise it to {row['raiseImport']:,}"
                 )
             elif status == "import":
                 text = (
@@ -4170,17 +4169,17 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
 
 # How a pile of same-shaped findings at one site reads as a single line.
 SUMMARIES = {
-    "shortfall": "{n} items run dry before the next import — soonest {subject}",
-    "order": "{n} weekly orders cannot cover their own week — worst {subject}",
-    "paused": "{n} imports are paused — soonest to run out is {subject}",
-    "outruns": "{n} products outsell their daily top-up — worst {subject}",
-    "unplanned": "{n} stocked products are on no distribution plan — largest {subject}",
-    "dead": "{n} products are held with nothing moving out — largest {subject}",
-    "feed": "{n} factory inputs are not fed as the machines need — largest {subject}",
-    "staff": "{n} factory machines are not staffed round the clock — worst {subject}",
-    "unnamed": "{n} factory machines run recipes the board cannot name — {subject} the largest",
-    "unset": "{n} factory machines have no recipe set — {subject} the largest",
-    "target": "{n} top-up targets are set far above what sells — {subject} the deepest",
+    "shortfall": "{n} items run dry before the next import; soonest {subject}",
+    "order": "{n} weekly orders cannot cover their own week; worst {subject}",
+    "paused": "{n} imports are paused; soonest to run out is {subject}",
+    "outruns": "{n} products outsell their daily top-up; worst {subject}",
+    "unplanned": "{n} stocked products are on no distribution plan; largest {subject}",
+    "dead": "{n} products are held with nothing moving out; largest {subject}",
+    "feed": "{n} factory inputs are not fed as the machines need; largest {subject}",
+    "staff": "{n} factory machines are not staffed round the clock; worst {subject}",
+    "unnamed": "{n} factory machines run recipes the board cannot name; {subject} the largest",
+    "unset": "{n} factory machines have no recipe set; {subject} the largest",
+    "target": "{n} top-up targets are set far above what sells; {subject} the deepest",
 }
 CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
 
@@ -4743,7 +4742,7 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
           title="Choose which kinds of finding make the list">Filter kinds</button>
       </div>
       <div class="card settings-panel" id="alertSettingsPanel" hidden>
-        <p class="minor">Which kinds of finding make the list — saved on this device.</p>
+        <p class="minor">Saved on this device.</p>
         <div class="settings-grid" id="alertSettingsGrid"></div>
       </div>
       <div class="alerts card" id="alerts"></div>
@@ -4793,7 +4792,6 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
     <section id="secDetail" hidden>
       <div class="head">
         <h2>Business detail</h2>
-        <p id="siteNote"></p>
         <div class="tools" id="siteTools"></div>
       </div>
       <div class="card pad" id="sitePanel"></div>
@@ -4805,7 +4803,7 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 
     <section id="secLogistics" data-sub="orders">
       <div class="head">
-        <h2>Logistics set-up</h2>
+        <h2>Orders to set</h2>
         <p id="logisticsNote"></p>
         <div class="tools" id="logisticsTools"></div>
       </div>
@@ -4817,7 +4815,7 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 
     <section id="secStock" data-sub="checks">
       <div class="head">
-        <h2>Supply chain</h2>
+        <h2>Stock checks</h2>
         <p id="stockNote"></p>
         <div class="tools" id="stockTools"></div>
       </div>
@@ -4828,7 +4826,6 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
     <section id="secFlow" data-sub="map">
       <div class="head">
         <h2>How goods move</h2>
-        <p>Click a site to see what it holds against what it has to cover</p>
         <div class="tools"><button id="flowClear" type="button">Clear selection</button></div>
       </div>
       <div class="card"><div class="flowbox"><svg id="flow"></svg></div>
@@ -5035,7 +5032,7 @@ const wowCell = b => {
 const VIEWS = {
   pnl: {
     label: "Profit & loss",
-    note: "Yesterday’s income statement, by chain",
+    note: "Yesterday's income statement, by chain",
     cols: [
       ["Business", b=>siteCell(b), "l", null],
       ["Revenue", b=>fmt(b.revenue), "", b=>b.revenue],
@@ -5121,7 +5118,7 @@ function drawRhythm(){
   const profile = r[rhythmView];
   const weeks = weeksOf(profile);
   $("rhythmNote").textContent = profile
-    ? `${RHYTHM_VIEWS[rhythmView].note}, against a normal day — ${weeks} weeks of history`
+    ? `${RHYTHM_VIEWS[rhythmView].note}, against a normal day, ${weeks} weeks of history`
     : RHYTHM_VIEWS[rhythmView].note;
   $("rhythmChart").innerHTML = weekBars(profile);
 
@@ -5310,7 +5307,7 @@ function drawFlowDetail(){
                i.cycleNeed.toLocaleString()}, ${
                (i.cycleNeed - i.provision).toLocaleString()} more</span>`
         }</td></tr>`).join("")}</tbody>
-    </table></div>` : `<p class="muted">Nothing stocked here — it only passes goods along.</p>`;
+    </table></div>` : `<p class="muted">Nothing stocked here; it only passes goods along.</p>`;
 
   $("flowDetail").innerHTML = `
     <div class="sitehead">
@@ -5324,15 +5321,15 @@ function drawFlowDetail(){
         ${inbound.length ? inbound.map(l => `<div class="stat"><span>${named(l.from)}
           ${l.paused ? `<span class="chip bad">paused</span>` : ""}</span>
           <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
-          : `<p class="muted">Nothing — this is where goods enter.</p>`}</div>
+          : `<p class="muted">Nothing. This is where goods enter.</p>`}</div>
       <div><span class="eyebrow">Goes out to</span>
         ${outbound.length ? outbound.map(l => `<div class="stat"><span>${named(l.to)}</span>
           <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
-          : `<p class="muted">Nothing — this is the end of the line.</p>`}</div>
+          : `<p class="muted">Nothing. This is the end of the line.</p>`}</div>
     </div>
     <div class="panel"><span class="eyebrow">Held against need${
-      node.short ? ` — ${node.short} order${node.short > 1 ? "s" : ""} too small`
-      : node.tight ? ` — ${node.tight} order${node.tight > 1 ? "s" : ""} running tight`
+      node.short ? `, ${node.short} order${node.short > 1 ? "s" : ""} too small`
+      : node.tight ? `, ${node.tight} order${node.tight > 1 ? "s" : ""} running tight`
       : ""}</span>${rows}</div>`;
 }
 
@@ -5378,7 +5375,7 @@ const SUPPLY_VIEWS = {
       // On delivery day the holdings are at their weekly low by design, so
       // "days left" stops being the question worth asking.
       if (s.daysToImport === 0)
-        return `${s.nextImportWeekday}'s import arrives today — holdings are at their weekly low`;
+        return `${s.nextImportWeekday}'s import arrives today; holdings are at their weekly low`;
       // Counted from now, not from this morning: most of today is already spent.
       return `Counting the real days ahead, does each holding reach ${s.nextImportWeekday}'s import, ${s.hoursToImport} days away from now?`;
     },
@@ -5457,7 +5454,7 @@ const SUPPLY_VIEWS = {
   },
   lines: {
     label: "Factory lines",
-    note: () => `Every assembly machine runs its recipe round the clock at the rated rate; the recipe is read from what the line ships`,
+    note: () => `Every assembly machine runs its recipe round the clock at the rated rate; the board reads the recipe from what the line ships`,
     empty: "No factory machine is set up.",
     verdict: rows => {
       const f = factoryView();
@@ -5488,7 +5485,7 @@ const SUPPLY_VIEWS = {
           r.idle ? "the machines stand idle"
           : r.hint ? `set up as ${r.hint.item} by the look of the top-up plan${r.hint.missing.length
               ? `, but ${r.hint.missing.join(", ")} never arrive${r.hint.missing.length === 1 ? "s" : ""}` : ""}`
-          : `nothing it could make has shipped or been fed in a week — one of ${r.candidates.length} recipes`}</span></td>
+          : `nothing it could make has shipped or been fed in a week; one of ${r.candidates.length} recipes`}</span></td>
       <td class="num">${r.machines}</td>
       <td class="num">${staffCell(r)}</td>
       <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>` : `
@@ -5521,7 +5518,7 @@ const SUPPLY_VIEWS = {
   },
   feed: {
     label: "Feed the factories",
-    note: () => `What the lines eat a day and a week, against the top-up and the import set up to bring it`,
+    note: () => "",
     empty: "No factory line to feed.",
     verdict: rows => {
       if(!rows.length) return "No factory line to feed.";
@@ -5533,7 +5530,7 @@ const SUPPLY_VIEWS = {
         bad ? `; ${bad} ${bad===1?"is":"are"} not` : ""}${
         watch ? `; ${watch} worth watching` : ""}${
         wait ? `; ${wait} wait on a stopped line` : ""}${
-        worst ? ` — largest ${worst.item} at ${shortName(D.businesses[worst.s])}` : ""}.`;
+        worst ? `; largest ${worst.item} at ${shortName(D.businesses[worst.s])}` : ""}.`;
     },
     keep: r => r.level !== "ok",
     head: `<th class="l">Factory</th><th class="l">Input</th><th>Needs / day</th>
@@ -5879,7 +5876,7 @@ function drawKpis(){
     {v: fmt(k.cash), l: "Cash on hand",
      d: (cf
        ? `${cf.days}d: profit ${compact(cf.profit)}, cash ${cf.cashChange>=0?"+":""}${
-           compact(cf.cashChange)} — ${cf.reinvested>=0
+           compact(cf.cashChange)}; ${cf.reinvested>=0
              ? `${compact(cf.reinvested)} went into set-up and stock`
              : `${compact(-cf.reinvested)} more than the books earned`}`
        : `profit ${compact(k.profitSum7)} over 7 days · no cash history yet`) + owed},
@@ -5890,11 +5887,11 @@ function drawKpis(){
          stale number as if it were today's, the tile says which day it is from. */
       : {v: fmt(k.netWorth), l: "Net worth",
          d: k.netWorthAsOf
-           ? `as of day ${k.netWorthAsOf} — the game stopped reporting it`
+           ? `as of day ${k.netWorthAsOf}; the game stopped reporting it`
            : cf && cf.netWorthChange !== null
            ? `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${
                cf.days===1?"":"s"}`
-           : "no net worth history yet — starts building today",
+           : "no net worth history yet; starts building today",
          cls: k.netWorthAsOf ? "" : (cf && cf.netWorthChange !== null ? sign(cf.netWorthChange) : "")},
   ];
   $("kpis").innerHTML = tiles.map(t => `
@@ -5994,7 +5991,7 @@ function drawAlerts(){
     <button type="button" id="minorToggle" aria-expanded="${showMinor}">${
       showMinor ? "hide" : "show"}</button>`
     + (showMinor ? `<ul>${rows.map((r, i) =>
-        `<li><b>${r.site}</b> — ${r.text}${
+        `<li><b>${r.site}</b>: ${r.text}${
           r.worth ? ` <span class="num">(${fmt(r.worth)}/day)</span>` : ""}${alertLink(r, i)}</li>`).join("")}</ul>` : "");
   $("minorToggle").onclick = () => { showMinor = !showMinor; drawAlerts(); };
   document.querySelectorAll("#alertMinor .goto").forEach(node => {
@@ -6008,8 +6005,8 @@ function drawChart(){
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */
-  $("chartNote").textContent = `Day ${rows[0].day} to ${rows[rows.length-1].day} — `
-    + `daily profit follows the purchase calendar, so the 7-day line is the trend`;
+  $("chartNote").textContent = `Day ${rows[0].day} to ${rows[rows.length-1].day}. `
+    + `Daily profit follows the purchase calendar, so the 7-day line is the trend`;
   document.querySelectorAll("#legend span").forEach(n =>
     n.style.opacity = shown.has(n.dataset.s) ? 1 : .38);
 
@@ -6076,7 +6073,7 @@ function chainRow(c, v){
 
 function drawPortfolio(){
   const v = VIEWS[view];
-  $("portfolioNote").textContent = `${v.note} — open a chain, then a site for its detail`;
+  $("portfolioNote").textContent = `${v.note}. Open a chain, then a site for its detail`;
   const byKey = {};
   D.businesses.forEach(b => byKey[b.key] = b);
   const sorter = (sortKey !== null && v.cols[sortKey] && v.cols[sortKey][3])
@@ -6208,15 +6205,15 @@ function hourGrid(g){
   const body = HOUR_ROWS.map(wd => {
     const cells = [...Array(24).keys()].map(h => {
       const seen = g.customers[wd][h], cap = g.effective[wd][h];
-      if(seen === null) return `<td title="${WEEK_SHORT[wd]} ${h}:00 — no reading"></td>`;
+      if(seen === null) return `<td title="${WEEK_SHORT[wd]} ${h}:00, no reading"></td>`;
       const shade = Math.round(Math.min(seen / peak, 1) * 42);
       const atCap = cap && seen >= cap * 0.95;
       const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
       return `<td class="${atCap?"cap":slack?"slack":""}"
         style="background:color-mix(in srgb, var(--accent) ${shade}%, var(--raised))"
-        title="${WEEK_SHORT[wd]} ${String(h).padStart(2,"0")}:00 — ${seen} customers, ${
+        title="${WEEK_SHORT[wd]} ${String(h).padStart(2,"0")}:00, ${seen} customers, ${
           g.staffed[wd][h]} of ${g.counters} register capacity staffed, ${
-          g.door||"no"} door cap${atCap?" — at the ceiling":slack?" — capacity idle":""}"></td>`;
+          g.door||"no"} door cap${atCap?"; at the ceiling":slack?"; capacity idle":""}"></td>`;
     }).join("");
     return `<tr class="${g.thin[wd]?"thin":""}"><th class="l">${WEEK_SHORT[wd]}${
       g.thin[wd]?"*":""}</th>${cells}</tr>`;
@@ -6232,7 +6229,7 @@ function hourGrid(g){
       <span>${g.counters} register capacity across ${g.stationCount} counter${
         g.stationCount===1?"":"s"}${g.door?`, ${g.door}/h door cap`:""}</span>
       <span>${weeks} week${weeks===1?"":"s"} behind each hour${
-        thin?" — starred days rest on under 2 weeks":""}</span>
+        thin?"; starred days rest on under 2 weeks":""}</span>
     </div>`;
 }
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -6252,7 +6249,6 @@ function drawSite(){
   const sec = $("secDetail");
   if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
   sec.hidden = false;
-  $("siteNote").textContent = "One site at a time — pick another, or close it";
 
   const targets = {};
   D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.item] = r; });
@@ -6261,11 +6257,11 @@ function drawSite(){
   const grid = (D.hours || []).find(h => h.key === b.key);
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
-      ? `At the ceiling ${f.hours} hours a week (${f.when}) — ${f.limit} is the limit, so
+      ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
          the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
-         hours; what is turned away above them is not recorded anywhere in the save.`
+         hours; the save records nothing about what is turned away above them.`
       : `${f.staff} counters are on ${String(f.from).padStart(2,"0")}:00-${
-         String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour —
+         String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
          ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
 
   const stats = [
@@ -6286,7 +6282,7 @@ function drawSite(){
 
   const crew = b.crew.length ? `
     <div class="panel">
-      <span class="eyebrow">Who works here — ${fmt(b.staffCost)}/day</span>
+      <span class="eyebrow">Who works here, ${fmt(b.staffCost)}/day</span>
       ${b.crew.map(c => `<div class="stat"><span>${c.role}${
         c.count > 1 ? ` ×${c.count}` : ""}</span><b class="num">${fmt(c.daily)}</b></div>`).join("")}
     </div>` : "";
@@ -6318,7 +6314,7 @@ function drawSite(){
       }).join("")}</tbody></table></div>` : `<p class="muted">Nothing stocked here.</p>`;
   const shelfMore = sideShelves.length ? `
     <button type="button" id="shelfToggle" aria-expanded="${showAllShelves}">${
-      showAllShelves ? "hide" : `show ${sideShelves.length} more — bags, drinks, odds and ends`}</button>` : "";
+      showAllShelves ? "hide" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</button>` : "";
 
   $("sitePanel").innerHTML = `
     <div class="sitehead">
@@ -6337,12 +6333,12 @@ function drawSite(){
     </div>
     <div class="panel">
       <span class="eyebrow">Its week${b.rhythm
-        ? ` — peaks ${b.peakDay}, ${b.swing} points between best and worst`
+        ? `: peaks ${b.peakDay}, ${b.swing} points between best and worst`
         : ""}</span>
       ${weekBars(b.rhythm, {empty:"Not enough trading history here yet."})}
     </div>
     ${grid ? `<div class="panel">
-      <span class="eyebrow">Every hour of the week — customers against the capacity on shift</span>
+      <span class="eyebrow">Every hour of the week: customers against the capacity on shift</span>
       ${hourGrid(grid)}
       ${notes.length ? notes.map(n => `<p class="muted">${n}</p>`).join("") : ""}
     </div>` : ""}
@@ -6376,8 +6372,8 @@ function drawStock(){
   const toggle = $("stockToggle");
   if(toggle) toggle.onclick = () => { showAllStock = !showAllStock; drawStock(); };
   const nothing = all.length
-    ? `Nothing here needs reading — the ${all.length} row${all.length===1?"":"s"} are all
-       inside their limits, and the line above is the whole story.`
+    ? `Nothing here needs reading: ${all.length===1 ? "the one row is" : `all ${all.length} rows are`}
+       inside their limits.`
     : v.empty;
   $("stock").innerHTML = rows.length
     ? `<thead><tr>${v.head}</tr></thead>
@@ -6406,7 +6402,7 @@ function drawLogistics(){
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
   const label = (s, slug, fallback) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || fallback;
   $("logisticsNote").textContent = f.sites.length
-    ? `What to set the managers to: import orders per depot, top-ups per factory — from ${f.machines} machines on ${
+    ? `What to set the managers to, from ${f.machines} machines on ${
         f.sites.reduce((n, s) => n + s.lines.length, 0)} lines${f.unnamed ? `, ${f.unnamed} still unnamed` : ""}`
     : "No factory to feed.";
 
@@ -6451,8 +6447,8 @@ function drawLogistics(){
   }
   const importShown = importRows.filter(d => d.rows.length);
   $("importVerdict").innerHTML = importRows.length
-    ? `<b>Weekly import orders.</b> Every material each depot ships, what the factories eat of it a week, what else leaves, and the order to set${
-        short ? ` — <b>${short}</b> ${short === 1 ? "is" : "are"} short or missing` : " — all covered"}${
+    ? `<b>Weekly import orders.</b> ${
+        short ? `<b>${short}</b> ${short === 1 ? "is" : "are"} short or missing` : "All covered"}${
         looseRows.length ? `. ${looseRows.length} material${looseRows.length === 1 ? "" : "s"} the factories need are on no depot's plan at all` : ""}.`
     : "No depot imports anything yet.";
   const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
@@ -6477,7 +6473,7 @@ function drawLogistics(){
       <td class="num">${r.stock.toLocaleString()}</td></tr>`).join("")}`).join("")
     + (looseRows.length ? `
     <tr class="chain"><td class="l" colspan="8"><div class="site"><span><b>On no depot's plan</b>
-      <span class="sub">needed by a factory line, but no top-up brings it from anywhere — add it to a depot's plan and import it there</span></span></div></td></tr>
+      <span class="sub">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></span></div></td></tr>
     ${looseRows.map(r => `<tr class="kid">
       <td class="l">${r.item}</td>
       <td class="l"><span class="sub" style="display:inline">${users(r)}</span></td>
@@ -6489,7 +6485,7 @@ function drawLogistics(){
   $("importPlan").innerHTML = importShown.length || looseRows.length
     ? importHead + `<tbody>${importBody}</tbody>`
     : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && importAll
-        ? `Every import order covers what leaves — all ${importAll} of them.` : "Nothing to import."}</td></tr></tbody>`;
+        ? `All ${importAll} import orders cover what leaves.` : "Nothing to import."}</td></tr></tbody>`;
 
   /* --- top-ups, one table per factory ----------------------------------- */
   const needsChange = r => r.status === "unplanned" || r.status === "target" || r.stalled;
@@ -6501,8 +6497,8 @@ function drawLogistics(){
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
   $("topupVerdict").innerHTML = allSites.length
-    ? `<b>Daily top-ups.</b> What each factory eats a day, per material, and the top-up to set on the plan that feeds it${
-        topShort ? ` — <b>${topShort}</b> ${topShort === 1 ? "is" : "are"} below the day's need or missing` : " — all covered"}.`
+    ? `<b>Daily top-ups.</b> ${
+        topShort ? `<b>${topShort}</b> ${topShort === 1 ? "is" : "are"} below the day's need or missing` : "All covered"}.`
     : "No factory line to feed.";
   const lineText = (s, r) => r.lines.map(l => {
     const line = s.lines.find(x => x.item === l);
@@ -6531,7 +6527,7 @@ function drawLogistics(){
           : r.stalled ? ` ${chip("warn", "none arrived")}` : ""}</td></tr>`; }).join("")}`;
     }).join("")}</tbody>`
     : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && topAll
-        ? `Every top-up covers its day — all ${topAll} of them.` : "No factory line to feed."}</td></tr></tbody>`;
+        ? `All ${topAll} top-ups cover their day.` : "No factory line to feed."}</td></tr></tbody>`;
 }
 
 /* --- market demand ---------------------------------------------------- */
@@ -6543,7 +6539,7 @@ function drawMovers(){
       <span class="dir up">▲ hype</span>
       <span><b>${h.count > 1 ? `${h.count} products` : h.items[0]}</b>
         <span class="where">in ${h.hood}${
-          h.count > 1 ? ` — ${h.items.slice(0,3).join(", ")}${h.count > 3 ? "…" : ""}` : ""}</span>${
+          h.count > 1 ? `: ${h.items.slice(0,3).join(", ")}${h.count > 3 ? "…" : ""}` : ""}</span>${
         h.sellHere ? `<span class="tagme">you sell here</span>`
         : h.mine ? `<span class="tagme">you stock it</span>` : ""}</span>
       <span class="when">${h.daysLeft} day${h.daysLeft === 1 ? "" : "s"} left</span>
@@ -6564,7 +6560,7 @@ function drawMovers(){
         x.delta > 0 ? "+" : ""}${x.delta}</span>
       <span><b>${x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]}</b>
         <span class="where">in ${x.hood}${x.count > 1
-          ? ` — ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""}` : ""}${
+          ? `: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""}` : ""}${
           x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window`
                        : ""}</span>${
         x.sell ? `<span class="tagme">you sell here</span>` : ""}</span>
@@ -6623,7 +6619,7 @@ function drawExpansion(){
           <span class="rank">${i+1}</span>
           <span><b>${e.what}</b> <span class="where">in ${e.where}</span>
             <span class="tagme">${e.measured ? "measured" : "demand grid"}</span>
-            <span class="why">${e.reason} — ${e.action}</span></span>
+            <span class="why">${e.reason}; ${e.action}</span></span>
           <span class="num">${e.worth ? fmt(e.worth) + "/day" : e.number}</span>
         </div>`;
   /* The top of the list is the decision; the tail is there for checking it. */
@@ -6642,13 +6638,13 @@ function drawExpansion(){
 function drawMarket(){
   const m = D.market;
   const trend = m.trendDays
-    ? `change over the last ${m.trendDays} days`
-    : `trend history starts building from today`;
+    ? `Change over the last ${m.trendDays} days`
+    : `Trend history starts building from today`;
   $("marketNote").textContent = marketView === "types"
-    ? `How much of each business type's whole range is wanted, by neighbourhood`
+    ? ""
     : marketView === "new"
-    ? `Products you do not stock yet, strongest demand first`
-    : `Demand by neighbourhood, ${trend}`;
+    ? "Strongest demand first"
+    : trend;
   $("marketLegend").innerHTML = (marketView === "types"
     ? [`<span>Cell shows how many of the range are in strong demand (60+)</span>`,
        `<span>Darker cell = more of the range wanted</span>`,
@@ -6659,8 +6655,8 @@ function drawMarket(){
 
   if(marketView === "types"){
     const t = D.market.types;
-    if(m.typesHidden) $("marketNote").textContent +=
-      ` — ${m.typesHidden} type${m.typesHidden===1?"":"s"} with under 3 products left out`;
+    if(m.typesHidden) $("marketNote").textContent =
+      `${m.typesHidden} type${m.typesHidden===1?"":"s"} with under 3 products left out`;
     $("market").innerHTML = t.length ? `
       <thead><tr><th class="l">Business type</th>${
         D.market.hoods.map(h => `<th>${h}</th>`).join("")}</tr></thead>
@@ -6824,8 +6820,7 @@ function drawPlan(){
   if(planShops === null) planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
 
   const cat = D.plan.catalogue[planType], own = (D.plan.own || {})[planType];
-  $("planNote").textContent =
-    `What a week of running these machines needs delivered, and what it leaves over`;
+  $("planNote").textContent = "";
   $("planPicker").innerHTML = `
     <div class="planrow">
       <label>Business type
@@ -6840,13 +6835,13 @@ function drawPlan(){
     </div>
     <p class="muted" style="margin:10px 0 0" id="planSummary"></p>
     <p class="muted" style="margin:10px 0 0">Machines run ${HOURS} hours at their rated rate,
-      so every line makes its full quantity whether or not the shelves need it — the
+      so every line makes its full quantity whether or not the shelves need it; the
       ingredient order is sized on that, never on demand. What the shops do not take is
-      surplus for export. Set the machines per line in the table below. ${own
+      surplus for export. ${own
       ? `Your ${own.sites} ${cat.type.toLowerCase()}${own.sites===1?"":"s"} average ${
           defaultRate(planType).toLocaleString()} a day per product, which is where the
          shop figures started.`
-      : "You do not run this type, so the shop figures are yours to choose — nothing there is measured."}</p>`;
+      : "You do not run this type, so the shop figures are yours to choose; nothing there is measured."}</p>`;
   $("planPick").onchange = e => {
     planType = e.target.value;
     planRate = defaultRate(planType) || planRate;
@@ -6877,7 +6872,7 @@ function paintPlan(){
          ? `, leaving <b>${Math.round(p.exportWeek).toLocaleString()}</b> a week for export`
          : ""}.${p.shortLines
          ? ` ${p.shortLines} line${p.shortLines === 1 ? " does" : "s do"} not keep up with
-             the shelves — those need more machines.` : ""}`
+             the shelves; those need more machines.` : ""}`
     : `No machines set, so nothing is being made.`;
 
   $("planTable").innerHTML = `
@@ -6901,7 +6896,7 @@ function paintPlan(){
     : `<tr><td class="l"><b>${r.item}</b><span class="sub">shops want ${
         Math.round(r.wantWeek).toLocaleString()}/week</span></td>
        <td class="l" colspan="7"><span class="chip neutral">imported, no recipe</span>
-       <span class="sub">the game documents no way to make this one — buy it in</span></td></tr>`
+       <span class="sub">the game documents no way to make this one; buy it in</span></td></tr>`
     ).join("")}</tbody>`;
 
   $("planTable").querySelectorAll(".mcount").forEach(el => {
@@ -6921,7 +6916,7 @@ function paintPlan(){
         `<div class="stat"><span>${m}</span><b class="num">${n}</b></div>`).join("")
       + `<div class="stat"><span><b>Total</b></span><b class="num">${
           machines.reduce((a,b)=>a+b[1],0)}</b></div>`
-    : `<p class="muted">Nothing in this range is manufactured — it is all bought in.</p>`);
+    : `<p class="muted">Nothing in this range is manufactured; it is all bought in.</p>`);
 
   /* Orders are placed one importer at a time, so the list is cut the same way.
      Each line carries what is on order now and the difference, which is the
@@ -6936,7 +6931,7 @@ function paintPlan(){
     (a[0] === "Not on any import contract" ? 1 : 0) - (b[0] === "Not on any import contract" ? 1 : 0)
     || b[1].reduce((x,i)=>x+i.weekly,0) - a[1].reduce((x,i)=>x+i.weekly,0));
 
-  $("planImports").innerHTML = `<span class="eyebrow">Weekly import order — what the machines
+  $("planImports").innerHTML = `<span class="eyebrow">Weekly import order: what the machines
     eat, by importer</span>` + (p.imports.length
     ? blocks.map(([who, list]) => {
         const sum = list.reduce((a,i) => a+i.weekly, 0);
@@ -6969,16 +6964,14 @@ function paintPlan(){
               <td class="num">${money ? fmt(money) : ""}</td></tr></tfoot>
           </table></div></div>`;
       }).join("")
-      + `<p class="muted" style="margin-top:12px">Sized for machines running flat out, which
-         is what they do — order to demand instead and the lines stop mid-week. ${p.priced
+      + `<p class="muted" style="margin-top:12px">${p.priced
           ? `A week costs <b class="num">${fmt(p.cash)}</b> across the ${
               p.priced} of ${p.total} ingredients this company already buys.`
           : `No cash figure here: none of these ${p.total} ingredients appear in your own
-             goods costs.`}${p.priced < p.total
-           ? ` Unit prices are what you actually paid on day ${D.plan.priceDay}; the other ${
-               p.total - p.priced} ${p.total - p.priced === 1 ? "is" : "are"} shown as
-               quantities only.` : ""}</p>`
-    : `<p class="muted">Nothing to import — this range is bought as finished goods.</p>`);
+             goods costs.`}${p.priced && p.priced < p.total
+           ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${
+               p.total - p.priced} show quantities only.` : ""}</p>`
+    : `<p class="muted">Nothing to import; this range is bought as finished goods.</p>`);
 }
 
 function drawProducts(){
@@ -6988,8 +6981,8 @@ function drawProducts(){
      row's own tooltip. */
   const withPeak = rows.filter(p => p.peak).length;
   const showPeak = withPeak * 2 >= rows.length;
-  $("productNote").textContent = `Daily revenue across every store`
-    + (showPeak ? "" : ` — weekday peaks on hover, ${withPeak} of ${rows.length} have one`);
+  $("productNote").textContent = showPeak ? ""
+    : `Weekday peaks on hover, ${withPeak} of ${rows.length} have one`;
   $("products").innerHTML = `
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
       <th>Avg price</th><th>Stores</th>${showPeak?`<th class="l">Peaks</th>`:""}</tr></thead>
@@ -7041,7 +7034,7 @@ function drawGoals(){
     ${g.goodsProduced.toLocaleString()} goods produced in the factories,
     ${fmt(g.taxesPaid)} paid in tax.</p>`
     + (h && moved.length ? `<div class="stat" style="border-top:1px solid var(--rule);
-         padding-top:12px"><span class="eyebrow">House rules — ${h.label.toLowerCase()},
+         padding-top:12px"><span class="eyebrow">House rules: ${h.label.toLowerCase()},
          ${h.harder} harder${h.easier ? `, ${h.easier} easier` : ""}, started on ${
          fmt(h.startingMoney)}</span></div>`
       + moved.map(r => `<div class="stat" title="${r.what}">

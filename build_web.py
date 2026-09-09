@@ -190,12 +190,12 @@ details.help[open] summary::after{content:"\2013"}
       <h2 id="welcomeTitle">Your company,<br>at a glance.</h2>
       <p class="lede" id="welcomeLede">Turn your Big Ambitions save into a daily board, built in your browser with nothing uploaded.</p>
       <div class="entry-actions" id="entryActions">
-        <button type="button" class="lg-btn primary large" id="folderBtn" title="Pick the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">Choose save folder <span aria-hidden="true">&rarr;</span></button>
+        <button type="button" class="lg-btn primary large" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">Choose save folder <span aria-hidden="true">&rarr;</span></button>
         <button type="button" class="lg-btn primary large" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
         <span class="drop-hint">or drop a <code>.hsg</code> save anywhere</span>
       </div>
       <div class="entry-secondary" id="entrySecondary">
-        <label class="lg-btn" id="savePickLabel" title="Pick one specific .hsg file instead">One save file<input type="file" id="savePick" accept=".hsg"></label>
+        <label class="lg-btn" id="savePickLabel" title="Choose one specific .hsg file instead">One save file<input type="file" id="savePick" accept=".hsg"></label>
       </div>
       <div class="entry-status" id="entryStatus">
         <div class="src-card" id="srcCard" data-tone="busy"><span class="sym" aria-hidden="true"></span><div class="txt"><b id="srcStatus">Starting</b><span id="srcMeta"></span></div></div>
@@ -214,7 +214,7 @@ details.help[open] summary::after{content:"\2013"}
       <details class="help" id="help" open>
         <summary>Where is my save?</summary>
         <div class="help-content">
-          <p>In the folder picker, paste the Windows path into <b>File name</b> and press Enter. Choose the <b>Big Ambitions</b> folder; the newest save is found across the company folders inside it, whose generated names cannot be told apart by eye.</p>
+          <p>In the folder picker, paste the Windows path into <b>File name</b> and press Enter. Choose the <b>Big Ambitions</b> folder; the page finds the newest save across the company folders inside it, whose generated names cannot be told apart by eye.</p>
           <div class="path-label">Save folder &middot; Windows</div>
           <div class="path-row"><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code><button type="button" class="copy" data-copy="savePath">Copy</button></div>
           <p class="mac">On macOS: <code>~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</code></p>
@@ -225,7 +225,7 @@ details.help[open] summary::after{content:"\2013"}
       </details>
     </div>
     <div class="onb-foot">
-      <span>Save files are only read.</span>
+      <span>The page only reads your save files.</span>
       <div class="foot-links" id="footSlot">
         <a href="__REPO__" title="MIT-licensed; report a save that will not build there">Source &#8599;</a>
         <button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button>
