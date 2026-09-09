@@ -5,6 +5,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ba-ledger",
   "compatibility_date": "2026-09-01",
+  // The page's own address. Custom domains: wrangler creates the DNS records and
+  // the certificate itself, since the zone lives in the same Cloudflare account.
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "bigcopilot.com", "custom_domain": true },
+    { "pattern": "www.bigcopilot.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./web",
     "not_found_handling": "404-page"

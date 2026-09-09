@@ -180,3 +180,6 @@ the second-release folder watcher.
 
 UI round, 9 Sep afternoon: Codex built mockup/ui-mockup.html; its header, landing, return-visit,
 reading and error states are live. Not yet ported: its Today tiles and findings grid.
+
+Domain, 9 Sep evening: bigcopilot.com bought on Cloudflare Registrar and attached to the Worker
+as a custom domain (apex and www) through wrangler.jsonc routes; the workers.dev address still works.
