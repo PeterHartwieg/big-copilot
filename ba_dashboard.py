@@ -544,7 +544,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
             "cityDate": _city_date(save, day),
             "build": root.get("buildNumberAtLastSave"),
             "verifiedBuild": VERIFIED_BUILD,
-            "locale": bool(names.locale),
+            # Names alone can be shipped with the page; recipes and station
+            # capacities only come from the game's own help pages.
+            "locale": any(k.startswith("help_") for k in names.locale),
             "difficulty": _difficulty(save)["label"],
             "houseRules": _difficulty(save),
             "generated": dt.datetime.now().strftime("%d %b %Y, %H:%M"),
@@ -5844,7 +5846,7 @@ function drawMast(){
      game build than the one every figure here was checked against. */
   const notices = [];
   if(m.locale === false)
-    notices.push(["Game text", `<span class="muted" title="Load the game's en.json for product names, recipes and station capacities">not loaded</span>`]);
+    notices.push(["Game text", `<span class="muted" title="Load the game's en.json for recipes and station capacities; without it the factory and capacity views cannot be filled">names only</span>`]);
   if(m.verifiedBuild && m.build > m.verifiedBuild)
     notices.push(["Game build", `<span class="muted" title="This board was checked on build ${m.verifiedBuild}; a newer game may have changed what the save records">${m.build}, unchecked</span>`]);
   $("mastMeta").innerHTML = [
@@ -7285,15 +7287,23 @@ def safe_extract(save: Save, names: Names, history_path: str | None) -> dict:
         ) from exc
 
 
-def browser_build(save_path: str, locale_path: str, history_path: str) -> str:
+def browser_build(
+    save_path: str, locale_path: str, history_path: str, names_path: str | None = None
+) -> str:
     """One rebuild for the in-browser board: parse, extract, JSON.
 
     Everything arrives as a path on Pyodide's virtual filesystem, so the same
     extract() runs unchanged; only this wrapper knows it is in a browser. The
     character id is kept beside the history so a later browser_name() can
     file the name under the right company without parsing the save again.
+
+    ``names_path`` is the table of display names shipped with the page; the
+    player's own en.json, when given, is laid over it and adds the help pages
+    that recipes and station capacities are read from.
     """
-    names = Names(load_locale(locale_path))
+    locale = dict(load_locale(names_path)) if names_path else {}
+    locale.update(load_locale(locale_path))
+    names = Names(locale)
     try:
         save = load_save(save_path)
     except Exception as exc:  # gzip, struct and format errors alike

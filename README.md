@@ -125,15 +125,15 @@ from and the build the tool was checked on, and the last good board stays on scr
 That sentence is the whole bug report: paste it into a GitHub issue.
 
 ## Game text
-
-Product names, business names, recipes and station capacities all come from the game's
-own English locale file, `en.json`. In the browser you pick it once. Locally the tool
-looks in the default Steam path; if the game is installed somewhere else, point
-`DEFAULT_LOCALE` in `ba_save.py` at your `StreamingAssets/locale/en.json`.
-
-Without it the board still builds, but names fall back to tidied-up slugs, the masthead
-reads *Game text: not loaded*, and recipes and station capacities are unknown, so the
-views that rest on them cannot be worked out.
+Product, business, neighbourhood and station names ship with the page and with the
+script, taken from the game's own English text, so a save never shows an internal
+name such as `smartphone1`; that phone is the Arty Fish Phone. What the tool cannot
+ship is the game's help pages, which is where recipes and station capacities are read
+from. Pick `en.json` once for those: the chip on the landing page reads "Game text
+loaded" when they are in, and the masthead says "Game text: names only" until then.
+The file is at `<game folder>\Big Ambitions_Data\StreamingAssets\locale\en.json`.
+Running from source, the script looks for it in the default Steam folder; set
+`DEFAULT_LOCALE` in `ba_save.py` if Steam lives elsewhere.
 
 ## Neighbourhood badges
 

@@ -46,6 +46,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import re
 import struct
 
 # Tags that introduce a *named* property. The same tag + 1 introduces the same
@@ -324,7 +325,9 @@ class Names:
         if text:
             return text
         tail = slug.split("_", 1)[-1] if "_" in slug else slug.replace("ba:", "")
-        return tail.replace("-", " ").title()
+        # "smartphone1" reads better as "Smartphone 1"; a slug is all we have.
+        tail = re.sub(r"(?<=[a-z])(?=\d)", " ", tail.replace("-", " "))
+        return tail.title()
 
     def street(self, slug: str | None) -> str:
         if not slug:

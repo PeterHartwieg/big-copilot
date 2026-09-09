@@ -304,19 +304,19 @@
     const has = !!stored.get(LOCALE_KEY);
     const chip = $("localeChip");
     chip.dataset.state = has ? "ok" : "missing";
-    chip.querySelector("span").textContent = has ? "Game text loaded" : "Game text missing";
+    chip.querySelector("span").textContent = has ? "Game text loaded" : "Game text: names only";
     chip.title = has
-      ? "Product names, recipes and station capacities come from the game's en.json. Click to replace it."
-      : "Pick the game's en.json so product names, recipes and station capacities are known. Without it names are slugs.";
+      ? "Recipes and station capacities come from the game's en.json. Click to replace it."
+      : "Product and business names are built in. Pick the game's en.json for recipes and station capacities as well.";
     $("asideEyebrow").textContent = has ? "Remembered on this device" : "One-time set-up";
     $("asideText").innerHTML = has
-      ? "Product names, recipes and station capacities are ready."
-      : "Choose the game's <code>en.json</code> for product names, recipes and station capacities.";
+      ? "Recipes and station capacities are ready."
+      : "Product and business names are built in. Choose the game's <code>en.json</code> for recipes and station capacities as well.";
     $("asideQuiet").textContent = has
       ? "Click the chip to replace en.json."
-      : "Remembered in this browser. You can open a save without it; recipes and capacities will be unavailable.";
+      : "Remembered in this browser. Without it the factory and capacity views stay empty.";
     const hint = $("menuChipHint");
-    if (hint) hint.textContent = has ? "en.json remembered · click to replace" : "Pick en.json for names, recipes and capacities";
+    if (hint) hint.textContent = has ? "en.json remembered · click to replace" : "Pick en.json for recipes and capacities";
   }
 
   async function takeLocale(file) {
