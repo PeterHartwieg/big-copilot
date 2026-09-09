@@ -177,3 +177,6 @@ Cloudflare's agent-setup page instructs.
 
 Left for you: the forum post. Not yet done, by choice: a test in Firefox and Safari, and
 the second-release folder watcher.
+
+UI round, 9 Sep afternoon: Codex built mockup/ui-mockup.html; its header, landing, return-visit,
+reading and error states are live. Not yet ported: its Today tiles and findings grid.
