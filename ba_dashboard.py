@@ -2774,7 +2774,12 @@ def _market(
         singles, _family_of(catalogue, names, mine_types), opened_in
     )
 
-    types = _type_demand(catalogue, by_item_hood, hoods, names, mine_types)
+    stores = {
+        (b["typeSlug"], b["neighbourhood"])
+        for b in businesses
+        if b["status"] == "retail" and b["neighbourhood"]
+    }
+    types = _type_demand(catalogue, by_item_hood, hoods, names, mine_types, stores)
     return {
         "hoods": hoods,
         "rows": rows,
@@ -2947,7 +2952,7 @@ def _type_catalogue(save: Save, names: Names, tradeable: set) -> dict:
 
 
 def _type_demand(
-    catalogue: dict, demand: dict, hoods: list, names: Names, mine: set
+    catalogue: dict, demand: dict, hoods: list, names: Names, mine: set, stores: set
 ) -> list:
     """Demand for a business type is the whole basket it sells, not one product.
 
@@ -2977,6 +2982,9 @@ def _type_demand(
                         sum(x["providers"] for x in scores) / len(scores)
                     ),
                     "sell": sum(1 for x in scores if x["sell"]),
+                    # A shop of this very type in this neighbourhood, from the
+                    # [XX] prefix in its name; without prefixes this stays off.
+                    "here": (kind, hood) in stores,
                 }
             )
         live = [c for c in cells if c]
@@ -4718,9 +4726,12 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 .heat{text-align:center; font-variant-numeric:tabular-nums; position:relative; min-width:64px}
 .heat .v{font-weight:600; font-size:13px}
 .heat .mk{font-size:10px; color:var(--ink-3); display:block; line-height:1.1; letter-spacing:.06em}
-/* An accent underline rather than accent text: a green number on a green-tinted
-   cell drops below readable contrast at high demand. */
-.heat.here{box-shadow:inset 0 -3px 0 var(--accent)}
+/* The cell is its shade; the numbers wait in the tooltip. An orange dot marks
+   where you already are, on any shade of green. */
+.heat{height:30px}
+.heat .dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--warn);
+  box-shadow:0 0 0 2px var(--surface)}
+.heat .mk{display:inline; margin-left:4px}
 .heat.none{color:var(--ink-3)}
 .legend-note{
   margin:10px 2px 0; font-size:12px; color:var(--ink-3);
@@ -6619,9 +6630,10 @@ function heatCell(cell){
   if(cell.delta) marks.push(`${cell.delta > 0 ? "+" : ""}${cell.delta}`);
   return `<td class="heat ${cell.sell ? "here" : ""}"
     style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
-    title="${cell.hood}: demand ${cell.demand}, ${cell.providers} sellers${
-      cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">
-    <span class="v">${cell.demand}</span><span class="mk">${marks.join(" · ")}</span></td>`;
+    title="${cell.hood}: demand ${cell.demand}, ${marks.join(", ")}${
+      cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">${
+    cell.sell ? `<span class="dot" aria-label="you sell here"></span>` : ""}${
+    cell.hype ? `<span class="mk">▲</span>` : ""}</td>`;
 }
 
 /* A business type is only worth opening if most of its range sells, so the cell
@@ -6630,11 +6642,11 @@ function typeCell(cell){
   if(!cell) return `<td class="heat none">—</td>`;
   const share = cell.strong / cell.count;
   const pct = Math.round(share * 40);
-  return `<td class="heat ${cell.sell ? "here" : ""}"
+  return `<td class="heat ${cell.here ? "here" : ""}"
     style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
-    title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average">
-    <span class="v">${cell.strong}/${cell.count}</span>
-    <span class="mk">avg ${cell.demand} · ${cell.providers} rivals</span></td>`;
+    title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average${
+      cell.here ? ", you have a store here" : ""}">${
+    cell.here ? `<span class="dot" aria-label="you have a store here"></span>` : ""}</td>`;
 }
 
 /* --- where to expand --------------------------------------------------
@@ -6681,11 +6693,11 @@ function drawMarket(){
     ? "Strongest demand first"
     : trend;
   $("marketLegend").innerHTML = (marketView === "types"
-    ? [`<span>Cell shows how many of the range are in strong demand (60+)</span>`,
+    ? [`<span>Hover a cell for the numbers: how much of the range is in strong demand (60+), the average, the rivals</span>`,
        `<span>Darker cell = more of the range wanted</span>`,
-       `<span>Green underline = you already sell some of it there</span>`]
+       `<span>Orange dot = you have a store of this type there</span>`]
     : [`<span>Darker cell = stronger demand</span>`,
-       `<span>Green underline = you sell it there</span>`,
+       `<span>Orange dot = you sell it there</span>`,
        `<span>▲hype = the game flagged rising demand</span>`]).join("");
 
   if(marketView === "types"){
