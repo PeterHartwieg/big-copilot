@@ -4732,6 +4732,8 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 .heat .dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--warn);
   box-shadow:0 0 0 2px var(--surface)}
 .heat .mk{display:inline; margin-left:4px}
+/* The rival count stays: it is a decision input. Small and quiet, bottom right. */
+.heat .rv{position:absolute; right:5px; bottom:3px; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-2); line-height:1}
 .heat.none{color:var(--ink-3)}
 .legend-note{
   margin:10px 2px 0; font-size:12px; color:var(--ink-3);
@@ -6633,7 +6635,8 @@ function heatCell(cell){
     title="${cell.hood}: demand ${cell.demand}, ${marks.join(", ")}${
       cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">${
     cell.sell ? `<span class="dot" aria-label="you sell here"></span>` : ""}${
-    cell.hype ? `<span class="mk">▲</span>` : ""}</td>`;
+    cell.hype ? `<span class="mk">▲</span>` : ""}<span class="rv" title="${cell.monopoly ? "only you sell here" : cell.providers + " sellers"}">${
+    cell.monopoly ? "only you" : cell.providers}</span></td>`;
 }
 
 /* A business type is only worth opening if most of its range sells, so the cell
@@ -6646,7 +6649,7 @@ function typeCell(cell){
     style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
     title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average${
       cell.here ? ", you have a store here" : ""}">${
-    cell.here ? `<span class="dot" aria-label="you have a store here"></span>` : ""}</td>`;
+    cell.here ? `<span class="dot" aria-label="you have a store here"></span>` : ""}<span class="rv" title="${cell.providers} rival sellers on average across the range">${cell.providers}</span></td>`;
 }
 
 /* --- where to expand --------------------------------------------------
@@ -6695,9 +6698,11 @@ function drawMarket(){
   $("marketLegend").innerHTML = (marketView === "types"
     ? [`<span>Hover a cell for the numbers: how much of the range is in strong demand (60+), the average, the rivals</span>`,
        `<span>Darker cell = more of the range wanted</span>`,
-       `<span>Orange dot = you have a store of this type there</span>`]
+       `<span>Orange dot = you have a store of this type there</span>`,
+       `<span>Small number = rival sellers, averaged over the range</span>`]
     : [`<span>Darker cell = stronger demand</span>`,
        `<span>Orange dot = you sell it there</span>`,
+       `<span>Small number = rival sellers</span>`,
        `<span>▲hype = the game flagged rising demand</span>`]).join("");
 
   if(marketView === "types"){
