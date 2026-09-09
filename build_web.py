@@ -32,6 +32,10 @@ NAME_PREFIXES = (
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 REPO = "https://github.com/PeterHartwieg/big-ambitions-ledger"
+ISSUES_URL = REPO + "/issues/new"
+# Where "Support the project" goes. GitHub Sponsors for now; swap in a Ko-fi
+# or PayPal address here and rebuild if you prefer one.
+DONATE_URL = "https://github.com/sponsors/PeterHartwieg"
 
 # Two screens, one set of controls.
 #
@@ -145,8 +149,9 @@ details.help[open] summary::after{content:"\2013"}
 .help-content .mac code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;overflow-wrap:anywhere;user-select:all}
 .onb-foot{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--rule);padding:15px 0;
   font-size:11px;color:var(--ink-2)}
-.foot-links{display:flex;gap:20px}
-.foot-links a{color:var(--ink-2)}
+.foot-links{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
+.foot-links a.lg-text{color:var(--ink-2)}
+.foot-links .lg-btn{font-size:12px;min-height:32px;padding:6px 12px}
 .veil{position:fixed;inset:0;z-index:70;background:color-mix(in srgb,var(--ground) 80%,transparent);display:flex;align-items:center;
   justify-content:center;pointer-events:none}
 .veil div{border:2px dashed var(--accent);border-radius:10px;padding:26px 40px;font-size:18px;font-weight:600;color:var(--accent);background:var(--surface)}
@@ -173,7 +178,9 @@ details.help[open] summary::after{content:"\2013"}
 .menu-panel .path-row{flex-wrap:wrap}
 .menu-panel .path-row code{flex-basis:100%;font-size:10px}
 .menu-foot{border-top:1px solid var(--rule);padding:14px 10px 5px;display:flex;justify-content:space-between;font-size:11px}
-.menu-foot .foot-links{width:100%;justify-content:space-between}
+.menu-foot .foot-links{width:100%;gap:4px 14px}
+.menu-foot .foot-links .lg-btn{width:100%;margin:0 0 4px}
+.menu-foot .foot-links .lg-text{margin-top:6px}
 
 @media (max-width:1050px){.welcome{gap:30px;grid-template-columns:minmax(0,1fr) 220px}.welcome h2{font-size:38px}.game-text{padding-left:22px}}
 @media (max-width:760px){.welcome{grid-template-columns:1fr;gap:24px;padding-top:30px}.welcome h2{font-size:36px}
@@ -227,7 +234,9 @@ details.help[open] summary::after{content:"\2013"}
     <div class="onb-foot">
       <span>The page only reads your save files.</span>
       <div class="foot-links" id="footSlot">
-        <a href="__REPO__" title="MIT-licensed; report a save that will not build there">Source &#8599;</a>
+        <a class="lg-btn" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug or request a feature &#8599;</a>
+        <a class="lg-btn" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project &#8599;</a>
+        <a class="lg-text" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source &#8599;</a>
         <button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button>
       </div>
     </div>
@@ -255,7 +264,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO)
+""".replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL)
 
 def stamp() -> str:
     """A short hash of everything the page fetches, so a deploy busts caches."""
