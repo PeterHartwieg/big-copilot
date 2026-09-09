@@ -27,7 +27,7 @@ while you play, so there is almost always a recent save to read.
 
 ### In the browser
 
-Open the page at `<the page URL>` and drop a save on it.
+Open the page at [https://ba-ledger.peter-hartwieg.workers.dev](https://ba-ledger.peter-hartwieg.workers.dev) and drop a save on it.
 
 The board is built inside the browser. The same Python that runs locally runs in a Web
 Worker through Pyodide, so the save never leaves your machine. Nothing is uploaded.

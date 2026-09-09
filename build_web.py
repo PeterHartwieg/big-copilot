@@ -32,6 +32,7 @@ BANNER = r"""<style>
   background:var(--raised);cursor:pointer;font-size:13px}
 .landing label.btn:hover{border-color:var(--ink-3)}
 .landing label.btn input{display:none}
+.landing a.link{color:var(--ink-3);font-size:12px}
 .landing button.link{background:none;border:0;padding:0;color:var(--ink-3);text-decoration:underline;cursor:pointer;font:inherit;font-size:12px}
 .landing .st{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink-2)}
 .landing .st[data-tone="busy"]::before{content:"● ";color:var(--warn)}
@@ -55,6 +56,7 @@ body.has-board .landing{padding-bottom:6px}
       <span class="st" id="localeState"></span>
     </div>
     <span class="st" id="srcStatus">Starting</span>
+    <a class="link" href="https://github.com/PeterHartwieg/big-ambitions-ledger" title="MIT-licensed; report a save that will not build there">source on GitHub</a>
     <button type="button" class="link" id="forgetHistory" title="The board keeps sixty days of demand and cash history in this browser so it can show trends. Forgetting it starts a fresh record.">forget history</button>
   </div>
   <p class="st" id="srcNote" hidden></p>
