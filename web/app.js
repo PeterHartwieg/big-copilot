@@ -152,6 +152,22 @@
     }));
     document.addEventListener("drop", (e) => take(e.dataTransfer.files));
     $("savePick").addEventListener("change", (e) => take(e.target.files));
+    // A whole folder: every company keeps its own generated-name folder under
+    // the save root and they all look alike, so the page does what the local
+    // script does and takes the newest save across all of them. Only that
+    // one file is ever read; the rest contribute a name and a date.
+    $("folderPick").addEventListener("change", (e) => {
+      const saves = [...e.target.files].filter(isSave);
+      if (!saves.length) {
+        note("No .hsg save in that folder. Pick the folder named Big Ambitions inside SaveGames.", "warn");
+        return;
+      }
+      const newest = saves.reduce((a, b) => (b.lastModified > a.lastModified ? b : a));
+      const where = newest.webkitRelativePath || newest.name;
+      const when = new Date(newest.lastModified);
+      note(`Newest of ${saves.length} saves: ${where}, written ${when.toLocaleString()}.`, "");
+      buildFrom(newest);
+    });
     $("localePick").addEventListener("change", (e) => take(e.target.files));
     // A hidden folder cannot be browsed to; a copied path pasted into the
     // dialog's File name box opens it. The %USERPROFILE% form is expanded by

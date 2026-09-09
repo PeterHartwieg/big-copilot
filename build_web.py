@@ -31,6 +31,7 @@ BANNER = r"""<style>
 .landing label.btn{display:inline-block;border:1px solid var(--rule);border-radius:4px;padding:5px 10px;
   background:var(--raised);cursor:pointer;font-size:13px}
 .landing label.btn:hover{border-color:var(--ink-3)}
+.landing label.btn.primary{border-color:var(--accent);color:var(--accent);font-weight:600}
 .landing label.btn input{display:none}
 .landing a.link{color:var(--ink-3);font-size:12px}
 .landing button.link{background:none;border:0;padding:0;color:var(--ink-3);text-decoration:underline;cursor:pointer;font:inherit;font-size:12px}
@@ -56,7 +57,8 @@ body.has-board .landing{padding-bottom:6px}
   <div class="row">
     <div class="drop" id="drop">
       <b>Drop a save here</b>
-      <label class="btn">Choose a save<input type="file" id="savePick" accept=".hsg"></label>
+      <label class="btn primary" title="Pick the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save. Your browser may ask whether to &quot;upload&quot; the folder: that is its wording for letting this page read it; nothing leaves your computer.">Choose the save folder<input type="file" id="folderPick" webkitdirectory directory multiple></label>
+      <label class="btn">Choose one save<input type="file" id="savePick" accept=".hsg"></label>
       <label class="btn" title="The game's own text: product names, recipes and station capacities. Found under the game folder at Big Ambitions_Data\StreamingAssets\locale\en.json">Pick en.json<input type="file" id="localePick" accept=".json"></label>
       <span class="st" id="localeState"></span>
     </div>
@@ -66,9 +68,12 @@ body.has-board .landing{padding-bottom:6px}
   </div>
   <p class="st" id="srcNote" hidden></p>
   <div class="never">
-    <p><b>Where the save is.</b> The folder is hidden in Explorer, so browsing will not find it. Copy the path, paste it into the
-      file dialog's <i>File name</i> box, press Enter, and the folder opens. Pick the newest <code>Recover</code> file; the game
-      writes one every five minutes while you play.</p>
+    <p><b>Where the save is.</b> The folder is hidden in Explorer, so browsing will not find it. Copy the path below, paste it
+      into the dialog's <i>File name</i> box, press Enter, and the folder opens. With <i>Choose the save folder</i>, choose the
+      <code>Big Ambitions</code> folder itself and the page takes the newest save from whichever company you played last; the
+      company folders have generated names and cannot be told apart by eye. Your browser may ask whether to "upload" the folder:
+      that is its wording for letting this page read it, and nothing leaves your computer. The game writes a
+      <code>Recover</code> save every five minutes while you play.</p>
     <p class="path"><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code>
       <button type="button" class="copy" data-copy="savePath">copy path</button> <span class="muted">Windows. On a Mac:
       ~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</span></p>
