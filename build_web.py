@@ -36,6 +36,11 @@ ISSUES_URL = REPO + "/issues/new"
 # Where "Support the project" goes. GitHub Sponsors for now; swap in a Ko-fi
 # or PayPal address here and rebuild if you prefer one.
 DONATE_URL = "https://github.com/sponsors/PeterHartwieg"
+# Cloudflare Web Analytics: cookieless visit counts, nothing about the save.
+# Paste the site token from the dashboard (Analytics & Logs > Web Analytics)
+# here and rebuild; empty means no beacon on the page. The token is public,
+# it sits in the HTML every visitor gets.
+ANALYTICS_TOKEN = ""
 
 # Two screens, one set of controls.
 #
@@ -227,7 +232,7 @@ details.help[open] summary::after{content:"\2013"}
           <p class="mac">On macOS: <code>~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</code></p>
           <div class="path-label">Game text &middot; en.json lives here (recipes and capacities)</div>
           <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
-          <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
+          <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.__ANALYTICS_NOTE__</p>
         </div>
       </details>
     </div>
@@ -264,7 +269,11 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL)
+""".replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL).replace(
+    "__ANALYTICS_NOTE__",
+    " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count."
+    if ANALYTICS_TOKEN else "",
+)
 
 def stamp() -> str:
     """A short hash of everything the page fetches, so a deploy busts caches."""
@@ -298,6 +307,11 @@ def main() -> None:
     print(f"names.json: {len(names)} display names")
     # The template carries its own charset tag; a viewport tag is all the page adds.
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
+    if ANALYTICS_TOKEN:
+        head += (
+            "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
+            + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
+        )
     page = head + render(
         None, live=True, banner=BANNER, before_script=BEFORE_SCRIPT.replace("__STAMP__", stamp())
     )
