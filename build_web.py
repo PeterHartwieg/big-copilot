@@ -270,9 +270,10 @@ details.help[open] summary::after{content:"\2013"}
   </div>
 </template>
 """.replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL).replace(
+    # Cloudflare injects its cookieless beacon at the edge for this domain, so
+    # the note is true whether or not a token is set here.
     "__ANALYTICS_NOTE__",
-    " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count."
-    if ANALYTICS_TOKEN else "",
+    " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.",
 )
 
 def stamp() -> str:
