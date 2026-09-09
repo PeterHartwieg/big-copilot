@@ -254,8 +254,11 @@ td.l .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
 
 footer{
   margin-top:56px; padding-top:18px; border-top:1px solid var(--rule);
-  display:flex; gap:20px; flex-wrap:wrap; color:var(--ink-3); font-size:12px;
+  display:flex; gap:16px 24px; flex-wrap:wrap; align-items:center; color:var(--ink-3); font-size:12px;
 }
+.foot-text{display:flex; gap:20px; flex-wrap:wrap}
+#footerLinks{margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+#footerLinks:empty{display:none}
 .flowbox{padding:16px 20px 4px; overflow-x:auto}
 #flow{min-width:760px}
 .flownode rect{fill:var(--raised); stroke:var(--rule); stroke-width:1; transition:stroke .12s}
@@ -630,8 +633,8 @@ details.help[open] summary::after{content:"\2013"}
     <div class="onb-foot">
       <span>The page only reads your save files.</span>
       <div class="foot-links" id="footSlot">
-        <a class="lg-btn" href="https://github.com/PeterHartwieg/big-ambitions-ledger/issues/new" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug or request a feature &#8599;</a>
-        <a class="lg-btn" href="https://github.com/sponsors/PeterHartwieg" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project &#8599;</a>
+        <a class="lg-btn" id="issueLink" href="https://github.com/PeterHartwieg/big-ambitions-ledger/issues/new" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug or request a feature &#8599;</a>
+        <a class="lg-btn" id="donateLink" href="https://github.com/sponsors/PeterHartwieg" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project &#8599;</a>
         <a class="lg-text" href="https://github.com/PeterHartwieg/big-ambitions-ledger" target="_blank" rel="noopener" title="MIT-licensed">Source &#8599;</a>
         <button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button>
       </div>
@@ -844,10 +847,14 @@ details.help[open] summary::after{content:"\2013"}
     </section>
   </div>
 
-  <footer id="footer"></footer>
+  <footer class="foot">
+    <div class="foot-text" id="footer"></div>
+    <!-- a host page may put its own links here; empty on the local page -->
+    <div class="foot-links" id="footerLinks"></div>
+  </footer>
 </div>
-<script>window.LEDGER_BUILD = "6c35715a29";</script>
-<script src="app.js?v=6c35715a29"></script>
+<script>window.LEDGER_BUILD = "38ef439379";</script>
+<script src="app.js?v=38ef439379"></script>
 
 <script>
 let D = null;

@@ -4524,8 +4524,11 @@ td.l .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
 
 footer{
   margin-top:56px; padding-top:18px; border-top:1px solid var(--rule);
-  display:flex; gap:20px; flex-wrap:wrap; color:var(--ink-3); font-size:12px;
+  display:flex; gap:16px 24px; flex-wrap:wrap; align-items:center; color:var(--ink-3); font-size:12px;
 }
+.foot-text{display:flex; gap:20px; flex-wrap:wrap}
+#footerLinks{margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+#footerLinks:empty{display:none}
 .flowbox{padding:16px 20px 4px; overflow-x:auto}
 #flow{min-width:760px}
 .flownode rect{fill:var(--raised); stroke:var(--rule); stroke-width:1; transition:stroke .12s}
@@ -4896,7 +4899,11 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
     </section>
   </div>
 
-  <footer id="footer"></footer>
+  <footer class="foot">
+    <div class="foot-text" id="footer"></div>
+    <!-- a host page may put its own links here; empty on the local page -->
+    <div class="foot-links" id="footerLinks"></div>
+  </footer>
 </div>
 <!--__BEFORE_SCRIPT__-->
 <script>

@@ -164,6 +164,10 @@
         $("menuHelpSlot").appendChild($("help"));
         $("menuFootSlot").append(...$("footSlot").children);
         $("sourceNote").appendChild($("srcNote"));
+        // The two project links also live in the board's own footer. Links
+        // carry no handlers, so copies are safe.
+        $("footerLinks").append($("issueLink").cloneNode(true), $("donateLink").cloneNode(true));
+        $("footerLinks").querySelectorAll("a").forEach((a) => a.removeAttribute("id"));
         $("folderBtn").textContent = "Choose save folder";
         $("folderBtn").className = "lg-btn";
         $("help").open = false;

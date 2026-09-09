@@ -234,8 +234,8 @@ details.help[open] summary::after{content:"\2013"}
     <div class="onb-foot">
       <span>The page only reads your save files.</span>
       <div class="foot-links" id="footSlot">
-        <a class="lg-btn" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug or request a feature &#8599;</a>
-        <a class="lg-btn" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project &#8599;</a>
+        <a class="lg-btn" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug or request a feature &#8599;</a>
+        <a class="lg-btn" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project &#8599;</a>
         <a class="lg-text" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source &#8599;</a>
         <button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button>
       </div>
