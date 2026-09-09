@@ -1,4 +1,4 @@
-# Big Ambitions Ledger
+# Big Copilot
 
 A progress board built straight from your Big Ambitions save file. No mods, nothing
 injected into the game. It reads the save on disk and builds a single HTML page.

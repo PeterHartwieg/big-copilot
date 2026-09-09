@@ -4257,10 +4257,10 @@ def render(
     script tag it sits in.
     """
     if data is None:
-        payload, title = "null", "Ledger"
+        payload, title = "null", "Big Copilot"
     else:
         payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
-        title = f"{data['meta']['save']} Ledger"
+        title = f"{data['meta']['save']} · Big Copilot"
     return '<meta charset="utf-8">' + chr(10) + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__LIVE__*/false", "true" if live else "false")
@@ -5827,7 +5827,7 @@ if(window.ResizeObserver){
 /* --- draw ----------------------------------------------------------- */
 function drawMast(){
   const m = D.meta;
-  $("eyebrow").innerHTML = `Big Ambitions <span>Ledger</span>`;
+  $("eyebrow").innerHTML = `Big <span>Copilot</span>`;
   /* The save name is the player's own text: set it as text, never as markup.
      The full stop after it is the board's one flourish. */
   {

@@ -31,7 +31,7 @@ NAME_PREFIXES = (
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
-REPO = "https://github.com/PeterHartwieg/big-ambitions-ledger"
+REPO = "https://github.com/PeterHartwieg/big-copilot"
 ISSUES_URL = REPO + "/issues/new"
 # Where "Support the project" goes. GitHub Sponsors for now; swap in a Ko-fi
 # or PayPal address here and rebuild if you prefer one.
@@ -189,7 +189,7 @@ details.help[open] summary::after{content:"\2013"}
 </style>
 <section class="landing" id="landing" data-visit="first">
   <header class="onb-mast">
-    <div class="eyebrow">Big Ambitions <span>Ledger</span></div>
+    <div class="eyebrow">Big <span>Copilot</span></div>
     <span class="local"><i class="dot ok"></i>In browser</span>
   </header>
   <div class="welcome">

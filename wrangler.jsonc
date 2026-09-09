@@ -3,7 +3,7 @@
   // uploads the ./web folder and Cloudflare serves those files directly, which is
   // all this project needs -- the analysis happens in the visitor's browser.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ba-ledger",
+  "name": "big-copilot",
   "compatibility_date": "2026-09-01",
   // The page's own address. Custom domains: wrangler creates the DNS records and
   // the certificate itself, since the zone lives in the same Cloudflare account.

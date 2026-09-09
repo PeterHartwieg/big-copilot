@@ -183,3 +183,6 @@ reading and error states are live. Not yet ported: its Today tiles and findings 
 
 Domain, 9 Sep evening: bigcopilot.com bought on Cloudflare Registrar and attached to the Worker
 as a custom domain (apex and www) through wrangler.jsonc routes; the workers.dev address still works.
+
+Renamed to Big Copilot, 9 Sep evening: page title and eyebrow, README, Worker `big-copilot`
+(workers.dev address now big-copilot.peter-hartwieg.workers.dev), repository PeterHartwieg/big-copilot.
