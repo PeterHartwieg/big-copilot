@@ -4260,7 +4260,7 @@ def render(
     else:
         payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
         title = f"{data['meta']['save']} Ledger"
-    return (
+    return '<meta charset="utf-8">' + chr(10) + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -4319,21 +4319,33 @@ section.measured{content-visibility:visible}
 
 /* masthead ---------------------------------------------------------- */
 .mast{
-  display:flex; flex-wrap:wrap; align-items:flex-end; gap:20px 32px;
-  padding:34px 0 20px; border-bottom:3px solid var(--ink);
+  display:flex; flex-wrap:wrap; align-items:center; gap:16px 32px;
+  padding:26px 0 20px; border-bottom:2px solid var(--ink);
 }
-.mast h1{
-  margin:0; font-size:clamp(34px,5.5vw,58px); font-weight:800;
-  letter-spacing:-.03em; line-height:.94; text-wrap:balance;
+.mast .identity h1{
+  margin:6px 0 0; font-size:clamp(34px,4.5vw,50px); font-weight:800;
+  letter-spacing:-.04em; line-height:1.02; text-wrap:balance;
 }
 .mast h1 span{color:var(--accent)}
-.mast-meta{display:flex; gap:26px; margin-left:auto; flex-wrap:wrap}
+.mast .clock{margin-left:auto; font-family:"IBM Plex Mono",monospace; white-space:nowrap}
+.mast .clock b{font-size:17px; font-weight:500}
+.mast .clock b i{font-style:normal; color:var(--ink-3); margin:0 4px}
+.mast .clock small{display:block; font-size:11px; color:var(--ink-2); margin-top:3px}
+.mast-meta{display:flex; gap:24px; flex-wrap:wrap; border-left:1px solid var(--rule); padding-left:26px}
 .mast-meta div{display:flex; flex-direction:column; gap:2px}
+.mast-local{align-self:flex-start; font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-2); white-space:nowrap}
+.mast-local:empty{display:none}
+.source-row:empty, .source-note:empty{display:none}
+@media (max-width:760px){
+  .mast .clock{margin-left:0}
+  .mast-meta{border-left:0; padding-left:0}
+}
 .eyebrow{
   font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:500;
   letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
 }
-.mast-meta strong{font-size:17px; font-weight:600; letter-spacing:-.01em}
+.eyebrow span{color:var(--accent)}
+.mast-meta strong{font-size:22px; font-weight:500; letter-spacing:-.01em; line-height:1.2}
 
 /* kpi --------------------------------------------------------------- */
 /* Four tiles, one row; two-up on a narrow window. */
@@ -4702,12 +4714,18 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 <!--__BANNER__-->
 <div class="wrap">
   <header class="mast">
-    <div>
+    <div class="identity">
       <div class="eyebrow" id="eyebrow"></div>
       <h1 id="title"></h1>
     </div>
+    <div class="clock" id="clock"></div>
     <div class="mast-meta" id="mastMeta"></div>
+    <span class="mast-local" id="liveSlot"></span>
   </header>
+  <!-- A host page (the in-browser board) fills these with its source controls;
+       the local server page leaves them empty and they take no room. -->
+  <div class="source-row" id="sourceRow"></div>
+  <div class="source-note" id="sourceNote"></div>
 
   <nav class="pages" id="pages" aria-label="Board pages"></nav>
 
@@ -5803,19 +5821,20 @@ if(window.ResizeObserver){
 /* --- draw ----------------------------------------------------------- */
 function drawMast(){
   const m = D.meta;
-  $("eyebrow").innerHTML =
-    `Day ${m.day} · ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")} · ${m.cityDate}`
-    + (LIVE ? ` <span class="live" id="live"><b></b><em>${SOURCE.label}</em></span>` : "");
-  /* The save name is the player's own text: set it as text, never as markup. */
+  $("eyebrow").innerHTML = `Big Ambitions <span>Ledger</span>`;
+  /* The save name is the player's own text: set it as text, never as markup.
+     The full stop after it is the board's one flourish. */
   {
     const t = $("title");
-    const words = m.save.trim().split(/\s+/);
-    const last = words.pop();
-    t.textContent = words.length ? words.join(" ") + " " : "";
-    const em = document.createElement("span");
-    em.textContent = last;
-    t.appendChild(em);
+    t.textContent = m.save.trim();
+    const stop = document.createElement("span");
+    stop.textContent = ".";
+    t.appendChild(stop);
   }
+  $("clock").innerHTML =
+    `<b>Day ${m.day}<i>·</i>${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
+    + `<small>${m.cityDate}</small>`;
+  $("liveSlot").innerHTML = LIVE ? `<span class="live" id="live"><b></b><em>${SOURCE.label}</em></span>` : "";
   /* Cash and net worth are tiles; repeating them up here only made the reader
      check whether the two copies agreed. */
   const k = D.kpi;
@@ -7275,7 +7294,13 @@ def browser_build(save_path: str, locale_path: str, history_path: str) -> str:
     file the name under the right company without parsing the save again.
     """
     names = Names(load_locale(locale_path))
-    save = load_save(save_path)
+    try:
+        save = load_save(save_path)
+    except Exception as exc:  # gzip, struct and format errors alike
+        raise SaveShapeError(
+            f"{os.path.basename(save_path)} is not a Big Ambitions save this board can "
+            f"read ({type(exc).__name__}: {exc})"
+        ) from exc
     data = safe_extract(save, names, history_path)
     with open(history_path + ".character", "w", encoding="utf-8") as fh:
         fh.write(save.root.get("characterId") or "default")

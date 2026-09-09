@@ -31,8 +31,11 @@ const ready = (async () => {
   const {loadPyodide} = await import(PYODIDE_URL + "pyodide.mjs");
   py = await loadPyodide({indexURL: PYODIDE_URL});
   say("code", "Loading the board's code");
+  // The page passes its build stamp on this worker's URL; the Python files
+  // are fetched with the same stamp so a deploy never mixes old and new.
+  const stamp = new URL(self.location.href).searchParams.get("v") || "dev";
   for (const file of ["ba_save.py", "ba_dashboard.py"]) {
-    const res = await fetch(`py/${file}`, {cache: "no-store"});
+    const res = await fetch(`py/${file}?v=${stamp}`, {cache: "no-store"});
     if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
     py.FS.writeFile(`/${file}`, await res.text());
   }
@@ -98,7 +101,11 @@ onmessage = (e) => {
         postMessage({kind: "built", id: msg.id, data, history: readText(HISTORY), ms: 0});
       }
     } catch (err) {
-      postMessage({kind: "failed", id: msg.id, error: String(err && err.message || err)});
+      // Pyodide hands back a whole traceback; the last line is the sentence
+      // that matters, minus the exception class in front of it.
+      const lines = String(err && err.message || err).trim().split(String.fromCharCode(10));
+      const last = lines[lines.length - 1].replace(/^[\w.]+(Error|Exception): /, "");
+      postMessage({kind: "failed", id: msg.id, error: last});
     }
   });
 };

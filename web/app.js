@@ -1,9 +1,14 @@
 /* The page side of the in-browser board.
  *
- * Owns the worker, the source bar at the top, the locale file, and what the
- * browser remembers between visits. Hands the board its numbers through
- * window.LEDGER_SOURCE, which the board's own script picks up instead of the
- * local server it would otherwise poll.
+ * Owns the worker, the landing screen, the source row in the board's header,
+ * the locale file, and what the browser remembers between visits. Hands the
+ * board its numbers through window.LEDGER_SOURCE, which the board's own
+ * script picks up instead of the local server it would otherwise poll.
+ *
+ * One set of controls, two homes. On the landing the status card, the folder
+ * button and the rarer controls are laid out in full. When a save loads the
+ * landing is hidden and the same elements are moved: the card and Update into
+ * the source row under the masthead, everything else into the More menu.
  *
  * Two ways in. Where the browser has the File System Access API (Chrome,
  * Edge) the folder button takes a live directory handle: Update rescans it
@@ -20,12 +25,13 @@
   const isSave = (f) => f && /\.hsg$/i.test(f.name);
   const isLocale = (f) => f && /\.json$/i.test(f.name);
   const canHandle = typeof window.showDirectoryPicker === "function";
+  const onBoard = () => document.body.classList.contains("has-board");
 
   const stored = {
     get(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } },
     set(key, value) {
       try { localStorage.setItem(key, value); return true; }
-      catch (e) { note(`Could not remember ${key === HISTORY_KEY ? "history" : "the game text"}: browser storage is full or blocked.`, "warn"); return false; }
+      catch (e) { note("warn", `Could not remember ${key === HISTORY_KEY ? "history" : "the game text"}.`, "Browser storage is full or blocked."); return false; }
     },
   };
 
@@ -64,17 +70,20 @@
 
   let handlers = null;    // what the board wants told: changed(data), stale(why), lost()
   let lastFile = null;    // the File most recently built, for rebuilds after naming
+  let lastGood = null;    // the File behind the board on screen
   let dirHandle = null;   // live folder handle, Chromium only
   let busy = false;
+  let runtimeReady = false;
   const pending = new Map();
   let nextId = 1;
 
-  const worker = new Worker("worker.js", {type: "module"});
+  // The build stamp on the URL means a deploy is never served a stale worker.
+  const worker = new Worker("worker.js?v=" + (window.LEDGER_BUILD || "dev"), {type: "module"});
   worker.onmessage = (e) => {
     const msg = e.data;
     if (msg.kind === "progress") {
-      if (msg.stage === "ready") setStatus("ready", "Ready");
-      else setStatus("busy", msg.detail);
+      if (msg.stage === "ready") { runtimeReady = true; if (!busy) idleState(); }
+      else if (!lastFile) state("busy", "Preparing the reader…", msg.detail);
       return;
     }
     const p = pending.get(msg.id);
@@ -87,7 +96,7 @@
       p.reject(new Error(msg.error));
     }
   };
-  worker.onerror = (e) => setStatus("bad", `The worker failed: ${e.message}`);
+  worker.onerror = (e) => state("bad", "The reader failed to start", e.message);
 
   function ask(msg, transfer) {
     return new Promise((resolve, reject) => {
@@ -97,42 +106,106 @@
     });
   }
 
-  /* --- the source card ---------------------------------------------- */
+  /* --- the status card and its note ------------------------------------ */
   const fmtTime = (ms) => new Date(ms).toLocaleString(undefined, {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
+  const fileLine = (file, extra) =>
+    `${file.name} · saved ${fmtTime(file.lastModified)}${extra ? ` · ${extra}` : ""}`;
 
-  function setStatus(tone, text) {
+  function state(tone, headline, meta) {
     $("srcCard").dataset.tone = tone;
-    $("srcStatus").textContent = text;
+    $("srcStatus").textContent = headline;
+    $("srcMeta").textContent = meta || "";
     const btn = $("updateBtn");
     btn.disabled = busy || !(dirHandle || lastFile);
-    btn.textContent = document.body.classList.contains("has-board") || !dirHandle || lastFile
-      ? "Update" : "Open newest save";
+    btn.textContent = !onBoard() && dirHandle && !lastFile ? "Open newest save →" : "Update";
   }
-  function setSource(file, secs) {
-    $("srcFile").textContent = file ? file.name : "No save loaded";
-    $("srcMeta").textContent = file
-      ? `saved ${fmtTime(file.lastModified)}${secs ? ` · built in ${secs} s` : ""}`
-      : "";
+  function idleState() {
+    if (lastGood) state("ok", "Up to date", fileLine(lastGood));
+    else if (dirHandle) state("remembered", "Folder remembered", "one click opens its newest save");
+    else state("ready", "No save loaded", runtimeReady ? "ready to read" : "");
   }
-  function closeMenu() {
-    $("srcMenu").classList.remove("open");
-    $("menuBtn").setAttribute("aria-expanded", "false");
-  }
-  function note(text, tone) {
+  function note(tone, text, sub, recover) {
     const el = $("srcNote");
-    el.textContent = text;
-    el.dataset.tone = tone || "";
     el.hidden = !text;
+    el.dataset.tone = tone || "";
+    $("noteText").textContent = text || "";
+    $("noteSub").textContent = sub || "";
+    $("recoverBtn").hidden = !recover;
   }
 
+  /* --- where the controls live ------------------------------------------ */
+  function place() {
+    const board = onBoard();
+    const landing = $("landing");
+    if (board) {
+      const row = $("sourceRow");
+      if (!row.contains($("srcCard"))) {
+        row.appendChild($("srcCard"));
+        row.appendChild($("boardControls").content.cloneNode(true));
+        $("sourceActions").insertBefore($("updateBtn"), $("srcMenu"));
+        $("menuSourceSlot").append($("folderBtn"), $("savePickLabel"));
+        $("menuChipSlot").appendChild($("localeChip"));
+        $("menuHelpSlot").appendChild($("help"));
+        $("menuFootSlot").append(...$("footSlot").children);
+        $("sourceNote").appendChild($("srcNote"));
+        $("folderBtn").textContent = "Choose save folder";
+        $("folderBtn").className = "lg-btn";
+        $("help").open = false;
+        wireMenu();
+      }
+    } else {
+      const ret = !!dirHandle;
+      landing.dataset.visit = ret ? "return" : "first";
+      $("welcomeTitle").innerHTML = ret ? "Back to your company." : "Your company,<br>at a glance.";
+      $("welcomeLede").textContent = ret
+        ? "Your save folder is remembered; open its newest save to bring the board up to date."
+        : "Turn your Big Ambitions save into a daily board, built in your browser with nothing uploaded.";
+      const fb = $("folderBtn");
+      if (ret) {
+        fb.textContent = "Choose a different folder";
+        fb.className = "lg-btn";
+        $("entrySecondary").prepend(fb);
+        $("entryActions").prepend($("updateBtn"));
+      } else {
+        fb.innerHTML = 'Choose save folder <span aria-hidden="true">→</span>';
+        fb.className = "lg-btn primary large";
+        $("entryActions").prepend(fb);
+      }
+      $("updateBtn").className = "lg-btn primary large";
+    }
+  }
+  function wireMenu() {
+    $("menuBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = !$("srcMenu").classList.contains("open");
+      $("srcMenu").classList.toggle("open", open);
+      $("menuBtn").setAttribute("aria-expanded", String(open));
+    });
+    $("srcMenu").addEventListener("click", (e) => e.stopPropagation());
+  }
+  function closeMenu() {
+    const m = $("srcMenu");
+    if (!m) return;
+    m.classList.remove("open");
+    $("menuBtn").setAttribute("aria-expanded", "false");
+  }
+  function enterBoard() {
+    if (onBoard()) return;
+    document.body.classList.add("has-board");
+    place();
+    window.scrollTo(0, 0);
+  }
+
+  /* --- building ----------------------------------------------------------- */
   async function buildFrom(file) {
     if (busy) return;
     busy = true;
     lastFile = file;
-    setSource(file, null);
-    setStatus("busy", `Reading ${file.name}`);
+    state("busy", "Reading the save…", fileLine(file));
+    if (lastGood) note("info", `${fmtTime(lastGood.lastModified)} snapshot still shown below. It will update when this save is ready.`);
+    else note("");
     const t = performance.now();
     try {
       const bytes = await file.arrayBuffer();
@@ -141,22 +214,19 @@
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes]);
       busy = false;
-      setSource(file, ((performance.now() - t) / 1000).toFixed(1));
-      setStatus("ok", "Up to date");
+      lastGood = file;
       note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
-      if (!document.body.classList.contains("has-board")) {
-        document.body.classList.add("has-board");
-        closeMenu();
-        window.scrollTo(0, 0);
-      }
-      $("updateBtn").textContent = "Update";
+      enterBoard();
+      state("ok", "Up to date", fileLine(file, `built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
     } catch (err) {
       busy = false;
-      setStatus("bad", "Could not read the save");
-      note(err.name === "NotReadableError"
-        ? "The game has rewritten this file since it was chosen. Choose the folder again."
-        : err.message, "bad");
+      state("bad", "Could not read the save", `${file.name} · attempted ${fmtTime(Date.now())}`);
+      const rewritten = err.name === "NotReadableError";
+      note("bad",
+        rewritten ? "The game has rewritten this file since it was chosen." : err.message,
+        lastGood ? `Last good board kept · saved ${fmtTime(lastGood.lastModified)}` : "",
+        true);
       if (handlers) handlers.stale(err.message);
     }
   }
@@ -181,16 +251,18 @@
   }
 
   async function loadFromHandle(handle, why) {
-    setStatus("busy", why || "Looking for the newest save");
-    const files = await scanHandle(handle);
+    state("busy", why || "Looking for the newest save", handle.name);
+    let files;
+    try { files = await scanHandle(handle); }
+    catch (err) { state("bad", "Could not read the folder", handle.name); note("bad", err.message, "", true); return; }
     const newest = newestOf(files);
     if (!newest) {
-      setStatus("bad", "No save found");
-      note("No .hsg save in that folder. Choose the folder named Big Ambitions inside SaveGames.", "warn");
+      state("bad", "No save found", handle.name);
+      note("warn", "No .hsg save in that folder.", "Choose the folder named Big Ambitions inside SaveGames.", true);
       return;
     }
-    if (lastFile && newest.name === lastFile.name && newest.lastModified === lastFile.lastModified) {
-      setStatus("ok", `No newer save than ${newest.name}`);
+    if (lastGood && newest.name === lastGood.name && newest.lastModified === lastGood.lastModified) {
+      state("ok", "No newer save found", fileLine(newest));
       return;
     }
     await buildFrom(newest);
@@ -213,10 +285,10 @@
   async function update() {
     if (busy) return;
     if (dirHandle) {
-      const state = await dirHandle.queryPermission({mode: "read"});
-      if (state !== "granted") {
+      const have = await dirHandle.queryPermission({mode: "read"});
+      if (have !== "granted") {
         const asked = await dirHandle.requestPermission({mode: "read"});
-        if (asked !== "granted") { setStatus("bad", "Folder access was not granted"); return; }
+        if (asked !== "granted") { state("bad", "Folder access was not granted", dirHandle.name); return; }
       }
       await loadFromHandle(dirHandle, "Checking for a newer save");
     } else if (canHandle) {
@@ -236,6 +308,15 @@
     chip.title = has
       ? "Product names, recipes and station capacities come from the game's en.json. Click to replace it."
       : "Pick the game's en.json so product names, recipes and station capacities are known. Without it names are slugs.";
+    $("asideEyebrow").textContent = has ? "Remembered on this device" : "One-time set-up";
+    $("asideText").innerHTML = has
+      ? "Product names, recipes and station capacities are ready."
+      : "Choose the game's <code>en.json</code> for product names, recipes and station capacities.";
+    $("asideQuiet").textContent = has
+      ? "Click the chip to replace en.json."
+      : "Remembered in this browser. You can open a save without it; recipes and capacities will be unavailable.";
+    const hint = $("menuChipHint");
+    if (hint) hint.textContent = has ? "en.json remembered · click to replace" : "Pick en.json for names, recipes and capacities";
   }
 
   async function takeLocale(file) {
@@ -243,11 +324,11 @@
     try {
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== "object" || !("ba:neighborhood_global" in parsed)) {
-        note("That file is not the game's en.json (no ba: keys inside).", "warn");
+        note("warn", "That file is not the game's en.json.", "No ba: keys inside.");
         return;
       }
     } catch (e) {
-      note("That file is not JSON.", "warn");
+      note("warn", "That file is not JSON.");
       return;
     }
     if (stored.set(LOCALE_KEY, text)) note("");
@@ -272,8 +353,7 @@
   /* --- wiring ------------------------------------------------------------ */
   window.addEventListener("DOMContentLoaded", async () => {
     localeState();
-    setSource(null);
-    setStatus("busy", "Starting the Python runtime");
+    state("busy", "Preparing the reader…", "Loading the Python runtime · about 6 MB, cached after the first visit");
     if (!canHandle) $("folderBtn").title = "Pick the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
 
     const take = (files) => {
@@ -281,30 +361,19 @@
       const save = newestOf(list);
       const locale = list.find(isLocale);
       if (locale) takeLocale(locale);
-      if (save) {
-        const n = list.filter(isSave).length;
-        if (n > 1) note(`Newest of ${n} saves: ${save.webkitRelativePath || save.name}.`, "");
-        buildFrom(save);
-      } else if (!locale) {
-        note("That is neither a .hsg save nor en.json.", "warn");
-      }
+      if (save) buildFrom(save);
+      else if (!locale) note("warn", "That is neither a .hsg save nor en.json.");
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
-    $("menuBtn").addEventListener("click", (e) => {
-      e.stopPropagation();
-      const menu = $("srcMenu");
-      const open = !menu.classList.contains("open");
-      menu.classList.toggle("open", open);
-      $("menuBtn").setAttribute("aria-expanded", String(open));
-    });
-    document.addEventListener("click", (e) => { if (!$("srcMenu").contains(e.target)) closeMenu(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+    $("recoverBtn").addEventListener("click", pickFolder);
     $("updateBtn").addEventListener("click", update);
     $("folderPick").addEventListener("change", (e) => take(e.target.files));
     $("savePick").addEventListener("change", (e) => take(e.target.files));
     $("localePick").addEventListener("change", (e) => take(e.target.files));
     $("localeChip").addEventListener("click", () => $("localePick").click());
+    document.addEventListener("click", closeMenu);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
 
     // Drop anywhere on the page. The veil says so while a file is over it.
     const veil = $("dropVeil");
@@ -316,25 +385,20 @@
 
     document.querySelectorAll("button.copy").forEach((btn) => btn.addEventListener("click", async () => {
       const text = $(btn.dataset.copy).textContent;
-      try { await navigator.clipboard.writeText(text); btn.textContent = "copied"; }
-      catch (e) { btn.textContent = "select and copy it"; }
-      setTimeout(() => { btn.textContent = "copy"; }, 1800);
+      try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+      catch (e) { btn.textContent = "Select and copy"; }
+      setTimeout(() => { btn.textContent = "Copy"; }, 1800);
     }));
     $("forgetHistory").addEventListener("click", () => {
       try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
-      note("History forgotten. The next save starts a fresh record.", "");
+      note("info", "History forgotten. The next save starts a fresh record.");
     });
 
-    // A folder chosen on an earlier visit: Update brings it back with one
-    // permission click. The browser will not grant it without a click.
-    if (canHandle) {
-      const kept = await handles.get("saves");
-      if (kept) {
-        dirHandle = kept;
-        $("srcFile").textContent = "Folder remembered";
-        $("srcMeta").textContent = "one click brings back the newest save";
-        setStatus("ready", "Ready");
-      }
-    }
+    // A folder chosen on an earlier visit: one click brings back its newest
+    // save. The browser will not grant folder access without a click.
+    if (canHandle) dirHandle = await handles.get("saves");
+    place();
+    if (runtimeReady || dirHandle) idleState();
+    if (dirHandle) note("info", "Your browser may ask for folder access when you open it.");
   });
 })();

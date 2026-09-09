@@ -1,5 +1,5 @@
-<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
 <title>Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,21 +50,33 @@ section.measured{content-visibility:visible}
 
 /* masthead ---------------------------------------------------------- */
 .mast{
-  display:flex; flex-wrap:wrap; align-items:flex-end; gap:20px 32px;
-  padding:34px 0 20px; border-bottom:3px solid var(--ink);
+  display:flex; flex-wrap:wrap; align-items:center; gap:16px 32px;
+  padding:26px 0 20px; border-bottom:2px solid var(--ink);
 }
-.mast h1{
-  margin:0; font-size:clamp(34px,5.5vw,58px); font-weight:800;
-  letter-spacing:-.03em; line-height:.94; text-wrap:balance;
+.mast .identity h1{
+  margin:6px 0 0; font-size:clamp(34px,4.5vw,50px); font-weight:800;
+  letter-spacing:-.04em; line-height:1.02; text-wrap:balance;
 }
 .mast h1 span{color:var(--accent)}
-.mast-meta{display:flex; gap:26px; margin-left:auto; flex-wrap:wrap}
+.mast .clock{margin-left:auto; font-family:"IBM Plex Mono",monospace; white-space:nowrap}
+.mast .clock b{font-size:17px; font-weight:500}
+.mast .clock b i{font-style:normal; color:var(--ink-3); margin:0 4px}
+.mast .clock small{display:block; font-size:11px; color:var(--ink-2); margin-top:3px}
+.mast-meta{display:flex; gap:24px; flex-wrap:wrap; border-left:1px solid var(--rule); padding-left:26px}
 .mast-meta div{display:flex; flex-direction:column; gap:2px}
+.mast-local{align-self:flex-start; font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-2); white-space:nowrap}
+.mast-local:empty{display:none}
+.source-row:empty, .source-note:empty{display:none}
+@media (max-width:760px){
+  .mast .clock{margin-left:0}
+  .mast-meta{border-left:0; padding-left:0}
+}
 .eyebrow{
   font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:500;
   letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
 }
-.mast-meta strong{font-size:17px; font-weight:600; letter-spacing:-.01em}
+.eyebrow span{color:var(--accent)}
+.mast-meta strong{font-size:22px; font-weight:500; letter-spacing:-.01em; line-height:1.2}
 
 /* kpi --------------------------------------------------------------- */
 /* Four tiles, one row; two-up on a narrow window. */
@@ -433,130 +445,231 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 <style>
 [hidden]{display:none!important}
 /* The board gives every section content-visibility:auto, which implies paint
-   containment and would clip the dropdown to the strip. Not here. */
-.landing{max-width:1180px;margin:0 auto;padding:18px 24px 0;content-visibility:visible;contain:none}
-.landing h1{font-size:22px;margin:0;letter-spacing:-.01em;line-height:1.2}
-.landing h1 span{color:var(--accent)}
-.landing .lede{margin:6px 0 0;color:var(--ink-2);max-width:70ch}
-.src{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px}
-.src .card{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--rule);
-  border-radius:6px;padding:8px 12px;min-width:260px;flex:1 1 300px;max-width:560px}
-.src .card .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-3);flex:none}
-.src .card[data-tone="busy"] .dot{background:var(--warn);animation:srcpulse 1s ease-in-out infinite}
-.src .card[data-tone="ok"] .dot{background:var(--pos)}
-.src .card[data-tone="bad"] .dot{background:var(--neg)}
-@keyframes srcpulse{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.src .card .dot{animation:none!important}}
-.src .card .txt{display:flex;flex-direction:column;min-width:0;flex:1}
-.src .card .txt b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.src .card .txt span{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
-.src .card em{font-style:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-2);white-space:nowrap}
-.src .btn{font:inherit;font-size:13px;border:1px solid var(--rule);border-radius:4px;padding:7px 12px;background:var(--raised);
-  color:var(--ink);cursor:pointer;line-height:1.2;white-space:nowrap}
-.src .btn:hover{border-color:var(--ink-3)}
-.src .btn:disabled{opacity:.45;cursor:default}
-.src .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-.src .btn.primary:disabled{background:var(--raised);border-color:var(--rule);color:var(--ink-3);font-weight:500}
-.src label.btn input{display:none}
-.src .chip{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;border:1px solid var(--rule);border-radius:999px;
-  padding:4px 10px;background:var(--surface);color:var(--ink-2);cursor:pointer;white-space:nowrap}
-.src .chip i{width:7px;height:7px;border-radius:50%;background:var(--warn)}
-.src .chip[data-state="ok"] i{background:var(--pos)}
-.src .chip[data-state="ok"]{color:var(--ink-3)}
-.src .more{font-size:12px;color:var(--ink-3);white-space:nowrap}
-.src .more a{color:var(--ink-3)}
-.src .link{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--ink-3);text-decoration:underline;cursor:pointer}
-.src details.help{font-size:12px;color:var(--ink-2)}
-.src details.help summary{cursor:pointer;color:var(--ink-3);text-decoration:underline;list-style:none;white-space:nowrap}
-.src details.help summary::-webkit-details-marker{display:none}
-.src details.help[open]{flex-basis:100%;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px 14px}
-.src details.help[open] summary{margin-bottom:6px;text-decoration:none;color:var(--ink)}
-.src details.help p{margin:4px 0;max-width:none}
-.src details.help code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;background:var(--raised);padding:2px 6px;border-radius:3px;user-select:all}
-.src details.help .muted{color:var(--ink-3)}
-.src button.copy{font:inherit;font-size:11px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:3px;padding:1px 7px;cursor:pointer;margin-left:4px}
-.src button.copy:hover{border-color:var(--ink-3)}
-.srcNote{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink-2);margin:8px 0 0}
-.srcNote[data-tone="bad"]{color:var(--neg)}
-.srcNote[data-tone="warn"]{color:var(--warn)}
-.veil{position:fixed;inset:0;z-index:50;background:color-mix(in srgb,var(--ground) 80%,transparent);display:flex;align-items:center;justify-content:center;pointer-events:none}
+   containment and would clip a dropdown. Not here. */
+.landing{max-width:1240px;margin:0 auto;padding:0 24px;content-visibility:visible;contain:none}
+body.has-board .landing{display:none}
+body:not(.has-board) .wrap{display:none}
+
+/* shared pieces ------------------------------------------------------ */
+.lg-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:36px;padding:8px 14px;
+  border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;
+  font-weight:500;line-height:1.4;text-decoration:none;white-space:nowrap;cursor:pointer}
+.lg-btn:hover:not(:disabled){border-color:var(--ink-3)}
+.lg-btn:disabled{cursor:default;color:var(--ink-3);background:var(--raised);border-color:var(--rule)}
+.lg-btn.primary{color:#fff;background:var(--accent);border-color:var(--accent);font-weight:600}
+.lg-btn.primary:disabled{color:var(--ink-3);background:var(--raised);border-color:var(--rule);font-weight:500}
+.lg-btn.large{font-size:13px;min-height:44px;padding:12px 18px}
+.lg-btn input{display:none}
+.lg-text{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--ink-2);text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer}
+.lg-text input{display:none}
+.lg-text:hover{color:var(--ink)}
+.lg-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--rule);border-radius:20px;padding:6px 10px;
+  font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);cursor:pointer;white-space:nowrap}
+.lg-chip i{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none}
+.lg-chip[data-state="ok"] i{background:var(--pos)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
+.dot.ok{background:var(--pos)}
+@keyframes lgspin{to{transform:rotate(360deg)}}
+
+/* the status card: a symbol, a headline, a detail line ---------------- */
+.src-card{display:flex;align-items:center;gap:12px;min-width:0}
+.src-card .sym{width:20px;height:20px;display:grid;place-items:center;border-radius:50%;flex:none;font-size:12px;font-weight:600}
+.src-card[data-tone="ready"] .sym::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.src-card[data-tone="remembered"] .sym::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--pos)}
+.src-card[data-tone="ok"] .sym{color:var(--pos);background:var(--accent-soft)}
+.src-card[data-tone="ok"] .sym::before{content:"\2713"}
+.src-card[data-tone="bad"] .sym{border:1px solid var(--neg);color:var(--neg)}
+.src-card[data-tone="bad"] .sym::before{content:"!"}
+.src-card[data-tone="busy"] .sym{border:2px solid var(--rule);border-top-color:var(--warn);border-radius:50%;width:17px;height:17px;
+  animation:lgspin 1s linear infinite}
+@media (prefers-reduced-motion:reduce){.src-card[data-tone="busy"] .sym{animation:none}}
+.src-card .txt{min-width:0}
+.src-card .txt b{display:block;font-size:13px;font-weight:600}
+.src-card[data-tone="bad"] .txt b{color:var(--neg)}
+.src-card[data-tone="busy"] .txt b{color:var(--warn)}
+.src-card .txt span{display:block;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;color:var(--ink-2);
+  margin-top:2px;overflow-wrap:anywhere}
+.src-card .txt span:empty{display:none}
+
+/* the note under the status: an explanation, or an error with a way out */
+.note{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:11px 14px;margin:10px 0 0;
+  font-size:12px;color:var(--ink-2);border-left:2px solid var(--rule);background:var(--raised)}
+.note[data-tone="bad"]{border-left-color:var(--neg)}
+.note[data-tone="warn"]{border-left-color:var(--warn)}
+.note[data-tone="info"]{border-left:0;background:none;padding:8px 0 0}
+.note p{margin:0 0 2px;color:var(--ink)}
+.note[data-tone="info"] p{color:var(--ink-2)}
+.note span{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
+.note span:empty{display:none}
+.source-note .note{margin:10px 0 0}
+.source-note:not(:empty)+.pages{margin-top:10px}
+
+/* the landing ---------------------------------------------------------- */
+.onb-mast{display:flex;justify-content:space-between;align-items:center;padding:23px 0;border-bottom:2px solid var(--ink)}
+.onb-mast .eyebrow{font-size:12px}
+.local{display:inline-flex;align-items:center;gap:7px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;color:var(--ink-2)}
+.welcome{display:grid;grid-template-columns:minmax(0,1fr) 265px;gap:60px;padding:40px 0 32px}
+.welcome h2{font-size:44px;font-weight:800;letter-spacing:-.045em;line-height:1.08;margin:0;text-wrap:balance}
+.welcome .lede{max-width:550px;color:var(--ink-2);font-size:15px;line-height:1.7;margin:17px 0 0}
+.entry-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:27px}
+.entry-actions #updateBtn:disabled{display:none}
+.drop-hint{font-size:12px;color:var(--ink-2)}
+.drop-hint code{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.entry-secondary{display:flex;gap:22px;margin-top:13px;font-size:12px;min-height:18px}
+.entry-secondary .lg-btn{border:0;background:none;padding:0;min-height:0;font-size:12px;font-weight:400;color:var(--ink-2);
+  text-decoration:underline;text-underline-offset:3px}
+.entry-secondary .lg-btn:hover{color:var(--ink)}
+.entry-status{margin-top:28px;min-height:47px}
+.game-text{border-left:1px solid var(--rule);padding-left:28px;align-self:center}
+.game-text .lg-chip{margin:14px 0 12px}
+.game-text p{font-size:12px;line-height:1.8;color:var(--ink-2);margin:0}
+.game-text p code{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.game-text p.quiet{font-size:11px;margin-top:10px}
+.onb-bottom{border-top:1px solid var(--rule)}
+details.help summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 0;font-size:12px;
+  color:var(--ink-2);cursor:pointer;list-style:none}
+details.help summary::-webkit-details-marker{display:none}
+details.help summary::after{content:"+";font-size:14px;color:var(--ink-3)}
+details.help[open] summary{color:var(--ink)}
+details.help[open] summary::after{content:"\2013"}
+.help-content{padding:0 0 20px;font-size:12px;color:var(--ink-2)}
+.help-content>p{max-width:850px;line-height:1.8;margin:0}
+.help-content>p:last-child{margin-top:12px;font-size:11px}
+.path-label{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9px;text-transform:uppercase;letter-spacing:.07em;margin:14px 0 6px}
+.path-row{display:flex;align-items:center;gap:14px;background:var(--raised);padding:9px 12px;border:1px solid var(--rule-soft)}
+.path-row code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;flex:1;overflow-wrap:anywhere;user-select:all;color:var(--ink)}
+.path-row button{font:inherit;font-size:11px;border:1px solid var(--rule);border-radius:3px;padding:4px 10px;background:var(--surface);
+  color:var(--ink);cursor:pointer;flex:none}
+.help-content .mac{font-size:10px;margin:7px 0}
+.help-content .mac code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;overflow-wrap:anywhere;user-select:all}
+.onb-foot{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--rule);padding:15px 0;
+  font-size:11px;color:var(--ink-2)}
+.foot-links{display:flex;gap:20px}
+.foot-links a{color:var(--ink-2)}
+.veil{position:fixed;inset:0;z-index:70;background:color-mix(in srgb,var(--ground) 80%,transparent);display:flex;align-items:center;
+  justify-content:center;pointer-events:none}
 .veil div{border:2px dashed var(--accent);border-radius:10px;padding:26px 40px;font-size:18px;font-weight:600;color:var(--accent);background:var(--surface)}
 
-/* The "more" menu: inline on the landing, a dropdown on the board. */
-.src .menu{display:contents}
-.src .menu > .toggle{display:none}
-.src .menu-body{display:contents}
-body:not(.has-board) #updateBtn:disabled{display:none}
+/* the board's source row ----------------------------------------------- */
+.source-row{display:flex;align-items:center;gap:24px;min-height:68px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.source-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
+.source-actions .lg-btn.primary{min-width:98px}
+.menu{position:relative}
+.menu-panel{display:none;position:absolute;right:0;top:calc(100% + 8px);width:320px;padding:10px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:5px;box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);z-index:40;
+  max-height:min(650px,80vh);overflow:auto}
+.menu.open .menu-panel{display:block}
+.menu.open>.lg-btn{background:var(--raised);border-color:var(--ink-3)}
+.menu-heading{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);padding:6px 10px}
+.menu-panel .lg-btn{display:flex;width:100%;justify-content:flex-start;border:0;background:none;padding:10px;border-radius:3px;font-size:13px;font-weight:500;min-height:0}
+.menu-panel .lg-btn:hover{background:var(--raised)}
+.menu-hint{font-size:11px;color:var(--ink-2);margin:4px 10px 10px}
+.menu-divider{border-top:1px solid var(--rule);margin:6px 0 12px}
+.menu-panel .lg-chip{margin-left:9px}
+.menu-panel details.help{margin-top:12px;border-top:1px solid var(--rule);padding:0 10px}
+.menu-panel details.help summary{padding:12px 0}
+.menu-panel .help-content{padding-bottom:12px}
+.menu-panel .path-row{flex-wrap:wrap}
+.menu-panel .path-row code{flex-basis:100%;font-size:10px}
+.menu-foot{border-top:1px solid var(--rule);padding:14px 10px 5px;display:flex;justify-content:space-between;font-size:11px}
+.menu-foot .foot-links{width:100%;justify-content:space-between}
 
-body:not(.has-board) .wrap{display:none}
-body.has-board .landing h1, body.has-board .landing .lede{display:none}
-body.has-board .landing{padding:10px 24px 0;position:relative;z-index:60}
-body.has-board .src{margin-top:0;gap:8px}
-body.has-board .src .card{padding:5px 10px;min-width:220px;flex:0 1 460px}
-body.has-board .src .card .txt b{font-size:13px}
-body.has-board .src .btn{padding:5px 11px;font-size:12.5px}
-body.has-board .src .menu{display:block;position:relative;margin-left:auto}
-body.has-board .src .menu > .toggle{display:inline-block}
-body.has-board .src .menu-body{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:260px;
-  background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);
-  flex-direction:column;align-items:stretch;gap:6px}
-body.has-board .src .menu.open .menu-body{display:flex}
-body.has-board .src .menu-body .btn, body.has-board .src .menu-body .chip{text-align:left;justify-content:flex-start;border-radius:4px;width:100%}
-body.has-board .src .menu-body details.help[open]{flex-basis:auto;padding:8px 10px}
-body.has-board .src .menu-body .more{margin:2px 4px 0}
+@media (max-width:1050px){.welcome{gap:30px;grid-template-columns:minmax(0,1fr) 220px}.welcome h2{font-size:38px}.game-text{padding-left:22px}}
+@media (max-width:760px){.welcome{grid-template-columns:1fr;gap:24px;padding-top:30px}.welcome h2{font-size:36px}
+  .game-text{border-left:0;border-top:1px solid var(--rule);padding:22px 0 0}.source-row{gap:14px;flex-wrap:wrap}
+  .menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}.note{flex-wrap:wrap}}
 </style>
-<section class="landing">
-  <h1>Big Ambitions <span>Ledger</span></h1>
-  <p class="lede">A progress board read straight from your Big Ambitions save. Choose the save folder, or drop a save anywhere on this
-    page, and the board is built here in your browser. Nothing is uploaded and no game file is touched.</p>
-  <div class="src">
-    <div class="card" id="srcCard" data-tone="busy">
-      <i class="dot"></i>
-      <div class="txt"><b id="srcFile">No save loaded</b><span id="srcMeta"></span></div>
-      <em id="srcStatus">Starting</em>
-    </div>
-    <button type="button" class="btn primary" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
-    <div class="menu" id="srcMenu">
-      <button type="button" class="btn toggle" id="menuBtn" aria-haspopup="true" aria-expanded="false" title="Change the folder, pick one file, load the game text, and more">More &#9662;</button>
-      <div class="menu-body">
-        <button type="button" class="btn" id="folderBtn" title="Pick the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">Choose save folder</button>
-        <label class="btn" title="Pick one specific .hsg file instead">One save file<input type="file" id="savePick" accept=".hsg"></label>
-        <button type="button" class="chip" id="localeChip" data-state="missing"><i></i><span>Game text missing</span></button>
-        <details class="help">
-          <summary>Where is my save?</summary>
-          <p>The folder is hidden in Explorer, so browsing will not find it. Copy the path, paste it into the dialog's <i>File name</i>
-            box, press Enter, and the folder opens. Choose the <code>Big Ambitions</code> folder itself; the company folders inside it
-            have generated names and cannot be told apart by eye, so the page takes the newest save across all of them. The game
-            writes a <code>Recover</code> save every five minutes while you play.</p>
-          <p><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code>
-            <button type="button" class="copy" data-copy="savePath">copy</button>
-            <span class="muted">Windows. On a Mac: ~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</span></p>
-          <p><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code>
-            <button type="button" class="copy" data-copy="localePath">copy</button>
-            <span class="muted">where en.json lives: the game's product names, recipes and station capacities</span></p>
-          <p class="muted">Your browser may ask whether to "upload" or "let this site view" the folder. That is its wording for
-            letting this page read it; nothing leaves your computer. Checked on game build 3674. The Python runtime the page
-            needs is about 6 MB, fetched once and cached.</p>
-        </details>
-        <span class="more"><a href="https://github.com/PeterHartwieg/big-ambitions-ledger" title="MIT-licensed; report a save that will not build there">source</a> ·
-          <button type="button" class="link" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">forget history</button></span>
+<section class="landing" id="landing" data-visit="first">
+  <header class="onb-mast">
+    <div class="eyebrow">Big Ambitions <span>Ledger</span></div>
+    <span class="local"><i class="dot ok"></i>In browser</span>
+  </header>
+  <div class="welcome">
+    <div class="welcome-copy">
+      <h2 id="welcomeTitle">Your company,<br>at a glance.</h2>
+      <p class="lede" id="welcomeLede">Turn your Big Ambitions save into a daily board, built in your browser with nothing uploaded.</p>
+      <div class="entry-actions" id="entryActions">
+        <button type="button" class="lg-btn primary large" id="folderBtn" title="Pick the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">Choose save folder <span aria-hidden="true">&rarr;</span></button>
+        <button type="button" class="lg-btn primary large" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
+        <span class="drop-hint">or drop a <code>.hsg</code> save anywhere</span>
+      </div>
+      <div class="entry-secondary" id="entrySecondary">
+        <label class="lg-btn" id="savePickLabel" title="Pick one specific .hsg file instead">One save file<input type="file" id="savePick" accept=".hsg"></label>
+      </div>
+      <div class="entry-status" id="entryStatus">
+        <div class="src-card" id="srcCard" data-tone="busy"><span class="sym" aria-hidden="true"></span><div class="txt"><b id="srcStatus">Starting</b><span id="srcMeta"></span></div></div>
+        <div class="note" id="srcNote" hidden><div><p id="noteText"></p><span id="noteSub"></span></div><button type="button" class="lg-btn" id="recoverBtn" hidden>Choose save folder</button></div>
       </div>
     </div>
-    <input type="file" id="folderPick" webkitdirectory directory multiple hidden>
-    <input type="file" id="localePick" accept=".json" hidden>
+    <aside class="game-text">
+      <div class="eyebrow" id="asideEyebrow">One-time set-up</div>
+      <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="missing"><i></i><span>Game text missing</span></button></div>
+      <p id="asideText">Choose the game's <code>en.json</code> for product names, recipes and station capacities.</p>
+      <p class="quiet" id="asideQuiet">Remembered in this browser. You can open a save without it; recipes and capacities will be unavailable.</p>
+    </aside>
   </div>
-  <p class="srcNote" id="srcNote" hidden></p>
+  <div class="onb-bottom">
+    <div id="helpSlot">
+      <details class="help" id="help" open>
+        <summary>Where is my save?</summary>
+        <div class="help-content">
+          <p>In the folder picker, paste the Windows path into <b>File name</b> and press Enter. Choose the <b>Big Ambitions</b> folder; the newest save is found across the company folders inside it, whose generated names cannot be told apart by eye.</p>
+          <div class="path-label">Save folder &middot; Windows</div>
+          <div class="path-row"><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code><button type="button" class="copy" data-copy="savePath">Copy</button></div>
+          <p class="mac">On macOS: <code>~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</code></p>
+          <div class="path-label">Game text &middot; choose en.json here</div>
+          <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
+          <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build 3674; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
+        </div>
+      </details>
+    </div>
+    <div class="onb-foot">
+      <span>Save files are only read.</span>
+      <div class="foot-links" id="footSlot">
+        <a href="https://github.com/PeterHartwieg/big-ambitions-ledger" title="MIT-licensed; report a save that will not build there">Source &#8599;</a>
+        <button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="folderPick" webkitdirectory directory multiple hidden>
+  <input type="file" id="localePick" accept=".json" hidden>
   <div class="veil" id="dropVeil" hidden><div>Drop the save to load it</div></div>
 </section>
+<!-- The board's source controls, empty until a save loads. app.js moves the
+     card and the Update button here and the rest into the More menu. -->
+<template id="boardControls">
+  <div class="source-actions" id="sourceActions">
+    <div class="menu" id="srcMenu">
+      <button type="button" class="lg-btn" id="menuBtn" aria-haspopup="true" aria-expanded="false">More <span aria-hidden="true">&#8964;</span></button>
+      <div class="menu-panel">
+        <div class="menu-heading">Save source</div>
+        <div id="menuSourceSlot"></div>
+        <p class="menu-hint">Or drop a .hsg save anywhere.</p>
+        <div class="menu-divider"></div>
+        <div id="menuChipSlot"></div>
+        <p class="menu-hint" id="menuChipHint"></p>
+        <div id="menuHelpSlot"></div>
+        <div class="menu-foot"><div id="menuFootSlot" class="foot-links"></div></div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <div class="wrap">
   <header class="mast">
-    <div>
+    <div class="identity">
       <div class="eyebrow" id="eyebrow"></div>
       <h1 id="title"></h1>
     </div>
+    <div class="clock" id="clock"></div>
     <div class="mast-meta" id="mastMeta"></div>
+    <span class="mast-local" id="liveSlot"></span>
   </header>
+  <!-- A host page (the in-browser board) fills these with its source controls;
+       the local server page leaves them empty and they take no room. -->
+  <div class="source-row" id="sourceRow"></div>
+  <div class="source-note" id="sourceNote"></div>
 
   <nav class="pages" id="pages" aria-label="Board pages"></nav>
 
@@ -730,7 +843,8 @@ body.has-board .src .menu-body .more{margin:2px 4px 0}
 
   <footer id="footer"></footer>
 </div>
-<script src="app.js"></script>
+<script>window.LEDGER_BUILD = "518584cf24";</script>
+<script src="app.js?v=518584cf24"></script>
 
 <script>
 let D = null;
@@ -1653,19 +1767,20 @@ if(window.ResizeObserver){
 /* --- draw ----------------------------------------------------------- */
 function drawMast(){
   const m = D.meta;
-  $("eyebrow").innerHTML =
-    `Day ${m.day} · ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")} · ${m.cityDate}`
-    + (LIVE ? ` <span class="live" id="live"><b></b><em>${SOURCE.label}</em></span>` : "");
-  /* The save name is the player's own text: set it as text, never as markup. */
+  $("eyebrow").innerHTML = `Big Ambitions <span>Ledger</span>`;
+  /* The save name is the player's own text: set it as text, never as markup.
+     The full stop after it is the board's one flourish. */
   {
     const t = $("title");
-    const words = m.save.trim().split(/\s+/);
-    const last = words.pop();
-    t.textContent = words.length ? words.join(" ") + " " : "";
-    const em = document.createElement("span");
-    em.textContent = last;
-    t.appendChild(em);
+    t.textContent = m.save.trim();
+    const stop = document.createElement("span");
+    stop.textContent = ".";
+    t.appendChild(stop);
   }
+  $("clock").innerHTML =
+    `<b>Day ${m.day}<i>·</i>${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
+    + `<small>${m.cityDate}</small>`;
+  $("liveSlot").innerHTML = LIVE ? `<span class="live" id="live"><b></b><em>${SOURCE.label}</em></span>` : "";
   /* Cash and net worth are tiles; repeating them up here only made the reader
      check whether the two copies agreed. */
   const k = D.kpi;
