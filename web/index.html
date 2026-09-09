@@ -450,28 +450,28 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 .src .card .txt span{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
 .src .card em{font-style:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-2);white-space:nowrap}
 .src .btn{font:inherit;font-size:13px;border:1px solid var(--rule);border-radius:4px;padding:7px 12px;background:var(--raised);
-  color:var(--ink);cursor:pointer;line-height:1.2}
+  color:var(--ink);cursor:pointer;line-height:1.2;white-space:nowrap}
 .src .btn:hover{border-color:var(--ink-3)}
 .src .btn:disabled{opacity:.45;cursor:default}
 .src .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .src .btn.primary:disabled{background:var(--raised);border-color:var(--rule);color:var(--ink-3);font-weight:500}
 .src label.btn input{display:none}
 .src .chip{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;border:1px solid var(--rule);border-radius:999px;
-  padding:4px 10px;background:var(--surface);color:var(--ink-2);cursor:pointer}
+  padding:4px 10px;background:var(--surface);color:var(--ink-2);cursor:pointer;white-space:nowrap}
 .src .chip i{width:7px;height:7px;border-radius:50%;background:var(--warn)}
 .src .chip[data-state="ok"] i{background:var(--pos)}
 .src .chip[data-state="ok"]{color:var(--ink-3)}
-.src .more{font-size:12px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
+.src .more{font-size:12px;color:var(--ink-3);white-space:nowrap}
 .src .more a{color:var(--ink-3)}
 .src .link{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--ink-3);text-decoration:underline;cursor:pointer}
-.src details{font-size:12px;color:var(--ink-2)}
-.src details summary{cursor:pointer;color:var(--ink-3);text-decoration:underline;list-style:none;white-space:nowrap}
-.src details summary::-webkit-details-marker{display:none}
-.src details[open]{flex-basis:100%;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px 14px}
-.src details[open] summary{margin-bottom:6px;text-decoration:none;color:var(--ink)}
-.src details p{margin:4px 0;max-width:none}
-.src details code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;background:var(--raised);padding:2px 6px;border-radius:3px;user-select:all}
-.src details .muted{color:var(--ink-3)}
+.src details.help{font-size:12px;color:var(--ink-2)}
+.src details.help summary{cursor:pointer;color:var(--ink-3);text-decoration:underline;list-style:none;white-space:nowrap}
+.src details.help summary::-webkit-details-marker{display:none}
+.src details.help[open]{flex-basis:100%;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px 14px}
+.src details.help[open] summary{margin-bottom:6px;text-decoration:none;color:var(--ink)}
+.src details.help p{margin:4px 0;max-width:none}
+.src details.help code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;background:var(--raised);padding:2px 6px;border-radius:3px;user-select:all}
+.src details.help .muted{color:var(--ink-3)}
 .src button.copy{font:inherit;font-size:11px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:3px;padding:1px 7px;cursor:pointer;margin-left:4px}
 .src button.copy:hover{border-color:var(--ink-3)}
 .srcNote{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink-2);margin:8px 0 0}
@@ -479,9 +479,29 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 .srcNote[data-tone="warn"]{color:var(--warn)}
 .veil{position:fixed;inset:0;z-index:50;background:color-mix(in srgb,var(--ground) 80%,transparent);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .veil div{border:2px dashed var(--accent);border-radius:10px;padding:26px 40px;font-size:18px;font-weight:600;color:var(--accent);background:var(--surface)}
+
+/* The "more" menu: inline on the landing, a dropdown on the board. */
+.src .menu{display:contents}
+.src .menu > .toggle{display:none}
+.src .menu-body{display:contents}
+body:not(.has-board) #updateBtn:disabled{display:none}
+
 body:not(.has-board) .wrap{display:none}
-body.has-board .landing .lede{display:none}
-body.has-board .landing{padding-bottom:4px}
+body.has-board .landing h1, body.has-board .landing .lede{display:none}
+body.has-board .landing{padding:10px 24px 0}
+body.has-board .src{margin-top:0;gap:8px}
+body.has-board .src .card{padding:5px 10px;min-width:220px;flex:0 1 460px}
+body.has-board .src .card .txt b{font-size:13px}
+body.has-board .src .btn{padding:5px 11px;font-size:12.5px}
+body.has-board .src .menu{display:block;position:relative;margin-left:auto}
+body.has-board .src .menu > .toggle{display:inline-block}
+body.has-board .src .menu-body{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:260px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);
+  flex-direction:column;align-items:stretch;gap:6px}
+body.has-board .src .menu.open .menu-body{display:flex}
+body.has-board .src .menu-body .btn, body.has-board .src .menu-body .chip{text-align:left;justify-content:flex-start;border-radius:4px;width:100%}
+body.has-board .src .menu-body details.help[open]{flex-basis:auto;padding:8px 10px}
+body.has-board .src .menu-body .more{margin:2px 4px 0}
 </style>
 <section class="landing">
   <h1>Big Ambitions <span>Ledger</span></h1>
@@ -494,27 +514,32 @@ body.has-board .landing{padding-bottom:4px}
       <em id="srcStatus">Starting</em>
     </div>
     <button type="button" class="btn primary" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
-    <button type="button" class="btn" id="folderBtn" title="Pick the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">Choose save folder</button>
-    <label class="btn" title="Pick one specific .hsg file instead">One save file<input type="file" id="savePick" accept=".hsg"></label>
-    <button type="button" class="chip" id="localeChip" data-state="missing"><i></i><span>Game text missing</span></button>
-    <details>
-      <summary>Where is my save?</summary>
-      <p>The folder is hidden in Explorer, so browsing will not find it. Copy the path, paste it into the dialog's <i>File name</i>
-        box, press Enter, and the folder opens. Choose the <code>Big Ambitions</code> folder itself; the company folders inside it
-        have generated names and cannot be told apart by eye, so the page takes the newest save across all of them. The game
-        writes a <code>Recover</code> save every five minutes while you play.</p>
-      <p><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code>
-        <button type="button" class="copy" data-copy="savePath">copy</button>
-        <span class="muted">Windows. On a Mac: ~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</span></p>
-      <p><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code>
-        <button type="button" class="copy" data-copy="localePath">copy</button>
-        <span class="muted">where en.json lives: the game's product names, recipes and station capacities</span></p>
-      <p class="muted">Your browser may ask whether to "upload" or "let this site view" the folder. That is its wording for
-        letting this page read it; nothing leaves your computer. Checked on game build 3674. The Python runtime the page
-        needs is about 6 MB, fetched once and cached.</p>
-    </details>
-    <span class="more"><a href="https://github.com/PeterHartwieg/big-ambitions-ledger" title="MIT-licensed; report a save that will not build there">source</a> ·
-      <button type="button" class="link" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">forget history</button></span>
+    <div class="menu" id="srcMenu">
+      <button type="button" class="btn toggle" id="menuBtn" aria-haspopup="true" aria-expanded="false" title="Change the folder, pick one file, load the game text, and more">More &#9662;</button>
+      <div class="menu-body">
+        <button type="button" class="btn" id="folderBtn" title="Pick the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">Choose save folder</button>
+        <label class="btn" title="Pick one specific .hsg file instead">One save file<input type="file" id="savePick" accept=".hsg"></label>
+        <button type="button" class="chip" id="localeChip" data-state="missing"><i></i><span>Game text missing</span></button>
+        <details class="help">
+          <summary>Where is my save?</summary>
+          <p>The folder is hidden in Explorer, so browsing will not find it. Copy the path, paste it into the dialog's <i>File name</i>
+            box, press Enter, and the folder opens. Choose the <code>Big Ambitions</code> folder itself; the company folders inside it
+            have generated names and cannot be told apart by eye, so the page takes the newest save across all of them. The game
+            writes a <code>Recover</code> save every five minutes while you play.</p>
+          <p><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code>
+            <button type="button" class="copy" data-copy="savePath">copy</button>
+            <span class="muted">Windows. On a Mac: ~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</span></p>
+          <p><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code>
+            <button type="button" class="copy" data-copy="localePath">copy</button>
+            <span class="muted">where en.json lives: the game's product names, recipes and station capacities</span></p>
+          <p class="muted">Your browser may ask whether to "upload" or "let this site view" the folder. That is its wording for
+            letting this page read it; nothing leaves your computer. Checked on game build 3674. The Python runtime the page
+            needs is about 6 MB, fetched once and cached.</p>
+        </details>
+        <span class="more"><a href="https://github.com/PeterHartwieg/big-ambitions-ledger" title="MIT-licensed; report a save that will not build there">source</a> ·
+          <button type="button" class="link" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">forget history</button></span>
+      </div>
+    </div>
     <input type="file" id="folderPick" webkitdirectory directory multiple hidden>
     <input type="file" id="localePick" accept=".json" hidden>
   </div>

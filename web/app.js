@@ -105,13 +105,20 @@
   function setStatus(tone, text) {
     $("srcCard").dataset.tone = tone;
     $("srcStatus").textContent = text;
-    $("updateBtn").disabled = busy || !(dirHandle || lastFile);
+    const btn = $("updateBtn");
+    btn.disabled = busy || !(dirHandle || lastFile);
+    btn.textContent = document.body.classList.contains("has-board") || !dirHandle || lastFile
+      ? "Update" : "Open newest save";
   }
   function setSource(file, secs) {
     $("srcFile").textContent = file ? file.name : "No save loaded";
     $("srcMeta").textContent = file
       ? `saved ${fmtTime(file.lastModified)}${secs ? ` · built in ${secs} s` : ""}`
       : "";
+  }
+  function closeMenu() {
+    $("srcMenu").classList.remove("open");
+    $("menuBtn").setAttribute("aria-expanded", "false");
   }
   function note(text, tone) {
     const el = $("srcNote");
@@ -138,7 +145,12 @@
       setStatus("ok", "Up to date");
       note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
-      document.body.classList.add("has-board");
+      if (!document.body.classList.contains("has-board")) {
+        document.body.classList.add("has-board");
+        closeMenu();
+        window.scrollTo(0, 0);
+      }
+      $("updateBtn").textContent = "Update";
     } catch (err) {
       busy = false;
       setStatus("bad", "Could not read the save");
@@ -279,6 +291,15 @@
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
+    $("menuBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = $("srcMenu");
+      const open = !menu.classList.contains("open");
+      menu.classList.toggle("open", open);
+      $("menuBtn").setAttribute("aria-expanded", String(open));
+    });
+    document.addEventListener("click", (e) => { if (!$("srcMenu").contains(e.target)) closeMenu(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
     $("updateBtn").addEventListener("click", update);
     $("folderPick").addEventListener("change", (e) => take(e.target.files));
     $("savePick").addEventListener("change", (e) => take(e.target.files));
@@ -311,8 +332,8 @@
       if (kept) {
         dirHandle = kept;
         $("srcFile").textContent = "Folder remembered";
-        $("srcMeta").textContent = "click Update to load the newest save";
-        $("updateBtn").disabled = false;
+        $("srcMeta").textContent = "one click brings back the newest save";
+        setStatus("ready", "Ready");
       }
     }
   });
