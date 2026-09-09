@@ -110,8 +110,22 @@
   const fmtTime = (ms) => new Date(ms).toLocaleString(undefined, {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
-  const fileLine = (file, extra) =>
-    `${file.name} · saved ${fmtTime(file.lastModified)}${extra ? ` · ${extra}` : ""}`;
+  // The game writes "Recover #N.hsg" every five minutes; a player never chose
+  // that name, so the card calls it an autosave and leads with the company,
+  // which is read from inside the file. The raw file name stays on hover.
+  let company = "";
+  const isAutosave = (file) => /^recover/i.test(file.name);
+  const fileLine = (file, extra) => {
+    const when = fmtTime(file.lastModified);
+    const base = file.name.replace(/\.hsg$/i, "");
+    const what = isAutosave(file)
+      ? `autosave from ${when}`
+      : base.toLowerCase() === company.toLowerCase()
+      ? `saved ${when}`
+      : `${base} saved ${when}`;
+    $("srcCard").title = file.name;
+    return `${company ? company + " · " : ""}${what}${extra ? ` · ${extra}` : ""}`;
+  };
 
   function state(tone, headline, meta) {
     $("srcCard").dataset.tone = tone;
@@ -215,6 +229,7 @@
       }, [bytes]);
       busy = false;
       lastGood = file;
+      company = (data.meta && data.meta.save) || company;
       note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
       enterBoard();
