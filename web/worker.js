@@ -16,7 +16,7 @@ const SAVE_DIR = "/save";
 const DATA_DIR = "/data";
 const HISTORY = `${DATA_DIR}/market_history.json`;
 const LOCALE = `${DATA_DIR}/en.json`;
-const NAMES = `${DATA_DIR}/names.json`;  // display names shipped with the page
+const NAMES = `${DATA_DIR}/gametext.json`;  // game text shipped with the page
 
 let py = null;
 let lastSave = null; // {name, mtime} of the save currently in the filesystem
@@ -42,7 +42,7 @@ const ready = (async () => {
   }
   py.FS.mkdir(SAVE_DIR);
   py.FS.mkdir(DATA_DIR);
-  const names = await fetch(`py/names.json?v=${stamp}`, {cache: "no-store"});
+  const names = await fetch(`py/gametext.json?v=${stamp}`, {cache: "no-store"});
   if (names.ok) py.FS.writeFile(NAMES, await names.text());
   await py.runPythonAsync(`
 import sys

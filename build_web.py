@@ -17,10 +17,12 @@ import shutil
 from ba_dashboard import VERIFIED_BUILD, render
 from ba_save import DEFAULT_LOCALE, load_locale
 
-# The display names shipped with the page: what the game calls its items,
-# business types, neighbourhoods, stations and skills. Nothing else from the
-# locale travels; the help pages that recipes and capacities are read from
-# stay the player's own file to pick.
+# The game text shipped with the page: the display names of items, business
+# types, neighbourhoods, stations and skills, and the few help pages the
+# analysis reads: recipes, the item pages that state a station's customer
+# capacity, each business type's range, and the workstation pages. Nothing
+# else from the locale travels. A player's own en.json, when given, is laid
+# over this, so a newer game wins.
 NAME_PREFIXES = (
     "ba:itemname_",
     "ba:businesstype_",
@@ -28,6 +30,21 @@ NAME_PREFIXES = (
     "ba:factoryworkstationtype_",
     "ba:skill_",
 )
+
+
+def ships(key: str, text: str) -> bool:
+    """Whether one locale entry travels with the page."""
+    if key.startswith(NAME_PREFIXES) or key.startswith("recipes_"):
+        return True
+    if key.startswith("help_factory_workstation_"):
+        return True
+    if not key.endswith("_content"):
+        return False
+    if key.startswith(("help_recipes_", "help_ba:businesstype_")):
+        return True
+    if key.startswith("help_ba:itemname_"):
+        return "Customer Capacity" in text or "employee station" in text
+    return False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -216,9 +233,9 @@ details.help[open] summary::after{content:"\2013"}
     </div>
     <aside class="game-text">
       <div class="eyebrow" id="asideEyebrow">One-time set-up</div>
-      <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="missing"><i></i><span>Game text: names only</span></button></div>
-      <p id="asideText">Product and business names are built in. Choose the game's <code>en.json</code> for recipes and station capacities as well.</p>
-      <p class="quiet" id="asideQuiet">Remembered in this browser. Without it the factory and capacity views stay empty.</p>
+      <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
+      <p id="asideText">Names, recipes and station capacities come with the page, from game build __BUILD__.</p>
+      <p class="quiet" id="asideQuiet">If your game is newer, click the chip and choose its <code>en.json</code>; it is remembered in this browser and wins over the built-in text.</p>
     </aside>
   </div>
   <div class="onb-bottom">
@@ -230,7 +247,7 @@ details.help[open] summary::after{content:"\2013"}
           <div class="path-label">Save folder &middot; Windows</div>
           <div class="path-row"><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code><button type="button" class="copy" data-copy="savePath">Copy</button></div>
           <p class="mac">On macOS: <code>~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</code></p>
-          <div class="path-label">Game text &middot; en.json lives here (recipes and capacities)</div>
+          <div class="path-label">Game text &middot; en.json lives here, only needed if your game is newer than the built-in text</div>
           <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
           <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.__ANALYTICS_NOTE__</p>
         </div>
@@ -281,7 +298,7 @@ def stamp() -> str:
     import hashlib
 
     h = hashlib.md5()
-    for name in ("web/app.js", "web/worker.js", "ba_save.py", "ba_dashboard.py", "web/py/names.json"):
+    for name in ("web/app.js", "web/worker.js", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()[:10]
@@ -301,11 +318,11 @@ def main() -> None:
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     locale = load_locale(DEFAULT_LOCALE)
     if not locale:
-        raise SystemExit(f"no game text at {DEFAULT_LOCALE}; names.json cannot be built")
-    names = {k: v for k, v in locale.items() if k.startswith(NAME_PREFIXES)}
-    with open(os.path.join(WEB, "py", "names.json"), "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(names, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    print(f"names.json: {len(names)} display names")
+        raise SystemExit(f"no game text at {DEFAULT_LOCALE}; gametext.json cannot be built")
+    text = {k: v for k, v in locale.items() if ships(k, v)}
+    with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
+        json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    print(f"gametext.json: {len(text)} entries")
     # The template carries its own charset tag; a viewport tag is all the page adds.
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
     if ANALYTICS_TOKEN:

@@ -322,20 +322,22 @@
   function localeState() {
     const has = !!stored.get(LOCALE_KEY);
     const chip = $("localeChip");
-    chip.dataset.state = has ? "ok" : "missing";
-    chip.querySelector("span").textContent = has ? "Game text loaded" : "Game text: names only";
+    // The page ships the text it needs; a player's own en.json only matters
+    // when the game has moved on from the build the page was made against.
+    chip.dataset.state = "ok";
+    chip.querySelector("span").textContent = has ? "Game text: your en.json" : "Game text built in";
     chip.title = has
-      ? "Recipes and station capacities come from the game's en.json. Click to replace it."
-      : "Product and business names are built in. Choose the game's en.json for recipes and station capacities as well.";
-    $("asideEyebrow").textContent = has ? "Remembered on this device" : "One-time set-up";
+      ? "Your own en.json is remembered in this browser and wins over the built-in text. Click to replace it."
+      : "Names, recipes and station capacities come with the page. If your game is newer, click to choose its en.json.";
+    $("asideEyebrow").textContent = has ? "Remembered on this device" : "Game text";
     $("asideText").innerHTML = has
-      ? "Recipes and station capacities are ready."
-      : "Product and business names are built in. Choose the game's <code>en.json</code> for recipes and station capacities as well.";
+      ? "Your own <code>en.json</code> is in use, ahead of the text built into the page."
+      : "Names, recipes and station capacities come with the page.";
     $("asideQuiet").textContent = has
-      ? "Click the chip to replace en.json."
-      : "Remembered in this browser. Without it the factory and capacity views stay empty.";
+      ? "Click the chip to replace it."
+      : "If your game is newer, click the chip and choose its en.json; it is remembered in this browser and wins over the built-in text.";
     const hint = $("menuChipHint");
-    if (hint) hint.textContent = has ? "en.json remembered · click to replace" : "Choose en.json for recipes and capacities";
+    if (hint) hint.textContent = has ? "your en.json is remembered · click to replace" : "built in · choose en.json only if your game is newer";
   }
 
   async function takeLocale(file) {
