@@ -792,6 +792,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                 "price": money(prices.get(item, 0)),
                 "revenue": money(revenue_by_item[item] / span),
                 "soldPerDay": round(units_sold[item] / span),
+                "soldPerWeek": round(units_sold[item] / span * 7),
             }
         )
     lines.sort(key=lambda x: (x["cover"] is None, x["cover"] if x["cover"] else 0))
@@ -993,7 +994,7 @@ def _loans(save: Save, names: Names) -> list:
 
 def _products(businesses: list) -> list:
     agg = collections.defaultdict(
-        lambda: {"revenue": 0.0, "units": 0, "stock": 0, "stores": 0}
+        lambda: {"revenue": 0.0, "units": 0, "week": 0, "stock": 0, "stores": 0}
     )
     for b in businesses:
         for line in b["lines"]:
@@ -1002,6 +1003,7 @@ def _products(businesses: list) -> list:
             rec = agg[line["item"]]
             rec["revenue"] += line["revenue"]
             rec["units"] += line["soldPerDay"]
+            rec["week"] += line["soldPerWeek"]
             rec["stock"] += line["units"]
             rec["stores"] += 1 if line["revenue"] else 0
     out = [{"item": k, **v} for k, v in agg.items()]
@@ -4735,6 +4737,8 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 /* The rival count stays: it is a decision input. Small and quiet, bottom right. */
 .heat .rv{position:absolute; right:5px; bottom:3px; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-2); line-height:1}
 .heat.none{color:var(--ink-3)}
+/* With the numbers on, the rival badge gets its own line under the figure. */
+#market.numbers .heat{height:auto; padding-bottom:17px}
 .legend-note{
   margin:10px 2px 0; font-size:12px; color:var(--ink-3);
   display:flex; gap:18px; flex-wrap:wrap;
@@ -4900,9 +4904,9 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
         <p id="marketNote"></p>
         <div class="tools" id="marketTools"></div>
       </div>
-      <div class="movers card pad" id="movers"></div>
-      <div class="card scroll" style="margin-top:14px"><table id="market"></table></div>
+      <div class="card scroll"><table id="market"></table></div>
       <p class="legend-note" id="marketLegend"></p>
+      <div class="movers card pad" id="movers" style="margin-top:14px"></div>
     </section>
 
     <section id="secPlan" data-sub="plan">
@@ -4924,7 +4928,8 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
     <div class="duo" style="margin-top:28px">
       <section style="margin:0" id="secProducts">
         <div class="head"><h2>Products</h2><p id="productNote"></p></div>
-        <div class="card scroll"><table id="products"></table></div>
+        <div class="card scroll"><table id="products"></table>
+          <div class="expand-more" id="productsMore" hidden></div></div>
       </section>
       <section style="margin:0" id="secPayroll">
         <div class="head"><h2>Payroll</h2><p id="payrollNote"></p></div>
@@ -5037,12 +5042,16 @@ function sparkline(values, colour){
    resetting whichever tab, filter or sort order the reader had chosen. */
 let alertFilter="all", chartWindow=30, shown=new Set(["profit7","profit"]);
 let view="pnl", sortKey=null, sortDir=-1, stockView="shops", marketView="types";
+/* The demand grid sorts by one neighbourhood at a time; numbers in the cells are
+   off until asked for, the shade carries the reading. */
+let marketSortHood=null, marketSortDir=-1, marketDetail=false;
 let rhythmView="customers";
 let flowPick = null;
 /* Everything that is folded away by default, so a refresh does not re-fold what
    the reader has just opened. */
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
 let showAllStock = false, showAllShelves = false, showAllExpand = false, showRhythmCards = false;
+let showAllProducts = false;
 /* Which kinds of "Needs attention" finding to show, set by buildAlertSettingsPanel()
    before the first render. */
 let alertGroupPrefs = {};
@@ -5813,6 +5822,18 @@ toolbar($("logisticsTools"), [["changes","Needs a change"],["all","Everything"]]
 toolbar($("marketTools"), [["types","By business type"],["mine","What I sell"],
                            ["new","Not selling yet"],["all","Everything"]],
   () => marketView, v => marketView = v, () => drawMarket());
+{
+  const b = el("button", null, "Show numbers");
+  b.id = "marketNumbers";
+  b.style.marginLeft = "10px";
+  b.setAttribute("aria-pressed", marketDetail);
+  b.onclick = () => {
+    marketDetail = !marketDetail;
+    b.setAttribute("aria-pressed", marketDetail);
+    drawMarket();
+  };
+  $("marketTools").append(b);
+}
 
 $("legend").innerHTML = Object.entries(SERIES).map(([id,s]) =>
   `<span data-s="${id}" role="button" tabindex="0" style="cursor:pointer">
@@ -6634,6 +6655,7 @@ function heatCell(cell){
     style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
     title="${cell.hood}: demand ${cell.demand}, ${marks.join(", ")}${
       cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">${
+    marketDetail ? `<span class="v">${cell.demand}</span>` : ""}${
     cell.sell ? `<span class="dot" aria-label="you sell here"></span>` : ""}${
     cell.hype ? `<span class="mk">▲</span>` : ""}<span class="rv" title="${cell.monopoly ? "only you sell here" : cell.providers + " sellers"}">${
     cell.monopoly ? "only you" : cell.providers}</span></td>`;
@@ -6649,6 +6671,7 @@ function typeCell(cell){
     style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
     title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average${
       cell.here ? ", you have a store here" : ""}">${
+    marketDetail ? `<span class="v" title="average demand across the range">${cell.demand}</span>` : ""}${
     cell.here ? `<span class="dot" aria-label="you have a store here"></span>` : ""}<span class="rv" title="${cell.providers} rival sellers on average across the range">${cell.providers}</span></td>`;
 }
 
@@ -6685,38 +6708,84 @@ function drawExpansion(){
   if(toggle) toggle.onclick = () => { showAllExpand = !showAllExpand; drawExpansion(); };
 }
 
+/* One click on a neighbourhood puts its strongest demand at the top; a second
+   flips it. Cells with no reading stay at the bottom either way. */
+function hoodHeaders(hoods){
+  const at = hoods.indexOf(marketSortHood);
+  const q = h => h.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return hoods.map((h, j) => `<th data-hood="${q(h)}" title="Sort by demand in ${q(h)}" ${
+    j === at ? `data-dir="${marketSortDir < 0 ? "desc" : "asc"}"` : ""}>${h}</th>`).join("");
+}
+function hoodSorted(rows, hoods){
+  const at = hoods.indexOf(marketSortHood);
+  if(at < 0) return rows;
+  // A type cell is shaded by how much of its range is wanted, a product cell
+  // by demand; the sort follows the shade, with the average as the tiebreak.
+  const d = r => { const c = r.cells[at];
+    return !c ? null : "strong" in c ? [c.strong / c.count, c.demand] : [c.demand, 0]; };
+  return rows.slice().sort((a, b) => {
+    const x = d(a), y = d(b);
+    if(x === null || y === null) return (x === null) - (y === null);
+    return ((x[0] - y[0]) || (x[1] - y[1])) * marketSortDir;
+  });
+}
+function wireMarketSort(){
+  const t = $("market");
+  t.querySelectorAll("thead th[data-hood]").forEach(th => th.onclick = () => {
+    const h = th.dataset.hood;
+    if(marketSortHood === h) marketSortDir = -marketSortDir;
+    else { marketSortHood = h; marketSortDir = -1; }
+    drawMarket();
+  });
+  const first = t.querySelector("thead th.l");
+  if(first){
+    first.title = marketSortHood ? "Back to the usual order" : "";
+    first.onclick = () => { marketSortHood = null; drawMarket(); };
+  }
+}
+
 function drawMarket(){
   const m = D.market;
+  if(marketSortHood && !m.hoods.includes(marketSortHood)) marketSortHood = null;
+  const sortedBy = !marketSortHood ? ""
+    : marketView === "types"
+    ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
+    : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`;
+  const numbers = $("marketNumbers");
+  if(numbers) numbers.setAttribute("aria-pressed", marketDetail);
+  $("market").classList.toggle("numbers", marketDetail);
   const trend = m.trendDays
     ? `Change over the last ${m.trendDays} days`
     : `Trend history starts building from today`;
-  $("marketNote").textContent = marketView === "types"
+  $("marketNote").textContent = sortedBy || (marketView === "types"
     ? ""
     : marketView === "new"
     ? "Strongest demand first"
-    : trend;
+    : trend);
   $("marketLegend").innerHTML = (marketView === "types"
     ? [`<span>Hover a cell for the numbers: how much of the range is in strong demand (60+), the average, the rivals</span>`,
        `<span>Darker cell = more of the range wanted</span>`,
        `<span>Orange dot = you have a store of this type there</span>`,
-       `<span>Small number = rival sellers, averaged over the range</span>`]
+       `<span>Small number = rival sellers, averaged over the range</span>`,
+       `<span>Click a neighbourhood to sort by its demand</span>`]
     : [`<span>Darker cell = stronger demand</span>`,
        `<span>Orange dot = you sell it there</span>`,
        `<span>Small number = rival sellers</span>`,
-       `<span>▲hype = the game flagged rising demand</span>`]).join("");
+       `<span>▲hype = the game flagged rising demand</span>`,
+       `<span>Click a neighbourhood to sort by its demand</span>`]).join("");
 
   if(marketView === "types"){
     const t = D.market.types;
-    if(m.typesHidden) $("marketNote").textContent =
+    if(m.typesHidden && !sortedBy) $("marketNote").textContent =
       `${m.typesHidden} type${m.typesHidden===1?"":"s"} with under 3 products left out`;
-    $("market").innerHTML = t.length ? `
-      <thead><tr><th class="l">Business type</th>${
-        D.market.hoods.map(h => `<th>${h}</th>`).join("")}</tr></thead>
-      <tbody>${t.map(r => `<tr>
+    $("market").innerHTML = `
+      <thead><tr><th class="l">Business type</th>${hoodHeaders(m.hoods)}</tr></thead>` + (t.length ? `
+      <tbody>${hoodSorted(t, m.hoods).map(r => `<tr>
         <td class="l"><b>${r.type}</b>${r.mine ? ` <span class="chip ok">you run one</span>` : ""}
           <span class="sub">${r.products} products</span></td>
         ${r.cells.map(typeCell).join("")}</tr>`).join("")}</tbody>`
-      : `<tbody><tr><td class="l muted">No business types matched.</td></tr></tbody>`;
+      : `<tbody><tr><td class="l muted">No business types matched.</td></tr></tbody>`);
+    wireMarketSort();
     return;
   }
 
@@ -6749,16 +6818,17 @@ function drawMarket(){
                   || (a.gap?.providers ?? 99) - (b.gap?.providers ?? 99));
     limit = 40;
   }
-  $("market").innerHTML = rows.length ? `
-    <thead><tr><th class="l">Product</th>${
-      m.hoods.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+  rows = hoodSorted(rows, m.hoods);
+  $("market").innerHTML = `
+    <thead><tr><th class="l">Product</th>${hoodHeaders(m.hoods)}</tr></thead>` + (rows.length ? `
     <tbody>${rows.slice(0, limit).map(r => `<tr>
       <td class="l"><b>${r.item}</b>${
         r.make && !r.sell ? ` <span class="chip warn">you make this</span>`
         : r.make ? ` <span class="chip ok">make</span>`
         : r.sell ? ` <span class="chip neutral">sell</span>` : ""}</td>
       ${r.cells.map(heatCell).join("")}</tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">Nothing here.</td></tr></tbody>`;
+    : `<tbody><tr><td class="l" style="color:var(--ink-3)">Nothing here.</td></tr></tbody>`);
+  wireMarketSort();
 }
 
 /* --- plan a chain -----------------------------------------------------
@@ -7030,8 +7100,11 @@ function paintPlan(){
     : `<p class="muted">Nothing to import; this range is bought as finished goods.</p>`);
 }
 
+/* The top of the list is the money; the full list is what a factory planner
+   needs, every product with its week of sales across all stores. */
 function drawProducts(){
-  const rows = D.products.slice(0,14);
+  const TOP = 14, all = D.products;
+  const rows = showAllProducts ? all : all.slice(0, TOP);
   /* A column that is empty on two rows in three is not a column. When most
      products do have a weekday peak it stays; otherwise it moves into the
      row's own tooltip. */
@@ -7041,6 +7114,7 @@ function drawProducts(){
     : `Weekday peaks on hover, ${withPeak} of ${rows.length} have one`;
   $("products").innerHTML = `
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
+      <th title="Sales across all stores over the last 7 days">Units / week</th>
       <th>Avg price</th><th>Stores</th>${showPeak?`<th class="l">Peaks</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>`<tr title="${p.peak
         ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
@@ -7048,11 +7122,21 @@ function drawProducts(){
       <td class="l">${p.item}</td>
       <td class="num">${fmt(p.revenue)}</td>
       <td class="num">${p.units.toLocaleString()}</td>
+      <td class="num">${(p.week ?? p.units * 7).toLocaleString()}</td>
       <td class="num">$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td class="num">${p.stores}</td>
       ${showPeak?`<td class="l">${p.peak
         ? `${p.peak} <span class="muted">+${p.swing} pts</span>`
         : `<span class="muted">—</span>`}</td>`:""}</tr>`).join("")}</tbody>`;
+  const more = $("productsMore");
+  more.hidden = all.length <= TOP;
+  if(!more.hidden){
+    more.innerHTML = `${showAllProducts ? `All ${all.length} shown`
+        : `${all.length - TOP} more below the top ${TOP}`}
+      <button type="button" id="productsToggle" aria-expanded="${showAllProducts}">${
+        showAllProducts ? `just the top ${TOP}` : `show all ${all.length}`}</button>`;
+    $("productsToggle").onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
+  }
 }
 
 /* Payroll, debt and milestones only earn their space when something needs
