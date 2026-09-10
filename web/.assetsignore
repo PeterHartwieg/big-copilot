@@ -2,3 +2,4 @@
 *.hsg
 test-*
 __pycache__/
+market_history.json
