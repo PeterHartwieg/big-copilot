@@ -630,7 +630,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "ledgerDays": len(ledger),
         "alerts": alerts["lines"],
         "minor": alerts["minor"],
-        "goals": _goals(save, names),
+        "goals": _goals(save, names, businesses),
         "weekly": _weekly(save),
     }
 
@@ -915,6 +915,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
+        "people": _people(crew),
         "rhythm": rhythm,
         "customerRhythm": customer_rhythm,
         "swing": _swing(rhythm or customer_rhythm),
@@ -945,6 +946,30 @@ def _crew(crew: list) -> list:
     for entry in roles.values():
         entry["daily"] = money(entry["daily"])
     return sorted(roles.values(), key=lambda r: -r["count"])
+
+
+def _people(crew: list) -> list:
+    """The same crew one person at a time, so a site can name who works it.
+
+    A character without a name — the save permits it, and _staff then reads
+    "?" — still gets a stable label: its role plus a number within the role.
+    """
+    seen = collections.Counter()
+    out = []
+    for person in sorted(crew, key=lambda c: (c["role"], c["name"])):
+        seen[person["role"]] += 1
+        name = person["name"]
+        if name == "?":
+            name = f"{person['role']} {seen[person['role']]}"
+        out.append(
+            {
+                "name": name,
+                "role": person["role"],
+                "absent": bool(person["absent"]),
+                "daily": money(person["daily"]),
+            }
+        )
+    return out
 
 
 def _chain_rhythm(save: Save, buildings: list, daily: list, day: int) -> dict:
@@ -1100,7 +1125,24 @@ def _weekly(save: Save) -> list:
     ]
 
 
-def _goals(save: Save, names: Names) -> dict:
+def _openable_types(names: Names) -> list[str]:
+    """Every business type a player can open, as the game's own F1 pages list them.
+
+    The locale also carries display names for types nobody can open — empty,
+    notimplemented, the IRS, the government, the hospital — so the raw
+    businesstype_* keys overcount. A type gets a help page only where the
+    player can actually run one: the sixteen retail floors, the five
+    agencies, the factory, the warehouse and the headquarters.
+    """
+    found = set()
+    for key in names.locale:
+        match = _BUSINESS_HELP_RE.match(key)
+        if match:
+            found.add(match.group(1))
+    return sorted(found)
+
+
+def _goals(save: Save, names: Names, businesses: list) -> dict:
     """Career totals, with a denominator where the save carries one.
 
     The save lists every diploma the player can study and every story rival,
@@ -1111,14 +1153,25 @@ def _goals(save: Save, names: Names) -> dict:
     ach = save.deref(save.root.get("achievementsData")) or {}
     diplomas = save.items(save.root["PlayerDiplomas"])
     rivals = save.items(save.root.get("specialRivalStates"))
+    goals_done = save.items(save.root["completedPersonalGoals"])
     return {
-        "completed": len(save.items(save.root["completedPersonalGoals"])),
+        "completed": len(goals_done),
         "diplomas": sum(1 for d in diplomas if d.get("completed")),
         "diplomasTotal": len(diplomas),
         "rivalsDefeated": sum(1 for r in rivals if r.get("isDefeated")),
         "rivalsTotal": len(rivals),
         "goodsProduced": ach.get("goodsProducedInFactories", 0),
         "taxesPaid": money(ach.get("taxesPaid", 0)),
+        # Types the player runs versus the types the game offers, and buildings
+        # bought outright (root realEstate, each with its purchase day) versus
+        # every building in the city's table. The goals carry no total: the
+        # save stores only the ids of the ones already completed.
+        "typesRun": len({b["typeSlug"] for b in businesses if b["status"] == "retail"}),
+        "typesTotal": len(_openable_types(names)),
+        "buildingsOwned": len(save.items(save.root.get("realEstate"))),
+        "buildingsTotal": len(load_buildings()),
+        "goalsDone": len(goals_done),
+        "goalsTotal": None,
     }
 
 
