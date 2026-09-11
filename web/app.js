@@ -582,9 +582,14 @@
   function wireLanding() {
     const landing = $("landing");
     if (!landing) return;
-    // Sections arrive: the landing's pieces slide in, staggered, once.
+    // Sections arrive: the landing's pieces slide in, staggered, once. The
+    // delay is dropped after the arrival, or the drop zone's tilt would lag
+    // behind the pointer by it.
     const rv = [...landing.querySelectorAll(".rv")];
-    requestAnimationFrame(() => rv.forEach((el, i) => { el.style.transitionDelay = (i * 70) + "ms"; el.classList.add("in"); }));
+    requestAnimationFrame(() => rv.forEach((el, i) => {
+      el.style.transitionDelay = (i * 70) + "ms"; el.classList.add("in");
+      setTimeout(() => { el.style.transitionDelay = ""; }, 600 + i * 70);
+    }));
     // The drop zone tilts toward the pointer, opens on hover (CSS) and on a
     // drag over the page, and is the folder button by another route.
     const drop = $("drop");
