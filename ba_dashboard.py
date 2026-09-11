@@ -5056,6 +5056,26 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .rules span{padding:3px 8px;border-radius:4px;background:var(--raised);font:500 11px "IBM Plex Mono",monospace;color:var(--ink-2);cursor:help}
 .rules span b{color:var(--ink);font-weight:600;margin-left:4px}
 
+/* the sphere: the dot grown up. It rolls out of the wordmark onto the masthead
+   rule and sits there; it watches the pointer, squishes when clicked and rolls
+   along its shelf as the page scrolls ---------------------------------------- */
+.orb{position:absolute;left:0;top:0;width:100px;height:100px;z-index:6;cursor:pointer;will-change:transform;opacity:0}
+.orb.live{opacity:1}
+.orb i{
+  display:block;width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at var(--hx,32%) var(--hy,30%),#d9ffe8 0%,#7fe3a8 14%,var(--accent) 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 18px 40px #43c07a3d,inset -14px -20px 34px #00000066,inset 6px 8px 18px #ffffff22;
+}
+.orb u{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%),radial-gradient(circle at 62% 80%,#0002 0 3%,transparent 4%),radial-gradient(circle at 40% 22%,#0002 0 2%,transparent 3%);
+}
+.orb .squish{animation:squish .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes squish{0%{scale:1 1}25%{scale:1.28 .74}50%{scale:.86 1.18}75%{scale:1.06 .95}100%{scale:1 1}}
+.orb::after{content:"";position:absolute;left:14%;right:14%;bottom:-9px;height:14px;border-radius:50%;background:#000;opacity:.45;filter:blur(6px);z-index:-1}
+.ring{position:absolute;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:ring .8s ease-out forwards;z-index:0}
+@keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
+
 /* footer ------------------------------------------------------------------- */
 .foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:22px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
 .foot span:last-child{margin-left:auto}
@@ -5078,6 +5098,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     <nav class="nav" id="nav" aria-label="Board pages"></nav>
     <div class="clock tr" id="clock" tabindex="0"
       data-tip="Game time when the save was written. Day 1 was a Monday."></div>
+    <div class="orb" id="orb" aria-hidden="true"><i></i><u></u></div>
   </header>
   <!-- A host page (the in-browser board) fills these with its source controls;
        the local server page leaves them empty and they take no room. -->
@@ -7818,6 +7839,100 @@ function wireReveal(){
   setTimeout(() => rest.forEach(el => el.classList.add("in")), 2500);
 }
 
+/* the sphere is the dot grown up: it leaves the wordmark, rolls along the
+   masthead rule and rests just past the nav. It watches the pointer, squishes
+   when clicked and rolls along its shelf as the page scrolls. Clicking the
+   wordmark rolls out another one, up to three; on the fourth the first ball on
+   the shelf gulps its neighbour to make room. Wired once, on boot; the web
+   shell shows the board only after the first build, so it waits for layout. */
+let sphereWired = false;
+function wireSphere(){
+  if(sphereWired) return;
+  const first = q(".orb"), dotEl = $("dot"), navEl = $("nav"), clockEl = $("clock");
+  if(!first || !dotEl || !navEl) return;
+  if(!navEl.getBoundingClientRect().width){ setTimeout(wireSphere, 200); return; }
+  sphereWired = true;
+  inkHome();  // the underline was homed while the board was hidden, so its width is 0
+  const parent = first.offsetParent || first.parentElement;
+  const GAP = 12, MAX = 3, SIZES = [100, 72, 54];
+  let p0, base, clockLeft;
+  const measure = () => {
+    p0 = parent.getBoundingClientRect();
+    const n = navEl.getBoundingClientRect();
+    base = { x: n.right - p0.left + 40, mid: null };
+    clockLeft = clockEl ? clockEl.getBoundingClientRect().left - p0.left : Infinity;
+  };
+  measure();
+  const d0 = dotEl.getBoundingClientRect();
+  const balls = [];
+  const restX = k => base.x + balls.slice(0, k).reduce((a, b) => a + b.size + GAP, 0);
+  const topOf = size => p0.height - size;
+  const maxRun = () => { const l = balls[balls.length - 1]; return !l ? 0 : Math.max(0, clockLeft - (l.rest + l.size) - 28); };
+  const paint = (b) => {
+    const roll = REDUCED ? 0 : Math.min(maxRun(), window.scrollY * .6);
+    b.el.style.transform = 'translate(' + (b.px + roll).toFixed(1) + 'px,' + b.py.toFixed(1) + 'px) scale(' + b.sc.toFixed(3) + ')';
+    b.seam.style.transform = 'rotate(' + (((b.px - b.sx) + roll) / (Math.PI * b.size) * 360).toFixed(1) + 'deg)';
+  };
+  const squish = (b) => { [b.core, b.seam].forEach(el => { el.classList.remove('squish'); void el.offsetWidth; el.classList.add('squish'); }); };
+  const ring = (b) => { const r = b.el.getBoundingClientRect(), i = document.createElement('i'); i.className = 'ring';
+    i.style.left = (r.left + window.scrollX) + 'px'; i.style.top = (r.top + window.scrollY) + 'px'; i.style.width = r.width + 'px'; i.style.height = r.height + 'px';
+    document.body.appendChild(i); setTimeout(() => i.remove(), 900); };
+  const makeBall = (el, k) => {
+    const size = SIZES[Math.min(k, SIZES.length - 1)], rest = restX(k), top = topOf(size);
+    el.style.width = el.style.height = size + 'px'; el.style.left = rest + 'px'; el.style.top = top + 'px';
+    const sx = d0.left - p0.left + d0.width / 2 - (rest + size / 2), sy = d0.top - p0.top + d0.height / 2 - (top + size / 2), s0 = d0.width / size;
+    const b = { el, core: q('i', el), seam: q('u', el), size, rest, sx, sy, s0, px: sx, py: sy, sc: s0, tx: 0, ty: 0, busy: true };
+    el.addEventListener('click', () => { squish(b); ring(b); });
+    paint(b); el.classList.add('live'); return b;
+  };
+  const enter = (b, delay) => setTimeout(() => {
+    if(REDUCED){ b.px = 0; b.py = 0; b.sc = 1; b.busy = false; paint(b); return; }
+    dotEl.classList.remove('kick'); void dotEl.offsetWidth; dotEl.classList.add('kick');
+    const t0 = performance.now() + 180, dur = 1300, lift = 26;
+    const step = (t) => { const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
+      b.px = b.sx * (1 - e); b.py = b.sy * (1 - e) - Math.sin(p * Math.PI) * lift; b.sc = b.s0 + (1 - b.s0) * e; paint(b);
+      if (p < 1) requestAnimationFrame(step); else b.busy = false; };
+    requestAnimationFrame(step);
+  }, delay);
+  const spawn = () => {
+    if (balls.some(b => b.busy)) return;
+    const el = first.cloneNode(true); el.removeAttribute('id'); parent.appendChild(el);
+    const b = makeBall(el, balls.length); balls.push(b); enter(b, 60);
+  };
+  const eat = () => {
+    const eater = balls[0], meal = balls[1]; if (!eater || !meal || balls.some(b => b.busy)) return;
+    eater.busy = meal.busy = true;
+    const t0 = performance.now(), dur = 520;
+    const dx = (eater.rest + eater.size / 2) - (meal.rest + meal.size / 2), dy = (topOf(eater.size) + eater.size / 2) - (topOf(meal.size) + meal.size / 2);
+    let gulped = false;
+    const step = (t) => { const p = Math.min(1, (t - t0) / dur), e = p * p;
+      meal.px = dx * e; meal.py = dy * e - 12 * Math.sin(p * Math.PI); meal.sc = 1 - .9 * e; paint(meal);
+      if (p > .55 && !gulped) { gulped = true; squish(eater); }
+      if (p < 1) requestAnimationFrame(step); else {
+        meal.el.remove(); balls.splice(1, 1);
+        balls.forEach((b, k) => { const old = b.rest; b.rest = restX(k); b.el.style.left = b.rest + 'px'; b.px += old - b.rest; b.busy = false; });
+        setTimeout(spawn, 220);
+      } };
+    requestAnimationFrame(step);
+  };
+  balls.push(makeBall(first, 0)); enter(balls[0], 400);
+  const wordmark = q('.wordmark');
+  if (wordmark) wordmark.addEventListener('click', () => (balls.length < MAX ? spawn() : eat()));
+  document.addEventListener('mousemove', (e) => balls.forEach(b => {
+    if (b.busy) return;
+    const r = b.el.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy) || 1, k = Math.min(10, d * .1);
+    b.tx = dx / d * k; b.ty = Math.min(0, dy / d * k);
+    b.el.style.setProperty('--hx', (34 + dx / d * 20) + '%'); b.el.style.setProperty('--hy', (32 + dy / d * 20) + '%');
+  }));
+  const loop = () => { balls.forEach(b => { if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; paint(b); } }); requestAnimationFrame(loop); };
+  loop();
+  /* The shelf moves when the window or the fonts do. */
+  const relayout = () => { measure(); balls.forEach((b, k) => { b.rest = restX(k); b.el.style.left = b.rest + 'px'; paint(b); }); };
+  window.addEventListener('resize', relayout);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
+}
+
 /* nav underline follows the pointer, then goes home --------------------------- */
 function inkHome(){
   const nav = $("nav"); if(!nav) return;
@@ -7836,6 +7951,24 @@ const wireNav = once(() => {
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(inkHome);
 });
 
+/* the green dot is a coin: click it and it pays out ---------------------------- */
+const wireCoin = once(() => {
+  const dot = $("dot"); if(!dot) return;
+  dot.addEventListener("click", () => {
+    dot.classList.remove("spin"); void dot.offsetWidth; dot.classList.add("spin");
+    if(REDUCED) return;
+    const r = dot.getBoundingClientRect();
+    for (let i = 0; i < 14; i++) {
+      const c = document.createElement("i"); c.className = "coin";
+      const a = (Math.random() * Math.PI) - Math.PI, d = 60 + Math.random() * 120;
+      c.style.left = (r.left + window.scrollX + 1) + "px"; c.style.top = (r.top + window.scrollY + 1) + "px";
+      c.style.setProperty("--dx", Math.cos(a) * d + "px"); c.style.setProperty("--dy", (Math.abs(Math.sin(a)) * d + 140) + "px");
+      c.style.animationDelay = (Math.random() * .12) + "s";
+      document.body.appendChild(c); setTimeout(() => c.remove(), 1400);
+    }
+  });
+});
+
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
 function wireAll(){
@@ -7849,9 +7982,9 @@ function boot(){
   showPage(PAGES.some(p => p.id === h) ? h
     : SEC_PAGE[h] ? SEC_PAGE[h][0]
     : remembered(PAGE_KEY) || "today", false);
-  /* Bound once: the nav underline. A live refresh re-renders the numbers but
-     never replays it. */
-  wireNav();
+  /* Bound once: the nav underline, the coin, and the sphere's entrance. A live
+     refresh re-renders the numbers but never replays these. */
+  wireNav(); wireCoin(); wireSphere();
 }
 /* A page written with its numbers boots now. One that receives them later,
    as the in-browser board does, boots on the first delivery. */
