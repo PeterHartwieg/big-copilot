@@ -18,3 +18,6 @@ dist/
 web/test-*
 watch.log
 watch.err
+
+# Local research notes, never published
+research/
