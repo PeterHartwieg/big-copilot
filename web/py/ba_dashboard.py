@@ -6487,9 +6487,9 @@ const SEC_PAGE = {
   secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company"], secPayroll:["company"], secGoals:["company"],
 };
-function reveal(secId){
+function reveal(secId, historyMode = "push"){
   const [p, sv] = SEC_PAGE[secId] || ["today"];
-  showPage(p, false);
+  showPage(p, false, historyMode);
   if(sv) showSub(p, sv);
   const sec = $(secId);
   if(sec && !sec.hidden) requestAnimationFrame(() => sec.scrollIntoView({behavior:"smooth", block:"start"}));
@@ -8115,13 +8115,18 @@ function showSub(pageId, id){
   remember(sv.key, id);
   wireReveal();
 }
-function showPage(id, scroll = true){
+function showPage(id, scroll = true, historyMode = "push"){
   if(!PAGES.some(p => p.id === id)) id = "today";
   page = id;
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
   remember(PAGE_KEY, id);
-  try{ if(location.hash !== "#" + id) history.replaceState(null, "", "#" + id); }catch(e){}
+  /* Clicks add a visit; boot normalises the current entry. History replay
+     only renders, so Back/Forward never changes the stack it is traversing. */
+  try{
+    if(historyMode !== "none" && location.hash !== "#" + id)
+      history[historyMode === "replace" ? "replaceState" : "pushState"](null, "", "#" + id);
+  }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
   if(id === "results") drawChart();
@@ -8146,8 +8151,8 @@ Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e
 }));
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
-  if(PAGES.some(p => p.id === h)) showPage(h, false);
-  else if(SEC_PAGE[h]) reveal(h);
+  if(PAGES.some(p => p.id === h)) showPage(h, false, "none");
+  else if(SEC_PAGE[h]) reveal(h, "none");
 });
 
 /* --- which kinds of finding make the list ------------------------------- */
@@ -9023,7 +9028,7 @@ function boot(){
   const h = location.hash.slice(1);
   showPage(PAGES.some(p => p.id === h) ? h
     : SEC_PAGE[h] ? SEC_PAGE[h][0]
-    : remembered(PAGE_KEY) || "today", false);
+    : remembered(PAGE_KEY) || "today", false, "replace");
   /* Bound once: the nav underline, the coin, and the sphere's entrance. A live
      refresh re-renders the numbers but never replays these. */
   wireNav(); wireCoin(); wireSphere();
