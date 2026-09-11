@@ -47,6 +47,40 @@ NEIGHBOURHOODS = {
     "HA": "The Hamptons",
 }
 
+# A neighbourhood's display name back to its tag, so a shop the building table
+# places can wear the same two letters and colour a prefix would have given it.
+HOOD_TAG = {name: tag for tag, name in NEIGHBOURHOODS.items()}
+
+# Every building in the city, from the game's fixed map: make_buildings.py
+# generates ba_buildings.json beside this file, and the browser worker writes it
+# to /data/. A missing table is not an error — the [XX] prefix in the business
+# name is then the only neighbourhood signal, as before the table existed.
+_buildings = None
+
+
+def load_buildings() -> dict:
+    """ba_buildings.json as {(street slug, number): row}, read once.
+
+    Row keys are single letters to keep the file small: s street slug, n number,
+    h neighbourhood, t building type, z size code, m square metres, x traffic.
+    """
+    global _buildings
+    if _buildings is None:
+        for path in (
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_buildings.json"),
+            "/data/ba_buildings.json",  # where the worker puts it in a browser
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    _buildings = {(r["s"], r["n"]): r for r in json.load(fh)}
+                break
+            except (OSError, ValueError):
+                continue  # not here, or unreadable: try the next place
+        else:
+            _buildings = {}
+    return _buildings
+
+
 # Business types that sell to walk-in customers; the rest are support sites.
 # Every physical retail floor the game documents with an F1 help page (the
 # handful of pure office agencies — law firm, travel agency and the like — say
@@ -743,6 +777,11 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     if name and name.startswith("[") and "]" in name:
         tag = name[1 : name.index("]")]
 
+    # The city is fixed, so the building table knows the neighbourhood from the
+    # address alone; the name prefix only covers an address it does not list.
+    building = load_buildings().get(addr)
+    neighbourhood = building["h"] if building else NEIGHBOURHOODS.get(tag, "")
+
     orders = save.items(b["orderHistory"])
     customer_days = [
         (e["dayNumber"], e.get("totalCustomers", 0))
@@ -839,7 +878,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     return {
         "name": name or "Vacant lease",
         "tag": tag,
-        "neighbourhood": NEIGHBOURHOODS.get(tag, ""),
+        "neighbourhood": neighbourhood,
+        # The badge's two letters: the player's own prefix, or the canonical
+        # one for a neighbourhood only the table knows.
+        "code": tag or HOOD_TAG.get(neighbourhood, ""),
         "type": names.label(btype, "Empty"),
         "typeSlug": btype,
         "status": status,
@@ -1506,7 +1548,7 @@ def _supply(
             business["key"],
             business["name"],
             kind_of(business),
-            business["tag"],
+            business["code"],  # prefix or table-derived, like the site badge
             business["neighbourhood"],
             business["type"],
         )
@@ -2985,7 +3027,7 @@ def _type_demand(
                     ),
                     "sell": sum(1 for x in scores if x["sell"]),
                     # A shop of this very type in this neighbourhood, from the
-                    # [XX] prefix in its name; without prefixes this stays off.
+                    # building table or the [XX] prefix in its name.
                     "here": (kind, hood) in stores,
                 }
             )
@@ -3559,24 +3601,31 @@ def _expansion(findings: list, market: dict, businesses: list) -> list:
     ones above the inferred ones, always.
     """
     by_key = {b["key"]: b for b in businesses}
+    buildings = load_buildings()
     out = []
     for finding in findings:
         if finding["kind"] != "cap" or finding["limit"] != "the building":
             continue
         b = by_key[finding["key"]]
-        out.append(
-            {
-                "measured": True,
-                "what": b["name"],
-                "where": b["neighbourhood"] or b["address"],
-                "reason": f"at its {finding['cap']}/h door cap for {finding['hours']} "
-                f"hours a week ({finding['when']})",
-                "number": f"{finding['hours']} h/week at the ceiling, "
-                f"${finding['basket']:,.2f} a customer",
-                "worth": finding["throughput"],
-                "action": finding["fix"],
-            }
-        )
+        # The building itself, when the table knows the address; a site_key is
+        # "slug#number", so only a real address has both halves.
+        slug, _, number = b["key"].partition("#")
+        row = buildings.get((slug, int(number))) if number else None
+        entry = {
+            "measured": True,
+            "what": b["name"],
+            "where": b["neighbourhood"] or b["address"],
+            "reason": f"at its {finding['cap']}/h door cap for {finding['hours']} "
+            f"hours a week ({finding['when']})",
+            "number": f"{finding['hours']} h/week at the ceiling, "
+            f"${finding['basket']:,.2f} a customer",
+            "worth": finding["throughput"],
+            "action": finding["fix"],
+        }
+        if row:
+            entry["traffic"] = row["x"]
+            entry["size"] = row["z"]
+        out.append(entry)
     out.sort(key=lambda r: -r["worth"])
 
     for opening in market.get("openings", []):
@@ -4707,6 +4756,10 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 }
 .exline.measured .tagme{color:var(--accent)}
 .exline.guess .tagme{color:var(--ink-3)}
+/* The building itself, when the address table knows it: quiet facts. */
+.exline .bld{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3); white-space:nowrap;
+}
 .movers{display:grid; gap:1px; background:var(--rule); padding:0}
 .mover{
   background:var(--surface); display:grid; grid-template-columns:auto 1fr auto;
@@ -5019,9 +5072,10 @@ const load = (v, level) => `<span class="chip ${
 const gauge = (v,dp=0) => `<span class="chip neutral">${v.toFixed(dp)}%</span>`
   + `<span class="bar"><i style="width:${Math.min(100,Math.max(v,1.5))}%"></i></span>`;
 
-/* A neighbourhood badge only where the player put a [XX] prefix in the name. */
-const bullet = b => b.tag ? `<span class="bullet" style="background:${LINE_COLOURS[b.tag]||LINE_COLOURS[""]}"
-  title="${b.neighbourhood||"Unassigned"}">${b.tag}</span>` : "";
+/* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
+   shop the building table places. With neither, no badge. */
+const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
+  title="${b.neighbourhood||"Unassigned"}">${b.code}</span>` : "";
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}</span></span></div>`;
 
@@ -6690,7 +6744,8 @@ function drawExpansion(){
   const line = (e, i) => `
         <div class="exline ${e.measured ? "measured" : "guess"}">
           <span class="rank">${i+1}</span>
-          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>
+          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>${
+            e.traffic != null ? ` <span class="bld">traffic ${e.traffic} · ${e.size}</span>` : ""}
             <span class="tagme">${e.measured ? "measured" : "demand grid"}</span>
             <span class="why">${e.reason}; ${e.action}</span></span>
           <span class="num">${e.worth ? fmt(e.worth) + "/day" : e.number}</span>

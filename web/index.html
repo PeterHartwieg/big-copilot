@@ -401,6 +401,10 @@ button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 }
 .exline.measured .tagme{color:var(--accent)}
 .exline.guess .tagme{color:var(--ink-3)}
+/* The building itself, when the address table knows it: quiet facts. */
+.exline .bld{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3); white-space:nowrap;
+}
 .movers{display:grid; gap:1px; background:var(--rule); padding:0}
 .mover{
   background:var(--surface); display:grid; grid-template-columns:auto 1fr auto;
@@ -868,8 +872,8 @@ details.help[open] summary::after{content:"\2013"}
     <div class="foot-links" id="footerLinks"></div>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "2e45c1dbfa";</script>
-<script src="app.js?v=2e45c1dbfa"></script>
+<script>window.LEDGER_BUILD = "387e00eae6";</script>
+<script src="app.js?v=387e00eae6"></script>
 
 <script>
 let D = null;
@@ -940,9 +944,10 @@ const load = (v, level) => `<span class="chip ${
 const gauge = (v,dp=0) => `<span class="chip neutral">${v.toFixed(dp)}%</span>`
   + `<span class="bar"><i style="width:${Math.min(100,Math.max(v,1.5))}%"></i></span>`;
 
-/* A neighbourhood badge only where the player put a [XX] prefix in the name. */
-const bullet = b => b.tag ? `<span class="bullet" style="background:${LINE_COLOURS[b.tag]||LINE_COLOURS[""]}"
-  title="${b.neighbourhood||"Unassigned"}">${b.tag}</span>` : "";
+/* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
+   shop the building table places. With neither, no badge. */
+const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
+  title="${b.neighbourhood||"Unassigned"}">${b.code}</span>` : "";
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}</span></span></div>`;
 
@@ -2611,7 +2616,8 @@ function drawExpansion(){
   const line = (e, i) => `
         <div class="exline ${e.measured ? "measured" : "guess"}">
           <span class="rank">${i+1}</span>
-          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>
+          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>${
+            e.traffic != null ? ` <span class="bld">traffic ${e.traffic} · ${e.size}</span>` : ""}
             <span class="tagme">${e.measured ? "measured" : "demand grid"}</span>
             <span class="why">${e.reason}; ${e.action}</span></span>
           <span class="num">${e.worth ? fmt(e.worth) + "/day" : e.number}</span>

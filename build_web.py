@@ -305,7 +305,7 @@ def stamp() -> str:
     import hashlib
 
     h = hashlib.md5()
-    for name in ("web/app.js", "web/worker.js", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json"):
+    for name in ("web/app.js", "web/worker.js", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()[:10]
@@ -323,6 +323,11 @@ def main() -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
     for name in ("ba_save.py", "ba_dashboard.py"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
+    # The building table travels with the code; make_buildings.py has to have
+    # been run, since the worker hands it to Python as data.
+    shutil.copyfile(
+        os.path.join(HERE, "ba_buildings.json"), os.path.join(WEB, "py", "ba_buildings.json")
+    )
     locale = load_locale(DEFAULT_LOCALE)
     if not locale:
         raise SystemExit(f"no game text at {DEFAULT_LOCALE}; gametext.json cannot be built")
