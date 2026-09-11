@@ -480,8 +480,12 @@
   };
 
   /* --- the landing: reveal, the drop zone, the sphere ------------------ */
+  // The landing's document and window listeners hang off this controller,
+  // so dropping the landing drops them too rather than leaving handlers
+  // that hold its removed nodes for the life of the page.
   let landingLive = true;
-  function stopLanding() { landingLive = false; }
+  const landingEvents = new AbortController();
+  function stopLanding() { landingLive = false; landingEvents.abort(); }
 
   // The sphere is the dot grown up. It leaves the dot after the wordmark,
   // arcs over and rests beside the drop zone, watches the pointer and
@@ -541,7 +545,7 @@
       const d = Math.hypot(dx, dy) || 1, k = Math.min(36, d * .1);
       b.tx = dx / d * k; b.ty = dy / d * k;
       orb.style.setProperty("--hx", (34 + dx / d * 20) + "%"); orb.style.setProperty("--hy", (32 + dy / d * 20) + "%");
-    });
+    }, {signal: landingEvents.signal});
     const loop = () => {
       if (!landingLive) return;
       if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; paint(); }
@@ -550,7 +554,7 @@
     loop();
     // The resting place moves when the window or the fonts do.
     const relayout = () => { if (landingLive) { measure(); paint(); } };
-    window.addEventListener("resize", relayout);
+    window.addEventListener("resize", relayout, {signal: landingEvents.signal});
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
   }
 
