@@ -1913,9 +1913,10 @@ def _assign(cost: list) -> list:
 
 
 def _off_hours(covered: set) -> str:
-    """The hours nobody is posted, as 'Tue 16-24, Thu 16-24'."""
-    parts = []
-    for wd in (1, 2, 3, 4, 5, 6, 0):
+    """Group identical gaps, preserving exception days and split shifts."""
+    weekdays = (1, 2, 3, 4, 5, 6, 0)
+    groups = {}
+    for day, wd in enumerate(weekdays):
         gaps = [h for h in range(24) if (wd, h) not in covered]
         if not gaps:
             continue
@@ -1926,7 +1927,20 @@ def _off_hours(covered: set) -> str:
                 start = h
             prev = h
         runs.append(f"{start}-{prev + 1}")
-        parts.append(f"{WEEKDAYS[wd][:3]} {', '.join(runs)}")
+        groups.setdefault(', '.join(runs), []).append(day)
+    parts = []
+    for hours, days in groups.items():
+        ranges, start, prev = [], days[0], days[0]
+        def day_range(first, last):
+            a, b = (WEEKDAYS[weekdays[d]][:3] for d in (first, last))
+            return a if first == last else f"{a}-{b}"
+        for day in days[1:]:
+            if day != prev + 1:
+                ranges.append(day_range(start, prev))
+                start = day
+            prev = day
+        ranges.append(day_range(start, prev))
+        parts.append(f"{', '.join(ranges)} {hours}")
     return "; ".join(parts)
 
 
@@ -4628,7 +4642,8 @@ body{
 }
 .mono,.num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}.warnc{color:var(--warn)}
-.wrap{width:min(1180px,calc(100% - 80px));margin:0 auto;position:relative;z-index:1;padding-bottom:72px}
+/* Data tables use the available monitor width; prose keeps its own limits. */
+.wrap{width:calc(100% - clamp(32px,5vw,80px));margin:0 auto;position:relative;z-index:1;padding-bottom:72px}
 svg{display:block}
 /* The board runs to a dozen screens, most of it off-view at any moment, and it
    is read on a second monitor while the game has the GPU. Sections that are not
@@ -4653,7 +4668,7 @@ tr.kid.on td{background:var(--accent-soft)}
 .seg select.sitepick{appearance:none; -webkit-appearance:none; font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif; color:var(--ground); background:var(--ink); border:0; border-radius:5px; padding:6px 12px; cursor:pointer; max-width:260px}
 .seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
 .flow .pipe.paused{stroke:var(--neg);stroke-opacity:.7}
-.scrollx{overflow-x:auto}
+.scrollx{overflow-x:auto;max-width:100%;min-width:0}
 #stock td.l+td.l,#importPlan td.l,#topupPlan td.l{white-space:normal}
 .flowpipes{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin:0 0 4px}
 select.linepick{
@@ -4759,18 +4774,20 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .page > .sec:first-child,.page > .duo.sec:first-child{margin-top:32px}
 .subhead{margin-top:28px}
 .subhead + .sec{margin-top:28px}
-.sechead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
-.sechead h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
-.sechead .aside{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sechead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:14px}
+.sechead h2{flex-shrink:0;margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.sechead > .quiet{flex:1 1 20rem;min-width:0}
+.sechead .aside{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%}
 .why{
-  width:18px;height:18px;border-radius:50%;border:1px solid var(--rule);color:var(--ink-3);
+  width:18px;height:18px;flex-shrink:0;border-radius:50%;border:1px solid var(--rule);color:var(--ink-3);
   display:grid;place-items:center;font:500 11px/1 "IBM Plex Mono",monospace;cursor:help;overflow:visible;z-index:30;
 }
 .why i{font-style:normal;display:block}
 .why:hover,.why:focus-visible{color:var(--ink);border-color:var(--ink-3)}
 .why:hover i{animation:qdrop .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes qdrop{0%{transform:translateY(-16px);opacity:0}100%{transform:none;opacity:1}}
-.seg{display:inline-flex;border:1px solid var(--rule);border-radius:7px;padding:2px;gap:2px;background:var(--surface)}
+.seg{display:inline-flex;flex-wrap:wrap;max-width:100%;border:1px solid var(--rule);border-radius:7px;padding:2px;gap:2px;background:var(--surface)}
+.seg a{white-space:nowrap}
 .seg a{padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
 .seg a:hover{color:var(--ink)}
 .seg a.on{background:var(--ink);color:var(--ground)}
@@ -4973,6 +4990,17 @@ tbody tr{transition:background .12s}
 tbody tr:hover{background:var(--surface)}
 tbody td{font-family:"IBM Plex Mono",monospace}
 tbody td.l{font-family:Archivo,sans-serif}
+/* Text may wrap; amounts stay intact. Long notes must not size the table. */
+tbody td.l,td .sub{white-space:normal}
+#stock[data-view="lines"] th:nth-child(2){min-width:15rem}
+.staff-hours{width:clamp(8rem,10vw,12rem);white-space:normal;text-align:left;font-family:Archivo,sans-serif}
+.staff-hours summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;width:fit-content}
+.staff-hours summary::-webkit-details-marker{display:none}
+.staff-hours summary::after{content:"+";color:var(--ink-3)}
+.staff-hours[open] summary::after{content:"−"}
+.staff-hours summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.staff-gaps{font-size:11.5px;color:var(--ink-2);overflow-wrap:anywhere}
+.staff-gaps p{margin:8px 0 0}
 tfoot td{font-family:"IBM Plex Mono",monospace;font-weight:600;border-top:1px solid var(--ink);border-bottom:none}
 .sub{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400;font-family:Archivo,sans-serif}
 .chev{display:inline-block;width:16px;vertical-align:-1px;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
@@ -6194,9 +6222,17 @@ const staffCell = r => {
   if(!r.fullWeek) return "—";
   const full = r.hoursWeek >= r.fullWeek;
   const pct = Math.round(r.hoursWeek / r.fullWeek * 100);
-  return `<span class="chip ${full ? "ok" : pct < 50 ? "bad" : "warn"}">${pct}%</span>${full ? "" :
-    `<span class="sub">${r.gaps.slice(0, 3).map(m => `#${m.slot} off ${m.off}`).join("; ")}${
-      r.gaps.length > 3 ? ` +${r.gaps.length - 3} more` : ""}</span>`}`;
+  const badge = `<span class="chip ${full ? "ok" : pct < 50 ? "bad" : "warn"}">${pct}%</span>`;
+  if(full) return badge;
+  const groups = new Map();
+  for(const m of r.gaps || []){
+    if(!groups.has(m.off)) groups.set(m.off, []);
+    groups.get(m.off).push(m.slot);
+  }
+  if(!groups.size) return badge;
+  const gaps = [...groups].map(([off, slots]) => `<p>Machine${slots.length === 1 ? "" : "s"} ${
+    slots.sort((a,b) => a-b).map(slot => `#${attr(slot)}`).join(", ")} off ${attr(off)}</p>`).join("");
+  return `<details class="staff-hours"><summary>${badge}<span class="sub">Off hours</span></summary><div class="staff-gaps">${gaps}</div></details>`;
 };
 /* Where a line's machines sit in the factory's workstation list, so a row
    here can be matched to a machine on the game screen. */
@@ -7122,6 +7158,7 @@ const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6
 
 function drawStock(){
   const v = SUPPLY_VIEWS[stockView];
+  $("stock").dataset.view = stockView;
   const all = v.rows();
   const worth = all.filter(v.keep);
   /* The rows worth reading lead; under them, where the view can rank the

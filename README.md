@@ -822,6 +822,21 @@ run `python build_web.py` so the browser copies match.
 Run `python -m unittest discover -s tests` for the portable planner regressions.
 These require Node.js for the embedded JavaScript checks and do not need a save file.
 
+The UI regressions also run in a real browser. Install the test-only dependencies
+with `npm install --no-save --package-lock=false playwright` and
+`npx playwright install chromium`, then run `node --test tests/*.test.cjs`.
+Alternatively, set `PLAYWRIGHT_CHANNEL=msedge` or `chrome` to use an installed browser.
+Set `BOARD_TARGET=web` to check the generated browser page after rebuilding it.
+The layout fixtures are synthetic; no game or save is needed. They cover desktop
+table sizing, crowded planner controls, keyboard access to downtime, and scrolling
+inside tables on narrow screens.
+
+Keep layout changes in the shared template in `ba_dashboard.py`: let section
+controls wrap, let text cells grow and wrap while keeping amounts intact, and put
+lengthy per-machine detail behind a disclosure. Do not reintroduce a fixed board
+width or use an unbroken note to size a metric column. Issue #7's screenshots show
+why both the shared layout and the displayed content need regression coverage.
+
 ## Licence
 
 MIT. See `LICENSE`.
