@@ -4515,36 +4515,13 @@ button:hover{color:var(--ink); border-color:var(--ink-3)}
 button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--ground)}
 button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 
-/* legacy: today (tiles, the findings list, the kinds panel) ---------------- */
-.kpi .d{font-size:12.5px; color:var(--ink-2)}
-svg.spark{height:26px; width:100%; margin-top:2px}
+/* legacy: today (the kinds panel only; the tiles and the findings list are
+   the redesign's .kpi and .find now) ------------------------------------- */
 .settings-panel{margin:0 0 14px; padding:14px 20px}
 .settings-panel .minor{margin:0 0 10px}
 .settings-grid{display:flex; flex-wrap:wrap; gap:8px}
 .settings-grid button{font-size:11.5px}
-.alerts{display:grid; gap:1px; background:var(--rule)}
-.alert{
-  background:var(--surface); display:grid; grid-template-columns:4px 1fr auto;
-  gap:14px; align-items:center; padding:11px 16px 11px 0;
-}
-.alert i{display:block; height:100%; min-height:26px; background:var(--info)}
-.alert.warn i{background:var(--warn)} .alert.critical i{background:var(--neg)}
-.alert.warn{color:var(--ink)}
-.alert b{font-weight:600; font-size:14px}
-.alert .detail{display:block; font-weight:400; font-size:12.5px; color:var(--ink-3); margin-top:2px}
-.alert .goto, .minor .goto{
-  font-size:12px; font-weight:500; color:var(--accent); text-decoration:none;
-  margin-left:8px; white-space:nowrap;
-}
-.alert .goto:hover, .minor .goto:hover{text-decoration:underline}
-.alert .who{
-  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3);
-  text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;
-}
 .minor{margin:10px 2px 0; font-size:12.5px; color:var(--ink-3)}
-.minor button{margin-left:8px; padding:2px 8px; font-size:11px}
-.minor ul{margin:8px 0 0; padding-left:18px}
-.minor li{margin:3px 0}
 
 /* legacy: results (chart tip, legend, chain rows, site cells, week bars,
    site detail, hour grid) -------------------------------------------------- */
@@ -5169,19 +5146,33 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     <div class="kpis" id="kpis"></div>
 
     <section class="sec rv" id="alertSection">
-      <div class="head">
-        <h2>Needs attention</h2>
-        <p id="alertCount"></p>
-        <div class="tools" id="alertTools"></div>
-        <button type="button" id="alertKindsToggle" aria-pressed="false"
-          title="Choose which kinds of finding make the list">Filter kinds</button>
+      <!-- drawAlerts() fills the head (title, ? mark, the three severity
+           counters) around this tune button, which is bound once at boot and
+           is moved into each fresh head rather than rebuilt. -->
+      <div id="alertHead">
+        <span class="ibtn tr" id="alertKindsToggle" aria-pressed="false" tabindex="0"
+          data-tip="Which kinds of finding make the list"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></span>
       </div>
       <div class="card settings-panel" id="alertSettingsPanel" hidden>
         <p class="minor">Saved on this device.</p>
         <div class="settings-grid" id="alertSettingsGrid"></div>
       </div>
-      <div class="alerts card" id="alerts"></div>
-      <p class="minor" id="alertMinor"></p>
+      <div class="finds" id="alerts"></div>
+      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#">undo</a></p>
+      <p class="quiet" id="alertMinor" style="margin:12px 0 0"></p>
+      <div class="finds" id="minorList" style="margin-top:12px" hidden></div>
+    </section>
+
+    <!-- Next moves: things the board could do that it cannot do yet. Static
+         placeholders that link nowhere; the cards tilt from wireCards(). -->
+    <section class="sec rv" id="secMoves">
+      <div class="sechead"><h2>Next moves</h2>
+        <span class="why" data-tip="Things the board could do for you that it cannot do yet. Each one is a decision you make every week by hand today." tabindex="0"><i>?</i></span></div>
+      <div class="moves">
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Size next week's orders from the peak day, then set every manager in one pass.</span></a>
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
+      </div>
     </section>
   </div>
 
@@ -5417,17 +5408,22 @@ const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLO
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}</span></span></div>`;
 
-function sparkline(values, colour){
+/* The tile sparkline, the generator's spark(): an area under the line, the
+   line, a point and a read-out that follow the pointer (wireTiles). x runs
+   0..100 so the wiring can find the nearest point from the pointer's share of
+   the width; the labels are what it prints, one per point, comma-separated,
+   so they must not carry commas themselves (compact money does not). */
+function sparkHtml(values, labels){
   if(values.length < 2) return "";
-  const w=160, h=26, lo=Math.min(...values,0), hi=Math.max(...values,1);
-  const x=i=>i/(values.length-1)*w, y=v=>h-2-(v-lo)/(hi-lo||1)*(h-4);
-  const pts=values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const zero=lo<0?`<line x1="0" y1="${y(0).toFixed(1)}" x2="${w}" y2="${y(0).toFixed(1)}" stroke="var(--rule)" stroke-width="1"/>`:"";
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-    ${zero}<polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="1.6"
-      vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-    <circle cx="${x(values.length-1).toFixed(1)}" cy="${y(values[values.length-1]).toFixed(1)}" r="2.4" fill="${colour}"/>
-  </svg>`;
+  const lo = Math.min(...values), hi = Math.max(...values), span = (hi - lo) || 1;
+  const pts = values.map((v, i) => [i / (values.length - 1) * 100, 30 - (v - lo) / span * 26]);
+  const poly = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  return `<div class="spark" data-vals="${attr(labels.join(","))}">
+    <svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">
+      <polygon class="area" points="0,34 ${poly} 100,34"></polygon>
+      <polyline points="${poly}" vector-effect="non-scaling-stroke"></polyline>
+      <circle class="pt" r="3" cx="100" cy="${pts[pts.length - 1][1].toFixed(1)}" vector-effect="non-scaling-stroke"></circle>
+    </svg><span class="scrub"></span></div>`;
 }
 
 /* --- the redesign's shared vocabulary ---------------------------------------
@@ -6261,8 +6257,6 @@ function toolbar(host, options, read, write, redraw){
   });
 }
 
-toolbar($("alertTools"), [["all","All"],["critical","Urgent"],["warn","Watch"],["info","Opportunity"]],
-  () => alertFilter, v => alertFilter = v, () => drawAlerts());
 toolbar($("chartTools"), [[30,"30 days"],[0,"All"]],
   () => chartWindow, v => chartWindow = v, () => drawChart());
 toolbar($("portTools"), Object.entries(VIEWS).map(([id,v]) => [id, v.label]),
@@ -6377,47 +6371,64 @@ function drawKpis(){
      it belongs under Profit and it says so. */
   const trend = k.profitAvg7 - k.profitPrev7;
   const cf = D.cashFlow;
-  const profits = D.daily.map(d => d.profit);
-  const revenues = D.daily.map(d => d.revenue);
   /* Four tiles: what the day made, what it took, what is in the bank, and the
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
   const fixed = k.rentBill + D.staff.dailyCost;
   const owed = k.debt > 0
     ? ` · ${fmt(k.debt)} owed on ${D.loans.length} loan${D.loans.length===1?"":"s"}` : "";
-  const tiles = [
-    {v: fmt(k.profitYesterday), l: "Profit yesterday",
-     d: `7-day avg ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs previous 7`,
-     cls: sign(k.profitYesterday), spark: profits},
-    {v: fmt(k.revenue), l: "Revenue yesterday",
-     d: `${k.customers.toLocaleString()} customers served`, spark: revenues},
-    {v: fmt(k.cash), l: "Cash on hand",
-     d: (cf
-       ? `${cf.days}d: profit ${compact(cf.profit)}, cash ${cf.cashChange>=0?"+":""}${
-           compact(cf.cashChange)}; ${cf.reinvested>=0
+  /* A tile is a number, one chip, a short sub line and a fortnight of history.
+     The sentence the tile used to print is the chip's tooltip. The arrow chips
+     read ▲/▼ with the size of the move; the dim ones carry a plain fact. */
+  const SPARK_DAYS = 14;
+  const hist = key => D.daily.slice(-SPARK_DAYS).map(key);
+  const vs7 = k.profitAvg7 ? (k.profitYesterday - k.profitAvg7) / Math.abs(k.profitAvg7) : 0;
+  const cashTile = cf
+    ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
+         `${cf.days} days: ${compact(cf.profit)} profit, cash ${cf.cashChange>=0?"+":""}${compact(cf.cashChange)}; ${
+           cf.reinvested>=0
              ? `${compact(cf.reinvested)} went into set-up and stock`
-             : `${compact(-cf.reinvested)} more than the books earned`}`
-       : `profit ${compact(k.profitSum7)} over 7 days · no cash history yet`) + owed},
+             : `${compact(-cf.reinvested)} more than the books earned`}${owed}`),
+       sub: cf.days === 7 ? "this week" : `over ${cf.days} day${cf.days===1?"":"s"}`}
+    : {chip: chipHtml("dim", `${compact(k.profitSum7)} profit`,
+         `${fmt(k.profitSum7)} profit over 7 days; no cash history yet, it starts building today${owed}`),
+       sub: "no cash history"};
+  const tiles = [
+    {l: "Profit yesterday", v: fmt(k.profitYesterday),
+     chip: chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
+       `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`),
+     sub: "vs 7-day", spark: hist(d => d.profit)},
+    {l: "Revenue yesterday", v: fmt(k.revenue),
+     chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
+     sub: "customers", spark: hist(d => d.revenue)},
+    /* Cash has no day-by-day history in the save, so this tile has no line. */
+    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip, sub: cashTile.sub},
     k.netWorth === null
-      ? {v: fmt(fixed), l: "Fixed cost per day",
-         d: `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`}
+      ? {l: "Fixed cost / day", v: fmt(fixed),
+         chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
+         sub: `payroll ${compact(D.staff.dailyCost)}`,
+         /* What the days actually paid in rent and wages; the number above is
+            today's contracted rate, which is why the last point can sit below it. */
+         spark: hist(d => (d.rent || 0) + (d.wages || 0))}
       /* Build 3672 stopped reporting net worth. Rather than quietly showing a
          stale number as if it were today's, the tile says which day it is from. */
-      : {v: fmt(k.netWorth), l: "Net worth",
-         d: k.netWorthAsOf
-           ? `as of day ${k.netWorthAsOf}; the game stopped reporting it`
+      : {l: "Net worth", v: fmt(k.netWorth),
+         chip: k.netWorthAsOf
+           ? chipHtml("dim", `day ${k.netWorthAsOf}`, `As of day ${k.netWorthAsOf}; the game stopped reporting it`)
            : cf && cf.netWorthChange !== null
-           ? `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${
-               cf.days===1?"":"s"}`
-           : "no net worth history yet; starts building today",
-         cls: k.netWorthAsOf ? "" : (cf && cf.netWorthChange !== null ? sign(cf.netWorthChange) : "")},
+           ? chipHtml(cf.netWorthChange >= 0 ? "ok" : "bad", `${cf.netWorthChange>=0?"▲":"▼"} ${compact(Math.abs(cf.netWorthChange))}`,
+               `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${cf.days===1?"":"s"}`)
+           : chipHtml("dim", "new", "No net worth history yet; starts building today"),
+         sub: k.netWorthAsOf ? "stale" : cf && cf.netWorthChange !== null ? `over ${cf.days} days` : "no history yet"},
   ];
+  /* The tiles are rebuilt on every render; the entrance plays only the first time. */
+  const seen = !!q("#kpis .kpi.in");
   $("kpis").innerHTML = tiles.map(t => `
-    <div class="kpi">
-      <span class="eyebrow">${t.l}</span>
-      <span class="v num ${t.cls||""}">${t.v}</span>
-      <span class="d">${t.d}</span>
-      ${t.spark ? sparkline(t.spark, "var(--accent)") : ""}
+    <div class="kpi rv${seen ? " in" : ""}">
+      <span class="lab">${t.l}</span>
+      <span class="v">${t.v}</span>
+      <div class="row">${t.chip}<span class="sub">${t.sub}</span></div>
+      ${t.spark ? sparkHtml(t.spark, t.spark.map(money)) : ""}
     </div>`).join("");
 }
 
@@ -6476,45 +6487,107 @@ function goToAlert(a){
   }
   reveal(link.sec);
 }
-const alertLink = (a, i) => ALERT_LINKS[a.group]
-  ? ` <a href="#${(SEC_PAGE[ALERT_LINKS[a.group].sec] || ["today"])[0]}" class="goto" data-i="${i}">details ›</a>` : "";
+const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
+
+/* The three severities of the list: the alert levels Python assigns, in the
+   design's words. */
+const SEV_KIND = {critical: "crit", warn: "watch", info: "opp"};
+const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
+
+/* A finding is a short verb phrase; the rest of the sentence unfolds on hover.
+   Python's sentences often lead with the site, which the row already names, so
+   that is dropped (with a following "is"/"are"); then the first colon,
+   semicolon or full stop splits the headline from the detail. A condensed row
+   (three of a kind at one site) carries its worst member's sentence as detail. */
+function splitFinding(a){
+  let t = String(a.text || "");
+  if(a.site && t.startsWith(a.site)){
+    t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
+  }
+  const m = t.match(/^(.*?)(?::|;|\.\s)\s*(.*)$/s);
+  let what = m ? m[1] : t, more = m ? m[2] : "";
+  what = what.charAt(0).toUpperCase() + what.slice(1);
+  if(a.detail) more = more ? `${more.replace(/[.\s]+$/, "")}. ${a.detail}` : a.detail;
+  return {what, more};
+}
+/* The figure on the right: the finding's worth in its unit, whole dollars up
+   to a million and compact beyond it; a condensed row with no money shows
+   how many findings it stands for; anything else leaves the column empty. */
+function findingAmount(a){
+  if(typeof a.worth === "number")
+    return `${Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth)}<small>${a.unit || ""}</small>`;
+  if(a.detail){
+    const n = (String(a.text).match(/^\d+/) || [])[0];
+    if(n) return `${n}<small>findings</small>`;
+  }
+  return "";
+}
+function findingRow(a){
+  const b = D.businesses.find(x => x.name === a.site);
+  const {what, more} = splitFinding(a);
+  /* Three shops can share a name; the pill already tells them apart, so the
+     neighbourhood shortName() would add is only spelt out when there is no pill. */
+  const site = !b ? a.site : b.code ? hoodHtml(b) + baseName(b) : shortName(b);
+  return `<a class="find ${SEV_KIND[a.level] || "opp"}" href="#${alertPage(a)}" data-id="${attr(a.id)}">
+    <span class="mark" data-tip="Silence this finding"></span>
+    <span class="site">${site}</span>
+    <span class="what">${what}</span>
+    <span class="amt">${findingAmount(a)}</span>
+    <span class="go">${icon("go")}</span>${more ? `
+    <span class="more">${more}</span>` : ""}</a>`;
+}
+/* Row click opens the finding's page; a click on the mark is stopped in the
+   capture phase by wireFinds() and never reaches this. */
+function bindFindingRows(host, list){
+  $$(".find", host).forEach((node, i) => {
+    node.onclick = e => { e.preventDefault(); goToAlert(list[i]); };
+  });
+}
 
 function drawAlerts(){
   const kindOn = a => alertGroupPrefs[a.group] !== false;
-  const alerts = D.alerts.filter(kindOn);
-  const counts = {critical:0, warn:0, info:0};
-  alerts.forEach(a => counts[a.level]++);
-  $("alertCount").textContent =
-    `${counts.critical} urgent · ${counts.warn} watch · ${counts.info} opportunity`;
-  const list = alerts.filter(a => alertFilter==="all" || a.level===alertFilter);
-  $("alerts").innerHTML = list.length ? list.map((a, i) => `
-    <div class="alert ${a.level}"><i></i><b>${a.text}${alertLink(a, i)}${
-      a.detail ? `<span class="detail">${a.detail}</span>` : ""}</b>
-      <span class="who">${a.site}</span></div>`).join("")
-    : `<div class="alert"><i style="background:var(--accent)"></i><b>Nothing to flag here.</b><span class="who"></span></div>`;
-  document.querySelectorAll("#alerts .goto").forEach(node => {
-    node.onclick = e => { e.preventDefault(); goToAlert(list[+node.dataset.i]); };
+  const list = D.alerts.filter(kindOn);
+  const counts = {crit: 0, watch: 0, opp: 0};
+  list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
+  const gate = (D.minor || {}).gate || 0;
+
+  /* The head: title, the threshold behind the ?, the three severity counters
+     that filter the list, and the tune button. That button is bound once at
+     boot, so it is carried over into the fresh head rather than rebuilt. */
+  const tune = $("alertKindsToggle");
+  $("alertHead").innerHTML = sechead("Needs attention", {
+    why: `A site that is not trading always makes the list. Everything else needs to be worth ${
+      fmt(gate)}/day; smaller findings are counted below.`,
+    aside: ["crit", "watch", "opp"].map(k =>
+      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
+    ).join("") + `<span id="alertTuneSlot"></span>`,
   });
+  $("alertTuneSlot").replaceWith(tune);
+
+  $("alerts").innerHTML = list.length ? list.map(findingRow).join("")
+    : `<span class="quiet" style="display:block;padding:12px 0">Nothing to flag here.</span>`;
+  bindFindingRows($("alerts"), list);
 
   /* Anything worth less than the materiality gate is counted rather than read
-     out. It is never dropped — the count and the money are both here. Hidden
-     kinds are dropped from both the count and the total, the same as above. */
+     out. It is never dropped — the count and the money are both here, and
+     "show" lays the rows out like the list above. Hidden kinds are dropped
+     from both the count and the total, the same as above. */
   const rows = ((D.minor || {}).rows || []).filter(kindOn);
-  const host = $("alertMinor");
-  if(!rows.length){ host.innerHTML = ""; return; }
-  const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
-  const gate = (D.minor || {}).gate || 0;
-  host.innerHTML = `${rows.length} smaller finding${rows.length===1?"":"s"} worth
-    ${fmt(worth)}/day in total, below the ${fmt(gate)}/day line
-    <button type="button" id="minorToggle" aria-expanded="${showMinor}">${
-      showMinor ? "hide" : "show"}</button>`
-    + (showMinor ? `<ul>${rows.map((r, i) =>
-        `<li><b>${r.site}</b>: ${r.text}${
-          r.worth ? ` <span class="num">(${fmt(r.worth)}/day)</span>` : ""}${alertLink(r, i)}</li>`).join("")}</ul>` : "");
-  $("minorToggle").onclick = () => { showMinor = !showMinor; drawAlerts(); };
-  document.querySelectorAll("#alertMinor .goto").forEach(node => {
-    node.onclick = e => { e.preventDefault(); goToAlert(rows[+node.dataset.i]); };
-  });
+  const host = $("alertMinor"), more = $("minorList");
+  if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
+  else {
+    const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
+    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
+      showMinor ? "hide" : "show"}</a>`;
+    $("minorToggle").onclick = e => { e.preventDefault(); showMinor = !showMinor; drawAlerts(); };
+    more.hidden = !showMinor;
+    more.innerHTML = showMinor ? rows.map(findingRow).join("") : "";
+    bindFindingRows(more, rows);
+  }
+  /* The kinds switches and the "show" link redraw this view outside
+     renderAll(), so the sticky state (filtered severities, silenced ids) is
+     re-applied here; both calls are idempotent. */
+  wireSev(); wireFinds();
 }
 
 function drawChart(){
