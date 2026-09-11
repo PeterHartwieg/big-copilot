@@ -309,6 +309,84 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .move:hover span{transform:translateZ(10px)}
 .move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
 .move:hover .soon{color:var(--accent);border-color:var(--accent)}
+/* The checklist follows the findings list: quiet rules, a site, an action. */
+.order-checklist{margin:0 0 28px;border-bottom:1px solid var(--rule);padding-bottom:20px}
+.order-checklist > summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;font-size:17px;font-weight:600;padding:8px 0}
+.order-checklist summary::-webkit-details-marker{display:none}
+.order-checklist > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(-45deg);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.order-checklist[open] > summary::before{transform:rotate(45deg)}
+.order-checklist > summary .order-count{font:400 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.order-checklist[open] #orderChecklistBody{animation:rowin .25s ease}
+.order-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 22px}
+.order-tools .order-context{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:12.5px}
+.order-tools .order-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.order-tools button{font-family:inherit}
+.order-progress{display:flex;align-items:center;gap:8px;font:400 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.order-progress-track{height:3px;width:40px;border-radius:3px;background:var(--rule);overflow:hidden}
+.order-progress-track i{display:block;width:100%;height:100%;background:var(--accent);transform:scaleX(var(--done,0));transform-origin:left;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.order-progress.complete{color:var(--accent)}
+.supply-location{margin-top:12px}
+.order-group-head{display:flex;align-items:center;gap:8px;padding:10px;color:var(--ink-2);font-size:12.5px;border-bottom:1px solid var(--rule);list-style:none;cursor:pointer;transition:background .2s}
+.order-group-head::-webkit-details-marker{display:none}
+.order-group-head:hover{background:var(--surface)}
+.order-group-head:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.location-name{min-width:0;overflow-wrap:anywhere}
+.location-count{margin-left:auto;white-space:nowrap;color:var(--ink-3);font:400 10.5px "IBM Plex Mono",monospace}
+.location-toggle{position:relative;width:26px;height:26px;flex:none;border:1px solid var(--rule);border-radius:50%;color:var(--ink-3);transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s}
+.location-toggle::before,.location-toggle::after{content:"";position:absolute;top:12px;left:7px;width:10px;height:1px;background:currentColor;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.location-toggle::after{transform:rotate(90deg)}
+.supply-location[open] > summary .location-toggle::after{transform:rotate(0)}
+.order-group-head:hover .location-toggle{transform:scale(1.12);color:var(--accent)}
+.supply-location[open] > .location-content{animation:rowin .2s ease}
+.supply-location .scrollx{margin-top:0}
+.order-item{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:0 10px;border-bottom:1px solid var(--rule-soft);transition:background .2s}
+.order-item:hover,.order-item:focus-within{background:var(--surface)}
+.order-toggle{position:relative;display:grid;place-items:center;width:30px;height:50px;cursor:pointer}
+.order-toggle input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;z-index:1}
+.order-tick{display:grid;place-items:center;width:18px;height:18px;border:1px solid var(--ink-3);border-radius:50%;color:var(--accent);transition:transform .25s cubic-bezier(.34,1.56,.64,1),background .2s,border-color .2s}
+.order-tick svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .28s ease}
+.order-toggle:hover .order-tick{border-color:var(--accent);transform:scale(1.18)}
+.order-toggle input:focus-visible + .order-tick{outline:2px solid var(--accent);outline-offset:4px}
+.order-toggle input:checked + .order-tick{border-color:var(--accent);background:var(--accent-soft)}
+.order-toggle input:checked + .order-tick svg{stroke-dashoffset:0}
+.order-item.just-marked .order-tick{animation:orderpop .45s cubic-bezier(.34,1.56,.64,1)}
+.order-item.just-marked::after{content:"";position:absolute;inset:0;background:var(--accent-soft);pointer-events:none;animation:ordersweep .55s ease both;transform-origin:left}
+@keyframes orderpop{0%{transform:scale(.7)}55%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes ordersweep{0%{transform:scaleX(0);opacity:.8}60%{transform:scaleX(1);opacity:.5}100%{transform:scaleX(1);opacity:0}}
+.order-detail{min-width:0}
+.order-detail summary{display:flex;align-items:center;gap:12px;min-height:50px;list-style:none;cursor:pointer}
+.order-product{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere;transition:color .2s}
+.order-values{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;gap:10px;flex:none;font:400 13px "IBM Plex Mono",monospace;white-space:nowrap}
+.order-before{color:var(--ink-3)}
+.order-after{font-weight:500;color:var(--accent)}
+.order-values small{font:400 10.5px Archivo,sans-serif;color:var(--ink-3)}
+.order-arrow{display:grid;place-items:center;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.order-arrow svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.order-item:hover .order-arrow{transform:translateX(3px)}
+.order-review{font:500 12.5px Archivo,sans-serif;color:var(--warn)}
+.order-chevron{display:grid;place-items:center;color:var(--ink-3);transition:transform .25s}
+.order-detail[open] .order-chevron{transform:rotate(90deg)}
+.order-reason{font-size:12.5px;line-height:1.65;color:var(--ink-2);margin:0 24px 14px 0;max-width:700px;animation:rowin .2s ease}
+.order-item.marked .order-product,.order-item.marked .order-values *{color:var(--ink-3)}
+.order-item.marked .order-product{text-decoration:line-through;text-decoration-color:var(--rule)}
+.order-empty > svg{width:18px;height:18px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.order-empty{display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:14px;padding:18px 10px;border-top:1px solid var(--rule)}
+.order-checklist textarea{width:100%;min-height:160px;font:13px/1.6 "IBM Plex Mono",monospace;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:7px;padding:12px;box-sizing:border-box}
+.order-copy-status{font-size:12.5px;color:var(--accent);margin:10px 0 0}
+.order-copy-status:empty{display:none}
+.order-tools .btn2.copied svg{animation:orderpop .4s ease}
+.order-tools button:disabled{opacity:.4;cursor:default;transform:none}
+.order-recipe-link{display:inline-flex;align-items:center;gap:4px;font:inherit;color:var(--warn);background:none;border:0;padding:0;cursor:pointer}
+.order-recipe-link:hover{text-decoration:underline}
+@media(max-width:620px){
+  .order-tools{gap:12px 8px}.order-tools .order-actions{margin-left:0;flex:1;justify-content:flex-end}
+  .order-group-head{padding-left:4px;padding-right:4px}
+  .order-item{padding:0 4px;gap:6px;grid-template-columns:26px minmax(0,1fr)}
+  .order-detail summary{flex-wrap:wrap;gap:4px 8px;padding:12px 0;min-height:26px}
+  .order-product{flex:1 1 calc(100% - 24px)}.order-values{order:3;margin-left:0;justify-content:flex-start;width:100%}
+  .order-chevron{margin-left:auto}.order-reason{margin-right:0}.order-progress-track{width:24px}
+}
+#secLogistics .up{cursor:default}
 
 /* tables ----------------------------------------------------------------- */
 table{width:100%;border-collapse:collapse;font-size:13.5px}
@@ -603,6 +681,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important; animation:none!important}
   .rv{opacity:1; transform:none}
+  .order-item.just-marked::after{display:none}
 }
 </style>
 <style>
@@ -865,13 +944,13 @@ details.help[open] summary::after{content:"\2013"}
       <div class="finds" id="minorList" style="margin-top:12px" hidden></div>
     </section>
 
-    <!-- Next moves: things the board could do that it cannot do yet. Static
-         placeholders that link nowhere; the cards tilt from wireCards(). -->
+    <!-- Next moves: the import checklist is available; the other two cards
+         are planned. The cards tilt from wireCards(). -->
     <section class="sec rv" id="secMoves">
       <div class="sechead"><h2>Next moves</h2>
-        <span class="why" data-tip="Things the board could do for you that it cannot do yet. Each one is a decision you make every week by hand today." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="Tools for the decisions you make each week. Plan imports opens a change checklist; the other tools are planned." tabindex="0"><i>?</i></span></div>
       <div class="moves">
-        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Plan weekly orders and get a checklist of settings to enter in-game.</span></a>
+        <a class="move rv" href="#secLogistics" id="planImportsCard"><span class="soon">CHECKLIST</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Plan weekly orders and get a checklist of settings to enter in-game.</span></a>
         <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
         <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
       </div>
@@ -903,6 +982,10 @@ details.help[open] summary::after{content:"\2013"}
       <div class="aside" data-sub="orders"><span class="seg" id="logisticsTools" aria-label="Which orders to list"></span></div></div>
 
     <section class="sec rv" id="secLogistics" data-sub="orders">
+      <details class="order-checklist" id="orderChecklist">
+        <summary id="orderChecklistTitle">Change checklist</summary>
+        <div id="orderChecklistBody"></div>
+      </details>
       <div class="scrollx" id="importPlan"></div>
       <div class="sec scrollx" id="topupPlan"></div>
     </section>
@@ -972,8 +1055,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "47dac9c08a";</script>
-<script src="app.js?v=47dac9c08a"></script>
+<script>window.LEDGER_BUILD = "2ff296283f";</script>
+<script src="app.js?v=2ff296283f"></script>
 
 <script>
 let D = null;
@@ -1085,6 +1168,7 @@ const ICON = {
   calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg>',
   people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"></path></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
@@ -2746,6 +2830,208 @@ function drawStock(){
    already in the totals. */
 const ceil100 = v => Math.ceil(v / 100) * 100;
 let logisticsView = "changes";
+
+/* A checklist of existing recommendations, not a second forecasting engine.
+   Keep this pure so changes can be checked without a browser or a save file. */
+function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses){
+  const rows = [];
+  const site = s => businesses[s];
+  const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
+  const add = (kind, s, item, current, proposed, reason, source = null) => {
+    const group = `${kind} · ${address(s)}`;
+    // Indexes can move when a different save is loaded; addresses do not.
+    const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
+                               source === null ? null : site(source)?.key ?? source]);
+    rows.push({key, group, item, current, proposed, reason, kind, site: s});
+  };
+  importRows.forEach(d => d.rows.forEach(r => {
+    if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
+      const why = r.factoryWeek
+        ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}; confirm the production plan before increasing.`
+        : "Based on recorded shop deliveries over a week.";
+      add("Weekly imports", r.s, r.item, r.current ?? null, r.setTo, why);
+    }
+  }));
+  looseRows.forEach(r => add("Weekly imports", null, r.item, null, null,
+    `Choose a supplying depot before setting an order. Full-rate factory inputs need ${ceil100(r.week).toLocaleString()} units/week.`));
+  imports.forEach(r => {
+    if(r.paused) add("Weekly imports", r.s, r.item, null, null,
+      `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
+    else if(r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+      Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
+      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand until delivery minus current stock, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before the next delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
+  });
+  sites.forEach(s => s.rows.forEach(r => {
+    if(r.status === "unplanned" || r.status === "target") add("Factory daily top-ups", s.s,
+      r.item, r.target || 0, ceil100(r.perDay),
+      `${r.from === null ? "Choose a supplying depot" : `From ${address(r.from)}`}. Full-rate input requirement; confirm staffing and output limits.`, r.from);
+    if(r.stalled) add("Check the delivery route", s.s, r.item, null, null,
+      `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from);
+  }));
+  shops.forEach(r => {
+    // Without a known route, this can be a made-to-order product (coffee,
+    // for example), not an item that a warehouse can deliver.
+    if(r.from !== null && r.from !== undefined && r.peakSold > 0
+      && (!r.target || feedFit(r.peakSold, r.target) !== "ok")) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+      ceil100(r.peakSold), `From ${address(r.from)}. `
+        + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}; check shelf space.`, r.from);
+  });
+  const groups = new Map();
+  rows.forEach(r => {
+    if(!groups.has(r.group)) groups.set(r.group, []);
+    groups.get(r.group).push(r);
+  });
+  return [...groups.values()].flat();
+}
+
+function orderChecklistText(rows, title){
+  const out = [title, "Enter these settings in-game. Amounts are units, not boxes.",
+    "Factory quantities assume full-rate production. Storage and transport capacity are not checked."];
+  let group = null;
+  rows.forEach(r => {
+    if(r.group !== group){ group = r.group; out.push("", group); }
+    const change = r.proposed === null ? "Review"
+      : r.kind === "Before the next delivery" ? `add ${r.proposed} units once`
+      : `${r.current ?? "not set"} -> ${r.proposed} units/${r.kind === "Weekly imports" ? "week" : "day"}`;
+    out.push(`[ ] ${r.item}: ${change}. ${r.reason}`);
+  });
+  return out.join("\n");
+}
+
+function reconcileOrderMarks(saved, rows, complete){
+  // Missing game text hides factory recommendations; absence then is not
+  // evidence that an action was resolved. Keep those notes for the next load.
+  if(!complete) return new Set(saved);
+  const valid = new Set(rows.map(r => r.key));
+  return new Set([...saved].filter(key => valid.has(key)));
+}
+
+const orderMarkCache = new Map();
+const supplyLocationState = new Map();
+function supplyLocation(section, s, count, content, first = false){
+  const business = D.businesses[s];
+  const name = business ? shortName(business) : "Choose a depot";
+  const key = JSON.stringify([D.supply.factories?.character, section, business?.key ?? null]);
+  const open = supplyLocationState.has(key) ? supplyLocationState.get(key) : first;
+  return `<details class="supply-location" data-location="${attr(key)}" ${open ? "open" : ""}>
+    <summary class="order-group-head" data-tip="${attr(business?.address || "Assign a depot in-game")}">
+      ${business ? hoodHtml(business) : ""}<span class="location-name">${attr(name)}</span>
+      <span class="location-count">${count} item${count === 1 ? "" : "s"}</span>
+      <span class="location-toggle" aria-hidden="true"></span></summary>
+    <div class="location-content">${content}</div></details>`;
+}
+function wireSupplyLocations(root){
+  root.querySelectorAll("details[data-location]").forEach(el => {
+    el.ontoggle = () => {
+      supplyLocationState.set(el.dataset.location, el.open);
+    };
+  });
+}
+function drawOrderChecklist(rows, factories){
+  const hasFactories = factories.sites.length > 0;
+  const unnamedRecipes = factories.sites.reduce((n, s) => n + (s.unnamed || []).length, 0);
+  const character = D.supply.factories?.character;
+  const storageKey = character ? `ba_order_marks_v1:${character}` : null;
+  // No character id means no persistent marks; never mix two unknown companies.
+  const cacheKey = storageKey;
+  if(!storageKey) orderMarkCache.delete(null);
+  if(!orderMarkCache.has(cacheKey)){
+    let saved = [];
+    try{ saved = storageKey ? JSON.parse(localStorage.getItem(storageKey)) : []; }catch(e){}
+    orderMarkCache.set(cacheKey, new Set(Array.isArray(saved) ? saved.filter(x => typeof x === "string") : []));
+  }
+  const complete = D.meta.locale === true;
+  const marks = reconcileOrderMarks(orderMarkCache.get(cacheKey), rows, complete);
+  orderMarkCache.set(cacheKey, marks);
+  const saveMarks = () => {
+    if(storageKey) try{ localStorage.setItem(storageKey, JSON.stringify([...marks])); }catch(e){}
+  };
+  if(complete) saveMarks();
+  const body = $("orderChecklistBody");
+  const groups = new Map();
+  rows.forEach((r, i) => {
+    if(!groups.has(r.site)) groups.set(r.site, []);
+    groups.get(r.site).push({...r, i});
+  });
+  const help = "Tick after applying a change in-game. Checkmarks are your notes, not confirmation from the save. Changed settings or estimated quantities need a fresh checkmark. Amounts are units, not boxes. Storage and transport limits are not checked."
+    + (hasFactories ? " Factory quantities assume full-rate production; check staffing and output limits." : "");
+  const actionLabel = r => r.kind === "Before the next delivery" ? "Top up early"
+    : r.kind === "Check the delivery route" ? "Check route"
+    : r.site === null ? "Choose depot" : "Review import";
+  body.innerHTML = `<div class="order-tools"${!rows.length && !unnamedRecipes ? " hidden" : ""}>
+    <div class="order-context">Apply in-game ${why(help)}</div>
+    ${unnamedRecipes ? `<button type="button" class="order-recipe-link" id="orderRecipeLink" data-tip="Identify the remaining factory recipes to include their inputs">${unnamedRecipes} recipe${unnamedRecipes === 1 ? "" : "s"} to name ${icon("chev")}</button>` : ""}
+    <div class="order-actions"${rows.length ? "" : " hidden"}><span class="order-progress" id="orderChecklistProgress" role="status">
+      <span class="order-progress-track" aria-hidden="true"><i></i></span><span id="orderProgressText"></span></span>
+      <button type="button" class="btn2" id="copyOrderChecklist">${icon("copy")}<span>Copy remaining</span></button>
+      <button type="button" class="ibtn" id="resetOrderMarks" aria-label="Clear marks" data-tip="Clear your checkmarks">${icon("refresh")}</button></div></div>
+    ${rows.length ? [...groups].map(([s, items], groupIndex) => supplyLocation("checklist", s, items.length,
+        items.map(r => `<div class="order-item${marks.has(r.key) ? " marked" : ""}">
+          <label class="order-toggle"><input type="checkbox" data-order-mark="${r.i}" aria-label="${attr(`Mark ${r.item} at ${r.group} done`)}" ${marks.has(r.key) ? "checked" : ""}><span class="order-tick" aria-hidden="true">${icon("tick")}</span></label>
+          <details class="order-detail"><summary><span class="order-product">${attr(r.item)}</span>
+            <span class="order-values">${r.proposed === null ? `<span class="order-review">${actionLabel(r)}</span>`
+              : r.kind === "Before the next delivery" ? `<b class="order-after" aria-label="Add ${r.proposed} units once">+${r.proposed.toLocaleString()}</b><small>units · once</small>`
+              : `<span class="order-before" aria-label="Saved setting ${r.current ?? "not set"}">${r.current === null ? "—" : r.current.toLocaleString()}</span>
+                 <span class="order-arrow" aria-hidden="true">${icon("go")}</span><b class="order-after" aria-label="Proposed setting ${r.proposed}">${r.proposed.toLocaleString()}</b><small>${r.kind === "Weekly imports" ? "/week" : "/day"}</small>`}</span>
+            <span class="order-chevron" aria-hidden="true">${icon("chev")}</span></summary>
+            <p class="order-reason">${attr(r.reason)}</p></details></div>`).join(""), groupIndex === 0)
+      ).join("") : `<div class="order-empty">${icon("tick")}<span>No changes found</span>${why("No changes identified from available supply data. New routes may need more history; unidentified factory recipes are not included.")}</div>`}
+    <p id="orderCopyStatus" class="order-copy-status" role="status"></p>
+    <textarea id="orderCopyFallback" aria-label="Checklist to copy manually" readonly hidden></textarea>`;
+  wireSupplyLocations(body);
+  if($("orderRecipeLink")) $("orderRecipeLink").onclick = () => {
+    stockView = "lines"; showAllStock = false; drawStock(); wireAll(); reveal("secStock");
+  };
+  const update = () => {
+    const remaining = rows.filter(r => !marks.has(r.key)).length;
+    $("orderChecklistTitle").innerHTML = `Change checklist <span class="order-count">${remaining ? `${remaining} to do` : rows.length ? "All checked" : ""}</span>`;
+    const done = rows.length - remaining;
+    $("orderProgressText").textContent = `${done} / ${rows.length}`;
+    $("orderChecklistProgress").setAttribute("aria-label", `${done} of ${rows.length} marked done by you`);
+    $("orderChecklistProgress").style.setProperty("--done", rows.length ? done / rows.length : 0);
+    $("orderChecklistProgress").classList.toggle("complete", !!rows.length && !remaining);
+    $("copyOrderChecklist").classList.remove("copied");
+    $("copyOrderChecklist").innerHTML = `${icon("copy")}<span>Copy remaining</span>`;
+    $("copyOrderChecklist").disabled = !remaining;
+    $("resetOrderMarks").disabled = !done;
+    $("orderCopyFallback").hidden = true;
+    $("orderCopyStatus").textContent = "";
+  };
+  body.querySelectorAll("input[data-order-mark]").forEach(input => {
+    input.onchange = () => {
+      const r = rows[+input.dataset.orderMark];
+      input.checked ? marks.add(r.key) : marks.delete(r.key);
+      const row = input.closest(".order-item");
+      row.classList.toggle("marked", input.checked);
+      row.classList.toggle("just-marked", input.checked);
+      setTimeout(() => row.classList.remove("just-marked"), 600);
+      saveMarks(); update();
+    };
+  });
+  $("resetOrderMarks").onclick = () => {
+    marks.clear(); saveMarks();
+    body.querySelectorAll("input[data-order-mark]").forEach(input => {
+      input.checked = false; input.closest(".order-item").classList.remove("marked", "just-marked");
+    });
+    update();
+  };
+  $("copyOrderChecklist").onclick = async () => {
+    const pending = rows.filter(r => !marks.has(r.key));
+    const text = orderChecklistText(pending, `Big Copilot · ${D.meta.save} · day ${D.meta.day}`);
+    try{
+      await navigator.clipboard.writeText(text);
+      $("copyOrderChecklist").classList.add("copied");
+      $("copyOrderChecklist").innerHTML = `${icon("tick")}<span>Copied</span>`;
+      $("orderCopyStatus").textContent = `${pending.length} action${pending.length === 1 ? "" : "s"} copied`;
+    }catch(e){
+      const fallback = $("orderCopyFallback");
+      fallback.value = text; fallback.hidden = false; fallback.focus(); fallback.select();
+      $("orderCopyStatus").textContent = "Copy the selected text below.";
+    }
+  };
+  update();
+}
+
 function drawLogistics(){
   const changesOnly = logisticsView === "changes";
   const f = factoryView();
@@ -2760,12 +3046,10 @@ function drawLogistics(){
     : D.meta.locale === false
       ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders are read from the delivery log and are complete."
       : "No factory to feed; the import orders are read from the delivery log.")
-    + " Click raise to see the order roll up; the thin line under the depot figure is how much of a day's use it holds.";
+    + " Proposed settings must be entered in-game; the thin line under the depot figure is how much of a day's use it holds.";
   const check = (n, what) => ({after: `<span class="check">${icon("tick")}</span>`, quiet: `All ${n} ${what}`});
   const up = (text, tip) => `<span class="up"${tip ? ` data-tip="${attr(tip)}"` : ""}>${icon("arrow_up")}${text}</span>`;
   const set = n => `<span class="set">${n.toLocaleString()}</span>`;
-  const grp = (b, cols) => `<tr class="grp"><td class="l" colspan="${cols}">${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${
-    shortName(b)} · ${b.type} · ${b.address}</td></tr>`;
   const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
 
   /* --- imports, one group per depot ------------------------------------ */
@@ -2793,7 +3077,8 @@ function drawLogistics(){
       const otherWeek = (other[si] || {})[r.slug] || 0;
       const total = r.factoryWeek + otherWeek;
       const current = ((depotsKnown[si] || {})[r.slug] || {}).weekly;
-      const fit = current === undefined ? (total ? "none" : "idle") : feedFit(total, current);
+      const fit = current === undefined ? (total ? "none" : "idle")
+        : current === 0 && total > 0 ? "short" : feedFit(total, current);
       // A weekly order carries a buffer by design; only half again over is worth a word.
       const surplus = current !== undefined && total && current > total * 1.5;
       return {...r, s, otherWeek, total, current, fit, surplus, stock: held(s, r.slug),
@@ -2850,12 +3135,12 @@ function drawLogistics(){
       <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
       <td>${set(ceil100(r.week))}${up("add")}</td>
       <td>—</td></tr>`;
-  const importTable = shown.length || looseRows.length ? `<table>
-    <thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
-      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>
-    <tbody>${shown.map(d => grp(D.businesses[d.s], 5) + d.rows.map(importRow).join("")).join("")}${
-      looseRows.length ? `<tr class="grp"><td class="l" colspan="5">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
-        looseRows.map(looseRow).join("")}` : ""}</tbody></table>` : "";
+  const importHead = `<thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
+      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
+  const importTable = shown.map((d, i) => supplyLocation("imports", d.s, d.rows.length,
+    `<div class="scrollx"><table>${importHead}<tbody>${d.rows.map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
+    + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
+      `<div class="scrollx"><table>${importHead}<tbody>${looseRows.map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
     : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
     : {after: (short ? chipHtml("bad", `${short} short`) : "")
@@ -2894,11 +3179,13 @@ function drawLogistics(){
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
         : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
   };
-  const topupTable = sites.length ? `<table>
-    <thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
-      <th class="l">From</th><th>Arrives / day</th></tr></thead>
-    <tbody>${sites.map(x => { const site = f.sites.find(s => s.s === x.s);
-      return grp(D.businesses[x.s], 6) + x.rows.map(r => topupRow(site, r)).join(""); }).join("")}</tbody></table>` : "";
+  const topupHead = `<thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
+      <th class="l">From</th><th>Arrives / day</th></tr></thead>`;
+  const topupTable = sites.map((x, i) => {
+    const site = f.sites.find(s => s.s === x.s);
+    return supplyLocation("topups", x.s, x.rows.length,
+      `<div class="scrollx"><table>${topupHead}<tbody>${x.rows.map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
+  }).join("");
   const topupState = !allSites.length ? {quiet: "No factory line to feed"}
     : !topShort && !topStalled ? check(topAll, "cover their day")
     : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
@@ -2908,6 +3195,10 @@ function drawLogistics(){
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
+  drawOrderChecklist(buildOrderChecklist(importRows, looseRows, allSites,
+    D.supply.shops || [], D.supply.imports || [], D.businesses), f);
+  wireSupplyLocations($("importPlan"));
+  wireSupplyLocations($("topupPlan"));
 }
 
 /* --- market demand ----------------------------------------------------
@@ -3763,9 +4054,9 @@ buildAlertSettingsPanel();
                           carrying its own onclick (the legacy table) is left alone.
      .hc[data-read]       hover writes data-read into #hourRead.
 
-   Supply — wireOrders, wireFlow:
-     .up                  in a row with td[data-now][data-to]: click rolls the
-                          figure up to the target, then reads "set".
+   Supply — drawOrderChecklist, wireFlow:
+     .up                  a suggested change to enter in-game; never changes
+                          the saved setting shown in the table.
      svg.flow             g.node[data-id], path.pipe#pipeN[data-a][data-b],
                           circle.cargo[data-pipe=pipeN]: pipe hover moves cargo,
                           node click picks (flowPickId, re-applied after render).
@@ -4057,6 +4348,12 @@ const wireTiles = once(() => {
 
 /* cards tilt toward the pointer ------------------------------------------------ */
 const wireCards = once(() => {
+  $("planImportsCard").addEventListener("click", e => {
+    e.preventDefault();
+    showSub("supply", "orders"); showPage("supply");
+    $("orderChecklist").open = true;
+    $("orderChecklistTitle").focus();
+  });
   document.addEventListener("mousemove", e => {
     const c = closest(e, ".move, .drop"); if(!c || REDUCED) return;
     const r = c.getBoundingClientRect();
@@ -4165,20 +4462,6 @@ const bindPortfolio = once(() => on("click", "tr.chain[data-chain]", tr => {
   applyChains();
 }));
 function wirePortfolio(){ bindPortfolio(); applyChains(); }
-
-/* orders: "raise" rolls the order up to its target ------------------------------ */
-const wireOrders = once(() => on("click", "td .up", (u, e) => {
-  /* Only the raise chip in an orders row, the one whose tr carries the
-     td[data-now] figure to roll up; a .wave.up on Growth is not this. */
-  const tr = u.closest("tr"), td = tr && tr.querySelector("td[data-now]"); if(!td) return;
-  e.preventDefault();
-  if(u.classList.contains("done")) return;
-  const from = +td.dataset.now, to = +td.dataset.to; const t0 = performance.now();
-  const step = (t) => { const p = REDUCED ? 1 : Math.min(1, (t - t0) / 700), e2 = 1 - Math.pow(1 - p, 3);
-    td.textContent = Math.round(from + (to - from) * e2).toLocaleString("en-US");
-    if(p < 1) requestAnimationFrame(step); else { u.classList.add("done"); u.innerHTML = "set"; } };
-  requestAnimationFrame(step);
-}));
 
 /* supply map: a pipe carries cargo while hovered; a node lights its own pipes --- */
 let flowPickId = null;
@@ -4384,7 +4667,7 @@ function wireAll(){
   wireTips(); wireTiles(); wireCards();
   wireSev(); wireFinds(); wireKinds();
   wireChart(); wirePortfolio(); wireSiteHours();
-  wireOrders(); wireFlow();
+  wireFlow();
   wireHeat(); wirePlan();
   wireReveal();
 }
