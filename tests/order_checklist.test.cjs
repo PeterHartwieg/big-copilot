@@ -78,6 +78,18 @@ test('unassigned factories require depot selection and expose full-rate assumpti
   assert.match(rows[1].reason, /confirm staffing and output limits/);
 });
 
+test('a measured delivery gap has a one-off quantity, separate from the recurring order', () => {
+  const gap = {s:0, item:'Sugar', coverFit:'short', shortBy:.8, catchUp:217, runsOut:'Sunday'};
+  const rows = build({checks:[gap]});
+  assert.equal(rows[0].proposed, 217);
+  assert.equal(rows[0].current, null);
+  assert.match(rows[0].reason, /before Sunday/);
+  const text = context.orderChecklistText(rows, 'Company');
+  assert.match(text, /add 217 units once/);
+  assert.doesNotMatch(text, /not set ->/);
+  assert.notEqual(rows[0].key, build({checks:[{...gap, catchUp:230}]})[0].key);
+});
+
 test('completion identities survive site reordering but change with settings and sources', () => {
   const shop = {s:2, item:'Flowers', target:100, peakSold:235, from:0};
   const before = build({shops:[shop]})[0];

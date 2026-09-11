@@ -1177,6 +1177,19 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
     }
 
 
+def _import_catch_up(stock, per_day, weekly, day, arrives, left_today):
+    """Extra whole units needed until the scheduled delivery day's start.
+
+    Use the same weekday demand and partial current day as the coverage walk;
+    the delivery day is supplied by the recurring order, not this one-off.
+    """
+    need = sum(
+        per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
+        for ahead in range(max(0, arrives - day))
+    )
+    return max(0, math.ceil(need - stock))
+
+
 def _supply(
     save: Save,
     names: Names,
@@ -1503,6 +1516,9 @@ def _supply(
                     "coverFit": cover_fit,
                     "due": round(due, 2) if due is not None else None,
                     "shortBy": round(short_by, 2),
+                    "catchUp": _import_catch_up(
+                        line["units"], per_day, weekly, day, supply["arrives"], left_today
+                    ) if supply["active"] and basis != "order" else None,
                     "paused": not supply["active"],
                     "arrives": supply["arrives"],
                     "from": supply["from"],
@@ -4824,9 +4840,20 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .order-progress-track{height:3px;width:40px;border-radius:3px;background:var(--rule);overflow:hidden}
 .order-progress-track i{display:block;width:100%;height:100%;background:var(--accent);transform:scaleX(var(--done,0));transform-origin:left;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
 .order-progress.complete{color:var(--accent)}
-.order-group{margin-top:18px}
-.order-group-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 10px 9px;color:var(--ink-2);font-size:12.5px;border-bottom:1px solid var(--rule)}
-.order-group-head .order-kind{margin-left:auto;color:var(--ink-3);font:400 10.5px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.06em}
+.supply-location{margin-top:12px}
+.order-group-head{display:flex;align-items:center;gap:8px;padding:10px;color:var(--ink-2);font-size:12.5px;border-bottom:1px solid var(--rule);list-style:none;cursor:pointer;transition:background .2s}
+.order-group-head::-webkit-details-marker{display:none}
+.order-group-head:hover{background:var(--surface)}
+.order-group-head:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.location-name{min-width:0;overflow-wrap:anywhere}
+.location-count{margin-left:auto;white-space:nowrap;color:var(--ink-3);font:400 10.5px "IBM Plex Mono",monospace}
+.location-toggle{position:relative;width:26px;height:26px;flex:none;border:1px solid var(--rule);border-radius:50%;color:var(--ink-3);transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s}
+.location-toggle::before,.location-toggle::after{content:"";position:absolute;top:12px;left:7px;width:10px;height:1px;background:currentColor;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.location-toggle::after{transform:rotate(90deg)}
+.supply-location[open] > summary .location-toggle::after{transform:rotate(0)}
+.order-group-head:hover .location-toggle{transform:scale(1.12);color:var(--accent)}
+.supply-location[open] > .location-content{animation:rowin .2s ease}
+.supply-location .scrollx{margin-top:0}
 .order-item{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:0 10px;border-bottom:1px solid var(--rule-soft);transition:background .2s}
 .order-item:hover,.order-item:focus-within{background:var(--surface)}
 .order-toggle{position:relative;display:grid;place-items:center;width:30px;height:50px;cursor:pointer}
@@ -4868,7 +4895,7 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .order-recipe-link:hover{text-decoration:underline}
 @media(max-width:620px){
   .order-tools{gap:12px 8px}.order-tools .order-actions{margin-left:0;flex:1;justify-content:flex-end}
-  .order-group-head{padding-left:4px;padding-right:4px}.order-group-head .order-kind{width:100%;margin-left:0;padding-left:0}
+  .order-group-head{padding-left:4px;padding-right:4px}
   .order-item{padding:0 4px;gap:6px;grid-template-columns:26px minmax(0,1fr)}
   .order-detail summary{flex-wrap:wrap;gap:4px 8px;padding:12px 0;min-height:26px}
   .order-product{flex:1 1 calc(100% - 24px)}.order-values{order:3;margin-left:0;justify-content:flex-start;width:100%}
@@ -7114,8 +7141,9 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   imports.forEach(r => {
     if(r.paused) add("Weekly imports", r.s, r.item, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if(r.coverFit === "short") add("Before the next delivery", r.s, r.item, null, null,
-      `Stock may run out ${r.shortBy} days before the next delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
+    else if(r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+      Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
+      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand until delivery minus current stock, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before the next delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });
   sites.forEach(s => s.rows.forEach(r => {
     if(r.status === "unplanned" || r.status === "target") add("Factory daily top-ups", s.s,
@@ -7145,13 +7173,37 @@ function orderChecklistText(rows, title){
   let group = null;
   rows.forEach(r => {
     if(r.group !== group){ group = r.group; out.push("", group); }
-    const change = r.proposed === null ? "Review" : `${r.current ?? "not set"} -> ${r.proposed}`;
+    const change = r.proposed === null ? "Review"
+      : r.kind === "Before the next delivery" ? `add ${r.proposed} units once`
+      : `${r.current ?? "not set"} -> ${r.proposed} units/${r.kind === "Weekly imports" ? "week" : "day"}`;
     out.push(`[ ] ${r.item}: ${change}. ${r.reason}`);
   });
   return out.join("\n");
 }
 
 const orderMarkCache = new Map();
+const supplyLocationState = new Map();
+function supplyLocation(section, s, count, content, first = false){
+  const business = D.businesses[s];
+  const name = business ? shortName(business) : "Choose a depot";
+  const key = JSON.stringify([D.supply.factories?.character, section, business?.key ?? null]);
+  const open = supplyLocationState.has(key) ? supplyLocationState.get(key) : first;
+  return `<details class="supply-location" data-location="${attr(key)}" ${open ? "open" : ""}>
+    <summary class="order-group-head" data-location-name="${attr(name)}" aria-label="${open ? "Collapse" : "Expand"} ${attr(name)}">
+      ${business ? hoodHtml(business) : ""}<span class="location-name" data-tip="${attr(business?.address || "Assign a depot in-game")}">${attr(name)}</span>
+      <span class="location-count">${count} item${count === 1 ? "" : "s"}</span>
+      <span class="location-toggle" aria-hidden="true"></span></summary>
+    <div class="location-content">${content}</div></details>`;
+}
+function wireSupplyLocations(root){
+  root.querySelectorAll("details[data-location]").forEach(el => {
+    el.ontoggle = () => {
+      supplyLocationState.set(el.dataset.location, el.open);
+      const summary = el.firstElementChild;
+      summary.setAttribute("aria-label", `${el.open ? "Collapse" : "Expand"} ${summary.dataset.locationName}`);
+    };
+  });
+}
 function drawOrderChecklist(rows, factories){
   const hasFactories = factories.sites.length > 0;
   const character = D.supply.factories?.character;
@@ -7174,13 +7226,11 @@ function drawOrderChecklist(rows, factories){
   const body = $("orderChecklistBody");
   const groups = new Map();
   rows.forEach((r, i) => {
-    if(!groups.has(r.group)) groups.set(r.group, []);
-    groups.get(r.group).push({...r, i});
+    if(!groups.has(r.site)) groups.set(r.site, []);
+    groups.get(r.site).push({...r, i});
   });
   const help = "Tick after applying a change in-game. Checkmarks are your notes, not confirmation from the save; they reset when settings change. Amounts are units, not boxes. Storage and transport limits are not checked."
     + (hasFactories ? " Factory quantities assume full-rate production; check staffing and output limits." : "");
-  const kindLabel = {"Weekly imports":"Weekly orders", "Before the next delivery":"Before delivery",
-    "Factory daily top-ups":"Factory top-ups", "Shop daily top-ups":"Shop top-ups", "Check the delivery route":"Delivery checks"};
   const actionLabel = r => r.kind === "Before the next delivery" ? "Top up early"
     : r.kind === "Check the delivery route" ? "Check route"
     : r.site === null ? "Choose depot" : "Review import";
@@ -7191,22 +7241,20 @@ function drawOrderChecklist(rows, factories){
       <span class="order-progress-track" aria-hidden="true"><i></i></span><span id="orderProgressText"></span></span>
       <button type="button" class="btn2" id="copyOrderChecklist">${icon("copy")}<span>Copy remaining</span></button>
       <button type="button" class="ibtn" id="resetOrderMarks" aria-label="Clear marks" data-tip="Clear your checkmarks">${icon("refresh")}</button></div></div>
-    ${rows.length ? [...groups].map(([group, items]) => {
-      const first = items[0], business = D.businesses[first.site];
-      return `<section class="order-group" aria-label="${attr(group)}"><div class="order-group-head">
-        ${business ? hoodHtml(business) : ""}<span data-tip="${attr(business?.address || "Assign a depot in-game")}" tabindex="0">${attr(business ? shortName(business) : "Choose a depot")}</span>
-        <span class="order-kind">${attr(kindLabel[first.kind] || first.kind)}</span></div>
-        ${items.map(r => `<div class="order-item${marks.has(r.key) ? " marked" : ""}">
+    ${rows.length ? [...groups].map(([s, items], groupIndex) => supplyLocation("checklist", s, items.length,
+        items.map(r => `<div class="order-item${marks.has(r.key) ? " marked" : ""}">
           <label class="order-toggle"><input type="checkbox" data-order-mark="${r.i}" aria-label="${attr(`Mark ${r.item} at ${r.group} done`)}" ${marks.has(r.key) ? "checked" : ""}><span class="order-tick" aria-hidden="true">${icon("tick")}</span></label>
           <details class="order-detail"><summary><span class="order-product">${attr(r.item)}</span>
             <span class="order-values">${r.proposed === null ? `<span class="order-review">${actionLabel(r)}</span>`
+              : r.kind === "Before the next delivery" ? `<b class="order-after" aria-label="Add ${r.proposed} units once">+${r.proposed.toLocaleString()}</b><small>units · once</small>`
               : `<span class="order-before" aria-label="Saved setting ${r.current ?? "not set"}">${r.current === null ? "—" : r.current.toLocaleString()}</span>
                  <span class="order-arrow" aria-hidden="true">${icon("go")}</span><b class="order-after" aria-label="Proposed setting ${r.proposed}">${r.proposed.toLocaleString()}</b><small>${r.kind === "Weekly imports" ? "/week" : "/day"}</small>`}</span>
             <span class="order-chevron" aria-hidden="true">${icon("chev")}</span></summary>
-            <p class="order-reason">${attr(r.reason)}</p></details></div>`).join("")}</section>`;
-      }).join("") : `<div class="order-empty">${icon("tick")}<span>No changes found</span>${why("No changes identified from available supply data. New routes may need more history; unidentified factory recipes are not included.")}</div>`}
+            <p class="order-reason">${attr(r.reason)}</p></details></div>`).join(""), groupIndex === 0)
+      ).join("") : `<div class="order-empty">${icon("tick")}<span>No changes found</span>${why("No changes identified from available supply data. New routes may need more history; unidentified factory recipes are not included.")}</div>`}
     <p id="orderCopyStatus" class="order-copy-status" role="status"></p>
     <textarea id="orderCopyFallback" aria-label="Checklist to copy manually" readonly hidden></textarea>`;
+  wireSupplyLocations(body);
   if($("orderRecipeLink")) $("orderRecipeLink").onclick = () => {
     stockView = "lines"; showAllStock = false; drawStock(); wireAll(); reveal("secStock");
   };
@@ -7278,8 +7326,6 @@ function drawLogistics(){
   const check = (n, what) => ({after: `<span class="check">${icon("tick")}</span>`, quiet: `All ${n} ${what}`});
   const up = (text, tip) => `<span class="up"${tip ? ` data-tip="${attr(tip)}"` : ""}>${icon("arrow_up")}${text}</span>`;
   const set = n => `<span class="set">${n.toLocaleString()}</span>`;
-  const grp = (b, cols) => `<tr class="grp"><td class="l" colspan="${cols}">${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${
-    shortName(b)} · ${b.type} · ${b.address}</td></tr>`;
   const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
 
   /* --- imports, one group per depot ------------------------------------ */
@@ -7365,12 +7411,12 @@ function drawLogistics(){
       <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
       <td>${set(ceil100(r.week))}${up("add")}</td>
       <td>—</td></tr>`;
-  const importTable = shown.length || looseRows.length ? `<table>
-    <thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
-      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>
-    <tbody>${shown.map(d => grp(D.businesses[d.s], 5) + d.rows.map(importRow).join("")).join("")}${
-      looseRows.length ? `<tr class="grp"><td class="l" colspan="5">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
-        looseRows.map(looseRow).join("")}` : ""}</tbody></table>` : "";
+  const importHead = `<thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
+      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
+  const importTable = shown.map((d, i) => supplyLocation("imports", d.s, d.rows.length,
+    `<div class="scrollx"><table>${importHead}<tbody>${d.rows.map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
+    + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
+      `<div class="scrollx"><table>${importHead}<tbody>${looseRows.map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
     : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
     : {after: (short ? chipHtml("bad", `${short} short`) : "")
@@ -7409,11 +7455,13 @@ function drawLogistics(){
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
         : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
   };
-  const topupTable = sites.length ? `<table>
-    <thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
-      <th class="l">From</th><th>Arrives / day</th></tr></thead>
-    <tbody>${sites.map(x => { const site = f.sites.find(s => s.s === x.s);
-      return grp(D.businesses[x.s], 6) + x.rows.map(r => topupRow(site, r)).join(""); }).join("")}</tbody></table>` : "";
+  const topupHead = `<thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
+      <th class="l">From</th><th>Arrives / day</th></tr></thead>`;
+  const topupTable = sites.map((x, i) => {
+    const site = f.sites.find(s => s.s === x.s);
+    return supplyLocation("topups", x.s, x.rows.length,
+      `<div class="scrollx"><table>${topupHead}<tbody>${x.rows.map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
+  }).join("");
   const topupState = !allSites.length ? {quiet: "No factory line to feed"}
     : !topShort && !topStalled ? check(topAll, "cover their day")
     : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
@@ -7425,6 +7473,8 @@ function drawLogistics(){
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
   drawOrderChecklist(buildOrderChecklist(importRows, looseRows, allSites,
     D.supply.shops || [], D.supply.imports || [], D.businesses), f);
+  wireSupplyLocations($("importPlan"));
+  wireSupplyLocations($("topupPlan"));
 }
 
 /* --- market demand ----------------------------------------------------
