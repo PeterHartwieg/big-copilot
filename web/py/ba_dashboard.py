@@ -4637,7 +4637,9 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .clock b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px;letter-spacing:.01em}
 .clock b i{font-style:normal;color:var(--ink-3);margin:0 6px}
 @keyframes blink{50%{opacity:.25}}
-.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);margin-top:3px}
+/* The real clock also carries staff counts. Keep its full text compact enough
+   for the three-ball shelf beside a short company name. */
+.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
 /* The live dot for a --watch board sits in the clock's small line. */
 .live{display:inline-flex;align-items:center;gap:6px;color:var(--accent);transition:color .3s}
@@ -5624,6 +5626,14 @@ function flowLayout(){
 
 function drawFlow(){
   const g = D.supply.graph;
+  const svg = $("flow");
+  svg.parentElement.hidden = !g.nodes.length;
+  if(!g.nodes.length){
+    flowPickId = null;
+    svg.innerHTML = "";
+    drawFlowDetail();
+    return;
+  }
   /* A pick outlives a re-render; one that names a node this save no longer
      has is dropped, so nothing is dimmed and the detail shows the prompt. */
   if(flowPickId && !g.nodes.some(n => n.id === flowPickId)) flowPickId = null;
@@ -5677,7 +5687,6 @@ function drawFlow(){
     if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
-  const svg = $("flow");
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.width = "100%"; svg.style.height = height + "px";
   svg.innerHTML = heads.concat(pipes, boxes, dots, cargo).join("");
@@ -5691,7 +5700,9 @@ function drawFlowDetail(){
   const node = g.nodes.find(n => n.id === flowPickId);
   const host = $("flowDetail");
   if(!node){
-    host.innerHTML = `<p class="quiet" style="margin:0">Pick a site to see what it holds against what it has to cover before its next delivery.</p>`;
+    host.innerHTML = `<p class="quiet" style="margin:0">${g.nodes.length
+      ? "Pick a site to see what it holds against what it has to cover before its next delivery."
+      : "No supply sites or delivery routes in this save yet."}</p>`;
     return;
   }
   const named = id => { const n = g.nodes.find(x => x.id === id);
@@ -5742,7 +5753,6 @@ const SUPPLY_VIEWS = {
   shops: {
     label: "Before the drop",
     note: () => `Does the busiest day of the week outrun tomorrow morning's top-up?`,
-    empty: "Every shelf is refilled faster than it sells.",
     /* One line first: the count, and the single tightest shelf in it. The rows
        below are only the ones near the ceiling. */
     verdict: rows => {
@@ -5791,7 +5801,6 @@ const SUPPLY_VIEWS = {
       // Counted from now, not from this morning: most of today is already spent.
       return `Counting the real days ahead, does each holding reach ${s.nextImportWeekday}'s import, ${s.hoursToImport} days away from now?`;
     },
-    empty: "Everything reaches the next import.",
     verdict: rows => {
       if(!rows.length) return "Nothing here is filled by import.";
       const short = rows.filter(r => r.coverFit === "short").length;
@@ -5847,7 +5856,6 @@ const SUPPLY_VIEWS = {
   idle: {
     label: "Idle stock",
     note: () => "Goods held far beyond what flows through them",
-    empty: "Nothing is piling up.",
     verdict: rows => {
       if(!rows.length) return "Nothing is piling up.";
       const dead = rows.filter(r => r.dead);
@@ -5875,7 +5883,6 @@ const SUPPLY_VIEWS = {
   lines: {
     label: "Factory lines",
     note: () => `Every assembly machine runs its recipe round the clock at the rated rate; the board reads the recipe from what the line ships`,
-    empty: "No factory machine is set up.",
     verdict: rows => {
       const f = factoryView();
       if(!f || !f.sites.length) return "No factory is set up.";
@@ -5943,7 +5950,6 @@ const SUPPLY_VIEWS = {
   feed: {
     label: "Feed the factories",
     note: () => "",
-    empty: "No factory line to feed.",
     verdict: rows => {
       if(!rows.length) return "No factory line to feed.";
       const bad = rows.filter(r => r.level === "critical").length;
@@ -6234,9 +6240,11 @@ function drawKpis(){
        sub: "no cash history"};
   const tiles = [
     {l: "Profit yesterday", v: fmt(k.profitYesterday),
-     chip: chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
-       `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`),
-     sub: "vs 7-day", spark: hist(d => d.profit)},
+     chip: D.daily.length
+       ? chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
+           `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`)
+       : chipHtml("dim", "no history", "No finished day in this save yet; there is no profit comparison to show"),
+     sub: D.daily.length ? "vs 7-day" : "no finished day", spark: hist(d => d.profit)},
     {l: "Revenue yesterday", v: fmt(k.revenue),
      chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
      sub: "customers", spark: hist(d => d.revenue)},
@@ -6640,6 +6648,10 @@ function drawPortfolio(){
   });
 
   const t = $("portfolio");
+  if(!D.businesses.length){
+    t.innerHTML = `<tbody><tr><td class="l quiet">No businesses in this save yet.</td></tr></tbody>`;
+    return;
+  }
   t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls,key],i) =>
       `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
         i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
@@ -6954,11 +6966,11 @@ function drawStock(){
   $("stockVerdict").innerHTML = (calm ? checkMark : "") + v.verdict(all);
   const nothing = all.length
     ? `Nothing here needs reading: ${all.length === 1 ? "the one row is" : `all ${all.length} rows are`} inside their limits.`
-    : v.empty;
+    : "";
   $("stock").innerHTML = rows.length
     ? `<thead><tr>${v.head}</tr></thead>
        <tbody>${rows.slice(0, 40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>`;
+    : nothing ? `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>` : "";
   const more = $("stockMore");
   more.innerHTML = all.length > shown.length
     ? (showAllStock
@@ -7341,7 +7353,7 @@ function drawMarket(){
         attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
     : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
-  $("cellDetail").textContent = "Click a cell";
+  $("cellDetail").textContent = shown.length ? "Click a cell" : "";
   wireMarketSort();
   wireTips();
 }
@@ -7500,6 +7512,11 @@ function drawPlan(){
    bar sits in the cell so the shape of the range reads before the figures do. */
 function drawProducts(){
   const TOP = 14, all = D.products;
+  if(!all.length){
+    $("secProducts").innerHTML = sechead("Products")
+      + `<p class="quiet">No products sold in this save yet.</p>`;
+    return;
+  }
   const rows = showAllProducts ? all : all.slice(0, TOP);
   /* A column that is empty on two rows in three is not a column. When most
      products do have a weekday peak it stays; otherwise it moves into the
@@ -7551,15 +7568,15 @@ function drawPayroll(){
   const max = Math.max(...st.roles.map(r => r.count), 1);
   $("secPayroll").innerHTML = sechead("Payroll", {
     quiet: `${st.total} people · ${fmt(st.dailyCost)} / day`,
-    aside: chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
+    aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
         `Average satisfaction across ${st.total} staff`)
-      + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join(""),
-  }) + `<div class="roles">${st.roles.map(r => `<div class="role rv">
+      + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join("") : "",
+  }) + (st.total ? `<div class="roles">${st.roles.map(r => `<div class="role rv">
       <span>${r.role}</span>
       <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
       <span class="c">${r.cost != null
         ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
-        : r.count}</span></div>`).join("")}</div>`;
+        : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">No staff hired yet.</p>`);
 }
 
 /* The career totals as a checklist, then the house rules. The stored difficulty
@@ -8086,10 +8103,17 @@ function wireSphere(){
   const balls = [];
   const restX = k => base.x + balls.slice(0, k).reduce((a, b) => a + b.size + GAP, 0);
   const topOf = size => p0.height - size;
-  const maxRun = () => { const l = balls[balls.length - 1]; return !l ? 0 : Math.max(0, clockLeft - (l.rest + l.size) - 28); };
+  const room = () => clockLeft - 28 - base.x;
+  const maxRun = () => {
+    /* Include pointer/animation movement. During an entrance the newest
+       ball is still on the left, so measure the actual rightmost one. */
+    const right = Math.max(...balls.map(b => b.rest + b.px + b.size));
+    return balls.length ? clockLeft - 28 - right : 0;
+  };
   const paint = (b) => {
-    const roll = REDUCED ? 0 : Math.min(maxRun(), window.scrollY * .6);
-    b.el.style.transform = 'translate(' + (b.px + roll).toFixed(1) + 'px,' + b.py.toFixed(1) + 'px) scale(' + b.sc.toFixed(3) + ')';
+    const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6);
+    const x = Math.floor((b.px + roll) * 10) / 10; // never round past the limit
+    b.el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + b.py.toFixed(1) + 'px) scale(' + b.sc.toFixed(3) + ')';
     b.seam.style.transform = 'rotate(' + (((b.px - b.sx) + roll) / (Math.PI * b.size) * 360).toFixed(1) + 'deg)';
   };
   const squish = (b) => { [b.core, b.seam].forEach(el => { el.classList.remove('squish'); void el.offsetWidth; el.classList.add('squish'); }); };
@@ -8115,6 +8139,14 @@ function wireSphere(){
   }, delay);
   const spawn = () => {
     if (balls.some(b => b.busy)) return;
+    measure();
+    const nextSize = SIZES[Math.min(balls.length, SIZES.length - 1)];
+    const needed = balls.reduce((n, b) => n + b.size + GAP, 0) + nextSize;
+    if(balls.length >= MAX || needed > room()){
+      if(balls.length > 1) eat();
+      else squish(balls[0]);
+      return;
+    }
     const el = first.cloneNode(true); el.removeAttribute('id'); parent.appendChild(el);
     const b = makeBall(el, balls.length); balls.push(b); enter(b, 60);
   };
@@ -8136,7 +8168,7 @@ function wireSphere(){
   };
   balls.push(makeBall(first, 0)); enter(balls[0], 400);
   const wordmark = q('.wordmark');
-  if (wordmark) wordmark.addEventListener('click', () => (balls.length < MAX ? spawn() : eat()));
+  if (wordmark) wordmark.addEventListener('click', spawn);
   document.addEventListener('mousemove', (e) => balls.forEach(b => {
     if (b.busy) return;
     const r = b.el.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
@@ -8144,7 +8176,11 @@ function wireSphere(){
     b.tx = dx / d * k; b.ty = Math.min(0, dy / d * k);
     b.el.style.setProperty('--hx', (34 + dx / d * 20) + '%'); b.el.style.setProperty('--hy', (32 + dy / d * 20) + '%');
   }));
-  const loop = () => { balls.forEach(b => { if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; paint(b); } }); requestAnimationFrame(loop); };
+  const loop = () => {
+    balls.forEach(b => { if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; } });
+    balls.forEach(paint);
+    requestAnimationFrame(loop);
+  };
   loop();
   /* The shelf moves when the window or the fonts do. */
   const relayout = () => { measure(); balls.forEach((b, k) => { b.rest = restX(k); b.el.style.left = b.rest + 'px'; paint(b); }); };
