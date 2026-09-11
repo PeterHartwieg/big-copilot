@@ -5173,21 +5173,17 @@ const sign = n => n>0?"pos":n<0?"neg":"";
 const sum = (rows,key) => rows.reduce((a,b)=>a+(b[key]||0),0);
 const $ = id => document.getElementById(id);
 
+/* A percentage with the thin gauge under it, the way the design shows shelf
+   pressure and depot cover; the cell that holds it carries class "gauge".
+   Colour is the grade: accent, amber, red, or the quiet ink for a figure that
+   describes rather than grades. */
+const graded = (v, fill) => `<i><b style="--w:${Math.min(100, Math.max(v, 1.5))}%${
+  fill ? `;background:var(--${fill})` : ""}"></b></i>${Math.round(v)}%`;
 /* Graded meter: red through green, for numbers where higher is better. */
-function meter(v){
-  const cls = v>=85?"ok":v>=60?"warn":"bad";
-  return `<span class="chip ${cls}">${v}%</span><span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>`;
-}
-/* Load gauge: unlike meter(), a high number here is the bad one — at 100% a
-   day of selling has drained the whole daily delivery. */
-const load = (v, level) => `<span class="chip ${
-  level === "critical" ? "bad" : level === "warn" ? "warn" : "ok"}">${v}%</span>`
-  + `<span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>`;
-
+const meter = v => graded(v, v >= 85 ? "" : v >= 60 ? "warn" : "neg");
 /* Neutral gauge: for numbers that describe a situation rather than grade it,
-   like how much of a loan is paid off or how busy a street is. */
-const gauge = (v,dp=0) => `<span class="chip dim">${v.toFixed(dp)}%</span>`
-  + `<span class="bar"><i style="width:${Math.min(100,Math.max(v,1.5))}%"></i></span>`;
+   like how busy a street is. */
+const gauge = v => graded(v, "ink-3");
 
 /* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
    shop the building table places. With neither, no badge. */
@@ -5362,10 +5358,10 @@ const VIEWS = {
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
       ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
       ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
-      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "", b=>b.satisfaction.overall??-1],
-      ["Promotion", b=>b.customers?meter(b.promotion):"—", "", b=>b.promotion],
-      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "", b=>b.traffic],
-      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "", b=>b.marketingIndex],
+      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
+      ["Promotion", b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
+      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
+      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
       ["Security", b=>b.security?`${b.security}%`:"—", "", b=>b.security],
     ],
     chain: c => [null, "", c.staff||"—", "", "", "", "", "", "", ""],
@@ -5478,37 +5474,55 @@ const FLOW_COLS = ["Importers", "Factories", "Depots", "Shops"];
    drawn 1:1 inside the chart box. */
 const NODE_W = 180, NODE_H = 44, ROW_GAP = 16, COL_GAP = 136;
 
+/* The map is meant to be compact: four columns, a node 180 by 44. A chain of
+   a dozen shops fits one column at a tight pitch; past what fits in ~900 px
+   the shops interleave into two sub-columns, the second one's rows sitting
+   in the gaps of the first, so a pipe to a back-row shop runs straight
+   through a gap instead of behind a box. */
+const SHOP_GAP = 8, SUB_GAP = 14, MAP_MAX_H = 900;
 function flowLayout(){
   const g = D.supply.graph;
   const columns = [[], [], [], []];
   g.nodes.forEach(n => columns[n.col].push(n));
   // Keep each column near the sites it feeds, so the lines stay untangled.
   columns[3].sort((a, b) => b.stock - a.stock);
-  const tallest = Math.max(...columns.map(c => c.length), 1);
-  const height = tallest * (NODE_H + ROW_GAP) + 34;
-  const width = 4 * NODE_W + 3 * COL_GAP;
+  const shops = columns[3].length;
+  const split = shops * (NODE_H + SHOP_GAP) + 34 > MAP_MAX_H;
+  /* Two sub-columns cost width; the columns close up a little to pay for it,
+     and the svg scales to its box regardless. */
+  const colGap = split ? 90 : COL_GAP;
+  const pitch = split ? (NODE_H + 12) / 2 : NODE_H + SHOP_GAP;
+  const spanOf = (ci, n) => ci === 3
+    ? (split ? (n - 1) * pitch + NODE_H : n * pitch - SHOP_GAP)
+    : n * (NODE_H + ROW_GAP) - ROW_GAP;
+  const height = Math.max(...columns.map((c, ci) => spanOf(ci, c.length)), 1) + 34 + 8;
+  const width = 4 * NODE_W + 3 * colGap + (split ? NODE_W + SUB_GAP : 0);
+  const colX = [0, 1, 2, 3].map(ci => ci * (NODE_W + colGap));
   const at = {};
   columns.forEach((col, ci) => {
-    const span = col.length * (NODE_H + ROW_GAP);
-    const top = (height - 34 - span) / 2 + 34;
+    const top = (height - 34 - spanOf(ci, col.length)) / 2 + 34;
     col.forEach((n, ri) => {
+      const back = split && ci === 3 && ri % 2 === 1;
       at[n.id] = {
-        x: ci * (NODE_W + COL_GAP),
-        y: top + ri * (NODE_H + ROW_GAP),
+        x: colX[ci] + (back ? NODE_W + SUB_GAP : 0),
+        y: top + ri * (ci === 3 ? pitch : NODE_H + ROW_GAP),
+        /* Where a pipe to a back-row shop straightens out: just before the
+           front row, so its last stretch is a level run through the gap. */
+        corridor: back ? colX[3] - 10 : null,
         node: n,
       };
     });
   });
-  return {at, width, height, columns};
+  return {at, width, height, columns, colX};
 }
 
 function drawFlow(){
   const g = D.supply.graph;
-  const {at, width, height} = flowLayout();
+  const {at, width, height, colX} = flowLayout();
   const heaviest = Math.max(...g.links.map(l => l.perDay), 1);
   const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
   const heads = FLOW_COLS.map((label, i) =>
-    `<text class="col" x="${i * (NODE_W + COL_GAP)}" y="22">${label.toUpperCase()}</text>`);
+    `<text class="col" x="${colX[i]}" y="22">${label.toUpperCase()}</text>`);
 
   /* One pipe per link, with its cargo riding the same path while the pipe is
      hovered. Width is volume on a square-root scale, so the heaviest pipe is
@@ -5520,14 +5534,17 @@ function drawFlow(){
     const fwd = b.x > a.x;
     const x1 = a.x + (fwd ? NODE_W : 0), y1 = a.y + NODE_H / 2;
     const x2 = b.x + (fwd ? 0 : NODE_W), y2 = b.y + NODE_H / 2;
-    const mid = (x1 + x2) / 2;
+    /* A back-row shop is reached through the gap in the front row: the curve
+       lands in the corridor before it and the rest is a level run. */
+    const xc = fwd && b.corridor !== null ? b.corridor : x2;
+    const mid = (x1 + xc) / 2;
     const w = 1 + Math.sqrt(l.perDay / heaviest) * 2.5;
     const tip = `${named(l.from)} to ${named(l.to)}: ${l.perDay.toLocaleString()} units a day over ${
       l.items} product${l.items === 1 ? "" : "s"}, ${l.paused ? "import paused"
       : l.cadence === "weekly" ? "weekly import" : "daily distribution"}`;
     pipes.push(`<path class="pipe ${l.cadence}${l.paused ? " paused" : ""}" id="pipe${i}"
       data-a="${attr(l.from)}" data-b="${attr(l.to)}" stroke-width="${w.toFixed(1)}"
-      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}"><title>${attr(tip)}</title></path>`);
+      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${xc},${y2}${xc !== x2 ? ` L${x2},${y2}` : ""}"><title>${attr(tip)}</title></path>`);
     cargo.push(`<circle class="cargo" data-pipe="pipe${i}" r="3.5"><animateMotion dur="${
       (1.1 + i % 3 * .25).toFixed(2)}s" repeatCount="indefinite"><mpath href="#pipe${i}"></mpath></animateMotion></circle>`);
   });
