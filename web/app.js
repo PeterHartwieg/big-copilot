@@ -1,20 +1,26 @@
 /* The page side of the in-browser board.
  *
- * Owns the worker, the landing screen, the source row in the board's header,
+ * Owns the worker, the landing screen, the source strip in the board's header,
  * the locale file, and what the browser remembers between visits. Hands the
  * board its numbers through window.LEDGER_SOURCE, which the board's own
  * script picks up instead of the local server it would otherwise poll.
  *
- * One set of controls, two homes. On the landing the status card, the folder
- * button and the rarer controls are laid out in full. When a save loads the
- * landing is hidden and the same elements are moved: the card and Update into
- * the source row under the masthead, everything else into the More menu.
+ * One set of controls, two homes. On the landing the drop zone, the folder
+ * button and the one-file link are laid out in full, with the save-location
+ * help and the game-text chip under "Where saves live". When a save loads the
+ * same elements are moved: the source strip (led, state, file line, Update)
+ * into the row under the masthead, everything else into the strip's More
+ * menu, and the landing is dropped. The board's own script then owns the
+ * masthead, its sphere and the tooltip layer; the landing has a sphere of
+ * its own, wired here, that leaves the dot after the wordmark and rests
+ * beside the drop zone.
  *
  * Two ways in. Where the browser has the File System Access API (Chrome,
  * Edge) the folder button takes a live directory handle: Update rescans it
  * for the newest save, and the handle is kept in IndexedDB so the next visit
- * needs one permission click, not the picker. Elsewhere the folder button is
- * a plain directory input, which is a snapshot: Update reopens the picker.
+ * needs one permission click, not the picker. A folder dropped on the page
+ * gives the same handle. Elsewhere the folder button is a plain directory
+ * input, which is a snapshot: Update reopens the picker.
  */
 (function () {
   const LOCALE_KEY = "ledger_locale";
@@ -26,6 +32,8 @@
   const isLocale = (f) => f && /\.json$/i.test(f.name);
   const canHandle = typeof window.showDirectoryPicker === "function";
   const onBoard = () => document.body.classList.contains("has-board");
+  const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
 
   const stored = {
     get(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } },
@@ -90,7 +98,8 @@
     const msg = e.data;
     if (msg.kind === "progress") {
       if (msg.stage === "ready") { runtimeReady = true; if (!busy) idleState(); }
-      else if (!lastFile) state("busy", "Preparing the reader…", msg.detail);
+      // A remembered folder keeps its own line while the runtime loads.
+      else if (!lastFile && !dirHandle) state("busy", "Preparing the reader…", msg.detail);
       return;
     }
     const p = pending.get(msg.id);
@@ -113,12 +122,12 @@
     });
   }
 
-  /* --- the status card and its note ------------------------------------ */
+  /* --- the source strip and its note ------------------------------------ */
   const fmtTime = (ms) => new Date(ms).toLocaleString(undefined, {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
   // The game writes "Recover #N.hsg" every five minutes; a player never chose
-  // that name, so the card calls it an autosave and leads with the company,
+  // that name, so the strip calls it an autosave and leads with the company,
   // which is read from inside the file. The raw file name stays on hover.
   let company = "";
   const isAutosave = (file) => /^recover/i.test(file.name);
@@ -130,77 +139,111 @@
       : base.toLowerCase() === company.toLowerCase()
       ? `saved ${when}`
       : `${base} saved ${when}`;
-    $("srcCard").title = file.name;
+    $("srcStrip").title = file.name;
     return `${company ? company + " · " : ""}${what}${extra ? ` · ${extra}` : ""}`;
   };
 
-  function state(tone, headline, meta) {
-    $("srcCard").dataset.tone = tone;
-    $("srcStatus").textContent = headline;
-    $("srcMeta").textContent = meta || "";
+  // The strip is painted from these: a tone (ok, busy, bad, remembered,
+  // ready), a headline, a mono file line; and a note, which in the bad tone
+  // is folded into the strip itself (headline: reason, sub as the file line,
+  // the recovery button first) and otherwise is a quiet line under it.
+  const strip = {tone: "ready", head: "", meta: ""};
+  const noted = {tone: "", text: "", sub: "", recover: false};
+
+  function paintStrip() {
+    const board = onBoard();
+    const bad = strip.tone === "bad";
+    const led = $("srcLed");
+    led.className = "led" + (strip.tone === "busy" ? " busy" : bad ? " err" : strip.tone === "ok" ? "" : " lg-dim");
+    const st = $("srcStatus");
+    st.className = bad ? "err" : "";
+    st.textContent = bad && noted.text ? `${strip.head}: ${noted.text.replace(/\.$/, "")}` : strip.head;
+    $("srcProg").hidden = strip.tone !== "busy";
+    let meta = bad && noted.sub ? noted.sub
+      : strip.tone === "busy" && lastGood ? "last good board stays on screen"
+      : strip.meta;
+    if (watchTimer && strip.tone === "ok") meta += " · watching";
+    $("srcMeta").textContent = meta;
     const btn = $("updateBtn");
     btn.disabled = busy || !(dirHandle || lastFile);
-    btn.textContent = !onBoard() && dirHandle && !lastFile ? "Open newest save →" : "Update";
+    const opens = !board && dirHandle && !lastFile;
+    btn.textContent = opens ? "Open newest save" : "Update";
+    btn.classList.toggle("primary", opens);
+    $("recoverBtn").hidden = !(bad && noted.recover);
+    // On the landing the strip only shows when it has something to say: a
+    // remembered folder, a save being read, a folder that would not read.
+    const quietLoad = strip.tone === "busy" && !lastFile && !dirHandle;
+    $("srcStrip").hidden = !board && (strip.tone === "ready" || quietLoad);
+    const n = $("srcNote");
+    const showNote = !!noted.text && !bad;
+    n.hidden = !showNote;
+    n.className = "quiet lg-note" + (noted.tone === "warn" ? " warn" : "");
+    n.textContent = showNote ? [noted.text, noted.sub].filter(Boolean).join(" ") : "";
+  }
+  function state(tone, headline, meta) {
+    strip.tone = tone; strip.head = headline; strip.meta = meta || "";
+    paintStrip();
   }
   function idleState() {
     if (lastGood) state("ok", "Up to date", fileLine(lastGood));
-    else if (dirHandle) state("remembered", "Folder remembered", "one click opens its newest save");
+    else if (dirHandle) state("remembered", "Folder remembered", dirHandle.name);
     else state("ready", "No save loaded", runtimeReady ? "ready to read" : "");
   }
   function note(tone, text, sub, recover) {
-    const el = $("srcNote");
-    el.hidden = !text;
-    el.dataset.tone = tone || "";
-    $("noteText").textContent = text || "";
-    $("noteSub").textContent = sub || "";
-    $("recoverBtn").hidden = !recover;
+    noted.tone = tone || ""; noted.text = text || ""; noted.sub = sub || ""; noted.recover = !!recover;
+    paintStrip();
   }
 
   /* --- where the controls live ------------------------------------------ */
   function place() {
-    const board = onBoard();
-    const landing = $("landing");
-    if (board) {
+    const fb = $("folderBtn"), sp = $("savePickLabel");
+    if (onBoard()) {
       const row = $("sourceRow");
-      if (!row.contains($("srcCard"))) {
-        row.appendChild($("srcCard"));
-        row.appendChild($("boardControls").content.cloneNode(true));
-        $("sourceActions").insertBefore($("updateBtn"), $("watchBtn"));
-        $("watchBtn").addEventListener("click", toggleWatch);
-        syncWatchBtn();
-        $("menuSourceSlot").append($("folderBtn"), $("savePickLabel"));
-        $("menuChipSlot").appendChild($("localeChip"));
-        $("menuHelpSlot").appendChild($("help"));
-        $("menuFootSlot").append(...$("footSlot").children);
-        $("sourceNote").appendChild($("srcNote"));
-        // The two project links also live in the board's own footer. Links
-        // carry no handlers, so copies are safe.
-        $("footerLinks").append($("issueLink").cloneNode(true), $("donateLink").cloneNode(true));
-        $("footerLinks").querySelectorAll("a").forEach((a) => a.removeAttribute("id"));
-        $("folderBtn").textContent = "Choose save folder";
-        $("folderBtn").className = "lg-btn";
-        $("help").open = false;
-        wireMenu();
-      }
+      if (row.contains($("srcStrip"))) return;
+      row.appendChild($("srcStrip"));
+      $("sourceNote").appendChild($("srcNote"));
+      $("srcActions").appendChild($("boardControls").content.cloneNode(true));
+      fb.className = "lg-btn"; fb.textContent = "Choose save folder";
+      sp.className = "lg-btn lg-pick"; $("savePickText").textContent = "One save file";
+      $("menuSourceSlot").append(fb, sp);
+      $("watchBtn").addEventListener("click", toggleWatch);
+      syncWatchBtn();
+      $("menuChipSlot").appendChild($("localeChip"));
+      $("help").open = false;
+      $("menuHelpSlot").appendChild($("help"));
+      const links = [...$("footSlot").querySelectorAll("a")];
+      links.forEach((a) => { a.className = a.id === "sourceLink" ? "lg-text" : "lg-btn"; });
+      $("forgetHistory").className = "lg-text";
+      $("menuFootSlot").append(...links, $("forgetHistory"));
+      // The two project links also live in the board's own footer. Links
+      // carry no handlers, so copies are safe.
+      const foot = $("footerLinks");
+      [$("issueLink"), $("donateLink")].forEach((a) => {
+        const c = a.cloneNode(true); c.removeAttribute("id"); c.className = "lg-footlink"; foot.appendChild(c);
+      });
+      // The hidden pickers must outlive the landing.
+      document.body.append($("folderPick"), $("localePick"));
+      wireMenu();
+      // The board's own script finds its sphere and wordmark by class; the
+      // landing's must not be there to be found first.
+      stopLanding();
+      $("landing").remove();
     } else {
       const ret = !!dirHandle;
-      landing.dataset.visit = ret ? "return" : "first";
-      $("welcomeTitle").innerHTML = ret ? "Back to your company." : "Your company,<br>at a glance.";
-      $("welcomeLede").textContent = ret
-        ? "Your save folder is remembered; open its newest save to bring the board up to date."
-        : "Turn your Big Ambitions save into a daily board, built in your browser with nothing uploaded.";
-      const fb = $("folderBtn");
+      sp.className = "link lg-pick";
       if (ret) {
-        fb.textContent = "Choose a different folder";
-        fb.className = "lg-btn";
-        $("entrySecondary").prepend(fb);
-        $("entryActions").prepend($("updateBtn"));
+        // A remembered folder: the strip carries the actions as the design
+        // draws them: Open newest save, Change folder, one file.
+        fb.className = "btn2"; fb.textContent = "Change folder";
+        $("savePickText").textContent = "one file";
+        $("srcActions").append(fb, sp);
+        $("entryRow").hidden = true;
       } else {
-        fb.innerHTML = 'Choose save folder <span aria-hidden="true">→</span>';
-        fb.className = "lg-btn primary large";
-        $("entryActions").prepend(fb);
+        fb.className = "btn"; fb.innerHTML = ICON_FOLDER + "Choose the folder";
+        $("savePickText").textContent = "or one save file";
+        $("entryRow").append(fb, sp);
+        $("entryRow").hidden = false;
       }
-      $("updateBtn").className = "lg-btn primary large";
     }
   }
   function wireMenu() {
@@ -209,6 +252,7 @@
       const open = !$("srcMenu").classList.contains("open");
       $("srcMenu").classList.toggle("open", open);
       $("menuBtn").setAttribute("aria-expanded", String(open));
+      if (typeof window.hideTip === "function") window.hideTip();
     });
     $("srcMenu").addEventListener("click", (e) => e.stopPropagation());
   }
@@ -230,9 +274,8 @@
     if (busy) return;
     busy = true;
     lastFile = file;
-    state("busy", "Reading the save…", fileLine(file));
-    if (lastGood) note("info", `${fmtTime(lastGood.lastModified)} snapshot still shown below; the board updates when this save is ready.`);
-    else note("");
+    note("");
+    state("busy", `Reading ${file.name}`, fileLine(file));
     const t = performance.now();
     try {
       const bytes = await file.arrayBuffer();
@@ -252,7 +295,7 @@
       state("bad", "Could not read the save", `${file.name} · attempted ${fmtTime(Date.now())}`);
       const rewritten = err.name === "NotReadableError";
       note("bad",
-        rewritten ? "The game has rewritten this file since it was chosen." : err.message,
+        rewritten ? "the game has rewritten this file since it was chosen" : err.message,
         lastGood ? `Last good board kept · saved ${fmtTime(lastGood.lastModified)}` : "",
         true);
       if (handlers) handlers.stale(err.message);
@@ -279,6 +322,7 @@
   }
 
   async function loadFromHandle(handle, why) {
+    note("");
     state("busy", why || "Looking for the newest save", handle.name);
     let files;
     try { files = await scanHandle(handle); }
@@ -286,7 +330,7 @@
     const newest = newestOf(files);
     if (!newest) {
       state("bad", "No save found", handle.name);
-      note("warn", "No .hsg save in that folder.", "Choose the folder named Big Ambitions inside SaveGames.", true);
+      note("bad", "no .hsg save in that folder", "Choose the folder named Big Ambitions inside SaveGames", true);
       return;
     }
     if (lastGood && newest.name === lastGood.name && newest.lastModified === lastGood.lastModified) {
@@ -298,15 +342,20 @@
     armWatch();  // the folder is readable now, so watching can begin
   }
 
+  async function takeHandle(handle, why) {
+    dirHandle = handle;
+    handles.set("saves", handle);
+    if (!onBoard()) place();
+    await loadFromHandle(handle, why);
+  }
+
   async function pickFolder() {
     if (canHandle) {
       let handle;
       try {
         handle = await window.showDirectoryPicker({id: "ba-saves", mode: "read"});
       } catch (e) { return; }  // the picker was dismissed
-      dirHandle = handle;
-      handles.set("saves", handle);
-      await loadFromHandle(handle, "Looking through the folder");
+      await takeHandle(handle, "Looking through the folder");
     } else {
       $("folderPick").click();
     }
@@ -318,7 +367,7 @@
       const have = await dirHandle.queryPermission({mode: "read"});
       if (have !== "granted") {
         const asked = await dirHandle.requestPermission({mode: "read"});
-        if (asked !== "granted") { state("bad", "Folder access was not granted", dirHandle.name); return; }
+        if (asked !== "granted") { state("bad", "Folder access was not granted", dirHandle.name); note("bad", "", "", true); return; }
       }
       await loadFromHandle(dirHandle, "Checking for a newer save");
     } else if (canHandle) {
@@ -353,13 +402,14 @@
     syncWatchBtn();
   }
   function syncWatchBtn() {
+    paintStrip();
     const b = $("watchBtn");
     if (!b) return;
     b.hidden = !(canHandle && dirHandle);
     const on = !!watchTimer;
     b.dataset.on = String(on);
     const at = lastCheck ? new Date(lastCheck).toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}) : "";
-    b.textContent = on ? `Watching${at ? " · " + at : ""}` : "Watch";
+    b.textContent = on ? `Watching the folder${at ? " · checked " + at : ""}` : "Watch the folder";
     b.title = on
       ? "Checking the folder every 30 seconds; the board rebuilds when the game writes a newer save. Click to pause."
       : "Check the folder every 30 seconds and rebuild on every autosave.";
@@ -387,7 +437,7 @@
     chip.title = has
       ? "Your own en.json is remembered in this browser and wins over the built-in text. Click to replace it."
       : "Names, recipes and station capacities come with the page. If your game is newer, click to choose its en.json.";
-    $("asideEyebrow").textContent = has ? "Remembered on this device" : "Game text";
+    $("asideEyebrow").textContent = has ? "Game text · remembered on this device" : "Game text";
     $("asideText").innerHTML = has
       ? "Your own <code>en.json</code> is in use, ahead of the text built into the page."
       : "Names, recipes and station capacities come with the page.";
@@ -429,11 +479,133 @@
     watch: (h) => { handlers = h; },
   };
 
+  /* --- the landing: reveal, the drop zone, the sphere ------------------ */
+  let landingLive = true;
+  function stopLanding() { landingLive = false; }
+
+  // The sphere is the dot grown up. It leaves the dot after the wordmark,
+  // arcs over and rests beside the drop zone, watches the pointer and
+  // squishes when clicked. The board's own sphere, on the masthead, is the
+  // template's; this one is the landing's and dies with it.
+  function wireSphere() {
+    const landing = $("landing"), orb = $("lgOrb"), dot = $("lgDot"), drop = $("drop");
+    if (!landing || !orb || !dot || !drop) return;
+    if (!drop.getBoundingClientRect().width) { setTimeout(wireSphere, 200); return; }
+    const size = 360;
+    const core = orb.querySelector("i"), seam = orb.querySelector("u");
+    let p0, rest, top;
+    const measure = () => {
+      p0 = landing.getBoundingClientRect();
+      const d = drop.getBoundingClientRect();
+      rest = d.right - p0.left + 48;
+      top = d.top - p0.top + d.height / 2 - size / 2;
+      orb.style.width = orb.style.height = size + "px";
+      orb.style.left = rest + "px"; orb.style.top = top + "px";
+    };
+    measure();
+    const d0 = dot.getBoundingClientRect();
+    const sx = d0.left - p0.left + d0.width / 2 - (rest + size / 2);
+    const sy = d0.top - p0.top + d0.height / 2 - (top + size / 2);
+    const s0 = d0.width / size;
+    const b = {px: sx, py: sy, sc: s0, tx: 0, ty: 0, busy: true};
+    const paint = () => {
+      orb.style.transform = `translate(${b.px.toFixed(1)}px,${b.py.toFixed(1)}px) scale(${b.sc.toFixed(3)})`;
+      seam.style.transform = `rotate(${((b.px - sx) / (Math.PI * size) * 360).toFixed(1)}deg)`;
+    };
+    const squish = () => [core, seam].forEach((el) => { el.classList.remove("squish"); void el.offsetWidth; el.classList.add("squish"); });
+    const ring = () => {
+      const r = orb.getBoundingClientRect(), i = document.createElement("i");
+      i.className = "ring";
+      i.style.left = (r.left + window.scrollX) + "px"; i.style.top = (r.top + window.scrollY) + "px";
+      i.style.width = r.width + "px"; i.style.height = r.height + "px";
+      document.body.appendChild(i); setTimeout(() => i.remove(), 900);
+    };
+    orb.addEventListener("click", () => { squish(); ring(); });
+    paint(); orb.classList.add("live");
+    const enter = () => {
+      if (REDUCED) { b.px = 0; b.py = 0; b.sc = 1; b.busy = false; paint(); return; }
+      dot.classList.remove("kick"); void dot.offsetWidth; dot.classList.add("kick");
+      const t0 = performance.now() + 180, dur = 1500, lift = 140;
+      const step = (t) => {
+        const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
+        b.px = sx * (1 - e); b.py = sy * (1 - e) - Math.sin(p * Math.PI) * lift; b.sc = s0 + (1 - s0) * e; paint();
+        if (p < 1) requestAnimationFrame(step); else b.busy = false;
+      };
+      requestAnimationFrame(step);
+    };
+    setTimeout(enter, 400);
+    document.addEventListener("mousemove", (e) => {
+      if (b.busy || !landingLive) return;
+      const r = orb.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      const d = Math.hypot(dx, dy) || 1, k = Math.min(36, d * .1);
+      b.tx = dx / d * k; b.ty = dy / d * k;
+      orb.style.setProperty("--hx", (34 + dx / d * 20) + "%"); orb.style.setProperty("--hy", (32 + dy / d * 20) + "%");
+    });
+    const loop = () => {
+      if (!landingLive) return;
+      if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; paint(); }
+      requestAnimationFrame(loop);
+    };
+    loop();
+    // The resting place moves when the window or the fonts do.
+    const relayout = () => { if (landingLive) { measure(); paint(); } };
+    window.addEventListener("resize", relayout);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
+  }
+
+  // The green dot is a coin: click it and it pays out. The board wires its
+  // own dot the same way; this is the landing's.
+  function wireCoin() {
+    const dot = $("lgDot");
+    if (!dot) return;
+    dot.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dot.classList.remove("spin"); void dot.offsetWidth; dot.classList.add("spin");
+      if (REDUCED) return;
+      const r = dot.getBoundingClientRect();
+      for (let i = 0; i < 14; i++) {
+        const c = document.createElement("i"); c.className = "coin";
+        const a = (Math.random() * Math.PI) - Math.PI, d = 60 + Math.random() * 120;
+        c.style.left = (r.left + window.scrollX + 1) + "px"; c.style.top = (r.top + window.scrollY + 1) + "px";
+        c.style.setProperty("--dx", Math.cos(a) * d + "px"); c.style.setProperty("--dy", (Math.abs(Math.sin(a)) * d + 140) + "px");
+        c.style.animationDelay = (Math.random() * .12) + "s";
+        document.body.appendChild(c); setTimeout(() => c.remove(), 1400);
+      }
+    });
+  }
+
+  function wireLanding() {
+    const landing = $("landing");
+    if (!landing) return;
+    // Sections arrive: the landing's pieces slide in, staggered, once.
+    const rv = [...landing.querySelectorAll(".rv")];
+    requestAnimationFrame(() => rv.forEach((el, i) => { el.style.transitionDelay = (i * 70) + "ms"; el.classList.add("in"); }));
+    // The drop zone tilts toward the pointer, opens on hover (CSS) and on a
+    // drag over the page, and is the folder button by another route.
+    const drop = $("drop");
+    drop.addEventListener("mousemove", (e) => {
+      if (REDUCED) return;
+      const r = drop.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      drop.style.setProperty("--ry", (x * 10) + "deg"); drop.style.setProperty("--rx", (-y * 8) + "deg");
+    });
+    drop.addEventListener("mouseleave", () => { drop.style.setProperty("--ry", "0deg"); drop.style.setProperty("--rx", "0deg"); });
+    drop.addEventListener("click", pickFolder);
+    drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickFolder(); } });
+    $("helpLink").addEventListener("click", (e) => { e.preventDefault(); $("help").open = !$("help").open; });
+    wireCoin();
+    wireSphere();
+  }
+
   /* --- wiring ------------------------------------------------------------ */
   window.addEventListener("DOMContentLoaded", async () => {
     localeState();
     state("busy", "Preparing the reader…", "Loading the Python runtime · about 6 MB, cached after the first visit");
-    if (!canHandle) $("folderBtn").title = "Choose the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
+    if (!canHandle) {
+      $("folderBtn").title = "Choose the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
+      $("drop").title = $("folderBtn").title;
+    }
 
     const take = (files) => {
       const list = [...files];
@@ -442,6 +614,38 @@
       if (locale) takeLocale(locale);
       if (save) buildFrom(save);
       else if (!locale) note("warn", "That is neither a .hsg save nor en.json.");
+    };
+    // A dropped folder: Chromium hands over the same live handle the picker
+    // would, so it is remembered and watched like one; elsewhere the folder
+    // is walked once for its files, a snapshot like the directory input.
+    const walkEntry = (entry, depth, out) => new Promise((resolve) => {
+      if (entry.isFile) { entry.file((f) => { out.push(f); resolve(); }, resolve); return; }
+      if (!entry.isDirectory || depth > 3) { resolve(); return; }
+      const reader = entry.createReader();
+      const batch = () => reader.readEntries(async (entries) => {
+        if (!entries.length) { resolve(); return; }
+        for (const en of entries) await walkEntry(en, depth + 1, out);
+        batch();
+      }, resolve);
+      batch();
+    });
+    const takeDrop = async (dt) => {
+      const items = [...(dt.items || [])].filter((it) => it.kind === "file");
+      // Handles and entries must be asked for inside the event, before the
+      // transfer is cleared; the waiting can happen after.
+      const asked = items.map((it) => typeof it.getAsFileSystemHandle === "function" ? it.getAsFileSystemHandle().catch(() => null) : null);
+      const entries = items.map((it) => typeof it.webkitGetAsEntry === "function" ? it.webkitGetAsEntry() : null);
+      const files = [...dt.files];
+      const dirs = (await Promise.all(asked)).filter((h) => h && h.kind === "directory");
+      if (dirs.length && canHandle) { await takeHandle(dirs[0], "Looking through the folder"); return; }
+      const dirEntries = entries.filter((en) => en && en.isDirectory);
+      if (dirEntries.length) {
+        const out = [];
+        for (const en of dirEntries) await walkEntry(en, 0, out);
+        take(out.concat(files.filter((f) => isSave(f) || isLocale(f))));
+        return;
+      }
+      take(files);
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
@@ -456,13 +660,14 @@
     // Back from the game: check at once rather than waiting out the interval.
     document.addEventListener("visibilitychange", () => { if (!document.hidden && watchTimer) checkFolder(); });
 
-    // Drop anywhere on the page. The veil says so while a file is over it.
-    const veil = $("dropVeil");
+    // Drop anywhere on the page. On the landing the drop zone opens its
+    // folder while a file is over the page.
+    const over = (on) => { const d = $("drop"); if (d) d.classList.toggle("lg-over", on); };
     let depth = 0;
-    document.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; veil.hidden = false; });
+    document.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; over(true); });
     document.addEventListener("dragover", (e) => { e.preventDefault(); });
-    document.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; veil.hidden = true; } });
-    document.addEventListener("drop", (e) => { e.preventDefault(); depth = 0; veil.hidden = true; take(e.dataTransfer.files); });
+    document.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; over(false); } });
+    document.addEventListener("drop", (e) => { e.preventDefault(); depth = 0; over(false); takeDrop(e.dataTransfer); });
 
     document.querySelectorAll("button.copy").forEach((btn) => btn.addEventListener("click", async () => {
       const text = $(btn.dataset.copy).textContent;
@@ -480,6 +685,7 @@
     if (canHandle) dirHandle = await handles.get("saves");
     place();
     if (runtimeReady || dirHandle) idleState();
-    if (dirHandle) note("info", "Your browser may ask for folder access when you open it.");
+    if (dirHandle) note("info", "One click opens its newest save; your browser may ask for folder access first.");
+    wireLanding();
   });
 })();
