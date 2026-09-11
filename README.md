@@ -422,6 +422,18 @@ recipes it can run. A patch that changes a recipe changes this section with it.
 The arithmetic runs in the browser so the sliders are instant; Python only ships the
 parsed tables across.
 
+The ingredient table separates this range's usage from the **company target**. Active
+import contracts are added together, including contracts at different depots; paused
+amounts are shown separately. Changing machines adds or removes this range's ingredient
+usage from the company's standing orders, preserving the orders used by other ranges.
+The target must still cover this range's full requirement. Allocate the company target
+across the appropriate importer contracts in-game; it is not a target for each depot.
+
+Service fees are excluded from factory and import plans. A Hairdresser plans one
+**Hair Care Product** supply chain, using Hair Care Formula; a Gym plans its beverages,
+not its cover charge. Service sales remain in the market views. The planner does not
+convert service sales into consumable quantities when that relationship is unknown.
+
 ### Does the model match the factories you already run?
 
 It does, to within a rounding error. Take the ingredient draw the supply section already
@@ -798,6 +810,9 @@ Before sending a change, run `python check_saves.py` over your own save folder. 
 and extracts every save it finds and prints a table, which catches a parse that succeeds
 while producing plausible wrong figures. If you touched `ba_save.py` or `ba_dashboard.py`,
 run `python build_web.py` so the browser copies match.
+
+Run `python -m unittest discover -s tests` for the portable planner regressions.
+These require Node.js for the embedded JavaScript checks and do not need a save file.
 
 ## Licence
 

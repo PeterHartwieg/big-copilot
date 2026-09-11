@@ -871,7 +871,7 @@ details.help[open] summary::after{content:"\2013"}
       <div class="sechead"><h2>Next moves</h2>
         <span class="why" data-tip="Things the board could do for you that it cannot do yet. Each one is a decision you make every week by hand today." tabindex="0"><i>?</i></span></div>
       <div class="moves">
-        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Size next week's orders from the peak day, then set every manager in one pass.</span></a>
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Plan weekly orders and get a checklist of settings to enter in-game.</span></a>
         <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
         <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
       </div>
@@ -943,9 +943,9 @@ details.help[open] summary::after{content:"\2013"}
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2>Ingredients</h2>
-        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. The order is the weekly figure rounded up to the hundred, the way the logistics manager takes it. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
       <table class="ingtable" id="ingTable">
-        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Weekly order</th>
+        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Company target</th>
           <th>On order now</th><th>Change</th><th class="cash">Cash / week</th></tr></thead>
         <tbody id="ingBody"></tbody>
         <tfoot id="ingFoot"></tfoot>
@@ -972,8 +972,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "635e80d70f";</script>
-<script src="app.js?v=635e80d70f"></script>
+<script>window.LEDGER_BUILD = "47dac9c08a";</script>
+<script src="app.js?v=47dac9c08a"></script>
 
 <script>
 let D = null;
@@ -3135,10 +3135,13 @@ const prettySlug = slug => slug.replace(/^ba:[a-z]+_/, "").replace(/([a-z])(\d)/
 const itemName = slug => (D.plan.items || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
 const HOURS = 24;  // a workstation keeps running while the shops are shut
 
+/* changed for growth: one physical product is enough to plan — the hairdresser
+   stocks a single haircare line beside its services. A type whose catalogue is
+   services only stays out of the list; there is no line for it to feed. */
 function planTypes(){
   const cat = D.plan.catalogue || {};
   return Object.keys(cat)
-    .filter(k => (cat[k].products || []).length >= 2)
+    .filter(k => (cat[k].products || []).length >= 1)
     .sort((a,b) => cat[a].type.localeCompare(cat[b].type));
 }
 
@@ -3149,6 +3152,21 @@ function defaultRate(kind){
   const vals = own ? Object.values(own.perDay || {}) : [];
   if(!vals.length) return null;
   return Math.max(1, Math.round(vals.reduce((a,b) => a+b, 0) / vals.length));
+}
+/* The company order for one material, in one pure function so it can be tested
+   on its own: what the planned week needs beyond what the factories on the
+   floor already eat, added to what the company already holds on active
+   contracts, rounded up to the hundred the logistics manager takes. The
+   selected range is the floor: the target never drops below a week of the
+   range, so the range stays funded even when the factories on the floor
+   already eat that much. The gap is what to change the contracts by. An order
+   that does not exist yet counts as zero here — the caller keeps the "not
+   ordered" wording and marks a positive target as a new order. Paused
+   contracts never count; the game will not ship against them. */
+function planOrder(week, baseline, ordered){
+  const have = ordered === null || ordered === undefined ? 0 : ordered;
+  const target = Math.ceil(Math.max(0, week, have + week - baseline) / 100) * 100;
+  return {target, gap: target - have};
 }
 /* A line starts as the factories the player already runs: the machines on
    that product across every factory, and none for a product nobody makes, so
@@ -3203,9 +3221,25 @@ function drawPlan(){
      machines × rate × 24 × 7 × factor is the same figure the logistics table
      draws for a running line. */
   const ws = D.plan.workstations || {}, sources = D.plan.sources || {}, prices = D.plan.prices || {};
-  /* Per ingredient, by name: what is on order today, whether that contract
-     runs, and the unit price where the company already buys it. planDraw()
-     turns these into the Ingredients table's order, change and cash columns. */
+  /* changed for growth: what the factories the player already runs eat of each
+     material, read from the machines actually on the floor — never from the
+     one-machine sketch this page seeds for a range nobody makes yet. Only lines
+     of the selected range count, so an untouched range reproduces the company's
+     standing orders (week equals baseline, the target keeps them) and a machine
+     added here raises the target by exactly what it eats. */
+  const view = factoryView(), alias = view.aliases || {};
+  const norm = slug => alias[slug] || slug;  // a recipe input to the product actually traded
+  const range = new Set(cat[planType].products);
+  const baseline = {};
+  view.sites.forEach(s => s.lines.forEach(l => {
+    const r = RECIPE_BY[l.slug];
+    if(!r || !range.has(l.slug)) return;
+    r.ingredients.forEach(i => { baseline[i.item] = (baseline[i.item] || 0) + (l.machines || 0) * i.per * HOURS * 7; });
+  }));
+  /* Per ingredient, by name: what is on order today (active contracts only, the
+     paused pile kept as its own figure), what the real factories already eat,
+     and the unit price where the company already buys it. planDraw() turns
+     these into the Ingredients table's target, change and cash columns. */
   const meta = {};
   const wantWeek = perShop * 7 * shops;  // what the shops take of one product a week
   let bought = 0;
@@ -3221,12 +3255,25 @@ function drawPlan(){
     const kit = [...(station.assembly || []), ...(station.machines || [])];
     const ing = r.ingredients.map(i => `${i.item}:${i.per / r.out}`).join(",");
     r.ingredients.forEach(i => {
-      const src = sources[i.slug], unit = prices[i.slug];
+      /* changed for growth: the recipe's input slug can name a variant of the
+         product actually traded, so the contract lookup goes through the
+         factory view's aliases before falling back to the slug itself; the
+         price keeps the recipe slug first, the traded product second. */
+      const src = sources[norm(i.slug)] || sources[i.slug];
+      const unit = prices[i.slug] !== undefined ? prices[i.slug] : prices[norm(i.slug)];
+      const base = Math.round(baseline[i.item] || 0);
+      const paused = src ? src.paused || 0 : 0;
+      const contracts = src ? (src.contracts || []).length : 0;
+      const on = !src ? "Not on any import contract yet"
+        : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
+        : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
+        : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
-        tip: (src
-          ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}${src.active ? "" : " (contract paused)"}`
-          : "Not on any import contract yet") + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
-        ordered: src ? src.ordered : null, active: src ? src.active : false, from: src ? src.from : null,
+        tip: on
+          + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
+          + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
+        ordered: src ? src.ordered : null, active: src ? src.active : false,
+        paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
       };
     });
@@ -3237,7 +3284,12 @@ function drawPlan(){
       <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
   });
 
-  $("planNote").textContent = bought ? `${plural(bought, "product")} of ${cat[planType].products.length} bought in` : "";
+  /* changed for growth: a type's service list is explained, never planned —
+     services are charged for work done, so no factory line makes or stocks
+     them and they stay out of the import sums entirely. */
+  const svcs = (cat[planType].services || []).map(itemName);
+  $("planNote").textContent = (bought ? `${plural(bought, "product")} of ${cat[planType].products.length} bought in` : "")
+    + (svcs.length ? `${bought ? " · " : ""}also sells ${svcs.join(", ")} as services, which no line makes or stocks` : "");
   $("planBody").innerHTML = `
     <div class="planstats">
       <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
@@ -3252,6 +3304,7 @@ function drawPlan(){
     <p class="planline">${own && perShop
       ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
           perShop.toLocaleString("en-US")}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
+      : own ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here.`
       : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
   planDraw();
   wireTips();
@@ -4230,6 +4283,7 @@ function planDraw(){
   const madeTile = $("vMadeTile");
   if(madeTile) madeTile.dataset.tip = wantWeek
     ? `The shops take ${fmtN(wantWeek * products)} units a week across the range; ${fmtN(exportWeek)} is surplus for export`
+    : shopsOwned ? `Demand is unknown: the ${shopsOwned} ${shopsOwned === 1 ? "shop sells" : "shops sell"} services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated`
     : `Nothing measured yet: all ${fmtN(made)} units a week are surplus for export until the shops exist`;
   put("vShort", shortLines ? ` ${shortLines} line${shortLines === 1 ? " does" : "s do"} not keep up with the shelves; those need more machines.` : "");
   /* What the factory has to buy: each workstation's kit, times the machines
@@ -4242,26 +4296,37 @@ function planDraw(){
   const body = $("ingBody");
   if(body){
     // changed for growth: the host's data-ingmeta (JSON, name -> {tip, ordered,
-    // active, from, unit}) puts what is on order today under each ingredient's
-    // name, and fills the order, change and cash columns.
+    // active, paused, contracts, from, baseline, unit}) puts what is on order
+    // today under each ingredient's name, and fills the target, change and
+    // cash columns.
     let meta = {}; try{ meta = host && host.dataset.ingmeta ? JSON.parse(host.dataset.ingmeta) : {}; }catch(e){}
     const prev = {};
     Array.from(body.children).forEach(tr => { const w = q(".wk", tr); if(w) prev[tr.dataset.name] = w.textContent; });
-    let cash = 0, priced = 0, total = 0;
+    let cash = 0, priced = 0, total = 0, targetSum = 0;
     body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) => {
       const i = meta[name] || {}, ordered = i.ordered ?? null, unit = i.unit ?? null;
-      /* The change is the weekly need against what is on order now, before
-         either is rounded; the cash is the week at the last price paid. */
-      const gap = ordered === null ? null : r.week - ordered;
+      /* changed for growth: Company target and Change come from planOrder() —
+         at least the range's own week, and more where the range adds beyond
+         what real factories already eat, on top of every active contract.
+         Per day, per week and cash stay the range's own
+         figures. Nothing on order counts as zero for the target and keeps the
+         "not ordered" wording; a positive target there is a new order to
+         place, not a change. Paused contracts are shown apart and never
+         counted. */
+      const o = planOrder(r.week, i.baseline || 0, ordered);
+      targetSum += o.target;
+      const gap = ordered === null ? (o.target > 0 ? o.target : null) : o.gap;
       const value = unit === null ? null : r.week * unit;
       total++; if(unit !== null){ priced++; cash += value; }
       return `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
-      `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", "paused", "The import contract is paused")}` : ""}</td>` +
+      `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", "paused", "Every contract for it is paused; none of it counts as ordered")}` : ""}</td>` +
       `<td class="l"><span class="usedby" data-tip="${attr(`Used by ${r.by.join(", ")}`)}">${
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
-      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td>` +
-      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")}</td>` +
+      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
+      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
+        }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
+        : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")
         : Math.abs(gap) < 1 ? chipHtml("ok", "as is")
         : gap > 0 ? chipHtml("warn", `+${Math.ceil(gap).toLocaleString("en-US")}`)
         : chipHtml("dim", Math.floor(gap).toLocaleString("en-US"))}</td>` +
@@ -4271,13 +4336,13 @@ function planDraw(){
     const table = $("ingTable");
     if(table) table.classList.toggle("nocash", !priced);
     const foot = $("ingFoot");
-    if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td></td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
+    if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td>${fmtN(targetSum)}</td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
     const note = $("ingNote");
     if(note) note.textContent = !total ? "Nothing to import; this range is bought as finished goods."
-      : !priced ? ""
-      : `A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
-        + (priced < total
-          ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : "");
+      : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
+        + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
+          + (priced < total
+            ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
