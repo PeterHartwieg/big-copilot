@@ -136,20 +136,22 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   position:absolute;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;
   left:var(--nx,0);width:var(--nw,0);transition:left .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
 }
-/* The balls may roll behind the clock, so it sits above them on a frosted
-   pane of the ground colour: invisible on the bare masthead, a soft blur over
-   a ball. The padding is taken back by the margin so the text stays put; the
-   left edge, where the balls come in, fades instead of ending in a line. */
-.clock{margin-left:auto;text-align:right;cursor:default;position:relative;z-index:7;padding:6px 10px 6px 28px;margin-right:-10px;border-radius:8px}
-.clock::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
-  background:color-mix(in srgb,var(--ground) 80%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
-  -webkit-mask-image:linear-gradient(90deg,transparent,#000 22px);mask-image:linear-gradient(90deg,transparent,#000 22px)}
-.clock b,.clock small{text-shadow:0 0 6px var(--ground),0 0 2px var(--ground)}
+/* The balls may roll behind the clock, so it sits above them. Each line of
+   text carries its own faint glow of the ground colour: blurred, so it has no
+   edge, only as wide as the words, and light enough that a ball still shows
+   through. A halo that hugs each letter does the real work of keeping the
+   small grey lines legible over the green. */
+.clock{margin-left:auto;text-align:right;cursor:default;position:relative;z-index:7}
+.clock > b,.clock > small{position:relative;
+  text-shadow:0 0 1px var(--ground),0 0 2px var(--ground),0 0 4px var(--ground),0 0 7px var(--ground)}
+.clock > b::before,.clock > small::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
+  border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
 .clock b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px;letter-spacing:.01em}
 .clock b i{font-style:normal;color:var(--ink-3);margin:0 6px}
 @keyframes blink{50%{opacity:.25}}
-/* The real clock also carries staff counts. */
-.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
+/* The real clock also carries staff counts. Each line is only as wide as its
+   text, so the glow behind it is too. */
+.clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
 /* The live dot for a --watch board sits in the clock's small line. */
 .live{display:inline-flex;align-items:center;gap:6px;color:var(--accent);transition:color .3s}
@@ -970,8 +972,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "00d53eb4fc";</script>
-<script src="app.js?v=00d53eb4fc"></script>
+<script>window.LEDGER_BUILD = "687ef60b2e";</script>
+<script src="app.js?v=687ef60b2e"></script>
 
 <script>
 let D = null;
