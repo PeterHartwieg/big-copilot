@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime as dt
+import hashlib
 import http.server
 import json
 import math
@@ -1421,6 +1422,9 @@ def _supply(
                     "peakDay": peak_day,
                     "peakPerDay": round(per_day * factor),
                     "cover": round(cover, 1),
+                    # The plain division, without the weekday walk: units on the
+                    # shelf against a flat day of draw.
+                    "daysOnHand": round(line["units"] / per_day, 1) if per_day else None,
                     "runsOut": WEEKDAYS[runs_out % 7] if runs_out is not None else None,
                     "weekly": supply["weekly"],
                     "lastWeek": supply["lastWeek"],
@@ -2514,26 +2518,47 @@ def _hourly(save: Save, buildings: list, businesses: list, stations: dict, crew:
             [min(staffed[wd][h], door) if door else staffed[wd][h] for h in range(24)]
             for wd in range(7)
         ]
-        out.append(
-            {
-                "key": key,
-                "name": business["name"],
-                "customers": customers,
-                "weeks": weeks,
-                "thin": [w < HOUR_WEEKS_THIN for w in weeks],
-                "staffed": staffed,
-                "onShift": on_shift,
-                "effective": effective,
-                "door": door,
-                "counters": counters,
-                "stationCount": len(here),
-                "basket": business["basket"],
-                "peak": max(
-                    (c for row in customers for c in row if c is not None), default=0
-                ),
-            }
-        )
+        entry = {
+            "key": key,
+            "name": business["name"],
+            "customers": customers,
+            "weeks": weeks,
+            "thin": [w < HOUR_WEEKS_THIN for w in weeks],
+            "staffed": staffed,
+            "onShift": on_shift,
+            "effective": effective,
+            "door": door,
+            # The same number under the name the cap findings think in.
+            "cap": door,
+            "counters": counters,
+            "stationCount": len(here),
+            "basket": business["basket"],
+            "peak": max(
+                (c for row in customers for c in row if c is not None), default=0
+            ),
+        }
+        entry["capHours"] = len(_capped_cells(entry))
+        out.append(entry)
     return out
+
+
+def _capped_cells(grid: dict) -> set:
+    """The weekday-hour cells measured at or above the cap that was on.
+
+    One test shared by the grid's capHours and the cap findings in
+    _hour_findings(): an hour is capped when the customers measured come
+    within AT_CAP of what was actually available that hour, on a weekday
+    with enough weeks behind it to measure.
+    """
+    return {
+        (wd, hour)
+        for wd in range(7)
+        if not grid["thin"][wd]
+        for hour in range(24)
+        if grid["customers"][wd][hour] is not None
+        and grid["effective"][wd][hour]
+        and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * AT_CAP
+    }
 
 
 def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
@@ -2546,14 +2571,8 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         door, counters = grid["door"], grid["counters"]
 
         capped = collections.defaultdict(set)
-        for wd in range(7):
-            for hour in range(24):
-                seen = grid["customers"][wd][hour]
-                cap = grid["effective"][wd][hour]
-                if seen is None or not cap or grid["thin"][wd]:
-                    continue
-                if seen >= cap * AT_CAP:
-                    capped[wd].add(hour)
+        for wd, hour in _capped_cells(grid):
+            capped[wd].add(hour)
         hours = sum(len(h) for h in capped.values())
         if hours:
             staffed_at = [
@@ -3547,6 +3566,8 @@ def _plan(
     own = {
         kind: {
             "sites": sites[kind],
+            # The same count under the name the chain planner prints.
+            "shops": sites[kind],
             "perDay": {s: round(sum(v) / len(v), 1) for s, v in products.items()},
         }
         for kind, products in mine.items()
@@ -3645,6 +3666,27 @@ def _expansion(findings: list, market: dict, businesses: list) -> list:
     return out
 
 
+# What the number in a finding's "worth" is counted in, for the page to print
+# under the amount. Only groups whose worth carries money get a unit; the rest
+# are left empty because their worth is always None.
+ALERT_UNITS = {
+    "vacant": "/day rent",
+    "loss": "/day loss",
+    "hype": "/day revenue",
+    "trend": "/day revenue",
+    "atcap": "/day trade",
+    "idlestaff": "/day wages",
+    "dead": "/day tied up",
+    "target": "/day excess",
+}
+
+
+def _alert_id(*parts: str) -> str:
+    """A stable id for a finding: the same finding keeps it across renders,
+    and it does not depend on where the finding sits in the list."""
+    return hashlib.sha1(":".join(parts).encode("utf-8")).hexdigest()[:10]
+
+
 def _alerts(
     businesses: list,
     supply: dict,
@@ -3676,6 +3718,8 @@ def _alerts(
                 "rank": rank,
                 "subject": subject,
                 "worth": worth,
+                "unit": ALERT_UNITS.get(group, ""),
+                "id": _alert_id(group, site, subject),
                 "always": always,
             }
         )
@@ -4047,6 +4091,8 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
                     "rank": -machines,
                     "subject": where,
                     "worth": None,
+                    "unit": ALERT_UNITS.get(group, ""),
+                    "id": _alert_id(group, business["name"], where),
                     "always": False,
                 }
             )
@@ -4065,6 +4111,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
             for machine in line.get("gaps", []):
                 share = machine["hours"] / STAFF_HOURS
                 lost = round((STAFF_HOURS - machine["hours"]) / 7 * line.get("rate", 0))
+                subject = f"{name} at position {machine['slot']}"
                 text = (
                     f"{name} machine at list position {machine['slot']} is staffed "
                     f"{machine['hours']} of {STAFF_HOURS} hours; nobody on it {machine['off']}"
@@ -4077,8 +4124,10 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
                         "group": "staff",
                         "text": text,
                         "rank": machine["hours"],
-                        "subject": f"{name} at position {machine['slot']}",
+                        "subject": subject,
                         "worth": None,
+                        "unit": ALERT_UNITS.get("staff", ""),
+                        "id": _alert_id("staff", business["name"], subject),
                         "always": False,
                     }
                 )
@@ -4168,6 +4217,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                     "rank": -row["perDay"],
                     "subject": row["item"],
                     "worth": None,
+                    "unit": ALERT_UNITS.get("feed", ""),
+                    "id": _alert_id("feed", where, row["item"]),
                     "always": False,
                 }
             )
@@ -4206,6 +4257,8 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
                     "rank": -row["stock"],
                     "subject": row["item"],
                     "worth": worth,
+                    "unit": ALERT_UNITS.get("dead", ""),
+                    "id": _alert_id("dead", name, row["item"]),
                     "always": False,
                 }
             )
@@ -4237,15 +4290,18 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
                 f"site{'s' if sites > 1 else ''} is "
                 f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
             )
+        site = f"{sites} shops" if sites > 1 else businesses[rows[0]["s"]]["name"]
         notes.append(
             {
                 "level": "info",
-                "site": f"{sites} shops" if sites > 1 else businesses[rows[0]["s"]]["name"],
+                "site": site,
                 "group": "target",
                 "text": text,
                 "rank": -stock,
                 "subject": items[0],
                 "worth": worth,
+                "unit": ALERT_UNITS.get("target", ""),
+                "id": _alert_id("target", site, items[0]),
                 "always": False,
             }
         )
@@ -4290,6 +4346,10 @@ def _condense(found: list, gate: float) -> dict:
                 "text": SUMMARIES[group].format(n=len(rows), subject=worst["subject"]),
                 "detail": worst["text"],
                 "worth": sum(worths) if worths else None,
+                "unit": ALERT_UNITS.get(group, ""),
+                # The subject is dropped here, so the merged row is keyed on
+                # where it is alone.
+                "id": _alert_id("summary", group, site),
                 "always": any(r["always"] for r in rows),
             }
         )
