@@ -337,7 +337,8 @@ def main() -> None:
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     print(f"gametext.json: {len(text)} entries")
-    # The template carries the doctype and its own charset tag; a viewport tag
+    # The template carries the doctype, its own charset tag and the inline SVG
+    # favicon (so this door never asks for /favicon.ico either); a viewport tag
     # is all the page adds, placed after them by render().
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
     if ANALYTICS_TOKEN:
