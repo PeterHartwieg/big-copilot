@@ -4633,12 +4633,19 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   position:absolute;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;
   left:var(--nx,0);width:var(--nw,0);transition:left .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
 }
-.clock{margin-left:auto;text-align:right;cursor:default}
+/* The balls may roll behind the clock, so it sits above them on a frosted
+   pane of the ground colour: invisible on the bare masthead, a soft blur over
+   a ball. The padding is taken back by the margin so the text stays put; the
+   left edge, where the balls come in, fades instead of ending in a line. */
+.clock{margin-left:auto;text-align:right;cursor:default;position:relative;z-index:7;padding:6px 10px 6px 28px;margin-right:-10px;border-radius:8px}
+.clock::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
+  background:color-mix(in srgb,var(--ground) 80%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 22px);mask-image:linear-gradient(90deg,transparent,#000 22px)}
+.clock b,.clock small{text-shadow:0 0 6px var(--ground),0 0 2px var(--ground)}
 .clock b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px;letter-spacing:.01em}
 .clock b i{font-style:normal;color:var(--ink-3);margin:0 6px}
 @keyframes blink{50%{opacity:.25}}
-/* The real clock also carries staff counts. Keep its full text compact enough
-   for the three-ball shelf beside a short company name. */
+/* The real clock also carries staff counts. */
 .clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
 /* The live dot for a --watch board sits in the clock's small line. */
@@ -4774,20 +4781,27 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .silenced.on{display:block}
 
 /* next moves: things the board cannot do yet ------------------------------ */
-.moves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;perspective:900px}
+/* Each card carries its own perspective. One perspective on the grid put the
+   vanishing point in the middle card, so the lifted icon and text of the outer
+   cards were projected sideways and no two cards had the same insets. The lift
+   itself only comes on hover, so at rest every card is flat and identical. */
+.moves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
 .move{
   position:relative;padding:20px 20px 18px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);
   text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;
-  transform:rotateX(var(--rx,0)) rotateY(var(--ry,0));transition:transform .12s ease-out,border-color .2s;transform-style:preserve-3d;
+  transform:perspective(900px) rotateX(var(--rx,0)) rotateY(var(--ry,0));transition:transform .12s ease-out,border-color .2s;transform-style:preserve-3d;
 }
 .move:hover{border-color:var(--rule);color:inherit}
 .move .ic{
   width:40px;height:40px;border-radius:10px;background:var(--raised);display:grid;place-items:center;color:var(--accent);
-  transform:translateZ(24px);transition:transform .2s;
 }
 .move .ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.move b{font-size:15px;font-weight:600;transform:translateZ(16px)}
-.move span{font-size:12.5px;color:var(--ink-2);transform:translateZ(10px)}
+.move b{font-size:15px;font-weight:600}
+.move span{font-size:12.5px;color:var(--ink-2)}
+.move b,.move span{transition:transform .2s}
+.move:hover .ic{transform:translateZ(24px)}
+.move:hover b{transform:translateZ(16px)}
+.move:hover span{transform:translateZ(10px)}
 .move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
 .move:hover .soon{color:var(--accent);border-color:var(--accent)}
 
@@ -8054,23 +8068,31 @@ function wireTips(){
 
 /* sections arrive as they come into view (and after a beat regardless) ------ */
 let rvIO = null;
+/* The stagger delay is for the arrival only. Left on the element it delays
+   every later transition too, so a card that tilts toward the pointer would
+   wait up to half a second before each move and never follow it. */
+function arrive(el){
+  if(el.classList.contains("in")) return;
+  el.classList.add("in");
+  setTimeout(() => { el.style.transitionDelay = ""; }, 600 + (parseFloat(el.style.transitionDelay) || 0));
+}
 function wireReveal(){
   const vh = window.innerHeight || 1000;
   if(rvIO) rvIO.disconnect();
   const pending = $$(".rv:not(.in)").filter(el => !el.closest("[hidden]"));
   pending.forEach((el, i) => {
     el.style.transitionDelay = (i % 8) * 70 + "ms";
-    if(REDUCED || el.getBoundingClientRect().top < vh) el.classList.add("in");
+    if(REDUCED || el.getBoundingClientRect().top < vh) arrive(el);
   });
   const rest = pending.filter(el => !el.classList.contains("in"));
   if(!rest.length) return;
   if("IntersectionObserver" in window){
     rvIO = rvIO || new IntersectionObserver(es => es.forEach(en => {
-      if(en.isIntersecting){ en.target.classList.add("in"); rvIO.unobserve(en.target); }
+      if(en.isIntersecting){ arrive(en.target); rvIO.unobserve(en.target); }
     }), {threshold: .05});
     rest.forEach(el => rvIO.observe(el));
   }
-  setTimeout(() => rest.forEach(el => el.classList.add("in")), 2500);
+  setTimeout(() => rest.forEach(arrive), 2500);
 }
 
 /* the sphere is the dot grown up: it leaves the wordmark, rolls along the
@@ -8084,31 +8106,33 @@ function wireSphere(){
   if(sphereWired) return;
   /* By id: the web front door keeps its own landing orb (.orb too) in the
      DOM until the board has been shown, and that one is about to be removed. */
-  const first = $("orb"), dotEl = $("dot"), navEl = $("nav"), clockEl = $("clock");
+  const first = $("orb"), dotEl = $("dot"), navEl = $("nav");
   if(!first || !dotEl || !navEl) return;
   if(!first.isConnected || !navEl.getBoundingClientRect().width || !first.offsetParent){ setTimeout(wireSphere, 200); return; }
   sphereWired = true;
   inkHome();  // the underline was homed while the board was hidden, so its width is 0
   const parent = first.offsetParent || first.parentElement;
   const GAP = 12, MAX = 3, SIZES = [100, 72, 54];
-  let p0, base, clockLeft;
+  let p0, base;
   const measure = () => {
     p0 = parent.getBoundingClientRect();
     const n = navEl.getBoundingClientRect();
     base = { x: n.right - p0.left + 40, mid: null };
-    clockLeft = clockEl ? clockEl.getBoundingClientRect().left - p0.left : Infinity;
   };
   measure();
   const d0 = dotEl.getBoundingClientRect();
   const balls = [];
   const restX = k => base.x + balls.slice(0, k).reduce((a, b) => a + b.size + GAP, 0);
   const topOf = size => p0.height - size;
-  const room = () => clockLeft - 28 - base.x;
+  /* The shelf runs to the masthead's right edge. Balls may roll behind the
+     clock, which keeps itself readable over them; past the edge they would
+     widen the page. */
+  const room = () => p0.width - base.x;
   const maxRun = () => {
     /* Include pointer/animation movement. During an entrance the newest
        ball is still on the left, so measure the actual rightmost one. */
     const right = Math.max(...balls.map(b => b.rest + b.px + b.size));
-    return balls.length ? clockLeft - 28 - right : 0;
+    return balls.length ? Math.max(0, p0.width - right) : 0;
   };
   const paint = (b) => {
     const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6);
