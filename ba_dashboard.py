@@ -7752,6 +7752,52 @@ $("alertKindsToggle").onclick = () => {
      icon      icon(name) -> inline stroke SVG from ICON
      links     an <a href="#"> never navigates; give real targets a real hash.
 
+   Today — wireTiles, wireSev, wireFinds, wireCards:
+     .kpi                 spotlight under the pointer (--mx/--my); inside it
+                          .spark[data-vals="l1,l2,…"] with a <polyline points>
+                          in a 0..100 x space, circle.pt and span.scrub.
+     .sev[data-kind=crit|watch|opp]   click toggles .off and hides .find.<kind>.
+     .find.crit|watch|opp[data-id]    a row; its .mark silences the row, data-id
+                          is remembered under localStorage ba_dash_silenced;
+                          #silenced is <p class="silenced"><b></b> · <a class="link">undo</a></p>.
+                          A row's own click handler should ignore clicks on .mark
+                          (they are stopped in the capture phase, so an onclick
+                          on the row never sees them).
+     .move (and .drop)    tilts toward the pointer (--rx/--ry).
+
+   FilterKinds — wireKinds:
+     .sw[data-kind=<alert group id>]  click toggles .on, flips alertGroupPrefs,
+                          saves under ALERT_SETTINGS_KEY, redraws the findings.
+                          A .sw without data-kind only toggles .on.
+
+   Results — wireChart, wirePortfolio, wireSiteHours:
+     .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
+                          day; inside it an svg with <g class="xh"><line/><circle/></g>,
+                          a .readout line, and .legend a[data-series] toggling
+                          g[data-series] (choices kept in seriesState across renders).
+     tr.chain[data-chain]  click toggles .open and .show on tr.kid[data-parent=…];
+                          open chains are the existing openChains set. A row
+                          carrying its own onclick (the legacy table) is left alone.
+     .hc[data-read]       hover writes data-read into #hourRead.
+
+   Supply — wireOrders, wireFlow:
+     .up                  in a row with td[data-now][data-to]: click rolls the
+                          figure up to the target, then reads "set".
+     svg.flow             g.node[data-id], path.pipe#pipeN[data-a][data-b],
+                          circle.cargo[data-pipe=pipeN]: pipe hover moves cargo,
+                          node click picks (flowPickId, re-applied after render).
+
+   Growth — wireHeat, wirePlan:
+     .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
+                          hover lights row and column, click pins the story into
+                          #cellDetail ("Name: rest" splits at the first colon).
+     tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-slug][data-max]
+                          with .step a[data-d=-1|1], .step b, .machines, .made,
+                          .covers, .ing; totals in #vMachines #vMade #vRaw
+                          #vSurplus; ingredient rows go into #ingBody. The
+                          nearest ancestor with data-pershop (units a day per
+                          shop) and data-shops (shops owned) sizes the surplus;
+                          data-slug keeps planCounts in step with the stepper.
    ------------------------------------------------------------------------- */
 const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const q = (s, r) => (r || document).querySelector(s);
@@ -7969,10 +8015,259 @@ const wireCoin = once(() => {
   });
 });
 
+/* tiles: a spotlight under the pointer, and the sparkline reads out where you are */
+const wireTiles = once(() => {
+  document.addEventListener("mousemove", e => {
+    const t = closest(e, ".kpi"); if(!t) return;
+    const r = t.getBoundingClientRect();
+    t.style.setProperty("--mx", (e.clientX - r.left) + "px"); t.style.setProperty("--my", (e.clientY - r.top) + "px");
+    const sp = q(".spark", t); if(!sp) return;
+    const pl = q("polyline", sp), pt = q(".pt", sp), lab = q(".scrub", sp);
+    if(!pl || !pt || !lab) return;
+    const pts = pl.getAttribute("points").trim().split(/\s+/).map(p => p.split(",").map(Number));
+    const vals = (sp.dataset.vals || "").split(",");
+    const sr = sp.getBoundingClientRect(), x = (e.clientX - sr.left) / sr.width * 100;
+    let k = 0; for(let i = 1; i < pts.length; i++) if(Math.abs(pts[i][0] - x) < Math.abs(pts[k][0] - x)) k = i;
+    pt.setAttribute("cx", pts[k][0]); pt.setAttribute("cy", pts[k][1]);
+    lab.style.left = pts[k][0] + "%"; lab.textContent = vals[k] || "";
+  });
+});
+
+/* cards tilt toward the pointer ------------------------------------------------ */
+const wireCards = once(() => {
+  document.addEventListener("mousemove", e => {
+    const c = closest(e, ".move, .drop"); if(!c || REDUCED) return;
+    const r = c.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+    c.style.setProperty("--ry", (x * 10) + "deg"); c.style.setProperty("--rx", (-y * 8) + "deg");
+  });
+  onLeave(".move, .drop", c => { c.style.setProperty("--ry", "0deg"); c.style.setProperty("--rx", "0deg"); });
+});
+
+/* severity dots filter the list; the dot on a row silences it ------------------ */
+const sevOff = new Set();
+function applySev(){
+  $$(".sev[data-kind]").forEach(s => s.classList.toggle("off", sevOff.has(s.dataset.kind)));
+  $$(".find").forEach(f => f.classList.toggle("hide", [...sevOff].some(k => f.classList.contains(k))));
+}
+const bindSev = once(() => on("click", ".sev[data-kind]", s => {
+  sevOff.has(s.dataset.kind) ? sevOff.delete(s.dataset.kind) : sevOff.add(s.dataset.kind);
+  applySev();
+}));
+function wireSev(){ bindSev(); applySev(); }
+
+const SILENCED_KEY = "ba_dash_silenced";
+let silencedIds = new Set();
+try{ silencedIds = new Set(JSON.parse(localStorage.getItem(SILENCED_KEY)) || []); }catch(e){}
+const saveSilenced = () => { try{ localStorage.setItem(SILENCED_KEY, JSON.stringify([...silencedIds])); }catch(e){} };
+function silencedLine(){
+  const line = $("silenced"); if(!line) return;
+  const n = $$(".find.gone").length;
+  line.classList.toggle("on", n > 0);
+  const b = line.querySelector("b");
+  if(b) b.textContent = n + (n === 1 ? " finding silenced" : " findings silenced");
+}
+const bindFinds = once(() => {
+  /* Capture phase: the mark sits inside the row's link, and the row must not
+     follow the click. */
+  on("click", ".find .mark", (m, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const f = m.closest(".find"); f.classList.add("gone");
+    if(f.dataset.id){ silencedIds.add(f.dataset.id); saveSilenced(); }
+    silencedLine();
+  }, true);
+  on("click", ".silenced a", (a, e) => {
+    e.preventDefault();
+    silencedIds.clear(); saveSilenced();
+    $$(".find.gone").forEach(f => f.classList.remove("gone"));
+    silencedLine();
+  });
+});
+function wireFinds(){
+  bindFinds();
+  $$(".find[data-id]").forEach(f => f.classList.toggle("gone", silencedIds.has(f.dataset.id)));
+  silencedLine();
+}
+
+/* daily chart: a crosshair reads the day into the reserved line above the plot -- */
+const seriesState = {};
+function applySeries(){
+  $$(".chartbox[data-chart]").forEach(cb => {
+    $$(".legend a[data-series]", cb).forEach(a => {
+      const id = a.dataset.series;
+      if(!(id in seriesState)) return;
+      a.classList.toggle("on", seriesState[id]);
+      const g = q(`g[data-series="${CSS.escape(id)}"]`, cb);
+      if(g) g.classList.toggle("off", !seriesState[id]);
+    });
+  });
+}
+const bindChart = once(() => {
+  document.addEventListener("mousemove", e => {
+    const svg = closest(e, ".chartbox[data-chart] svg"); if(!svg) return;
+    const cb = svg.closest(".chartbox");
+    const line = q(".xh line", svg), dotc = q(".xh circle", svg), out = q(".readout", cb);
+    if(!line || !dotc || !out) return;
+    let xs, ys, labels;
+    try{ xs = JSON.parse(cb.dataset.xs); ys = JSON.parse(cb.dataset.ys); labels = JSON.parse(cb.dataset.labels); }catch(err){ return; }
+    const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal;
+    const x = (e.clientX - r.left) / r.width * vb.width;
+    let k = 0; for(let i = 1; i < xs.length; i++) if(Math.abs(xs[i] - x) < Math.abs(xs[k] - x)) k = i;
+    line.setAttribute("x1", xs[k]); line.setAttribute("x2", xs[k]);
+    dotc.setAttribute("cx", xs[k]); dotc.setAttribute("cy", ys[k]);
+    out.innerHTML = labels[k];
+  });
+  on("click", ".chartbox[data-chart] .legend a[data-series]", (a, e) => {
+    e.preventDefault();
+    seriesState[a.dataset.series] = !a.classList.contains("on");
+    applySeries();
+  });
+});
+function wireChart(){ bindChart(); applySeries(); }
+
+/* portfolio: a chain opens its sites ------------------------------------------- */
+function applyChains(){
+  $$("tr.chain[data-chain]").forEach(tr => {
+    if(tr.onclick) return;
+    const open = openChains.has(tr.dataset.chain);
+    tr.classList.toggle("open", open);
+    $$(`tr.kid[data-parent="${CSS.escape(tr.dataset.chain)}"]`).forEach(k => k.classList.toggle("show", open));
+  });
+}
+const bindPortfolio = once(() => on("click", "tr.chain[data-chain]", tr => {
+  if(tr.onclick) return;
+  const name = tr.dataset.chain;
+  openChains.has(name) ? openChains.delete(name) : openChains.add(name);
+  applyChains();
+}));
+function wirePortfolio(){ bindPortfolio(); applyChains(); }
+
+/* orders: "raise" rolls the order up to its target ------------------------------ */
+const wireOrders = once(() => on("click", ".up", (u, e) => {
+  e.preventDefault();
+  if(u.classList.contains("done")) return;
+  const td = u.closest("tr") && u.closest("tr").querySelector("td[data-now]"); if(!td) return;
+  const from = +td.dataset.now, to = +td.dataset.to; const t0 = performance.now();
+  const step = (t) => { const p = REDUCED ? 1 : Math.min(1, (t - t0) / 700), e2 = 1 - Math.pow(1 - p, 3);
+    td.textContent = Math.round(from + (to - from) * e2).toLocaleString("en-US");
+    if(p < 1) requestAnimationFrame(step); else { u.classList.add("done"); u.innerHTML = "set"; } };
+  requestAnimationFrame(step);
+}));
+
+/* supply map: a pipe carries cargo while hovered; a node lights its own pipes --- */
+let flowPickId = null;
+function applyFlow(){
+  const picked = flowPickId;
+  const nodes = $$(".flow .node"); if(!nodes.length) return;
+  nodes.forEach(m => { m.classList.toggle("on", m.dataset.id === picked); m.classList.remove("faded"); });
+  const touched = new Set();
+  $$(".flow .pipe").forEach(p => { const lit = picked && (p.dataset.a === picked || p.dataset.b === picked);
+    p.classList.toggle("lit", !!lit); p.classList.toggle("dim", !!picked && !lit); if(lit){ touched.add(p.dataset.a); touched.add(p.dataset.b); } });
+  if(picked) nodes.forEach(m => m.classList.toggle("faded", !touched.has(m.dataset.id) && m.dataset.id !== picked));
+}
+const bindFlow = once(() => {
+  const cargoOf = p => q(`.cargo[data-pipe="${CSS.escape(p.id)}"]`);
+  onEnter(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.add("go"); });
+  onLeave(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.remove("go"); });
+  on("click", ".flow .node[data-id]", n => { flowPickId = flowPickId === n.dataset.id ? null : n.dataset.id; applyFlow(); });
+});
+function wireFlow(){ bindFlow(); applyFlow(); }
+
+/* demand grid: rows and columns light up together; a click pins a cell's story -- */
+const wireHeat = once(() => {
+  onEnter(".heat .cell", c => {
+    $$(`.cell[data-r="${CSS.escape(c.dataset.r)}"], .cell[data-c="${CSS.escape(c.dataset.c)}"]`).forEach(x => x.classList.add("hl"));
+    $$(`.heat .h[data-c="${CSS.escape(c.dataset.c)}"], .heat .r[data-r="${CSS.escape(c.dataset.r)}"]`).forEach(x => x.classList.add("hl"));
+  });
+  onLeave(".heat .cell", () => $$(".hl").forEach(x => x.classList.remove("hl")));
+  on("click", ".heat .cell", c => {
+    $$(".cell.picked").forEach(x => x.classList.remove("picked")); c.classList.add("picked");
+    const detail = $("cellDetail"), tip = c.dataset.tip || "";
+    if(!detail) return;
+    const i = tip.indexOf(":");
+    detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
+      + ` <a class="link" href="#secPlan">open in Plan a chain</a>`;
+  });
+});
+
+/* plan a chain: every line runs 24/7; step a line's machines and everything follows */
+function planDraw(){
+  const lines = $$("tr.line[data-m][data-rate]"); if(!lines.length) return;
+  const host = lines[0].closest("[data-pershop], [data-shops]");
+  const perShopWeek = host ? (+host.dataset.pershop || 0) * 7 : 0, shopsOwned = host ? (+host.dataset.shops || 0) : 0;
+  const fmtN = n => Math.round(n).toLocaleString("en-US");
+  let machines = 0, made = 0, raw = 0, take = 0;
+  const ing = {};
+  lines.forEach(tr => {
+    const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
+    machines += m; made += wk; take += perShopWeek ? Math.min(wk, shopsOwned * perShopWeek) : 0;
+    const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
+    set(".step b", m); set(".made", fmtN(wk));
+    set(".covers", perShopWeek ? Math.floor(wk / perShopWeek) + " shops" : "—");
+    const cell = q("td.l", tr);
+    const product = (tr.dataset.name || (cell && cell.firstChild && cell.firstChild.textContent) || "").trim();
+    const parts = (tr.dataset.ing || "").split(",").filter(Boolean).map(x => {
+      const i = x.lastIndexOf(":"); return [x.slice(0, i).trim(), +x.slice(i + 1)];
+    });
+    const ingEl = q(".ing", tr);
+    if(ingEl) ingEl.innerHTML = parts.map(([name, f]) => `<b>${fmtN(wk * f)}</b> ${name}`).join(", ");
+    parts.forEach(([name, f]) => {
+      raw += wk * f;
+      const r = ing[name] || (ing[name] = {week: 0, by: []});
+      r.week += wk * f; if(product && !r.by.includes(product)) r.by.push(product);
+    });
+    const box = q(".machines", tr);
+    if(box){
+      const cur = box.children.length;
+      while(box.children.length < m){ const i = document.createElement("i"); i.className = "on new"; box.appendChild(i); }
+      while(box.children.length > m) box.lastChild.remove();
+      Array.from(box.children).forEach((i, k) => { if(k < cur) i.classList.remove("new"); });
+    }
+  });
+  const put = (id, v) => { const n = $(id); if(n) n.textContent = v; };
+  put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw)); put("vSurplus", fmtN(made - take));
+  /* the ingredient table: one row per material, summed over the lines that share it */
+  const body = $("ingBody");
+  if(body){
+    const prev = {};
+    Array.from(body.children).forEach(tr => { const w = q(".wk", tr); if(w) prev[tr.dataset.name] = w.textContent; });
+    body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) =>
+      `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
+      `<td class="l">${name}</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
+      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td></tr>`).join("");
+  }
+}
+const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
+  e.preventDefault();
+  const tr = a.closest("tr.line");
+  const max = +tr.dataset.max || 12;
+  tr.dataset.m = Math.max(1, Math.min(max, +tr.dataset.m + +a.dataset.d));
+  if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
+  planDraw();
+}));
+function wirePlan(){ bindPlan(); planDraw(); }
+
+/* site detail: the hour grid reads out under the pointer ------------------------- */
+const wireSiteHours = once(() => onEnter(".hc[data-read]", c => { const hr = $("hourRead"); if(hr) hr.innerHTML = c.dataset.read; }));
+
+/* kinds popover: switches flip; with a data-kind they also flip the preference --- */
+const wireKinds = once(() => on("click", ".sw", s => {
+  s.classList.toggle("on");
+  const kind = s.dataset.kind; if(!kind) return;
+  alertGroupPrefs[kind] = s.classList.contains("on");
+  try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
+  drawAlerts();
+}));
+
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
 function wireAll(){
-  wireTips(); wireReveal();
+  wireTips(); wireTiles(); wireCards();
+  wireSev(); wireFinds(); wireKinds();
+  wireChart(); wirePortfolio(); wireSiteHours();
+  wireOrders(); wireFlow();
+  wireHeat(); wirePlan();
+  wireReveal();
 }
 
 function boot(){
