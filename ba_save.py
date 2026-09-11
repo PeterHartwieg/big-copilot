@@ -13,6 +13,9 @@ An object body is a sequence of entries terminated by ``05``::
     <tag> <key:string> <value>      named property
     <tag+1> <value>                 unnamed value (e.g. the 4 bytes of a Color32)
     06 <int64 count> (<tag+1> <value>)* 07     collection payload
+    08 <int32 count> <int32 size> <count*size raw bytes>
+                                    packed primitive array (seen on a
+                                    System.Boolean[], size 1, Sept 2026)
 
 Value tags::
 
@@ -58,6 +61,16 @@ PROP_TAGS = frozenset(
 END_OBJECT = 0x05
 BEGIN_ITEMS = 0x06
 END_ITEMS = 0x07
+PACKED_ITEMS = 0x08
+
+# Element types of a packed array, by .NET type name prefix and element size.
+_PACKED = {
+    ("System.Boolean", 1): lambda raw: [b != 0 for b in raw],
+    ("System.Int32", 4): lambda raw: list(struct.unpack(f"<{len(raw) // 4}i", raw)),
+    ("System.Int64", 8): lambda raw: list(struct.unpack(f"<{len(raw) // 8}q", raw)),
+    ("System.Single", 4): lambda raw: list(struct.unpack(f"<{len(raw) // 4}f", raw)),
+    ("System.Double", 8): lambda raw: list(struct.unpack(f"<{len(raw) // 8}d", raw)),
+}
 
 
 class SaveFormatError(Exception):
@@ -199,6 +212,9 @@ class _Reader:
             if tag == BEGIN_ITEMS:
                 obj["$items"] = self.items()
                 continue
+            if tag == PACKED_ITEMS:
+                obj["$items"] = self.packed(type_name)
+                continue
             if tag in PROP_TAGS:
                 key = self.string()
                 obj[key] = self.value(tag)
@@ -218,6 +234,20 @@ class _Reader:
             if mark - 1 not in PROP_TAGS:
                 raise SaveFormatError(self._where(f"element marker {mark:#04x}"))
             out.append(self.value(mark - 1))
+
+    def packed(self, type_name: str | None) -> list:
+        count = self.i32()
+        size = self.i32()
+        if count < 0 or size < 1:
+            raise SaveFormatError(self._where(f"packed array {count} x {size}"))
+        raw = self.d[self.p : self.p + count * size]
+        self.p += count * size
+        elem = (type_name or "").split("[", 1)[0]
+        decode = _PACKED.get((elem, size))
+        if decode:
+            return decode(raw)
+        # An element type not seen yet: keep its bytes, one entry per element.
+        return [raw[i : i + size] for i in range(0, len(raw), size)]
 
 
 class Save:
