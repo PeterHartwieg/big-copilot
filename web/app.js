@@ -18,7 +18,8 @@
  * Two ways in. Where the browser has the File System Access API (Chrome,
  * Edge) the folder button takes a live directory handle: Update rescans it
  * for the newest save, and the handle is kept in IndexedDB so the next visit
- * needs one permission click, not the picker. A folder dropped on the page
+ * reopens automatically if access is still granted, or needs one permission
+ * click, not the picker. A folder dropped on the page
  * gives the same handle. Elsewhere the folder button is a plain directory
  * input, which is a snapshot: Update reopens the picker.
  *
@@ -96,9 +97,8 @@
   let lastEntries = null; // {file, dir} for every save and sidecar last seen
   let busy = false;
   let runtimeReady = false;
-  // Watching the folder: Chromium only, and only after this visit's
-  // permission click, since the browser lets a page read a folder only
-  // after a click. The preference survives; the timer does not.
+  // Watching the folder: Chromium only, once read access is granted.
+  // The preference survives; the timer does not.
   let watching = stored.get("ledger_watch") !== "off";
   let watchTimer = null;
   let lastCheck = null;
@@ -922,12 +922,24 @@
       note("info", "History forgotten. The next save starts a fresh record.");
     });
 
-    // A folder chosen on an earlier visit: one click brings back its newest
-    // save. The browser will not grant folder access without a click.
-    if (canHandle) dirHandle = await handles.get("saves");
+    // A folder chosen on an earlier visit: resume when access is still
+    // granted. Requesting fresh access stays in the Update click handler.
+    const resumeGen = sourceGen;
+    const rememberedHandle = canHandle ? await handles.get("saves") : null;
+    if (resumeGen !== sourceGen) return;
+    dirHandle = rememberedHandle;
     place();
     if (runtimeReady || dirHandle) idleState();
     if (dirHandle) note("info", `One click opens its ${pick.dir || pick.name ? "chosen" : "newest"} save; your browser may ask for folder access first.`);
     wireLanding();
+    if (rememberedHandle) {
+      let permission;
+      try { permission = await rememberedHandle.queryPermission({mode: "read"}); }
+      catch (e) { return; } // Keep the manual recovery controls available.
+      if (resumeGen !== sourceGen || dirHandle !== rememberedHandle) return;
+      if (permission === "granted") {
+        await loadFromHandle(rememberedHandle, "Opening the remembered save");
+      }
+    }
   });
 })();
