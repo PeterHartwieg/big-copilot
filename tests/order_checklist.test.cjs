@@ -11,7 +11,9 @@ const start = source.indexOf('function buildOrderChecklist(');
 const end = source.indexOf('const orderMarkCache', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
-vm.runInContext('const ceil100 = v => Math.ceil(v / 100) * 100;\n' + source.slice(start, end), context);
+const fitStart = source.indexOf('const feedFit =');
+const fitEnd = source.indexOf('/* The same verdict', fitStart);
+vm.runInContext(source.slice(fitStart, fitEnd) + '\nconst ceil100 = v => Math.ceil(v / 100) * 100;\n' + source.slice(start, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
@@ -54,6 +56,39 @@ test('shop top-ups cover a peak day and require a known delivery route', () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0].proposed, 300); // daily, never seven times the peak
   assert.match(rows[0].reason, /Saturday/);
+});
+
+test('shop recommendations respect the existing absolute and percentage noise floors', () => {
+  const shop = {s:2, item:'Flowers', target:100, from:0};
+  for(const peakSold of [101, 104, 105]){
+    assert.deepEqual(build({shops:[{...shop, peakSold}]}), []);
+  }
+  assert.deepEqual(build({shops:[{...shop, target:1000, peakSold:1010}]}), []);
+  for(const peakSold of [106, 120]){
+    assert.equal(build({shops:[{...shop, peakSold}]})[0].proposed, 200);
+  }
+  assert.equal(build({shops:[{...shop, target:0, peakSold:4}]})[0].proposed, 100);
+  assert.deepEqual(build({shops:[{...shop, target:0, peakSold:0}]}), []);
+});
+
+test('incomplete data preserves saved marks until a complete snapshot can reconcile them', () => {
+  const rows = build({imports:[{s:0, rows:[order({})]}]});
+  let marks = new Set([rows[0].key]);
+  marks = context.reconcileOrderMarks(marks, [], false);
+  assert.ok(marks.has(rows[0].key), 'a missing recipe must not erase the saved mark');
+  // Checking a different visible action during the gap must preserve hidden notes.
+  const other = build({shops:[{s:2, item:'Flowers', target:0, peakSold:120, from:0}]});
+  marks.add(other[0].key);
+  marks = new Set(JSON.parse(JSON.stringify([...marks]))); // save and reload
+  marks = context.reconcileOrderMarks(marks, [...rows, ...other], true);
+  assert.equal(marks.size, 2);
+  const changed = build({imports:[{s:0, rows:[order({setTo:1700})]}]});
+  marks = context.reconcileOrderMarks(marks, [...changed, ...other], true);
+  assert.ok(!marks.has(rows[0].key), 'a changed recommendation invalidates its old mark');
+  assert.ok(!marks.has(changed[0].key), 'new quantities must not inherit completion');
+  assert.ok(marks.has(other[0].key));
+  marks = context.reconcileOrderMarks(marks, [], true);
+  assert.equal(marks.size, 0, 'a complete snapshot can remove resolved actions');
 });
 
 test('a paused order or delivery gap is a review action, not an invented quantity', () => {

@@ -7155,7 +7155,8 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   shops.forEach(r => {
     // Without a known route, this can be a made-to-order product (coffee,
     // for example), not an item that a warehouse can deliver.
-    if(r.from !== null && r.from !== undefined && r.peakSold > r.target) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+    if(r.from !== null && r.from !== undefined && r.peakSold > 0
+      && (!r.target || feedFit(r.peakSold, r.target) !== "ok")) add("Shop daily top-ups", r.s, r.item, r.target || 0,
       ceil100(r.peakSold), `From ${address(r.from)}. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}; check shelf space.`, r.from);
   });
@@ -7181,6 +7182,14 @@ function orderChecklistText(rows, title){
   return out.join("\n");
 }
 
+function reconcileOrderMarks(saved, rows, complete){
+  // Missing game text hides factory recommendations; absence then is not
+  // evidence that an action was resolved. Keep those notes for the next load.
+  if(!complete) return new Set(saved);
+  const valid = new Set(rows.map(r => r.key));
+  return new Set([...saved].filter(key => valid.has(key)));
+}
+
 const orderMarkCache = new Map();
 const supplyLocationState = new Map();
 function supplyLocation(section, s, count, content, first = false){
@@ -7189,8 +7198,8 @@ function supplyLocation(section, s, count, content, first = false){
   const key = JSON.stringify([D.supply.factories?.character, section, business?.key ?? null]);
   const open = supplyLocationState.has(key) ? supplyLocationState.get(key) : first;
   return `<details class="supply-location" data-location="${attr(key)}" ${open ? "open" : ""}>
-    <summary class="order-group-head" data-location-name="${attr(name)}" aria-label="${open ? "Collapse" : "Expand"} ${attr(name)}">
-      ${business ? hoodHtml(business) : ""}<span class="location-name" data-tip="${attr(business?.address || "Assign a depot in-game")}">${attr(name)}</span>
+    <summary class="order-group-head" data-tip="${attr(business?.address || "Assign a depot in-game")}">
+      ${business ? hoodHtml(business) : ""}<span class="location-name">${attr(name)}</span>
       <span class="location-count">${count} item${count === 1 ? "" : "s"}</span>
       <span class="location-toggle" aria-hidden="true"></span></summary>
     <div class="location-content">${content}</div></details>`;
@@ -7199,13 +7208,12 @@ function wireSupplyLocations(root){
   root.querySelectorAll("details[data-location]").forEach(el => {
     el.ontoggle = () => {
       supplyLocationState.set(el.dataset.location, el.open);
-      const summary = el.firstElementChild;
-      summary.setAttribute("aria-label", `${el.open ? "Collapse" : "Expand"} ${summary.dataset.locationName}`);
     };
   });
 }
 function drawOrderChecklist(rows, factories){
   const hasFactories = factories.sites.length > 0;
+  const unnamedRecipes = factories.sites.reduce((n, s) => n + (s.unnamed || []).length, 0);
   const character = D.supply.factories?.character;
   const storageKey = character ? `ba_order_marks_v1:${character}` : null;
   // No character id means no persistent marks; never mix two unknown companies.
@@ -7216,27 +7224,27 @@ function drawOrderChecklist(rows, factories){
     try{ saved = storageKey ? JSON.parse(localStorage.getItem(storageKey)) : []; }catch(e){}
     orderMarkCache.set(cacheKey, new Set(Array.isArray(saved) ? saved.filter(x => typeof x === "string") : []));
   }
-  const marks = orderMarkCache.get(cacheKey);
-  const valid = new Set(rows.map(r => r.key));
-  for(const key of marks) if(!valid.has(key)) marks.delete(key);
+  const complete = D.meta.locale === true;
+  const marks = reconcileOrderMarks(orderMarkCache.get(cacheKey), rows, complete);
+  orderMarkCache.set(cacheKey, marks);
   const saveMarks = () => {
     if(storageKey) try{ localStorage.setItem(storageKey, JSON.stringify([...marks])); }catch(e){}
   };
-  saveMarks();
+  if(complete) saveMarks();
   const body = $("orderChecklistBody");
   const groups = new Map();
   rows.forEach((r, i) => {
     if(!groups.has(r.site)) groups.set(r.site, []);
     groups.get(r.site).push({...r, i});
   });
-  const help = "Tick after applying a change in-game. Checkmarks are your notes, not confirmation from the save; they reset when settings change. Amounts are units, not boxes. Storage and transport limits are not checked."
+  const help = "Tick after applying a change in-game. Checkmarks are your notes, not confirmation from the save. Changed settings or estimated quantities need a fresh checkmark. Amounts are units, not boxes. Storage and transport limits are not checked."
     + (hasFactories ? " Factory quantities assume full-rate production; check staffing and output limits." : "");
   const actionLabel = r => r.kind === "Before the next delivery" ? "Top up early"
     : r.kind === "Check the delivery route" ? "Check route"
     : r.site === null ? "Choose depot" : "Review import";
-  body.innerHTML = `<div class="order-tools"${!rows.length && !factories.unnamed ? " hidden" : ""}>
+  body.innerHTML = `<div class="order-tools"${!rows.length && !unnamedRecipes ? " hidden" : ""}>
     <div class="order-context">Apply in-game ${why(help)}</div>
-    ${factories.unnamed ? `<button type="button" class="order-recipe-link" id="orderRecipeLink" data-tip="Identify the remaining factory recipes to include their inputs">${factories.unnamed} recipe${factories.unnamed === 1 ? "" : "s"} to name ${icon("chev")}</button>` : ""}
+    ${unnamedRecipes ? `<button type="button" class="order-recipe-link" id="orderRecipeLink" data-tip="Identify the remaining factory recipes to include their inputs">${unnamedRecipes} recipe${unnamedRecipes === 1 ? "" : "s"} to name ${icon("chev")}</button>` : ""}
     <div class="order-actions"${rows.length ? "" : " hidden"}><span class="order-progress" id="orderChecklistProgress" role="status">
       <span class="order-progress-track" aria-hidden="true"><i></i></span><span id="orderProgressText"></span></span>
       <button type="button" class="btn2" id="copyOrderChecklist">${icon("copy")}<span>Copy remaining</span></button>
@@ -7269,7 +7277,7 @@ function drawOrderChecklist(rows, factories){
     $("copyOrderChecklist").classList.remove("copied");
     $("copyOrderChecklist").innerHTML = `${icon("copy")}<span>Copy remaining</span>`;
     $("copyOrderChecklist").disabled = !remaining;
-    $("resetOrderMarks").disabled = !marks.size;
+    $("resetOrderMarks").disabled = !done;
     $("orderCopyFallback").hidden = true;
     $("orderCopyStatus").textContent = "";
   };
