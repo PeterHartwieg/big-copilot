@@ -1058,6 +1058,9 @@ def _products(businesses: list) -> list:
 
 def _staff_summary(staff: list, businesses: list) -> dict:
     by_role = collections.Counter(s["role"] for s in staff)
+    cost_by_role = collections.Counter()
+    for s in staff:
+        cost_by_role[s["role"]] += s["daily"]
     by_site = collections.Counter()
     for b in businesses:
         by_site[b["name"]] = b["staff"]
@@ -1071,7 +1074,7 @@ def _staff_summary(staff: list, businesses: list) -> dict:
         "absent": sum(1 for s in staff if s["absent"]),
         "complaining": sum(1 for s in staff if s["complaining"]),
         "roles": sorted(
-            ({"role": r, "count": c} for r, c in by_role.items()),
+            ({"role": r, "count": c, "cost": round(cost_by_role[r])} for r, c in by_role.items()),
             key=lambda x: -x["count"],
         ),
         "sites": sorted(
@@ -1096,12 +1099,22 @@ def _weekly(save: Save) -> list:
 
 
 def _goals(save: Save, names: Names) -> dict:
+    """Career totals, with a denominator where the save carries one.
+
+    The save lists every diploma the player can study and every story rival,
+    so those two read "n of total". The personal goals list holds only the
+    completed ones and the achievement counters have no target, so the rest
+    are bare totals.
+    """
     ach = save.deref(save.root.get("achievementsData")) or {}
+    diplomas = save.items(save.root["PlayerDiplomas"])
+    rivals = save.items(save.root.get("specialRivalStates"))
     return {
         "completed": len(save.items(save.root["completedPersonalGoals"])),
-        "diplomas": sum(
-            1 for d in save.items(save.root["PlayerDiplomas"]) if d.get("completed")
-        ),
+        "diplomas": sum(1 for d in diplomas if d.get("completed")),
+        "diplomasTotal": len(diplomas),
+        "rivalsDefeated": sum(1 for r in rivals if r.get("isDefeated")),
+        "rivalsTotal": len(rivals),
         "goodsProduced": ach.get("goodsProducedInFactories", 0),
         "taxesPaid": money(ach.get("taxesPaid", 0)),
     }
@@ -3670,6 +3683,7 @@ def _expansion(findings: list, market: dict, businesses: list) -> list:
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
 ALERT_UNITS = {
+    "notrading": "/day rent",
     "vacant": "/day rent",
     "loss": "/day loss",
     "hype": "/day revenue",
@@ -3753,6 +3767,7 @@ def _alerts(
             "notrading",
             f"{b['name']} opened day {b['opened']}, not trading yet: "
             f"{', '.join(reasons)}, ${b['rent']:,.0f}/day rent",
+            worth=b["rent"],
             always=True,
         )
 
@@ -4389,13 +4404,19 @@ def render(
     *,
     banner: str = "",
     before_script: str = "",
+    head: str = "",
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
     ``data`` may be None for a page that receives its numbers later, as the
-    in-browser board does. ``banner`` is markup placed above the board and
+    in-browser board does. ``banner`` is markup placed above the board,
     ``before_script`` goes just ahead of the board's own script, which is where
-    a host page defines ``window.LEDGER_SOURCE``.
+    a host page defines ``window.LEDGER_SOURCE``, and ``head`` is extra markup
+    for the document head (a viewport tag, an analytics beacon).
+
+    The doctype comes first so the page runs in standards mode: without it the
+    viewport height reads as the document's, tables do not inherit line-height
+    and the tooltip layer has to guess where the window ends.
 
     A save name is the player's own text, so it is escaped on the way into the
     title, and ``</`` is escaped inside the JSON so a name can never close the
@@ -4406,7 +4427,7 @@ def render(
     else:
         payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
         title = f"{data['meta']['save']} · Big Copilot"
-    return '<meta charset="utf-8">' + chr(10) + (
+    return "<!doctype html>" + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -4457,6 +4478,7 @@ TEMPLATE = r"""<title>__TITLE__</title>
 :root[data-theme="light"] .chip.dim{background:#00000010}
 :root[data-theme="light"] .orb::after{opacity:.2}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{
   margin:0; background:var(--ground); color:var(--ink);
   font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
@@ -4476,224 +4498,39 @@ section.measured{content-visibility:visible}
 /* A finding's link scrolls to a section; the sticky masthead must not cover it. */
 section,.sitehead{scroll-margin-top:116px}
 
-/* ===== LEGACY: delete per view as it is ported =============================
-   Everything in this block styles markup the old draw*() functions still
-   produce. Each view's engineer deletes their own sub-block when their view is
-   ported; the shared sub-block goes when the last user is gone. Where a name
-   here collides with one in the new stylesheet below, the new rule wins. */
-
-/* legacy: shared (sections, cards, buttons, toolbars; the web landing in
-   build_web.py still uses .eyebrow) ---------------------------------------- */
-svg{width:100%;overflow:visible}
-.eyebrow{
-  font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:500;
-  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
-}
-.eyebrow span{color:var(--accent)}
-.head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px}
-.head h2{margin:0; font-size:17px; font-weight:600; letter-spacing:-.01em}
-.head .tools{margin-left:auto; display:flex; gap:6px}
-.card{background:var(--surface); border:1px solid var(--rule); border-radius:3px; box-shadow:var(--shadow)}
-.pad{padding:18px 20px}
-.scroll{overflow-x:auto}
-.muted{color:var(--ink-3); font-size:13px; margin:4px 0}
-.verdict{margin:0 2px 14px; font-size:13.5px; color:var(--ink-2)}
-.verdict b{color:var(--ink); font-weight:600}
-.stat{display:flex; justify-content:space-between; gap:16px; padding:7px 0; border-bottom:1px solid var(--rule-soft)}
-.stat:last-child{border-bottom:none}
-.stat span{color:var(--ink-2); font-size:13.5px}
-.trio{display:grid; grid-template-columns:repeat(3,1fr); gap:20px}
-.chip.neutral{background:#8b94991f; color:var(--ink-2)}
-.expand-more{padding:10px 16px; font-size:12.5px; color:var(--ink-3); background:var(--surface)}
-.expand-more button{margin-left:8px; padding:2px 8px; font-size:11px}
-button{
-  font:inherit; font-size:12px; font-weight:500; color:var(--ink-2);
-  background:var(--surface); border:1px solid var(--rule); border-radius:2px;
-  padding:5px 11px; cursor:pointer; transition:color .12s, border-color .12s;
-}
-button:hover{color:var(--ink); border-color:var(--ink-3)}
-button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--ground)}
-button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
-
-/* legacy: today (tiles, the findings list, the kinds panel) ---------------- */
-.kpi .d{font-size:12.5px; color:var(--ink-2)}
-svg.spark{height:26px; width:100%; margin-top:2px}
-.settings-panel{margin:0 0 14px; padding:14px 20px}
-.settings-panel .minor{margin:0 0 10px}
-.settings-grid{display:flex; flex-wrap:wrap; gap:8px}
-.settings-grid button{font-size:11.5px}
-.alerts{display:grid; gap:1px; background:var(--rule)}
-.alert{
-  background:var(--surface); display:grid; grid-template-columns:4px 1fr auto;
-  gap:14px; align-items:center; padding:11px 16px 11px 0;
-}
-.alert i{display:block; height:100%; min-height:26px; background:var(--info)}
-.alert.warn i{background:var(--warn)} .alert.critical i{background:var(--neg)}
-.alert.warn{color:var(--ink)}
-.alert b{font-weight:600; font-size:14px}
-.alert .detail{display:block; font-weight:400; font-size:12.5px; color:var(--ink-3); margin-top:2px}
-.alert .goto, .minor .goto{
-  font-size:12px; font-weight:500; color:var(--accent); text-decoration:none;
-  margin-left:8px; white-space:nowrap;
-}
-.alert .goto:hover, .minor .goto:hover{text-decoration:underline}
-.alert .who{
-  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3);
-  text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;
-}
-.minor{margin:10px 2px 0; font-size:12.5px; color:var(--ink-3)}
-.minor button{margin-left:8px; padding:2px 8px; font-size:11px}
-.minor ul{margin:8px 0 0; padding-left:18px}
-.minor li{margin:3px 0}
-
-/* legacy: results (chart tip, legend, chain rows, site cells, week bars,
-   site detail, hour grid) -------------------------------------------------- */
-.charttip{
-  position:absolute; pointer-events:none; opacity:0; transform:translate(-50%,-100%);
-  background:var(--ink); color:var(--ground); padding:7px 10px; border-radius:3px;
-  font-size:12px; white-space:nowrap; transition:opacity .1s; z-index:5;
-}
-.charttip .num{font-weight:600}
-.legend{padding:0 20px 16px; flex-wrap:wrap}
-.legend span{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2)}
-.legend i{width:14px; height:3px; border-radius:2px}
-thead th{position:sticky; top:0; background:var(--surface); cursor:pointer; user-select:none}
-thead th:hover{color:var(--ink)}
-thead th[data-dir]::after{content:"↓"; margin-left:5px; color:var(--accent)}
-thead th[data-dir="asc"]::after{content:"↑"}
-tbody tr.chain > td{background:var(--raised); font-weight:600; border-bottom:1px solid var(--rule)}
-tbody tr.chain:hover > td{background:var(--accent-soft)}
-tbody tr.chain td.l{font-size:14.5px}
-.chainname{display:flex; align-items:baseline; gap:8px}
-.chainname .twist{font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-3); width:9px}
-.chainname .sub{font-weight:400}
-.site{display:flex; align-items:center; gap:10px}
-.site .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
-td.l .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
-.site b{font-weight:600}
-.site .bullet{width:26px; height:26px; font-size:10px; letter-spacing:.02em}
-tbody tr.kid{cursor:pointer}
-tbody tr.kid.on > td{background:var(--accent-soft)}
-tbody tr.kid > td.l .site b::after{content:" \203A"; color:var(--ink-3); font-weight:400}
-select.sitepick{
-  font:inherit; font-size:12.5px; color:var(--ink); background:var(--surface);
-  border:1px solid var(--rule); border-radius:2px; padding:4px 8px; max-width:260px;
-}
-.weekbars{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; align-items:end}
-.wb{display:flex; flex-direction:column; align-items:center; gap:5px}
-.wbtrack{position:relative; width:100%; height:96px; border-radius:2px; background:var(--raised)}
-.wbtrack::after{content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--rule)}
-.wbtrack i{position:absolute; left:22%; right:22%; border-radius:2px}
-.wbtrack i.up{background:var(--accent)}
-.wbtrack i.down{background:var(--warn)}
-.wbv{font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--ink-2)}
-.wbd{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
-.wb.now .wbd{color:var(--ink); font-weight:600}
-.wb.now .wbtrack{outline:1px solid var(--rule); outline-offset:2px}
-.weekbars.compact{gap:3px}
-.weekbars.compact .wbtrack{height:34px}
-.weekbars.compact .wbv{display:none}
-.weekbars.compact .wbd{font-size:9px}
-#sitePanel .sitehead{margin:0 0 18px}
-#sitePanel .sitehead h3{margin:0; font-size:21px; font-weight:600; letter-spacing:-.02em}
-#sitePanel .sstats{gap:1px; margin-top:0; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
-#sitePanel .sstat{border-radius:0; border:none; padding:12px 14px; display:flex; flex-direction:column; gap:3px}
-#sitePanel .sstat b{font-size:19px; font-weight:600; letter-spacing:-.02em}
-.sitegrid{display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; align-items:start}
-.sitegrid > .panel{margin-top:20px}
-.panel{margin-top:20px}
-.panel:first-child{margin-top:0}
-.panel > .eyebrow{display:block; margin-bottom:8px}
-.panel svg{width:100%}
-.hourgrid{border-collapse:separate; border-spacing:1px; width:100%; table-layout:fixed}
-.hourgrid th{
-  font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:500; color:var(--ink-3);
-  padding:0 0 3px; border:none; text-align:center; background:none; position:static;
-  letter-spacing:0; text-transform:none; cursor:default;
-}
-.hourgrid th.l{text-align:left; padding-right:6px; width:34px}
-.hourgrid td{padding:0; border:none; height:15px; border-radius:1px; background:var(--raised); position:relative}
-.hourgrid td.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
-.hourgrid td.slack{box-shadow:inset 0 0 0 1px var(--info)}
-.hourgrid tr.thin td{opacity:.4}
-.hourgrid tr.thin th.l{color:var(--ink-3); font-style:italic}
-.hourkey{display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--ink-3)}
-.hourkey i{display:inline-block; width:11px; height:11px; border-radius:2px; vertical-align:-1px; margin-right:5px}
-
-/* legacy: supply (flow map, factory line naming, import blocks) ------------ */
-.flowbox{padding:16px 20px 4px; overflow-x:auto}
-#flow{min-width:760px}
-.flownode rect{fill:var(--raised); stroke:var(--rule); stroke-width:1; transition:stroke .12s}
-.flownode{cursor:pointer}
-.flownode:hover rect{stroke:var(--ink-3)}
-.flownode.on rect{fill:var(--surface); stroke:var(--accent); stroke-width:2}
-.flownode.dim{opacity:.32}
-.flowlink{transition:opacity .15s}
-.flowpipes{display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; margin:18px 0 4px}
-.impblock{margin-top:16px}
-.impblock:first-of-type{margin-top:10px}
-.imphead{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding-bottom:6px; border-bottom:1px solid var(--rule)}
-.imphead b{font-size:14px}
-.imphead .sub{font-size:12px; color:var(--ink-3)}
-.impblock tfoot td{border-top:1px solid var(--rule); font-weight:600}
-input.mcount{
-  width:58px; font:inherit; font-family:"IBM Plex Mono",monospace; font-size:13px;
-  text-align:right; padding:3px 6px; border-radius:2px;
-  border:1px solid var(--rule); background:var(--surface); color:var(--ink);
-}
-input.mcount:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+/* ===== kept from the old board: what the artboards could not show ==========
+   Header sorting, the site picker's full list inside its .seg, the open
+   site's row in the portfolio, a paused import pipe, the two pipe tables
+   under the map, the naming controls on the factory-lines view, and the
+   growth grid's sortable columns and empty cells. ============================ */
+thead th[data-i]{cursor:pointer; user-select:none}
+thead th[data-i]:hover{color:var(--ink)}
+thead th svg.sort{width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
+thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
+tr.kid.on td{background:var(--accent-soft)}
+.seg select.sitepick{appearance:none; -webkit-appearance:none; font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif; color:var(--ground); background:var(--ink); border:0; border-radius:5px; padding:6px 12px; cursor:pointer; max-width:260px}
+.seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
+.flow .pipe.paused{stroke:var(--neg);stroke-opacity:.7}
+.scrollx{overflow-x:auto}
+#stock td.l+td.l,#importPlan td.l,#topupPlan td.l{white-space:normal}
+.flowpipes{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin:0 0 4px}
 select.linepick{
-  font:inherit; font-size:12px; color:var(--ink); background:var(--surface);
-  border:1px solid var(--rule); border-radius:2px; padding:2px 6px; margin-left:6px;
+  font:inherit;font-size:12px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--rule);border-radius:6px;padding:3px 8px;margin-left:6px;
 }
-button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
-.legend-note{margin:10px 2px 0; font-size:12px; color:var(--ink-3); display:flex; gap:18px; flex-wrap:wrap}
-
-/* legacy: growth (expansion list, movers, the demand table, plan sliders) -- */
-.planrow{display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap}
-.planrow label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--ink-2)}
-.planrow select, .planrow input[type=number]{
-  font:inherit; font-size:13px; color:var(--ink); background:var(--surface);
-  border:1px solid var(--rule); border-radius:2px; padding:5px 8px; min-width:200px;
+select.linepick:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.unname{
+  font:inherit;font-size:12px;line-height:1.4;color:var(--ink-3);background:none;
+  border:1px solid var(--rule);border-radius:5px;padding:0 6px;margin-left:4px;cursor:pointer;
 }
-.planrow input[type=range]{width:220px; accent-color:var(--accent)}
-.planrow output{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:15px; color:var(--ink)}
-.rollup{display:grid; gap:1px}
-.expand{display:grid; gap:1px; background:var(--rule)}
-.exline{background:var(--surface); display:grid; grid-template-columns:26px 1fr auto; gap:14px; align-items:baseline; padding:12px 16px}
-.exline .rank{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-3); font-weight:600}
-.exline b{font-weight:600}
-.exline .why{display:block; font-size:12.5px; color:var(--ink-2); margin-top:2px; width:auto; height:auto; border:none; border-radius:0; font-family:Archivo,sans-serif; cursor:default}
-.exline .num{white-space:nowrap; font-size:13px; font-weight:600}
-.exline .tagme{
-  font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.06em;
-  border:1px solid currentColor; border-radius:2px; padding:0 5px; margin-left:8px; text-transform:uppercase;
-}
-.exline.measured .tagme{color:var(--accent)}
-.exline.guess .tagme{color:var(--ink-3)}
-.exline .bld{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3); white-space:nowrap}
-.movers{display:grid; gap:1px; background:var(--rule); padding:0}
-.mover{background:var(--surface); display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:baseline; padding:10px 16px}
-.mover .dir{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600}
-.mover .dir.up{color:var(--pos)} .mover .dir.down{color:var(--neg)}
-.mover .where{font-size:13px; color:var(--ink-2)}
-.mover .when{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; white-space:nowrap}
-.mover b{font-weight:600}
-.mover .tagme{
-  font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.06em;
-  color:var(--accent); border:1px solid var(--accent); border-radius:2px; padding:0 5px; margin-left:8px; text-transform:uppercase;
-}
-td.heat{display:table-cell; text-align:center; font-variant-numeric:tabular-nums; position:relative; min-width:64px; height:30px}
-td.heat .v{font-weight:600; font-size:13px}
-td.heat .mk{display:inline; font-size:10px; color:var(--ink-3); line-height:1.1; letter-spacing:.06em; margin-left:4px}
-td.heat .dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--warn); box-shadow:0 0 0 2px var(--surface)}
-td.heat .rv{position:absolute; right:5px; bottom:3px; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-2); line-height:1; opacity:1; transform:none}
-td.heat.none{color:var(--ink-3)}
-#market.numbers td.heat{height:auto; padding-bottom:17px}
-
-/* legacy: company (nothing of its own beyond the shared .stat, .muted,
-   .expand-more and .chip above) -------------------------------------------- */
-/* ===== end of LEGACY ====================================================== */
+button.unname:hover{color:var(--ink);border-color:var(--ink-3)}
+button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.heat .h[data-hood]{cursor:pointer}
+.heat .h.sort{color:var(--accent)}
+.cell.none{background:var(--surface);color:var(--ink-3);cursor:default}
+.cell.none:hover{transform:none;box-shadow:none}
+.waves .quiet{padding:7px 0}
+#planPicker .field select{padding:6px 10px;font-size:12.5px}
 
 /* everything arrives: sections slide in when they come into view -------- */
 .rv{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
@@ -4703,8 +4540,6 @@ td.heat.none{color:var(--ink-3)}
 .mast{display:flex;align-items:center;gap:40px;height:100px;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5;background:var(--ground)}
 .brand{display:flex;align-items:baseline;gap:2px;user-select:none}
 .wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer}
-/* .brand .dot rather than .dot: the web shell's own stylesheet, which comes
-   after this one, has a 7px .dot of its own for the landing. */
 .brand .dot{
   display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--accent);
   transform-origin:50% 100%;transition:transform .25s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
@@ -5096,6 +4931,21 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .btn2.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .btn2.primary:hover{color:var(--ground)}
 .btn2[aria-disabled="true"]{opacity:.4;pointer-events:none}
+/* On the artboard the panel is the whole page, centred in it. Here it is a
+   popover hung off the tune button, so the id carries what the artboard did
+   not need: where it sits, and how it arrives. The board has 26 kinds against
+   the artboard's eight, so the rows scroll inside it and the title, the note
+   and the foot stay put. */
+#alertPop{
+  position:fixed;left:0;top:0;margin:0;z-index:60;max-width:calc(100vw - 24px);
+  opacity:0;visibility:hidden;transform:translateY(-6px);transform-origin:100% 0;
+  transition:opacity .16s ease,transform .16s cubic-bezier(.2,.7,.2,1),visibility .16s;
+}
+#alertPop.on{opacity:1;visibility:visible;transform:none}
+#alertPop .kinds{max-height:min(52vh,430px);overflow-y:auto;overscroll-behavior:contain}
+#alertPop .kind:last-child{border-bottom:none}
+#alertPop .foot2{border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.sw:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* company ------------------------------------------------------------------ */
 .roles{display:flex;flex-direction:column;gap:8px}
@@ -5169,167 +5019,113 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     <div class="kpis" id="kpis"></div>
 
     <section class="sec rv" id="alertSection">
-      <div class="head">
-        <h2>Needs attention</h2>
-        <p id="alertCount"></p>
-        <div class="tools" id="alertTools"></div>
-        <button type="button" id="alertKindsToggle" aria-pressed="false"
-          title="Choose which kinds of finding make the list">Filter kinds</button>
+      <!-- drawAlerts() fills the head (title, ? mark, the three severity
+           counters) around this tune button, which is bound once at boot and
+           is moved into each fresh head rather than rebuilt. -->
+      <div id="alertHead">
+        <span class="ibtn tr" id="alertKindsToggle" aria-pressed="false" tabindex="0"
+          data-tip="Which kinds of finding make the list"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></span>
       </div>
-      <div class="card settings-panel" id="alertSettingsPanel" hidden>
-        <p class="minor">Saved on this device.</p>
-        <div class="settings-grid" id="alertSettingsGrid"></div>
+      <div class="finds" id="alerts"></div>
+      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#">undo</a></p>
+      <p class="quiet" id="alertMinor" style="margin:12px 0 0"></p>
+      <div class="finds" id="minorList" style="margin-top:12px" hidden></div>
+    </section>
+
+    <!-- Next moves: things the board could do that it cannot do yet. Static
+         placeholders that link nowhere; the cards tilt from wireCards(). -->
+    <section class="sec rv" id="secMoves">
+      <div class="sechead"><h2>Next moves</h2>
+        <span class="why" data-tip="Things the board could do for you that it cannot do yet. Each one is a decision you make every week by hand today." tabindex="0"><i>?</i></span></div>
+      <div class="moves">
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Size next week's orders from the peak day, then set every manager in one pass.</span></a>
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
+        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
       </div>
-      <div class="alerts card" id="alerts"></div>
-      <p class="minor" id="alertMinor"></p>
     </section>
   </div>
 
   <div class="page" id="pageResults" hidden>
-    <section class="sec rv measured" id="secDaily">
-      <div class="head">
-        <h2>Daily result</h2>
-        <p id="chartNote"></p>
-        <div class="tools" id="chartTools"></div>
-      </div>
-      <div class="card">
-        <div class="chartbox"><svg id="chart" height="260"></svg><div class="charttip" id="chartTip"></div></div>
-        <div class="legend" id="legend"></div>
-      </div>
+    <section class="sec rv" id="secDaily">
+      <div id="dailyHead"></div>
+      <div id="dailyBox"></div>
     </section>
 
     <section class="sec rv" id="secRhythm">
-      <div class="head">
-        <h2>Weekly rhythm</h2>
-        <p id="rhythmNote"></p>
-        <div class="tools" id="rhythmTools"></div>
-      </div>
-      <p class="verdict" id="rhythmVerdict"></p>
-      <div id="rhythmCards" hidden>
-        <div class="duo">
-          <div class="card pad"><div id="rhythmChart"></div></div>
-          <div class="card pad" id="rhythmToday"></div>
-        </div>
-      </div>
-      <div class="card scroll" id="rhythmSitesBox" style="margin-top:20px" hidden>
-        <table id="rhythmSites"></table></div>
+      <div id="rhythmHead"></div>
+      <div id="rhythmChart"></div>
+      <div id="rhythmSitesBox" style="margin-top:20px" hidden><table id="rhythmSites"></table></div>
     </section>
 
     <section class="sec rv" id="secPortfolio">
-      <div class="head">
-        <h2>Portfolio</h2>
-        <p id="portfolioNote"></p>
-        <div class="tools" id="portTools"></div>
-      </div>
-      <div class="card scroll"><table id="portfolio"></table></div>
+      <div id="portHead"></div>
+      <div style="overflow-x:auto"><table id="portfolio"></table></div>
     </section>
 
-    <section class="sec rv" id="secDetail" hidden>
-      <div class="head">
-        <h2>Business detail</h2>
-        <div class="tools" id="siteTools"></div>
-      </div>
-      <div class="card pad" id="sitePanel"></div>
-    </section>
+    <section class="sec rv" id="secDetail" hidden><div id="sitePanel"></div></section>
   </div>
 
   <div class="page" id="pageSupply" hidden>
-    <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav></div>
+    <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav>
+      <div class="aside" data-sub="orders"><span class="seg" id="logisticsTools" aria-label="Which orders to list"></span></div></div>
 
     <section class="sec rv" id="secLogistics" data-sub="orders">
-      <div class="head">
-        <h2>Orders to set</h2>
-        <p id="logisticsNote"></p>
-        <div class="tools" id="logisticsTools"></div>
-      </div>
-      <p class="verdict" id="importVerdict"></p>
-      <div class="card scroll"><table id="importPlan"></table></div>
-      <p class="verdict" id="topupVerdict" style="margin-top:24px"></p>
-      <div class="card scroll"><table id="topupPlan"></table></div>
+      <div class="scrollx" id="importPlan"></div>
+      <div class="sec scrollx" id="topupPlan"></div>
     </section>
 
     <section class="sec rv" id="secStock" data-sub="checks">
-      <div class="head">
-        <h2>Stock checks</h2>
-        <p id="stockNote"></p>
-        <div class="tools" id="stockTools"></div>
-      </div>
-      <p class="verdict" id="stockVerdict"></p>
-      <div class="card scroll"><table id="stock"></table></div>
+      <div id="stockHead"></div>
+      <p class="quiet" id="stockVerdict" style="margin:0 0 14px"></p>
+      <div class="scrollx"><table id="stock"></table></div>
+      <p class="quiet" id="stockMore" style="margin:12px 0 0"></p>
     </section>
 
     <section class="sec rv" id="secFlow" data-sub="map">
-      <div class="head">
-        <h2>How goods move</h2>
-        <div class="tools"><button id="flowClear" type="button">Clear selection</button></div>
-      </div>
-      <div class="card"><div class="flowbox"><svg id="flow"></svg></div>
-        <p class="legend-note" style="padding:0 20px 14px; margin:0">
-          <span>Line width = units per day</span>
-          <span style="color:var(--accent)">Solid = daily distribution</span>
-          <span style="color:var(--info)">Dashed = weekly import</span>
-          <span style="color:var(--warn)">Amber dot = order running tight</span>
-          <span style="color:var(--neg)">Red dot = order too small</span>
-        </p>
-      </div>
-      <div class="card pad" id="flowDetail" style="margin-top:20px"></div>
+      <div class="sechead"><h2>How goods move</h2><span class="why" tabindex="0" data-tip="Solid pipes are daily distribution, dashed ones weekly imports, a red one a paused import; width is volume. Hover a pipe and its cargo moves. Click a site to keep only its pipes lit and to see what it holds below. An amber dot is an order running tight or a holding below what its week needs, a red one an order too small."><i>?</i></span></div>
+      <div class="chartbox" style="padding:18px 24px 24px"><svg class="flow" id="flow"></svg></div>
+      <div class="sec" id="flowDetail"></div>
     </section>
   </div>
 
   <div class="page" id="pageGrowth" hidden>
     <div class="sechead subhead"><nav class="seg" id="growthNav" aria-label="Growth views"></nav></div>
 
-    <section class="sec rv" id="secExpand" data-sub="expand">
-      <div class="head">
-        <h2>Where to expand</h2>
-        <p id="expandNote"></p>
-      </div>
-      <div class="card" id="expansion"></div>
-    </section>
-
     <section class="sec rv" id="secMarket" data-sub="market">
-      <div class="head">
-        <h2>Market demand</h2>
-        <p id="marketNote"></p>
-        <div class="tools" id="marketTools"></div>
-      </div>
-      <div class="card scroll"><table id="market"></table></div>
-      <p class="legend-note" id="marketLegend"></p>
-      <div class="movers card pad" id="movers" style="margin-top:14px"></div>
+      <div class="sechead"><h2>Market demand</h2>
+        <span class="why" id="marketWhy" data-tip="" tabindex="0"><i>?</i></span>
+        <span class="quiet" id="marketNote"></span>
+        <div class="aside"><span class="seg" id="marketTools" aria-label="Market views"></span></div></div>
+      <div class="waves" id="movers"></div>
+      <div class="heat" id="market"></div>
+      <p class="celldetail" id="cellDetail">Click a cell</p>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
-      <div class="head">
-        <h2>Plan a chain</h2>
-        <p id="planNote"></p>
-        <div class="tools" id="planTools"></div>
-      </div>
-      <div class="card pad" id="planPicker"></div>
-      <div class="card scroll" style="margin-top:14px"><table id="planTable"></table></div>
-      <div class="duo" style="margin-top:14px">
-        <div class="card pad" id="planMachines"></div>
-        <div class="card pad" id="planImports"></div>
-      </div>
+      <div class="sechead"><h2>Plan a chain</h2>
+        <span class="why" data-tip="Every machine runs 24 hours at its rated rate, so a line makes its full quantity whether or not the shelves need it. Build the factory first; the shops come after, and what they do not take is exported. Step a single line up when one product deserves more, down to none to buy it in instead." tabindex="0"><i>?</i></span>
+        <span class="quiet" id="planNote"></span>
+        <div class="aside" id="planPicker"></div></div>
+      <div id="planBody"></div>
+    </section>
+    <section class="sec rv" id="secIngredients" data-sub="plan">
+      <div class="sechead"><h2>Ingredients</h2>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. The order is the weekly figure rounded up to the hundred, the way the logistics manager takes it. Hover an ingredient for what is on order today." tabindex="0"><i>?</i></span></div>
+      <table>
+        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Weekly order</th></tr></thead>
+        <tbody id="ingBody"></tbody>
+      </table>
     </section>
   </div>
 
+  <!-- The reference page: the product table full width, then payroll beside the
+       milestones. Each section's head and body are drawn by its own draw*(). -->
   <div class="page" id="pageCompany" hidden>
+    <section class="sec rv" id="secProducts"></section>
     <div class="duo sec">
-      <section class="rv" style="margin:0" id="secProducts">
-        <div class="head"><h2>Products</h2><p id="productNote"></p></div>
-        <div class="card scroll"><table id="products"></table>
-          <div class="expand-more" id="productsMore" hidden></div></div>
-      </section>
-      <section class="rv" style="margin:0" id="secPayroll">
-        <div class="head"><h2>Payroll</h2><p id="payrollNote"></p></div>
-        <div class="card pad" id="payroll"></div>
-      </section>
+      <section class="rv" style="margin:0" id="secPayroll"></section>
+      <section class="rv" style="margin:0" id="secGoals"></section>
     </div>
-
-    <section class="sec rv" id="secGoals">
-      <div class="head"><h2>Milestones</h2><p id="goalsNote">Career totals</p></div>
-      <div class="card pad" id="goals"></div>
-    </section>
   </div>
 
   <footer class="foot" id="footer">
@@ -5394,21 +5190,17 @@ const sign = n => n>0?"pos":n<0?"neg":"";
 const sum = (rows,key) => rows.reduce((a,b)=>a+(b[key]||0),0);
 const $ = id => document.getElementById(id);
 
+/* A percentage with the thin gauge under it, the way the design shows shelf
+   pressure and depot cover; the cell that holds it carries class "gauge".
+   Colour is the grade: accent, amber, red, or the quiet ink for a figure that
+   describes rather than grades. */
+const graded = (v, fill) => `<i><b style="--w:${Math.min(100, Math.max(v, 1.5))}%${
+  fill ? `;background:var(--${fill})` : ""}"></b></i>${Math.round(v)}%`;
 /* Graded meter: red through green, for numbers where higher is better. */
-function meter(v){
-  const cls = v>=85?"ok":v>=60?"warn":"bad";
-  return `<span class="chip ${cls}">${v}%</span><span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>`;
-}
-/* Load gauge: unlike meter(), a high number here is the bad one — at 100% a
-   day of selling has drained the whole daily delivery. */
-const load = (v, level) => `<span class="chip ${
-  level === "critical" ? "bad" : level === "warn" ? "warn" : "ok"}">${v}%</span>`
-  + `<span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>`;
-
+const meter = v => graded(v, v >= 85 ? "" : v >= 60 ? "warn" : "neg");
 /* Neutral gauge: for numbers that describe a situation rather than grade it,
-   like how much of a loan is paid off or how busy a street is. */
-const gauge = (v,dp=0) => `<span class="chip neutral">${v.toFixed(dp)}%</span>`
-  + `<span class="bar"><i style="width:${Math.min(100,Math.max(v,1.5))}%"></i></span>`;
+   like how busy a street is. */
+const gauge = v => graded(v, "ink-3");
 
 /* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
    shop the building table places. With neither, no badge. */
@@ -5417,17 +5209,22 @@ const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLO
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}</span></span></div>`;
 
-function sparkline(values, colour){
+/* The tile sparkline, the generator's spark(): an area under the line, the
+   line, a point and a read-out that follow the pointer (wireTiles). x runs
+   0..100 so the wiring can find the nearest point from the pointer's share of
+   the width; the labels are what it prints, one per point, comma-separated,
+   so they must not carry commas themselves (compact money does not). */
+function sparkHtml(values, labels){
   if(values.length < 2) return "";
-  const w=160, h=26, lo=Math.min(...values,0), hi=Math.max(...values,1);
-  const x=i=>i/(values.length-1)*w, y=v=>h-2-(v-lo)/(hi-lo||1)*(h-4);
-  const pts=values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const zero=lo<0?`<line x1="0" y1="${y(0).toFixed(1)}" x2="${w}" y2="${y(0).toFixed(1)}" stroke="var(--rule)" stroke-width="1"/>`:"";
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-    ${zero}<polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="1.6"
-      vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-    <circle cx="${x(values.length-1).toFixed(1)}" cy="${y(values[values.length-1]).toFixed(1)}" r="2.4" fill="${colour}"/>
-  </svg>`;
+  const lo = Math.min(...values), hi = Math.max(...values), span = (hi - lo) || 1;
+  const pts = values.map((v, i) => [i / (values.length - 1) * 100, 30 - (v - lo) / span * 26]);
+  const poly = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  return `<div class="spark" data-vals="${attr(labels.join(","))}">
+    <svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">
+      <polygon class="area" points="0,34 ${poly} 100,34"></polygon>
+      <polyline points="${poly}" vector-effect="non-scaling-stroke"></polyline>
+      <circle class="pt" r="3" cx="100" cy="${pts[pts.length - 1][1].toFixed(1)}" vector-effect="non-scaling-stroke"></circle>
+    </svg><span class="scrub"></span></div>`;
 }
 
 /* --- the redesign's shared vocabulary ---------------------------------------
@@ -5473,9 +5270,8 @@ const chipHtml = (kind, text, tip) =>
 const hoodHtml = b => b && b.code ? `<span class="hood">${b.code}</span>` : "";
 /* $3.57M, $751k, $98: the compact money the tiles and axes use. */
 const money = compact;
-/* A segmented control, the .seg of the design, with toolbar()'s signature so a
-   view swaps one call for the other: options are [id, label] pairs, read()
-   gives the current id, write(id) stores it, redraw() repaints the view. */
+/* A segmented control, the .seg of the design: options are [id, label] pairs,
+   read() gives the current id, write(id) stores it, redraw() repaints the view. */
 function seg(host, options, read, write, redraw){
   if(typeof host === "string") host = $(host);
   host.classList.add("seg");
@@ -5495,17 +5291,16 @@ function seg(host, options, read, write, redraw){
 
 /* View state lives out here so a live refresh redraws the numbers without
    resetting whichever tab, filter or sort order the reader had chosen. */
-let alertFilter="all", chartWindow=30, shown=new Set(["profit7","profit"]);
+let chartWindow=30, shown=new Set(["profit7","profit"]);
 let view="pnl", sortKey=null, sortDir=-1, stockView="shops", marketView="types";
 /* The demand grid sorts by one neighbourhood at a time; numbers in the cells are
    off until asked for, the shade carries the reading. */
-let marketSortHood=null, marketSortDir=-1, marketDetail=false;
+let marketSortHood=null, marketSortDir=-1;
 let rhythmView="customers";
-let flowPick = null;
 /* Everything that is folded away by default, so a refresh does not re-fold what
    the reader has just opened. */
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
-let showAllStock = false, showAllShelves = false, showAllExpand = false, showRhythmCards = false;
+let showAllStock = false, showAllShelves = false, showRhythmCards = false;
 let showAllProducts = false;
 /* Which kinds of "Needs attention" finding to show, set by buildAlertSettingsPanel()
    before the first render. */
@@ -5516,13 +5311,16 @@ let alertGroupPrefs = {};
 let siteKey = null, siteTab = -1, siteOpen = false;
 let chartRows=[];
 
+/* The five lines of the daily chart. Two are on until the reader says
+   otherwise; the choice lives in seriesState across renders. */
 const SERIES = {
-  profit7: {label:"Profit, 7-day average", colour:"var(--accent)", key:"profit7", wide:true},
-  profit:  {label:"Net profit", colour:"var(--ink-3)", key:"profit"},
-  revenue: {label:"Revenue",    colour:"var(--info)",   key:"revenue"},
-  cogs:    {label:"Goods",      colour:"var(--warn)",   key:"cogs"},
-  wages:   {label:"Wages",      colour:"var(--neg)",    key:"wages"},
+  avg:     {label:"7-day profit", colour:"var(--accent)", key:"profit7", on:true, width:2},
+  net:     {label:"Net profit",   colour:"var(--ink-3)",  key:"profit",  on:true, bars:true},
+  revenue: {label:"Revenue",      colour:"var(--info)",   key:"revenue"},
+  goods:   {label:"Goods",        colour:"var(--warn)",   key:"cogs"},
+  wages:   {label:"Wages",        colour:"var(--ink-2)",  key:"wages", width:1.2, dash:"3 3"},
 };
+const seriesOn = id => id in seriesState ? !!seriesState[id] : !!SERIES[id].on;
 
 /* Week on week per site, keyed by address so it survives a re-sort. */
 const TREND = {};
@@ -5531,12 +5329,13 @@ function indexTrends(){
   (D.trends||[]).forEach(t => TREND[t.key] = t);
 }
 const pct = v => `${v>0?"+":""}${(v*100).toFixed(0)}%`;
+/* The two weeks behind the percentage sit in its tooltip. */
+const wow = (change, last7, prev7, empty) => change === null || change === undefined
+  ? `<span class="sub" data-tip="${empty}">—</span>`
+  : `<span class="${sign(change)}" data-tip="${compact(last7)} this week against ${compact(prev7)} the week before">${pct(change)}</span>`;
 const wowCell = b => {
   const t = TREND[b.key];
-  if(!t || !t.ready || t.change === null)
-    return `<span class="sub" title="Needs two full weeks of trading">—</span>`;
-  return `<span class="${sign(t.change)}">${pct(t.change)}</span>
-    <span class="sub">${compact(t.last7)} vs ${compact(t.prev7)}</span>`;
+  return wow(t && t.ready ? t.change : null, t && t.last7, t && t.prev7, "Needs two full weeks of trading");
 };
 
 const VIEWS = {
@@ -5544,9 +5343,9 @@ const VIEWS = {
     label: "Profit & loss",
     note: "Yesterday's income statement, by chain",
     cols: [
-      ["Business", b=>siteCell(b), "l", null],
+      ["Business", b=>kidCell(b), "l", null],
       ["Revenue", b=>fmt(b.revenue), "", b=>b.revenue],
-      ["Week / week", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
+      ["Wk / wk", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
       ["Goods", b=>fmt(-b.cogs), "", b=>b.cogs],
       ["Wages", b=>fmt(-b.wages), "", b=>b.wages],
       ["Rent", b=>fmt(-b.rent), "", b=>b.rent],
@@ -5558,13 +5357,10 @@ const VIEWS = {
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
     chain: c => [null, fmt(c.revenue),
-                 c.change === null || c.change === undefined
-                   ? `<span class="sub" title="A site here has under two weeks of trading">—</span>`
-                   : `<span class="${sign(c.change)}">${pct(c.change)}</span>
-                      <span class="sub">${compact(c.last7)} vs ${compact(c.prev7)}</span>`,
+                 wow(c.change, c.last7, c.prev7, "A site here has under two weeks of trading"),
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
-                 `<span class="${sign(c.profit)}">${fmt(c.profit)}</span>`,
+                 `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
                  c.margin===null?"—":`${c.margin.toFixed(1)}%`],
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
                   fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
@@ -5574,15 +5370,15 @@ const VIEWS = {
     label: "Operations",
     note: "Who shops here, and what pulls them in",
     cols: [
-      ["Business", b=>siteCell(b), "l", null],
+      ["Business", b=>kidCell(b), "l", null],
       ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
       ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
       ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
-      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "", b=>b.satisfaction.overall??-1],
-      ["Promotion", b=>b.customers?meter(b.promotion):"—", "", b=>b.promotion],
-      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "", b=>b.traffic],
-      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "", b=>b.marketingIndex],
+      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
+      ["Promotion", b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
+      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
+      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
       ["Security", b=>b.security?`${b.security}%`:"—", "", b=>b.security],
     ],
     chain: c => [null, "", c.staff||"—", "", "", "", "", "", "", ""],
@@ -5593,28 +5389,34 @@ const VIEWS = {
 /* --- the weekly cycle ------------------------------------------------- */
 const weeksOf = p => p ? Math.min(...p.map(d => d.n)) : 0;
 
-/* Seven bars against a 100 baseline. Height encodes distance from a normal
-   day in both directions, so a trough reads as clearly as a peak. */
-function weekBars(profile, opts){
-  if(!profile) return `<p class="muted">${(opts && opts.empty)
-    || "Not enough history to separate a weekly cycle from noise."}</p>`;
-  const today = D.rhythm.today && D.rhythm.today.day;
+/* Seven columns either side of a midline. Height is distance from a normal
+   day in both directions, so a trough reads as clearly as a peak; the figure
+   sits in a pill at the bar's tip and shows on hover, the weekday spells
+   itself out, and today's column is outlined. */
+function weekHtml(profile, todayName){
   const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
-  return `<div class="weekbars${opts && opts.compact ? " compact" : ""}">
-    ${profile.map(d => {
-      const off = d.index - 100;
-      const h = Math.min(Math.abs(off) / span, 1) * 50;
-      const isToday = d.day === today;
-      return `<div class="wb${isToday ? " now" : ""}" title="${d.day}: ${d.index}% of a normal day, from ${d.n} weeks">
-        <span class="wbv">${off > 0 ? "+" : ""}${off}</span>
-        <div class="wbtrack">
-          <i class="${off >= 0 ? "up" : "down"}" style="height:${h.toFixed(1)}%;
-             ${off >= 0 ? "bottom:50%" : "top:50%"}"></i>
-        </div>
-        <span class="wbd">${d.short}</span>
-      </div>`;
+  return `<div class="week">${profile.map(d => {
+    const off = d.index - 100, up = off >= 0, side = up ? "bottom" : "top";
+    /* 44 px keeps a downward bar's pill clear of the weekday label. */
+    const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 44));
+    return `<div class="wd${d.day === todayName ? " now" : ""}"><div class="track">
+      <i class="bar2${up ? "" : " down"}" style="height:${h}px;${side}:50%"></i>
+      <span class="n" style="${side}:calc(50% + ${h + 8}px)">${off > 0 ? "+" : ""}${off} pts</span>
+      </div><span class="d"><span>${d.short.toUpperCase()}</span><b>${d.day}</b></span></div>`;
+  }).join("")}</div>`;
+}
+/* The same week at table-row size. */
+function miniWeek(profile){
+  if(!profile) return `<span class="quiet">not enough history</span>`;
+  const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
+  return `<svg viewBox="0 0 140 28" style="width:140px;height:28px" aria-hidden="true">
+    <line x1="0" x2="140" y1="14" y2="14" stroke="var(--rule)"/>
+    ${profile.map((d, i) => {
+      const off = d.index - 100, h = Math.max(1, Math.abs(off) / span * 12);
+      return `<rect x="${i * 20 + 4}" y="${(off >= 0 ? 14 - h : 14).toFixed(1)}" width="12" height="${h.toFixed(1)}" rx="1.5"
+        fill="${off >= 0 ? "var(--accent)" : "var(--warn)"}"><title>${d.day}: ${d.index}% of a normal day, from ${d.n} weeks</title></rect>`;
     }).join("")}
-  </div>`;
+  </svg>`;
 }
 
 const RHYTHM_VIEWS = {
@@ -5622,32 +5424,17 @@ const RHYTHM_VIEWS = {
   revenue:   {label:"Revenue",   note:"Takings across every site"},
   profit:    {label:"Profit",    note:"Daily profit across every site"},
 };
+const signedPct = v => `${v > 0 ? "+" : ""}${v}%`;
 
 function drawRhythm(){
-  const r = D.rhythm;
-  const profile = r[rhythmView];
-  const weeks = weeksOf(profile);
-  $("rhythmNote").textContent = profile
-    ? `${RHYTHM_VIEWS[rhythmView].note}, against a normal day, ${weeks} weeks of history`
-    : RHYTHM_VIEWS[rhythmView].note;
-  $("rhythmChart").innerHTML = weekBars(profile);
-
+  const r = D.rhythm, profile = r[rhythmView], weeks = weeksOf(profile);
   const today = r.today, yest = r.yesterday;
-  $("rhythmToday").innerHTML = [
-    today && today.index ? `<div class="stat"><span>Today is ${today.day}</span>
-      <b class="num ${today.index >= 100 ? "pos" : "neg"}">${today.index > 100 ? "+" : ""}${
-        today.index - 100}% vs a normal day</b></div>` : "",
-    yest && yest.index ? `<div class="stat"><span>Yesterday was ${yest.day}</span>
-      <b class="num ${yest.index >= 100 ? "pos" : "neg"}">${yest.index > 100 ? "+" : ""}${
-        yest.index - 100}% vs a normal day</b></div>` : "",
-  ].join("");
-
-  const swingy = D.businesses.filter(b => b.rhythm)
-    .sort((a,z) => z.swing - a.swing);
+  const swingy = D.businesses.filter(b => b.rhythm).sort((a,z) => z.swing - a.swing);
 
   /* Nine rows saying the same thing is a sentence, not a table. When most sites
      peak on the same day within a narrow band, say that; the table stays a
-     click away for the sites that break the pattern. */
+     click away for the sites that break the pattern. The sentence, today's and
+     yesterday's own weekday reading go behind the ? mark. */
   const byDay = {};
   swingy.forEach(b => (byDay[b.peakDay] = byDay[b.peakDay] || []).push(b));
   const ranked = Object.entries(byDay).sort((a,z) => z[1].length - a[1].length);
@@ -5656,131 +5443,152 @@ function drawRhythm(){
   const spread = swings.length ? Math.max(...swings) - Math.min(...swings) : 0;
   const rest = ranked.slice(1);
   const verdict = (pack.length >= 7 && spread <= 15)
-    ? `<b>${pack.length} site${pack.length===1?"":"s"} peak ${topDay}</b>, +${
-        Math.min(...swings)} to +${Math.max(...swings)} points between their best and
-        worst day. ${rest.length
+    ? `${pack.length} site${pack.length===1?"":"s"} peak ${topDay}, +${Math.min(...swings)} to +${
+        Math.max(...swings)} points between their best and worst day. ${rest.length
           ? rest.map(([d,bs]) => `${bs.map(b => shortName(b)).join(", ")} peak${
               bs.length===1?"s":""} ${d}`).join("; ") + "."
-          : "Nothing runs the other way."}
-      <button type="button" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-        showRhythmSites ? "hide the table" : "site by site"}</button>`
+          : "Nothing runs the other way."}`
     : swingy.length
-      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.
-         <button type="button" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-           showRhythmSites ? "hide the table" : "site by site"}</button>`
-      : `No site has enough history to separate a weekly cycle from noise yet.`;
-  /* The sentence is the decision; the bars are the shape behind it, and they
-     wait for a click. */
-  $("rhythmVerdict").innerHTML = verdict + (profile
-    ? ` <button type="button" id="rhythmCardsToggle" aria-expanded="${showRhythmCards}">${
-        showRhythmCards ? "hide the week's shape" : "the week's shape"}</button>` : "");
-  $("rhythmCards").hidden = !showRhythmCards;
-  $("rhythmTools").hidden = !showRhythmCards;
-  const cardsToggle = $("rhythmCardsToggle");
-  if(cardsToggle) cardsToggle.onclick = () => { showRhythmCards = !showRhythmCards; drawRhythm(); };
-  const toggle = $("rhythmToggle");
-  if(toggle) toggle.onclick = () => { showRhythmSites = !showRhythmSites; drawRhythm(); };
-  $("rhythmSitesBox").hidden = !showRhythmSites || !swingy.length;
+      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.`
+      : "No site has enough history to separate a weekly cycle from noise yet.";
+  const days = [
+    today && today.index ? `Today is ${today.day}, normally ${signedPct(today.index - 100)}.` : "",
+    yest && yest.index ? `Yesterday was ${yest.day}, normally ${signedPct(yest.index - 100)}.` : "",
+  ].filter(Boolean).join(" ");
+  const note = `${RHYTHM_VIEWS[rhythmView].note} against a normal day${
+    profile ? `, from ${weeks} week${weeks===1?"":"s"} of history.` : "."}`;
 
+  $("rhythmHead").innerHTML = sechead("Weekly rhythm", {
+    why: [note, verdict, days].filter(Boolean).join(" "),
+    aside: `<span class="seg" id="rhythmTools"></span>${swingy.length
+      ? `<a class="link" href="#" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
+          showRhythmSites ? "hide the table" : "site by site"}</a>` : ""}`,
+  });
+  seg($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
+    () => rhythmView, v => rhythmView = v, drawRhythm);
+  $("rhythmChart").innerHTML = profile
+    ? `<div class="chartbox" style="padding-bottom:16px">${weekHtml(profile, today && today.day)}</div>`
+    : `<p class="quiet">Not enough history to separate a weekly cycle from noise.</p>`;
+
+  const toggle = $("rhythmToggle");
+  if(toggle) toggle.onclick = e => { e.preventDefault(); showRhythmSites = !showRhythmSites; drawRhythm(); };
+  $("rhythmSitesBox").hidden = !showRhythmSites || !swingy.length;
   $("rhythmSites").innerHTML = swingy.length ? `
-    <thead><tr><th class="l">Business</th><th class="l">Peaks</th><th>Swing</th>
+    <thead><tr><th>Business</th><th class="l">Peaks</th><th>Swing</th>
       <th class="l" style="width:38%">Across the week</th></tr></thead>
-    <tbody>${swingy.map(b => `<tr>
-      <td class="l">${siteCell(b)}</td>
+    <tbody>${swingy.map(b => `<tr data-key="${attr(b.key)}" style="cursor:pointer">
+      <td class="l">${siteLabel(b)}</td>
       <td class="l">${b.peakDay}</td>
-      <td class="num">${b.swing} pts</td>
-      <td>${weekBars(b.rhythm, {compact:true})}</td></tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l muted">No site has enough history yet.</td></tr></tbody>`;
+      <td>${b.swing} pts</td>
+      <td class="l">${miniWeek(b.rhythm)}</td></tr>`).join("")}</tbody>` : "";
+  $$("#rhythmSites tr[data-key]").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
+  wireTips();
 }
 
 /* --- the chain as a picture ------------------------------------------- */
 const FLOW_COLS = ["Importers", "Factories", "Depots", "Shops"];
-const NODE_W = 168, NODE_H = 40, ROW_GAP = 12, COL_GAP = 92;
+/* The artboard's stage: 180 × 44 boxes in four columns across 1128 units,
+   drawn 1:1 inside the chart box. */
+const NODE_W = 180, NODE_H = 44, ROW_GAP = 16, COL_GAP = 136;
 
+/* The map is meant to be compact: four columns, a node 180 by 44. A chain of
+   a dozen shops fits one column at a tight pitch; past what fits in ~900 px
+   the shops interleave into two sub-columns, the second one's rows sitting
+   in the gaps of the first, so a pipe to a back-row shop runs straight
+   through a gap instead of behind a box. */
+const SHOP_GAP = 8, SUB_GAP = 14, MAP_MAX_H = 900;
 function flowLayout(){
   const g = D.supply.graph;
   const columns = [[], [], [], []];
   g.nodes.forEach(n => columns[n.col].push(n));
   // Keep each column near the sites it feeds, so the lines stay untangled.
   columns[3].sort((a, b) => b.stock - a.stock);
-  const tallest = Math.max(...columns.map(c => c.length), 1);
-  const height = tallest * (NODE_H + ROW_GAP) + 34;
-  const width = 4 * NODE_W + 3 * COL_GAP;
+  const shops = columns[3].length;
+  const split = shops * (NODE_H + SHOP_GAP) + 34 > MAP_MAX_H;
+  /* Two sub-columns cost width; the columns close up a little to pay for it,
+     and the svg scales to its box regardless. */
+  const colGap = split ? 90 : COL_GAP;
+  const pitch = split ? (NODE_H + 12) / 2 : NODE_H + SHOP_GAP;
+  const spanOf = (ci, n) => ci === 3
+    ? (split ? (n - 1) * pitch + NODE_H : n * pitch - SHOP_GAP)
+    : n * (NODE_H + ROW_GAP) - ROW_GAP;
+  const height = Math.max(...columns.map((c, ci) => spanOf(ci, c.length)), 1) + 34 + 8;
+  const width = 4 * NODE_W + 3 * colGap + (split ? NODE_W + SUB_GAP : 0);
+  const colX = [0, 1, 2, 3].map(ci => ci * (NODE_W + colGap));
   const at = {};
   columns.forEach((col, ci) => {
-    const span = col.length * (NODE_H + ROW_GAP);
-    const top = (height - 34 - span) / 2 + 34;
+    const top = (height - 34 - spanOf(ci, col.length)) / 2 + 34;
     col.forEach((n, ri) => {
+      const back = split && ci === 3 && ri % 2 === 1;
       at[n.id] = {
-        x: ci * (NODE_W + COL_GAP),
-        y: top + ri * (NODE_H + ROW_GAP),
+        x: colX[ci] + (back ? NODE_W + SUB_GAP : 0),
+        y: top + ri * (ci === 3 ? pitch : NODE_H + ROW_GAP),
+        /* Where a pipe to a back-row shop straightens out: just before the
+           front row, so its last stretch is a level run through the gap. */
+        corridor: back ? colX[3] - 10 : null,
         node: n,
       };
     });
   });
-  return {at, width, height, columns};
+  return {at, width, height, columns, colX};
 }
 
 function drawFlow(){
   const g = D.supply.graph;
-  const {at, width, height} = flowLayout();
-  const flows = g.links.map(l => l.perDay).filter(v => v > 0);
-  const heaviest = Math.max(...flows, 1);
-  const parts = [];
+  const {at, width, height, colX} = flowLayout();
+  const heaviest = Math.max(...g.links.map(l => l.perDay), 1);
+  const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
+  const heads = FLOW_COLS.map((label, i) =>
+    `<text class="col" x="${colX[i]}" y="22">${label.toUpperCase()}</text>`);
 
-  FLOW_COLS.forEach((label, i) => parts.push(
-    `<text x="${i * (NODE_W + COL_GAP) + NODE_W/2}" y="16" text-anchor="middle"
-      fill="var(--ink-3)" font-family="IBM Plex Mono, monospace" font-size="10"
-      letter-spacing="1.4">${label.toUpperCase()}</text>`));
-
+  /* One pipe per link, with its cargo riding the same path while the pipe is
+     hovered. Width is volume on a square-root scale, so the heaviest pipe is
+     a few times the thinnest rather than ten. */
+  const pipes = [], cargo = [];
   g.links.forEach((l, i) => {
     const a = at[l.from], b = at[l.to];
     if(!a || !b) return;
-    const x1 = a.x + NODE_W, y1 = a.y + NODE_H/2;
-    const x2 = b.x, y2 = b.y + NODE_H/2;
-    const mid = (x1 + x2) / 2;
-    const on = !flowPick || flowPick === l.from || flowPick === l.to;
-    const w = 1 + Math.sqrt(l.perDay / heaviest) * 9;
-    parts.push(`<path class="flowlink${on ? "" : " dim"}" data-link="${i}"
-      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}"
-      stroke="${l.paused ? "var(--neg)" : l.cadence === "weekly"
-        ? "var(--info)" : "var(--accent)"}"
-      stroke-width="${w.toFixed(1)}" fill="none" opacity="${on ? .42 : .08}"
-      stroke-dasharray="${l.cadence === "weekly" ? "7 5" : "none"}">
-      <title>${l.perDay.toLocaleString()} units/day · ${l.items} products · ${l.cadence}</title>
-    </path>`);
+    const fwd = b.x > a.x;
+    const x1 = a.x + (fwd ? NODE_W : 0), y1 = a.y + NODE_H / 2;
+    const x2 = b.x + (fwd ? 0 : NODE_W), y2 = b.y + NODE_H / 2;
+    /* A back-row shop is reached through the gap in the front row: the curve
+       lands in the corridor before it and the rest is a level run. */
+    const xc = fwd && b.corridor !== null ? b.corridor : x2;
+    const mid = (x1 + xc) / 2;
+    const w = 1 + Math.sqrt(l.perDay / heaviest) * 2.5;
+    const tip = `${named(l.from)} to ${named(l.to)}: ${l.perDay.toLocaleString()} units a day over ${
+      l.items} product${l.items === 1 ? "" : "s"}, ${l.paused ? "import paused"
+      : l.cadence === "weekly" ? "weekly import" : "daily distribution"}`;
+    pipes.push(`<path class="pipe ${l.cadence}${l.paused ? " paused" : ""}" id="pipe${i}"
+      data-a="${attr(l.from)}" data-b="${attr(l.to)}" stroke-width="${w.toFixed(1)}"
+      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${xc},${y2}${xc !== x2 ? ` L${x2},${y2}` : ""}"><title>${attr(tip)}</title></path>`);
+    cargo.push(`<circle class="cargo" data-pipe="pipe${i}" r="3.5"><animateMotion dur="${
+      (1.1 + i % 3 * .25).toFixed(2)}s" repeatCount="indefinite"><mpath href="#pipe${i}"></mpath></animateMotion></circle>`);
   });
 
+  /* A site is a box: the hood pill, the name, what it holds. The dot in the
+     corner says an order there is too small (red), or running tight, or a
+     holding will not reach its week's delivery (amber). */
+  const boxes = [], dots = [];
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
   Object.values(at).forEach(({x, y, node}) => {
-    const on = !flowPick || flowPick === node.id
-      || g.links.some(l => (l.from === flowPick && l.to === node.id)
-                        || (l.to === flowPick && l.from === node.id));
-    const flag = node.short ? "var(--neg)"
-      : (node.tight || node.low) ? "var(--warn)" : null;
-    parts.push(`<g class="flownode${on ? "" : " dim"}${flowPick === node.id ? " on" : ""}"
-      data-node="${node.id}" transform="translate(${x},${y})">
-      <rect width="${NODE_W}" height="${NODE_H}" rx="3"/>
-      ${node.tag ? `<circle cx="18" cy="${NODE_H/2}" r="9"
-        fill="${LINE_COLOURS[node.tag] || LINE_COLOURS[""]}"/>
-        <text x="18" y="${NODE_H/2 + 3}" text-anchor="middle" fill="#fff"
-          font-family="IBM Plex Mono, monospace" font-size="8"
-          font-weight="600">${node.tag}</text>` : ""}
-      <text x="${node.tag ? 33 : 12}" y="${NODE_H/2 - 2}" font-size="11.5"
-        font-weight="600" fill="var(--ink)">${shortText(node.name, node.tag ? 17 : 20)}</text>
-      <text x="${node.tag ? 33 : 12}" y="${NODE_H/2 + 12}" font-size="9.5"
-        fill="var(--ink-3)" font-family="IBM Plex Mono, monospace">${
-        node.stock ? node.stock.toLocaleString() + " held" : node.sub}</text>
-      ${flag ? `<circle cx="${NODE_W - 11}" cy="11" r="4" fill="${flag}"/>` : ""}
-    </g>`);
+    const hood = node.tag, tx = x + (hood ? 44 : 12);
+    const flag = node.short ? ["badd", `${plural(node.short, "order")} too small`]
+      : node.tight ? ["warnd", `${plural(node.tight, "order")} running tight`]
+      : node.low ? ["warnd", `${plural(node.low, "holding")} below what the week needs`] : null;
+    boxes.push(`<g class="node" data-id="${attr(node.id)}">
+      <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7"></rect>${hood
+        ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
+           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
+      <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held" : attr(node.sub)}</text></g>`);
+    if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
-  $("flow").setAttribute("viewBox", `0 0 ${width} ${height}`);
-  $("flow").style.height = height + "px";
-  $("flow").innerHTML = parts.join("");
-  $("flow").querySelectorAll(".flownode").forEach(el => {
-    el.onclick = () => { flowPick = flowPick === el.dataset.node ? null : el.dataset.node;
-      drawFlow(); drawFlowDetail(); };
-  });
+  const svg = $("flow");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.style.width = "100%"; svg.style.height = height + "px";
+  svg.innerHTML = heads.concat(pipes, boxes, dots, cargo).join("");
   drawFlowDetail();
 }
 
@@ -5788,59 +5596,51 @@ const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
 
 function drawFlowDetail(){
   const g = D.supply.graph;
-  const node = g.nodes.find(n => n.id === flowPick);
+  const node = g.nodes.find(n => n.id === flowPickId);
+  const host = $("flowDetail");
   if(!node){
-    $("flowDetail").innerHTML = `<p class="muted">Pick a site to see what it holds
-      against what it has to cover before its next delivery.</p>`;
+    host.innerHTML = `<p class="quiet" style="margin:0">Pick a site to see what it holds against what it has to cover before its next delivery.</p>`;
     return;
   }
+  const named = id => { const n = g.nodes.find(x => x.id === id);
+    return n ? `${hoodHtml({code: n.tag})}${n.tag ? "&nbsp; " : ""}${shortText(n.name, 60)}` : id; };
   const inbound = g.links.filter(l => l.to === node.id);
   const outbound = g.links.filter(l => l.from === node.id);
-  const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
-
-  const rows = node.items.length ? `
-    <div class="scroll"><table>
-      <thead><tr><th class="l">Product</th><th>On hand</th>
-        <th>Needs before next refill</th><th>Refill brings</th>
-        <th class="l">Does the order cover a full cycle?</th></tr></thead>
-      <tbody>${node.items.map(i => `<tr>
-        <td class="l">${i.item}</td>
-        <td class="num">${i.stock.toLocaleString()}</td>
-        <td class="num">${i.need ? i.need.toLocaleString() : "—"}</td>
-        <td class="num">${i.provision ? i.provision.toLocaleString() : "—"}</td>
-        <td class="l">${i.fit === "ok"
-          ? (i.low ? `<span class="chip warn">below need</span>`
-                   : `<span class="chip ok">covered</span>`)
-          : `<span class="chip ${i.fit === "short" ? "bad" : "warn"}">${
-              i.fit === "short" ? "order too small" : "tight"}</span>
-             <span class="sub">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
-               i.cycleNeed.toLocaleString()}, ${
-               (i.cycleNeed - i.provision).toLocaleString()} more</span>`
-        }</td></tr>`).join("")}</tbody>
-    </table></div>` : `<p class="muted">Nothing stocked here; it only passes goods along.</p>`;
-
-  $("flowDetail").innerHTML = `
-    <div class="sitehead">
-      ${node.tag ? `<span class="bullet" style="background:${
-        LINE_COLOURS[node.tag] || LINE_COLOURS[""]}">${node.tag}</span>` : ""}
-      <div><h3>${node.name}</h3>
-        <span class="sub">${node.sub}${node.hood ? ` · ${node.hood}` : ""}</span></div>
-    </div>
+  const pipeTable = (title, links, other, empty) => `<table>
+    <thead><tr><th class="l">${title}</th><th>Units / day</th></tr></thead>
+    <tbody>${links.length ? links.map(l => `<tr><td class="l">${named(other(l))}${
+        l.paused ? ` ${chipHtml("bad", "paused")}` : ""}</td><td>${l.perDay.toLocaleString()}</td></tr>`).join("")
+      : `<tr><td class="l quiet" colspan="2">${empty}</td></tr>`}</tbody></table>`;
+  const fitCell = i => i.fit === "ok"
+    ? (i.low ? chipHtml("warn", "below need", "Holds less than it needs before the next delivery") : chipHtml("ok", "covered"))
+    : `${chipHtml(i.fit === "short" ? "bad" : "warn", i.fit === "short" ? "order too small" : "tight")}
+       <span class="sub" style="display:inline">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
+         i.cycleNeed.toLocaleString()}, ${(i.cycleNeed - i.provision).toLocaleString()} more</span>`;
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+  const flags = (node.short ? chipHtml("bad", `${plural(node.short, "order")} too small`) : "")
+    + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
+  host.innerHTML = `
+    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}),
+      quiet: `${node.sub}${node.hood ? ` · ${node.hood}` : ""}`,
+      aside: `<a class="link" href="#" id="flowClear">clear selection</a>`})}
     <div class="flowpipes">
-      <div><span class="eyebrow">Comes in from</span>
-        ${inbound.length ? inbound.map(l => `<div class="stat"><span>${named(l.from)}
-          ${l.paused ? `<span class="chip bad">paused</span>` : ""}</span>
-          <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
-          : `<p class="muted">Nothing. This is where goods enter.</p>`}</div>
-      <div><span class="eyebrow">Goes out to</span>
-        ${outbound.length ? outbound.map(l => `<div class="stat"><span>${named(l.to)}</span>
-          <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
-          : `<p class="muted">Nothing. This is the end of the line.</p>`}</div>
+      ${pipeTable("Comes in from", inbound, l => l.from, "Nothing. This is where goods enter.")}
+      ${pipeTable("Goes out to", outbound, l => l.to, "Nothing. This is the end of the line.")}
     </div>
-    <div class="panel"><span class="eyebrow">Held against need${
-      node.short ? `, ${node.short} order${node.short > 1 ? "s" : ""} too small`
-      : node.tight ? `, ${node.tight} order${node.tight > 1 ? "s" : ""} running tight`
-      : ""}</span>${rows}</div>`;
+    <div class="sec" style="margin-top:28px">
+      ${sechead("Held against need", {after: flags})}
+      ${node.items.length ? `<table>
+        <thead><tr><th class="l">Product</th><th>On hand</th><th>Needs before next refill</th>
+          <th>Refill brings</th><th class="l">Does the order cover a full cycle?</th></tr></thead>
+        <tbody>${node.items.map(i => `<tr>
+          <td class="l">${i.item}</td>
+          <td>${i.stock.toLocaleString()}</td>
+          <td>${i.need ? i.need.toLocaleString() : "—"}</td>
+          <td>${i.provision ? i.provision.toLocaleString() : "—"}</td>
+          <td class="l">${fitCell(i)}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="quiet" style="margin:0">Nothing stocked here; it only passes goods along.</p>`}
+    </div>`;
+  $("flowClear").onclick = e => { e.preventDefault(); flowPickId = null; applyFlow(); drawFlowDetail(); };
 }
 
 /* --- supply chain ---------------------------------------------------- */
@@ -5866,16 +5666,15 @@ const SUPPLY_VIEWS = {
            <th>Busiest day</th><th>Daily top-up</th><th>Pressure</th><th>On hand</th>`,
     rows: () => D.supply.shops,
     row: r => `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}</td>
-      <td class="num">${r.sold.toLocaleString()}</td>
-      <td class="num">${r.peakSold.toLocaleString()}${r.peakDay
-        ? `<span class="sub"> ${r.peakDay.slice(0,3)}</span>` : ""}</td>
-      <td class="num">${r.target ? r.target.toLocaleString() : "—"}</td>
-      <td class="num">${r.pressure === null
-        ? `<span class="chip bad">no plan</span>`
-        : load(r.pressure, r.level)}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>`,
+      <td>${r.sold.toLocaleString()}</td>
+      <td>${r.peakDay ? `${r.peakDay.slice(0,3)} ` : ""}${r.peakSold.toLocaleString()}</td>
+      <td>${r.target ? r.target.toLocaleString() : "—"}</td>
+      ${r.pressure === null
+        ? `<td>${chipHtml("bad", "no plan", "Nothing refills this shelf on a schedule, so it is judged on days of cover instead")}</td>`
+        : `<td class="gauge${r.level !== "ok" ? " low" : ""}"><i><b style="--w:${Math.min(100, r.pressure)}%"></b></i>${r.pressure}%</td>`}
+      <td>${r.stock.toLocaleString()}</td>`,
   },
   imports: {
     label: "Before the import",
@@ -5912,23 +5711,23 @@ const SUPPLY_VIEWS = {
       const due = r.due;
       /* A holding that empties a few hours early is an order sized to
          consumption, so it gets a chip and not a red one. */
-      const cls = !due ? "neutral"
+      const cls = !due ? "dim"
         : r.coverFit === "short" ? "bad" : r.coverFit === "tight" ? "warn" : "ok";
       return `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}${r.paused ? ` <span class="chip bad">paused</span>` : ""}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>
-      <td class="num">${r.perDay.toLocaleString()}${r.basis === "order"
+      <td>${r.stock.toLocaleString()}</td>
+      <td>${r.perDay.toLocaleString()}${r.basis === "order"
         ? `<span class="sub"> est.</span>` : ""}</td>
-      <td class="num">${r.peakPerDay.toLocaleString()}${r.peakDay
+      <td>${r.peakPerDay.toLocaleString()}${r.peakDay
         ? `<span class="sub"> ${r.peakDay.slice(0,3)}</span>` : ""}</td>
-      <td class="num"><span class="chip ${cls}">${r.runsOut
+      <td><span class="chip ${cls}">${r.runsOut
         ? r.runsOut.slice(0,3) : `${r.cover}d`}</span><span class="sub"> ${r.cover}d${
         due ? ` of ${due}` : ""}${r.coverFit === "tight"
           ? `, ${r.shortBy}d early` : ""}</span></td>
-      <td class="num">${r.weekly.toLocaleString()}</td>
-      <td class="num">${r.basis === "order"
-        ? `<span class="chip neutral" title="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
+      <td>${r.weekly.toLocaleString()}</td>
+      <td>${r.basis === "order"
+        ? `<span class="chip dim" data-tip="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
         : `${r.weekNeed.toLocaleString()}${r.orderFit !== "ok"
           ? ` <span class="chip ${r.orderFit === "short" ? "bad" : "warn"}">${
               r.orderFit === "short" ? "order too small" : "tight"}</span>` : ""}`}</td>`;
@@ -5953,14 +5752,14 @@ const SUPPLY_VIEWS = {
            <th>Out / week</th><th>Weeks of supply</th><th>Top-up target</th>`,
     rows: () => D.supply.idle,
     row: r => `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>
-      <td class="num">${r.perWeek ? r.perWeek.toLocaleString() : "—"}</td>
-      <td class="num">${r.weeks === null
+      <td>${r.stock.toLocaleString()}</td>
+      <td>${r.perWeek ? r.perWeek.toLocaleString() : "—"}</td>
+      <td>${r.weeks === null
         ? `<span class="chip bad">not moving</span>`
-        : `<span class="chip ${r.weeks >= 8 ? "warn" : "neutral"}">${r.weeks}</span>`}</td>
-      <td class="num">${r.target ? r.target.toLocaleString() : "—"}</td>`,
+        : `<span class="chip ${r.weeks >= 8 ? "warn" : "dim"}">${r.weeks}</span>`}</td>
+      <td>${r.target ? r.target.toLocaleString() : "—"}</td>`,
   },
   lines: {
     label: "Factory lines",
@@ -5987,43 +5786,43 @@ const SUPPLY_VIEWS = {
       ...s.lines.map(l => ({...l, s: s.s})),
       ...s.unnamed.map(u => ({...u, s: s.s, unnamed: true}))]),
     row: r => r.unnamed ? `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
-      <td class="l">${r.workstation}${slotText(r)} <span class="chip neutral">${
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
+      <td class="l">${r.workstation}${slotText(r)} <span class="chip dim">${
           r.idle ? "no recipe chosen" : "recipe not identified"}</span>${r.rid && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" title="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
+          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
               r.candidates.map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}<span class="sub">${
           r.idle ? "the machines stand idle"
           : r.hint ? `set up as ${r.hint.item} by the look of the top-up plan${r.hint.missing.length
               ? `, but ${r.hint.missing.join(", ")} never arrive${r.hint.missing.length === 1 ? "s" : ""}` : ""}`
           : `nothing it could make has shipped or been fed in a week; one of ${r.candidates.length} recipes`}</span></td>
-      <td class="num">${r.machines}</td>
-      <td class="num">${staffCell(r)}</td>
-      <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>` : `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td>${r.machines}</td>
+      <td>${staffCell(r)}</td>
+      <td>—</td><td>—</td><td>—</td><td>—</td>` : `
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}${r.basis !== "measured" && r.basis !== "paired"
-          ? ` <span class="chip neutral" title="${r.basis === "likely"
+          ? ` <span class="chip dim" data-tip="${r.basis === "likely"
               ? "Nothing has shipped; named from the product held at the factory"
               : r.basis === "paired"
               ? "Twin lines with the same machine count: the pair is certain from what it eats, which is which is not"
               : r.basis === "you" ? "You named this line; the board takes your word for it"
               : "Identified on an earlier build and remembered"}">${
               r.basis === "you" ? "named by you" : r.basis}</span>` : ""}${r.basis === "you" && r.rid
-          ? ` <button type="button" class="unname" data-rid="${r.rid}" title="Forget this name">×</button>` : ""}${
+          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name">×</button>` : ""}${
           LIVE && r.basis !== "you" && r.basis !== "measured" && r.candidates && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" title="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
+          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
               r.candidates.filter(c => c.slug !== r.slug).map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}
         <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine${r.basis === "paired"
           ? ` · one of a twin pair: which id is which cannot be told` : ""}</span></td>
-      <td class="num">${r.machines}</td>
-      <td class="num">${staffCell(r)}</td>
-      <td class="num">${r.makes.toLocaleString()}${r.missing && r.missing.length
+      <td>${r.machines}</td>
+      <td>${staffCell(r)}</td>
+      <td>${r.makes.toLocaleString()}${r.missing && r.missing.length
           ? `<span class="sub">stopped: no ${r.missing.join(", ")}</span>`
           : r.fullWeek && r.hoursWeek < r.fullWeek
           ? `<span class="sub">${r.atRoster.toLocaleString()} at this roster</span>` : ""}</td>
-      <td class="num">${r.ships.toLocaleString()}${r.piling
+      <td>${r.ships.toLocaleString()}${r.piling
           ? ` <span class="chip warn">piling up</span>` : ""}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>
-      <td class="num">${r.toCity ? r.toCity.toLocaleString() : "—"}${r.toPier
+      <td>${r.stock.toLocaleString()}</td>
+      <td>${r.toCity ? r.toCity.toLocaleString() : "—"}${r.toPier
           ? `<span class="sub"> +${r.toPier.toLocaleString()} export</span>` : ""}</td>`,
   },
   feed: {
@@ -6054,7 +5853,7 @@ const SUPPLY_VIEWS = {
       const change = {
         unplanned: () => `${chip("bad", "no top-up")} put ${r.item} on a plan at ${r.perDay.toLocaleString()} a day`,
         target: () => `${chip("bad", "top-up short")} raise ${depot}'s top-up to ${r.raiseTarget.toLocaleString()}${stalled}`,
-        waiting: () => `${chip("neutral", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
+        waiting: () => `${chip("dim", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
         staffing: () => `${chip("warn", "understaffed")} the roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week; staff them and the need is the full ${r.perDay.toLocaleString()}`,
         dry: () => `${chip("bad", "depot out")} ${depot} holds ${r.depotStock.toLocaleString()}; the import is not keeping up`,
         idle: () => `${chip("warn", "not drawn")} ${depot} holds ${r.depotStock.toLocaleString()} but the line takes ${
@@ -6067,17 +5866,17 @@ const SUPPLY_VIEWS = {
         ok: () => chip("ok", "covered"),
       }[r.status]();
       return `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}<span class="sub">${r.lines.map(l => {
           const line = (factoryView().sites.find(s => s.s === r.s) || {lines: []}).lines.find(x => x.item === l);
           return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ")}</span></td>
-      <td class="num">${r.perDay.toLocaleString()}</td>
-      <td class="num">${r.perWeek.toLocaleString()}</td>
-      <td class="num">${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
+      <td>${r.perDay.toLocaleString()}</td>
+      <td>${r.perWeek.toLocaleString()}</td>
+      <td>${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
           ? `<span class="sub"> from ${depot}</span>` : ""}</td>
-      <td class="num">${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay
+      <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay
           ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
-      <td class="num">${r.importWeekly !== null ? r.importWeekly.toLocaleString() : "—"}${
+      <td>${r.importWeekly !== null ? r.importWeekly.toLocaleString() : "—"}${
           r.depotNeed && r.depotNeed !== r.perWeek
           ? `<span class="sub"> all factories ${r.depotNeed.toLocaleString()}</span>` : ""}</td>
       <td class="l">${change}</td>`;
@@ -6114,10 +5913,10 @@ function nameLine(rid, slug){
   const names = localNames();
   if(slug) names[rid] = slug; else delete names[rid];
   try{ localStorage.setItem(LINE_NAMES_KEY, JSON.stringify(names)); }catch(e){}
-  if(!LIVE){ drawStock(); drawLogistics(); return; }
+  if(!LIVE){ drawStock(); drawLogistics(); wireAll(); return; }
   SOURCE.name(rid, slug)
     .then(data => { if(data){ D = data; renderAll(); } })
-    .catch(() => { drawStock(); drawLogistics(); });
+    .catch(() => { drawStock(); drawLogistics(); wireAll(); });
 }
 const feedFit = (need, have) => {
   if(!need || !have) return "ok";
@@ -6247,97 +6046,10 @@ function factoryView(){
 }
 
 /* --- chrome, wired up once ----------------------------------------- */
-function toolbar(host, options, read, write, redraw){
-  options.forEach(([id,label]) => {
-    const b = el("button", null, label);
-    b.dataset.id = id;
-    b.setAttribute("aria-pressed", id === read());
-    b.onclick = () => {
-      write(id);
-      [...host.children].forEach(c => c.setAttribute("aria-pressed", c === b));
-      redraw();
-    };
-    host.append(b);
-  });
-}
-
-toolbar($("alertTools"), [["all","All"],["critical","Urgent"],["warn","Watch"],["info","Opportunity"]],
-  () => alertFilter, v => alertFilter = v, () => drawAlerts());
-toolbar($("chartTools"), [[30,"30 days"],[0,"All"]],
-  () => chartWindow, v => chartWindow = v, () => drawChart());
-toolbar($("portTools"), Object.entries(VIEWS).map(([id,v]) => [id, v.label]),
-  () => view, v => { view = v; sortKey = null; }, () => drawPortfolio());
-toolbar($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
-  () => rhythmView, v => rhythmView = v, () => drawRhythm());
-toolbar($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id,v]) => [id, v.label]),
-  () => stockView, v => stockView = v, () => drawStock());
-let logisticsView = "changes";
-toolbar($("logisticsTools"), [["changes","Needs a change"],["all","Everything"]],
-  () => logisticsView, v => logisticsView = v, () => drawLogistics());
-toolbar($("marketTools"), [["types","By business type"],["mine","What I sell"],
-                           ["new","Not selling yet"],["all","Everything"]],
-  () => marketView, v => marketView = v, () => drawMarket());
-{
-  const b = el("button", null, "Show numbers");
-  b.id = "marketNumbers";
-  b.style.marginLeft = "10px";
-  b.setAttribute("aria-pressed", marketDetail);
-  b.onclick = () => {
-    marketDetail = !marketDetail;
-    b.setAttribute("aria-pressed", marketDetail);
-    drawMarket();
-  };
-  $("marketTools").append(b);
-}
-
-$("legend").innerHTML = Object.entries(SERIES).map(([id,s]) =>
-  `<span data-s="${id}" role="button" tabindex="0" style="cursor:pointer">
-     <i style="background:${s.colour}"></i>${s.label}</span>`).join("");
-document.querySelectorAll("#legend span").forEach(node => {
-  const toggle = () => {
-    const id = node.dataset.s;
-    shown.has(id) ? shown.delete(id) : shown.add(id);
-    if(!shown.size) shown.add(id);
-    drawChart();
-  };
-  node.onclick = toggle;
-  node.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } };
-});
-
-$("flowClear").onclick = () => { flowPick = null; drawFlow(); };
-
-const chart = $("chart"), tip = $("chartTip");
-
-chart.addEventListener("pointermove", e => {
-  if(!chartRows.length) return;
-  const box = chart.getBoundingClientRect();
-  const {W,P} = chart._geom;
-  const px = (e.clientX-box.left) / box.width * W;
-  const i = Math.max(0, Math.min(chartRows.length-1,
-    Math.round((px-P.l)/((W-P.l-P.r)/(chartRows.length-1||1)))));
-  const r = chartRows[i], cx = chart._x(i);
-  const cross = chart.querySelector("#cross");
-  cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("opacity", ".5");
-  tip.style.opacity = 1;
-  tip.style.left = (cx/W*box.width) + "px";
-  tip.style.top = (e.clientY-box.top-14) + "px";
-  tip.innerHTML = `<b>Day ${r.day}</b>` + [...shown].map(id =>
-    `<br>${SERIES[id].label} <span class="num">${fmt(r[SERIES[id].key])}</span>`).join("");
-});
-chart.addEventListener("pointerleave", () => {
-  tip.style.opacity = 0;
-  const c = chart.querySelector("#cross"); if(c) c.setAttribute("opacity", 0);
-});
-window.addEventListener("resize", () => { if(D) drawChart(); });
-/* A width change the window never sees — a scrollbar appearing, a panel
-   opening — would otherwise leave the chart drawn to the old geometry. */
-if(window.ResizeObserver){
-  let lastW = 0;
-  new ResizeObserver(entries => {
-    const w = Math.round(entries[0].contentRect.width);
-    if(w && w !== lastW){ lastW = w; drawChart(); }
-  }).observe(chart);
-}
+// changed for growth: the market views are a .seg; "Everything" went, being the
+// union of "What I sell" and "Not yet", and the numbers are always in the cells.
+seg($("marketTools"), [["types","By type"],["mine","What I sell"],["new","Not yet"]],
+  () => marketView, v => { marketView = v; showAllMarket = false; }, () => drawMarket());
 
 /* --- draw ----------------------------------------------------------- */
 function drawMast(){
@@ -6377,47 +6089,64 @@ function drawKpis(){
      it belongs under Profit and it says so. */
   const trend = k.profitAvg7 - k.profitPrev7;
   const cf = D.cashFlow;
-  const profits = D.daily.map(d => d.profit);
-  const revenues = D.daily.map(d => d.revenue);
   /* Four tiles: what the day made, what it took, what is in the bank, and the
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
   const fixed = k.rentBill + D.staff.dailyCost;
   const owed = k.debt > 0
     ? ` · ${fmt(k.debt)} owed on ${D.loans.length} loan${D.loans.length===1?"":"s"}` : "";
-  const tiles = [
-    {v: fmt(k.profitYesterday), l: "Profit yesterday",
-     d: `7-day avg ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs previous 7`,
-     cls: sign(k.profitYesterday), spark: profits},
-    {v: fmt(k.revenue), l: "Revenue yesterday",
-     d: `${k.customers.toLocaleString()} customers served`, spark: revenues},
-    {v: fmt(k.cash), l: "Cash on hand",
-     d: (cf
-       ? `${cf.days}d: profit ${compact(cf.profit)}, cash ${cf.cashChange>=0?"+":""}${
-           compact(cf.cashChange)}; ${cf.reinvested>=0
+  /* A tile is a number, one chip, a short sub line and a fortnight of history.
+     The sentence the tile used to print is the chip's tooltip. The arrow chips
+     read ▲/▼ with the size of the move; the dim ones carry a plain fact. */
+  const SPARK_DAYS = 14;
+  const hist = key => D.daily.slice(-SPARK_DAYS).map(key);
+  const vs7 = k.profitAvg7 ? (k.profitYesterday - k.profitAvg7) / Math.abs(k.profitAvg7) : 0;
+  const cashTile = cf
+    ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
+         `${cf.days} days: ${compact(cf.profit)} profit, cash ${cf.cashChange>=0?"+":""}${compact(cf.cashChange)}; ${
+           cf.reinvested>=0
              ? `${compact(cf.reinvested)} went into set-up and stock`
-             : `${compact(-cf.reinvested)} more than the books earned`}`
-       : `profit ${compact(k.profitSum7)} over 7 days · no cash history yet`) + owed},
+             : `${compact(-cf.reinvested)} more than the books earned`}${owed}`),
+       sub: cf.days === 7 ? "this week" : `over ${cf.days} day${cf.days===1?"":"s"}`}
+    : {chip: chipHtml("dim", `${compact(k.profitSum7)} profit`,
+         `${fmt(k.profitSum7)} profit over 7 days; no cash history yet, it starts building today${owed}`),
+       sub: "no cash history"};
+  const tiles = [
+    {l: "Profit yesterday", v: fmt(k.profitYesterday),
+     chip: chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
+       `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`),
+     sub: "vs 7-day", spark: hist(d => d.profit)},
+    {l: "Revenue yesterday", v: fmt(k.revenue),
+     chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
+     sub: "customers", spark: hist(d => d.revenue)},
+    /* Cash has no day-by-day history in the save, so this tile has no line. */
+    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip, sub: cashTile.sub},
     k.netWorth === null
-      ? {v: fmt(fixed), l: "Fixed cost per day",
-         d: `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`}
+      ? {l: "Fixed cost / day", v: fmt(fixed),
+         chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
+         sub: `payroll ${compact(D.staff.dailyCost)}`,
+         /* What the days actually paid in rent and wages; the number above is
+            today's contracted rate, which is why the last point can sit below it. */
+         spark: hist(d => (d.rent || 0) + (d.wages || 0))}
       /* Build 3672 stopped reporting net worth. Rather than quietly showing a
          stale number as if it were today's, the tile says which day it is from. */
-      : {v: fmt(k.netWorth), l: "Net worth",
-         d: k.netWorthAsOf
-           ? `as of day ${k.netWorthAsOf}; the game stopped reporting it`
+      : {l: "Net worth", v: fmt(k.netWorth),
+         chip: k.netWorthAsOf
+           ? chipHtml("dim", `day ${k.netWorthAsOf}`, `As of day ${k.netWorthAsOf}; the game stopped reporting it`)
            : cf && cf.netWorthChange !== null
-           ? `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${
-               cf.days===1?"":"s"}`
-           : "no net worth history yet; starts building today",
-         cls: k.netWorthAsOf ? "" : (cf && cf.netWorthChange !== null ? sign(cf.netWorthChange) : "")},
+           ? chipHtml(cf.netWorthChange >= 0 ? "ok" : "bad", `${cf.netWorthChange>=0?"▲":"▼"} ${compact(Math.abs(cf.netWorthChange))}`,
+               `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${cf.days===1?"":"s"}`)
+           : chipHtml("dim", "new", "No net worth history yet; starts building today"),
+         sub: k.netWorthAsOf ? "stale" : cf && cf.netWorthChange !== null ? `over ${cf.days} days` : "no history yet"},
   ];
+  /* The tiles are rebuilt on every render; the entrance plays only the first time. */
+  const seen = !!q("#kpis .kpi.in");
   $("kpis").innerHTML = tiles.map(t => `
-    <div class="kpi">
-      <span class="eyebrow">${t.l}</span>
-      <span class="v num ${t.cls||""}">${t.v}</span>
-      <span class="d">${t.d}</span>
-      ${t.spark ? sparkline(t.spark, "var(--accent)") : ""}
+    <div class="kpi rv${seen ? " in" : ""}">
+      <span class="lab">${t.l}</span>
+      <span class="v">${t.v}</span>
+      <div class="row">${t.chip}<span class="sub">${t.sub}</span></div>
+      ${t.spark ? sparkHtml(t.spark, t.spark.map(money)) : ""}
     </div>`).join("");
 }
 
@@ -6447,7 +6176,7 @@ const SEC_PAGE = {
   alertSection:["today"],
   secDaily:["results"], secRhythm:["results"], secPortfolio:["results"], secDetail:["results"],
   secLogistics:["supply","orders"], secStock:["supply","checks"], secFlow:["supply","map"],
-  secExpand:["growth","expand"], secMarket:["growth","market"], secPlan:["growth","plan"],
+  secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company"], secPayroll:["company"], secGoals:["company"],
 };
 function reveal(secId){
@@ -6462,12 +6191,10 @@ function goToAlert(a){
   if(!link) return;
   if(link.view){
     stockView = link.view; showAllStock = false;
-    [...$("stockTools").children].forEach(c => c.setAttribute("aria-pressed", c.dataset.id === stockView));
     drawStock();
   }
   if(link.port){
     view = link.port; sortKey = null;
-    [...$("portTools").children].forEach(c => c.setAttribute("aria-pressed", c.dataset.id === view));
     drawPortfolio();
   }
   if(link.site){
@@ -6476,156 +6203,245 @@ function goToAlert(a){
   }
   reveal(link.sec);
 }
-const alertLink = (a, i) => ALERT_LINKS[a.group]
-  ? ` <a href="#${(SEC_PAGE[ALERT_LINKS[a.group].sec] || ["today"])[0]}" class="goto" data-i="${i}">details ›</a>` : "";
+const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
+
+/* The three severities of the list: the alert levels Python assigns, in the
+   design's words. */
+const SEV_KIND = {critical: "crit", warn: "watch", info: "opp"};
+const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
+
+/* A finding is a short verb phrase; the rest of the sentence unfolds on hover.
+   Python's sentences often lead with the site, which the row already names, so
+   that is dropped (with a following "is"/"are"); then the first colon,
+   semicolon or full stop splits the headline from the detail. A condensed row
+   (three of a kind at one site) carries its worst member's sentence as detail. */
+function splitFinding(a){
+  let t = String(a.text || "");
+  if(a.site && t.startsWith(a.site)){
+    t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
+  }
+  const m = t.match(/^(.*?)(?::|;|\.\s)\s*(.*)$/s);
+  let what = m ? m[1] : t, more = m ? m[2] : "";
+  what = what.charAt(0).toUpperCase() + what.slice(1);
+  if(a.detail) more = more ? `${more.replace(/[.\s]+$/, "")}. ${a.detail}` : a.detail;
+  return {what, more};
+}
+/* The figure on the right: the finding's worth in its unit, whole dollars up
+   to a million and compact beyond it; a condensed row with no money shows
+   how many findings it stands for; anything else leaves the column empty. */
+function findingAmount(a){
+  if(typeof a.worth === "number")
+    return `${Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth)}<small>${a.unit || ""}</small>`;
+  if(a.detail){
+    const n = (String(a.text).match(/^\d+/) || [])[0];
+    if(n) return `${n}<small>findings</small>`;
+  }
+  return "";
+}
+function findingRow(a){
+  const b = D.businesses.find(x => x.name === a.site);
+  const {what, more} = splitFinding(a);
+  /* Three shops can share a name; the pill already tells them apart, so the
+     neighbourhood shortName() would add is only spelt out when there is no pill. */
+  const site = !b ? a.site : b.code ? hoodHtml(b) + baseName(b) : shortName(b);
+  return `<a class="find ${SEV_KIND[a.level] || "opp"}" href="#${alertPage(a)}" data-id="${attr(a.id)}">
+    <span class="mark" data-tip="Silence this finding"></span>
+    <span class="site">${site}</span>
+    <span class="what">${what}</span>
+    <span class="amt">${findingAmount(a)}</span>
+    <span class="go">${icon("go")}</span>${more ? `
+    <span class="more">${more}</span>` : ""}</a>`;
+}
+/* Row click opens the finding's page; a click on the mark is stopped in the
+   capture phase by wireFinds() and never reaches this. */
+function bindFindingRows(host, list){
+  $$(".find", host).forEach((node, i) => {
+    node.onclick = e => { e.preventDefault(); goToAlert(list[i]); };
+  });
+}
 
 function drawAlerts(){
   const kindOn = a => alertGroupPrefs[a.group] !== false;
-  const alerts = D.alerts.filter(kindOn);
-  const counts = {critical:0, warn:0, info:0};
-  alerts.forEach(a => counts[a.level]++);
-  $("alertCount").textContent =
-    `${counts.critical} urgent · ${counts.warn} watch · ${counts.info} opportunity`;
-  const list = alerts.filter(a => alertFilter==="all" || a.level===alertFilter);
-  $("alerts").innerHTML = list.length ? list.map((a, i) => `
-    <div class="alert ${a.level}"><i></i><b>${a.text}${alertLink(a, i)}${
-      a.detail ? `<span class="detail">${a.detail}</span>` : ""}</b>
-      <span class="who">${a.site}</span></div>`).join("")
-    : `<div class="alert"><i style="background:var(--accent)"></i><b>Nothing to flag here.</b><span class="who"></span></div>`;
-  document.querySelectorAll("#alerts .goto").forEach(node => {
-    node.onclick = e => { e.preventDefault(); goToAlert(list[+node.dataset.i]); };
+  const list = D.alerts.filter(kindOn);
+  const counts = {crit: 0, watch: 0, opp: 0};
+  list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
+  const gate = (D.minor || {}).gate || 0;
+
+  /* The head: title, the threshold behind the ?, the three severity counters
+     that filter the list, and the tune button. That button is bound once at
+     boot, so it is carried over into the fresh head rather than rebuilt. */
+  const tune = $("alertKindsToggle");
+  $("alertHead").innerHTML = sechead("Needs attention", {
+    why: `A site that is not trading always makes the list. Everything else needs to be worth ${
+      fmt(gate)}/day; smaller findings are counted below.`,
+    aside: ["crit", "watch", "opp"].map(k =>
+      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
+    ).join("") + `<span id="alertTuneSlot"></span>`,
   });
+  $("alertTuneSlot").replaceWith(tune);
+
+  $("alerts").innerHTML = list.length ? list.map(findingRow).join("")
+    : `<span class="quiet" style="display:block;padding:12px 0">Nothing to flag here.</span>`;
+  bindFindingRows($("alerts"), list);
 
   /* Anything worth less than the materiality gate is counted rather than read
-     out. It is never dropped — the count and the money are both here. Hidden
-     kinds are dropped from both the count and the total, the same as above. */
+     out. It is never dropped — the count and the money are both here, and
+     "show" lays the rows out like the list above. Hidden kinds are dropped
+     from both the count and the total, the same as above. */
   const rows = ((D.minor || {}).rows || []).filter(kindOn);
-  const host = $("alertMinor");
-  if(!rows.length){ host.innerHTML = ""; return; }
-  const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
-  const gate = (D.minor || {}).gate || 0;
-  host.innerHTML = `${rows.length} smaller finding${rows.length===1?"":"s"} worth
-    ${fmt(worth)}/day in total, below the ${fmt(gate)}/day line
-    <button type="button" id="minorToggle" aria-expanded="${showMinor}">${
-      showMinor ? "hide" : "show"}</button>`
-    + (showMinor ? `<ul>${rows.map((r, i) =>
-        `<li><b>${r.site}</b>: ${r.text}${
-          r.worth ? ` <span class="num">(${fmt(r.worth)}/day)</span>` : ""}${alertLink(r, i)}</li>`).join("")}</ul>` : "");
-  $("minorToggle").onclick = () => { showMinor = !showMinor; drawAlerts(); };
-  document.querySelectorAll("#alertMinor .goto").forEach(node => {
-    node.onclick = e => { e.preventDefault(); goToAlert(rows[+node.dataset.i]); };
-  });
+  const host = $("alertMinor"), more = $("minorList");
+  if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
+  else {
+    const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
+    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
+      showMinor ? "hide" : "show"}</a>`;
+    $("minorToggle").onclick = e => { e.preventDefault(); showMinor = !showMinor; drawAlerts(); };
+    more.hidden = !showMinor;
+    more.innerHTML = showMinor ? rows.map(findingRow).join("") : "";
+    bindFindingRows(more, rows);
+  }
+  /* The kinds switches and the "show" link redraw this view outside
+     renderAll(), so the sticky state (filtered severities, silenced ids) is
+     re-applied here; both calls are idempotent. */
+  wireSev(); wireFinds();
+}
+
+/* A round step for the y axis: 1, 2, 2.5 or 5 times a power of ten, so about
+   `ticks` gridlines cover the span. */
+function niceStep(span, ticks){
+  const raw = span / ticks, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+  return (f <= 1.2 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
 }
 
 function drawChart(){
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
-  const rows = chartRows;
+  const rows = chartRows, n = rows.length;
+  if(!n) return;
+  const first = rows[0], last = rows[n - 1];
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */
-  $("chartNote").textContent = `Day ${rows[0].day} to ${rows[rows.length-1].day}. `
-    + `Daily profit follows the purchase calendar, so the 7-day line is the trend`;
-  document.querySelectorAll("#legend span").forEach(n =>
-    n.style.opacity = shown.has(n.dataset.s) ? 1 : .38);
-
-  const W = chart.clientWidth || 900, H = 260, P = {t:12,r:8,b:26,l:62};
-  const keys = [...shown];
-  let lo = 0, hi = 0;
-  rows.forEach(r => keys.forEach(id => { lo=Math.min(lo,r[SERIES[id].key]); hi=Math.max(hi,r[SERIES[id].key]); }));
-  hi = hi || 1;
-  const pad = (hi-lo)*0.08;
-  lo -= pad; hi += pad;
-  const x = i => P.l + i/(rows.length-1||1)*(W-P.l-P.r);
-  const y = v => P.t + (1-(v-lo)/(hi-lo))*(H-P.t-P.b);
-
-  const ticks = 4, out = [];
-  for(let i=0;i<=ticks;i++){
-    const v = lo + (hi-lo)*i/ticks, yy = y(v).toFixed(1);
-    out.push(`<line x1="${P.l}" y1="${yy}" x2="${W-P.r}" y2="${yy}" stroke="var(--rule-soft)" stroke-width="1"/>`);
-    out.push(`<text x="${P.l-10}" y="${+yy+4}" text-anchor="end" fill="var(--ink-3)"
-      font-family="IBM Plex Mono, monospace" font-size="10.5">${compact(v)}</text>`);
-  }
-  if(lo<0) out.push(`<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}" stroke="var(--ink-3)" stroke-width="1"/>`);
-
-  const step = Math.max(1, Math.ceil(rows.length/10));
-  rows.forEach((r,i) => { if(i%step===0 || i===rows.length-1)
-    out.push(`<text x="${x(i)}" y="${H-6}" text-anchor="middle" fill="var(--ink-3)"
-      font-family="IBM Plex Mono, monospace" font-size="10.5">${r.day}</text>`); });
-
-  keys.forEach(id => {
-    const s = SERIES[id];
-    const pts = rows.map((r,i)=>`${x(i).toFixed(1)},${y(r[s.key]).toFixed(1)}`).join(" ");
-    if(s.wide){
-      out.push(`<polygon points="${x(0).toFixed(1)},${y(Math.max(lo,0)).toFixed(1)} ${pts} ${x(rows.length-1).toFixed(1)},${y(Math.max(lo,0)).toFixed(1)}"
-        fill="${s.colour}" opacity=".10"/>`);
-    }
-    out.push(`<polyline points="${pts}" fill="none" stroke="${s.colour}"
-      stroke-width="${s.wide ? 2.6 : 1.4}" stroke-linejoin="round" stroke-linecap="round"
-      opacity="${s.wide ? 1 : .8}"/>`);
-    const last = rows.length-1;
-    out.push(`<circle cx="${x(last).toFixed(1)}" cy="${y(rows[last][s.key]).toFixed(1)}" r="3.4"
-      fill="var(--surface)" stroke="${s.colour}" stroke-width="2"/>`);
+  $("dailyHead").innerHTML = sechead("Daily result", {
+    why: `Daily profit follows the purchase calendar, so the 7-day line is the trend. Day ${
+      first.day} to ${last.day}. Click a legend chip to add or drop a line.`,
+    aside: `<span class="seg" id="chartTools"></span>`,
   });
-  out.push(`<line id="cross" x1="0" y1="${P.t}" x2="0" y2="${H-P.b}" stroke="var(--ink-3)"
-    stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`);
-  chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  chart.innerHTML = out.join("");
-  chart._x = x; chart._geom = {W,H,P};
+  seg($("chartTools"), [[30,"30 days"],[0,"All"]], () => chartWindow, v => chartWindow = v, drawChart);
+
+  const W = 1140, H = 260, L = 56, R = 12, T = 16, B = 28;
+  /* The axis fits every series, on or off, so a legend click never moves it. */
+  let min = 0, max = 0;
+  rows.forEach(r => Object.values(SERIES).forEach(s => { min = Math.min(min, r[s.key]); max = Math.max(max, r[s.key]); }));
+  const step = niceStep((max - min) || 1, 5), fine = step / 5;
+  const hi = Math.max(Math.ceil((max + step * .05) / fine) * fine, fine);
+  const lo = min < 0 ? -Math.ceil((-min + step * .05) / fine) * fine : 0;
+  const X = i => L + (n > 1 ? i / (n - 1) : .5) * (W - L - R);
+  const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+
+  const out = [];
+  for(let v = 0; v <= hi + 1e-9; v += step){
+    const yy = Y(v).toFixed(1);
+    out.push(`<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--rule-soft)"></line>`
+      + `<text x="${L - 10}" y="${(+yy + 4).toFixed(1)}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-3)">${money(v)}</text>`);
+  }
+  const bw = Math.min(12, (W - L - R) / n * .6), y0 = Y(0);
+  const line = (key, colour, width, dash) => {
+    const pts = rows.map((r, i) => `${X(i).toFixed(1)},${Y(r[key]).toFixed(1)}`).join(" ");
+    return `<polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="${width || 1.5}" stroke-linejoin="round"${
+      dash ? ` stroke-dasharray="${dash}"` : ""}></polyline>`;
+  };
+  Object.entries(SERIES).forEach(([id, s]) => {
+    const body = s.bars
+      ? rows.map((r, i) => { const v = r[s.key], yy = Y(v);
+          return `<rect x="${(X(i) - bw / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${
+            Math.abs(yy - y0).toFixed(1)}" rx="2" fill="${v < 0 ? "var(--neg)" : "var(--ink-3)"}" opacity=".45"><title>Day ${
+            r.day}: net ${money(v)}</title></rect>`; }).join("")
+      : line(s.key, s.colour, s.width, s.dash);
+    out.push(`<g data-series="${id}"${seriesOn(id) ? "" : ' class="off"'}>${body}</g>`);
+  });
+  const stride = Math.max(1, Math.ceil(n / 10));
+  rows.forEach((r, i) => { if(i % stride === 0 || i === n - 1)
+    out.push(`<text x="${X(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-3)">${r.day}</text>`); });
+  const k = n - 1;
+  out.push(`<g class="xh"><line x1="${X(k).toFixed(1)}" x2="${X(k).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--ink-3)" stroke-dasharray="3 4"></line>
+    <circle cx="${X(k).toFixed(1)}" cy="${Y(last.profit7).toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--ground)" stroke-width="2"></circle></g>`);
+
+  const readout = r => `<i></i>Day ${r.day} <b>${money(r.profit)}</b> net <b>${money(r.profit7)}</b> 7-day <b>${money(r.revenue)}</b> revenue`;
+  const xs = JSON.stringify(rows.map((r, i) => +X(i).toFixed(1)));
+  const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
+  const labels = JSON.stringify(rows.map(readout));
+  $("dailyBox").innerHTML = `
+    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}">
+      <div class="readout">${readout(last)}</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;overflow:visible">${out.join("\n")}</svg>
+      <div class="legend">${Object.entries(SERIES).map(([id, s]) =>
+        `<a class="${seriesOn(id) ? "on" : ""}" data-series="${id}" href="#"><i style="background:${s.colour}"></i>${s.label}</a>`).join("")}</div>
+    </div>`;
+  wireChart(); wireTips();
 }
 
 /* A shop, its depot and the factory behind it are one operation. Reading them
    apart puts a 98% shop margin next to a factory at -80% and neither number
    means anything, so the chain total comes first and the sites fold underneath. */
+const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
+/* A site in a table: its neighbourhood pill, its short name, and the type and
+   address underneath. With `chev`, the arrow that says the row opens. */
+const siteLabel = (b, chev) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}${chev ? ` ${CHEV()}` : ""}
+  <span class="sub">${b.type} · ${b.address}</span>`;
+const kidCell = b => siteLabel(b, true);
+
 function chainRow(c, v){
-  const open = openChains.has(c.name);
   const cells = v.chain(c);
   const note = c.external
-    ? `${compact(c.external)} of that is sold outside the company by the factory`
+    ? `${compact(c.external)} of it sold outside the company by its factory`
     : c.suppliedBy.length ? `supplied from ${c.suppliedBy.join(", ")}` : "";
-  const name = `<div class="chainname"><span class="twist">${open?"▾":"▸"}</span>
-    <span><b>${c.name}</b> <span class="sub">${c.count} site${c.count===1?"":"s"}${
-      note ? ` · ${note}` : ""}</span></span></div>`;
-  return `<tr class="chain" data-chain="${c.name}">${
-    cells.map((cell,i) => `<td class="${i?"num":"l"}">${i===0?name:cell}</td>`).join("")}</tr>`;
+  const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${c.count} site${c.count===1?"":"s"}${
+    note ? ` · ${note}` : ""}</span>`;
+  return `<tr class="chain" data-chain="${attr(c.name)}">${
+    cells.map((cell, i) => `<td class="${i ? "" : "l"}">${i === 0 ? name : cell}</td>`).join("")}</tr>`;
 }
+
+const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>`;
 
 function drawPortfolio(){
   const v = VIEWS[view];
-  $("portfolioNote").textContent = `${v.note}. Open a chain, then a site for its detail`;
+  $("portHead").innerHTML = sechead("Portfolio", {
+    why: `${v.note}. Click a chain to open its sites, a site to open its detail. Click a column to sort the sites by it.`,
+    aside: `<span class="seg" id="portTools"></span>`,
+  });
+  seg($("portTools"), Object.entries(VIEWS).map(([id, o]) => [id, o.label]),
+    () => view, id => { view = id; sortKey = null; }, drawPortfolio);
   const byKey = {};
   D.businesses.forEach(b => byKey[b.key] = b);
   const sorter = (sortKey !== null && v.cols[sortKey] && v.cols[sortKey][3])
     ? (a,z) => (v.cols[sortKey][3](a) - v.cols[sortKey][3](z)) * sortDir : null;
 
+  /* Every site row is in the table; wirePortfolio() shows the ones whose
+     chain is open, from the openChains set, so a refresh keeps them open. */
   const body = [];
   (D.chains||[]).forEach(c => {
     body.push(chainRow(c, v));
-    if(!openChains.has(c.name)) return;
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
-    kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-key="${
-      b.key}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
-      `<td class="${cls||"num"}">${f(b)}</td>`).join("")}</tr>`));
+    kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-parent="${
+      attr(c.name)}" data-key="${attr(b.key)}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
+      `<td class="${cls||""}">${f(b)}</td>`).join("")}</tr>`));
   });
 
   const t = $("portfolio");
-  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls],i) =>
-      `<th class="${cls||""}" data-i="${i}" ${i===sortKey?`data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}</th>`).join("")}</tr></thead>
+  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls,key],i) =>
+      `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
+        i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
-      `<td class="${i?"num":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr></tfoot>` : ""}`;
-  t.querySelectorAll("thead th").forEach(th => th.onclick = () => {
+      `<td class="${i?"":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr></tfoot>` : ""}`;
+  t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
     const i = +th.dataset.i;
-    if(!v.cols[i][3]) return;
     if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
     drawPortfolio();
   });
-  t.querySelectorAll("tr.chain").forEach(tr => tr.onclick = () => {
-    const name = tr.dataset.chain;
-    openChains.has(name) ? openChains.delete(name) : openChains.add(name);
-    drawPortfolio();
-  });
   t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
+  wirePortfolio(); wireTips();
 }
 
 /* --- one business at a time ------------------------------------------ */
@@ -6652,25 +6468,28 @@ const shortName = b => nameUses()[baseName(b)] > 1 && b.neighbourhood
 const trades = b => b.status !== "vacant" && b.revenue > 0;
 
 /* A site opens from its portfolio row or from a finding; nothing is open until
-   someone asks. The picker moves between sites without the trip back up. */
+   someone asks. The picker moves between sites without the trip back up: the
+   previous and next site are a click away, the whole roster is in the list
+   between them. Trading sites lead, the support sites sit in their own group. */
 function drawSitePicker(){
+  const host = $("sitePick");
+  if(!host) return;
   const all = D.businesses.filter(b => b.status !== "vacant");
   const trading = all.filter(trades), support = all.filter(b => !trades(b));
-  const opt = b => `<option value="${b.key}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
-  $("siteTools").innerHTML = `
-    <select class="sitepick" id="sitePick" aria-label="Which site">
-      <option value="" disabled${siteKey ? "" : " selected"}>Pick a site</option>
-      ${trading.map(opt).join("")}
-      ${support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}
-    </select>
-    <button type="button" id="siteClose" title="Close the detail">close</button>`;
-  $("sitePick").onchange = e => openSite(e.target.value);
-  $("siteClose").onclick = closeSite;
+  const order = trading.concat(support);
+  const at = order.findIndex(b => b.key === siteKey);
+  const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+  const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
+  const step = b => b ? `<a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>` : "";
+  host.innerHTML = `${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
+    support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}`;
+  host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
+  q("select", host).onchange = e => openSite(e.target.value);
 }
 function openSite(key, scroll = true){
   if(!D.businesses.some(b => b.key === key)) return;
   siteKey = key; siteOpen = true;
-  drawSitePicker(); drawSite(); drawPortfolio();
+  drawSite(); drawPortfolio();
   if(scroll) reveal("secDetail");
 }
 function closeSite(){
@@ -6681,8 +6500,8 @@ function closeSite(){
 /* A small area chart for one site's history: same grammar as the big one,
    without the axes it does not have room for. */
 function miniChart(series, key, colour){
-  if(series.length < 2) return `<p class="muted">Not enough history yet.</p>`;
-  const W = 640, H = 108, P = {t:8, r:6, b:16, l:4};
+  if(series.length < 2) return `<p class="quiet">Not enough history yet.</p>`;
+  const W = 540, H = 108, P = {t:8, r:6, b:16, l:4};
   const vals = series.map(d => d[key]);
   let lo = Math.min(...vals, 0), hi = Math.max(...vals, 1);
   const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
@@ -6691,7 +6510,7 @@ function miniChart(series, key, colour){
   const pts = series.map((d,i) => `${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
   const base = y(Math.max(lo, 0)).toFixed(1);
   const last = series.length - 1;
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:108px">
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:108px;overflow:visible">
     ${lo < 0 ? `<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}"
         stroke="var(--ink-3)" stroke-width="1"/>` : ""}
     <polygon points="${x(0).toFixed(1)},${base} ${pts} ${x(last).toFixed(1)},${base}"
@@ -6702,8 +6521,8 @@ function miniChart(series, key, colour){
       fill="var(--surface)" stroke="${colour}" stroke-width="2"/>
     <text x="${P.l}" y="${H-4}" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
       font-size="10">day ${series[0].day}</text>
-    <text x="${W-P.r}" y="${H-4}" text-anchor="end" fill="var(--ink-3)"
-      font-family="IBM Plex Mono, monospace" font-size="10">day ${series[last].day}</text>
+    <text x="${W-P.r}" y="${H-4}" text-anchor="end" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
+      font-size="10">day ${series[last].day}</text>
   </svg>`;
 }
 
@@ -6711,55 +6530,45 @@ function miniChart(series, key, colour){
    Three numbers meet here. Customers are measured an hour at a time over the
    fortnight the save keeps. The registers are whatever service staff were
    rostered that hour, at the capacity of the counters they were posted to. The
-   door cap is the building's own limit. Shade is how busy; a red outline is an
-   hour spent at the ceiling, a blue one an hour with capacity doing nothing. */
+   door cap is the building's own limit. Shade is how busy against the site's
+   own busiest hour; a red outline is an hour spent at the ceiling that was on.
+   The sentence under the grid says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
-
-function hourGrid(g){
-  if(!g) return "";
-  const peak = Math.max(g.peak, 1);
-  const head = `<tr><th class="l"></th>${
-    [...Array(24).keys()].map(h => `<th>${h%3===0?h:""}</th>`).join("")}</tr>`;
-  const body = HOUR_ROWS.map(wd => {
-    const cells = [...Array(24).keys()].map(h => {
-      const seen = g.customers[wd][h], cap = g.effective[wd][h];
-      if(seen === null) return `<td title="${WEEK_SHORT[wd]} ${h}:00, no reading"></td>`;
-      const shade = Math.round(Math.min(seen / peak, 1) * 42);
-      const atCap = cap && seen >= cap * 0.95;
-      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
-      return `<td class="${atCap?"cap":slack?"slack":""}"
-        style="background:color-mix(in srgb, var(--accent) ${shade}%, var(--raised))"
-        title="${WEEK_SHORT[wd]} ${String(h).padStart(2,"0")}:00, ${seen} customers, ${
-          g.staffed[wd][h]} of ${g.counters} register capacity staffed, ${
-          g.door||"no"} door cap${atCap?"; at the ceiling":slack?"; capacity idle":""}"></td>`;
-    }).join("");
-    return `<tr class="${g.thin[wd]?"thin":""}"><th class="l">${WEEK_SHORT[wd]}${
-      g.thin[wd]?"*":""}</th>${cells}</tr>`;
-  }).join("");
-  const weeks = Math.min(...g.weeks.filter(w => w));
-  const thin = g.thin.some(Boolean);
-  return `<table class="hourgrid">${head}${body}</table>
-    <div class="hourkey">
-      <span><i style="background:color-mix(in srgb, var(--accent) 42%, var(--raised))"></i>busiest hour ${
-        Math.round(g.peak)} customers</span>
-      <span><i style="box-shadow:inset 0 0 0 1.5px var(--neg)"></i>at the ceiling</span>
-      <span><i style="box-shadow:inset 0 0 0 1px var(--info)"></i>capacity idle</span>
-      <span>${g.counters} register capacity across ${g.stationCount} counter${
-        g.stationCount===1?"":"s"}${g.door?`, ${g.door}/h door cap`:""}</span>
-      <span>${weeks} week${weeks===1?"":"s"} behind each hour${
-        thin?"; starred days rest on under 2 weeks":""}</span>
-    </div>`;
-}
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+/* Mirrors AT_CAP in the Python: this close to the ceiling is at the ceiling,
+   so the outlined cells are the ones capHours counts. */
+const AT_CAP = 0.95;
 
-function siteStat(label, value, cls){
-  return `<div class="sstat"><span class="eyebrow">${label}</span>
-    <b class="num ${cls || ""}">${value}</b></div>`;
+function hourGrid(g, todayWd){
+  const peak = Math.max(g.peak, 1);
+  let cells = `<div></div>${[...Array(24).keys()].map(h => `<div class="hh">${h % 3 === 0 ? h : ""}</div>`).join("")}`;
+  HOUR_ROWS.forEach(wd => {
+    cells += `<div class="dd${wd === todayWd ? " now" : ""}">${WEEK_SHORT[wd].toUpperCase()}${g.thin[wd] ? "*" : ""}</div>`;
+    for(let h = 0; h < 24; h++){
+      const seen = g.customers[wd][h], cap = g.effective[wd][h];
+      const when = `<b>${WEEK_FULL[wd]} ${String(h).padStart(2, "0")}:00</b>`;
+      if(seen === null){ cells += `<div class="hc" data-read="${attr(`${when} no reading`)}"></div>`; continue; }
+      const a = seen ? 6 + Math.round(Math.min(seen / peak, 1) * 70) : 0;
+      const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
+      const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
+      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
+        g.staffed[wd][h]} of ${g.counters} register capacity on${
+        atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
+      cells += `<div class="hc${atCap ? " cap" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
+    }
+  });
+  return `<div class="hours">${cells}</div>`;
 }
 
 /* A vending-machine side item earns a rounding error next to a store's real
    line — this is the cutoff, as a share of the best-selling line's revenue. */
 const SHELF_MAIN_SHARE = 0.02;
+const SMALL = `style="font-size:12px;color:var(--ink-3);margin-left:6px"`;
+const CLOSE_ICON = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>`;
+/* Two letters for a role: the initials of its first two words. */
+const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1][0] : (w[0] || "??").slice(0, 2)).toUpperCase(); };
 
 function drawSite(){
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
@@ -6773,6 +6582,7 @@ function drawSite(){
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
   const grid = (D.hours || []).find(h => h.key === b.key);
+  const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
       ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
@@ -6782,28 +6592,29 @@ function drawSite(){
          String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
          ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
 
-  const stats = [
-    siteStat("Revenue / day", fmt(b.revenue)),
-    siteStat("Profit / day", fmt(b.profit), sign(b.profit)),
-    siteStat("Margin", b.margin === null ? "—" : `${b.margin.toFixed(1)}%`),
-    siteStat("Customers", b.customers ? b.customers.toLocaleString() : "—"),
-    siteStat("Spend / visit", b.basket === null ? "—" : `$${b.basket.toFixed(2)}`),
-    siteStat("Staff", b.staff || "—"),
-    siteStat("Rent / day", fmt(b.rent)),
-    siteStat("Opened", `day ${b.opened}`),
-  ].join("");
-
+  /* The costs behind the profit tile, on hover. */
   const costs = [
     ["Goods", b.cogs], ["Wages", b.wages], ["Rent", b.rent],
     ["Marketing", b.marketing], ["Theft", b.theft], ["Licensing", b.licensing],
   ].filter(([, v]) => v);
+  const costTip = costs.length
+    ? `Yesterday's costs: ${costs.map(([l, v]) => `${l.toLowerCase()} ${fmt(v)}`).join(", ")}.`
+    : "No costs recorded yesterday.";
+  const capTile = !grid ? "—"
+    : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
+    : `—<small ${SMALL}>no door cap${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
+  const stats = `
+    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}</div></div>
+    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
+      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/visit</small>`}</div></div>
+    <div class="sstat" data-tip="${attr(costTip)}"><span class="lab">Profit</span><div class="v ${sign(b.profit)}">${fmt(b.profit)}${
+      b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
+    <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
 
-  const crew = b.crew.length ? `
-    <div class="panel">
-      <span class="eyebrow">Who works here, ${fmt(b.staffCost)}/day</span>
-      ${b.crew.map(c => `<div class="stat"><span>${c.role}${
-        c.count > 1 ? ` ×${c.count}` : ""}</span><b class="num">${fmt(c.daily)}</b></div>`).join("")}
-    </div>` : "";
+  const crew = b.crew.length
+    ? b.crew.map(c => `<span class="person"><i>${roleCode(c.role)}</i>${c.role}<small>${
+        c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day</small></span>`).join("")
+    : `<span class="quiet">Nobody assigned.</span>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
@@ -6815,88 +6626,112 @@ function drawSite(){
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
   const shelves = showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
+  const gauge = t => {
+    if(!t || t.pressure === null) return "—";
+    const p = Math.round(t.pressure);
+    return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
+  };
   const products = shelves.length ? `
-    <div class="scroll"><table>
-      <thead><tr><th class="l">Product</th><th>Price</th><th>Sold / day</th>
-        <th>Revenue / day</th><th>On hand</th><th>Top-up</th><th>Pressure</th></tr></thead>
+    <table>
+      <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
+        <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
       <tbody>${shelves.map(l => {
         const t = targets[l.item];
         return `<tr>
-          <td class="l">${l.item}</td>
-          <td class="num">${l.price ? fmt(l.price) : "—"}</td>
-          <td class="num">${l.soldPerDay.toLocaleString()}</td>
-          <td class="num">${fmt(l.revenue)}</td>
-          <td class="num">${l.units.toLocaleString()}</td>
-          <td class="num">${t && t.target ? t.target.toLocaleString() : "—"}</td>
-          <td class="num">${t && t.pressure !== null ? load(t.pressure, t.level) : "—"}</td></tr>`;
-      }).join("")}</tbody></table></div>` : `<p class="muted">Nothing stocked here.</p>`;
+          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td>${l.soldPerDay.toLocaleString()}</td>
+          <td>${t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—"}</td>
+          <td>${fmt(l.revenue)}</td>
+          <td>${t && t.target ? t.target.toLocaleString() : "—"}</td>
+          <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
+          <td>${l.units.toLocaleString()}</td></tr>`;
+      }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
   const shelfMore = sideShelves.length ? `
-    <button type="button" id="shelfToggle" aria-expanded="${showAllShelves}">${
-      showAllShelves ? "hide" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</button>` : "";
+    <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
+      showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
+  const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
+    depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
   $("sitePanel").innerHTML = `
-    <div class="sitehead">
-      ${bullet(b)}
-      <div>
-        <h3>${b.name}</h3>
-        <span class="sub">${b.type} · ${b.address}${
-          b.neighbourhood ? ` · ${b.neighbourhood}` : ""}${
-          depot ? ` · supplied from ${shortName(depot)}` : ""}</span>
-      </div>
+    <div class="sitehead rv">
+      ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
+      <div><h2>${baseName(b)}</h2><span class="sub">${sub}</span></div>
+      <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
-    <div class="sstats">${stats}</div>
-    <div class="panel">
-      <span class="eyebrow">Profit, last ${b.series.length} days</span>
-      ${miniChart(b.series, "profit", "var(--accent)")}
+    <div class="sstats rv">${stats}</div>
+    ${grid ? `<section class="sec rv">
+      ${sechead("Customers by hour", {why: `${Math.min(...grid.weeks.filter(w => w))} week${
+        Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
+        grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
+        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.counters} register capacity across ${
+        grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}${grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.`})}
+      <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>
+      ${notes.map(n => `<p class="quiet">${n}</p>`).join("")}
+    </section>` : ""}
+    <div class="duo sec" style="grid-template-columns:1fr 2fr">
+      <section class="rv">
+        ${sechead("Crew", {quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        <div class="crew">${crew}</div>
+      </section>
+      <section class="rv">
+        ${sechead("Shelves", {quiet: "before tomorrow's top-up"})}
+        ${products}${shelfMore}
+      </section>
     </div>
-    <div class="panel">
-      <span class="eyebrow">Its week${b.rhythm
-        ? `: peaks ${b.peakDay}, ${b.swing} points between best and worst`
-        : ""}</span>
-      ${weekBars(b.rhythm, {empty:"Not enough trading history here yet."})}
-    </div>
-    ${grid ? `<div class="panel">
-      <span class="eyebrow">Every hour of the week: customers against the capacity on shift</span>
-      ${hourGrid(grid)}
-      ${notes.length ? notes.map(n => `<p class="muted">${n}</p>`).join("") : ""}
-    </div>` : ""}
-    <div class="sitegrid">
-      <div class="panel">
-        <span class="eyebrow">Yesterday's costs</span>
-        ${costs.length ? costs.map(([l,v]) =>
-          `<div class="stat"><span>${l}</span><b class="num neg">${fmt(-v)}</b></div>`).join("")
-          : `<p class="muted">No costs recorded.</p>`}
-        <div class="stat"><span><b>Profit</b></span>
-          <b class="num ${sign(b.profit)}">${fmt(b.profit)}</b></div>
-      </div>
-      ${crew || `<div class="panel"><span class="eyebrow">Who works here</span>
-        <p class="muted">Nobody assigned.</p></div>`}
-    </div>
-    <div class="panel"><span class="eyebrow">Shelves</span>${products}${shelfMore}</div>`;
-  if($("shelfToggle")) $("shelfToggle").onclick = () => { showAllShelves = !showAllShelves; drawSite(); };
+    <div class="duo sec">
+      <section class="rv">
+        ${sechead(`Profit, last ${b.series.length} days`)}
+        <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)")}</div>
+      </section>
+      <section class="rv">
+        ${sechead("Its week", {quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
+        <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
+          : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
+      </section>
+    </div>`;
+  drawSitePicker();
+  $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
+  if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
+  wireSiteHours(); wireTips(); wireReveal();
 }
+
+/* The site cell of the redesign's tables: the hood pill, the short name, and
+   the type on a line under the name. */
+const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}<span class="sub"${
+  b.code ? ` style="padding-left:34px"` : ""}>${b.type}</span>`;
+const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
 
 function drawStock(){
   const v = SUPPLY_VIEWS[stockView];
   const all = v.rows();
   const worth = all.filter(v.keep);
   const rows = showAllStock ? all : worth;
-  $("stockNote").textContent = v.note();
-  $("stockVerdict").innerHTML = v.verdict(all)
-    + (all.length > worth.length
-       ? ` <button type="button" id="stockToggle" aria-expanded="${showAllStock}">${
-           showAllStock ? `just the ${worth.length} worth reading`
-                        : `show all ${all.length}`}</button>` : "");
-  const toggle = $("stockToggle");
-  if(toggle) toggle.onclick = () => { showAllStock = !showAllStock; drawStock(); };
+  const note = v.note();
+  $("stockHead").innerHTML = sechead("Stock checks", {why: note || null,
+    aside: `<span class="seg" id="stockTools"></span>`});
+  seg($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id, x]) => [id, x.label]),
+    () => stockView, x => { stockView = x; showAllStock = false; }, () => { drawStock(); wireAll(); });
+  /* The tick means nothing in this view is graded critical or warn; a row the
+     view flags without grading it (an unnamed line) counts against it. */
+  const calm = all.length > 0
+    && !worth.some(r => r.level ? r.level === "critical" || r.level === "warn" : true);
+  $("stockVerdict").innerHTML = (calm ? checkMark : "") + v.verdict(all);
   const nothing = all.length
-    ? `Nothing here needs reading: ${all.length===1 ? "the one row is" : `all ${all.length} rows are`}
-       inside their limits.`
+    ? `Nothing here needs reading: ${all.length === 1 ? "the one row is" : `all ${all.length} rows are`} inside their limits.`
     : v.empty;
   $("stock").innerHTML = rows.length
     ? `<thead><tr>${v.head}</tr></thead>
-       <tbody>${rows.slice(0,40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${nothing}</td></tr></tbody>`;
+       <tbody>${rows.slice(0, 40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>`;
+  const more = $("stockMore");
+  more.innerHTML = all.length > worth.length
+    ? (showAllStock
+        ? `<a class="link" href="#" id="stockToggle">just the ${worth.length} worth reading</a>`
+        : `${all.length - worth.length} more &nbsp;<a class="link" href="#" id="stockToggle">show all ${all.length}</a>`)
+      + (rows.length > 40 ? ` &nbsp;first 40 shown` : "")
+    : "";
+  more.hidden = !more.innerHTML;
+  if($("stockToggle")) $("stockToggle").onclick = e => { e.preventDefault(); showAllStock = !showAllStock; drawStock(); wireAll(); };
   document.querySelectorAll("#stock select.linepick").forEach(sel => {
     sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
   });
@@ -6912,6 +6747,7 @@ function drawStock(){
    board reads them (or as you named them), so a line named a minute ago is
    already in the totals. */
 const ceil100 = v => Math.ceil(v / 100) * 100;
+let logisticsView = "changes";
 function drawLogistics(){
   const changesOnly = logisticsView === "changes";
   const f = factoryView();
@@ -6919,14 +6755,22 @@ function drawLogistics(){
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
   const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
-  $("logisticsNote").textContent = f.sites.length
-    ? `What to set the managers to, from ${f.machines} machines on ${
-        f.sites.reduce((n, s) => n + s.lines.length, 0)} lines${f.unnamed ? `, ${f.unnamed} still unnamed` : ""}`
+  const lines = f.sites.reduce((n, s) => n + s.lines.length, 0);
+  const whyText = (f.sites.length
+    ? `What to set the logistics managers to, from ${f.machines} machines on ${lines} lines${
+        f.unnamed ? `, ${f.unnamed} still unnamed` : ""}.`
     : D.meta.locale === false
-      ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders below are read from the delivery log and are complete."
-      : "No factory to feed.";
+      ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders are read from the delivery log and are complete."
+      : "No factory to feed; the import orders are read from the delivery log.")
+    + " Click raise to see the order roll up; the thin line under the depot figure is how much of a day's use it holds.";
+  const check = (n, what) => ({after: `<span class="check">${icon("tick")}</span>`, quiet: `All ${n} ${what}`});
+  const up = (text, tip) => `<span class="up"${tip ? ` data-tip="${attr(tip)}"` : ""}>${icon("arrow_up")}${text}</span>`;
+  const set = n => `<span class="set">${n.toLocaleString()}</span>`;
+  const grp = (b, cols) => `<tr class="grp"><td class="l" colspan="${cols}">${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${
+    shortName(b)} · ${b.type} · ${b.address}</td></tr>`;
+  const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
 
-  /* --- imports, one table per depot ------------------------------------ */
+  /* --- imports, one group per depot ------------------------------------ */
   const depots = {}, loose = {};
   f.sites.forEach(s => s.needs.forEach(n => {
     if(n.from === null){
@@ -6960,219 +6804,216 @@ function drawLogistics(){
     importRows.push({s, rows});
   });
   const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
-  const short = importRows.reduce((n, d) => n + d.rows.filter(r => r.fit === "short" || r.fit === "none").length, 0);
-  const importAll = importRows.reduce((n, d) => n + d.rows.length, 0);
-  if(changesOnly){
-    importRows.forEach(d => { d.rows = d.rows.filter(r => r.fit === "short" || r.fit === "none" || r.fit === "tight"); });
-  }
-  const importShown = importRows.filter(d => d.rows.length);
-  $("importVerdict").innerHTML = importRows.length
-    ? `<b>Weekly import orders.</b> ${
-        short ? `<b>${short}</b> ${short === 1 ? "is" : "are"} short or missing` : "All covered"}${
-        looseRows.length ? `. ${looseRows.length} material${looseRows.length === 1 ? "" : "s"} the factories need are on no depot's plan at all` : ""}.`
-    : "No depot imports anything yet.";
-  const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
-  const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
-  const importHead = `<thead><tr><th class="l">Material</th><th class="l">Eaten by</th>
-      <th>Factories / week</th><th>Shops / week</th><th>Total / week</th>
-      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
-  const importBody = importShown.map(d => `
-    <tr class="chain"><td class="l" colspan="8">${siteCell(D.businesses[d.s])}</td></tr>
-    ${d.rows.map(r => `<tr class="kid">
-      <td class="l">${r.item}</td>
-      <td class="l"><span class="sub" style="display:inline">${r.users.length ? users(r) : "no factory line"}</span></td>
-      <td class="num">${r.factoryWeek ? r.factoryWeek.toLocaleString() : "—"}</td>
-      <td class="num">${r.otherWeek ? r.otherWeek.toLocaleString() : "—"}</td>
-      <td class="num">${r.total ? r.total.toLocaleString() : "—"}</td>
-      <td class="num">${r.current !== undefined ? r.current.toLocaleString() : chip("bad", "not imported")}</td>
-      <td class="num">${r.setTo === null ? chip("neutral", "nothing draws it")
-        : r.fit === "short" || r.fit === "none" ? `<b>${r.setTo.toLocaleString()}</b> ${chip("bad", r.fit === "none" ? "add" : "raise")}`
-        : r.fit === "tight" ? `${r.setTo.toLocaleString()} ${chip("warn", "tight")}`
-        : r.surplus ? `${r.setTo.toLocaleString()} ${chip("neutral", "could lower")}`
-        : chip("ok", "covered")}</td>
-      <td class="num">${r.stock.toLocaleString()}</td></tr>`).join("")}`).join("")
-    + (looseRows.length ? `
-    <tr class="chain"><td class="l" colspan="8"><div class="site"><span><b>On no depot's plan</b>
-      <span class="sub">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></span></div></td></tr>
-    ${looseRows.map(r => `<tr class="kid">
-      <td class="l">${r.item}</td>
-      <td class="l"><span class="sub" style="display:inline">${users(r)}</span></td>
-      <td class="num">${r.week.toLocaleString()}</td><td class="num">—</td>
-      <td class="num">${r.week.toLocaleString()}</td>
-      <td class="num">${chip("bad", "not imported")}</td>
-      <td class="num"><b>${ceil100(r.week).toLocaleString()}</b> ${chip("bad", "add")}</td>
-      <td class="num">—</td></tr>`).join("")}` : "");
-  $("importPlan").innerHTML = importShown.length || looseRows.length
-    ? importHead + `<tbody>${importBody}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && importAll
-        ? `All ${importAll} import orders cover what leaves.` : "Nothing to import."}</td></tr></tbody>`;
+  const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
+  const short = count(r => r.fit === "short" || r.fit === "none");
+  const tight = count(r => r.fit === "tight");
+  const importAll = count(() => true);
+  const shown = (changesOnly
+    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
+    : importRows).filter(d => d.rows.length);
+  /* The thin line under the depot figure: how much of a day's draw it holds,
+     from the delivery log's measured draw where one is on record, else from
+     what this table says leaves in a week. */
+  const depotDays = r => {
+    const imp = (D.supply.imports || []).find(i => i.s === r.s && i.item === r.item);
+    if(imp && imp.daysOnHand !== null && imp.daysOnHand !== undefined) return imp.daysOnHand;
+    return r.total ? r.stock / (r.total / 7) : null;
+  };
+  const depotCell = r => {
+    const days = depotDays(r);
+    return days === null ? `<td>${r.stock.toLocaleString()}</td>`
+      : `<td class="gauge${days < 1 ? " low" : ""}"><i><b style="--w:${Math.min(100, days * 100).toFixed(0)}%"></b></i>${
+          r.stock.toLocaleString()}</td>`;
+  };
+  const setCell = r => r.setTo === null ? chipHtml("dim", "nothing draws it")
+    : r.fit === "none" ? `${set(r.setTo)}${up("add")}`
+    : r.fit === "short" ? `${set(r.setTo)}${up("raise")}`
+    : r.fit === "tight" ? `${set(r.setTo)}${up("raise", "Within 5% of the week it has to cover")}`
+    : r.surplus ? `${r.setTo.toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what leaves in a week")}`
+    : chipHtml("ok", "covered");
+  const importRow = r => `<tr>
+      <td class="l">${r.item}<span class="sub">${r.users.length ? users(r) : "no factory line draws it"}</span></td>
+      <td>${r.factoryWeek ? r.factoryWeek.toLocaleString() : "—"}</td>
+      <td>${r.otherWeek ? r.otherWeek.toLocaleString() : "—"}</td>
+      <td>${r.total ? r.total.toLocaleString() : "—"}</td>
+      <td data-now="${r.current || 0}" data-to="${r.setTo || 0}">${
+        r.current !== undefined ? r.current.toLocaleString() : chipHtml("bad", "not imported")}</td>
+      <td>${setCell(r)}</td>
+      ${depotCell(r)}</tr>`;
+  const looseRow = r => `<tr>
+      <td class="l">${r.item}<span class="sub">${users(r)}</span></td>
+      <td>${r.week.toLocaleString()}</td><td>—</td><td>${r.week.toLocaleString()}</td>
+      <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
+      <td>${set(ceil100(r.week))}${up("add")}</td>
+      <td>—</td></tr>`;
+  const importTable = shown.length || looseRows.length ? `<table>
+    <thead><tr><th class="l">Material</th><th>Factories / week</th><th>Shops / week</th><th>Used / week</th>
+      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>
+    <tbody>${shown.map(d => grp(D.businesses[d.s], 7) + d.rows.map(importRow).join("")).join("")}${
+      looseRows.length ? `<tr class="grp"><td class="l" colspan="7">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
+        looseRows.map(looseRow).join("")}` : ""}</tbody></table>` : "";
+  const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
+    : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
+    : {after: (short ? chipHtml("bad", `${short} short`) : "")
+      + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
+      + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
+  $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText}) + importTable;
+  seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
+    () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
 
-  /* --- top-ups, one table per factory ----------------------------------- */
+  /* --- top-ups, one group per factory ----------------------------------- */
   const needsChange = r => r.status === "unplanned" || r.status === "target" || r.stalled;
   const allSites = f.sites.map(s => ({s: s.s, rows: s.needs.slice().sort((a, b) => b.perDay - a.perDay)}))
     .filter(x => x.rows.length);
   const topShort = allSites.reduce((n, x) => n + x.rows.filter(r => r.status === "unplanned" || r.status === "target").length, 0);
+  const topStalled = allSites.reduce((n, x) => n + x.rows.filter(r => r.stalled && r.status !== "unplanned" && r.status !== "target").length, 0);
   const topAll = allSites.reduce((n, x) => n + x.rows.length, 0);
   const sites = changesOnly
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
-  $("topupVerdict").innerHTML = allSites.length
-    ? `<b>Daily top-ups.</b> ${
-        topShort ? `<b>${topShort}</b> ${topShort === 1 ? "is" : "are"} below the day's need or missing` : "All covered"}.`
-    : "No factory line to feed.";
   const lineText = (s, r) => r.lines.map(l => {
     const line = s.lines.find(x => x.item === l);
     return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ");
-  $("topupPlan").innerHTML = sites.length ? `
-    <thead><tr><th class="l">Material</th><th class="l">Lines</th><th>Eats / day</th>
-      <th>Top-up now</th><th>Set top-up to</th><th>From</th><th>Arrives / day</th></tr></thead>
-    <tbody>${sites.map(x => {
-      const site = f.sites.find(s => s.s === x.s);
-      return `
-      <tr class="chain"><td class="l" colspan="7">${siteCell(D.businesses[x.s])}</td></tr>
-      ${x.rows.map(r => {
-        const over = r.target && r.target > r.perDay * 1.5;
-        return `<tr class="kid">
-        <td class="l">${r.item}</td>
-        <td class="l"><span class="sub" style="display:inline">${lineText(site, r)}</span></td>
-        <td class="num">${r.perDay.toLocaleString()}</td>
-        <td class="num">${r.target ? r.target.toLocaleString() : chip("bad", "none")}</td>
-        <td class="num">${r.status === "unplanned" ? `<b>${ceil100(r.perDay).toLocaleString()}</b> ${chip("bad", "add")}`
-          : r.status === "target" ? `<b>${ceil100(r.perDay).toLocaleString()}</b> ${chip("bad", "raise")}`
-          : over ? `${ceil100(r.perDay).toLocaleString()} ${chip("neutral", "could lower")}`
-          : chip("ok", "covered")}</td>
-        <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
-        <td class="num">${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
-          ? ` ${chip("neutral", "waiting")}` : r.status === "staffing" ? ` ${chip("warn", "understaffed")}`
-          : r.stalled ? ` ${chip("warn", "none arrived")}` : ""}</td></tr>`; }).join("")}`;
-    }).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && topAll
-        ? `All ${topAll} top-ups cover their day.` : "No factory line to feed."}</td></tr></tbody>`;
+  const topupRow = (site, r) => {
+    const over = r.target && r.target > r.perDay * 1.5;
+    return `<tr>
+      <td class="l">${r.item}<span class="sub">${lineText(site, r)}</span></td>
+      <td>${r.perDay.toLocaleString()}</td>
+      <td data-now="${r.target || 0}" data-to="${ceil100(r.perDay)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
+      <td>${r.status === "unplanned" ? `${set(ceil100(r.perDay))}${up("add")}`
+        : r.status === "target" ? `${set(ceil100(r.perDay))}${up("raise")}`
+        : over ? `${ceil100(r.perDay).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line eats")}`
+        : chipHtml("ok", "covered")}</td>
+      <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
+      <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
+        ? ` ${chipHtml("dim", "waiting", `${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`)}`
+        : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
+        : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
+  };
+  const topupTable = sites.length ? `<table>
+    <thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
+      <th class="l">From</th><th>Arrives / day</th></tr></thead>
+    <tbody>${sites.map(x => { const site = f.sites.find(s => s.s === x.s);
+      return grp(D.businesses[x.s], 6) + x.rows.map(r => topupRow(site, r)).join(""); }).join("")}</tbody></table>` : "";
+  const topupState = !allSites.length ? {quiet: "No factory line to feed"}
+    : !topShort && !topStalled ? check(topAll, "cover their day")
+    : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
+      + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "")};
+  $("topupPlan").innerHTML = sechead("Daily top-ups", {...topupState,
+    aside: allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : ""})
+    + topupTable;
+  if($("topupAll")) $("topupAll").onclick = e => {
+    e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
 }
 
-/* --- market demand ---------------------------------------------------- */
+/* --- market demand ----------------------------------------------------
+   The waves come first: the game's own hype events, supplier trouble, and
+   the moves the board measured against its own history, one chip each. Then
+   the grid, a business type (or a product) per row and a neighbourhood per
+   column, each cell shaded by demand and dotted with rivals. */
+let showAllMarket = false;
+
+/* One hue, ramped by demand: the generator's shade(), so a cell reads the same
+   here as on the canvas. */
+const shadeDemand = d => {
+  const a = 0.08 + (d - 40) / 55 * 0.55;
+  return `color-mix(in oklab, var(--accent) ${Math.round(Math.max(6, Math.min(70, a * 100)))}%, var(--surface))`;
+};
+/* Column headers are ten characters wide; the full name is in the header's note. */
+const HOOD_SUFFIX = /^(District|City|Heights|Park|Island|Village)$/i;
+function shortHood(name){
+  let n = name.replace(/^The\s+/i, "");
+  if(n.length <= 10) return n;
+  const w = n.split(/\s+/);
+  if(w.length === 1) return n;
+  if(HOOD_SUFFIX.test(w[w.length - 1])){
+    const cut = w.slice(0, -1).join(" ");
+    if(cut.length <= 10) return cut;
+  }
+  const head = w.slice(0, -1).join(" "), last = w[w.length - 1];
+  const three = `${head} ${last.slice(0, 3)}.`;
+  return three.length <= 10 ? three : `${head} ${last[0]}.`;
+}
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
+/* A rival per dot, ten at most; the exact count is in the cell's note. */
+const rivalDots = n => n > 0 ? `<span class="rv2">${"<i></i>".repeat(Math.min(n, 10))}</span>` : "";
+
+function waveHtml(dir, place, what, tag, tip, hood){
+  const body = `${icon(dir === "up" ? "trend_up" : "trend_dn")}<b>${place}</b>${what}<span class="t">${tag}</span>`;
+  return hood
+    ? `<a class="wave ${dir}" href="#secMarket" data-hood="${attr(hood)}" data-tip="${attr(tip)}">${body}</a>`
+    : `<span class="wave ${dir}" data-tip="${attr(tip)}">${body}</span>`;
+}
 function drawMovers(){
   const m = D.market;
   const out = [];
-  m.hype.slice(0,5).forEach(h => out.push(`
-    <div class="mover">
-      <span class="dir up">▲ hype</span>
-      <span><b>${h.count > 1 ? `${h.count} products` : h.items[0]}</b>
-        <span class="where">in ${h.hood}${
-          h.count > 1 ? `: ${h.items.slice(0,3).join(", ")}${h.count > 3 ? "…" : ""}` : ""}</span>${
-        h.sellHere ? `<span class="tagme">you sell here</span>`
-        : h.mine ? `<span class="tagme">you stock it</span>` : ""}</span>
-      <span class="when">${h.daysLeft} day${h.daysLeft === 1 ? "" : "s"} left</span>
-    </div>`));
-  m.shortages.slice(0,5).forEach(x => out.push(`
-    <div class="mover">
-      <span class="dir down">▼ ${x.kind.toLowerCase()}</span>
-      <span><b>${x.item}</b> <span class="where">at ${
-        x.count > 1 ? `${x.count} suppliers` : x.where}</span>${
-        x.mine ? `<span class="tagme">affects you</span>` : ""}</span>
-      <span class="when">${x.daysLeft} day${x.daysLeft === 1 ? "" : "s"} left</span>
-    </div>`));
-  /* One wave, or one shop opening, moves a whole range at once — so it reads as
-     one line, and where our own shop opened in that window it says so. */
-  (m.movers || []).slice(0,6).forEach(x => out.push(`
-    <div class="mover">
-      <span class="dir ${x.up ? "up" : "down"}">${x.up ? "▲" : "▼"} ${
-        x.delta > 0 ? "+" : ""}${x.delta}</span>
-      <span><b>${x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]}</b>
-        <span class="where">in ${x.hood}${x.count > 1
-          ? `: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""}` : ""}${
-          x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window`
-                       : ""}</span>${
-        x.sell ? `<span class="tagme">you sell here</span>` : ""}</span>
-      <span class="when">over ${m.trendDays} day${m.trendDays === 1 ? "" : "s"}</span>
-    </div>`));
-  $("movers").innerHTML = out.length
-    ? out.join("")
-    : `<div class="mover"><span class="dir">—</span><span class="where">No demand events running right now.</span><span class="when"></span></div>`;
+  const days = n => `${n} d`;
+  m.hype.slice(0,5).forEach(h => {
+    const what = (h.count > 1 ? `${h.count} products` : h.items[0])
+      + (h.sellHere ? " you sell here" : h.mine ? " you stock" : "");
+    const tip = `Hype in ${h.hood} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
+      h.items.join(", ")}. Click to sort the grid by ${h.hood}.`;
+    out.push(waveHtml("up", h.hood, what, days(h.daysLeft), tip, h.hood));
+  });
+  m.shortages.slice(0,5).forEach(x => {
+    const where = x.count > 1 ? `${x.count} suppliers` : x.where;
+    const kind = x.kind.toLowerCase();
+    out.push(waveHtml("dn", x.item, `${kind} at ${where}${x.mine ? ", affects you" : ""}`, days(x.daysLeft),
+      `${x.item}: ${kind} at ${where}, ${plural(x.daysLeft, "day")} left${x.mine ? "; you sell or make it" : ""}`));
+  });
+  /* One wave, or one shop opening, moves a whole range at once, so it reads as
+     one chip, and where our own shop opened in that window the note says so. */
+  (m.movers || []).slice(0,6).forEach(x => {
+    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]) + (x.sell ? " you sell here" : "");
+    const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
+    const tip = `${x.hood}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
+      plural(m.trendDays, "day")}${x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window` : ""}. Click to sort the grid by ${x.hood}.`;
+    out.push(waveHtml(x.up ? "up" : "dn", x.hood, what, delta, tip, x.hood));
+  });
+  $("movers").innerHTML = out.length ? out.join("")
+    : `<span class="quiet">No demand events running right now${m.trendDays ? "" : "; trend history starts building from today"}.</span>`;
+  $$("#movers a[data-hood]").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    marketSortHood = a.dataset.hood; marketSortDir = -1;
+    drawMarket();
+  });
 }
 
-function heatCell(cell){
-  if(!cell) return `<td class="heat none">—</td>`;
-  // Demand is a magnitude, not a grade, so this ramps one hue rather than
-  // running red-to-green.
-  const pct = Math.round(Math.min(cell.demand, 100) * 0.32);
-  const marks = [];
-  if(cell.monopoly) marks.push("only you");
-  else if(cell.sell) marks.push(`${cell.providers} sellers`);
-  else marks.push(`${cell.providers} sellers`);
-  if(cell.hype) marks.push("▲hype");
-  if(cell.delta) marks.push(`${cell.delta > 0 ? "+" : ""}${cell.delta}`);
-  return `<td class="heat ${cell.sell ? "here" : ""}"
-    style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
-    title="${cell.hood}: demand ${cell.demand}, ${marks.join(", ")}${
-      cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">${
-    marketDetail ? `<span class="v">${cell.demand}</span>` : ""}${
-    cell.sell ? `<span class="dot" aria-label="you sell here"></span>` : ""}${
-    cell.hype ? `<span class="mk">▲</span>` : ""}<span class="rv" title="${cell.monopoly ? "only you sell here" : cell.providers + " sellers"}">${
-    cell.monopoly ? "only you" : cell.providers}</span></td>`;
+/* A business type is only worth opening if most of its range sells, so the
+   cell leads with how much of the range is wanted; the shade is the average. */
+function typeRow(r, i, hoods){
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.products} products${r.mine ? " · you run one" : ""}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    const tip = `${r.type} in ${c.hood}: ${c.strong} of ${c.count} products in strong demand (60+), average demand ${
+      c.demand}, ${plural(c.providers, "rival seller")} on average across the range${c.here ? ", you have a store here" : ""}`;
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.strong}/${c.count}${rivalDots(c.providers)}</div>`;
+  });
+  return h;
 }
-
-/* A business type is only worth opening if most of its range sells, so the cell
-   leads with how much of the range is in strong demand. */
-function typeCell(cell){
-  if(!cell) return `<td class="heat none">—</td>`;
-  const share = cell.strong / cell.count;
-  const pct = Math.round(share * 40);
-  return `<td class="heat ${cell.here ? "here" : ""}"
-    style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
-    title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average${
-      cell.here ? ", you have a store here" : ""}">${
-    marketDetail ? `<span class="v" title="average demand across the range">${cell.demand}</span>` : ""}${
-    cell.here ? `<span class="dot" aria-label="you have a store here"></span>` : ""}<span class="rv" title="${cell.providers} rival sellers on average across the range">${cell.providers}</span></td>`;
-}
-
-/* --- where to expand --------------------------------------------------
-   One list, two kinds of evidence. A shop turning people away at the door is a
-   fact with a date on it; a gap in the demand grid is an inference about a shop
-   that does not exist yet. Measured always outranks inferred. */
-function drawExpansion(){
-  const list = D.expansion || [];
-  const measured = list.filter(e => e.measured).length;
-  const TOP = 5;
-  const shown = showAllExpand ? list : list.slice(0, TOP);
-  $("expandNote").textContent = list.length
-    ? `${measured} measured at the ceiling, ${list.length - measured} inferred from demand`
-    : "Nothing is at its ceiling and nothing unserved ranks.";
-  const line = (e, i) => `
-        <div class="exline ${e.measured ? "measured" : "guess"}">
-          <span class="rank">${i+1}</span>
-          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>${
-            e.traffic != null ? ` <span class="bld">traffic ${e.traffic} · ${e.size}</span>` : ""}
-            <span class="tagme">${e.measured ? "measured" : "demand grid"}</span>
-            <span class="why">${e.reason}; ${e.action}</span></span>
-          <span class="num">${e.worth ? fmt(e.worth) + "/day" : e.number}</span>
-        </div>`;
-  /* The top of the list is the decision; the tail is there for checking it. */
-  const more = list.length > TOP ? `<div class="expand-more">${showAllExpand
-      ? `All ${list.length} shown`
-      : `${list.length - TOP} more below the top ${TOP}`}
-      <button type="button" id="expandToggle" aria-expanded="${showAllExpand}">${
-        showAllExpand ? `just the top ${TOP}` : `show all ${list.length}`}</button></div>` : "";
-  $("expansion").innerHTML = list.length
-    ? `<div class="expand">${shown.map(line).join("")}</div>${more}`
-    : `<p class="pad muted">Nothing to rank yet.</p>`;
-  const toggle = $("expandToggle");
-  if(toggle) toggle.onclick = () => { showAllExpand = !showAllExpand; drawExpansion(); };
+function productRow(r, i, hoods, trendDays){
+  const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
+  let h = `<div class="r" data-r="${i}">${r.item}<small>${tag}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
+      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
+      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
+      c.sell && !c.monopoly ? ", you sell it here" : ""}`;
+    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.demand}${rivalDots(c.monopoly ? 0 : c.providers)}</div>`;
+  });
+  return h;
 }
 
 /* One click on a neighbourhood puts its strongest demand at the top; a second
    flips it. Cells with no reading stay at the bottom either way. */
-function hoodHeaders(hoods){
-  const at = hoods.indexOf(marketSortHood);
-  const q = h => h.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  return hoods.map((h, j) => `<th data-hood="${q(h)}" title="Sort by demand in ${q(h)}" ${
-    j === at ? `data-dir="${marketSortDir < 0 ? "desc" : "asc"}"` : ""}>${h}</th>`).join("");
-}
 function hoodSorted(rows, hoods){
   const at = hoods.indexOf(marketSortHood);
   if(at < 0) return rows;
-  // A type cell is shaded by how much of its range is wanted, a product cell
-  // by demand; the sort follows the shade, with the average as the tiebreak.
+  // A type row sorts by how much of its range is wanted, a product row by
+  // demand, with the average as the tiebreak.
   const d = r => { const c = r.cells[at];
     return !c ? null : "strong" in c ? [c.strong / c.count, c.demand] : [c.demand, 0]; };
   return rows.slice().sort((a, b) => {
@@ -7182,88 +7023,27 @@ function hoodSorted(rows, hoods){
   });
 }
 function wireMarketSort(){
-  const t = $("market");
-  t.querySelectorAll("thead th[data-hood]").forEach(th => th.onclick = () => {
-    const h = th.dataset.hood;
-    if(marketSortHood === h) marketSortDir = -marketSortDir;
-    else { marketSortHood = h; marketSortDir = -1; }
+  $$("#market .h[data-hood]").forEach(h => h.onclick = () => {
+    const name = h.dataset.hood;
+    if(marketSortHood === name) marketSortDir = -marketSortDir;
+    else { marketSortHood = name; marketSortDir = -1; }
     drawMarket();
   });
-  const first = t.querySelector("thead th.l");
-  if(first){
-    first.title = marketSortHood ? "Back to the usual order" : "";
-    first.onclick = () => { marketSortHood = null; drawMarket(); };
-  }
+  const usual = $("marketUsual");
+  if(usual) usual.onclick = e => { e.preventDefault(); marketSortHood = null; drawMarket(); };
+  const more = $("marketMore");
+  if(more) more.onclick = e => { e.preventDefault(); showAllMarket = !showAllMarket; drawMarket(); };
 }
 
+const MARKET_TOP = 20;  // product rows before "show all"
 function drawMarket(){
   const m = D.market;
   if(marketSortHood && !m.hoods.includes(marketSortHood)) marketSortHood = null;
-  const sortedBy = !marketSortHood ? ""
-    : marketView === "types"
-    ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
-    : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`;
-  const numbers = $("marketNumbers");
-  if(numbers) numbers.setAttribute("aria-pressed", marketDetail);
-  $("market").classList.toggle("numbers", marketDetail);
-  const trend = m.trendDays
-    ? `Change over the last ${m.trendDays} days`
-    : `Trend history starts building from today`;
-  $("marketNote").textContent = sortedBy || (marketView === "types"
-    ? ""
-    : marketView === "new"
-    ? "Strongest demand first"
-    : trend);
-  $("marketLegend").innerHTML = (marketView === "types"
-    ? [`<span>Hover a cell for the numbers: how much of the range is in strong demand (60+), the average, the rivals</span>`,
-       `<span>Darker cell = more of the range wanted</span>`,
-       `<span>Orange dot = you have a store of this type there</span>`,
-       `<span>Small number = rival sellers, averaged over the range</span>`,
-       `<span>Click a neighbourhood to sort by its demand</span>`]
-    : [`<span>Darker cell = stronger demand</span>`,
-       `<span>Orange dot = you sell it there</span>`,
-       `<span>Small number = rival sellers</span>`,
-       `<span>▲hype = the game flagged rising demand</span>`,
-       `<span>Click a neighbourhood to sort by its demand</span>`]).join("");
-
-  if(marketView === "types"){
-    const t = D.market.types;
-    if(m.typesHidden && !sortedBy) $("marketNote").textContent =
-      `${m.typesHidden} type${m.typesHidden===1?"":"s"} with under 3 products left out`;
-    $("market").innerHTML = `
-      <thead><tr><th class="l">Business type</th>${hoodHeaders(m.hoods)}</tr></thead>` + (t.length ? `
-      <tbody>${hoodSorted(t, m.hoods).map(r => `<tr>
-        <td class="l"><b>${r.type}</b>${r.mine ? ` <span class="chip ok">you run one</span>` : ""}
-          <span class="sub">${r.products} products</span></td>
-        ${r.cells.map(typeCell).join("")}</tr>`).join("")}</tbody>`
-      : `<tbody><tr><td class="l muted">No business types matched.</td></tr></tbody>`);
-    wireMarketSort();
-    return;
-  }
-
-  if(marketView === "gaps"){
-    const gaps = m.gaps;
-    $("market").innerHTML = gaps.length ? `
-      <thead><tr><th class="l">Product</th><th class="l">Neighbourhood</th>
-        <th>Demand</th><th>Sellers</th><th class="l">You</th></tr></thead>
-      <tbody>${gaps.map(g => `<tr>
-        <td class="l">${g.item}</td>
-        <td class="l">${g.hood}</td>
-        <td class="num">${meter(g.demand)}</td>
-        <td class="num">${g.providers === 0
-          ? `<span class="chip ok">none</span>` : g.providers}</td>
-        <td class="l">${g.make
-          ? `<span class="chip ok">you make this</span>`
-          : `<span style="color:var(--ink-3)">not stocked</span>`}</td></tr>`).join("")}</tbody>`
-      : `<tbody><tr><td class="l" style="color:var(--ink-3)">No unserved demand above 50.</td></tr></tbody>`;
-    return;
-  }
-
-  let rows = m.rows, limit = 30;
-  if(marketView === "mine"){
-    rows = m.rows.filter(r => r.sell || r.make);
-    limit = 60;
-  } else if(marketView === "new"){
+  const types = marketView === "types";
+  let rows, limit;
+  if(types){ rows = m.types; limit = rows.length; }
+  else if(marketView === "mine"){ rows = m.rows.filter(r => r.sell || r.make); limit = 60; }
+  else {
     // Strongest unserved demand first, and among equals the emptiest market.
     rows = m.rows.filter(r => !r.sell)
       .sort((a,b) => (b.gap?.demand ?? 0) - (a.gap?.demand ?? 0)
@@ -7271,30 +7051,51 @@ function drawMarket(){
     limit = 40;
   }
   rows = hoodSorted(rows, m.hoods);
-  $("market").innerHTML = `
-    <thead><tr><th class="l">Product</th>${hoodHeaders(m.hoods)}</tr></thead>` + (rows.length ? `
-    <tbody>${rows.slice(0, limit).map(r => `<tr>
-      <td class="l"><b>${r.item}</b>${
-        r.make && !r.sell ? ` <span class="chip warn">you make this</span>`
-        : r.make ? ` <span class="chip ok">make</span>`
-        : r.sell ? ` <span class="chip neutral">sell</span>` : ""}</td>
-      ${r.cells.map(heatCell).join("")}</tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">Nothing here.</td></tr></tbody>`);
+  const cap = Math.min(rows.length, limit);
+  const shown = rows.slice(0, types || showAllMarket ? cap : Math.min(MARKET_TOP, cap));
+
+  const notes = [];
+  if(marketSortHood) notes.push((types
+      ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
+      : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`)
+    + ` · <a class="link" href="#" id="marketUsual">usual order</a>`);
+  else if(types && m.typesHidden) notes.push(`${plural(m.typesHidden, "type")} with under 3 products left out`);
+  else if(marketView === "new") notes.push("Strongest unserved demand first");
+  else if(!m.trendDays) notes.push("Trend history starts building from today");
+  if(!types && cap > MARKET_TOP) notes.push(showAllMarket
+    ? `all ${cap} · <a class="link" href="#" id="marketMore">top ${MARKET_TOP}</a>`
+    : `${MARKET_TOP} of ${cap} · <a class="link" href="#" id="marketMore">show all ${cap}</a>`);
+  $("marketNote").innerHTML = notes.join(" · ");
+  $("marketWhy").dataset.tip = types
+    ? `Each cell is how many of a type's products are in strong demand (60 or more) in that neighbourhood, shaded by the average demand across the range. Dots count rival sellers. An outlined cell is where you already run a shop of that type. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
+    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
+
+  const grid = $("market");
+  grid.style.gridTemplateColumns = `200px repeat(${m.hoods.length},minmax(0,1fr))`;
+  grid.innerHTML = shown.length
+    ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
+        attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
+      + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
+    : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
+  $("cellDetail").textContent = "Click a cell";
   wireMarketSort();
+  wireTips();
 }
 
 /* --- plan a chain -----------------------------------------------------
    The recipes, the workstations and the prices come across from the save as
-   they were read; every number below is worked out here, so a slider is
+   they were read; every number is worked out in the browser, so a stepper is
    instant and nothing about the plan is decided in Python.
 
    Two facts set the shape of this. A workstation runs flat out around the
    clock, so a line's output is fixed by how many machines are on it and never
    by what the shops happen to want. And anything the shops do not take is
    exported rather than wasted. So the number that has to be right is the raw
-   material a week — order short and the machines stop; the shop count is a
-   consequence, not the plan. */
-let planType = null, planRate = null, planShops = null, planCounts = {};
+   material a week — order short and the machines stop; the shops are the
+   ones the player already runs, and what they take is what they sell today.
+   The arithmetic itself (machines × rate × 24 h × 7 d, the ingredient sums,
+   the surplus) lives in planDraw() with the other wiring. */
+let planType = null, planCounts = {};
 
 const RECIPE_BY = {};
 function indexPlan(){
@@ -7325,314 +7126,184 @@ function defaultRate(kind){
 }
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? 1);
 
-function planFor(kind, perShop, shops){
-  const products = ((D.plan.catalogue || {})[kind] || {}).products || [];
-  const peak = D.plan.peak || 1;
-  const shelfDay = perShop * peak;          // one shop, on its busiest day
-  const shelfWeek = perShop * 7;            // a week of ordinary trading
-  const rows = [], kitCount = {}, ingredients = {};
-  let madeWeek = 0, shelfDemandWeek = 0, exportWeek = 0;
-
-  products.forEach(slug => {
-    const r = RECIPE_BY[slug];
-    const wantWeek = shelfWeek * shops;
-    shelfDemandWeek += wantWeek;
-    if(!r){
-      rows.push({slug, item:itemName(slug), made:false, wantWeek, shelfDay});
-      return;
-    }
-    const ws = (D.plan.workstations || {})[r.workstation] || {};
-    const machines = machinesOn(slug);
-    const oneHour = r.out, oneDay = oneHour * HOURS;
-    /* Full tilt, always: the line does not idle because a shelf is full. */
-    const perDay = oneDay * machines, perWeek = perDay * 7;
-    madeWeek += perWeek;
-    const surplus = perWeek - wantWeek;
-    if(surplus > 0) exportWeek += surplus;
-    const kit = [...(ws.assembly || []), ...(ws.machines || [])];
-    kit.forEach(m => kitCount[m] = (kitCount[m] || 0) + machines);
-    const ings = r.ingredients.map(i => {
-      const weekly = perWeek * i.per / r.out;
-      ingredients[i.slug] = (ingredients[i.slug] || 0) + weekly;
-      return {...i, weekly, hourly: weekly / 7 / HOURS};
-    });
-    rows.push({
-      slug, item:r.item, made:true, machines, out:oneHour, oneDay, perDay, perWeek,
-      wantWeek, surplus, kit, ings, shelfDay,
-      workstation: ws.name || r.workstation,
-      covers: shelfDay > 0 ? perDay / shelfDay : Infinity,
-      short: surplus < 0,
-    });
-  });
-
-  const prices = D.plan.prices || {};
-  let cash = 0, priced = 0, total = 0;
-  const sources = D.plan.sources || {};
-  const imports = Object.entries(ingredients).map(([slug, weekly]) => {
-    const unit = prices[slug];
-    total++;
-    if(unit !== undefined){ priced++; cash += weekly * unit; }
-    const src = sources[slug];
-    return {slug, item:itemName(slug), weekly, daily: weekly / 7, unit,
-            value: unit === undefined ? null : weekly * unit,
-            from: src ? src.from : null, warehouse: src ? src.warehouse : null,
-            ordered: src ? src.ordered : null, active: src ? src.active : false,
-            gap: src ? weekly - src.ordered : null};
-  }).sort((a,b) => b.weekly - a.weekly);
-
-  return {rows, machines: kitCount, imports, cash, priced, total,
-          madeWeek, shelfDemandWeek, exportWeek,
-          totalMachines: rows.reduce((a,r) => a + (r.machines || 0), 0),
-          bought: rows.filter(r => !r.made).length,
-          shortLines: rows.filter(r => r.short).length};
-}
-
 function drawPlan(){
   indexPlan();
   const types = planTypes();
-  if(!types.length){ $("planNote").textContent = "No product catalogue in this save."; return; }
+  if(!types.length){
+    $("planNote").textContent = "No product catalogue in this save.";
+    $("planPicker").innerHTML = ""; $("planBody").innerHTML = ""; $("ingBody").innerHTML = "";
+    return;
+  }
   if(!types.includes(planType))
     planType = types.includes("ba:businesstype_supermarket")
       ? "ba:businesstype_supermarket" : types[0];
-  if(planRate === null) planRate = defaultRate(planType) || 200;
-  if(planShops === null) planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
+  const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
+  const kind = cat[planType].type, low = kind.toLowerCase();
+  const shops = own ? (own.shops ?? own.sites) || 0 : 0;
+  const perShop = defaultRate(planType) || 0;
+  const pick = k => { planType = k; planCounts = {}; drawPlan(); };
 
-  const cat = D.plan.catalogue[planType], own = (D.plan.own || {})[planType];
-  $("planNote").textContent = "";
-  $("planPicker").innerHTML = `
-    <div class="planrow">
-      <label>Business type
-        <select id="planPick">${types.map(k =>
-          `<option value="${k}" ${k===planType?"selected":""}>${D.plan.catalogue[k].type} · ${
-            D.plan.catalogue[k].products.length} products</option>`).join("")}</select></label>
-      <label>Shops taking the output
-        <input type="range" id="planShopSlide" min="1" max="30" step="1" value="${planShops}"></label>
-      <label>Sales per product, in each shop
-        <input type="range" id="planSlide" min="10" max="2000" step="10" value="${planRate}"></label>
-      <label>&nbsp;<output id="planOut"></output></label>
+  /* The types the player runs are the segments, as on the canvas; every other
+     type the city sells is one select away. */
+  const owned = types.filter(k => (D.plan.own || {})[k]);
+  const others = types.filter(k => !owned.includes(k));
+  $("planPicker").innerHTML = (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
+    ? `<span class="field" style="margin:0"><select id="planPick" aria-label="Another business type">
+        <option value="" ${others.includes(planType) ? "" : "selected"} disabled>Another type…</option>${
+        others.map(k => `<option value="${attr(k)}" ${k === planType ? "selected" : ""}>${cat[k].type} · ${cat[k].products.length}</option>`).join("")}
+      </select></span>` : "");
+  if(owned.length) seg($("planTypes"), owned.map(k => [k, cat[k].type]), () => planType, k => { planType = k; planCounts = {}; }, drawPlan);
+  const sel = $("planPick");
+  if(sel) sel.onchange = e => pick(e.target.value);
+
+  /* One line per product with a recipe. The ingredient factors are the recipe
+     page flattened: units of ingredient per unit made, so the wiring's
+     machines × rate × 24 × 7 × factor is the same figure the logistics table
+     draws for a running line. */
+  const ws = D.plan.workstations || {}, sources = D.plan.sources || {}, prices = D.plan.prices || {};
+  const tips = {};
+  let bought = 0;
+  const lines = cat[planType].products.map(slug => {
+    const r = RECIPE_BY[slug];
+    if(!r){
+      bought++;
+      return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in</span></td>
+        <td class="l" colspan="4"><span class="quiet">the game documents no way to make this one; the shops buy it from an importer</span></td></tr>`;
+    }
+    const station = ws[r.workstation] || {};
+    const kit = [...(station.assembly || []), ...(station.machines || [])];
+    const ing = r.ingredients.map(i => `${i.item}:${i.per / r.out}`).join(",");
+    r.ingredients.forEach(i => {
+      const src = sources[i.slug], unit = prices[i.slug];
+      tips[i.item] = (src
+        ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}${src.active ? "" : " (contract paused)"}`
+        : "Not on any import contract yet") + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : "");
+    });
+    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="12" data-rate="${r.out}" data-ing="${attr(ing)}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
+      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
+        r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
+      <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
+  });
+
+  $("planNote").textContent = bought ? `${plural(bought, "product")} of ${cat[planType].products.length} bought in` : "";
+  $("planBody").innerHTML = `
+    <div class="planstats">
+      <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
+      <div class="planstat"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
+      <div class="planstat"><span class="lab">Raw material / week</span><div class="v"><span id="vRaw"></span><small>units to import</small></div></div>
     </div>
-    <p class="muted" style="margin:10px 0 0" id="planSummary"></p>
-    <p class="muted" style="margin:10px 0 0">Machines run ${HOURS} hours at their rated rate,
-      so every line makes its full quantity whether or not the shelves need it; the
-      ingredient order is sized on that, never on demand. What the shops do not take is
-      surplus for export. ${own
-      ? `Your ${own.sites} ${cat.type.toLowerCase()}${own.sites===1?"":"s"} average ${
-          defaultRate(planType).toLocaleString()} a day per product, which is where the
-         shop figures started.`
-      : "You do not run this type, so the shop figures are yours to choose; nothing there is measured."}</p>`;
-  $("planPick").onchange = e => {
-    planType = e.target.value;
-    planRate = defaultRate(planType) || planRate;
-    planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
-    planCounts = {};
-    drawPlan();
-  };
-  $("planShopSlide").oninput = e => { planShops = +e.target.value; paintPlan(); };
-  $("planSlide").oninput = e => { planRate = +e.target.value; paintPlan(); };
-  paintPlan();
-}
-
-function paintPlan(){
-  const p = planFor(planType, planRate, planShops);
-  const cat = D.plan.catalogue[planType];
-  const focused = document.activeElement;
-  const keep = focused && focused.dataset ? focused.dataset.slug : null;
-
-  $("planOut").textContent = `${Math.round(p.madeWeek).toLocaleString()} units/week`;
-  $("planSummary").innerHTML = p.totalMachines
-    ? `<b>${p.totalMachines} machine${p.totalMachines === 1 ? "" : "s"}</b> across the range
-       turn out <b>${Math.round(p.madeWeek).toLocaleString()}</b> units a week and need
-       <b class="num">${Math.round(p.imports.reduce((a,i)=>a+i.weekly,0)).toLocaleString()}</b>
-       units of raw material delivered to keep going${p.priced
-         ? `, costing <b class="num">${fmt(p.cash)}</b> a week` : ""}.
-       ${planShops} ${cat.type.toLowerCase()}${planShops === 1 ? "" : "s"} would take
-       ${Math.round(p.shelfDemandWeek).toLocaleString()} of it${p.exportWeek > 0
-         ? `, leaving <b>${Math.round(p.exportWeek).toLocaleString()}</b> a week for export`
-         : ""}.${p.shortLines
-         ? ` ${p.shortLines} line${p.shortLines === 1 ? " does" : "s do"} not keep up with
-             the shelves; those need more machines.` : ""}`
-    : `No machines set, so nothing is being made.`;
-
-  $("planTable").innerHTML = `
-    <thead><tr><th class="l">Product</th><th>Machines</th><th class="l">Workstation</th>
-      <th>One machine / day</th><th>Made / week</th><th>Shops take</th><th>Surplus / week</th>
-      <th class="l">Raw material per week</th></tr></thead>
-    <tbody>${p.rows.map(r => r.made ? `<tr>
-      <td class="l"><b>${r.item}</b><span class="sub">${r.out.toLocaleString()}/h rated · one
-        machine covers ${r.covers.toFixed(1)} shop${r.covers === 1 ? "" : "s"}</span></td>
-      <td class="num"><input class="mcount" type="number" min="0" max="99" step="1"
-        data-slug="${r.slug}" value="${r.machines}"></td>
-      <td class="l">${r.workstation}<span class="sub">${r.kit.join(" + ")}</span></td>
-      <td class="num">${r.oneDay.toLocaleString()}</td>
-      <td class="num">${Math.round(r.perWeek).toLocaleString()}</td>
-      <td class="num">${Math.round(r.wantWeek).toLocaleString()}</td>
-      <td class="num">${r.surplus >= 0
-        ? `<span class="chip ok">+${Math.round(r.surplus).toLocaleString()}</span>`
-        : `<span class="chip bad">${Math.round(r.surplus).toLocaleString()}</span>`}</td>
-      <td class="l">${r.ings.map(i =>
-        `${Math.round(i.weekly).toLocaleString()} ${i.item}`).join(", ")}</td></tr>`
-    : `<tr><td class="l"><b>${r.item}</b><span class="sub">shops want ${
-        Math.round(r.wantWeek).toLocaleString()}/week</span></td>
-       <td class="l" colspan="7"><span class="chip neutral">imported, no recipe</span>
-       <span class="sub">the game documents no way to make this one; buy it in</span></td></tr>`
-    ).join("")}</tbody>`;
-
-  $("planTable").querySelectorAll(".mcount").forEach(el => {
-    el.oninput = e => {
-      planCounts[e.target.dataset.slug] = Math.max(0, +e.target.value || 0);
-      paintPlan();
-    };
-  });
-  if(keep){
-    const back = $("planTable").querySelector(`.mcount[data-slug="${keep}"]`);
-    if(back){ back.focus(); back.select?.(); }
-  }
-
-  const machines = Object.entries(p.machines).sort((a,b) => b[1]-a[1]);
-  $("planMachines").innerHTML = `<span class="eyebrow">Machines to buy</span>` + (machines.length
-    ? machines.map(([m,n]) =>
-        `<div class="stat"><span>${m}</span><b class="num">${n}</b></div>`).join("")
-      + `<div class="stat"><span><b>Total</b></span><b class="num">${
-          machines.reduce((a,b)=>a+b[1],0)}</b></div>`
-    : `<p class="muted">Nothing in this range is manufactured; it is all bought in.</p>`);
-
-  /* Orders are placed one importer at a time, so the list is cut the same way.
-     Each line carries what is on order now and the difference, which is the
-     only number that actually has to be typed. */
-  const byImporter = new Map();
-  p.imports.forEach(i => {
-    const key = i.from || "Not on any import contract";
-    if(!byImporter.has(key)) byImporter.set(key, []);
-    byImporter.get(key).push(i);
-  });
-  const blocks = [...byImporter.entries()].sort((a,b) =>
-    (a[0] === "Not on any import contract" ? 1 : 0) - (b[0] === "Not on any import contract" ? 1 : 0)
-    || b[1].reduce((x,i)=>x+i.weekly,0) - a[1].reduce((x,i)=>x+i.weekly,0));
-
-  $("planImports").innerHTML = `<span class="eyebrow">Weekly import order: what the machines
-    eat, by importer</span>` + (p.imports.length
-    ? blocks.map(([who, list]) => {
-        const sum = list.reduce((a,i) => a+i.weekly, 0);
-        const money = list.reduce((a,i) => a + (i.value || 0), 0);
-        const raise = list.filter(i => i.gap !== null && i.gap > 0);
-        return `<div class="impblock">
-          <div class="imphead"><b>${who}</b>
-            <span class="sub">${list.length} ingredient${list.length===1?"":"s"} ·
-              ${Math.round(sum).toLocaleString()} units a week${
-              money ? ` · ${fmt(money)}` : ""}${
-              raise.length ? ` · ${raise.length} to raise` : ""}</span></div>
-          <div class="scroll"><table>
-            <thead><tr><th class="l">Ingredient</th><th>Order / week</th>
-              <th>On order now</th><th>Change</th><th>Cash</th></tr></thead>
-            <tbody>${list.map(i => `<tr>
-              <td class="l">${i.item}${i.from && !i.active
-                ? ` <span class="chip bad">paused</span>` : ""}</td>
-              <td class="num"><b>${Math.ceil(i.weekly).toLocaleString()}</b></td>
-              <td class="num">${i.ordered === null
-                ? `<span class="sub">not ordered</span>` : i.ordered.toLocaleString()}</td>
-              <td class="num">${i.gap === null ? "—"
-                : Math.abs(i.gap) < 1 ? `<span class="chip ok">as is</span>`
-                : i.gap > 0 ? `<span class="chip warn">+${Math.ceil(i.gap).toLocaleString()}</span>`
-                : `<span class="chip neutral">${Math.floor(i.gap).toLocaleString()}</span>`}</td>
-              <td class="num">${i.value === null
-                ? `<span class="sub">no price</span>` : fmt(i.value)}</td></tr>`).join("")}</tbody>
-            <tfoot><tr><td class="l">Total</td>
-              <td class="num">${Math.round(sum).toLocaleString()}</td>
-              <td class="num"></td><td class="num"></td>
-              <td class="num">${money ? fmt(money) : ""}</td></tr></tfoot>
-          </table></div></div>`;
-      }).join("")
-      + `<p class="muted" style="margin-top:12px">${p.priced
-          ? `A week costs <b class="num">${fmt(p.cash)}</b> across the ${
-              p.priced} of ${p.total} ingredients this company already buys.`
-          : `No cash figure here: none of these ${p.total} ingredients appear in your own
-             goods costs.`}${p.priced && p.priced < p.total
-           ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${
-               p.total - p.priced} show quantities only.` : ""}</p>`
-    : `<p class="muted">Nothing to import; this range is bought as finished goods.</p>`);
+    <table data-pershop="${perShop}" data-shops="${shops}" data-ingtips="${attr(JSON.stringify(tips))}">
+      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <tbody>${lines.join("")}</tbody>
+    </table>
+    <p class="planline">${own && perShop
+      ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
+          perShop.toLocaleString("en-US")}</b> a day per product. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
+      : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}</p>`;
+  planDraw();
+  wireTips();
 }
 
 /* The top of the list is the money; the full list is what a factory planner
-   needs, every product with its week of sales across all stores. */
+   needs, every product with its week of sales across all stores. The revenue
+   bar sits in the cell so the shape of the range reads before the figures do. */
 function drawProducts(){
   const TOP = 14, all = D.products;
   const rows = showAllProducts ? all : all.slice(0, TOP);
   /* A column that is empty on two rows in three is not a column. When most
      products do have a weekday peak it stays; otherwise it moves into the
-     row's own tooltip. */
+     product's own note. */
   const withPeak = rows.filter(p => p.peak).length;
   const showPeak = withPeak * 2 >= rows.length;
-  $("productNote").textContent = showPeak ? ""
-    : `Weekday peaks on hover, ${withPeak} of ${rows.length} have one`;
-  $("products").innerHTML = `
+  /* The list is sorted by revenue, so the first row is the bar's full width. */
+  const top = rows.length ? rows[0].revenue : 1;
+  const peakTip = p => p.peak
+    ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
+    : "No weekly cycle clears the noise test";
+  const more = all.length > TOP
+    ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
+        showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
+    : `<span class="quiet">all ${all.length}</span>`;
+  $("secProducts").innerHTML = sechead("Products", {
+    why: `Revenue and units are yesterday summed over every store that sells the line;`
+      + ` units a week is the last seven days, and stores is how many carry it.`
+      + (showPeak
+        ? " Peaks names the weekday that sells best and the points between best and worst day."
+        : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
+    quiet: "by revenue yesterday",
+    aside: more,
+  }) + `<table>
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
-      <th title="Sales across all stores over the last 7 days">Units / week</th>
-      <th>Avg price</th><th>Stores</th>${showPeak?`<th class="l">Peaks</th>`:""}</tr></thead>
-    <tbody>${rows.map(p=>`<tr title="${p.peak
-        ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
-        : "No weekly cycle clears the noise test"}">
-      <td class="l">${p.item}</td>
-      <td class="num">${fmt(p.revenue)}</td>
-      <td class="num">${p.units.toLocaleString()}</td>
-      <td class="num">${(p.week ?? p.units * 7).toLocaleString()}</td>
-      <td class="num">$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      <td class="num">${p.stores}</td>
-      ${showPeak?`<td class="l">${p.peak
-        ? `${p.peak} <span class="muted">+${p.swing} pts</span>`
-        : `<span class="muted">—</span>`}</td>`:""}</tr>`).join("")}</tbody>`;
-  const more = $("productsMore");
-  more.hidden = all.length <= TOP;
-  if(!more.hidden){
-    more.innerHTML = `${showAllProducts ? `All ${all.length} shown`
-        : `${all.length - TOP} more below the top ${TOP}`}
-      <button type="button" id="productsToggle" aria-expanded="${showAllProducts}">${
-        showAllProducts ? `just the top ${TOP}` : `show all ${all.length}`}</button>`;
-    $("productsToggle").onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
-  }
+      <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
+      <th>Avg price</th><th>Stores</th>${showPeak?`<th>Peaks</th>`:""}</tr></thead>
+    <tbody>${rows.map(p=>`<tr>
+      <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${p.item}</td>
+      <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
+      <td>${p.units.toLocaleString()}</td>
+      <td>${(p.week ?? p.units * 7).toLocaleString()}</td>
+      <td>$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${p.stores}</td>
+      ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
+        p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`).join("")}</tbody></table>`;
+  const toggle = $("productsToggle");
+  if(toggle) toggle.onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
 }
 
-/* Payroll, debt and milestones only earn their space when something needs
-   doing. With nobody unhappy and nothing owed they are one line each. */
+/* Payroll is the headcount by role against the biggest role, and whatever needs
+   doing as a chip beside the heading: nobody unhappy and nothing absent leaves
+   one satisfaction chip. */
 function drawPayroll(){
   const st = D.staff;
-  $("payrollNote").textContent = `${st.total} people · ${fmt(st.dailyCost)} per day`;
-  const trouble = [["unhappy, below 70%", st.unhappy], ["absent today", st.absent],
-                   ["with an open complaint", st.complaining]].filter(([,v]) => v);
-  if(!trouble.length){
-    $("payroll").innerHTML = `<p class="muted" style="margin:0">Nothing to do here:
-      ${st.total} staff averaging ${st.avgSatisfaction}% satisfaction, none unhappy,
-      none absent, no complaints. ${st.roles.map(r => `${r.count} ${r.role.toLowerCase()}`)
-        .join(", ")}.</p>`;
-    return;
-  }
-  $("payroll").innerHTML =
-    [["Average satisfaction", `${st.avgSatisfaction}%`],
-     ...trouble.map(([l,v]) => [l[0].toUpperCase()+l.slice(1), v])]
-      .map(([l,v])=>`<div class="stat"><span>${l}</span><b class="num">${v}</b></div>`).join("")
-    + `<div class="stat" style="border-top:1px solid var(--rule); margin-top:8px; padding-top:12px">
-         <span class="eyebrow">Headcount by role</span></div>`
-    + st.roles.map(r=>`<div class="stat"><span>${r.role}</span><b class="num">${r.count}</b></div>`).join("");
+  const trouble = [["unhappy", st.unhappy, "Satisfaction below 70%"],
+                   ["out", st.absent, "Absent today"],
+                   ["complaining", st.complaining, "With an open complaint"]].filter(([,v]) => v);
+  const max = Math.max(...st.roles.map(r => r.count), 1);
+  $("secPayroll").innerHTML = sechead("Payroll", {
+    quiet: `${st.total} people · ${fmt(st.dailyCost)} / day`,
+    aside: chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
+        `Average satisfaction across ${st.total} staff`)
+      + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join(""),
+  }) + `<div class="roles">${st.roles.map(r => `<div class="role rv">
+      <span>${r.role}</span>
+      <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
+      <span class="c">${r.cost != null
+        ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
+        : r.count}</span></div>`).join("")}</div>`;
 }
 
+/* The career totals as a checklist, then the house rules. The stored difficulty
+   is only a slot number, and a custom game keeps its own multipliers whatever
+   that slot says, so the settings themselves are what answers "how hard is
+   this game" — and they are worth stating, because several of them are doing
+   real work here. */
 function drawGoals(){
   const g = D.goals, h = D.meta.houseRules;
-  $("goalsNote").textContent = `Career totals · playing on ${D.meta.difficulty}`;
-  /* The stored difficulty is only a slot number, so the settings themselves are
-     what answers "how hard is this game" — and they are worth stating, because
-     several of them are doing real work here. */
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
-  $("goals").innerHTML = `<p class="muted" style="margin:0 0 12px">${g.completed} personal
-    goal${g.completed===1?"":"s"} completed, ${g.diplomas} diploma${g.diplomas===1?"":"s"},
-    ${g.goodsProduced.toLocaleString()} goods produced in the factories,
-    ${fmt(g.taxesPaid)} paid in tax.</p>`
-    + (h && moved.length ? `<div class="stat" style="border-top:1px solid var(--rule);
-         padding-top:12px"><span class="eyebrow">House rules: ${h.label.toLowerCase()},
-         ${h.harder} harder${h.easier ? `, ${h.easier} easier` : ""}, started on ${
-         fmt(h.startingMoney)}</span></div>`
-      + moved.map(r => `<div class="stat" title="${r.what}">
-          <span>${r.name} <span class="muted">${r.what}</span></span>
-          <b class="num"><span class="chip ${r.lean === "harder" ? "warn" : "ok"}">×${
-            r.value}</span></b></div>`).join("")
+  /* A row with a denominator is ticked when it is complete; the rest are
+     totals the player has banked, with no target to count them against, so
+     they are ticked once off zero. */
+  const ofAll = (n, total) => [total > 0 && n >= total, `${n} / ${total}`];
+  const miles = [
+    ["Personal goals completed", g.completed > 0, g.completed.toLocaleString()],
+    ["Diplomas earned", ...ofAll(g.diplomas, g.diplomasTotal)],
+    ...(g.rivalsTotal ? [["Rivals seen off", ...ofAll(g.rivalsDefeated, g.rivalsTotal)]] : []),
+    ["Goods produced in the factories", g.goodsProduced > 0, g.goodsProduced.toLocaleString()],
+    ["Tax paid", g.taxesPaid > 0, fmt(g.taxesPaid)],
+  ];
+  $("secGoals").innerHTML = sechead("Milestones", {
+    why: "The stored difficulty is only a slot number, and a custom game keeps its own"
+      + " multipliers whatever that slot says, so the house rules below are the honest"
+      + " answer to how hard this game is. Only the rules that moved off stock are listed.",
+    quiet: h ? `career totals · playing on ${h.label.toLowerCase()}, ${h.harder} harder${
+        h.easier ? `, ${h.easier} easier` : ""}, started on ${fmt(h.startingMoney)}`
+      : `career totals · playing on ${D.meta.difficulty}`,
+  }) + `<div class="miles">${miles.map(([label, done, text]) =>
+      `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
+        label}<span class="c">${text}</span></div>`).join("")}</div>`
+    + (moved.length ? `<div class="rules">${moved.map(r =>
+        `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
+          r.neutral}, so this game is ${r.lean}.`)}">${r.name}<b>×${r.value}</b></span>`).join("")}</div>`
       : "");
 }
 
@@ -7649,7 +7320,7 @@ function renderAll(){
   drawMast(); drawKpis(); drawAlerts();
   drawChart(); drawRhythm(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
-  drawExpansion(); drawMovers(); drawMarket(); drawPlan();
+  drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFooter();
   wireAll();
 }
@@ -7660,17 +7331,18 @@ function renderAll(){
    the supply round, growth planning, the company's reference tables. Which
    page and which view are remembered on this device and mirrored in the hash. */
 const PAGES = [
-  {id:"today",   label:"Today",   host:"pageToday",   hint:"The four numbers and what needs attention"},
-  {id:"results", label:"Results", host:"pageResults", hint:"Daily result, the week, the portfolio by chain, one site at a time"},
-  {id:"supply",  label:"Supply",  host:"pageSupply",  hint:"Orders to set, stock checks, how goods move"},
-  {id:"growth",  label:"Growth",  host:"pageGrowth",  hint:"Where to expand, market demand, plan a chain"},
-  {id:"company", label:"Company", host:"pageCompany", hint:"Products, payroll, milestones"},
+  {id:"today",   label:"Today",   host:"pageToday"},
+  {id:"results", label:"Results", host:"pageResults"},
+  {id:"supply",  label:"Supply",  host:"pageSupply"},
+  {id:"growth",  label:"Growth",  host:"pageGrowth"},
+  {id:"company", label:"Company", host:"pageCompany"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
            items:[["orders","Orders"],["checks","Checks"],["map","Map"]]},
-  growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"expand",
-           items:[["expand","Expand"],["market","Demand"],["plan","Plan a chain"]]},
+  // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
+  growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
+           items:[["market","Demand"],["plan","Plan a chain"]]},
 };
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
@@ -7686,7 +7358,7 @@ function showSub(pageId, id){
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   sub[pageId] = id;
-  document.querySelectorAll(`#${sv.host} section[data-sub]`).forEach(sec => { sec.hidden = sec.dataset.sub !== id; });
+  document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
   $(sv.nav).innerHTML = sv.items.map(([k, label]) =>
     `<a href="#${k}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
   remember(sv.key, id);
@@ -7732,58 +7404,187 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        on:true},
-  {id:"vacant",       label:"Vacant leases",          on:true},
-  {id:"loss",         label:"Losing money",           on:true},
-  {id:"staff",        label:"Staffing",               on:true},
-  {id:"satisfaction", label:"Low satisfaction",       on:true},
-  {id:"promotion",    label:"Promotion below cap",   on:true},
-  {id:"uniform",      label:"No staff uniforms",      on:true},
-  {id:"bathroom",     label:"No customer bathroom",   on:true},
-  {id:"toiletprivacy",label:"Bathroom has no privacy",on:true},
-  {id:"sink",         label:"No customer sink",       on:true},
-  {id:"music",        label:"No music playing",       on:true},
-  {id:"interior",     label:"Interior design too low",on:true},
-  {id:"hype",         label:"Demand wave ending",     on:true},
-  {id:"trend",        label:"Revenue trend",          on:true},
-  {id:"unplanned",    label:"No distribution plan",   on:true},
-  {id:"outruns",      label:"Outsells its top-up",    on:true},
-  {id:"paused",       label:"Import paused",          on:true},
-  {id:"feed",         label:"Factory inputs",         on:true},
-  {id:"unnamed",      label:"Unnamed factory line",   on:true},
-  {id:"unset",        label:"Machine with no recipe", on:true},
-  {id:"shortfall",    label:"Import shortfall",       on:true},
-  {id:"order",        label:"Weekly order too small", on:true},
-  {id:"atcap",        label:"At capacity (door/staff/registers)", on:false},
-  {id:"idlestaff",    label:"Overstaffed hours",      on:false},
-  {id:"dead",         label:"Stock not moving",       on:true},
-  {id:"target",       label:"Top-up target too high", on:true},
+  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no stock or no trading day", on:true},
+  {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
+  {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
+  {id:"staff",        label:"Staffing",               note:"A shop with nobody on, or a machine nobody is posted to", on:true},
+  {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
+  {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
+  {id:"uniform",      label:"No staff uniforms",      note:"Customers notice staff with no uniform set", on:true},
+  {id:"bathroom",     label:"No customer bathroom",   note:"Customers here expect a bathroom and there is none", on:true},
+  {id:"toiletprivacy",label:"Bathroom has no privacy",note:"A customer bathroom with no stall or door", on:true},
+  {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
+  {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
+  {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
+  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
+  {id:"trend",        label:"Revenue trend",          note:"A shop's week up or down by more than 15%", on:true},
+  {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
+  {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
+  {id:"paused",       label:"Import paused",          note:"An import switched off with the depot still drawing", on:true},
+  {id:"feed",         label:"Factory inputs",         note:"An input arriving short of what the machines need", on:true},
+  {id:"unnamed",      label:"Unnamed factory line",   note:"A machine running a recipe the board cannot name", on:true},
+  {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
+  {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import lands", on:true},
+  {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
+  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff or registers turn people away", on:false},
+  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters staffed through hours that buy nothing", on:false},
+  {id:"dead",         label:"Stock not moving",       note:"Goods sitting in a depot no line draws from", on:true},
+  {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
+/* The control that opens the panel: the tune button in the Needs attention
+   section head, anything marked data-kinds, or the legacy "Filter kinds"
+   button while the old markup is still there. Whichever one is clicked becomes
+   the anchor; with none on the page the panel hangs off the section's top
+   right. */
+const KINDS_TOGGLE = "#alertSection .sechead .ibtn, [data-kinds], #alertKindsToggle";
+let kindsPop = null, kindsAnchor = null;
 
+/* How many findings each kind puts on the board today — read from the whole
+   unfiltered set, the read-out lines and the smaller ones counted below them
+   together, so the number does not change as the switches move. */
+function kindCounts(){
+  const n = {};
+  const add = rows => (rows || []).forEach(r => { n[r.group] = (n[r.group] || 0) + 1; });
+  if(D){ add(D.alerts); add((D.minor || {}).rows); }
+  return n;
+}
+function drawKindRows(){
+  const host = kindsPop && kindsPop.querySelector(".kinds");
+  if(!host) return;
+  const n = kindCounts(), at = host.scrollTop;
+  host.innerHTML = ALERT_GROUPS.map(g => {
+    const on = !!alertGroupPrefs[g.id];
+    return `<div class="kind"><div><b>${g.label}</b><small>${g.note}</small></div>`
+      + `<span class="c">${n[g.id] || 0} today</span>`
+      + `<span class="sw${on ? " on" : ""}" data-kind="${g.id}" role="switch"`
+      + ` aria-checked="${on}" aria-label="${attr(g.label)}" tabindex="0"></span></div>`;
+  }).join("");
+  host.scrollTop = at;
+}
+/* Where the panel sits: under the button that opened it, its right edge in
+   line with the button's, clamped into the window. With no button on the page
+   yet it hangs off the top right of the Needs attention section. */
+function placeKindsPop(){
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  let r = kindsAnchor && kindsAnchor.getBoundingClientRect();
+  if(!r || !r.width){
+    const sec = document.getElementById("alertSection");
+    const s = sec && sec.getBoundingClientRect();
+    r = s && s.width ? {right: s.right, top: s.top, bottom: s.top + 8}
+                     : {right: vw - 40, top: 120, bottom: 128};
+  }
+  const rows = kindsPop.querySelector(".kinds");
+  if(rows) rows.style.maxHeight = "";
+  let h = kindsPop.offsetHeight;
+  const y0 = r.bottom + 10, room = vh - 12 - y0;
+  /* Twenty-six kinds are taller than a short window. The rows give up whatever
+     height the window cannot spare, down to a floor; only past that does the
+     panel leave the button it hangs from. */
+  if(rows && h > room && room > 240){
+    rows.style.maxHeight = Math.max(200, rows.offsetHeight - (h - room)) + "px";
+    h = kindsPop.offsetHeight;
+  }
+  let y = y0;
+  if(y + h > vh - 12){
+    const above = r.top - 10 - h;
+    y = above >= 12 ? above : vh - 12 - h;
+  }
+  kindsPop.style.left = Math.max(12, Math.min(r.right - kindsPop.offsetWidth, vw - kindsPop.offsetWidth - 12)) + "px";
+  kindsPop.style.top = Math.max(12, y) + "px";
+}
+function closeKindsPanel(){
+  if(!kindsPop || !kindsPop.classList.contains("on")) return;
+  kindsPop.classList.remove("on");
+  document.querySelectorAll(KINDS_TOGGLE).forEach(a => a.setAttribute("aria-expanded", "false"));
+}
+function openKindsPanel(anchor){
+  if(!kindsPop) buildAlertSettingsPanel();
+  kindsAnchor = anchor && anchor.nodeType === 1 ? anchor : document.querySelector(KINDS_TOGGLE);
+  drawKindRows();
+  kindsPop.classList.add("on");
+  placeKindsPop();
+  if(kindsAnchor) kindsAnchor.setAttribute("aria-expanded", "true");
+}
+/* The one entry point the Needs attention head calls: the tune button toggles
+   the panel and anchors it under itself. */
+function toggleKindsPanel(anchor){
+  if(kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
+  else openKindsPanel(anchor);
+}
+
+/* The panel is a body-level popover, like #tip: a section's paint containment
+   would clip one rendered inside it. Built once, on boot, because the
+   preferences it reads have to be in place before the first drawAlerts(); the
+   counts are filled in each time it opens, so a live refresh cannot leave a
+   stale number behind. */
 function buildAlertSettingsPanel(){
   let saved = {};
   try{ saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)) || {}; }catch(e){}
   ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = saved.hasOwnProperty(g.id) ? !!saved[g.id] : g.on; });
-  $("alertSettingsGrid").innerHTML = ALERT_GROUPS.map(g =>
-    `<button type="button" data-kind="${g.id}" aria-pressed="${alertGroupPrefs[g.id]}">${g.label}</button>`
-  ).join("");
-  $("alertSettingsGrid").addEventListener("click", e => {
-    const btn = e.target.closest("button[data-kind]");
-    if(!btn) return;
-    const id = btn.dataset.kind;
-    alertGroupPrefs[id] = !alertGroupPrefs[id];
-    btn.setAttribute("aria-pressed", String(alertGroupPrefs[id]));
-    try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
+  if(kindsPop){ drawKindRows(); return; }
+  kindsPop = document.createElement("div");
+  kindsPop.className = "pop";
+  kindsPop.id = "alertPop";
+  kindsPop.setAttribute("role", "dialog");
+  kindsPop.setAttribute("aria-label", "Which kinds make the list");
+  kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
+    <p>Off means the kind is left out of the list and its counts. Saved on this device.</p>
+    <div class="kinds"></div>
+    <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
+    + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
+  document.body.appendChild(kindsPop);
+  drawKindRows();
+
+  /* The switches themselves are wired by wireKinds(), with everything else. */
+  kindsPop.addEventListener("click", e => {
+    if(!e.target.closest) return;
+    if(e.target.closest("[data-kinds-done]")){ e.preventDefault(); closeKindsPanel(); return; }
+    if(!e.target.closest("[data-kinds-reset]")) return;
+    e.preventDefault();
+    /* Back to the board's defaults, and out of storage entirely, so a later
+       change to a default is picked up rather than frozen. */
+    ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = g.on; });
+    try{ localStorage.removeItem(ALERT_SETTINGS_KEY); }catch(e2){}
+    drawKindRows();
     drawAlerts();
   });
+  /* A switch is not a button, so the keyboard needs saying out loud. */
+  kindsPop.addEventListener("keydown", e => {
+    const sw = e.target.closest && e.target.closest(".sw");
+    if(!sw || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    sw.click();
+  });
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest(KINDS_TOGGLE);
+    if(!t) return;
+    e.preventDefault();
+    toggleKindsPanel(t);
+  });
+  /* Outside click closes it; mousedown, so the click that follows lands on
+     whatever was clicked rather than on a panel that is still there. */
+  document.addEventListener("mousedown", e => {
+    if(!kindsPop.classList.contains("on")) return;
+    if(kindsPop.contains(e.target) || (e.target.closest && e.target.closest(KINDS_TOGGLE))) return;
+    closeKindsPanel();
+  });
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Escape" || !kindsPop.classList.contains("on")) return;
+    closeKindsPanel();
+    if(kindsAnchor) kindsAnchor.focus();
+  });
+  window.addEventListener("resize", () => { if(kindsPop.classList.contains("on")) placeKindsPop(); });
+  /* The panel follows the button as the page scrolls — but the rows scrolling
+     inside it are not the page moving, and re-measuring would fight them. */
+  window.addEventListener("scroll", e => {
+    if(!kindsPop.classList.contains("on")) return;
+    if(e.target && e.target.nodeType === 1 && kindsPop.contains(e.target)) return;
+    placeKindsPop();
+  }, true);
 }
 buildAlertSettingsPanel();
-$("alertKindsToggle").onclick = () => {
-  const panel = $("alertSettingsPanel");
-  panel.hidden = !panel.hidden;
-  $("alertKindsToggle").setAttribute("aria-pressed", String(!panel.hidden));
-};
 
 /* --- the redesign's interactions ---------------------------------------------
    MARKUP CONTRACT. Each wire*() below works on whatever is in the DOM, found by
@@ -7805,7 +7606,7 @@ $("alertKindsToggle").onclick = () => {
                the viewport, once. wireReveal() after render; no replay.
      sechead   sechead(title, {why, quiet, aside, after}) -> <div class="sechead">
      seg       seg(host, [[id,label],...], read, write, redraw) fills a .seg with
-               <a data-id> links, like toolbar() did with buttons.
+               <a data-id> links; the view's redraw rebuilds it.
      chip      chipHtml(kind, text, tip) -> <span class="chip ok|bad|warn|dim">
      hood      hoodHtml(b) -> <span class="hood">LM</span> from b.code
      money     money(v) -> $3.57M / $751k / $98 (compact())
@@ -7829,6 +7630,13 @@ $("alertKindsToggle").onclick = () => {
      .sw[data-kind=<alert group id>]  click toggles .on, flips alertGroupPrefs,
                           saves under ALERT_SETTINGS_KEY, redraws the findings.
                           A .sw without data-kind only toggles .on.
+     the panel itself    a body-level popover (#alertPop), built once by
+                          buildAlertSettingsPanel(). toggleKindsPanel(anchor)
+                          opens and closes it under whatever element is passed.
+                          The tune button needs no wiring of its own: a click
+                          on any KINDS_TOGGLE match — ".sechead .ibtn" inside
+                          #alertSection, or anything marked data-kinds — opens
+                          it and anchors it there.
 
    Results — wireChart, wirePortfolio, wireSiteHours:
      .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
@@ -7895,7 +7703,10 @@ function placeTip(t){
   const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
   let x, y;
   if(t.classList.contains("why")){ x = r.right + 12; y = r.top + r.height / 2 - h / 2; tipEl.classList.add("side"); }
-  else if(t.classList.contains("cell")){ x = r.left + r.width / 2 - w / 2; y = r.top - 8 - h; tipEl.classList.add("above"); }
+  else if(t.classList.contains("cell")){
+    x = r.left + r.width / 2 - w / 2; y = r.top - 8 - h; tipEl.classList.add("above");
+    if(y < 6){ y = r.bottom + 8; tipEl.classList.remove("above"); }
+  }
   else if(t.classList.contains("tr")){ x = r.right - w; y = r.bottom + 8; }
   else { x = r.left; y = r.bottom + 8; }
   if(y + h > vh - 6) y = r.top - 8 - h;
@@ -8203,10 +8014,12 @@ const bindPortfolio = once(() => on("click", "tr.chain[data-chain]", tr => {
 function wirePortfolio(){ bindPortfolio(); applyChains(); }
 
 /* orders: "raise" rolls the order up to its target ------------------------------ */
-const wireOrders = once(() => on("click", ".up", (u, e) => {
+const wireOrders = once(() => on("click", "td .up", (u, e) => {
+  /* Only the raise chip in an orders row, the one whose tr carries the
+     td[data-now] figure to roll up; a .wave.up on Growth is not this. */
+  const tr = u.closest("tr"), td = tr && tr.querySelector("td[data-now]"); if(!td) return;
   e.preventDefault();
   if(u.classList.contains("done")) return;
-  const td = u.closest("tr") && u.closest("tr").querySelector("td[data-now]"); if(!td) return;
   const from = +td.dataset.now, to = +td.dataset.to; const t0 = performance.now();
   const step = (t) => { const p = REDUCED ? 1 : Math.min(1, (t - t0) / 700), e2 = 1 - Math.pow(1 - p, 3);
     td.textContent = Math.round(from + (to - from) * e2).toLocaleString("en-US");
@@ -8229,7 +8042,8 @@ const bindFlow = once(() => {
   const cargoOf = p => q(`.cargo[data-pipe="${CSS.escape(p.id)}"]`);
   onEnter(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.add("go"); });
   onLeave(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.remove("go"); });
-  on("click", ".flow .node[data-id]", n => { flowPickId = flowPickId === n.dataset.id ? null : n.dataset.id; applyFlow(); });
+  on("click", ".flow .node[data-id]", n => { flowPickId = flowPickId === n.dataset.id ? null : n.dataset.id; applyFlow();
+    drawFlowDetail(); });  // changed for supply: the table under the map follows the pick
 });
 function wireFlow(){ bindFlow(); applyFlow(); }
 
@@ -8289,11 +8103,14 @@ function planDraw(){
   /* the ingredient table: one row per material, summed over the lines that share it */
   const body = $("ingBody");
   if(body){
+    // changed for growth: the host's data-ingtips (JSON, name -> sentence) puts
+    // what is on order today under each ingredient's name.
+    let tips = {}; try{ tips = host && host.dataset.ingtips ? JSON.parse(host.dataset.ingtips) : {}; }catch(e){}
     const prev = {};
     Array.from(body.children).forEach(tr => { const w = q(".wk", tr); if(w) prev[tr.dataset.name] = w.textContent; });
     body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) =>
       `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
-      `<td class="l">${name}</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
+      `<td class="l"${tips[name] ? ` data-tip="${attr(tips[name])}"` : ""}>${name}</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td></tr>`).join("");
   }
 }
@@ -8301,7 +8118,9 @@ const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
   e.preventDefault();
   const tr = a.closest("tr.line");
   const max = +tr.dataset.max || 12;
-  tr.dataset.m = Math.max(1, Math.min(max, +tr.dataset.m + +a.dataset.d));
+  // changed for growth: data-min="0" lets a line be switched off (bought in instead)
+  const min = tr.dataset.min !== undefined ? +tr.dataset.min : 1;
+  tr.dataset.m = Math.max(min, Math.min(max, +tr.dataset.m + +a.dataset.d));
   if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
   planDraw();
 }));
@@ -8311,13 +8130,22 @@ function wirePlan(){ bindPlan(); planDraw(); }
 const wireSiteHours = once(() => onEnter(".hc[data-read]", c => { const hr = $("hourRead"); if(hr) hr.innerHTML = c.dataset.read; }));
 
 /* kinds popover: switches flip; with a data-kind they also flip the preference --- */
-const wireKinds = once(() => on("click", ".sw", s => {
+const bindKinds = once(() => on("click", ".sw", s => {
   s.classList.toggle("on");
+  /* changed for kinds: the switch is a span carrying role="switch", so the
+     state a screen reader hears has to move with the class. */
+  if(s.getAttribute("role") === "switch") s.setAttribute("aria-checked", String(s.classList.contains("on")));
   const kind = s.dataset.kind; if(!kind) return;
   alertGroupPrefs[kind] = s.classList.contains("on");
   try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
   drawAlerts();
 }));
+/* changed for kinds: bound once as before, plus the "n today" counts of an
+   open panel, which a live refresh would otherwise leave a day behind. */
+function wireKinds(){
+  bindKinds();
+  if(kindsPop && kindsPop.classList.contains("on")) drawKindRows();
+}
 
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
