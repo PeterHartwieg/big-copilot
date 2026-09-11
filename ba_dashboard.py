@@ -4620,33 +4620,24 @@ select.sitepick{
 .hourkey{display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--ink-3)}
 .hourkey i{display:inline-block; width:11px; height:11px; border-radius:2px; vertical-align:-1px; margin-right:5px}
 
-/* legacy: supply (flow map, factory line naming, import blocks) ------------ */
-.flowbox{padding:16px 20px 4px; overflow-x:auto}
-#flow{min-width:760px}
-.flownode rect{fill:var(--raised); stroke:var(--rule); stroke-width:1; transition:stroke .12s}
-.flownode{cursor:pointer}
-.flownode:hover rect{stroke:var(--ink-3)}
-.flownode.on rect{fill:var(--surface); stroke:var(--accent); stroke-width:2}
-.flownode.dim{opacity:.32}
-.flowlink{transition:opacity .15s}
-.flowpipes{display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; margin:18px 0 4px}
-.impblock{margin-top:16px}
-.impblock:first-of-type{margin-top:10px}
-.imphead{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding-bottom:6px; border-bottom:1px solid var(--rule)}
-.imphead b{font-size:14px}
-.imphead .sub{font-size:12px; color:var(--ink-3)}
-.impblock tfoot td{border-top:1px solid var(--rule); font-weight:600}
-input.mcount{
-  width:58px; font:inherit; font-family:"IBM Plex Mono",monospace; font-size:13px;
-  text-align:right; padding:3px 6px; border-radius:2px;
-  border:1px solid var(--rule); background:var(--surface); color:var(--ink);
-}
-input.mcount:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+/* supply: what the artboard did not need — a paused import pipe, the two pipe
+   tables under the map, and the naming controls on the factory-lines view.
+   .legend-note is kept for the growth page's market legend, which still
+   uses it. ------------------------------------------------------------------ */
+.flow .pipe.paused{stroke:var(--neg);stroke-opacity:.7}
+.scrollx{overflow-x:auto}
+#stock td.l+td.l,#importPlan td.l,#topupPlan td.l{white-space:normal}
+.flowpipes{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin:0 0 4px}
 select.linepick{
-  font:inherit; font-size:12px; color:var(--ink); background:var(--surface);
-  border:1px solid var(--rule); border-radius:2px; padding:2px 6px; margin-left:6px;
+  font:inherit;font-size:12px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--rule);border-radius:6px;padding:3px 8px;margin-left:6px;
 }
-button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
+select.linepick:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.unname{
+  font:inherit;font-size:12px;line-height:1.4;color:var(--ink-3);background:none;
+  border:1px solid var(--rule);border-radius:5px;padding:0 6px;margin-left:4px;cursor:pointer;
+}
+button.unname:hover{color:var(--ink);border-color:var(--ink-3)}
 .legend-note{margin:10px 2px 0; font-size:12px; color:var(--ink-3); display:flex; gap:18px; flex-wrap:wrap}
 
 /* legacy: growth (expansion list, movers, the demand table, plan sliders) -- */
@@ -5237,42 +5228,21 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav></div>
 
     <section class="sec rv" id="secLogistics" data-sub="orders">
-      <div class="head">
-        <h2>Orders to set</h2>
-        <p id="logisticsNote"></p>
-        <div class="tools" id="logisticsTools"></div>
-      </div>
-      <p class="verdict" id="importVerdict"></p>
-      <div class="card scroll"><table id="importPlan"></table></div>
-      <p class="verdict" id="topupVerdict" style="margin-top:24px"></p>
-      <div class="card scroll"><table id="topupPlan"></table></div>
+      <div class="scrollx" id="importPlan"></div>
+      <div class="sec scrollx" id="topupPlan"></div>
     </section>
 
     <section class="sec rv" id="secStock" data-sub="checks">
-      <div class="head">
-        <h2>Stock checks</h2>
-        <p id="stockNote"></p>
-        <div class="tools" id="stockTools"></div>
-      </div>
-      <p class="verdict" id="stockVerdict"></p>
-      <div class="card scroll"><table id="stock"></table></div>
+      <div id="stockHead"></div>
+      <p class="quiet" id="stockVerdict" style="margin:0 0 14px"></p>
+      <div class="scrollx"><table id="stock"></table></div>
+      <p class="quiet" id="stockMore" style="margin:12px 0 0"></p>
     </section>
 
     <section class="sec rv" id="secFlow" data-sub="map">
-      <div class="head">
-        <h2>How goods move</h2>
-        <div class="tools"><button id="flowClear" type="button">Clear selection</button></div>
-      </div>
-      <div class="card"><div class="flowbox"><svg id="flow"></svg></div>
-        <p class="legend-note" style="padding:0 20px 14px; margin:0">
-          <span>Line width = units per day</span>
-          <span style="color:var(--accent)">Solid = daily distribution</span>
-          <span style="color:var(--info)">Dashed = weekly import</span>
-          <span style="color:var(--warn)">Amber dot = order running tight</span>
-          <span style="color:var(--neg)">Red dot = order too small</span>
-        </p>
-      </div>
-      <div class="card pad" id="flowDetail" style="margin-top:20px"></div>
+      <div class="sechead"><h2>How goods move</h2><span class="why" tabindex="0" data-tip="Solid pipes are daily distribution, dashed ones weekly imports, a red one a paused import; width is volume. Hover a pipe and its cargo moves. Click a site to keep only its pipes lit and to see what it holds below. An amber dot is an order running tight or a holding below what its week needs, a red one an order too small."><i>?</i></span></div>
+      <div class="chartbox" style="padding:18px 24px 24px"><svg class="flow" id="flow"></svg></div>
+      <div class="sec" id="flowDetail"></div>
     </section>
   </div>
 
@@ -5695,7 +5665,9 @@ function drawRhythm(){
 
 /* --- the chain as a picture ------------------------------------------- */
 const FLOW_COLS = ["Importers", "Factories", "Depots", "Shops"];
-const NODE_W = 168, NODE_H = 40, ROW_GAP = 12, COL_GAP = 92;
+/* The artboard's stage: 180 × 44 boxes in four columns across 1128 units,
+   drawn 1:1 inside the chart box. */
+const NODE_W = 180, NODE_H = 44, ROW_GAP = 16, COL_GAP = 136;
 
 function flowLayout(){
   const g = D.supply.graph;
@@ -5724,63 +5696,56 @@ function flowLayout(){
 function drawFlow(){
   const g = D.supply.graph;
   const {at, width, height} = flowLayout();
-  const flows = g.links.map(l => l.perDay).filter(v => v > 0);
-  const heaviest = Math.max(...flows, 1);
-  const parts = [];
+  const heaviest = Math.max(...g.links.map(l => l.perDay), 1);
+  const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
+  const heads = FLOW_COLS.map((label, i) =>
+    `<text class="col" x="${i * (NODE_W + COL_GAP)}" y="22">${label.toUpperCase()}</text>`);
 
-  FLOW_COLS.forEach((label, i) => parts.push(
-    `<text x="${i * (NODE_W + COL_GAP) + NODE_W/2}" y="16" text-anchor="middle"
-      fill="var(--ink-3)" font-family="IBM Plex Mono, monospace" font-size="10"
-      letter-spacing="1.4">${label.toUpperCase()}</text>`));
-
+  /* One pipe per link, with its cargo riding the same path while the pipe is
+     hovered. Width is volume on a square-root scale, so the heaviest pipe is
+     a few times the thinnest rather than ten. */
+  const pipes = [], cargo = [];
   g.links.forEach((l, i) => {
     const a = at[l.from], b = at[l.to];
     if(!a || !b) return;
-    const x1 = a.x + NODE_W, y1 = a.y + NODE_H/2;
-    const x2 = b.x, y2 = b.y + NODE_H/2;
+    const fwd = b.x > a.x;
+    const x1 = a.x + (fwd ? NODE_W : 0), y1 = a.y + NODE_H / 2;
+    const x2 = b.x + (fwd ? 0 : NODE_W), y2 = b.y + NODE_H / 2;
     const mid = (x1 + x2) / 2;
-    const on = !flowPick || flowPick === l.from || flowPick === l.to;
-    const w = 1 + Math.sqrt(l.perDay / heaviest) * 9;
-    parts.push(`<path class="flowlink${on ? "" : " dim"}" data-link="${i}"
-      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}"
-      stroke="${l.paused ? "var(--neg)" : l.cadence === "weekly"
-        ? "var(--info)" : "var(--accent)"}"
-      stroke-width="${w.toFixed(1)}" fill="none" opacity="${on ? .42 : .08}"
-      stroke-dasharray="${l.cadence === "weekly" ? "7 5" : "none"}">
-      <title>${l.perDay.toLocaleString()} units/day · ${l.items} products · ${l.cadence}</title>
-    </path>`);
+    const w = 1 + Math.sqrt(l.perDay / heaviest) * 2.5;
+    const tip = `${named(l.from)} to ${named(l.to)}: ${l.perDay.toLocaleString()} units a day over ${
+      l.items} product${l.items === 1 ? "" : "s"}, ${l.paused ? "import paused"
+      : l.cadence === "weekly" ? "weekly import" : "daily distribution"}`;
+    pipes.push(`<path class="pipe ${l.cadence}${l.paused ? " paused" : ""}" id="pipe${i}"
+      data-a="${attr(l.from)}" data-b="${attr(l.to)}" stroke-width="${w.toFixed(1)}"
+      d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}"><title>${attr(tip)}</title></path>`);
+    cargo.push(`<circle class="cargo" data-pipe="pipe${i}" r="3.5"><animateMotion dur="${
+      (1.1 + i % 3 * .25).toFixed(2)}s" repeatCount="indefinite"><mpath href="#pipe${i}"></mpath></animateMotion></circle>`);
   });
 
+  /* A site is a box: the hood pill, the name, what it holds. The dot in the
+     corner says an order there is too small (red), or running tight, or a
+     holding will not reach its week's delivery (amber). */
+  const boxes = [], dots = [];
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
   Object.values(at).forEach(({x, y, node}) => {
-    const on = !flowPick || flowPick === node.id
-      || g.links.some(l => (l.from === flowPick && l.to === node.id)
-                        || (l.to === flowPick && l.from === node.id));
-    const flag = node.short ? "var(--neg)"
-      : (node.tight || node.low) ? "var(--warn)" : null;
-    parts.push(`<g class="flownode${on ? "" : " dim"}${flowPick === node.id ? " on" : ""}"
-      data-node="${node.id}" transform="translate(${x},${y})">
-      <rect width="${NODE_W}" height="${NODE_H}" rx="3"/>
-      ${node.tag ? `<circle cx="18" cy="${NODE_H/2}" r="9"
-        fill="${LINE_COLOURS[node.tag] || LINE_COLOURS[""]}"/>
-        <text x="18" y="${NODE_H/2 + 3}" text-anchor="middle" fill="#fff"
-          font-family="IBM Plex Mono, monospace" font-size="8"
-          font-weight="600">${node.tag}</text>` : ""}
-      <text x="${node.tag ? 33 : 12}" y="${NODE_H/2 - 2}" font-size="11.5"
-        font-weight="600" fill="var(--ink)">${shortText(node.name, node.tag ? 17 : 20)}</text>
-      <text x="${node.tag ? 33 : 12}" y="${NODE_H/2 + 12}" font-size="9.5"
-        fill="var(--ink-3)" font-family="IBM Plex Mono, monospace">${
-        node.stock ? node.stock.toLocaleString() + " held" : node.sub}</text>
-      ${flag ? `<circle cx="${NODE_W - 11}" cy="11" r="4" fill="${flag}"/>` : ""}
-    </g>`);
+    const hood = node.tag, tx = x + (hood ? 44 : 12);
+    const flag = node.short ? ["badd", `${plural(node.short, "order")} too small`]
+      : node.tight ? ["warnd", `${plural(node.tight, "order")} running tight`]
+      : node.low ? ["warnd", `${plural(node.low, "holding")} below what the week needs`] : null;
+    boxes.push(`<g class="node" data-id="${attr(node.id)}">
+      <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7"></rect>${hood
+        ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
+           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
+      <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held" : attr(node.sub)}</text></g>`);
+    if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
-  $("flow").setAttribute("viewBox", `0 0 ${width} ${height}`);
-  $("flow").style.height = height + "px";
-  $("flow").innerHTML = parts.join("");
-  $("flow").querySelectorAll(".flownode").forEach(el => {
-    el.onclick = () => { flowPick = flowPick === el.dataset.node ? null : el.dataset.node;
-      drawFlow(); drawFlowDetail(); };
-  });
+  const svg = $("flow");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.style.width = "100%"; svg.style.height = height + "px";
+  svg.innerHTML = heads.concat(pipes, boxes, dots, cargo).join("");
   drawFlowDetail();
 }
 
@@ -5788,59 +5753,51 @@ const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
 
 function drawFlowDetail(){
   const g = D.supply.graph;
-  const node = g.nodes.find(n => n.id === flowPick);
+  const node = g.nodes.find(n => n.id === flowPickId);
+  const host = $("flowDetail");
   if(!node){
-    $("flowDetail").innerHTML = `<p class="muted">Pick a site to see what it holds
-      against what it has to cover before its next delivery.</p>`;
+    host.innerHTML = `<p class="quiet" style="margin:0">Pick a site to see what it holds against what it has to cover before its next delivery.</p>`;
     return;
   }
+  const named = id => { const n = g.nodes.find(x => x.id === id);
+    return n ? `${hoodHtml({code: n.tag})}${n.tag ? "&nbsp; " : ""}${shortText(n.name, 60)}` : id; };
   const inbound = g.links.filter(l => l.to === node.id);
   const outbound = g.links.filter(l => l.from === node.id);
-  const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
-
-  const rows = node.items.length ? `
-    <div class="scroll"><table>
-      <thead><tr><th class="l">Product</th><th>On hand</th>
-        <th>Needs before next refill</th><th>Refill brings</th>
-        <th class="l">Does the order cover a full cycle?</th></tr></thead>
-      <tbody>${node.items.map(i => `<tr>
-        <td class="l">${i.item}</td>
-        <td class="num">${i.stock.toLocaleString()}</td>
-        <td class="num">${i.need ? i.need.toLocaleString() : "—"}</td>
-        <td class="num">${i.provision ? i.provision.toLocaleString() : "—"}</td>
-        <td class="l">${i.fit === "ok"
-          ? (i.low ? `<span class="chip warn">below need</span>`
-                   : `<span class="chip ok">covered</span>`)
-          : `<span class="chip ${i.fit === "short" ? "bad" : "warn"}">${
-              i.fit === "short" ? "order too small" : "tight"}</span>
-             <span class="sub">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
-               i.cycleNeed.toLocaleString()}, ${
-               (i.cycleNeed - i.provision).toLocaleString()} more</span>`
-        }</td></tr>`).join("")}</tbody>
-    </table></div>` : `<p class="muted">Nothing stocked here; it only passes goods along.</p>`;
-
-  $("flowDetail").innerHTML = `
-    <div class="sitehead">
-      ${node.tag ? `<span class="bullet" style="background:${
-        LINE_COLOURS[node.tag] || LINE_COLOURS[""]}">${node.tag}</span>` : ""}
-      <div><h3>${node.name}</h3>
-        <span class="sub">${node.sub}${node.hood ? ` · ${node.hood}` : ""}</span></div>
-    </div>
+  const pipeTable = (title, links, other, empty) => `<table>
+    <thead><tr><th class="l">${title}</th><th>Units / day</th></tr></thead>
+    <tbody>${links.length ? links.map(l => `<tr><td class="l">${named(other(l))}${
+        l.paused ? ` ${chipHtml("bad", "paused")}` : ""}</td><td>${l.perDay.toLocaleString()}</td></tr>`).join("")
+      : `<tr><td class="l quiet" colspan="2">${empty}</td></tr>`}</tbody></table>`;
+  const fitCell = i => i.fit === "ok"
+    ? (i.low ? chipHtml("warn", "below need", "Holds less than it needs before the next delivery") : chipHtml("ok", "covered"))
+    : `${chipHtml(i.fit === "short" ? "bad" : "warn", i.fit === "short" ? "order too small" : "tight")}
+       <span class="sub" style="display:inline">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
+         i.cycleNeed.toLocaleString()}, ${(i.cycleNeed - i.provision).toLocaleString()} more</span>`;
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+  const flags = (node.short ? chipHtml("bad", `${plural(node.short, "order")} too small`) : "")
+    + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
+  host.innerHTML = `
+    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}),
+      quiet: `${node.sub}${node.hood ? ` · ${node.hood}` : ""}`,
+      aside: `<a class="link" href="#" id="flowClear">clear selection</a>`})}
     <div class="flowpipes">
-      <div><span class="eyebrow">Comes in from</span>
-        ${inbound.length ? inbound.map(l => `<div class="stat"><span>${named(l.from)}
-          ${l.paused ? `<span class="chip bad">paused</span>` : ""}</span>
-          <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
-          : `<p class="muted">Nothing. This is where goods enter.</p>`}</div>
-      <div><span class="eyebrow">Goes out to</span>
-        ${outbound.length ? outbound.map(l => `<div class="stat"><span>${named(l.to)}</span>
-          <b class="num">${l.perDay.toLocaleString()}/day</b></div>`).join("")
-          : `<p class="muted">Nothing. This is the end of the line.</p>`}</div>
+      ${pipeTable("Comes in from", inbound, l => l.from, "Nothing. This is where goods enter.")}
+      ${pipeTable("Goes out to", outbound, l => l.to, "Nothing. This is the end of the line.")}
     </div>
-    <div class="panel"><span class="eyebrow">Held against need${
-      node.short ? `, ${node.short} order${node.short > 1 ? "s" : ""} too small`
-      : node.tight ? `, ${node.tight} order${node.tight > 1 ? "s" : ""} running tight`
-      : ""}</span>${rows}</div>`;
+    <div class="sec" style="margin-top:28px">
+      ${sechead("Held against need", {after: flags})}
+      ${node.items.length ? `<table>
+        <thead><tr><th class="l">Product</th><th>On hand</th><th>Needs before next refill</th>
+          <th>Refill brings</th><th class="l">Does the order cover a full cycle?</th></tr></thead>
+        <tbody>${node.items.map(i => `<tr>
+          <td class="l">${i.item}</td>
+          <td>${i.stock.toLocaleString()}</td>
+          <td>${i.need ? i.need.toLocaleString() : "—"}</td>
+          <td>${i.provision ? i.provision.toLocaleString() : "—"}</td>
+          <td class="l">${fitCell(i)}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="quiet" style="margin:0">Nothing stocked here; it only passes goods along.</p>`}
+    </div>`;
+  $("flowClear").onclick = e => { e.preventDefault(); flowPickId = null; applyFlow(); drawFlowDetail(); };
 }
 
 /* --- supply chain ---------------------------------------------------- */
@@ -5866,16 +5823,15 @@ const SUPPLY_VIEWS = {
            <th>Busiest day</th><th>Daily top-up</th><th>Pressure</th><th>On hand</th>`,
     rows: () => D.supply.shops,
     row: r => `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}</td>
-      <td class="num">${r.sold.toLocaleString()}</td>
-      <td class="num">${r.peakSold.toLocaleString()}${r.peakDay
-        ? `<span class="sub"> ${r.peakDay.slice(0,3)}</span>` : ""}</td>
-      <td class="num">${r.target ? r.target.toLocaleString() : "—"}</td>
-      <td class="num">${r.pressure === null
-        ? `<span class="chip bad">no plan</span>`
-        : load(r.pressure, r.level)}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>`,
+      <td>${r.sold.toLocaleString()}</td>
+      <td>${r.peakDay ? `${r.peakDay.slice(0,3)} ` : ""}${r.peakSold.toLocaleString()}</td>
+      <td>${r.target ? r.target.toLocaleString() : "—"}</td>
+      ${r.pressure === null
+        ? `<td>${chipHtml("bad", "no plan", "Nothing refills this shelf on a schedule, so it is judged on days of cover instead")}</td>`
+        : `<td class="gauge${r.level !== "ok" ? " low" : ""}"><i><b style="--w:${Math.min(100, r.pressure)}%"></b></i>${r.pressure}%</td>`}
+      <td>${r.stock.toLocaleString()}</td>`,
   },
   imports: {
     label: "Before the import",
@@ -5915,20 +5871,20 @@ const SUPPLY_VIEWS = {
       const cls = !due ? "neutral"
         : r.coverFit === "short" ? "bad" : r.coverFit === "tight" ? "warn" : "ok";
       return `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}${r.paused ? ` <span class="chip bad">paused</span>` : ""}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>
-      <td class="num">${r.perDay.toLocaleString()}${r.basis === "order"
+      <td>${r.stock.toLocaleString()}</td>
+      <td>${r.perDay.toLocaleString()}${r.basis === "order"
         ? `<span class="sub"> est.</span>` : ""}</td>
-      <td class="num">${r.peakPerDay.toLocaleString()}${r.peakDay
+      <td>${r.peakPerDay.toLocaleString()}${r.peakDay
         ? `<span class="sub"> ${r.peakDay.slice(0,3)}</span>` : ""}</td>
-      <td class="num"><span class="chip ${cls}">${r.runsOut
+      <td><span class="chip ${cls}">${r.runsOut
         ? r.runsOut.slice(0,3) : `${r.cover}d`}</span><span class="sub"> ${r.cover}d${
         due ? ` of ${due}` : ""}${r.coverFit === "tight"
           ? `, ${r.shortBy}d early` : ""}</span></td>
-      <td class="num">${r.weekly.toLocaleString()}</td>
-      <td class="num">${r.basis === "order"
-        ? `<span class="chip neutral" title="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
+      <td>${r.weekly.toLocaleString()}</td>
+      <td>${r.basis === "order"
+        ? `<span class="chip dim" data-tip="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
         : `${r.weekNeed.toLocaleString()}${r.orderFit !== "ok"
           ? ` <span class="chip ${r.orderFit === "short" ? "bad" : "warn"}">${
               r.orderFit === "short" ? "order too small" : "tight"}</span>` : ""}`}</td>`;
@@ -5953,14 +5909,14 @@ const SUPPLY_VIEWS = {
            <th>Out / week</th><th>Weeks of supply</th><th>Top-up target</th>`,
     rows: () => D.supply.idle,
     row: r => `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>
-      <td class="num">${r.perWeek ? r.perWeek.toLocaleString() : "—"}</td>
-      <td class="num">${r.weeks === null
+      <td>${r.stock.toLocaleString()}</td>
+      <td>${r.perWeek ? r.perWeek.toLocaleString() : "—"}</td>
+      <td>${r.weeks === null
         ? `<span class="chip bad">not moving</span>`
         : `<span class="chip ${r.weeks >= 8 ? "warn" : "neutral"}">${r.weeks}</span>`}</td>
-      <td class="num">${r.target ? r.target.toLocaleString() : "—"}</td>`,
+      <td>${r.target ? r.target.toLocaleString() : "—"}</td>`,
   },
   lines: {
     label: "Factory lines",
@@ -5987,43 +5943,43 @@ const SUPPLY_VIEWS = {
       ...s.lines.map(l => ({...l, s: s.s})),
       ...s.unnamed.map(u => ({...u, s: s.s, unnamed: true}))]),
     row: r => r.unnamed ? `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
-      <td class="l">${r.workstation}${slotText(r)} <span class="chip neutral">${
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
+      <td class="l">${r.workstation}${slotText(r)} <span class="chip dim">${
           r.idle ? "no recipe chosen" : "recipe not identified"}</span>${r.rid && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" title="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
+          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
               r.candidates.map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}<span class="sub">${
           r.idle ? "the machines stand idle"
           : r.hint ? `set up as ${r.hint.item} by the look of the top-up plan${r.hint.missing.length
               ? `, but ${r.hint.missing.join(", ")} never arrive${r.hint.missing.length === 1 ? "s" : ""}` : ""}`
           : `nothing it could make has shipped or been fed in a week; one of ${r.candidates.length} recipes`}</span></td>
-      <td class="num">${r.machines}</td>
-      <td class="num">${staffCell(r)}</td>
-      <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>` : `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td>${r.machines}</td>
+      <td>${staffCell(r)}</td>
+      <td>—</td><td>—</td><td>—</td><td>—</td>` : `
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}${r.basis !== "measured" && r.basis !== "paired"
-          ? ` <span class="chip neutral" title="${r.basis === "likely"
+          ? ` <span class="chip dim" data-tip="${r.basis === "likely"
               ? "Nothing has shipped; named from the product held at the factory"
               : r.basis === "paired"
               ? "Twin lines with the same machine count: the pair is certain from what it eats, which is which is not"
               : r.basis === "you" ? "You named this line; the board takes your word for it"
               : "Identified on an earlier build and remembered"}">${
               r.basis === "you" ? "named by you" : r.basis}</span>` : ""}${r.basis === "you" && r.rid
-          ? ` <button type="button" class="unname" data-rid="${r.rid}" title="Forget this name">×</button>` : ""}${
+          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name">×</button>` : ""}${
           LIVE && r.basis !== "you" && r.basis !== "measured" && r.candidates && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" title="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
+          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
               r.candidates.filter(c => c.slug !== r.slug).map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}
         <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine${r.basis === "paired"
           ? ` · one of a twin pair: which id is which cannot be told` : ""}</span></td>
-      <td class="num">${r.machines}</td>
-      <td class="num">${staffCell(r)}</td>
-      <td class="num">${r.makes.toLocaleString()}${r.missing && r.missing.length
+      <td>${r.machines}</td>
+      <td>${staffCell(r)}</td>
+      <td>${r.makes.toLocaleString()}${r.missing && r.missing.length
           ? `<span class="sub">stopped: no ${r.missing.join(", ")}</span>`
           : r.fullWeek && r.hoursWeek < r.fullWeek
           ? `<span class="sub">${r.atRoster.toLocaleString()} at this roster</span>` : ""}</td>
-      <td class="num">${r.ships.toLocaleString()}${r.piling
+      <td>${r.ships.toLocaleString()}${r.piling
           ? ` <span class="chip warn">piling up</span>` : ""}</td>
-      <td class="num">${r.stock.toLocaleString()}</td>
-      <td class="num">${r.toCity ? r.toCity.toLocaleString() : "—"}${r.toPier
+      <td>${r.stock.toLocaleString()}</td>
+      <td>${r.toCity ? r.toCity.toLocaleString() : "—"}${r.toPier
           ? `<span class="sub"> +${r.toPier.toLocaleString()} export</span>` : ""}</td>`,
   },
   feed: {
@@ -6054,7 +6010,7 @@ const SUPPLY_VIEWS = {
       const change = {
         unplanned: () => `${chip("bad", "no top-up")} put ${r.item} on a plan at ${r.perDay.toLocaleString()} a day`,
         target: () => `${chip("bad", "top-up short")} raise ${depot}'s top-up to ${r.raiseTarget.toLocaleString()}${stalled}`,
-        waiting: () => `${chip("neutral", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
+        waiting: () => `${chip("dim", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
         staffing: () => `${chip("warn", "understaffed")} the roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week; staff them and the need is the full ${r.perDay.toLocaleString()}`,
         dry: () => `${chip("bad", "depot out")} ${depot} holds ${r.depotStock.toLocaleString()}; the import is not keeping up`,
         idle: () => `${chip("warn", "not drawn")} ${depot} holds ${r.depotStock.toLocaleString()} but the line takes ${
@@ -6067,17 +6023,17 @@ const SUPPLY_VIEWS = {
         ok: () => chip("ok", "covered"),
       }[r.status]();
       return `
-      <td class="l">${siteCell(D.businesses[r.s])}</td>
+      <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}<span class="sub">${r.lines.map(l => {
           const line = (factoryView().sites.find(s => s.s === r.s) || {lines: []}).lines.find(x => x.item === l);
           return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ")}</span></td>
-      <td class="num">${r.perDay.toLocaleString()}</td>
-      <td class="num">${r.perWeek.toLocaleString()}</td>
-      <td class="num">${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
+      <td>${r.perDay.toLocaleString()}</td>
+      <td>${r.perWeek.toLocaleString()}</td>
+      <td>${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
           ? `<span class="sub"> from ${depot}</span>` : ""}</td>
-      <td class="num">${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay
+      <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay
           ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
-      <td class="num">${r.importWeekly !== null ? r.importWeekly.toLocaleString() : "—"}${
+      <td>${r.importWeekly !== null ? r.importWeekly.toLocaleString() : "—"}${
           r.depotNeed && r.depotNeed !== r.perWeek
           ? `<span class="sub"> all factories ${r.depotNeed.toLocaleString()}</span>` : ""}</td>
       <td class="l">${change}</td>`;
@@ -6114,10 +6070,10 @@ function nameLine(rid, slug){
   const names = localNames();
   if(slug) names[rid] = slug; else delete names[rid];
   try{ localStorage.setItem(LINE_NAMES_KEY, JSON.stringify(names)); }catch(e){}
-  if(!LIVE){ drawStock(); drawLogistics(); return; }
+  if(!LIVE){ drawStock(); drawLogistics(); wireAll(); return; }
   SOURCE.name(rid, slug)
     .then(data => { if(data){ D = data; renderAll(); } })
-    .catch(() => { drawStock(); drawLogistics(); });
+    .catch(() => { drawStock(); drawLogistics(); wireAll(); });
 }
 const feedFit = (need, have) => {
   if(!need || !have) return "ok";
@@ -6269,11 +6225,6 @@ toolbar($("portTools"), Object.entries(VIEWS).map(([id,v]) => [id, v.label]),
   () => view, v => { view = v; sortKey = null; }, () => drawPortfolio());
 toolbar($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
   () => rhythmView, v => rhythmView = v, () => drawRhythm());
-toolbar($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id,v]) => [id, v.label]),
-  () => stockView, v => stockView = v, () => drawStock());
-let logisticsView = "changes";
-toolbar($("logisticsTools"), [["changes","Needs a change"],["all","Everything"]],
-  () => logisticsView, v => logisticsView = v, () => drawLogistics());
 toolbar($("marketTools"), [["types","By business type"],["mine","What I sell"],
                            ["new","Not selling yet"],["all","Everything"]],
   () => marketView, v => marketView = v, () => drawMarket());
@@ -6303,8 +6254,6 @@ document.querySelectorAll("#legend span").forEach(node => {
   node.onclick = toggle;
   node.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } };
 });
-
-$("flowClear").onclick = () => { flowPick = null; drawFlow(); };
 
 const chart = $("chart"), tip = $("chartTip");
 
@@ -6876,27 +6825,43 @@ function drawSite(){
   if($("shelfToggle")) $("shelfToggle").onclick = () => { showAllShelves = !showAllShelves; drawSite(); };
 }
 
+/* The site cell of the redesign's tables: the hood pill, the short name, and
+   the type on a line under the name. */
+const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}<span class="sub"${
+  b.code ? ` style="padding-left:34px"` : ""}>${b.type}</span>`;
+const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
+
 function drawStock(){
   const v = SUPPLY_VIEWS[stockView];
   const all = v.rows();
   const worth = all.filter(v.keep);
   const rows = showAllStock ? all : worth;
-  $("stockNote").textContent = v.note();
-  $("stockVerdict").innerHTML = v.verdict(all)
-    + (all.length > worth.length
-       ? ` <button type="button" id="stockToggle" aria-expanded="${showAllStock}">${
-           showAllStock ? `just the ${worth.length} worth reading`
-                        : `show all ${all.length}`}</button>` : "");
-  const toggle = $("stockToggle");
-  if(toggle) toggle.onclick = () => { showAllStock = !showAllStock; drawStock(); };
+  const note = v.note();
+  $("stockHead").innerHTML = sechead("Stock checks", {why: note || null,
+    aside: `<span class="seg" id="stockTools"></span>`});
+  seg($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id, x]) => [id, x.label]),
+    () => stockView, x => { stockView = x; showAllStock = false; }, () => { drawStock(); wireAll(); });
+  /* The tick means nothing in this view is graded critical or warn; a row the
+     view flags without grading it (an unnamed line) counts against it. */
+  const calm = all.length > 0
+    && !worth.some(r => r.level ? r.level === "critical" || r.level === "warn" : true);
+  $("stockVerdict").innerHTML = (calm ? checkMark : "") + v.verdict(all);
   const nothing = all.length
-    ? `Nothing here needs reading: ${all.length===1 ? "the one row is" : `all ${all.length} rows are`}
-       inside their limits.`
+    ? `Nothing here needs reading: ${all.length === 1 ? "the one row is" : `all ${all.length} rows are`} inside their limits.`
     : v.empty;
   $("stock").innerHTML = rows.length
     ? `<thead><tr>${v.head}</tr></thead>
-       <tbody>${rows.slice(0,40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${nothing}</td></tr></tbody>`;
+       <tbody>${rows.slice(0, 40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>`;
+  const more = $("stockMore");
+  more.innerHTML = all.length > worth.length
+    ? (showAllStock
+        ? `<a class="link" href="#" id="stockToggle">just the ${worth.length} worth reading</a>`
+        : `${all.length - worth.length} more &nbsp;<a class="link" href="#" id="stockToggle">show all ${all.length}</a>`)
+      + (rows.length > 40 ? ` &nbsp;first 40 shown` : "")
+    : "";
+  more.hidden = !more.innerHTML;
+  if($("stockToggle")) $("stockToggle").onclick = e => { e.preventDefault(); showAllStock = !showAllStock; drawStock(); wireAll(); };
   document.querySelectorAll("#stock select.linepick").forEach(sel => {
     sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
   });
@@ -6912,6 +6877,7 @@ function drawStock(){
    board reads them (or as you named them), so a line named a minute ago is
    already in the totals. */
 const ceil100 = v => Math.ceil(v / 100) * 100;
+let logisticsView = "changes";
 function drawLogistics(){
   const changesOnly = logisticsView === "changes";
   const f = factoryView();
@@ -6919,14 +6885,22 @@ function drawLogistics(){
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
   const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
-  $("logisticsNote").textContent = f.sites.length
-    ? `What to set the managers to, from ${f.machines} machines on ${
-        f.sites.reduce((n, s) => n + s.lines.length, 0)} lines${f.unnamed ? `, ${f.unnamed} still unnamed` : ""}`
+  const lines = f.sites.reduce((n, s) => n + s.lines.length, 0);
+  const whyText = (f.sites.length
+    ? `What to set the logistics managers to, from ${f.machines} machines on ${lines} lines${
+        f.unnamed ? `, ${f.unnamed} still unnamed` : ""}.`
     : D.meta.locale === false
-      ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders below are read from the delivery log and are complete."
-      : "No factory to feed.";
+      ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders are read from the delivery log and are complete."
+      : "No factory to feed; the import orders are read from the delivery log.")
+    + " Click raise to see the order roll up; the thin line under the depot figure is how much of a day's use it holds.";
+  const check = (n, what) => `<span class="check">${icon("tick")}</span><span class="quiet">All ${n} ${what}</span>`;
+  const up = (text, tip) => `<span class="up"${tip ? ` data-tip="${attr(tip)}"` : ""}>${icon("arrow_up")}${text}</span>`;
+  const set = n => `<span class="set">${n.toLocaleString()}</span>`;
+  const grp = (b, cols) => `<tr class="grp"><td class="l" colspan="${cols}">${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${
+    shortName(b)} · ${b.type} · ${b.address}</td></tr>`;
+  const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
 
-  /* --- imports, one table per depot ------------------------------------ */
+  /* --- imports, one group per depot ------------------------------------ */
   const depots = {}, loose = {};
   f.sites.forEach(s => s.needs.forEach(n => {
     if(n.from === null){
@@ -6960,94 +6934,107 @@ function drawLogistics(){
     importRows.push({s, rows});
   });
   const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
-  const short = importRows.reduce((n, d) => n + d.rows.filter(r => r.fit === "short" || r.fit === "none").length, 0);
-  const importAll = importRows.reduce((n, d) => n + d.rows.length, 0);
-  if(changesOnly){
-    importRows.forEach(d => { d.rows = d.rows.filter(r => r.fit === "short" || r.fit === "none" || r.fit === "tight"); });
-  }
-  const importShown = importRows.filter(d => d.rows.length);
-  $("importVerdict").innerHTML = importRows.length
-    ? `<b>Weekly import orders.</b> ${
-        short ? `<b>${short}</b> ${short === 1 ? "is" : "are"} short or missing` : "All covered"}${
-        looseRows.length ? `. ${looseRows.length} material${looseRows.length === 1 ? "" : "s"} the factories need are on no depot's plan at all` : ""}.`
-    : "No depot imports anything yet.";
-  const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
-  const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
-  const importHead = `<thead><tr><th class="l">Material</th><th class="l">Eaten by</th>
-      <th>Factories / week</th><th>Shops / week</th><th>Total / week</th>
-      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
-  const importBody = importShown.map(d => `
-    <tr class="chain"><td class="l" colspan="8">${siteCell(D.businesses[d.s])}</td></tr>
-    ${d.rows.map(r => `<tr class="kid">
-      <td class="l">${r.item}</td>
-      <td class="l"><span class="sub" style="display:inline">${r.users.length ? users(r) : "no factory line"}</span></td>
-      <td class="num">${r.factoryWeek ? r.factoryWeek.toLocaleString() : "—"}</td>
-      <td class="num">${r.otherWeek ? r.otherWeek.toLocaleString() : "—"}</td>
-      <td class="num">${r.total ? r.total.toLocaleString() : "—"}</td>
-      <td class="num">${r.current !== undefined ? r.current.toLocaleString() : chip("bad", "not imported")}</td>
-      <td class="num">${r.setTo === null ? chip("neutral", "nothing draws it")
-        : r.fit === "short" || r.fit === "none" ? `<b>${r.setTo.toLocaleString()}</b> ${chip("bad", r.fit === "none" ? "add" : "raise")}`
-        : r.fit === "tight" ? `${r.setTo.toLocaleString()} ${chip("warn", "tight")}`
-        : r.surplus ? `${r.setTo.toLocaleString()} ${chip("neutral", "could lower")}`
-        : chip("ok", "covered")}</td>
-      <td class="num">${r.stock.toLocaleString()}</td></tr>`).join("")}`).join("")
-    + (looseRows.length ? `
-    <tr class="chain"><td class="l" colspan="8"><div class="site"><span><b>On no depot's plan</b>
-      <span class="sub">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></span></div></td></tr>
-    ${looseRows.map(r => `<tr class="kid">
-      <td class="l">${r.item}</td>
-      <td class="l"><span class="sub" style="display:inline">${users(r)}</span></td>
-      <td class="num">${r.week.toLocaleString()}</td><td class="num">—</td>
-      <td class="num">${r.week.toLocaleString()}</td>
-      <td class="num">${chip("bad", "not imported")}</td>
-      <td class="num"><b>${ceil100(r.week).toLocaleString()}</b> ${chip("bad", "add")}</td>
-      <td class="num">—</td></tr>`).join("")}` : "");
-  $("importPlan").innerHTML = importShown.length || looseRows.length
-    ? importHead + `<tbody>${importBody}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && importAll
-        ? `All ${importAll} import orders cover what leaves.` : "Nothing to import."}</td></tr></tbody>`;
+  const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
+  const short = count(r => r.fit === "short" || r.fit === "none");
+  const tight = count(r => r.fit === "tight");
+  const importAll = count(() => true);
+  const shown = (changesOnly
+    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
+    : importRows).filter(d => d.rows.length);
+  /* The thin line under the depot figure: how much of a day's draw it holds,
+     from the delivery log's measured draw where one is on record, else from
+     what this table says leaves in a week. */
+  const depotDays = r => {
+    const imp = (D.supply.imports || []).find(i => i.s === r.s && i.item === r.item);
+    if(imp && imp.daysOnHand !== null && imp.daysOnHand !== undefined) return imp.daysOnHand;
+    return r.total ? r.stock / (r.total / 7) : null;
+  };
+  const depotCell = r => {
+    const days = depotDays(r);
+    return days === null ? `<td>${r.stock.toLocaleString()}</td>`
+      : `<td class="gauge${days < 1 ? " low" : ""}"><i><b style="--w:${Math.min(100, days * 100).toFixed(0)}%"></b></i>${
+          r.stock.toLocaleString()}</td>`;
+  };
+  const setCell = r => r.setTo === null ? chipHtml("dim", "nothing draws it")
+    : r.fit === "none" ? `${set(r.setTo)}${up("add")}`
+    : r.fit === "short" ? `${set(r.setTo)}${up("raise")}`
+    : r.fit === "tight" ? `${set(r.setTo)}${up("raise", "Within 5% of the week it has to cover")}`
+    : r.surplus ? `${r.setTo.toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what leaves in a week")}`
+    : chipHtml("ok", "covered");
+  const importRow = r => `<tr>
+      <td class="l">${r.item}<span class="sub">${r.users.length ? users(r) : "no factory line draws it"}</span></td>
+      <td>${r.factoryWeek ? r.factoryWeek.toLocaleString() : "—"}</td>
+      <td>${r.otherWeek ? r.otherWeek.toLocaleString() : "—"}</td>
+      <td>${r.total ? r.total.toLocaleString() : "—"}</td>
+      <td data-now="${r.current || 0}" data-to="${r.setTo || 0}">${
+        r.current !== undefined ? r.current.toLocaleString() : chipHtml("bad", "not imported")}</td>
+      <td>${setCell(r)}</td>
+      ${depotCell(r)}</tr>`;
+  const looseRow = r => `<tr>
+      <td class="l">${r.item}<span class="sub">${users(r)}</span></td>
+      <td>${r.week.toLocaleString()}</td><td>—</td><td>${r.week.toLocaleString()}</td>
+      <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
+      <td>${set(ceil100(r.week))}${up("add")}</td>
+      <td>—</td></tr>`;
+  const importTable = shown.length || looseRows.length ? `<table>
+    <thead><tr><th class="l">Material</th><th>Factories / week</th><th>Shops / week</th><th>Used / week</th>
+      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>
+    <tbody>${shown.map(d => grp(D.businesses[d.s], 7) + d.rows.map(importRow).join("")).join("")}${
+      looseRows.length ? `<tr class="grp"><td class="l" colspan="7">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
+        looseRows.map(looseRow).join("")}` : ""}</tbody></table>` : "";
+  const importState = !importRows.length && !looseRows.length ? `<span class="quiet">No depot imports anything yet</span>`
+    : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
+    : (short ? chipHtml("bad", `${short} short`) : "")
+      + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
+      + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "");
+  $("importPlan").innerHTML = sechead("Weekly imports", {after: importState, why: whyText,
+    aside: `<span class="seg" id="logisticsTools"></span>`}) + importTable;
+  seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
+    () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
 
-  /* --- top-ups, one table per factory ----------------------------------- */
+  /* --- top-ups, one group per factory ----------------------------------- */
   const needsChange = r => r.status === "unplanned" || r.status === "target" || r.stalled;
   const allSites = f.sites.map(s => ({s: s.s, rows: s.needs.slice().sort((a, b) => b.perDay - a.perDay)}))
     .filter(x => x.rows.length);
   const topShort = allSites.reduce((n, x) => n + x.rows.filter(r => r.status === "unplanned" || r.status === "target").length, 0);
+  const topStalled = allSites.reduce((n, x) => n + x.rows.filter(r => r.stalled && r.status !== "unplanned" && r.status !== "target").length, 0);
   const topAll = allSites.reduce((n, x) => n + x.rows.length, 0);
   const sites = changesOnly
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
-  $("topupVerdict").innerHTML = allSites.length
-    ? `<b>Daily top-ups.</b> ${
-        topShort ? `<b>${topShort}</b> ${topShort === 1 ? "is" : "are"} below the day's need or missing` : "All covered"}.`
-    : "No factory line to feed.";
   const lineText = (s, r) => r.lines.map(l => {
     const line = s.lines.find(x => x.item === l);
     return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ");
-  $("topupPlan").innerHTML = sites.length ? `
-    <thead><tr><th class="l">Material</th><th class="l">Lines</th><th>Eats / day</th>
-      <th>Top-up now</th><th>Set top-up to</th><th>From</th><th>Arrives / day</th></tr></thead>
-    <tbody>${sites.map(x => {
-      const site = f.sites.find(s => s.s === x.s);
-      return `
-      <tr class="chain"><td class="l" colspan="7">${siteCell(D.businesses[x.s])}</td></tr>
-      ${x.rows.map(r => {
-        const over = r.target && r.target > r.perDay * 1.5;
-        return `<tr class="kid">
-        <td class="l">${r.item}</td>
-        <td class="l"><span class="sub" style="display:inline">${lineText(site, r)}</span></td>
-        <td class="num">${r.perDay.toLocaleString()}</td>
-        <td class="num">${r.target ? r.target.toLocaleString() : chip("bad", "none")}</td>
-        <td class="num">${r.status === "unplanned" ? `<b>${ceil100(r.perDay).toLocaleString()}</b> ${chip("bad", "add")}`
-          : r.status === "target" ? `<b>${ceil100(r.perDay).toLocaleString()}</b> ${chip("bad", "raise")}`
-          : over ? `${ceil100(r.perDay).toLocaleString()} ${chip("neutral", "could lower")}`
-          : chip("ok", "covered")}</td>
-        <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
-        <td class="num">${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
-          ? ` ${chip("neutral", "waiting")}` : r.status === "staffing" ? ` ${chip("warn", "understaffed")}`
-          : r.stalled ? ` ${chip("warn", "none arrived")}` : ""}</td></tr>`; }).join("")}`;
-    }).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">${changesOnly && topAll
-        ? `All ${topAll} top-ups cover their day.` : "No factory line to feed."}</td></tr></tbody>`;
+  const topupRow = (site, r) => {
+    const over = r.target && r.target > r.perDay * 1.5;
+    return `<tr>
+      <td class="l">${r.item}<span class="sub">${lineText(site, r)}</span></td>
+      <td>${r.perDay.toLocaleString()}</td>
+      <td data-now="${r.target || 0}" data-to="${ceil100(r.perDay)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
+      <td>${r.status === "unplanned" ? `${set(ceil100(r.perDay))}${up("add")}`
+        : r.status === "target" ? `${set(ceil100(r.perDay))}${up("raise")}`
+        : over ? `${ceil100(r.perDay).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line eats")}`
+        : chipHtml("ok", "covered")}</td>
+      <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
+      <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
+        ? ` ${chipHtml("dim", "waiting", `${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`)}`
+        : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
+        : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
+  };
+  const topupTable = sites.length ? `<table>
+    <thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
+      <th class="l">From</th><th>Arrives / day</th></tr></thead>
+    <tbody>${sites.map(x => { const site = f.sites.find(s => s.s === x.s);
+      return grp(D.businesses[x.s], 6) + x.rows.map(r => topupRow(site, r)).join(""); }).join("")}</tbody></table>` : "";
+  const topupState = !allSites.length ? `<span class="quiet">No factory line to feed</span>`
+    : !topShort && !topStalled ? check(topAll, "cover their day")
+    : (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
+      + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "");
+  $("topupPlan").innerHTML = sechead("Daily top-ups", {after: topupState,
+    aside: allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : ""})
+    + topupTable;
+  if($("topupAll")) $("topupAll").onclick = e => {
+    e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
 }
 
 /* --- market demand ---------------------------------------------------- */
@@ -8229,7 +8216,8 @@ const bindFlow = once(() => {
   const cargoOf = p => q(`.cargo[data-pipe="${CSS.escape(p.id)}"]`);
   onEnter(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.add("go"); });
   onLeave(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.remove("go"); });
-  on("click", ".flow .node[data-id]", n => { flowPickId = flowPickId === n.dataset.id ? null : n.dataset.id; applyFlow(); });
+  on("click", ".flow .node[data-id]", n => { flowPickId = flowPickId === n.dataset.id ? null : n.dataset.id; applyFlow();
+    drawFlowDetail(); });  // changed for supply: the table under the map follows the pick
 });
 function wireFlow(){ bindFlow(); applyFlow(); }
 
