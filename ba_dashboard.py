@@ -5511,7 +5511,8 @@ function weekHtml(profile, todayName){
   const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
   return `<div class="week">${profile.map(d => {
     const off = d.index - 100, up = off >= 0, side = up ? "bottom" : "top";
-    const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 56));
+    /* 44 px keeps a downward bar's pill clear of the weekday label. */
+    const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 44));
     return `<div class="wd${d.day === todayName ? " now" : ""}"><div class="track">
       <i class="bar2${up ? "" : " down"}" style="height:${h}px;${side}:50%"></i>
       <span class="n" style="${side}:calc(50% + ${h + 8}px)">${off > 0 ? "+" : ""}${off} pts</span>
