@@ -1058,6 +1058,9 @@ def _products(businesses: list) -> list:
 
 def _staff_summary(staff: list, businesses: list) -> dict:
     by_role = collections.Counter(s["role"] for s in staff)
+    cost_by_role = collections.Counter()
+    for s in staff:
+        cost_by_role[s["role"]] += s["daily"]
     by_site = collections.Counter()
     for b in businesses:
         by_site[b["name"]] = b["staff"]
@@ -1071,7 +1074,7 @@ def _staff_summary(staff: list, businesses: list) -> dict:
         "absent": sum(1 for s in staff if s["absent"]),
         "complaining": sum(1 for s in staff if s["complaining"]),
         "roles": sorted(
-            ({"role": r, "count": c} for r, c in by_role.items()),
+            ({"role": r, "count": c, "cost": round(cost_by_role[r])} for r, c in by_role.items()),
             key=lambda x: -x["count"],
         ),
         "sites": sorted(
@@ -3680,6 +3683,7 @@ def _expansion(findings: list, market: dict, businesses: list) -> list:
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
 ALERT_UNITS = {
+    "notrading": "/day rent",
     "vacant": "/day rent",
     "loss": "/day loss",
     "hype": "/day revenue",
@@ -3763,6 +3767,7 @@ def _alerts(
             "notrading",
             f"{b['name']} opened day {b['opened']}, not trading yet: "
             f"{', '.join(reasons)}, ${b['rent']:,.0f}/day rent",
+            worth=b["rent"],
             always=True,
         )
 
