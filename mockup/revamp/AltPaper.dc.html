@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&amp;display=swap">
+  <style>
+body{margin:0;background:#f4f2ec}
+a{color:#333}a:hover{color:#000}
+.lo{width:720px;min-height:100vh;padding:36px 40px;box-sizing:border-box;background:#f4f2ec;color:#2a2a2a;
+  font-family:"Patrick Hand","Comic Sans MS",cursive;font-size:15px;line-height:1.4}
+.lo *{box-sizing:border-box}
+.lo .t{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#888;margin-bottom:6px}
+.lo h1{margin:0 0 4px;font-size:26px;font-weight:400}
+.lo p.d{margin:0 0 22px;color:#666;max-width:560px}
+.bx{border:1.5px solid #555;border-radius:4px;padding:10px 12px;position:relative;background:#faf9f5}
+.bx.dash{border-style:dashed;color:#888}
+.row{display:flex;gap:12px}
+.col{display:flex;flex-direction:column;gap:12px}
+.ln{height:8px;background:#ddd8cc;border-radius:4px}
+.ln.s{width:40%}.ln.m{width:65%}
+.big{font-size:24px}
+.sm{font-size:12px;color:#777}
+.lo h1,.lo .bx,.lo p.d,.lo .big{font-family:Georgia,"Times New Roman",serif}</style>
+</helmet>
+<div class="lo">
+  <div class="t">Alternate direction</div>
+  <h1>B · Paper ledger</h1>
+  <p class="d">Light, editorial, serif. The board is written, not tiled. For a player who reads the day like a morning paper.</p>
+  
+<div class="col">
+  <div class="row" style="align-items:baseline;justify-content:space-between">
+    <span class="big">Costco &mdash; Day 189</span><span class="sm">Sunday, 02:00</span>
+  </div>
+  <div class="bx" style="font-size:17px;line-height:1.6">
+    Yesterday made <b>$3.57M</b> on $5.11M of sales, 12% over the week's pace.<br>
+    Cash is <b>$38.9M</b>, down $10.4M after set-up and stock.<br>
+    <span class="sm">Three shops are open but not trading. One donut order runs dry on Sunday.</span>
+  </div>
+  <div class="row">
+    <div class="bx" style="flex:1"><div class="sm">One column, one story per line. Findings read like a newspaper brief; numbers set in the text, not in tiles.</div></div>
+    <div class="bx dash" style="flex:1">Charts appear inline only where a sentence cannot say it: a 30-day line under "Results".</div>
+  </div>
+  <div class="bx"><div class="ln m"></div><div class="ln s" style="margin-top:8px"></div><div class="ln" style="margin-top:8px;width:80%"></div></div>
+  <div class="sm">Trade-off: warmer and calmer, but slower to scan across many sites; less room for playful mouse work.</div>
+</div>
+</div>
+</x-dc>
+</body>
+</html>

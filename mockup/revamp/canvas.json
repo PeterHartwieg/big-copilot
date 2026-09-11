@@ -1,0 +1,266 @@
+{
+  "pages": [
+    {
+      "id": "board",
+      "name": "Board"
+    },
+    {
+      "id": "alts",
+      "name": "Alternates"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Today",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1400,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Landing.dc.html",
+      "title": "Landing",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 820,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Results.dc.html",
+      "title": "Results",
+      "x": 0,
+      "y": 1640,
+      "w": 1440,
+      "h": 1560,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "SiteDetail.dc.html",
+      "title": "Results \u00b7 Business detail",
+      "x": 1560,
+      "y": 1640,
+      "w": 1440,
+      "h": 1180,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Supply.dc.html",
+      "title": "Supply \u00b7 Orders",
+      "x": 0,
+      "y": 3440,
+      "w": 1440,
+      "h": 900,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "SupplyChecks.dc.html",
+      "title": "Supply \u00b7 Checks",
+      "x": 1560,
+      "y": 3440,
+      "w": 1440,
+      "h": 820,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "SupplyMap.dc.html",
+      "title": "Supply \u00b7 Map",
+      "x": 0,
+      "y": 4580,
+      "w": 1440,
+      "h": 760,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Growth.dc.html",
+      "title": "Growth \u00b7 Demand",
+      "x": 1560,
+      "y": 4580,
+      "w": 1440,
+      "h": 1120,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "GrowthPlan.dc.html",
+      "title": "Growth \u00b7 Plan a chain",
+      "x": 0,
+      "y": 5940,
+      "w": 1440,
+      "h": 1420,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Company.dc.html",
+      "title": "Company",
+      "x": 1560,
+      "y": 5940,
+      "w": 1440,
+      "h": 1180,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "FilterKinds.dc.html",
+      "title": "Today \u00b7 Filter kinds",
+      "x": 0,
+      "y": 7600,
+      "w": 1440,
+      "h": 760,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "SourceStates.dc.html",
+      "title": "Source strip states",
+      "x": 1560,
+      "y": 7600,
+      "w": 1440,
+      "h": 820,
+      "page": "board",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "AltPaper.dc.html",
+      "title": "B \u00b7 Paper ledger",
+      "x": 0,
+      "y": 0,
+      "w": 720,
+      "h": 640,
+      "page": "alts"
+    },
+    {
+      "file": "AltPanel.dc.html",
+      "title": "C \u00b7 Instrument panel",
+      "x": 840,
+      "y": 0,
+      "w": 720,
+      "h": 640,
+      "page": "alts"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "try-main",
+      "x": 0,
+      "y": -110,
+      "w": 460,
+      "page": "board",
+      "text": "Try it: reload and watch the dot after Costco kick out the sphere, which rolls along the masthead rule and rests past the nav. Click the word Costco for another ball, up to three; on the fourth click the first one gulps its neighbour. It watches the pointer, squishes when clicked, and rolls along its shelf as you scroll. Slide across a tile and the sparkline reads out. Hover a finding; click its dot to silence it. Click the counts to filter. Click the small green dot too."
+    },
+    {
+      "id": "try-landing",
+      "x": 1560,
+      "y": -110,
+      "w": 460,
+      "page": "board",
+      "text": "Landing: the sphere leaves the dot after Big Copilot and arcs over to sit beside the drop zone. Hover the drop zone and the folder opens."
+    },
+    {
+      "id": "try-results",
+      "x": 0,
+      "y": 1530,
+      "w": 460,
+      "page": "board",
+      "text": "Results: hover a ? mark and the question falls into place, the note opens to its right. The crosshair reads the day into the line above the plot. Click legend chips to add revenue, goods or wages. Weekday bars stretch and spell out their day. Click a chain to open its sites."
+    },
+    {
+      "id": "try-sitedetail",
+      "x": 1560,
+      "y": 1530,
+      "w": 460,
+      "page": "board",
+      "text": "Business detail: hover the hour grid and it reads out the hour, the customers and the door cap. Outlined cells are hours at the cap."
+    },
+    {
+      "id": "try-supply",
+      "x": 0,
+      "y": 3330,
+      "w": 460,
+      "page": "board",
+      "text": "Orders: click raise and the order rolls up to its target. The thin line under the depot figure is how much of a day's use sits there."
+    },
+    {
+      "id": "try-supplymap",
+      "x": 0,
+      "y": 4470,
+      "w": 460,
+      "page": "board",
+      "text": "Map: hover a pipe and its cargo moves along it. Click a site and only its pipes stay lit."
+    },
+    {
+      "id": "try-growth",
+      "x": 1560,
+      "y": 4470,
+      "w": 460,
+      "page": "board",
+      "text": "Demand: hovering a cell lights its row and column; clicking pins its story under the grid."
+    },
+    {
+      "id": "try-growthplan",
+      "x": 0,
+      "y": 5830,
+      "w": 460,
+      "page": "board",
+      "text": "Plan a chain: every line runs 24/7. Step one line up to two machines and its squares pop in; made, raw material, export surplus and the ingredient table follow, and the rows that changed flash."
+    },
+    {
+      "id": "try-company",
+      "x": 1560,
+      "y": 5830,
+      "w": 460,
+      "page": "board",
+      "text": "Company: hover a role for its daily cost; click an unticked milestone."
+    },
+    {
+      "id": "try-filterkinds",
+      "x": 0,
+      "y": 7490,
+      "w": 460,
+      "page": "board",
+      "text": "Filter kinds: the switches flip. Off is counted, never dropped."
+    },
+    {
+      "id": "try-sourcestates",
+      "x": 1560,
+      "y": 7490,
+      "w": 460,
+      "page": "board",
+      "text": "Source strip: click Update on the first strip and it reads, then comes back."
+    },
+    {
+      "id": "alts-note",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "alts",
+      "text": "Two low-fi directions kept beside the draft in case the minimal dark board is not the one. Same data, different stance."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "board"
+  }
+}

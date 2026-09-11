@@ -1,0 +1,827 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+body{margin:0;background:#0d100f}
+a{color:#43c07a}a:hover{color:#6fd39a}
+.board{
+  --ground:#0d100f;--surface:#151917;--raised:#1c211e;
+  --ink:#e9ece6;--ink-2:#9aa39d;--ink-3:#6b756f;
+  --rule:#262c28;--rule-soft:#1e2320;
+  --accent:#43c07a;--accent-soft:#43c07a26;
+  --pos:#43c07a;--neg:#ff6257;--warn:#f0913a;--info:#6ea8ff;
+  --tip-bg:#e9ece6;--tip-ink:#0d100f;
+  width:100%;min-width:1240px;min-height:100vh;box-sizing:border-box;padding:0 0 72px;position:relative;overflow:clip;
+  background:var(--ground);color:var(--ink);
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.board.light{
+  --ground:#eef0ea;--surface:#fdfdfb;--raised:#f3f4ef;
+  --ink:#15181a;--ink-2:#5b6469;--ink-3:#8b9499;
+  --rule:#d2d6cd;--rule-soft:#e0e3da;
+  --accent:#00703a;--accent-soft:#00703a1f;
+  --pos:#00703a;--neg:#cc2a20;--warn:#c25400;--info:#2a5ea8;
+  --tip-bg:#15181a;--tip-ink:#f3f4ef;
+}
+.board *{box-sizing:border-box}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}
+.wrap{width:min(1180px,calc(100% - 80px));margin:0 auto;position:relative;z-index:1}
+svg{display:block}
+
+/* everything arrives: sections slide in when they come into view -------- */
+.rv{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
+.rv.in{opacity:1;transform:none}
+
+/* masthead: wordmark, five places, the clock ------------------------------ */
+.mast{display:flex;align-items:center;gap:40px;height:100px;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5;background:var(--ground)}
+.brand{display:flex;align-items:baseline;gap:2px;user-select:none}
+.wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer}
+.dot{
+  display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--accent);
+  transform-origin:50% 100%;transition:transform .25s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
+}
+.brand:hover .dot{transform:translateY(-6px) scale(1.15)}
+.dot.spin{animation:coinspin .6s linear}
+.dot.kick{animation:kick .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes kick{30%{transform:translateY(-6px) scale(1.8)}60%{transform:scale(.6)}100%{transform:none}}
+@keyframes coinspin{from{transform:rotateY(0)}to{transform:rotateY(720deg)}}
+.coin{
+  position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);
+  pointer-events:none;animation:fall 1.1s cubic-bezier(.2,.7,.4,1) forwards;z-index:9;
+}
+@keyframes fall{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.6);opacity:0}}
+.nav{position:relative;display:flex;gap:4px;margin-left:8px}
+.nav a{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:6px;
+  color:var(--ink-2);text-decoration:none;font-weight:500;font-size:13.5px;transition:color .15s;
+}
+.nav a svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.nav a:hover svg{transform:translateY(-2px) rotate(-6deg)}
+.nav a:hover,.nav a.on{color:var(--ink)}
+.nav .ink{
+  position:absolute;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;
+  left:var(--nx,0);width:var(--nw,0);transition:left .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
+}
+.clock{margin-left:auto;text-align:right;cursor:default}
+.clock b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px;letter-spacing:.01em}
+.clock b i{font-style:normal;color:var(--ink-3);margin:0 6px}
+@keyframes blink{50%{opacity:.25}}
+.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);margin-top:3px}
+
+/* tooltips: the sentence lives here now, not on the page --------------------- */
+[data-tip]{position:relative}
+[data-tip]::after{
+  content:attr(data-tip);position:absolute;left:0;top:calc(100% + 8px);z-index:8;
+  background:var(--tip-bg);color:var(--tip-ink);padding:7px 10px;border-radius:5px;
+  font:400 12px/1.4 Archivo,sans-serif;white-space:normal;width:max-content;max-width:300px;
+  opacity:0;transform:translateY(-3px);pointer-events:none;transition:opacity .15s,transform .15s;
+}
+[data-tip]:hover::after{opacity:1;transform:translateY(0)}
+[data-tip].tr::after{left:auto;right:0}
+
+/* sections ----------------------------------------------------------------- */
+.sec{margin-top:44px}
+.sechead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.sechead h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.sechead .aside{margin-left:auto;display:flex;align-items:center;gap:8px}
+.why{
+  width:18px;height:18px;border-radius:50%;border:1px solid var(--rule);color:var(--ink-3);
+  display:grid;place-items:center;font:500 11px/1 "IBM Plex Mono",monospace;cursor:help;overflow:visible;z-index:30;
+}
+.why i{font-style:normal;display:block}
+.why:hover{color:var(--ink);border-color:var(--ink-3)}
+.why:hover i{animation:qdrop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes qdrop{0%{transform:translateY(-16px);opacity:0}100%{transform:none;opacity:1}}
+.why::after{left:calc(100% + 12px);top:50%;transform:translate(-6px,-50%)}
+.why:hover::after{transform:translate(0,-50%)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:7px;padding:2px;gap:2px;background:var(--surface)}
+.seg a{padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
+.seg a:hover{color:var(--ink)}
+.seg a.on{background:var(--ink);color:var(--ground)}
+.ibtn{
+  width:32px;height:32px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);
+  display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:color .15s,border-color .15s;
+}
+.ibtn:hover{color:var(--ink);border-color:var(--ink-3)}
+.ibtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.quiet{color:var(--ink-3);font-size:12.5px}
+.link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
+.link:hover{color:var(--ink);border-color:var(--ink-3)}
+
+/* kpis: a number, a chip, a line ----------------------------------------- */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:36px}
+.kpi{
+  position:relative;padding:18px 20px 16px;border-radius:10px;background:var(--surface);
+  border:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:8px;
+}
+.kpi::before{
+  content:"";position:absolute;inset:0;border-radius:10px;pointer-events:none;opacity:0;transition:opacity .25s;
+  background:radial-gradient(220px circle at var(--mx,50%) var(--my,50%),var(--accent-soft),transparent 70%);
+}
+.kpi:hover::before{opacity:1}
+.kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.kpi .v{font-family:"IBM Plex Mono",monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.05}
+.kpi .row{display:flex;align-items:center;gap:10px;min-height:20px}
+.chip{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+  font:500 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;
+}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.bad{background:#ff625722;color:var(--neg)}
+.chip.warn{background:#f0913a22;color:var(--warn)}
+.chip.dim{background:#ffffff10;color:var(--ink-2)}
+.light .chip.dim{background:#00000010}
+.kpi .sub{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2)}
+.spark{position:relative;height:34px;margin-top:2px}
+.spark svg{width:100%;height:34px;overflow:visible}
+.spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round}
+.spark .area{fill:var(--accent);opacity:.08}
+.spark .pt{fill:var(--accent);opacity:0;transition:opacity .15s}
+.spark .scrub{
+  position:absolute;top:-22px;left:0;transform:translateX(-50%);opacity:0;
+  font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink);white-space:nowrap;transition:opacity .15s;
+}
+.kpi:hover .spark .pt,.kpi:hover .spark .scrub{opacity:1}
+
+/* findings: a dot, a verb, a number ------------------------------------- */
+.sev{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--ink-2);font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent;transition:all .15s}
+.sev i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.sev.crit i{background:var(--neg)}.sev.watch i{background:var(--warn)}.sev.opp i{background:var(--accent)}
+.sev:hover{color:var(--ink);border-color:var(--rule)}
+.sev.off{opacity:.35}
+.finds{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.find{
+  display:grid;grid-template-columns:22px 150px 1fr auto 28px;gap:0 14px;align-items:center;
+  padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;
+  transition:background .15s,opacity .35s,transform .35s;border-radius:0 6px 6px 0;
+}
+.find:hover{background:var(--surface);color:inherit}
+.find.gone{opacity:0;transform:translateX(40px);pointer-events:none;max-height:0;padding:0;overflow:hidden;border:none}
+.find .mark{width:8px;height:8px;border-radius:50%;justify-self:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1);cursor:pointer;position:relative}
+.find .mark::after{content:"";position:absolute;inset:-8px;border-radius:50%}
+.find:hover .mark{transform:scale(1.6)}
+.find .mark:hover{transform:scale(2.2)}
+.find.crit .mark{background:var(--neg)}.find.watch .mark{background:var(--warn)}.find.opp .mark{background:var(--accent)}
+.find .site{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+.hood{
+  display:inline-grid;place-items:center;min-width:24px;height:20px;padding:0 4px;border-radius:4px;
+  background:var(--raised);border:1px solid var(--rule);font:600 10px/1 "IBM Plex Mono",monospace;
+  letter-spacing:.06em;color:var(--ink-2);flex:none;
+}
+.find .what{font-weight:600;font-size:14px;color:var(--ink)}
+.find .more{
+  grid-column:3/5;max-height:0;overflow:hidden;opacity:0;font-size:12.5px;color:var(--ink-2);
+  transition:max-height .28s ease,opacity .2s,margin .28s;margin:0;
+}
+.find:hover .more{max-height:60px;opacity:1;margin-top:4px}
+.find .amt{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.find .amt small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+.find .go{color:var(--ink-3);display:grid;place-items:center;transition:transform .2s,color .15s}
+.find .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.find:hover .go{color:var(--accent);transform:translateX(3px)}
+.find.hide{display:none}
+.silenced{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);display:none}
+.silenced.on{display:block}
+
+/* next moves: things the board cannot do yet ------------------------------ */
+.moves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;perspective:900px}
+.move{
+  position:relative;padding:20px 20px 18px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);
+  text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;
+  transform:rotateX(var(--rx,0)) rotateY(var(--ry,0));transition:transform .12s ease-out,border-color .2s;transform-style:preserve-3d;
+}
+.move:hover{border-color:var(--rule);color:inherit}
+.move .ic{
+  width:40px;height:40px;border-radius:10px;background:var(--raised);display:grid;place-items:center;color:var(--accent);
+  transform:translateZ(24px);transition:transform .2s;
+}
+.move .ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.move b{font-size:15px;font-weight:600;transform:translateZ(16px)}
+.move span{font-size:12.5px;color:var(--ink-2);transform:translateZ(10px)}
+.move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
+.move:hover .soon{color:var(--accent);border-color:var(--accent)}
+.move.add{border-style:dashed;background:none;justify-content:center;align-items:center;color:var(--ink-3);min-height:120px}
+.move.add:hover{color:var(--ink)}
+
+/* tables ----------------------------------------------------------------- */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:10px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule-soft)}
+th:first-child,td:first-child,.l{text-align:left}
+thead th{font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--rule)}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:var(--surface)}
+tbody td{font-family:"IBM Plex Mono",monospace}
+tbody td.l{font-family:Archivo,sans-serif}
+tfoot td{font-family:"IBM Plex Mono",monospace;font-weight:600;border-top:1px solid var(--ink);border-bottom:none}
+.sub{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400;font-family:Archivo,sans-serif}
+.chev{display:inline-block;width:16px;vertical-align:-1px;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+tr.chain{cursor:pointer}
+tr.chain:hover .chev{transform:translateX(2px)}
+tr.chain.open .chev{transform:rotate(90deg)}
+tr.kid{display:none}
+tr.kid.show{display:table-row;animation:rowin .3s ease}
+@keyframes rowin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+tr.kid td:first-child{padding-left:42px}
+tr.bump td{animation:bump .6s ease}
+@keyframes bump{0%{background:var(--accent-soft)}100%{background:transparent}}
+.grp td{background:var(--raised);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;color:var(--ink-2);padding:7px 12px}
+.bar{display:inline-block;vertical-align:middle;width:64px;height:4px;border-radius:3px;background:var(--rule);overflow:hidden;margin-right:8px}
+.bar i{display:block;height:100%;background:var(--accent);transform-origin:left;transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+tr:hover .bar i{transform:scaleX(1.04)}
+.set{color:var(--accent);font-weight:600}
+.up{display:inline-flex;align-items:center;gap:3px;color:var(--warn);font-size:11px;margin-left:6px;cursor:pointer;padding:2px 6px;border-radius:4px;border:1px solid transparent;transition:all .15s}
+.up:hover{border-color:var(--warn)}
+.up svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.up.done{color:var(--accent);border-color:transparent}
+.check{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.check svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+td.gauge{position:relative}
+td.gauge i{position:absolute;left:12px;right:12px;bottom:6px;height:2px;background:var(--rule);border-radius:2px;overflow:hidden}
+td.gauge i b{display:block;height:100%;background:var(--accent);width:var(--w,0);transition:width .5s cubic-bezier(.2,.7,.2,1)}
+td.gauge.low i b{background:var(--neg)}
+
+/* charts ----------------------------------------------------------------- */
+.chartbox{position:relative;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);padding:14px 20px 12px}
+.readout{display:flex;justify-content:flex-end;align-items:center;gap:14px;min-height:22px;margin-bottom:6px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.readout b{color:var(--ink);font-weight:500}
+.readout i{width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:6px;vertical-align:1px}
+.legend{display:flex;gap:8px;margin-top:10px}
+.legend a{display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:5px;font-size:12px;color:var(--ink-2);text-decoration:none;border:1px solid transparent;transition:all .15s;cursor:pointer}
+.legend a i{width:12px;height:3px;border-radius:2px;background:var(--ink-3);transition:transform .2s}
+.legend a.on{color:var(--ink);border-color:var(--rule)}
+.legend a:hover{color:var(--ink)}
+.legend a:hover i{transform:scaleX(1.4)}
+.xh{opacity:0;transition:opacity .12s}
+.chartbox:hover .xh{opacity:1}
+g[data-series]{transition:opacity .25s}
+g[data-series].off{opacity:0}
+.chart rect{transition:opacity .15s}
+.chart rect:hover{opacity:1}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;align-items:end;height:170px;padding-top:30px}
+.wd{display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end}
+.wd .track{position:relative;width:100%;flex:1;display:flex;align-items:center}
+.wd .track::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--rule)}
+.wd .bar2{
+  position:absolute;left:18%;right:18%;border-radius:4px;background:var(--accent);
+  transform-origin:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1),filter .2s;
+}
+.wd .bar2.down{background:var(--warn)}
+.wd:hover .bar2{transform:scaleX(1.18);filter:brightness(1.15)}
+.wd .n{
+  position:absolute;left:50%;transform:translate(-50%,4px);padding:3px 7px;border-radius:4px;
+  background:var(--ink);color:var(--ground);font:600 11px/1 "IBM Plex Mono",monospace;
+  opacity:0;transition:opacity .15s,transform .2s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap;
+}
+.wd:hover .n{opacity:1;transform:translate(-50%,0)}
+.wd .d{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3)}
+.wd .d b{display:none;font-weight:500}
+.wd:hover .d span{display:none}.wd:hover .d b{display:inline}
+.wd.now .d{color:var(--ink)}
+.wd.now .track{outline:1px dashed var(--rule);outline-offset:4px;border-radius:6px}
+
+/* heat grid --------------------------------------------------------------- */
+.heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
+.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s}
+.heat .h.hl{color:var(--ink)}
+.heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
+.heat .r.hl{color:var(--accent)}
+.heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.cell{
+  position:relative;height:44px;border-radius:6px;display:grid;place-items:center;cursor:pointer;
+  font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,outline-color .15s,filter .15s;
+}
+.cell.hl{filter:brightness(1.18)}
+.cell:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
+.cell.picked{outline:2px solid var(--ink);outline-offset:-2px}
+.cell .rv2{position:absolute;right:6px;bottom:5px;display:flex;gap:2px}
+.cell .rv2 i{width:3px;height:3px;border-radius:50%;background:var(--ink);opacity:.5}
+.cell.mine{outline:1.5px solid var(--accent);outline-offset:-1.5px}
+.cell::after{top:auto;bottom:calc(100% + 8px);left:50%;transform:translate(-50%,3px)}
+.cell:hover::after{transform:translate(-50%,0)}
+.celldetail{margin-top:14px;min-height:22px;font-size:13px;color:var(--ink-2)}
+.celldetail b{color:var(--ink);font-weight:600}
+.celldetail .link{margin-left:10px}
+
+/* waves ------------------------------------------------------------------ */
+.waves{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+.wave{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:7px;border:1px solid var(--rule);
+  font-size:12.5px;color:var(--ink-2);text-decoration:none;background:var(--surface);transition:border-color .15s,color .15s,transform .2s;
+}
+.wave:hover{color:var(--ink);border-color:var(--ink-3);transform:translateY(-2px)}
+.wave b{color:var(--ink);font-weight:600}
+.wave .t{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
+.wave svg{width:12px;height:12px;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;fill:none;transition:transform .3s}
+.wave.up svg{stroke:var(--accent)}.wave.dn svg{stroke:var(--neg)}
+.wave:hover svg{transform:translateY(-2px) scale(1.2)}
+.wave.dn:hover svg{transform:translateY(2px) scale(1.2)}
+
+/* plan a chain ------------------------------------------------------------ */
+.plan{display:grid;grid-template-columns:300px 1fr;gap:32px;align-items:start}
+.field{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+.field label{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.field select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:8px 10px}
+.field input[type=range]{width:100%;accent-color:var(--accent)}
+.field output{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink)}
+.machines{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 14px}
+.machines i{width:22px;height:22px;border-radius:5px;background:var(--rule);transition:background .25s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.machines i.on{background:var(--accent);transform:scale(1)}
+.machines i.new{animation:pop .35s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pop{from{transform:scale(.3)}to{transform:scale(1)}}
+.shops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 14px}
+.shops i{width:12px;height:12px;border-radius:3px;background:var(--rule);transition:background .2s}
+.shops i.on{background:var(--ink-2)}
+.planstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.planstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
+.planstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.planstat .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
+.planstat .v small{font-size:12px;color:var(--ink-3);margin-left:4px;letter-spacing:0}
+
+.step{display:inline-flex;align-items:center;gap:6px}
+.step a{width:24px;height:24px;border-radius:6px;border:1px solid var(--rule);display:grid;place-items:center;color:var(--ink-2);text-decoration:none;font:500 14px/1 "IBM Plex Mono",monospace;transition:all .15s}
+.step a:hover{color:var(--ink);border-color:var(--ink-3);transform:scale(1.1)}
+.step b{font:600 14px/1 "IBM Plex Mono",monospace;min-width:14px;text-align:center}
+.step .machines{margin:0 0 0 8px;gap:4px}
+.step .machines i{width:14px;height:14px;border-radius:3px}
+td .ing{font-size:12px;color:var(--ink-2);white-space:normal;font-family:Archivo,sans-serif}
+td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
+.planline{margin:14px 0 0;font-size:13.5px;color:var(--ink-2)}
+.planline b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500}
+
+/* flow map ---------------------------------------------------------------- */
+.flow .node rect{fill:var(--surface);stroke:var(--rule);transition:stroke .15s,transform .2s}
+.flow .node{cursor:pointer}
+.flow .node:hover rect{stroke:var(--ink-3)}
+.flow .node.on rect{stroke:var(--accent);stroke-width:1.5}
+.flow .node.faded{opacity:.35}
+.flow .node text{font:500 11.5px Archivo,sans-serif;fill:var(--ink)}
+.flow .node text.s{font:400 10px "IBM Plex Mono",monospace;fill:var(--ink-3)}
+.flow .pipe{fill:none;stroke:var(--ink-3);stroke-opacity:.45;stroke-linecap:round;transition:stroke-opacity .2s,stroke .2s}
+.flow .pipe.weekly{stroke-dasharray:6 7}
+.flow .pipe:hover,.flow .pipe.lit{stroke:var(--accent);stroke-opacity:1;animation:flowdash .9s linear infinite}
+.flow .pipe.daily:hover,.flow .pipe.daily.lit{stroke-dasharray:1 9;stroke-width:3}
+.flow .pipe.dim{stroke-opacity:.12}
+@keyframes flowdash{to{stroke-dashoffset:-26}}
+.flow .cargo{fill:var(--accent);display:none}
+.flow .cargo.go{display:block}
+.flow .col{font:500 10px "IBM Plex Mono",monospace;letter-spacing:.14em;fill:var(--ink-3)}
+.flow .warnd{fill:var(--warn)}.flow .badd{fill:var(--neg)}
+
+/* site detail -------------------------------------------------------------- */
+.sitehead{display:flex;align-items:center;gap:16px;margin-top:32px}
+.bullet{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font:600 12px/1 "IBM Plex Mono",monospace;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sitehead:hover .bullet{transform:rotate(-12deg) scale(1.08)}
+.sitehead h2{margin:0;font-size:22px;font-weight:600;letter-spacing:-.02em}
+.sitehead .sub{font-size:13px}
+.sstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px}
+.sstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
+.sstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sstat .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
+.hours{display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center}
+.hours .hh{font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:center;padding-bottom:4px}
+.hours .dd{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3)}
+.hours .dd.now{color:var(--ink)}
+.hc{height:20px;border-radius:3px;background:var(--raised);cursor:pointer;transition:transform .15s cubic-bezier(.34,1.56,.64,1),box-shadow .15s}
+.hc:hover{transform:scale(1.3);box-shadow:0 4px 14px #0007;z-index:2;position:relative}
+.hc.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
+.hc.cap:hover{box-shadow:inset 0 0 0 1.5px var(--neg),0 4px 14px #0007}
+.hourread{min-height:22px;margin-top:12px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.hourread b{color:var(--ink);font-weight:500}
+.crew{display:flex;flex-wrap:wrap;gap:8px}
+.person{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:20px;background:var(--surface);border:1px solid var(--rule-soft);font-size:12.5px;transition:transform .2s}
+.person:hover{transform:translateY(-2px)}
+.person i{width:22px;height:22px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.person small{color:var(--ink-3)}
+.person.off{opacity:.5}
+.person.off i{background:#ff625733}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
+
+/* kinds popover ------------------------------------------------------------ */
+.pop{width:520px;margin:40px auto;padding:20px 22px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0008}
+.pop h3{margin:0 0 4px;font-size:15px;font-weight:600}
+.pop p{margin:0 0 14px;color:var(--ink-3);font-size:12.5px}
+.kind{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule-soft)}
+.kind:last-of-type{border-bottom:none}
+.kind b{font-weight:500;font-size:13.5px}
+.kind small{display:block;color:var(--ink-3);font-size:11.5px}
+.kind .c{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--rule);position:relative;cursor:pointer;transition:background .2s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sw.on{background:var(--accent)}
+.sw.on::after{transform:translateX(14px);background:#fff}
+.pop .foot2{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+
+/* source strip states -------------------------------------------------------- */
+.strip{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);margin-top:14px}
+.strip .st{display:flex;align-items:center;gap:10px;font-size:13px}
+.strip .st .led{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.strip .st .led.busy{background:var(--info);animation:blink 1s steps(1) infinite}
+.strip .st .led.err{background:var(--neg)}
+.strip .file{font:400 12px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.strip .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.strip .prog{position:relative;width:160px;height:3px;border-radius:2px;background:var(--rule);overflow:hidden}
+.strip .prog i{position:absolute;top:0;bottom:0;width:40%;background:var(--info);border-radius:2px;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{left:-40%}100%{left:100%}}
+.strip .err{color:var(--neg);font-size:12.5px}
+.btn2{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:500;text-decoration:none;cursor:pointer;transition:border-color .15s,transform .15s}
+.btn2:hover{border-color:var(--ink-3);transform:translateY(-1px);color:var(--ink)}
+.btn2 svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn2.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.btn2.primary:hover{color:var(--ground)}
+.btn2[aria-disabled="true"]{opacity:.4;pointer-events:none}
+.statelabel{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:32px}
+
+/* company ------------------------------------------------------------------ */
+.roles{display:flex;flex-direction:column;gap:8px}
+.role{display:grid;grid-template-columns:130px 1fr 44px;gap:12px;align-items:center;font-size:13px}
+.role .tr{height:8px;border-radius:4px;background:var(--rule-soft);overflow:hidden}
+.role .tr i{display:block;height:100%;background:var(--ink-2);border-radius:4px;transform-origin:left;transition:background .2s,transform .3s cubic-bezier(.2,.7,.2,1)}
+.role:hover .tr i{background:var(--accent);transform:scaleX(1.03)}
+.role .c{font:500 12px "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+.role .c b{display:none;font-weight:500;color:var(--ink)}
+.role:hover .c span{display:none}.role:hover .c b{display:inline}
+.miles{display:flex;flex-direction:column;gap:2px}
+.mile{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--rule-soft);font-size:13.5px;cursor:pointer}
+.mile .box{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rule);display:grid;place-items:center;color:var(--ground);transition:all .25s cubic-bezier(.34,1.56,.64,1)}
+.mile .box svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.mile.done .box{background:var(--accent);border-color:var(--accent)}
+.mile:not(.done):hover .box{border-color:var(--accent);transform:rotate(-8deg)}
+.mile.just .box{animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+.mile .c{margin-left:auto;font:500 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.rules span{padding:3px 8px;border-radius:4px;background:var(--raised);font:500 11px "IBM Plex Mono",monospace;color:var(--ink-2);cursor:help}
+.rules span b{color:var(--ink);font-weight:600;margin-left:4px}
+
+/* landing ------------------------------------------------------------------ */
+.landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:80px 0;perspective:1000px}
+.landing .wordmark{font-size:44px}
+.landing p{margin:0;color:var(--ink-2);font-size:15px;max-width:460px;text-align:center;text-wrap:pretty}
+.drop{
+  width:560px;height:280px;border-radius:16px;border:1.5px dashed var(--rule);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;cursor:pointer;transition:border-color .2s,background .2s,transform .12s ease-out;position:relative;
+  transform:rotateX(var(--rx,0)) rotateY(var(--ry,0));transform-style:preserve-3d;
+}
+.drop:hover{border-color:var(--accent);background:var(--surface)}
+.drop .folder{width:64px;height:52px;position:relative;transform:translateZ(30px)}
+.drop .folder i{position:absolute;inset:0;border-radius:6px;background:var(--raised);border:1.5px solid var(--rule)}
+.drop .folder i.tab{width:26px;height:10px;top:-8px;left:0;border-bottom:none;border-radius:6px 6px 0 0}
+.drop .folder i.flap{top:10px;transform-origin:50% 100%;transition:transform .35s cubic-bezier(.34,1.56,.64,1);background:var(--surface)}
+.drop:hover .folder i.flap{transform:perspective(200px) rotateX(-38deg)}
+.drop .folder .file{position:absolute;left:18px;right:18px;top:4px;height:30px;border-radius:3px;background:var(--accent);opacity:0;transform:translateY(8px);transition:all .3s .05s}
+.drop:hover .folder .file{opacity:1;transform:translateY(-10px)}
+.drop b{font-size:15px;font-weight:600;transform:translateZ(16px)}
+.drop span{font-size:12.5px;color:var(--ink-3);transform:translateZ(10px)}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;background:var(--ink);color:var(--ground);
+  font-weight:600;font-size:13.5px;text-decoration:none;transition:transform .15s,opacity .15s;
+}
+.btn:hover{transform:translateY(-1px);opacity:.92;color:var(--ground)}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.landing .row{display:flex;align-items:center;gap:18px}
+.landing footer{margin-top:40px;display:flex;gap:18px;align-items:center;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
+
+/* the sphere: the dot grown up. It rolls out of the wordmark onto the masthead
+   rule and sits there; it watches the pointer, squishes when clicked and rolls
+   along its shelf as the page scrolls ---------------------------------------- */
+.orb{position:absolute;left:0;top:0;width:100px;height:100px;z-index:6;cursor:pointer;will-change:transform;opacity:0}
+.orb.live{opacity:1}
+.orb i{
+  display:block;width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at var(--hx,32%) var(--hy,30%),#d9ffe8 0%,#7fe3a8 14%,var(--accent) 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 18px 40px #43c07a3d,inset -14px -20px 34px #00000066,inset 6px 8px 18px #ffffff22;
+}
+.orb u{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%),radial-gradient(circle at 62% 80%,#0002 0 3%,transparent 4%),radial-gradient(circle at 40% 22%,#0002 0 2%,transparent 3%);
+}
+.orb .squish{animation:squish .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes squish{0%{scale:1 1}25%{scale:1.28 .74}50%{scale:.86 1.18}75%{scale:1.06 .95}100%{scale:1 1}}
+.orb::after{content:"";position:absolute;left:14%;right:14%;bottom:-9px;height:14px;border-radius:50%;background:#000;opacity:.45;filter:blur(6px);z-index:-1}
+.light .orb::after{opacity:.2}
+.landing{position:relative}
+.landing .orb{width:360px;height:360px;z-index:0}
+.landing .orb i{box-shadow:0 40px 90px #43c07a44,inset -24px -34px 60px #00000066,inset 10px 14px 30px #ffffff22}
+.landing .orb::after{bottom:-30px;height:26px;filter:blur(10px)}
+.ring{position:absolute;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:ring .8s ease-out forwards;z-index:0}
+@keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
+
+/* footer ------------------------------------------------------------------- */
+.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:22px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
+.foot span:last-child{margin-left:auto}
+</style>
+</helmet>
+<div class="board {{theme}}">
+<div class="wrap">
+<header class="mast">
+  <div class="brand"><span class="wordmark">Costco</span><span class="dot" id="dot"></span></div>
+  <nav class="nav" id="nav"><a class="" href="#today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path></svg><span>Today</span></a><a class="" href="#results"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path></svg><span>Results</span></a><a class="" href="#supply"><svg viewBox="0 0 24 24"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg><span>Supply</span></a><a class="" href="#growth"><svg viewBox="0 0 24 24"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span>Growth</span></a><a class="on" href="#company"><svg viewBox="0 0 24 24"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span>Company</span></a><i class="ink"></i></nav>
+  <div class="clock tr" data-tip="Game time when the save was written. Day 1 was a Monday."><b>Day 189<i>·</i>Sun 02:00</b><small>YEAR 4 · 35 SITES · 581 STAFF</small></div>
+  <div class="orb"><i></i><u></u></div>
+</header>
+
+<section class="sec rv" style="margin-top:32px">
+  <div class="sechead"><h2>Products</h2><span class="quiet">by revenue yesterday</span>
+    <div class="aside"><a class="link" href="#">all 41</a></div></div>
+  <table>
+    <thead><tr><th>Product</th><th>Revenue / day</th><th>Units</th><th>Avg price</th><th>Stores</th><th>Peaks</th></tr></thead>
+    <tbody><tr><td class="l">Jewelry (Expensive)</td><td><span class="bar"><i style="width:100%"></i></span>$741,008</td><td>721</td><td>$1,027.75</td><td>11</td><td class="">—</td></tr><tr><td class="l">ZanaMan Phone</td><td><span class="bar"><i style="width:84%"></i></span>$626,135</td><td>723</td><td>$866.02</td><td>5</td><td class="">—</td></tr><tr><td class="l">Arty Fish Phone</td><td><span class="bar"><i style="width:79%"></i></span>$584,445</td><td>721</td><td>$810.60</td><td>5</td><td class="">—</td></tr><tr><td class="l">Rhythm By Tre Headphones</td><td><span class="bar"><i style="width:43%"></i></span>$319,192</td><td>1,441</td><td>$221.51</td><td>5</td><td class="pos">Fri +4</td></tr><tr><td class="l">Arty Fish Smartwatch</td><td><span class="bar"><i style="width:34%"></i></span>$254,555</td><td>1,142</td><td>$222.90</td><td>9</td><td class="">—</td></tr><tr><td class="l">ZanaMan Smartwatch</td><td><span class="bar"><i style="width:34%"></i></span>$249,319</td><td>714</td><td>$349.19</td><td>9</td><td class="">—</td></tr><tr><td class="l">Jewelry (Cheap)</td><td><span class="bar"><i style="width:32%"></i></span>$233,900</td><td>1,442</td><td>$162.21</td><td>11</td><td class="">—</td></tr><tr><td class="l">Clothing (Modern Expensive Male)</td><td><span class="bar"><i style="width:26%"></i></span>$195,237</td><td>1,463</td><td>$133.45</td><td>7</td><td class="pos">Sat +26</td></tr></tbody>
+  </table>
+</section>
+<div class="duo sec">
+  <section class="rv">
+    <div class="sechead"><h2>Payroll</h2><span class="quiet">581 people · $160,911 / day</span>
+      <div class="aside"><span class="chip ok tr" data-tip="Average satisfaction">99.8%</span><span class="chip warn tr" data-tip="Absent today">13 out</span></div></div>
+    <div class="roles"><div class="role rv"><span>Factory Worker</span><span class="tr"><i style="width:100%"></i></span><span class="c"><span>165</span><b>$38k</b></span></div><div class="role rv"><span>Customer Service</span><span class="tr"><i style="width:90%"></i></span><span class="c"><span>149</span><b>$41k</b></span></div><div class="role rv"><span>Cleaning</span><span class="tr"><i style="width:62%"></i></span><span class="c"><span>102</span><b>$22k</b></span></div><div class="role rv"><span>Security Guard</span><span class="tr"><i style="width:61%"></i></span><span class="c"><span>101</span><b>$26k</b></span></div><div class="role rv"><span>HR Manager</span><span class="tr"><i style="width:8%"></i></span><span class="c"><span>13</span><b>$6k</b></span></div><div class="role rv"><span>Delivery Driver</span><span class="tr"><i style="width:7%"></i></span><span class="c"><span>12</span><b>$4k</b></span></div><div class="role rv"><span>Projectionist</span><span class="tr"><i style="width:6%"></i></span><span class="c"><span>10</span><b>$3k</b></span></div><div class="role rv"><span>Logistics Manager</span><span class="tr"><i style="width:5%"></i></span><span class="c"><span>9</span><b>$5k</b></span></div><div class="role rv"><span>Headhunter</span><span class="tr"><i style="width:4%"></i></span><span class="c"><span>7</span><b>$4k</b></span></div><div class="role rv"><span>Pricing Manager</span><span class="tr"><i style="width:4%"></i></span><span class="c"><span>7</span><b>$4k</b></span></div><div class="role rv"><span>Purchasing Agent</span><span class="tr"><i style="width:4%"></i></span><span class="c"><span>6</span><b>$3k</b></span></div></div>
+  </section>
+  <section class="rv">
+    <div class="sechead"><h2>Milestones</h2><span class="quiet">playing on Custom · 7 harder, 1 easier, started on $0</span></div>
+    <div class="miles"><div class="mile done"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>Every business type run<span class="c">14 / 14</span></div><div class="mile done"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>5 diplomas<span class="c">5 / 5</span></div><div class="mile "><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>Every building owned<span class="c">37 / 61</span></div><div class="mile "><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>Rivals taken over<span class="c">3 / 9</span></div><div class="mile done"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>58 personal goals<span class="c">58 / 58</span></div><div class="mile "><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>$25M paid in tax<span class="c">$21.2M</span></div></div>
+    <div class="rules"><span data-tip="Cost of wholesale and imported goods, hospital fees and the like">Public prices<b>×1.3</b></span><span data-tip="What staff cost an hour">Salaries<b>×1.3</b></span><span data-tip="Interest on loans and investments">Interest<b>×1.3</b></span><span data-tip="Severity of rival attacks">Rival attacks<b>×1.2</b></span><span data-tip="Customers you get before any traffic or marketing">Base customers<b>×0.5</b></span><span data-tip="What exporting pays">Export income<b>×0.5</b></span><span data-tip="What selling something back returns">Resale value<b>×0.5</b></span><span data-tip="Surcharge for rushing a wholesale order">Urgent wholesale<b>×0.3</b></span></div>
+  </section>
+</div>
+
+<footer class="foot"><span>BIG COPILOT</span><span>RECOVER #2.HSG · SAVED 21:09</span><span>GAME BUILD 3674</span></footer>
+</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light' }; }
+  componentDidMount() {
+    const $ = (s, r) => (r || document).querySelector(s);
+    const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+    // every link on the board is a mockup: nothing may navigate the artboard away
+    document.addEventListener('click', (e) => { const a = e.target.closest('a'); if (a) e.preventDefault(); });
+
+    // sections arrive as they come into view (and after a beat regardless)
+    const rv = $$('.rv');
+    const vh = window.innerHeight || 1000;
+    rv.forEach((el, i) => { el.style.transitionDelay = (i % 8) * 70 + 'ms'; if (el.getBoundingClientRect().top < vh) el.classList.add('in'); });
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }), { threshold: .05 });
+      rv.forEach(el => { if (!el.classList.contains('in')) io.observe(el); });
+    }
+    setTimeout(() => rv.forEach(el => el.classList.add('in')), 2500);
+
+    // the sphere is the dot grown up: it leaves the wordmark, rolls along the masthead
+    // rule and rests just past the nav. It watches the pointer, squishes when clicked and
+    // rolls along its shelf as the page scrolls. On the landing it arcs over beside the drop zone.
+    // Clicking the wordmark rolls out another one, up to three; on the fourth the first ball on
+    // the shelf gulps its neighbour to make room.
+    const first = $('.orb');
+    if (first && $('#dot')) {
+      const dotEl = $('#dot'), landing = first.closest('.landing'), parent = first.offsetParent || first.parentElement;
+      const p0 = parent.getBoundingClientRect(), GAP = 12, MAX = 3, SIZES = landing ? [360] : [100, 72, 54];
+      let base;
+      if (landing) { const d = $('.drop').getBoundingClientRect(); base = { x: d.right - p0.left + 48, mid: d.top - p0.top + d.height / 2 }; }
+      else { const n = $('#nav').getBoundingClientRect(); base = { x: n.right - p0.left + 40, mid: null }; }
+      const clockLeft = landing ? Infinity : $('.clock').getBoundingClientRect().left - p0.left;
+      const d0 = dotEl.getBoundingClientRect();
+      const balls = [];
+      const restX = k => base.x + balls.slice(0, k).reduce((a, b) => a + b.size + GAP, 0);
+      const topOf = size => landing ? base.mid - size / 2 : p0.height - size;
+      const maxRun = () => { const l = balls[balls.length - 1]; return landing || !l ? 0 : Math.max(0, clockLeft - (l.rest + l.size) - 28); };
+      const paint = (b) => {
+        const roll = Math.min(maxRun(), window.scrollY * .6);
+        b.el.style.transform = 'translate(' + (b.px + roll).toFixed(1) + 'px,' + b.py.toFixed(1) + 'px) scale(' + b.sc.toFixed(3) + ')';
+        b.seam.style.transform = 'rotate(' + (((b.px - b.sx) + roll) / (Math.PI * b.size) * 360).toFixed(1) + 'deg)';
+      };
+      const squish = (b) => { [b.core, b.seam].forEach(el => { el.classList.remove('squish'); void el.offsetWidth; el.classList.add('squish'); }); };
+      const ring = (b) => { const r = b.el.getBoundingClientRect(), i = document.createElement('i'); i.className = 'ring';
+        i.style.left = (r.left + window.scrollX) + 'px'; i.style.top = (r.top + window.scrollY) + 'px'; i.style.width = r.width + 'px'; i.style.height = r.height + 'px';
+        document.body.appendChild(i); setTimeout(() => i.remove(), 900); };
+      const makeBall = (el, k) => {
+        const size = SIZES[Math.min(k, SIZES.length - 1)], rest = restX(k), top = topOf(size);
+        el.style.width = el.style.height = size + 'px'; el.style.left = rest + 'px'; el.style.top = top + 'px';
+        const sx = d0.left - p0.left + d0.width / 2 - (rest + size / 2), sy = d0.top - p0.top + d0.height / 2 - (top + size / 2), s0 = d0.width / size;
+        const b = { el, core: $('i', el), seam: $('u', el), size, rest, sx, sy, s0, px: sx, py: sy, sc: s0, tx: 0, ty: 0, busy: true };
+        el.addEventListener('click', () => { squish(b); ring(b); });
+        paint(b); el.classList.add('live'); return b;
+      };
+      const enter = (b, delay) => setTimeout(() => {
+        dotEl.classList.remove('kick'); void dotEl.offsetWidth; dotEl.classList.add('kick');
+        const t0 = performance.now() + 180, dur = landing ? 1500 : 1300, lift = landing ? 140 : 26;
+        const step = (t) => { const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
+          b.px = b.sx * (1 - e); b.py = b.sy * (1 - e) - Math.sin(p * Math.PI) * lift; b.sc = b.s0 + (1 - b.s0) * e; paint(b);
+          if (p < 1) requestAnimationFrame(step); else b.busy = false; };
+        requestAnimationFrame(step);
+      }, delay);
+      const spawn = () => {
+        if (balls.some(b => b.busy)) return;
+        const el = first.cloneNode(true); parent.appendChild(el);
+        const b = makeBall(el, balls.length); balls.push(b); enter(b, 60);
+      };
+      const eat = () => {
+        const eater = balls[0], meal = balls[1]; if (!eater || !meal || balls.some(b => b.busy)) return;
+        eater.busy = meal.busy = true;
+        const t0 = performance.now(), dur = 520;
+        const dx = (eater.rest + eater.size / 2) - (meal.rest + meal.size / 2), dy = (topOf(eater.size) + eater.size / 2) - (topOf(meal.size) + meal.size / 2);
+        let gulped = false;
+        const step = (t) => { const p = Math.min(1, (t - t0) / dur), e = p * p;
+          meal.px = dx * e; meal.py = dy * e - 12 * Math.sin(p * Math.PI); meal.sc = 1 - .9 * e; paint(meal);
+          if (p > .55 && !gulped) { gulped = true; squish(eater); }
+          if (p < 1) requestAnimationFrame(step); else {
+            meal.el.remove(); balls.splice(1, 1);
+            balls.forEach((b, k) => { const old = b.rest; b.rest = restX(k); b.el.style.left = b.rest + 'px'; b.px += old - b.rest; b.busy = false; });
+            setTimeout(spawn, 220);
+          } };
+        requestAnimationFrame(step);
+      };
+      balls.push(makeBall(first, 0)); enter(balls[0], 400);
+      if (!landing) $('.wordmark').addEventListener('click', () => (balls.length < MAX ? spawn() : eat()));
+      document.addEventListener('mousemove', (e) => balls.forEach(b => {
+        if (b.busy) return;
+        const r = b.el.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+        const d = Math.hypot(dx, dy) || 1, k = Math.min(landing ? 36 : 10, d * .1);
+        b.tx = dx / d * k; b.ty = landing ? dy / d * k : Math.min(0, dy / d * k);
+        b.el.style.setProperty('--hx', (34 + dx / d * 20) + '%'); b.el.style.setProperty('--hy', (32 + dy / d * 20) + '%');
+      }));
+      const loop = () => { balls.forEach(b => { if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; paint(b); } }); requestAnimationFrame(loop); };
+      loop();
+    }
+
+    // nav underline follows the pointer, then goes home
+    const nav = $('#nav');
+    if (nav) {
+      const ink = (a) => { if (!a) return; const r = a.getBoundingClientRect(), n = nav.getBoundingClientRect();
+        nav.style.setProperty('--nx', (r.left - n.left) + 'px'); nav.style.setProperty('--nw', r.width + 'px'); };
+      const home = () => ink($('a.on', nav));
+      $$('a', nav).forEach(a => a.addEventListener('mouseenter', () => ink(a)));
+      nav.addEventListener('mouseleave', home);
+      setTimeout(home, 50); setTimeout(home, 600);
+    }
+
+    // the green dot is a coin: click it and it pays out
+    const dot = $('#dot');
+    if (dot) dot.addEventListener('click', () => {
+      dot.classList.remove('spin'); void dot.offsetWidth; dot.classList.add('spin');
+      const r = dot.getBoundingClientRect();
+      for (let i = 0; i < 14; i++) {
+        const c = document.createElement('i'); c.className = 'coin';
+        const a = (Math.random() * Math.PI) - Math.PI, d = 60 + Math.random() * 120;
+        c.style.left = (r.left + window.scrollX + 1) + 'px'; c.style.top = (r.top + window.scrollY + 1) + 'px';
+        c.style.setProperty('--dx', Math.cos(a) * d + 'px'); c.style.setProperty('--dy', (Math.abs(Math.sin(a)) * d + 140) + 'px');
+        c.style.animationDelay = (Math.random() * .12) + 's';
+        document.body.appendChild(c); setTimeout(() => c.remove(), 1400);
+      }
+    });
+
+    // tiles: a spotlight under the pointer, and the sparkline reads out where you are
+    $$('.kpi').forEach(t => t.addEventListener('mousemove', (e) => {
+      const r = t.getBoundingClientRect();
+      t.style.setProperty('--mx', (e.clientX - r.left) + 'px'); t.style.setProperty('--my', (e.clientY - r.top) + 'px');
+      const sp = $('.spark', t); if (!sp) return;
+      const pl = $('polyline', sp), pt = $('.pt', sp), lab = $('.scrub', sp);
+      const pts = pl.getAttribute('points').trim().split(' ').map(p => p.split(',').map(Number));
+      const vals = (sp.dataset.vals || '').split(',');
+      const sr = sp.getBoundingClientRect(), x = (e.clientX - sr.left) / sr.width * 100;
+      let k = 0; for (let i = 1; i < pts.length; i++) if (Math.abs(pts[i][0] - x) < Math.abs(pts[k][0] - x)) k = i;
+      pt.setAttribute('cx', pts[k][0]); pt.setAttribute('cy', pts[k][1]);
+      lab.style.left = (pts[k][0]) + '%'; lab.textContent = vals[k] || '';
+    }));
+
+    // cards tilt toward the pointer
+    $$('.move, .drop').forEach(c => {
+      c.addEventListener('mousemove', (e) => { const r = c.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+        c.style.setProperty('--ry', (x * 10) + 'deg'); c.style.setProperty('--rx', (-y * 8) + 'deg'); });
+      c.addEventListener('mouseleave', () => { c.style.setProperty('--ry', '0deg'); c.style.setProperty('--rx', '0deg'); });
+    });
+
+    // severity dots filter the list; the dot on a row silences it
+    $$('.sev').forEach(s => s.addEventListener('click', () => {
+      s.classList.toggle('off');
+      const off = $$('.sev.off').map(x => x.dataset.kind);
+      $$('.find').forEach(f => f.classList.toggle('hide', off.some(k => f.classList.contains(k))));
+    }));
+    const silenced = $('#silenced');
+    $$('.find .mark').forEach(m => m.addEventListener('click', (e) => {
+      e.stopPropagation(); m.closest('.find').classList.add('gone');
+      const n = $$('.find.gone').length; silenced.classList.add('on');
+      $('b', silenced).textContent = n + (n === 1 ? ' finding silenced' : ' findings silenced');
+    }));
+    if (silenced) $('a', silenced).addEventListener('click', () => { $$('.find.gone').forEach(f => f.classList.remove('gone')); silenced.classList.remove('on'); });
+
+    // daily chart: a crosshair reads the day into the reserved line above the plot
+    const cb = $('.chartbox[data-chart]');
+    if (cb) {
+      const svg = $('svg', cb), line = $('.xh line', svg), dotc = $('.xh circle', svg), out = $('.readout', cb);
+      const xs = JSON.parse(cb.dataset.xs), ys = JSON.parse(cb.dataset.ys), labels = JSON.parse(cb.dataset.labels);
+      svg.addEventListener('mousemove', (e) => {
+        const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal;
+        const x = (e.clientX - r.left) / r.width * vb.width;
+        let k = 0; for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i] - x) < Math.abs(xs[k] - x)) k = i;
+        line.setAttribute('x1', xs[k]); line.setAttribute('x2', xs[k]);
+        dotc.setAttribute('cx', xs[k]); dotc.setAttribute('cy', ys[k]);
+        out.innerHTML = labels[k];
+      });
+      $$('.legend a', cb).forEach(a => a.addEventListener('click', () => {
+        a.classList.toggle('on'); const g = $('g[data-series="' + a.dataset.series + '"]', svg); if (g) g.classList.toggle('off', !a.classList.contains('on'));
+      }));
+    }
+
+    // portfolio: a chain opens its sites
+    $$('tr.chain').forEach(tr => tr.addEventListener('click', () => {
+      tr.classList.toggle('open');
+      $$('tr.kid[data-parent="' + tr.dataset.chain + '"]').forEach(k => k.classList.toggle('show', tr.classList.contains('open')));
+    }));
+
+    // orders: "raise" rolls the order up to its target
+    $$('.up').forEach(u => u.addEventListener('click', () => {
+      if (u.classList.contains('done')) return;
+      const td = u.closest('tr').querySelector('td[data-now]'); const from = +td.dataset.now, to = +td.dataset.to; const t0 = performance.now();
+      const step = (t) => { const p = Math.min(1, (t - t0) / 700), e = 1 - Math.pow(1 - p, 3);
+        td.textContent = Math.round(from + (to - from) * e).toLocaleString('en-US'); if (p < 1) requestAnimationFrame(step); else { u.classList.add('done'); u.innerHTML = 'set'; } };
+      requestAnimationFrame(step);
+    }));
+
+    // supply map: a pipe carries cargo while hovered; a node lights its own pipes
+    $$('.flow .pipe').forEach(p => {
+      const cargo = $('.cargo[data-pipe="' + p.id + '"]');
+      p.addEventListener('mouseenter', () => cargo && cargo.classList.add('go'));
+      p.addEventListener('mouseleave', () => cargo && cargo.classList.remove('go'));
+    });
+    let picked = null;
+    $$('.flow .node').forEach(n => n.addEventListener('click', () => {
+      picked = picked === n.dataset.id ? null : n.dataset.id;
+      $$('.flow .node').forEach(m => { m.classList.toggle('on', m.dataset.id === picked); m.classList.remove('faded'); });
+      const touched = new Set();
+      $$('.flow .pipe').forEach(p => { const on = picked && (p.dataset.a === picked || p.dataset.b === picked);
+        p.classList.toggle('lit', !!on); p.classList.toggle('dim', !!picked && !on); if (on) { touched.add(p.dataset.a); touched.add(p.dataset.b); } });
+      if (picked) $$('.flow .node').forEach(m => m.classList.toggle('faded', !touched.has(m.dataset.id) && m.dataset.id !== picked));
+    }));
+
+    // demand grid: rows and columns light up together; a click pins a cell's story
+    const detail = $('#cellDetail');
+    $$('.cell').forEach(c => {
+      c.addEventListener('mouseenter', () => { $$('.cell[data-r="' + c.dataset.r + '"], .cell[data-c="' + c.dataset.c + '"]').forEach(x => x.classList.add('hl'));
+        $$('.heat .h[data-c="' + c.dataset.c + '"], .heat .r[data-r="' + c.dataset.r + '"]').forEach(x => x.classList.add('hl')); });
+      c.addEventListener('mouseleave', () => $$('.hl').forEach(x => x.classList.remove('hl')));
+      c.addEventListener('click', () => { $$('.cell.picked').forEach(x => x.classList.remove('picked')); c.classList.add('picked');
+        if (detail) detail.innerHTML = '<b>' + c.dataset.tip.split(':')[0] + '</b>' + c.dataset.tip.slice(c.dataset.tip.indexOf(':') + 1) + ' <a class="link" href="#">open in Plan a chain</a>'; });
+    });
+
+    // plan a chain: every line runs 24/7; step a line's machines and everything follows
+    const lines = $$('tr.line');
+    if (lines.length) {
+      const fmt = (n) => Math.round(n).toLocaleString('en-US');
+      const perShopWeek = 243 * 7, shopsOwned = 7;
+      const draw = () => {
+        let machines = 0, made = 0, raw = 0, take = 0;
+        lines.forEach(tr => {
+          const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * 24 * 7;
+          machines += m; made += wk; take += Math.min(wk, shopsOwned * perShopWeek);
+          $('.step b', tr).textContent = m; $('.made', tr).textContent = fmt(wk);
+          $('.covers', tr).textContent = Math.floor(wk / perShopWeek) + ' shops';
+          $('.ing', tr).innerHTML = tr.dataset.ing.split(',').map(x => { const [name, f] = x.split(':'); raw += wk * +f; return '<b>' + fmt(wk * +f) + '</b> ' + name; }).join(', ');
+          const box = $('.machines', tr); const cur = box.children.length;
+          while (box.children.length < m) { const i = document.createElement('i'); i.className = 'on new'; box.appendChild(i); }
+          while (box.children.length > m) box.lastChild.remove();
+          Array.from(box.children).forEach((i, k) => { if (k < cur) i.classList.remove('new'); });
+        });
+        $('#vMachines').textContent = machines; $('#vMade').textContent = fmt(made); $('#vRaw').textContent = fmt(raw);
+        $('#vSurplus').textContent = fmt(made - take);
+        // the ingredient table: one row per material, summed over the lines that share it
+        const ing = {};
+        lines.forEach(tr => { const wk = +tr.dataset.m * +tr.dataset.rate * 24 * 7, product = tr.querySelector('td.l').firstChild.textContent;
+          tr.dataset.ing.split(',').forEach(x => { const [name, f] = x.split(':'); const r = ing[name] || (ing[name] = { week: 0, by: [] }); r.week += wk * +f; r.by.push(product); }); });
+        const body = $('#ingBody'); const prev = {}; Array.from(body.children).forEach(tr => prev[tr.dataset.name] = tr.querySelector('.wk').textContent);
+        body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) =>
+          '<tr data-name="' + name + '" class="' + (prev[name] && prev[name] !== fmt(r.week) ? 'bump' : '') + '"><td class="l">' + name + '</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">' + r.by.join(', ') + '</td>' +
+          '<td>' + fmt(r.week / 7) + '</td><td class="wk">' + fmt(r.week) + '</td><td><span class="set">' + fmt(Math.ceil(r.week / 100) * 100) + '</span></td></tr>').join('');
+      };
+      $$('.step a').forEach(a => a.addEventListener('click', () => { const tr = a.closest('tr'); tr.dataset.m = Math.max(1, Math.min(6, +tr.dataset.m + +a.dataset.d)); draw(); }));
+      draw();
+    }
+
+    // site detail: the hour grid reads out under the pointer
+    const hr = $('#hourRead');
+    $$('.hc').forEach(c => c.addEventListener('mouseenter', () => { hr.innerHTML = c.dataset.read; }));
+
+    // kinds popover: switches flip
+    $$('.sw').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
+
+    // source strip: Update reads, then comes back
+    $$('.strip [data-update]').forEach(b => b.addEventListener('click', () => {
+      const strip = b.closest('.strip'); const idle = $('.idle', strip), busy = $('.busy2', strip);
+      if (!idle || !busy) return; idle.style.display = 'none'; busy.style.display = 'flex'; b.setAttribute('aria-disabled', 'true');
+      setTimeout(() => { idle.style.display = 'flex'; busy.style.display = 'none'; b.removeAttribute('aria-disabled'); $('.file', idle).textContent = 'RECOVER #2.HSG · SAVED JUST NOW · NOTHING NEWER'; }, 1600);
+    }));
+
+    // milestones: an unticked box ticks with a bounce (a mock, but a satisfying one)
+    $$('.mile').forEach(m => m.addEventListener('click', () => { if (!m.classList.contains('done')) { m.classList.add('done', 'just'); setTimeout(() => m.classList.remove('just'), 500); } }));
+  }
+}
+</script>
+</body>
+</html>

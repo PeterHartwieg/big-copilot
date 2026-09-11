@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&amp;display=swap">
+  <style>
+body{margin:0;background:#f4f2ec}
+a{color:#333}a:hover{color:#000}
+.lo{width:720px;min-height:100vh;padding:36px 40px;box-sizing:border-box;background:#f4f2ec;color:#2a2a2a;
+  font-family:"Patrick Hand","Comic Sans MS",cursive;font-size:15px;line-height:1.4}
+.lo *{box-sizing:border-box}
+.lo .t{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#888;margin-bottom:6px}
+.lo h1{margin:0 0 4px;font-size:26px;font-weight:400}
+.lo p.d{margin:0 0 22px;color:#666;max-width:560px}
+.bx{border:1.5px solid #555;border-radius:4px;padding:10px 12px;position:relative;background:#faf9f5}
+.bx.dash{border-style:dashed;color:#888}
+.row{display:flex;gap:12px}
+.col{display:flex;flex-direction:column;gap:12px}
+.ln{height:8px;background:#ddd8cc;border-radius:4px}
+.ln.s{width:40%}.ln.m{width:65%}
+.big{font-size:24px}
+.sm{font-size:12px;color:#777}
+body{background:#15181a}.lo{background:#15181a;color:#d8dcd6;font-family:"IBM Plex Mono",Consolas,monospace;font-size:13px}.lo .t,.lo .sm,.lo p.d{color:#8b9499}.bx{background:#1c211e;border-color:#3a423d}.bx.dash{color:#8b9499}.ln{background:#2b322e}</style>
+</helmet>
+<div class="lo">
+  <div class="t">Alternate direction</div>
+  <h1>C · Instrument panel</h1>
+  <p class="d">Dark, dense, one screen. A city map as the index, panels driven by where the pointer is.</p>
+  
+<div class="col">
+  <div class="row">
+    <div class="bx" style="flex:1;text-align:center"><div class="sm">PROFIT</div><div class="big">3.57M</div><div class="ln" style="margin-top:6px"></div></div>
+    <div class="bx" style="flex:1;text-align:center"><div class="sm">CASH</div><div class="big">38.9M</div><div class="ln" style="margin-top:6px"></div></div>
+    <div class="bx" style="flex:1;text-align:center"><div class="sm">DOOR CAP</div><div class="big">9 sites</div><div class="ln" style="margin-top:6px"></div></div>
+    <div class="bx" style="flex:1;text-align:center"><div class="sm">ORDERS</div><div class="big">7 short</div><div class="ln" style="margin-top:6px"></div></div>
+  </div>
+  <div class="row">
+    <div class="bx" style="flex:2;height:150px"><div class="sm">City map: every site a dot, coloured by state. Hover a dot for its one-line finding. Click to open it.</div></div>
+    <div class="bx" style="flex:1"><div class="sm">Hour strip 0-24 for the hovered site</div><div class="ln" style="margin-top:8px"></div><div class="ln m" style="margin-top:6px"></div><div class="ln s" style="margin-top:6px"></div></div>
+  </div>
+  <div class="bx dash">Everything on one screen, no pages: the map is the index and the panels follow the pointer.</div>
+  <div class="sm">Trade-off: dense and spatial, the most playful; but it needs the building table for the map and hides the weekly ordering flow.</div>
+</div>
+</div>
+</x-dc>
+</body>
+</html>
