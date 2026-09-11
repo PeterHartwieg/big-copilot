@@ -7056,13 +7056,13 @@ function drawMarket(){
   const types = marketView === "types";
   let rows, limit;
   if(types){ rows = m.types; limit = rows.length; }
-  else if(marketView === "mine"){ rows = m.rows.filter(r => r.sell || r.make); limit = 60; }
+  else if(marketView === "mine"){ rows = m.rows.filter(r => r.sell || r.make); limit = MARKET_TOP.mine; }
   else {
     // Strongest unserved demand first, and among equals the emptiest market.
     rows = m.rows.filter(r => !r.sell)
       .sort((a,b) => (b.gap?.demand ?? 0) - (a.gap?.demand ?? 0)
                   || (a.gap?.providers ?? 99) - (b.gap?.providers ?? 99));
-    limit = 40;
+    limit = MARKET_TOP.new;
   }
   rows = hoodSorted(rows, m.hoods);
   const cap = types || showAllMarket ? rows.length : Math.min(rows.length, limit);
