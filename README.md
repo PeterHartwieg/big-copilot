@@ -187,6 +187,14 @@ hash, so a live refresh and a reopened tab both land where you left off.
     actually on shift. A picker in its header moves between sites, support sites in
     their own group, and *close* puts it away.
 - **Supply**: the logistics round, one view at a time.
+  - *Change checklist*: open **Plan imports** on Today, or expand the checklist
+    under Supply / Orders. It groups recommended weekly orders, factory top-ups,
+    existing shop-route top-ups and delivery checks by site. Saved and proposed
+    settings stay separate. Tick actions as you carry them out in-game, or copy
+    the remaining list. Marks are local to this browser and character, and clear
+    when their setting or recommendation changes; they are not confirmation from
+    the game. Factory quantities use the existing full-rate model. Storage,
+    transport limits and a custom buffer are not modelled in this first increment.
   - *Orders to set*: the weekly import order per depot and the daily top-up per factory,
     opening on the ones that need a change.
   - *Stock checks*: the five questions your logistics actually raise. Each view opens
