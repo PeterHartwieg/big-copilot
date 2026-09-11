@@ -4546,79 +4546,16 @@ svg.spark{height:26px; width:100%; margin-top:2px}
 .minor ul{margin:8px 0 0; padding-left:18px}
 .minor li{margin:3px 0}
 
-/* legacy: results (chart tip, legend, chain rows, site cells, week bars,
-   site detail, hour grid) -------------------------------------------------- */
-.charttip{
-  position:absolute; pointer-events:none; opacity:0; transform:translate(-50%,-100%);
-  background:var(--ink); color:var(--ground); padding:7px 10px; border-radius:3px;
-  font-size:12px; white-space:nowrap; transition:opacity .1s; z-index:5;
-}
-.charttip .num{font-weight:600}
-.legend{padding:0 20px 16px; flex-wrap:wrap}
-.legend span{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2)}
-.legend i{width:14px; height:3px; border-radius:2px}
-thead th{position:sticky; top:0; background:var(--surface); cursor:pointer; user-select:none}
-thead th:hover{color:var(--ink)}
-thead th[data-dir]::after{content:"↓"; margin-left:5px; color:var(--accent)}
-thead th[data-dir="asc"]::after{content:"↑"}
-tbody tr.chain > td{background:var(--raised); font-weight:600; border-bottom:1px solid var(--rule)}
-tbody tr.chain:hover > td{background:var(--accent-soft)}
-tbody tr.chain td.l{font-size:14.5px}
-.chainname{display:flex; align-items:baseline; gap:8px}
-.chainname .twist{font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-3); width:9px}
-.chainname .sub{font-weight:400}
-.site{display:flex; align-items:center; gap:10px}
-.site .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
-td.l .sub{display:block; font-size:11.5px; color:var(--ink-3); font-weight:400}
-.site b{font-weight:600}
-.site .bullet{width:26px; height:26px; font-size:10px; letter-spacing:.02em}
-tbody tr.kid{cursor:pointer}
-tbody tr.kid.on > td{background:var(--accent-soft)}
-tbody tr.kid > td.l .site b::after{content:" \203A"; color:var(--ink-3); font-weight:400}
-select.sitepick{
-  font:inherit; font-size:12.5px; color:var(--ink); background:var(--surface);
-  border:1px solid var(--rule); border-radius:2px; padding:4px 8px; max-width:260px;
-}
-.weekbars{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; align-items:end}
-.wb{display:flex; flex-direction:column; align-items:center; gap:5px}
-.wbtrack{position:relative; width:100%; height:96px; border-radius:2px; background:var(--raised)}
-.wbtrack::after{content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--rule)}
-.wbtrack i{position:absolute; left:22%; right:22%; border-radius:2px}
-.wbtrack i.up{background:var(--accent)}
-.wbtrack i.down{background:var(--warn)}
-.wbv{font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--ink-2)}
-.wbd{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
-.wb.now .wbd{color:var(--ink); font-weight:600}
-.wb.now .wbtrack{outline:1px solid var(--rule); outline-offset:2px}
-.weekbars.compact{gap:3px}
-.weekbars.compact .wbtrack{height:34px}
-.weekbars.compact .wbv{display:none}
-.weekbars.compact .wbd{font-size:9px}
-#sitePanel .sitehead{margin:0 0 18px}
-#sitePanel .sitehead h3{margin:0; font-size:21px; font-weight:600; letter-spacing:-.02em}
-#sitePanel .sstats{gap:1px; margin-top:0; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
-#sitePanel .sstat{border-radius:0; border:none; padding:12px 14px; display:flex; flex-direction:column; gap:3px}
-#sitePanel .sstat b{font-size:19px; font-weight:600; letter-spacing:-.02em}
-.sitegrid{display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; align-items:start}
-.sitegrid > .panel{margin-top:20px}
-.panel{margin-top:20px}
-.panel:first-child{margin-top:0}
-.panel > .eyebrow{display:block; margin-bottom:8px}
-.panel svg{width:100%}
-.hourgrid{border-collapse:separate; border-spacing:1px; width:100%; table-layout:fixed}
-.hourgrid th{
-  font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:500; color:var(--ink-3);
-  padding:0 0 3px; border:none; text-align:center; background:none; position:static;
-  letter-spacing:0; text-transform:none; cursor:default;
-}
-.hourgrid th.l{text-align:left; padding-right:6px; width:34px}
-.hourgrid td{padding:0; border:none; height:15px; border-radius:1px; background:var(--raised); position:relative}
-.hourgrid td.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
-.hourgrid td.slack{box-shadow:inset 0 0 0 1px var(--info)}
-.hourgrid tr.thin td{opacity:.4}
-.hourgrid tr.thin th.l{color:var(--ink-3); font-style:italic}
-.hourkey{display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--ink-3)}
-.hourkey i{display:inline-block; width:11px; height:11px; border-radius:2px; vertical-align:-1px; margin-right:5px}
+/* legacy: results — the old markup is gone; what stays is what the mockup
+   could not show: header sorting, the site picker's full list inside its
+   .seg, and the open site's row in the portfolio -------------------------- */
+thead th[data-i]{cursor:pointer; user-select:none}
+thead th[data-i]:hover{color:var(--ink)}
+thead th svg.sort{width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
+thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
+tr.kid.on td{background:var(--accent-soft)}
+.seg select.sitepick{appearance:none; -webkit-appearance:none; font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif; color:var(--ground); background:var(--ink); border:0; border-radius:5px; padding:6px 12px; cursor:pointer; max-width:260px}
+.seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
 
 /* legacy: supply (flow map, factory line naming, import blocks) ------------ */
 .flowbox{padding:16px 20px 4px; overflow-x:auto}
@@ -5186,51 +5123,23 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
   </div>
 
   <div class="page" id="pageResults" hidden>
-    <section class="sec rv measured" id="secDaily">
-      <div class="head">
-        <h2>Daily result</h2>
-        <p id="chartNote"></p>
-        <div class="tools" id="chartTools"></div>
-      </div>
-      <div class="card">
-        <div class="chartbox"><svg id="chart" height="260"></svg><div class="charttip" id="chartTip"></div></div>
-        <div class="legend" id="legend"></div>
-      </div>
+    <section class="sec rv" id="secDaily">
+      <div id="dailyHead"></div>
+      <div id="dailyBox"></div>
     </section>
 
     <section class="sec rv" id="secRhythm">
-      <div class="head">
-        <h2>Weekly rhythm</h2>
-        <p id="rhythmNote"></p>
-        <div class="tools" id="rhythmTools"></div>
-      </div>
-      <p class="verdict" id="rhythmVerdict"></p>
-      <div id="rhythmCards" hidden>
-        <div class="duo">
-          <div class="card pad"><div id="rhythmChart"></div></div>
-          <div class="card pad" id="rhythmToday"></div>
-        </div>
-      </div>
-      <div class="card scroll" id="rhythmSitesBox" style="margin-top:20px" hidden>
-        <table id="rhythmSites"></table></div>
+      <div id="rhythmHead"></div>
+      <div id="rhythmChart"></div>
+      <div id="rhythmSitesBox" style="margin-top:20px" hidden><table id="rhythmSites"></table></div>
     </section>
 
     <section class="sec rv" id="secPortfolio">
-      <div class="head">
-        <h2>Portfolio</h2>
-        <p id="portfolioNote"></p>
-        <div class="tools" id="portTools"></div>
-      </div>
-      <div class="card scroll"><table id="portfolio"></table></div>
+      <div id="portHead"></div>
+      <div style="overflow-x:auto"><table id="portfolio"></table></div>
     </section>
 
-    <section class="sec rv" id="secDetail" hidden>
-      <div class="head">
-        <h2>Business detail</h2>
-        <div class="tools" id="siteTools"></div>
-      </div>
-      <div class="card pad" id="sitePanel"></div>
-    </section>
+    <section class="sec rv" id="secDetail" hidden><div id="sitePanel"></div></section>
   </div>
 
   <div class="page" id="pageSupply" hidden>
@@ -5516,13 +5425,16 @@ let alertGroupPrefs = {};
 let siteKey = null, siteTab = -1, siteOpen = false;
 let chartRows=[];
 
+/* The five lines of the daily chart. Two are on until the reader says
+   otherwise; the choice lives in seriesState across renders. */
 const SERIES = {
-  profit7: {label:"Profit, 7-day average", colour:"var(--accent)", key:"profit7", wide:true},
-  profit:  {label:"Net profit", colour:"var(--ink-3)", key:"profit"},
-  revenue: {label:"Revenue",    colour:"var(--info)",   key:"revenue"},
-  cogs:    {label:"Goods",      colour:"var(--warn)",   key:"cogs"},
-  wages:   {label:"Wages",      colour:"var(--neg)",    key:"wages"},
+  avg:     {label:"7-day profit", colour:"var(--accent)", key:"profit7", on:true, width:2},
+  net:     {label:"Net profit",   colour:"var(--ink-3)",  key:"profit",  on:true, bars:true},
+  revenue: {label:"Revenue",      colour:"var(--info)",   key:"revenue"},
+  goods:   {label:"Goods",        colour:"var(--warn)",   key:"cogs"},
+  wages:   {label:"Wages",        colour:"var(--ink-2)",  key:"wages", width:1.2, dash:"3 3"},
 };
+const seriesOn = id => id in seriesState ? !!seriesState[id] : !!SERIES[id].on;
 
 /* Week on week per site, keyed by address so it survives a re-sort. */
 const TREND = {};
@@ -5531,12 +5443,13 @@ function indexTrends(){
   (D.trends||[]).forEach(t => TREND[t.key] = t);
 }
 const pct = v => `${v>0?"+":""}${(v*100).toFixed(0)}%`;
+/* The two weeks behind the percentage sit in its tooltip. */
+const wow = (change, last7, prev7, empty) => change === null || change === undefined
+  ? `<span class="sub" data-tip="${empty}">—</span>`
+  : `<span class="${sign(change)}" data-tip="${compact(last7)} this week against ${compact(prev7)} the week before">${pct(change)}</span>`;
 const wowCell = b => {
   const t = TREND[b.key];
-  if(!t || !t.ready || t.change === null)
-    return `<span class="sub" title="Needs two full weeks of trading">—</span>`;
-  return `<span class="${sign(t.change)}">${pct(t.change)}</span>
-    <span class="sub">${compact(t.last7)} vs ${compact(t.prev7)}</span>`;
+  return wow(t && t.ready ? t.change : null, t && t.last7, t && t.prev7, "Needs two full weeks of trading");
 };
 
 const VIEWS = {
@@ -5544,9 +5457,9 @@ const VIEWS = {
     label: "Profit & loss",
     note: "Yesterday's income statement, by chain",
     cols: [
-      ["Business", b=>siteCell(b), "l", null],
+      ["Business", b=>kidCell(b), "l", null],
       ["Revenue", b=>fmt(b.revenue), "", b=>b.revenue],
-      ["Week / week", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
+      ["Wk / wk", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
       ["Goods", b=>fmt(-b.cogs), "", b=>b.cogs],
       ["Wages", b=>fmt(-b.wages), "", b=>b.wages],
       ["Rent", b=>fmt(-b.rent), "", b=>b.rent],
@@ -5558,13 +5471,10 @@ const VIEWS = {
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
     chain: c => [null, fmt(c.revenue),
-                 c.change === null || c.change === undefined
-                   ? `<span class="sub" title="A site here has under two weeks of trading">—</span>`
-                   : `<span class="${sign(c.change)}">${pct(c.change)}</span>
-                      <span class="sub">${compact(c.last7)} vs ${compact(c.prev7)}</span>`,
+                 wow(c.change, c.last7, c.prev7, "A site here has under two weeks of trading"),
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
-                 `<span class="${sign(c.profit)}">${fmt(c.profit)}</span>`,
+                 `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
                  c.margin===null?"—":`${c.margin.toFixed(1)}%`],
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
                   fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
@@ -5574,7 +5484,7 @@ const VIEWS = {
     label: "Operations",
     note: "Who shops here, and what pulls them in",
     cols: [
-      ["Business", b=>siteCell(b), "l", null],
+      ["Business", b=>kidCell(b), "l", null],
       ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
       ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
@@ -5593,28 +5503,33 @@ const VIEWS = {
 /* --- the weekly cycle ------------------------------------------------- */
 const weeksOf = p => p ? Math.min(...p.map(d => d.n)) : 0;
 
-/* Seven bars against a 100 baseline. Height encodes distance from a normal
-   day in both directions, so a trough reads as clearly as a peak. */
-function weekBars(profile, opts){
-  if(!profile) return `<p class="muted">${(opts && opts.empty)
-    || "Not enough history to separate a weekly cycle from noise."}</p>`;
-  const today = D.rhythm.today && D.rhythm.today.day;
+/* Seven columns either side of a midline. Height is distance from a normal
+   day in both directions, so a trough reads as clearly as a peak; the figure
+   sits in a pill at the bar's tip and shows on hover, the weekday spells
+   itself out, and today's column is outlined. */
+function weekHtml(profile, todayName){
   const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
-  return `<div class="weekbars${opts && opts.compact ? " compact" : ""}">
-    ${profile.map(d => {
-      const off = d.index - 100;
-      const h = Math.min(Math.abs(off) / span, 1) * 50;
-      const isToday = d.day === today;
-      return `<div class="wb${isToday ? " now" : ""}" title="${d.day}: ${d.index}% of a normal day, from ${d.n} weeks">
-        <span class="wbv">${off > 0 ? "+" : ""}${off}</span>
-        <div class="wbtrack">
-          <i class="${off >= 0 ? "up" : "down"}" style="height:${h.toFixed(1)}%;
-             ${off >= 0 ? "bottom:50%" : "top:50%"}"></i>
-        </div>
-        <span class="wbd">${d.short}</span>
-      </div>`;
+  return `<div class="week">${profile.map(d => {
+    const off = d.index - 100, up = off >= 0, side = up ? "bottom" : "top";
+    const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 56));
+    return `<div class="wd${d.day === todayName ? " now" : ""}"><div class="track">
+      <i class="bar2${up ? "" : " down"}" style="height:${h}px;${side}:50%"></i>
+      <span class="n" style="${side}:calc(50% + ${h + 8}px)">${off > 0 ? "+" : ""}${off} pts</span>
+      </div><span class="d"><span>${d.short.toUpperCase()}</span><b>${d.day}</b></span></div>`;
+  }).join("")}</div>`;
+}
+/* The same week at table-row size. */
+function miniWeek(profile){
+  if(!profile) return `<span class="quiet">not enough history</span>`;
+  const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
+  return `<svg viewBox="0 0 140 28" style="width:140px;height:28px" aria-hidden="true">
+    <line x1="0" x2="140" y1="14" y2="14" stroke="var(--rule)"/>
+    ${profile.map((d, i) => {
+      const off = d.index - 100, h = Math.max(1, Math.abs(off) / span * 12);
+      return `<rect x="${i * 20 + 4}" y="${(off >= 0 ? 14 - h : 14).toFixed(1)}" width="12" height="${h.toFixed(1)}" rx="1.5"
+        fill="${off >= 0 ? "var(--accent)" : "var(--warn)"}"><title>${d.day}: ${d.index}% of a normal day, from ${d.n} weeks</title></rect>`;
     }).join("")}
-  </div>`;
+  </svg>`;
 }
 
 const RHYTHM_VIEWS = {
@@ -5622,32 +5537,17 @@ const RHYTHM_VIEWS = {
   revenue:   {label:"Revenue",   note:"Takings across every site"},
   profit:    {label:"Profit",    note:"Daily profit across every site"},
 };
+const signedPct = v => `${v > 0 ? "+" : ""}${v}%`;
 
 function drawRhythm(){
-  const r = D.rhythm;
-  const profile = r[rhythmView];
-  const weeks = weeksOf(profile);
-  $("rhythmNote").textContent = profile
-    ? `${RHYTHM_VIEWS[rhythmView].note}, against a normal day, ${weeks} weeks of history`
-    : RHYTHM_VIEWS[rhythmView].note;
-  $("rhythmChart").innerHTML = weekBars(profile);
-
+  const r = D.rhythm, profile = r[rhythmView], weeks = weeksOf(profile);
   const today = r.today, yest = r.yesterday;
-  $("rhythmToday").innerHTML = [
-    today && today.index ? `<div class="stat"><span>Today is ${today.day}</span>
-      <b class="num ${today.index >= 100 ? "pos" : "neg"}">${today.index > 100 ? "+" : ""}${
-        today.index - 100}% vs a normal day</b></div>` : "",
-    yest && yest.index ? `<div class="stat"><span>Yesterday was ${yest.day}</span>
-      <b class="num ${yest.index >= 100 ? "pos" : "neg"}">${yest.index > 100 ? "+" : ""}${
-        yest.index - 100}% vs a normal day</b></div>` : "",
-  ].join("");
-
-  const swingy = D.businesses.filter(b => b.rhythm)
-    .sort((a,z) => z.swing - a.swing);
+  const swingy = D.businesses.filter(b => b.rhythm).sort((a,z) => z.swing - a.swing);
 
   /* Nine rows saying the same thing is a sentence, not a table. When most sites
      peak on the same day within a narrow band, say that; the table stays a
-     click away for the sites that break the pattern. */
+     click away for the sites that break the pattern. The sentence, today's and
+     yesterday's own weekday reading go behind the ? mark. */
   const byDay = {};
   swingy.forEach(b => (byDay[b.peakDay] = byDay[b.peakDay] || []).push(b));
   const ranked = Object.entries(byDay).sort((a,z) => z[1].length - a[1].length);
@@ -5656,41 +5556,46 @@ function drawRhythm(){
   const spread = swings.length ? Math.max(...swings) - Math.min(...swings) : 0;
   const rest = ranked.slice(1);
   const verdict = (pack.length >= 7 && spread <= 15)
-    ? `<b>${pack.length} site${pack.length===1?"":"s"} peak ${topDay}</b>, +${
-        Math.min(...swings)} to +${Math.max(...swings)} points between their best and
-        worst day. ${rest.length
+    ? `${pack.length} site${pack.length===1?"":"s"} peak ${topDay}, +${Math.min(...swings)} to +${
+        Math.max(...swings)} points between their best and worst day. ${rest.length
           ? rest.map(([d,bs]) => `${bs.map(b => shortName(b)).join(", ")} peak${
               bs.length===1?"s":""} ${d}`).join("; ") + "."
-          : "Nothing runs the other way."}
-      <button type="button" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-        showRhythmSites ? "hide the table" : "site by site"}</button>`
+          : "Nothing runs the other way."}`
     : swingy.length
-      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.
-         <button type="button" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-           showRhythmSites ? "hide the table" : "site by site"}</button>`
-      : `No site has enough history to separate a weekly cycle from noise yet.`;
-  /* The sentence is the decision; the bars are the shape behind it, and they
-     wait for a click. */
-  $("rhythmVerdict").innerHTML = verdict + (profile
-    ? ` <button type="button" id="rhythmCardsToggle" aria-expanded="${showRhythmCards}">${
-        showRhythmCards ? "hide the week's shape" : "the week's shape"}</button>` : "");
-  $("rhythmCards").hidden = !showRhythmCards;
-  $("rhythmTools").hidden = !showRhythmCards;
-  const cardsToggle = $("rhythmCardsToggle");
-  if(cardsToggle) cardsToggle.onclick = () => { showRhythmCards = !showRhythmCards; drawRhythm(); };
-  const toggle = $("rhythmToggle");
-  if(toggle) toggle.onclick = () => { showRhythmSites = !showRhythmSites; drawRhythm(); };
-  $("rhythmSitesBox").hidden = !showRhythmSites || !swingy.length;
+      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.`
+      : "No site has enough history to separate a weekly cycle from noise yet.";
+  const days = [
+    today && today.index ? `Today is ${today.day}, normally ${signedPct(today.index - 100)}.` : "",
+    yest && yest.index ? `Yesterday was ${yest.day}, normally ${signedPct(yest.index - 100)}.` : "",
+  ].filter(Boolean).join(" ");
+  const note = `${RHYTHM_VIEWS[rhythmView].note} against a normal day${
+    profile ? `, from ${weeks} week${weeks===1?"":"s"} of history.` : "."}`;
 
+  $("rhythmHead").innerHTML = sechead("Weekly rhythm", {
+    why: [note, verdict, days].filter(Boolean).join(" "),
+    aside: `<span class="seg" id="rhythmTools"></span>${swingy.length
+      ? `<a class="link" href="#" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
+          showRhythmSites ? "hide the table" : "site by site"}</a>` : ""}`,
+  });
+  seg($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
+    () => rhythmView, v => rhythmView = v, drawRhythm);
+  $("rhythmChart").innerHTML = profile
+    ? `<div class="chartbox" style="padding-bottom:16px">${weekHtml(profile, today && today.day)}</div>`
+    : `<p class="quiet">Not enough history to separate a weekly cycle from noise.</p>`;
+
+  const toggle = $("rhythmToggle");
+  if(toggle) toggle.onclick = e => { e.preventDefault(); showRhythmSites = !showRhythmSites; drawRhythm(); };
+  $("rhythmSitesBox").hidden = !showRhythmSites || !swingy.length;
   $("rhythmSites").innerHTML = swingy.length ? `
-    <thead><tr><th class="l">Business</th><th class="l">Peaks</th><th>Swing</th>
+    <thead><tr><th>Business</th><th class="l">Peaks</th><th>Swing</th>
       <th class="l" style="width:38%">Across the week</th></tr></thead>
-    <tbody>${swingy.map(b => `<tr>
-      <td class="l">${siteCell(b)}</td>
+    <tbody>${swingy.map(b => `<tr data-key="${attr(b.key)}" style="cursor:pointer">
+      <td class="l">${siteLabel(b)}</td>
       <td class="l">${b.peakDay}</td>
-      <td class="num">${b.swing} pts</td>
-      <td>${weekBars(b.rhythm, {compact:true})}</td></tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l muted">No site has enough history yet.</td></tr></tbody>`;
+      <td>${b.swing} pts</td>
+      <td class="l">${miniWeek(b.rhythm)}</td></tr>`).join("")}</tbody>` : "";
+  $$("#rhythmSites tr[data-key]").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
+  wireTips();
 }
 
 /* --- the chain as a picture ------------------------------------------- */
@@ -6263,12 +6168,6 @@ function toolbar(host, options, read, write, redraw){
 
 toolbar($("alertTools"), [["all","All"],["critical","Urgent"],["warn","Watch"],["info","Opportunity"]],
   () => alertFilter, v => alertFilter = v, () => drawAlerts());
-toolbar($("chartTools"), [[30,"30 days"],[0,"All"]],
-  () => chartWindow, v => chartWindow = v, () => drawChart());
-toolbar($("portTools"), Object.entries(VIEWS).map(([id,v]) => [id, v.label]),
-  () => view, v => { view = v; sortKey = null; }, () => drawPortfolio());
-toolbar($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
-  () => rhythmView, v => rhythmView = v, () => drawRhythm());
 toolbar($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id,v]) => [id, v.label]),
   () => stockView, v => stockView = v, () => drawStock());
 let logisticsView = "changes";
@@ -6290,54 +6189,7 @@ toolbar($("marketTools"), [["types","By business type"],["mine","What I sell"],
   $("marketTools").append(b);
 }
 
-$("legend").innerHTML = Object.entries(SERIES).map(([id,s]) =>
-  `<span data-s="${id}" role="button" tabindex="0" style="cursor:pointer">
-     <i style="background:${s.colour}"></i>${s.label}</span>`).join("");
-document.querySelectorAll("#legend span").forEach(node => {
-  const toggle = () => {
-    const id = node.dataset.s;
-    shown.has(id) ? shown.delete(id) : shown.add(id);
-    if(!shown.size) shown.add(id);
-    drawChart();
-  };
-  node.onclick = toggle;
-  node.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } };
-});
-
 $("flowClear").onclick = () => { flowPick = null; drawFlow(); };
-
-const chart = $("chart"), tip = $("chartTip");
-
-chart.addEventListener("pointermove", e => {
-  if(!chartRows.length) return;
-  const box = chart.getBoundingClientRect();
-  const {W,P} = chart._geom;
-  const px = (e.clientX-box.left) / box.width * W;
-  const i = Math.max(0, Math.min(chartRows.length-1,
-    Math.round((px-P.l)/((W-P.l-P.r)/(chartRows.length-1||1)))));
-  const r = chartRows[i], cx = chart._x(i);
-  const cross = chart.querySelector("#cross");
-  cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("opacity", ".5");
-  tip.style.opacity = 1;
-  tip.style.left = (cx/W*box.width) + "px";
-  tip.style.top = (e.clientY-box.top-14) + "px";
-  tip.innerHTML = `<b>Day ${r.day}</b>` + [...shown].map(id =>
-    `<br>${SERIES[id].label} <span class="num">${fmt(r[SERIES[id].key])}</span>`).join("");
-});
-chart.addEventListener("pointerleave", () => {
-  tip.style.opacity = 0;
-  const c = chart.querySelector("#cross"); if(c) c.setAttribute("opacity", 0);
-});
-window.addEventListener("resize", () => { if(D) drawChart(); });
-/* A width change the window never sees — a scrollbar appearing, a panel
-   opening — would otherwise leave the chart drawn to the old geometry. */
-if(window.ResizeObserver){
-  let lastW = 0;
-  new ResizeObserver(entries => {
-    const w = Math.round(entries[0].contentRect.width);
-    if(w && w !== lastW){ lastW = w; drawChart(); }
-  }).observe(chart);
-}
 
 /* --- draw ----------------------------------------------------------- */
 function drawMast(){
@@ -6517,115 +6369,142 @@ function drawAlerts(){
   });
 }
 
+/* A round step for the y axis: 1, 2, 2.5 or 5 times a power of ten, so about
+   `ticks` gridlines cover the span. */
+function niceStep(span, ticks){
+  const raw = span / ticks, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+  return (f <= 1.2 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
+}
+
 function drawChart(){
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
-  const rows = chartRows;
+  const rows = chartRows, n = rows.length;
+  if(!n) return;
+  const first = rows[0], last = rows[n - 1];
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */
-  $("chartNote").textContent = `Day ${rows[0].day} to ${rows[rows.length-1].day}. `
-    + `Daily profit follows the purchase calendar, so the 7-day line is the trend`;
-  document.querySelectorAll("#legend span").forEach(n =>
-    n.style.opacity = shown.has(n.dataset.s) ? 1 : .38);
-
-  const W = chart.clientWidth || 900, H = 260, P = {t:12,r:8,b:26,l:62};
-  const keys = [...shown];
-  let lo = 0, hi = 0;
-  rows.forEach(r => keys.forEach(id => { lo=Math.min(lo,r[SERIES[id].key]); hi=Math.max(hi,r[SERIES[id].key]); }));
-  hi = hi || 1;
-  const pad = (hi-lo)*0.08;
-  lo -= pad; hi += pad;
-  const x = i => P.l + i/(rows.length-1||1)*(W-P.l-P.r);
-  const y = v => P.t + (1-(v-lo)/(hi-lo))*(H-P.t-P.b);
-
-  const ticks = 4, out = [];
-  for(let i=0;i<=ticks;i++){
-    const v = lo + (hi-lo)*i/ticks, yy = y(v).toFixed(1);
-    out.push(`<line x1="${P.l}" y1="${yy}" x2="${W-P.r}" y2="${yy}" stroke="var(--rule-soft)" stroke-width="1"/>`);
-    out.push(`<text x="${P.l-10}" y="${+yy+4}" text-anchor="end" fill="var(--ink-3)"
-      font-family="IBM Plex Mono, monospace" font-size="10.5">${compact(v)}</text>`);
-  }
-  if(lo<0) out.push(`<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}" stroke="var(--ink-3)" stroke-width="1"/>`);
-
-  const step = Math.max(1, Math.ceil(rows.length/10));
-  rows.forEach((r,i) => { if(i%step===0 || i===rows.length-1)
-    out.push(`<text x="${x(i)}" y="${H-6}" text-anchor="middle" fill="var(--ink-3)"
-      font-family="IBM Plex Mono, monospace" font-size="10.5">${r.day}</text>`); });
-
-  keys.forEach(id => {
-    const s = SERIES[id];
-    const pts = rows.map((r,i)=>`${x(i).toFixed(1)},${y(r[s.key]).toFixed(1)}`).join(" ");
-    if(s.wide){
-      out.push(`<polygon points="${x(0).toFixed(1)},${y(Math.max(lo,0)).toFixed(1)} ${pts} ${x(rows.length-1).toFixed(1)},${y(Math.max(lo,0)).toFixed(1)}"
-        fill="${s.colour}" opacity=".10"/>`);
-    }
-    out.push(`<polyline points="${pts}" fill="none" stroke="${s.colour}"
-      stroke-width="${s.wide ? 2.6 : 1.4}" stroke-linejoin="round" stroke-linecap="round"
-      opacity="${s.wide ? 1 : .8}"/>`);
-    const last = rows.length-1;
-    out.push(`<circle cx="${x(last).toFixed(1)}" cy="${y(rows[last][s.key]).toFixed(1)}" r="3.4"
-      fill="var(--surface)" stroke="${s.colour}" stroke-width="2"/>`);
+  $("dailyHead").innerHTML = sechead("Daily result", {
+    why: `Daily profit follows the purchase calendar, so the 7-day line is the trend. Day ${
+      first.day} to ${last.day}. Click a legend chip to add or drop a line.`,
+    aside: `<span class="seg" id="chartTools"></span>`,
   });
-  out.push(`<line id="cross" x1="0" y1="${P.t}" x2="0" y2="${H-P.b}" stroke="var(--ink-3)"
-    stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`);
-  chart.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  chart.innerHTML = out.join("");
-  chart._x = x; chart._geom = {W,H,P};
+  seg($("chartTools"), [[30,"30 days"],[0,"All"]], () => chartWindow, v => chartWindow = v, drawChart);
+
+  const W = 1140, H = 260, L = 56, R = 12, T = 16, B = 28;
+  /* The axis fits every series, on or off, so a legend click never moves it. */
+  let min = 0, max = 0;
+  rows.forEach(r => Object.values(SERIES).forEach(s => { min = Math.min(min, r[s.key]); max = Math.max(max, r[s.key]); }));
+  const step = niceStep((max - min) || 1, 5), fine = step / 5;
+  const hi = Math.max(Math.ceil((max + step * .05) / fine) * fine, fine);
+  const lo = min < 0 ? -Math.ceil((-min + step * .05) / fine) * fine : 0;
+  const X = i => L + (n > 1 ? i / (n - 1) : .5) * (W - L - R);
+  const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+
+  const out = [];
+  for(let v = 0; v <= hi + 1e-9; v += step){
+    const yy = Y(v).toFixed(1);
+    out.push(`<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--rule-soft)"></line>`
+      + `<text x="${L - 10}" y="${(+yy + 4).toFixed(1)}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-3)">${money(v)}</text>`);
+  }
+  const bw = Math.min(12, (W - L - R) / n * .6), y0 = Y(0);
+  const line = (key, colour, width, dash) => {
+    const pts = rows.map((r, i) => `${X(i).toFixed(1)},${Y(r[key]).toFixed(1)}`).join(" ");
+    return `<polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="${width || 1.5}" stroke-linejoin="round"${
+      dash ? ` stroke-dasharray="${dash}"` : ""}></polyline>`;
+  };
+  Object.entries(SERIES).forEach(([id, s]) => {
+    const body = s.bars
+      ? rows.map((r, i) => { const v = r[s.key], yy = Y(v);
+          return `<rect x="${(X(i) - bw / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${
+            Math.abs(yy - y0).toFixed(1)}" rx="2" fill="${v < 0 ? "var(--neg)" : "var(--ink-3)"}" opacity=".45"><title>Day ${
+            r.day}: net ${money(v)}</title></rect>`; }).join("")
+      : line(s.key, s.colour, s.width, s.dash);
+    out.push(`<g data-series="${id}"${seriesOn(id) ? "" : ' class="off"'}>${body}</g>`);
+  });
+  const stride = Math.max(1, Math.ceil(n / 10));
+  rows.forEach((r, i) => { if(i % stride === 0 || i === n - 1)
+    out.push(`<text x="${X(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-3)">${r.day}</text>`); });
+  const k = n - 1;
+  out.push(`<g class="xh"><line x1="${X(k).toFixed(1)}" x2="${X(k).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--ink-3)" stroke-dasharray="3 4"></line>
+    <circle cx="${X(k).toFixed(1)}" cy="${Y(last.profit7).toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--ground)" stroke-width="2"></circle></g>`);
+
+  const readout = r => `<i></i>Day ${r.day} <b>${money(r.profit)}</b> net <b>${money(r.profit7)}</b> 7-day <b>${money(r.revenue)}</b> revenue`;
+  const xs = JSON.stringify(rows.map((r, i) => +X(i).toFixed(1)));
+  const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
+  const labels = JSON.stringify(rows.map(readout));
+  $("dailyBox").innerHTML = `
+    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}">
+      <div class="readout">${readout(last)}</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;overflow:visible">${out.join("\n")}</svg>
+      <div class="legend">${Object.entries(SERIES).map(([id, s]) =>
+        `<a class="${seriesOn(id) ? "on" : ""}" data-series="${id}" href="#"><i style="background:${s.colour}"></i>${s.label}</a>`).join("")}</div>
+    </div>`;
+  wireChart(); wireTips();
 }
 
 /* A shop, its depot and the factory behind it are one operation. Reading them
    apart puts a 98% shop margin next to a factory at -80% and neither number
    means anything, so the chain total comes first and the sites fold underneath. */
+const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
+/* A site in a table: its neighbourhood pill, its short name, and the type and
+   address underneath. With `chev`, the arrow that says the row opens. */
+const siteLabel = (b, chev) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}${chev ? ` ${CHEV()}` : ""}
+  <span class="sub">${b.type} · ${b.address}</span>`;
+const kidCell = b => siteLabel(b, true);
+
 function chainRow(c, v){
-  const open = openChains.has(c.name);
   const cells = v.chain(c);
   const note = c.external
-    ? `${compact(c.external)} of that is sold outside the company by the factory`
+    ? `${compact(c.external)} of it sold outside the company by its factory`
     : c.suppliedBy.length ? `supplied from ${c.suppliedBy.join(", ")}` : "";
-  const name = `<div class="chainname"><span class="twist">${open?"▾":"▸"}</span>
-    <span><b>${c.name}</b> <span class="sub">${c.count} site${c.count===1?"":"s"}${
-      note ? ` · ${note}` : ""}</span></span></div>`;
-  return `<tr class="chain" data-chain="${c.name}">${
-    cells.map((cell,i) => `<td class="${i?"num":"l"}">${i===0?name:cell}</td>`).join("")}</tr>`;
+  const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${c.count} site${c.count===1?"":"s"}${
+    note ? ` · ${note}` : ""}</span>`;
+  return `<tr class="chain" data-chain="${attr(c.name)}">${
+    cells.map((cell, i) => `<td class="${i ? "" : "l"}">${i === 0 ? name : cell}</td>`).join("")}</tr>`;
 }
+
+const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>`;
 
 function drawPortfolio(){
   const v = VIEWS[view];
-  $("portfolioNote").textContent = `${v.note}. Open a chain, then a site for its detail`;
+  $("portHead").innerHTML = sechead("Portfolio", {
+    why: `${v.note}. Click a chain to open its sites, a site to open its detail. Click a column to sort the sites by it.`,
+    aside: `<span class="seg" id="portTools"></span>`,
+  });
+  seg($("portTools"), Object.entries(VIEWS).map(([id, o]) => [id, o.label]),
+    () => view, id => { view = id; sortKey = null; }, drawPortfolio);
   const byKey = {};
   D.businesses.forEach(b => byKey[b.key] = b);
   const sorter = (sortKey !== null && v.cols[sortKey] && v.cols[sortKey][3])
     ? (a,z) => (v.cols[sortKey][3](a) - v.cols[sortKey][3](z)) * sortDir : null;
 
+  /* Every site row is in the table; wirePortfolio() shows the ones whose
+     chain is open, from the openChains set, so a refresh keeps them open. */
   const body = [];
   (D.chains||[]).forEach(c => {
     body.push(chainRow(c, v));
-    if(!openChains.has(c.name)) return;
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
-    kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-key="${
-      b.key}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
-      `<td class="${cls||"num"}">${f(b)}</td>`).join("")}</tr>`));
+    kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-parent="${
+      attr(c.name)}" data-key="${attr(b.key)}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
+      `<td class="${cls||""}">${f(b)}</td>`).join("")}</tr>`));
   });
 
   const t = $("portfolio");
-  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls],i) =>
-      `<th class="${cls||""}" data-i="${i}" ${i===sortKey?`data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}</th>`).join("")}</tr></thead>
+  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls,key],i) =>
+      `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
+        i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
-      `<td class="${i?"num":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr></tfoot>` : ""}`;
-  t.querySelectorAll("thead th").forEach(th => th.onclick = () => {
+      `<td class="${i?"":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr></tfoot>` : ""}`;
+  t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
     const i = +th.dataset.i;
-    if(!v.cols[i][3]) return;
     if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
     drawPortfolio();
   });
-  t.querySelectorAll("tr.chain").forEach(tr => tr.onclick = () => {
-    const name = tr.dataset.chain;
-    openChains.has(name) ? openChains.delete(name) : openChains.add(name);
-    drawPortfolio();
-  });
   t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
+  wirePortfolio(); wireTips();
 }
 
 /* --- one business at a time ------------------------------------------ */
@@ -6652,25 +6531,28 @@ const shortName = b => nameUses()[baseName(b)] > 1 && b.neighbourhood
 const trades = b => b.status !== "vacant" && b.revenue > 0;
 
 /* A site opens from its portfolio row or from a finding; nothing is open until
-   someone asks. The picker moves between sites without the trip back up. */
+   someone asks. The picker moves between sites without the trip back up: the
+   previous and next site are a click away, the whole roster is in the list
+   between them. Trading sites lead, the support sites sit in their own group. */
 function drawSitePicker(){
+  const host = $("sitePick");
+  if(!host) return;
   const all = D.businesses.filter(b => b.status !== "vacant");
   const trading = all.filter(trades), support = all.filter(b => !trades(b));
-  const opt = b => `<option value="${b.key}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
-  $("siteTools").innerHTML = `
-    <select class="sitepick" id="sitePick" aria-label="Which site">
-      <option value="" disabled${siteKey ? "" : " selected"}>Pick a site</option>
-      ${trading.map(opt).join("")}
-      ${support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}
-    </select>
-    <button type="button" id="siteClose" title="Close the detail">close</button>`;
-  $("sitePick").onchange = e => openSite(e.target.value);
-  $("siteClose").onclick = closeSite;
+  const order = trading.concat(support);
+  const at = order.findIndex(b => b.key === siteKey);
+  const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
+  const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
+  const step = b => b ? `<a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>` : "";
+  host.innerHTML = `${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
+    support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}`;
+  host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
+  q("select", host).onchange = e => openSite(e.target.value);
 }
 function openSite(key, scroll = true){
   if(!D.businesses.some(b => b.key === key)) return;
   siteKey = key; siteOpen = true;
-  drawSitePicker(); drawSite(); drawPortfolio();
+  drawSite(); drawPortfolio();
   if(scroll) reveal("secDetail");
 }
 function closeSite(){
@@ -6681,8 +6563,8 @@ function closeSite(){
 /* A small area chart for one site's history: same grammar as the big one,
    without the axes it does not have room for. */
 function miniChart(series, key, colour){
-  if(series.length < 2) return `<p class="muted">Not enough history yet.</p>`;
-  const W = 640, H = 108, P = {t:8, r:6, b:16, l:4};
+  if(series.length < 2) return `<p class="quiet">Not enough history yet.</p>`;
+  const W = 540, H = 108, P = {t:8, r:6, b:16, l:4};
   const vals = series.map(d => d[key]);
   let lo = Math.min(...vals, 0), hi = Math.max(...vals, 1);
   const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
@@ -6691,7 +6573,7 @@ function miniChart(series, key, colour){
   const pts = series.map((d,i) => `${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
   const base = y(Math.max(lo, 0)).toFixed(1);
   const last = series.length - 1;
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:108px">
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:108px;overflow:visible">
     ${lo < 0 ? `<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}"
         stroke="var(--ink-3)" stroke-width="1"/>` : ""}
     <polygon points="${x(0).toFixed(1)},${base} ${pts} ${x(last).toFixed(1)},${base}"
@@ -6702,8 +6584,8 @@ function miniChart(series, key, colour){
       fill="var(--surface)" stroke="${colour}" stroke-width="2"/>
     <text x="${P.l}" y="${H-4}" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
       font-size="10">day ${series[0].day}</text>
-    <text x="${W-P.r}" y="${H-4}" text-anchor="end" fill="var(--ink-3)"
-      font-family="IBM Plex Mono, monospace" font-size="10">day ${series[last].day}</text>
+    <text x="${W-P.r}" y="${H-4}" text-anchor="end" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
+      font-size="10">day ${series[last].day}</text>
   </svg>`;
 }
 
@@ -6711,55 +6593,45 @@ function miniChart(series, key, colour){
    Three numbers meet here. Customers are measured an hour at a time over the
    fortnight the save keeps. The registers are whatever service staff were
    rostered that hour, at the capacity of the counters they were posted to. The
-   door cap is the building's own limit. Shade is how busy; a red outline is an
-   hour spent at the ceiling, a blue one an hour with capacity doing nothing. */
+   door cap is the building's own limit. Shade is how busy against the site's
+   own busiest hour; a red outline is an hour spent at the ceiling that was on.
+   The sentence under the grid says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
-
-function hourGrid(g){
-  if(!g) return "";
-  const peak = Math.max(g.peak, 1);
-  const head = `<tr><th class="l"></th>${
-    [...Array(24).keys()].map(h => `<th>${h%3===0?h:""}</th>`).join("")}</tr>`;
-  const body = HOUR_ROWS.map(wd => {
-    const cells = [...Array(24).keys()].map(h => {
-      const seen = g.customers[wd][h], cap = g.effective[wd][h];
-      if(seen === null) return `<td title="${WEEK_SHORT[wd]} ${h}:00, no reading"></td>`;
-      const shade = Math.round(Math.min(seen / peak, 1) * 42);
-      const atCap = cap && seen >= cap * 0.95;
-      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
-      return `<td class="${atCap?"cap":slack?"slack":""}"
-        style="background:color-mix(in srgb, var(--accent) ${shade}%, var(--raised))"
-        title="${WEEK_SHORT[wd]} ${String(h).padStart(2,"0")}:00, ${seen} customers, ${
-          g.staffed[wd][h]} of ${g.counters} register capacity staffed, ${
-          g.door||"no"} door cap${atCap?"; at the ceiling":slack?"; capacity idle":""}"></td>`;
-    }).join("");
-    return `<tr class="${g.thin[wd]?"thin":""}"><th class="l">${WEEK_SHORT[wd]}${
-      g.thin[wd]?"*":""}</th>${cells}</tr>`;
-  }).join("");
-  const weeks = Math.min(...g.weeks.filter(w => w));
-  const thin = g.thin.some(Boolean);
-  return `<table class="hourgrid">${head}${body}</table>
-    <div class="hourkey">
-      <span><i style="background:color-mix(in srgb, var(--accent) 42%, var(--raised))"></i>busiest hour ${
-        Math.round(g.peak)} customers</span>
-      <span><i style="box-shadow:inset 0 0 0 1.5px var(--neg)"></i>at the ceiling</span>
-      <span><i style="box-shadow:inset 0 0 0 1px var(--info)"></i>capacity idle</span>
-      <span>${g.counters} register capacity across ${g.stationCount} counter${
-        g.stationCount===1?"":"s"}${g.door?`, ${g.door}/h door cap`:""}</span>
-      <span>${weeks} week${weeks===1?"":"s"} behind each hour${
-        thin?"; starred days rest on under 2 weeks":""}</span>
-    </div>`;
-}
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+/* Mirrors AT_CAP in the Python: this close to the ceiling is at the ceiling,
+   so the outlined cells are the ones capHours counts. */
+const AT_CAP = 0.95;
 
-function siteStat(label, value, cls){
-  return `<div class="sstat"><span class="eyebrow">${label}</span>
-    <b class="num ${cls || ""}">${value}</b></div>`;
+function hourGrid(g, todayWd){
+  const peak = Math.max(g.peak, 1);
+  let cells = `<div></div>${[...Array(24).keys()].map(h => `<div class="hh">${h % 3 === 0 ? h : ""}</div>`).join("")}`;
+  HOUR_ROWS.forEach(wd => {
+    cells += `<div class="dd${wd === todayWd ? " now" : ""}">${WEEK_SHORT[wd].toUpperCase()}${g.thin[wd] ? "*" : ""}</div>`;
+    for(let h = 0; h < 24; h++){
+      const seen = g.customers[wd][h], cap = g.effective[wd][h];
+      const when = `<b>${WEEK_FULL[wd]} ${String(h).padStart(2, "0")}:00</b>`;
+      if(seen === null){ cells += `<div class="hc" data-read="${attr(`${when} no reading`)}"></div>`; continue; }
+      const a = seen ? 6 + Math.round(Math.min(seen / peak, 1) * 70) : 0;
+      const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
+      const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
+      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
+        g.staffed[wd][h]} of ${g.counters} register capacity on${
+        atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
+      cells += `<div class="hc${atCap ? " cap" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
+    }
+  });
+  return `<div class="hours">${cells}</div>`;
 }
 
 /* A vending-machine side item earns a rounding error next to a store's real
    line — this is the cutoff, as a share of the best-selling line's revenue. */
 const SHELF_MAIN_SHARE = 0.02;
+const SMALL = `style="font-size:12px;color:var(--ink-3);margin-left:6px"`;
+const CLOSE_ICON = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>`;
+/* Two letters for a role: the initials of its first two words. */
+const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1][0] : (w[0] || "??").slice(0, 2)).toUpperCase(); };
 
 function drawSite(){
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
@@ -6773,6 +6645,7 @@ function drawSite(){
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
   const grid = (D.hours || []).find(h => h.key === b.key);
+  const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
       ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
@@ -6782,28 +6655,29 @@ function drawSite(){
          String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
          ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
 
-  const stats = [
-    siteStat("Revenue / day", fmt(b.revenue)),
-    siteStat("Profit / day", fmt(b.profit), sign(b.profit)),
-    siteStat("Margin", b.margin === null ? "—" : `${b.margin.toFixed(1)}%`),
-    siteStat("Customers", b.customers ? b.customers.toLocaleString() : "—"),
-    siteStat("Spend / visit", b.basket === null ? "—" : `$${b.basket.toFixed(2)}`),
-    siteStat("Staff", b.staff || "—"),
-    siteStat("Rent / day", fmt(b.rent)),
-    siteStat("Opened", `day ${b.opened}`),
-  ].join("");
-
+  /* The costs behind the profit tile, on hover. */
   const costs = [
     ["Goods", b.cogs], ["Wages", b.wages], ["Rent", b.rent],
     ["Marketing", b.marketing], ["Theft", b.theft], ["Licensing", b.licensing],
   ].filter(([, v]) => v);
+  const costTip = costs.length
+    ? `Yesterday's costs: ${costs.map(([l, v]) => `${l.toLowerCase()} ${fmt(v)}`).join(", ")}.`
+    : "No costs recorded yesterday.";
+  const capTile = !grid ? "—"
+    : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
+    : `—<small ${SMALL}>no door cap${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
+  const stats = `
+    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}</div></div>
+    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
+      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/visit</small>`}</div></div>
+    <div class="sstat" data-tip="${attr(costTip)}"><span class="lab">Profit</span><div class="v ${sign(b.profit)}">${fmt(b.profit)}${
+      b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
+    <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
 
-  const crew = b.crew.length ? `
-    <div class="panel">
-      <span class="eyebrow">Who works here, ${fmt(b.staffCost)}/day</span>
-      ${b.crew.map(c => `<div class="stat"><span>${c.role}${
-        c.count > 1 ? ` ×${c.count}` : ""}</span><b class="num">${fmt(c.daily)}</b></div>`).join("")}
-    </div>` : "";
+  const crew = b.crew.length
+    ? b.crew.map(c => `<span class="person"><i>${roleCode(c.role)}</i>${c.role}<small>${
+        c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day</small></span>`).join("")
+    : `<span class="quiet">Nobody assigned.</span>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
@@ -6815,65 +6689,73 @@ function drawSite(){
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
   const shelves = showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
+  const gauge = t => {
+    if(!t || t.pressure === null) return "—";
+    const p = Math.round(t.pressure);
+    return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
+  };
   const products = shelves.length ? `
-    <div class="scroll"><table>
-      <thead><tr><th class="l">Product</th><th>Price</th><th>Sold / day</th>
-        <th>Revenue / day</th><th>On hand</th><th>Top-up</th><th>Pressure</th></tr></thead>
+    <table>
+      <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
+        <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
       <tbody>${shelves.map(l => {
         const t = targets[l.item];
         return `<tr>
-          <td class="l">${l.item}</td>
-          <td class="num">${l.price ? fmt(l.price) : "—"}</td>
-          <td class="num">${l.soldPerDay.toLocaleString()}</td>
-          <td class="num">${fmt(l.revenue)}</td>
-          <td class="num">${l.units.toLocaleString()}</td>
-          <td class="num">${t && t.target ? t.target.toLocaleString() : "—"}</td>
-          <td class="num">${t && t.pressure !== null ? load(t.pressure, t.level) : "—"}</td></tr>`;
-      }).join("")}</tbody></table></div>` : `<p class="muted">Nothing stocked here.</p>`;
+          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td>${l.soldPerDay.toLocaleString()}</td>
+          <td>${t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—"}</td>
+          <td>${fmt(l.revenue)}</td>
+          <td>${t && t.target ? t.target.toLocaleString() : "—"}</td>
+          <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
+          <td>${l.units.toLocaleString()}</td></tr>`;
+      }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
   const shelfMore = sideShelves.length ? `
-    <button type="button" id="shelfToggle" aria-expanded="${showAllShelves}">${
-      showAllShelves ? "hide" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</button>` : "";
+    <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
+      showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
+  const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
+    depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
   $("sitePanel").innerHTML = `
-    <div class="sitehead">
-      ${bullet(b)}
-      <div>
-        <h3>${b.name}</h3>
-        <span class="sub">${b.type} · ${b.address}${
-          b.neighbourhood ? ` · ${b.neighbourhood}` : ""}${
-          depot ? ` · supplied from ${shortName(depot)}` : ""}</span>
-      </div>
+    <div class="sitehead rv">
+      ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
+      <div><h2>${baseName(b)}</h2><span class="sub">${sub}</span></div>
+      <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
-    <div class="sstats">${stats}</div>
-    <div class="panel">
-      <span class="eyebrow">Profit, last ${b.series.length} days</span>
-      ${miniChart(b.series, "profit", "var(--accent)")}
+    <div class="sstats rv">${stats}</div>
+    ${grid ? `<section class="sec rv">
+      ${sechead("Customers by hour", {why: `${Math.min(...grid.weeks.filter(w => w))} week${
+        Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
+        grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
+        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.counters} register capacity across ${
+        grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}${grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.`})}
+      <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>
+      ${notes.map(n => `<p class="quiet">${n}</p>`).join("")}
+    </section>` : ""}
+    <div class="duo sec" style="grid-template-columns:1fr 2fr">
+      <section class="rv">
+        ${sechead("Crew", {quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        <div class="crew">${crew}</div>
+      </section>
+      <section class="rv">
+        ${sechead("Shelves", {quiet: "before tomorrow's top-up"})}
+        ${products}${shelfMore}
+      </section>
     </div>
-    <div class="panel">
-      <span class="eyebrow">Its week${b.rhythm
-        ? `: peaks ${b.peakDay}, ${b.swing} points between best and worst`
-        : ""}</span>
-      ${weekBars(b.rhythm, {empty:"Not enough trading history here yet."})}
-    </div>
-    ${grid ? `<div class="panel">
-      <span class="eyebrow">Every hour of the week: customers against the capacity on shift</span>
-      ${hourGrid(grid)}
-      ${notes.length ? notes.map(n => `<p class="muted">${n}</p>`).join("") : ""}
-    </div>` : ""}
-    <div class="sitegrid">
-      <div class="panel">
-        <span class="eyebrow">Yesterday's costs</span>
-        ${costs.length ? costs.map(([l,v]) =>
-          `<div class="stat"><span>${l}</span><b class="num neg">${fmt(-v)}</b></div>`).join("")
-          : `<p class="muted">No costs recorded.</p>`}
-        <div class="stat"><span><b>Profit</b></span>
-          <b class="num ${sign(b.profit)}">${fmt(b.profit)}</b></div>
-      </div>
-      ${crew || `<div class="panel"><span class="eyebrow">Who works here</span>
-        <p class="muted">Nobody assigned.</p></div>`}
-    </div>
-    <div class="panel"><span class="eyebrow">Shelves</span>${products}${shelfMore}</div>`;
-  if($("shelfToggle")) $("shelfToggle").onclick = () => { showAllShelves = !showAllShelves; drawSite(); };
+    <div class="duo sec">
+      <section class="rv">
+        ${sechead(`Profit, last ${b.series.length} days`)}
+        <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)")}</div>
+      </section>
+      <section class="rv">
+        ${sechead("Its week", {quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
+        <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
+          : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
+      </section>
+    </div>`;
+  drawSitePicker();
+  $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
+  if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
+  wireSiteHours(); wireTips(); wireReveal();
 }
 
 function drawStock(){
