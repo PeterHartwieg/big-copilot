@@ -872,8 +872,8 @@ details.help[open] summary::after{content:"\2013"}
     <div class="foot-links" id="footerLinks"></div>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "387e00eae6";</script>
-<script src="app.js?v=387e00eae6"></script>
+<script>window.LEDGER_BUILD = "d7a53b1266";</script>
+<script src="app.js?v=d7a53b1266"></script>
 
 <script>
 let D = null;
@@ -1995,6 +1995,12 @@ function drawAlerts(){
 function drawChart(){
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
   const rows = chartRows;
+  /* A save on its first day has no finished day to plot yet. */
+  if(!rows.length){
+    $("chartNote").textContent = "No finished day in this save yet; the chart starts tomorrow";
+    chart.innerHTML = ""; chart._x = null;
+    return;
+  }
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */

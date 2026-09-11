@@ -6123,6 +6123,12 @@ function drawAlerts(){
 function drawChart(){
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
   const rows = chartRows;
+  /* A save on its first day has no finished day to plot yet. */
+  if(!rows.length){
+    $("chartNote").textContent = "No finished day in this save yet; the chart starts tomorrow";
+    chart.innerHTML = ""; chart._x = null;
+    return;
+  }
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */
