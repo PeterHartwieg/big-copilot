@@ -4989,6 +4989,9 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .person.off{opacity:.5}
 .person.off i{background:#ff625733}
 .person small .off{color:var(--neg)}
+.person.more{color:var(--ink-2);border-style:dashed}
+/* A career total with no target is a line, not a box to tick. */
+.mile.plain{padding-left:30px;color:var(--ink-2)}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
 /* kinds popover ------------------------------------------------------------ */
@@ -6791,12 +6794,27 @@ function drawSite(){
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
     <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
 
-  /* A pill dims when nobody in the role is in today; a part-absent role says
-     how many are off. */
-  const crew = b.crew.length
-    ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
-        c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
-    : `<span class="quiet">Nobody assigned.</span>`;
+  /* One pill a person, as on the canvas: the name, the role under it, dimmed
+     when they are off today. A big site keeps to a dozen and a "+n more"
+     pill; the roles with their headcount and daily cost are the section's ?.
+     A save built before people were named falls back to the role groups. */
+  const CREW_MAX = 12;
+  const people = b.people || [];
+  const offToday = people.filter(p => p.absent).length;
+  const roleTip = b.crew.length
+    ? `${b.crew.map(c => `${c.role} ${c.count > 1 ? `×${c.count} · ` : "· "}${fmt(c.daily)}/day${
+        c.absent ? ` (${c.absent} off)` : ""}`).join("; ")}.${offToday ? ` ${plural(offToday, "person", "people")} off today.` : ""}`
+    : "";
+  const personPill = p => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
+    p.role}${p.absent ? " · off today" : ""}</small></span>`;
+  const crew = people.length
+    ? people.slice(0, CREW_MAX).map(personPill).join("") + (people.length > CREW_MAX
+        ? `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
+            people.length - CREW_MAX} more</span>` : "")
+    : b.crew.length
+      ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
+          c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
+      : `<span class="quiet">Nobody assigned.</span>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
@@ -6852,7 +6870,7 @@ function drawSite(){
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv">
-        ${sechead("Crew", {quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
         <div class="crew">${crew}</div>
       </section>
       <section class="rv">
@@ -7522,16 +7540,24 @@ function drawPayroll(){
 function drawGoals(){
   const g = D.goals, h = D.meta.houseRules;
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
-  /* A row with a denominator is ticked when it is complete; the rest are
-     totals the player has banked, with no target to count them against, so
-     they are ticked once off zero. */
-  const ofAll = (n, total) => [total > 0 && n >= total, `${n} / ${total}`];
+  /* The checklist is the design's: every business type run, every building
+     owned, the story rivals taken over, the personal goals, the diplomas —
+     each "n / total", the box filled only when complete. What the save keeps
+     no target for (the goals, where it stores only the completed ids; the
+     goods made; the tax paid) is a plain line under the boxes, never ticked. */
+  const num = n => (n || 0).toLocaleString();
+  const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${num(n)} / ${num(total)}`]] : [];
   const miles = [
-    ["Personal goals completed", g.completed > 0, g.completed.toLocaleString()],
-    ["Diplomas earned", ...ofAll(g.diplomas, g.diplomasTotal)],
-    ...(g.rivalsTotal ? [["Rivals seen off", ...ofAll(g.rivalsDefeated, g.rivalsTotal)]] : []),
-    ["Goods produced in the factories", g.goodsProduced > 0, g.goodsProduced.toLocaleString()],
-    ["Tax paid", g.taxesPaid > 0, fmt(g.taxesPaid)],
+    ...ofAll("Every business type run", g.typesRun, g.typesTotal),
+    ...ofAll("Every building owned", g.buildingsOwned, g.buildingsTotal),
+    ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
+    ...ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal),
+    ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
+  ];
+  const plain = [
+    ...(g.goalsTotal ? [] : [["Personal goals completed", num(g.goalsDone ?? g.completed)]]),
+    ["Goods produced in the factories", num(g.goodsProduced)],
+    ["Tax paid", fmt(g.taxesPaid || 0)],
   ];
   $("secGoals").innerHTML = sechead("Milestones", {
     why: "The stored difficulty is only a slot number, and a custom game keeps its own"
@@ -7542,7 +7568,8 @@ function drawGoals(){
       : `career totals · playing on ${D.meta.difficulty}`,
   }) + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
-        label}<span class="c">${text}</span></div>`).join("")}</div>`
+        label}<span class="c">${text}</span></div>`).join("")}${plain.map(([label, text]) =>
+      `<div class="mile plain">${label}<span class="c">${text}</span></div>`).join("")}</div>`
     + (moved.length ? `<div class="rules">${moved.map(r =>
         `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
           r.neutral}, so this game is ${r.lean}.`)}">${r.name}<b>×${r.value}</b></span>`).join("")}</div>`
