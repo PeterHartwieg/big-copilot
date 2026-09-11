@@ -1096,12 +1096,22 @@ def _weekly(save: Save) -> list:
 
 
 def _goals(save: Save, names: Names) -> dict:
+    """Career totals, with a denominator where the save carries one.
+
+    The save lists every diploma the player can study and every story rival,
+    so those two read "n of total". The personal goals list holds only the
+    completed ones and the achievement counters have no target, so the rest
+    are bare totals.
+    """
     ach = save.deref(save.root.get("achievementsData")) or {}
+    diplomas = save.items(save.root["PlayerDiplomas"])
+    rivals = save.items(save.root.get("specialRivalStates"))
     return {
         "completed": len(save.items(save.root["completedPersonalGoals"])),
-        "diplomas": sum(
-            1 for d in save.items(save.root["PlayerDiplomas"]) if d.get("completed")
-        ),
+        "diplomas": sum(1 for d in diplomas if d.get("completed")),
+        "diplomasTotal": len(diplomas),
+        "rivalsDefeated": sum(1 for r in rivals if r.get("isDefeated")),
+        "rivalsTotal": len(rivals),
         "goodsProduced": ach.get("goodsProducedInFactories", 0),
         "taxesPaid": money(ach.get("taxesPaid", 0)),
     }
@@ -7264,13 +7274,16 @@ function drawPayroll(){
 function drawGoals(){
   const g = D.goals, h = D.meta.houseRules;
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
-  /* Every row is a total the player has already banked; the board knows no
-     target to count them against, so a row is ticked once it is off zero. */
+  /* A row with a denominator is ticked when it is complete; the rest are
+     totals the player has banked, with no target to count them against, so
+     they are ticked once off zero. */
+  const ofAll = (n, total) => [total > 0 && n >= total, `${n} / ${total}`];
   const miles = [
-    ["Personal goals completed", g.completed, g.completed.toLocaleString()],
-    [`Diploma${g.diplomas === 1 ? "" : "s"} earned`, g.diplomas, g.diplomas],
-    ["Goods produced in the factories", g.goodsProduced, g.goodsProduced.toLocaleString()],
-    ["Tax paid", g.taxesPaid, fmt(g.taxesPaid)],
+    ["Personal goals completed", g.completed > 0, g.completed.toLocaleString()],
+    ["Diplomas earned", ...ofAll(g.diplomas, g.diplomasTotal)],
+    ...(g.rivalsTotal ? [["Rivals seen off", ...ofAll(g.rivalsDefeated, g.rivalsTotal)]] : []),
+    ["Goods produced in the factories", g.goodsProduced > 0, g.goodsProduced.toLocaleString()],
+    ["Tax paid", g.taxesPaid > 0, fmt(g.taxesPaid)],
   ];
   $("secGoals").innerHTML = sechead("Milestones", {
     why: "The stored difficulty is only a slot number, and a custom game keeps its own"
@@ -7279,8 +7292,8 @@ function drawGoals(){
     quiet: h ? `career totals · playing on ${h.label.toLowerCase()}, ${h.harder} harder${
         h.easier ? `, ${h.easier} easier` : ""}, started on ${fmt(h.startingMoney)}`
       : `career totals · playing on ${D.meta.difficulty}`,
-  }) + `<div class="miles">${miles.map(([label, value, text]) =>
-      `<div class="mile${value ? " done" : ""}"><span class="box">${icon("tick")}</span>${
+  }) + `<div class="miles">${miles.map(([label, done, text]) =>
+      `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
     + (moved.length ? `<div class="rules">${moved.map(r =>
         `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
