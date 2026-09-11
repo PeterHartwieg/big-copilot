@@ -4808,15 +4808,72 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .move:hover span{transform:translateZ(10px)}
 .move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
 .move:hover .soon{color:var(--accent);border-color:var(--accent)}
+/* The checklist follows the findings list: quiet rules, a site, an action. */
 .order-checklist{margin:0 0 28px;border-bottom:1px solid var(--rule);padding-bottom:20px}
-.order-checklist summary{cursor:pointer;font-size:16px;font-weight:600;padding:8px 0}
-.order-checklist .order-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}
-.order-checklist .order-tools button{font:inherit;font-size:14px}
-.order-checklist .order-note{font-size:14px;color:var(--ink-2);line-height:1.6;max-width:850px}
-.order-checklist td.l{white-space:normal;min-width:170px}
-.order-checklist input{width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
-.order-checklist tr.marked td{color:var(--ink-3)}
-.order-checklist textarea{width:100%;min-height:180px;font:14px/1.5 "IBM Plex Mono",monospace;background:var(--surface);color:var(--ink);border:1px solid var(--rule);padding:12px;box-sizing:border-box}
+.order-checklist > summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;font-size:17px;font-weight:600;padding:8px 0}
+.order-checklist summary::-webkit-details-marker{display:none}
+.order-checklist > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(-45deg);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.order-checklist[open] > summary::before{transform:rotate(45deg)}
+.order-checklist > summary .order-count{font:400 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.order-checklist[open] #orderChecklistBody{animation:rowin .25s ease}
+.order-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 22px}
+.order-tools .order-context{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:12.5px}
+.order-tools .order-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.order-tools button{font-family:inherit}
+.order-progress{display:flex;align-items:center;gap:8px;font:400 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.order-progress-track{height:3px;width:40px;border-radius:3px;background:var(--rule);overflow:hidden}
+.order-progress-track i{display:block;width:100%;height:100%;background:var(--accent);transform:scaleX(var(--done,0));transform-origin:left;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.order-progress.complete{color:var(--accent)}
+.order-group{margin-top:18px}
+.order-group-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 10px 9px;color:var(--ink-2);font-size:12.5px;border-bottom:1px solid var(--rule)}
+.order-group-head .order-kind{margin-left:auto;color:var(--ink-3);font:400 10.5px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.06em}
+.order-item{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:0 10px;border-bottom:1px solid var(--rule-soft);transition:background .2s}
+.order-item:hover,.order-item:focus-within{background:var(--surface)}
+.order-toggle{position:relative;display:grid;place-items:center;width:30px;height:50px;cursor:pointer}
+.order-toggle input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;z-index:1}
+.order-tick{display:grid;place-items:center;width:18px;height:18px;border:1px solid var(--ink-3);border-radius:50%;color:var(--accent);transition:transform .25s cubic-bezier(.34,1.56,.64,1),background .2s,border-color .2s}
+.order-tick svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .28s ease}
+.order-toggle:hover .order-tick{border-color:var(--accent);transform:scale(1.18)}
+.order-toggle input:focus-visible + .order-tick{outline:2px solid var(--accent);outline-offset:4px}
+.order-toggle input:checked + .order-tick{border-color:var(--accent);background:var(--accent-soft)}
+.order-toggle input:checked + .order-tick svg{stroke-dashoffset:0}
+.order-item.just-marked .order-tick{animation:orderpop .45s cubic-bezier(.34,1.56,.64,1)}
+.order-item.just-marked::after{content:"";position:absolute;inset:0;background:var(--accent-soft);pointer-events:none;animation:ordersweep .55s ease both;transform-origin:left}
+@keyframes orderpop{0%{transform:scale(.7)}55%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes ordersweep{0%{transform:scaleX(0);opacity:.8}60%{transform:scaleX(1);opacity:.5}100%{transform:scaleX(1);opacity:0}}
+.order-detail{min-width:0}
+.order-detail summary{display:flex;align-items:center;gap:12px;min-height:50px;list-style:none;cursor:pointer}
+.order-product{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere;transition:color .2s}
+.order-values{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;gap:10px;flex:none;font:400 13px "IBM Plex Mono",monospace;white-space:nowrap}
+.order-before{color:var(--ink-3)}
+.order-after{font-weight:500;color:var(--accent)}
+.order-values small{font:400 10.5px Archivo,sans-serif;color:var(--ink-3)}
+.order-arrow{display:grid;place-items:center;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.order-arrow svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.order-item:hover .order-arrow{transform:translateX(3px)}
+.order-review{font:500 12.5px Archivo,sans-serif;color:var(--warn)}
+.order-chevron{display:grid;place-items:center;color:var(--ink-3);transition:transform .25s}
+.order-detail[open] .order-chevron{transform:rotate(90deg)}
+.order-reason{font-size:12.5px;line-height:1.65;color:var(--ink-2);margin:0 24px 14px 0;max-width:700px;animation:rowin .2s ease}
+.order-item.marked .order-product,.order-item.marked .order-values *{color:var(--ink-3)}
+.order-item.marked .order-product{text-decoration:line-through;text-decoration-color:var(--rule)}
+.order-empty > svg{width:18px;height:18px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.order-empty{display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:14px;padding:18px 10px;border-top:1px solid var(--rule)}
+.order-checklist textarea{width:100%;min-height:160px;font:13px/1.6 "IBM Plex Mono",monospace;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:7px;padding:12px;box-sizing:border-box}
+.order-copy-status{font-size:12.5px;color:var(--accent);margin:10px 0 0}
+.order-copy-status:empty{display:none}
+.order-tools .btn2.copied svg{animation:orderpop .4s ease}
+.order-tools button:disabled{opacity:.4;cursor:default;transform:none}
+.order-recipe-link{display:inline-flex;align-items:center;gap:4px;font:inherit;color:var(--warn);background:none;border:0;padding:0;cursor:pointer}
+.order-recipe-link:hover{text-decoration:underline}
+@media(max-width:620px){
+  .order-tools{gap:12px 8px}.order-tools .order-actions{margin-left:0;flex:1;justify-content:flex-end}
+  .order-group-head{padding-left:4px;padding-right:4px}.order-group-head .order-kind{width:100%;margin-left:0;padding-left:0}
+  .order-item{padding:0 4px;gap:6px;grid-template-columns:26px minmax(0,1fr)}
+  .order-detail summary{flex-wrap:wrap;gap:4px 8px;padding:12px 0;min-height:26px}
+  .order-product{flex:1 1 calc(100% - 24px)}.order-values{order:3;margin-left:0;justify-content:flex-start;width:100%}
+  .order-chevron{margin-left:auto}.order-reason{margin-right:0}.order-progress-track{width:24px}
+}
 #secLogistics .up{cursor:default}
 
 /* tables ----------------------------------------------------------------- */
@@ -5112,6 +5169,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important; animation:none!important}
   .rv{opacity:1; transform:none}
+  .order-item.just-marked::after{display:none}
 }
 </style>
 <!--__BANNER__-->
@@ -5367,6 +5425,7 @@ const ICON = {
   calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg>',
   people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"></path></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
@@ -7040,7 +7099,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]);
-    rows.push({key, group, item, current, proposed, reason});
+    rows.push({key, group, item, current, proposed, reason, kind, site: s});
   };
   importRows.forEach(d => d.rows.forEach(r => {
     if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
@@ -7118,25 +7177,49 @@ function drawOrderChecklist(rows, factories){
     if(!groups.has(r.group)) groups.set(r.group, []);
     groups.get(r.group).push({...r, i});
   });
-  body.innerHTML = `<p class="order-note">Enter these settings in-game. Check a box to mark your own progress; saved values stay unchanged. Marks clear when a setting or recommendation changes.</p>
-    <p class="order-note">${hasFactories ? "Factory quantities assume full-rate production; confirm staffing and output limits. " : ""}Amounts are units, not boxes. Storage and transport capacity are not checked.</p>
-    ${factories.unnamed ? `<p class="order-note">${factories.unnamed} factory machine${factories.unnamed === 1 ? " still needs" : "s still need"} a recipe identified in Supply / Checks before all inputs can be included.</p>` : ""}
-    <div class="order-tools"><button type="button" class="btn2" id="copyOrderChecklist">Copy remaining</button>
-      <button type="button" class="btn2" id="resetOrderMarks">Clear marks</button>
-      <span class="quiet" id="orderChecklistProgress" role="status"></span></div>
-    ${rows.length ? `<div class="scrollx"><table><thead><tr><th>Done</th><th class="l">Product / action</th><th>Saved setting</th><th>Proposed setting</th></tr></thead>
-      <tbody>${[...groups].map(([group, items]) => `<tr class="grp"><td class="l" colspan="4">${attr(group)}</td></tr>${items.map(r => `
-        <tr class="${marks.has(r.key) ? "marked" : ""}"><td><input type="checkbox" data-order-mark="${r.i}" aria-label="${attr(`Mark ${r.item} at ${r.group} done`)}" ${marks.has(r.key) ? "checked" : ""}></td>
-        <td class="l">${attr(r.item)}<span class="sub">${attr(r.reason)}</span></td>
-        <td>${r.current === null ? "—" : r.current.toLocaleString()}</td>
-        <td>${r.proposed === null ? "Review in-game" : r.proposed.toLocaleString()}</td></tr>`).join("")}`).join("")}</tbody></table></div>`
-      : `<p class="order-note">No changes identified from the available supply data.${hasFactories ? "" : " New supply routes may need more history before orders can be sized."}</p>`}
-    <p id="orderCopyStatus" class="order-note" role="status"></p>
+  const help = "Tick after applying a change in-game. Checkmarks are your notes, not confirmation from the save; they reset when settings change. Amounts are units, not boxes. Storage and transport limits are not checked."
+    + (hasFactories ? " Factory quantities assume full-rate production; check staffing and output limits." : "");
+  const kindLabel = {"Weekly imports":"Weekly orders", "Before the next delivery":"Before delivery",
+    "Factory daily top-ups":"Factory top-ups", "Shop daily top-ups":"Shop top-ups", "Check the delivery route":"Delivery checks"};
+  const actionLabel = r => r.kind === "Before the next delivery" ? "Top up early"
+    : r.kind === "Check the delivery route" ? "Check route"
+    : r.site === null ? "Choose depot" : "Review import";
+  body.innerHTML = `<div class="order-tools"${!rows.length && !factories.unnamed ? " hidden" : ""}>
+    <div class="order-context">Apply in-game ${why(help)}</div>
+    ${factories.unnamed ? `<button type="button" class="order-recipe-link" id="orderRecipeLink" data-tip="Identify the remaining factory recipes to include their inputs">${factories.unnamed} recipe${factories.unnamed === 1 ? "" : "s"} to name ${icon("chev")}</button>` : ""}
+    <div class="order-actions"${rows.length ? "" : " hidden"}><span class="order-progress" id="orderChecklistProgress" role="status">
+      <span class="order-progress-track" aria-hidden="true"><i></i></span><span id="orderProgressText"></span></span>
+      <button type="button" class="btn2" id="copyOrderChecklist">${icon("copy")}<span>Copy remaining</span></button>
+      <button type="button" class="ibtn" id="resetOrderMarks" aria-label="Clear marks" data-tip="Clear your checkmarks">${icon("refresh")}</button></div></div>
+    ${rows.length ? [...groups].map(([group, items]) => {
+      const first = items[0], business = D.businesses[first.site];
+      return `<section class="order-group" aria-label="${attr(group)}"><div class="order-group-head">
+        ${business ? hoodHtml(business) : ""}<span data-tip="${attr(business?.address || "Assign a depot in-game")}" tabindex="0">${attr(business ? shortName(business) : "Choose a depot")}</span>
+        <span class="order-kind">${attr(kindLabel[first.kind] || first.kind)}</span></div>
+        ${items.map(r => `<div class="order-item${marks.has(r.key) ? " marked" : ""}">
+          <label class="order-toggle"><input type="checkbox" data-order-mark="${r.i}" aria-label="${attr(`Mark ${r.item} at ${r.group} done`)}" ${marks.has(r.key) ? "checked" : ""}><span class="order-tick" aria-hidden="true">${icon("tick")}</span></label>
+          <details class="order-detail"><summary><span class="order-product">${attr(r.item)}</span>
+            <span class="order-values">${r.proposed === null ? `<span class="order-review">${actionLabel(r)}</span>`
+              : `<span class="order-before" aria-label="Saved setting ${r.current ?? "not set"}">${r.current === null ? "—" : r.current.toLocaleString()}</span>
+                 <span class="order-arrow" aria-hidden="true">${icon("go")}</span><b class="order-after" aria-label="Proposed setting ${r.proposed}">${r.proposed.toLocaleString()}</b><small>${r.kind === "Weekly imports" ? "/week" : "/day"}</small>`}</span>
+            <span class="order-chevron" aria-hidden="true">${icon("chev")}</span></summary>
+            <p class="order-reason">${attr(r.reason)}</p></details></div>`).join("")}</section>`;
+      }).join("") : `<div class="order-empty">${icon("tick")}<span>No changes found</span>${why("No changes identified from available supply data. New routes may need more history; unidentified factory recipes are not included.")}</div>`}
+    <p id="orderCopyStatus" class="order-copy-status" role="status"></p>
     <textarea id="orderCopyFallback" aria-label="Checklist to copy manually" readonly hidden></textarea>`;
+  if($("orderRecipeLink")) $("orderRecipeLink").onclick = () => {
+    stockView = "lines"; showAllStock = false; drawStock(); wireAll(); reveal("secStock");
+  };
   const update = () => {
     const remaining = rows.filter(r => !marks.has(r.key)).length;
-    $("orderChecklistTitle").textContent = `Change checklist · ${rows.length} action${rows.length === 1 ? "" : "s"}`;
-    $("orderChecklistProgress").textContent = `${remaining} remaining · ${rows.length - remaining} marked done by you`;
+    $("orderChecklistTitle").innerHTML = `Change checklist <span class="order-count">${remaining ? `${remaining} to do` : rows.length ? "All checked" : ""}</span>`;
+    const done = rows.length - remaining;
+    $("orderProgressText").textContent = `${done} / ${rows.length}`;
+    $("orderChecklistProgress").setAttribute("aria-label", `${done} of ${rows.length} marked done by you`);
+    $("orderChecklistProgress").style.setProperty("--done", rows.length ? done / rows.length : 0);
+    $("orderChecklistProgress").classList.toggle("complete", !!rows.length && !remaining);
+    $("copyOrderChecklist").classList.remove("copied");
+    $("copyOrderChecklist").innerHTML = `${icon("copy")}<span>Copy remaining</span>`;
     $("copyOrderChecklist").disabled = !remaining;
     $("resetOrderMarks").disabled = !marks.size;
     $("orderCopyFallback").hidden = true;
@@ -7146,14 +7229,17 @@ function drawOrderChecklist(rows, factories){
     input.onchange = () => {
       const r = rows[+input.dataset.orderMark];
       input.checked ? marks.add(r.key) : marks.delete(r.key);
-      input.closest("tr").classList.toggle("marked", input.checked);
+      const row = input.closest(".order-item");
+      row.classList.toggle("marked", input.checked);
+      row.classList.toggle("just-marked", input.checked);
+      setTimeout(() => row.classList.remove("just-marked"), 600);
       saveMarks(); update();
     };
   });
   $("resetOrderMarks").onclick = () => {
     marks.clear(); saveMarks();
     body.querySelectorAll("input[data-order-mark]").forEach(input => {
-      input.checked = false; input.closest("tr").classList.remove("marked");
+      input.checked = false; input.closest(".order-item").classList.remove("marked", "just-marked");
     });
     update();
   };
@@ -7162,11 +7248,13 @@ function drawOrderChecklist(rows, factories){
     const text = orderChecklistText(pending, `Big Copilot · ${D.meta.save} · day ${D.meta.day}`);
     try{
       await navigator.clipboard.writeText(text);
-      $("orderCopyStatus").textContent = `Copied ${pending.length} action${pending.length === 1 ? "" : "s"}. Enter the changes in-game.`;
+      $("copyOrderChecklist").classList.add("copied");
+      $("copyOrderChecklist").innerHTML = `${icon("tick")}<span>Copied</span>`;
+      $("orderCopyStatus").textContent = `${pending.length} action${pending.length === 1 ? "" : "s"} copied`;
     }catch(e){
       const fallback = $("orderCopyFallback");
       fallback.value = text; fallback.hidden = false; fallback.focus(); fallback.select();
-      $("orderCopyStatus").textContent = "Select and copy the checklist below.";
+      $("orderCopyStatus").textContent = "Copy the selected text below.";
     }
   };
   update();
