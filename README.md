@@ -27,7 +27,7 @@ while you play, so there is almost always a recent save to read.
 
 ### In the browser
 
-Open the page at [https://bigcopilot.com](https://bigcopilot.com) and drop a save on it, or click *Choose the save folder* and pick the `Big Ambitions` folder inside `SaveGames`: the page looks through every company folder there and takes the newest save, since the company folders have generated names and cannot be told apart by eye. The `AppData` folder is hidden in Explorer, so paste the path into the dialog's *File name* box to open it. Your browser may ask whether to "upload" the folder; that is its wording for letting the page read it, and nothing leaves your computer. In Chrome and Edge the folder stays connected: *Update* reads the newest save again in one click, and on the next visit one permission click brings the folder back. In Firefox and Safari the folder choice is a snapshot, so *Update* opens the picker again.
+Open the page at [https://bigcopilot.com](https://bigcopilot.com) and drop a save on it, or click *Choose the save folder* and pick the `Big Ambitions` folder inside `SaveGames`: the page looks through every company folder there and takes the newest save, since the company folders have generated names and cannot be told apart by eye. The save menu (in the strip under the masthead, and in its *More* menu) lists every character by name, with the saves in each folder, so you can keep the board on one character while you try things in another, or hold it on one named save. The choice is remembered and applies to *Update* and to the folder watch. The `AppData` folder is hidden in Explorer, so paste the path into the dialog's *File name* box to open it. Your browser may ask whether to "upload" the folder; that is its wording for letting the page read it, and nothing leaves your computer. In Chrome and Edge the folder stays connected: *Update* reads the newest save again in one click, and on the next visit one permission click brings the folder back. In Firefox and Safari the folder choice is a snapshot, so *Update* opens the picker again.
 
 The board is built inside the browser. The same Python that runs locally runs in a Web
 Worker through Pyodide, so the save never leaves your machine. Nothing is uploaded.
@@ -64,9 +64,14 @@ always know which snapshot you are looking at. Re-running mid-session gives you 
 up-to-date board.
 
 Pass a `.hsg` file or a folder as the positional argument to choose the save yourself.
-Given a folder, it takes the newest save inside it.
+Given a folder, it takes the newest save inside it. A name works too: a character's
+name gives that character's folder, a save's name gives that file. `--list` shows what
+there is, by character.
 
 ```bash
+python ba_dashboard.py --list
+python ba_dashboard.py "Costy Co"                    # the save named Costy Co
+python ba_dashboard.py "Costy" --watch               # the Costy Co character, following its autosaves
 python ba_dashboard.py "path/to/My Company.hsg" -o board.html
 python ba_dashboard.py "path/to/SaveGames/Big Ambitions/<characterId>"
 ```

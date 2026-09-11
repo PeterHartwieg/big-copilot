@@ -21,6 +21,14 @@
  * needs one permission click, not the picker. A folder dropped on the page
  * gives the same handle. Elsewhere the folder button is a plain directory
  * input, which is a snapshot: Update reopens the picker.
+ *
+ * Which save. By default the newest .hsg anywhere under the folder, which is
+ * the game's own idea of "continue". The save menu narrows that: to one
+ * character's folder (its newest save, so autosaves keep flowing) or to one
+ * named file. The game writes a small <name>.hsg.meta beside every save with
+ * the character's name and the game day, so the menu can label the folders,
+ * whose own names are generated ids. The pick is remembered in localStorage
+ * and applied to every later scan: Update, the watcher, the next visit.
  */
 (function () {
   const LOCALE_KEY = "ledger_locale";
@@ -28,7 +36,9 @@
   const DB = "ledger";
   const STORE = "handles";
   const $ = (id) => document.getElementById(id);
+  const PICK_KEY = "ledger_pick";
   const isSave = (f) => f && /\.hsg$/i.test(f.name);
+  const isMeta = (f) => f && /\.hsg\.meta$/i.test(f.name);
   const isLocale = (f) => f && /\.json$/i.test(f.name);
   const canHandle = typeof window.showDirectoryPicker === "function";
   const onBoard = () => document.body.classList.contains("has-board");
@@ -79,7 +89,11 @@
   let handlers = null;    // what the board wants told: changed(data), stale(why), lost()
   let lastFile = null;    // the File most recently built, for rebuilds after naming
   let lastGood = null;    // the File behind the board on screen
+  let lastGoodDir = "";   // and the character folder it was found in
+  let sourceGen = 0;      // bumps when a different folder or file set comes in
+  let lastGoodSource = 0; // the sourceGen the board on screen came from
   let dirHandle = null;   // live folder handle, Chromium only
+  let lastEntries = null; // {file, dir} for every save and sidecar last seen
   let busy = false;
   let runtimeReady = false;
   // Watching the folder: Chromium only, and only after this visit's
@@ -167,7 +181,7 @@
     const btn = $("updateBtn");
     btn.disabled = busy || !(dirHandle || lastFile);
     const opens = !board && dirHandle && !lastFile;
-    btn.textContent = opens ? "Open newest save" : "Update";
+    btn.textContent = opens ? (pick.dir || pick.name ? "Open chosen save" : "Open newest save") : "Update";
     btn.classList.toggle("primary", opens);
     $("recoverBtn").hidden = !(bad && noted.recover);
     // On the landing the strip only shows when it has something to say: a
@@ -205,7 +219,7 @@
       $("srcActions").appendChild($("boardControls").content.cloneNode(true));
       fb.className = "lg-btn"; fb.textContent = "Choose save folder";
       sp.className = "lg-btn lg-pick"; $("savePickText").textContent = "One save file";
-      $("menuSourceSlot").append(fb, sp);
+      $("menuSourceSlot").append(saveSel, fb, sp);
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
       $("menuChipSlot").appendChild($("localeChip"));
@@ -236,12 +250,13 @@
         // draws them: Open newest save, Change folder, one file.
         fb.className = "btn2"; fb.textContent = "Change folder";
         $("savePickText").textContent = "one file";
-        $("srcActions").append(fb, sp);
+        $("srcActions").append(saveSel, fb, sp);
         $("entryRow").hidden = true;
       } else {
         fb.className = "btn"; fb.innerHTML = ICON_FOLDER + "Choose the folder";
         $("savePickText").textContent = "or one save file";
         $("entryRow").append(fb, sp);
+        $("srcActions").prepend(saveSel);
         $("entryRow").hidden = false;
       }
     }
@@ -270,9 +285,12 @@
   }
 
   /* --- building ----------------------------------------------------------- */
-  async function buildFrom(file) {
-    if (busy) return;
+  async function buildFrom(file, dir, gen) {
+    // A build asked for while one runs is not lost: the latest request, a
+    // pick, a folder or a file dropped by hand, runs once this build ends.
+    if (busy) { queued = () => buildFrom(file, dir, gen); return; }
     busy = true;
+    if (gen === undefined) gen = sourceGen;  // the source this file came from
     lastFile = file;
     note("");
     state("busy", `Reading ${file.name}`, fileLine(file));
@@ -285,6 +303,8 @@
       }, [bytes]);
       busy = false;
       lastGood = file;
+      lastGoodDir = dir || "";
+      lastGoodSource = gen;
       company = (data.meta && data.meta.save) || company;
       note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
@@ -300,49 +320,227 @@
         true);
       if (handlers) handlers.stale(err.message);
     }
+    const next = queued;
+    queued = null;
+    if (next) next();
   }
+  // The save on screen, by name, time, folder and source: two characters
+  // can hold equally named saves written at the same moment (copies), so the
+  // folder counts, and two chosen folders can both put a save at "." so the
+  // source counts. After a failed build lastFile is the file that failed,
+  // not the board, and the board's save must be read again to put the
+  // worker right.
+  const onScreen = (file, dir) => !!lastGood && lastFile === lastGood && lastGoodSource === sourceGen
+    && file.name === lastGood.name && file.lastModified === lastGood.lastModified && (dir || "") === lastGoodDir;
 
-  /* --- finding the newest save --------------------------------------- */
+  /* --- finding the save to read ------------------------------------- */
+  // Every save and sidecar is carried as {file, dir}: dir is the character
+  // folder's name relative to the chosen folder, "." for files at its top
+  // (a player who picks a character folder itself lands there). "" is kept
+  // for the pick that means any folder.
   function newestOf(files) {
     const saves = files.filter(isSave);
     if (!saves.length) return null;
     return saves.reduce((a, b) => (b.lastModified > a.lastModified ? b : a));
   }
+  // Files from an <input> or a drop know their folder through
+  // webkitRelativePath: "<picked folder>/<character>/<file>".
+  function entriesOf(files) {
+    return files.filter((f) => isSave(f) || isMeta(f) || isLocale(f)).map((f) => {
+      const parts = (f.webkitRelativePath || "").split("/");
+      return {file: f, dir: parts.length > 2 ? parts.slice(1, -1).join("/") : "."};
+    });
+  }
 
   async function scanHandle(handle) {
-    const files = [];
-    async function walk(dir, depth) {
+    const entries = [];
+    async function walk(dir, depth, rel) {
       for await (const entry of dir.values()) {
-        if (entry.kind === "directory") { if (depth < 3) await walk(entry, depth + 1); }
-        else if (isSave(entry)) files.push(await entry.getFile());
+        if (entry.kind === "directory") { if (depth < 3) await walk(entry, depth + 1, rel ? `${rel}/${entry.name}` : entry.name); }
+        else if (isSave(entry) || isMeta(entry)) entries.push({file: await entry.getFile(), dir: rel || "."});
       }
     }
-    await walk(handle, 0);
-    return files;
+    await walk(handle, 0, "");
+    return entries;
+  }
+
+  // The pick: {dir, name}. Empty dir means any folder; empty name means the
+  // newest save within whatever dir allows.
+  let pick = {dir: "", name: ""};
+  try { pick = Object.assign(pick, JSON.parse(stored.get(PICK_KEY) || "{}")); } catch (e) {}
+  const pickKey = (dir, name) => `${dir}|${name}`;
+  function setPick(dir, name) {
+    pick = {dir: dir || "", name: name || ""};
+    try { localStorage.setItem(PICK_KEY, JSON.stringify(pick)); } catch (e) {}
+    paintStrip();
+  }
+
+  // Applies the pick to a scan. Returns {file, fellBack}: fellBack names what
+  // was asked for when it is no longer there and the newest stands in.
+  function chooseFrom(entries) {
+    let saves = entries.filter((e) => isSave(e.file));
+    if (!saves.length) return {file: null, dir: "", fellBack: ""};
+    let fellBack = "";
+    if (pick.dir) {
+      const inDir = saves.filter((e) => e.dir === pick.dir);
+      if (inDir.length) saves = inDir;
+      else fellBack = "the chosen character's folder";
+    }
+    if (pick.name && !fellBack) {
+      const named = saves.find((e) => e.file.name === pick.name);
+      if (named) return {file: named.file, dir: named.dir, fellBack: ""};
+      fellBack = `the save named ${pick.name.replace(/\.hsg$/i, "")}`;
+    }
+    const best = saves.reduce((a, b) => (b.file.lastModified > a.file.lastModified ? b : a));
+    return {file: best.file, dir: best.dir, fellBack};
+  }
+
+  // The save menu. Groups are character folders, labelled from the sidecars;
+  // inside each, the newest-of entry first and then every save, newest first.
+  const saveSel = document.createElement("select");
+  saveSel.id = "saveSel";
+  saveSel.className = "lg-sel";
+  saveSel.title = "Which save the board reads. The newest anywhere follows whatever you play; a character keeps to that folder; a named save stays on that file.";
+  saveSel.setAttribute("aria-label", "Which save to read");
+  saveSel.hidden = true;
+  const metaCache = new Map();  // "dir/name@mtime" -> {character, day, autosave}
+  async function readMeta(e) {
+    const key = `${e.dir}/${e.file.name}@${e.file.lastModified}`;
+    if (metaCache.has(key)) return metaCache.get(key);
+    let info = null;
+    try {
+      const m = JSON.parse(await e.file.text());
+      const who = m.characterData || m.playerCustomizationData || {};
+      info = {character: (who.name || "").trim(), day: m.day, autosave: !!m.isRecoverSave};
+    } catch (err) {}
+    metaCache.set(key, info);
+    return info;
+  }
+  const saveLabel = (name, info) => {
+    const base = name.replace(/\.hsg$/i, "");
+    const auto = info ? info.autosave : /^recover/i.test(base);
+    const what = auto ? "Autosave " + base.replace(/^recover\s*#?/i, "") : base;
+    const day = info && info.day != null ? ` · day ${info.day}` : "";
+    return `${what}${day}`;
+  };
+  async function catalogueOf(entries) {
+    const groups = new Map();
+    for (const e of entries) {
+      if (!groups.has(e.dir)) groups.set(e.dir, {dir: e.dir, character: "", saves: [], newest: 0});
+      const g = groups.get(e.dir);
+      if (isSave(e.file)) { g.saves.push(e); g.newest = Math.max(g.newest, e.file.lastModified); }
+    }
+    for (const g of groups.values()) {
+      if (!g.saves.length) { groups.delete(g.dir); continue; }
+      g.saves.sort((a, b) => b.file.lastModified - a.file.lastModified);
+      for (const s of g.saves) {
+        const meta = entries.find((e) => e.dir === g.dir && e.file.name === s.file.name + ".meta");
+        s.info = meta ? await readMeta(meta) : null;
+        if (!g.character && s.info && s.info.character) g.character = s.info.character;
+      }
+      if (!g.character) {
+        const m = g.saves.map((s) => /^New (.+?) Save Game/i.exec(s.file.name)).find(Boolean);
+        g.character = m ? m[1].trim() : (g.dir || "this folder");
+      }
+    }
+    return [...groups.values()].sort((a, b) => b.newest - a.newest);
+  }
+  // Rebuilds the menu from a scan. Returns a sentence when the remembered
+  // pick is no longer there (a save deleted or renamed, a folder gone) and
+  // says what the pick moved to; the pick itself is moved so the menu and
+  // the rule agree.
+  async function refreshSaveMenu(entries, gen) {
+    const groups = await catalogueOf(entries);
+    // Sidecars read for a source that has since been replaced change nothing.
+    if (gen !== undefined && gen !== sourceGen) return "";
+    lastEntries = entries;
+    // The pick is checked against what is there, whether or not the menu
+    // shows (it hides for a lone save), so a stale pick never lingers.
+    let moved = "";
+    const home = groups.find((g) => g.dir === pick.dir);
+    const pool = home ? home.saves : groups.flatMap((g) => g.saves);
+    if (pick.dir && !home) {
+      moved = "Could not find the chosen character's folder; following the newest save anywhere instead.";
+      setPick("", "");
+    } else if (pick.name && !pool.some((s) => s.file.name === pick.name)) {
+      const was = `the save named ${pick.name.replace(/\.hsg$/i, "")}`;
+      if (home) { moved = `Could not find ${was}; following ${home.character}'s newest save instead.`; setPick(pick.dir, ""); }
+      else { moved = `Could not find ${was}; following the newest save anywhere instead.`; setPick("", ""); }
+    }
+    const total = groups.reduce((n, g) => n + g.saves.length, 0);
+    saveSel.hidden = total < 2;
+    if (saveSel.hidden) return moved;
+    saveSel.textContent = "";
+    const opt = (parent, value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; parent.appendChild(o); return o; };
+    opt(saveSel, pickKey("", ""), "Newest save anywhere");
+    for (const g of groups) {
+      const og = document.createElement("optgroup");
+      og.label = g.character;
+      if (g.saves.length > 1) opt(og, pickKey(g.dir, ""), `${g.character} · newest`);
+      for (const s of g.saves) opt(og, pickKey(g.dir, s.file.name), `${saveLabel(s.file.name, s.info)} · ${fmtTime(s.file.lastModified)}`);
+      saveSel.appendChild(og);
+    }
+    saveSel.value = pickKey(pick.dir, pick.name);
+    // A character down to one save has no "newest" entry; its one save
+    // stands for the folder in the menu, the pick stays the folder.
+    if (saveSel.selectedIndex < 0 && home && !pick.name) saveSel.value = pickKey(home.dir, home.saves[0].file.name);
+    // Nothing in the menu stands for the pick: the rule follows the menu.
+    if (saveSel.selectedIndex < 0) { setPick("", ""); saveSel.value = pickKey("", ""); }
+    return moved;
+  }
+  // Whatever was asked for while a build ran; the latest request wins.
+  let queued = null;
+  async function applyPick() {
+    if (busy) { queued = applyPick; return; }
+    if (dirHandle) await loadFromHandle(dirHandle, "Opening the chosen save");
+    else if (lastEntries) await loadFromEntries(lastEntries);
+  }
+  saveSel.addEventListener("change", () => {
+    const [dir, name] = saveSel.value.split("|");
+    setPick(dir, name);
+    applyPick();
+  });
+
+  async function loadFromEntries(entries, label, moved, gen) {
+    const {file, dir, fellBack} = chooseFrom(entries);
+    if (!file) {
+      state("bad", "No save found", label || "");
+      note("bad", "no .hsg save in that folder", "Choose the folder named Big Ambitions inside SaveGames", true);
+      return false;
+    }
+    if (onScreen(file, dir)) {
+      state("ok", "No newer save found", fileLine(file));
+    } else {
+      await buildFrom(file, dir, gen);
+    }
+    // A build that failed keeps its own reason; the move is only worth
+    // saying under a board that shows.
+    if (strip.tone !== "bad") {
+      if (fellBack) note("warn", `Could not find ${fellBack}; showing the newest save instead.`);
+      else note(moved ? "warn" : "", moved);
+    }
+    return true;
   }
 
   async function loadFromHandle(handle, why) {
     note("");
-    state("busy", why || "Looking for the newest save", handle.name);
-    let files;
-    try { files = await scanHandle(handle); }
+    state("busy", why || "Looking for the save to read", handle.name);
+    // A scan that ends after another source was chosen is thrown away, so
+    // a slow folder never overwrites a newer one.
+    const gen = sourceGen;
+    let entries;
+    try { entries = await scanHandle(handle); }
     catch (err) { state("bad", "Could not read the folder", handle.name); note("bad", err.message, "", true); return; }
-    const newest = newestOf(files);
-    if (!newest) {
-      state("bad", "No save found", handle.name);
-      note("bad", "no .hsg save in that folder", "Choose the folder named Big Ambitions inside SaveGames", true);
-      return;
-    }
-    if (lastGood && newest.name === lastGood.name && newest.lastModified === lastGood.lastModified) {
-      state("ok", "No newer save found", fileLine(newest));
-    } else {
-      await buildFrom(newest);
-    }
+    if (gen !== sourceGen) return;
+    const moved = await refreshSaveMenu(entries, gen);
+    if (gen !== sourceGen) return;
+    if (!(await loadFromEntries(entries, handle.name, moved, gen))) return;
     lastCheck = Date.now();
     armWatch();  // the folder is readable now, so watching can begin
   }
 
   async function takeHandle(handle, why) {
+    if (handle !== dirHandle) sourceGen++;
     dirHandle = handle;
     handles.set("saves", handle);
     if (!onBoard()) place();
@@ -383,10 +581,17 @@
     if (!dirHandle || busy) return;
     try {
       if (await dirHandle.queryPermission({mode: "read"}) !== "granted") { stopWatch(); return; }
-      const newest = newestOf(await scanHandle(dirHandle));
+      const gen = sourceGen;
+      const entries = await scanHandle(dirHandle);
+      if (gen !== sourceGen) return;
+      const moved = await refreshSaveMenu(entries, gen);
+      if (gen !== sourceGen) return;
+      const {file, dir, fellBack} = chooseFrom(entries);
       lastCheck = Date.now();
-      const same = newest && lastGood && newest.name === lastGood.name && newest.lastModified === lastGood.lastModified;
-      if (newest && !same) await buildFrom(newest);
+      if (file && !onScreen(file, dir)) await buildFrom(file, dir, gen);
+      // A character or save that vanished mid-watch is said, not skipped.
+      const msg = fellBack ? `Could not find ${fellBack}; showing the newest save instead.` : moved;
+      if (msg && strip.tone !== "bad") note("warn", msg);
     } catch (e) {
       // A folder that vanished or a file mid-write; the next check, or Update, says so.
     }
@@ -616,24 +821,46 @@
       $("drop").title = $("folderBtn").title;
     }
 
+    // Entries from a folder (an <input webkitdirectory>, or a folder walked
+    // from a drop) feed the menu and the pick. Files chosen by hand are
+    // read as they are: no rule applies, and the menu, which described some
+    // other folder, is put away unless a live folder handle still backs it.
+    // gen: the request's generation when the caller took it before its own
+    // asynchronous work (a dropped folder's walk); otherwise a new one.
+    const takeEntries = async (entries, fromFolder, gen) => {
+      const locale = entries.find((e) => isLocale(e.file));
+      if (locale) takeLocale(locale.file);
+      const wanted = entries.filter((e) => isSave(e.file) || isMeta(e.file));
+      const saves = wanted.filter((e) => isSave(e.file));
+      if (!saves.length) { if (!locale) note("warn", "That is neither a .hsg save nor en.json."); return; }
+      if (gen === undefined) gen = ++sourceGen;  // a new set of files, whatever its shape
+      else if (gen !== sourceGen) return;        // superseded during the walk
+      if (fromFolder) {
+        const moved = await refreshSaveMenu(wanted, gen);
+        if (gen !== sourceGen) return;  // superseded while the sidecars were read
+        await loadFromEntries(wanted, "", moved, gen);
+      } else {
+        if (!dirHandle) { saveSel.hidden = true; lastEntries = null; }
+        buildFrom(newestOf(saves.map((e) => e.file)), "", gen);
+      }
+    };
     const take = (files) => {
       const list = [...files];
-      const save = newestOf(list);
-      const locale = list.find(isLocale);
-      if (locale) takeLocale(locale);
-      if (save) buildFrom(save);
-      else if (!locale) note("warn", "That is neither a .hsg save nor en.json.");
+      takeEntries(entriesOf(list), list.some((f) => f.webkitRelativePath));
     };
     // A dropped folder: Chromium hands over the same live handle the picker
     // would, so it is remembered and watched like one; elsewhere the folder
     // is walked once for its files, a snapshot like the directory input.
-    const walkEntry = (entry, depth, out) => new Promise((resolve) => {
-      if (entry.isFile) { entry.file((f) => { out.push(f); resolve(); }, resolve); return; }
+    // Files from a walk carry no webkitRelativePath, so the walk keeps the
+    // folder itself: "." for the dropped folder, a name for each one inside.
+    const walkEntry = (entry, depth, out, rel) => new Promise((resolve) => {
+      if (entry.isFile) { entry.file((f) => { out.push({file: f, dir: rel || "."}); resolve(); }, resolve); return; }
       if (!entry.isDirectory || depth > 3) { resolve(); return; }
+      const below = depth === 0 ? "" : rel ? `${rel}/${entry.name}` : entry.name;
       const reader = entry.createReader();
       const batch = () => reader.readEntries(async (entries) => {
         if (!entries.length) { resolve(); return; }
-        for (const en of entries) await walkEntry(en, depth + 1, out);
+        for (const en of entries) await walkEntry(en, depth + 1, out, below);
         batch();
       }, resolve);
       batch();
@@ -649,9 +876,15 @@
       if (dirs.length && canHandle) { await takeHandle(dirs[0], "Looking through the folder"); return; }
       const dirEntries = entries.filter((en) => en && en.isDirectory);
       if (dirEntries.length) {
+        const gen = ++sourceGen;  // taken now: the walk can take seconds
         const out = [];
-        for (const en of dirEntries) await walkEntry(en, 0, out);
-        take(out.concat(files.filter((f) => isSave(f) || isLocale(f))));
+        for (const en of dirEntries) await walkEntry(en, 0, out, "");
+        if (gen !== sourceGen) return;
+        // dt.files may list the folder's own files again; the walk has those
+        // with their folders, so only files the walk did not see are added.
+        const seen = new Set(out.map((e) => `${e.file.name}@${e.file.lastModified}`));
+        const loose = files.filter((f) => (isSave(f) || isLocale(f)) && !seen.has(`${f.name}@${f.lastModified}`)).map((f) => ({file: f, dir: "."}));
+        takeEntries(out.concat(loose), true, gen);
         return;
       }
       take(files);
@@ -694,7 +927,7 @@
     if (canHandle) dirHandle = await handles.get("saves");
     place();
     if (runtimeReady || dirHandle) idleState();
-    if (dirHandle) note("info", "One click opens its newest save; your browser may ask for folder access first.");
+    if (dirHandle) note("info", `One click opens its ${pick.dir || pick.name ? "chosen" : "newest"} save; your browser may ask for folder access first.`);
     wireLanding();
   });
 })();

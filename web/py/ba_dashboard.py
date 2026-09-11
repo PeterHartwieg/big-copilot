@@ -2,6 +2,8 @@
 
     python ba_dashboard.py                          # newest save in the default folder
     python ba_dashboard.py "path\\to\\Costy Co.hsg"  # a specific save
+    python ba_dashboard.py --list                   # every save, by character
+    python ba_dashboard.py "Costy Co"               # a character or save by name
     python ba_dashboard.py -o board.html            # choose the output file
     python ba_dashboard.py --watch                  # serve it and follow the save
 
@@ -8657,6 +8659,131 @@ def newest_under(target: str) -> str:
     return max(saves, key=os.path.getmtime)
 
 
+def read_save_meta(path: str) -> dict:
+    """The game's sidecar for a save: `<name>.hsg.meta`, a small JSON file.
+
+    It names the character and the game day without opening the save itself.
+    Missing or unreadable (very old saves have a different shape) gives {}.
+    """
+    try:
+        with open(path + ".meta", encoding="utf-8") as fh:
+            meta = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    who = meta.get("characterData") or meta.get("playerCustomizationData") or {}
+    return {
+        "character": (who.get("name") or "").strip(),
+        "day": meta.get("day"),
+        "autosave": bool(meta.get("isRecoverSave")),
+    }
+
+
+def catalogue(root: str) -> list[dict]:
+    """Every save under `root`, grouped by character folder, newest first.
+
+    Each entry: folder (the character id the game generated), character (its
+    name, from the sidecars, else from a "New <name> Save Game" file, else the
+    folder), and saves: [{path, name, day, autosave, mtime}] newest first.
+    Groups are ordered by their newest save, so the ones being played lead.
+    """
+    if os.path.isfile(root):
+        root = os.path.dirname(root)
+    folders = [root] + sorted(
+        os.path.join(root, n)
+        for n in os.listdir(root)
+        if os.path.isdir(os.path.join(root, n))
+    )
+    groups = []
+    for folder in folders:
+        saves = []
+        for n in os.listdir(folder):
+            if not n.lower().endswith(".hsg"):
+                continue
+            path = os.path.join(folder, n)
+            meta = read_save_meta(path)
+            saves.append(
+                {
+                    "path": path,
+                    "name": n[:-4],
+                    "day": meta.get("day"),
+                    "autosave": meta.get("autosave", n.lower().startswith("recover")),
+                    "character": meta.get("character", ""),
+                    "mtime": os.path.getmtime(path),
+                }
+            )
+        if not saves:
+            continue
+        saves.sort(key=lambda s: -s["mtime"])
+        character = next((s["character"] for s in saves if s["character"]), "")
+        if not character:
+            for s in saves:
+                m = re.match(r"New (.+?) Save Game", s["name"])
+                if m:
+                    character = m.group(1).strip()
+                    break
+        groups.append(
+            {
+                "folder": folder,
+                "character": character or os.path.basename(folder),
+                "saves": saves,
+            }
+        )
+    groups.sort(key=lambda g: -g["saves"][0]["mtime"])
+    return groups
+
+
+def print_catalogue(groups: list[dict]) -> None:
+    for g in groups:
+        print(f"{g['character']}  ({os.path.basename(g['folder'])})")
+        for s in g["saves"]:
+            when = dt.datetime.fromtimestamp(s["mtime"]).strftime("%d %b %H:%M")
+            day = f"day {s['day']:>4}" if s["day"] is not None else "day    ?"
+            kind = "autosave" if s["autosave"] else "saved   "
+            print(f"    {when}  {day}  {kind}  {s['name']}")
+    print()
+    print('Pass a character or save name to open it: python ba_dashboard.py "Costy Co"')
+
+
+def resolve_target(arg: str | None) -> str:
+    """Turn the positional argument into a file or folder to read.
+
+    A path that exists is taken as is. Anything else is a name: a save
+    (`Costy Co`, `Costy Co.hsg`) or a character; an exact match wins, then a
+    case-insensitive substring. A save name gives that file; a character name
+    gives its folder, so --watch follows the character's autosaves. Several
+    matches are listed and the run stops, so a guess never opens the wrong city.
+    """
+    if not arg:
+        return SAVE_ROOT
+    if os.path.exists(arg):
+        return arg
+    if not os.path.isdir(SAVE_ROOT):
+        raise SystemExit(f"{arg} does not exist, and there is no save folder at {SAVE_ROOT}")
+    want = arg.lower().removesuffix(".hsg")
+    groups = catalogue(SAVE_ROOT)
+    saves = [(g, s) for g in groups for s in g["saves"]]
+    # Four tiers, each tried on its own: a save named exactly so, a character
+    # named exactly so, then the same two as substrings. "Costy Co" is both a
+    # save and a character here; the save wins, and "Costy" finds the character.
+    tiers = [
+        [(f"{g['character']} - {s['name']}", s["path"]) for g, s in saves if s["name"].lower() == want],
+        [(g["character"], g["folder"]) for g in groups if g["character"].lower() == want],
+        [(g["character"], g["folder"]) for g in groups if want in g["character"].lower()],
+        [(f"{g['character']} - {s['name']}", s["path"]) for g, s in saves if want in s["name"].lower()],
+    ]
+    for hits in tiers:
+        if len(hits) == 1:
+            return hits[0][1]
+        if hits:
+            print(f"{arg!r} matches more than one save or character:")
+            for label, path in hits:
+                print(f"  {label:<40} {path}")
+            raise SystemExit("be more specific, or pass the path")
+    print(f"nothing named {arg!r} under {SAVE_ROOT}. The saves there:\n")
+    print_catalogue(groups)
+    raise SystemExit(1)
+
+
 class SaveShapeError(Exception):
     """The save parsed, but a field the board relies on was not where expected."""
 
@@ -8971,7 +9098,16 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("save", nargs="?", help="a .hsg file or a save folder")
+    ap.add_argument(
+        "save",
+        nargs="?",
+        help="a .hsg file, a save folder, or the name of a save or character",
+    )
+    ap.add_argument(
+        "--list",
+        action="store_true",
+        help="list every save under the save folder, by character, and stop",
+    )
     ap.add_argument(
         "-o", "--out", default="dashboard.html", help="where to write the page"
     )
@@ -8994,7 +9130,12 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    target = args.save or SAVE_ROOT
+    if args.list:
+        root = args.save if args.save and os.path.isdir(args.save) else SAVE_ROOT
+        print_catalogue(catalogue(root))
+        return
+
+    target = resolve_target(args.save)
     out = os.path.abspath(args.out)
     history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
 

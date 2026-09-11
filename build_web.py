@@ -143,6 +143,13 @@ button.btn{border:0;cursor:pointer}
 .source-note .lg-note{margin:8px 2px 0;max-width:none;text-align:left}
 .lg-pick{cursor:pointer}
 .lg-pick input{display:none}
+/* the save menu: which character or save the board follows */
+.lg-sel{font:inherit;font-size:12.5px;font-weight:500;line-height:1.4;color:var(--ink);background:var(--surface);
+  border:1px solid var(--rule);border-radius:7px;padding:7px 10px;max-width:260px;cursor:pointer}
+.lg-sel:hover{border-color:var(--ink-3)}
+.lg-sel:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.menu-panel .lg-sel{display:block;width:100%;max-width:none;margin:0 0 6px;border-radius:4px}
+.strip .right .menu-panel{white-space:normal}
 .lg-foot{display:contents}
 .landing footer a{cursor:pointer}
 .landing details.help{width:560px;margin-top:-8px}
@@ -225,7 +232,7 @@ details.help[open] summary::after{content:"\2013"}
 <section class="landing" id="landing">
   <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
   <p class="rv" id="welcomeLede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
-  <div class="drop rv" id="drop" role="button" tabindex="0" title="Choose the folder named Big Ambitions inside SaveGames, or drop it here. The page looks through every company folder in it and takes the newest save.">
+  <div class="drop rv" id="drop" role="button" tabindex="0" title="Choose the folder named Big Ambitions inside SaveGames, or drop it here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save.">
     <div class="folder"><i class="tab"></i><i></i><span class="file"></span><i class="flap"></i></div>
     <b>Drop your save folder anywhere</b>
     <span>the newest .hsg in it opens</span>
@@ -286,7 +293,7 @@ details.help[open] summary::after{content:"\2013"}
       <div class="menu-heading">Save source</div>
       <div id="menuSourceSlot"></div>
       <button type="button" class="lg-btn lg-watch" id="watchBtn" hidden>Watch</button>
-      <p class="menu-hint">Or drop a .hsg save anywhere.</p>
+      <p class="menu-hint">Pick a character or one save above and the board follows it. Or drop a .hsg save anywhere.</p>
       <div class="menu-divider"></div>
       <div id="menuChipSlot"></div>
       <p class="menu-hint" id="menuChipHint"></p>
