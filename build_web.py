@@ -337,15 +337,17 @@ def main() -> None:
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     print(f"gametext.json: {len(text)} entries")
-    # The template carries its own charset tag; a viewport tag is all the page adds.
+    # The template carries the doctype and its own charset tag; a viewport tag
+    # is all the page adds, placed after them by render().
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
     if ANALYTICS_TOKEN:
         head += (
             "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
             + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
         )
-    page = head + render(
-        None, live=True, banner=BANNER, before_script=BEFORE_SCRIPT.replace("__STAMP__", stamp())
+    page = render(
+        None, live=True, banner=BANNER, before_script=BEFORE_SCRIPT.replace("__STAMP__", stamp()),
+        head=head,
     )
     out = os.path.join(WEB, "index.html")
     with open(out, "w", encoding="utf-8", newline="\n") as fh:

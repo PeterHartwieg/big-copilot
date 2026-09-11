@@ -4389,13 +4389,19 @@ def render(
     *,
     banner: str = "",
     before_script: str = "",
+    head: str = "",
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
     ``data`` may be None for a page that receives its numbers later, as the
-    in-browser board does. ``banner`` is markup placed above the board and
+    in-browser board does. ``banner`` is markup placed above the board,
     ``before_script`` goes just ahead of the board's own script, which is where
-    a host page defines ``window.LEDGER_SOURCE``.
+    a host page defines ``window.LEDGER_SOURCE``, and ``head`` is extra markup
+    for the document head (a viewport tag, an analytics beacon).
+
+    The doctype comes first so the page runs in standards mode: without it the
+    viewport height reads as the document's, tables do not inherit line-height
+    and the tooltip layer has to guess where the window ends.
 
     A save name is the player's own text, so it is escaped on the way into the
     title, and ``</`` is escaped inside the JSON so a name can never close the
@@ -4406,7 +4412,7 @@ def render(
     else:
         payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
         title = f"{data['meta']['save']} · Big Copilot"
-    return '<meta charset="utf-8">' + chr(10) + (
+    return "<!doctype html>" + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -7494,11 +7500,8 @@ function drawKindRows(){
    line with the button's, clamped into the window. With no button on the page
    yet it hangs off the top right of the Needs attention section. */
 function placeKindsPop(){
-  /* The page has no doctype, so it runs in quirks mode and
-     documentElement.clientHeight is the document's height, not the window's:
-     innerHeight is the one that means "how much of the window is left". */
   const vw = document.documentElement.clientWidth || window.innerWidth;
-  const vh = window.innerHeight || document.documentElement.clientHeight;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
   let r = kindsAnchor && kindsAnchor.getBoundingClientRect();
   if(!r || !r.width){
     const sec = document.getElementById("alertSection");
