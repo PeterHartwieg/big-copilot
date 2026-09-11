@@ -4691,8 +4691,6 @@ td.heat .rv{position:absolute; right:5px; bottom:3px; font-family:"IBM Plex Mono
 td.heat.none{color:var(--ink-3)}
 #market.numbers td.heat{height:auto; padding-bottom:17px}
 
-/* legacy: company (nothing of its own beyond the shared .stat, .muted,
-   .expand-more and .chip above) -------------------------------------------- */
 /* ===== end of LEGACY ====================================================== */
 
 /* everything arrives: sections slide in when they come into view -------- */
@@ -5313,23 +5311,14 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     </section>
   </div>
 
+  <!-- The reference page: the product table full width, then payroll beside the
+       milestones. Each section's head and body are drawn by its own draw*(). -->
   <div class="page" id="pageCompany" hidden>
+    <section class="sec rv" id="secProducts"></section>
     <div class="duo sec">
-      <section class="rv" style="margin:0" id="secProducts">
-        <div class="head"><h2>Products</h2><p id="productNote"></p></div>
-        <div class="card scroll"><table id="products"></table>
-          <div class="expand-more" id="productsMore" hidden></div></div>
-      </section>
-      <section class="rv" style="margin:0" id="secPayroll">
-        <div class="head"><h2>Payroll</h2><p id="payrollNote"></p></div>
-        <div class="card pad" id="payroll"></div>
-      </section>
+      <section class="rv" style="margin:0" id="secPayroll"></section>
+      <section class="rv" style="margin:0" id="secGoals"></section>
     </div>
-
-    <section class="sec rv" id="secGoals">
-      <div class="head"><h2>Milestones</h2><p id="goalsNote">Career totals</p></div>
-      <div class="card pad" id="goals"></div>
-    </section>
   </div>
 
   <footer class="foot" id="footer">
@@ -7553,86 +7542,101 @@ function paintPlan(){
 }
 
 /* The top of the list is the money; the full list is what a factory planner
-   needs, every product with its week of sales across all stores. */
+   needs, every product with its week of sales across all stores. The revenue
+   bar sits in the cell so the shape of the range reads before the figures do. */
 function drawProducts(){
   const TOP = 14, all = D.products;
   const rows = showAllProducts ? all : all.slice(0, TOP);
   /* A column that is empty on two rows in three is not a column. When most
      products do have a weekday peak it stays; otherwise it moves into the
-     row's own tooltip. */
+     product's own note. */
   const withPeak = rows.filter(p => p.peak).length;
   const showPeak = withPeak * 2 >= rows.length;
-  $("productNote").textContent = showPeak ? ""
-    : `Weekday peaks on hover, ${withPeak} of ${rows.length} have one`;
-  $("products").innerHTML = `
+  /* The list is sorted by revenue, so the first row is the bar's full width. */
+  const top = rows.length ? rows[0].revenue : 1;
+  const peakTip = p => p.peak
+    ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
+    : "No weekly cycle clears the noise test";
+  const more = all.length > TOP
+    ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
+        showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
+    : `<span class="quiet">all ${all.length}</span>`;
+  $("secProducts").innerHTML = sechead("Products", {
+    why: `Revenue and units are yesterday summed over every store that sells the line;`
+      + ` units a week is the last seven days, and stores is how many carry it.`
+      + (showPeak
+        ? " Peaks names the weekday that sells best and the points between best and worst day."
+        : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
+    quiet: "by revenue yesterday",
+    aside: more,
+  }) + `<table>
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
-      <th title="Sales across all stores over the last 7 days">Units / week</th>
-      <th>Avg price</th><th>Stores</th>${showPeak?`<th class="l">Peaks</th>`:""}</tr></thead>
-    <tbody>${rows.map(p=>`<tr title="${p.peak
-        ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
-        : "No weekly cycle clears the noise test"}">
-      <td class="l">${p.item}</td>
-      <td class="num">${fmt(p.revenue)}</td>
-      <td class="num">${p.units.toLocaleString()}</td>
-      <td class="num">${(p.week ?? p.units * 7).toLocaleString()}</td>
-      <td class="num">$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      <td class="num">${p.stores}</td>
-      ${showPeak?`<td class="l">${p.peak
-        ? `${p.peak} <span class="muted">+${p.swing} pts</span>`
-        : `<span class="muted">—</span>`}</td>`:""}</tr>`).join("")}</tbody>`;
-  const more = $("productsMore");
-  more.hidden = all.length <= TOP;
-  if(!more.hidden){
-    more.innerHTML = `${showAllProducts ? `All ${all.length} shown`
-        : `${all.length - TOP} more below the top ${TOP}`}
-      <button type="button" id="productsToggle" aria-expanded="${showAllProducts}">${
-        showAllProducts ? `just the top ${TOP}` : `show all ${all.length}`}</button>`;
-    $("productsToggle").onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
-  }
+      <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
+      <th>Avg price</th><th>Stores</th>${showPeak?`<th>Peaks</th>`:""}</tr></thead>
+    <tbody>${rows.map(p=>`<tr>
+      <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${p.item}</td>
+      <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
+      <td>${p.units.toLocaleString()}</td>
+      <td>${(p.week ?? p.units * 7).toLocaleString()}</td>
+      <td>$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${p.stores}</td>
+      ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
+        p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`).join("")}</tbody></table>`;
+  const toggle = $("productsToggle");
+  if(toggle) toggle.onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
 }
 
-/* Payroll, debt and milestones only earn their space when something needs
-   doing. With nobody unhappy and nothing owed they are one line each. */
+/* Payroll is the headcount by role against the biggest role, and whatever needs
+   doing as a chip beside the heading: nobody unhappy and nothing absent leaves
+   one satisfaction chip. */
 function drawPayroll(){
   const st = D.staff;
-  $("payrollNote").textContent = `${st.total} people · ${fmt(st.dailyCost)} per day`;
-  const trouble = [["unhappy, below 70%", st.unhappy], ["absent today", st.absent],
-                   ["with an open complaint", st.complaining]].filter(([,v]) => v);
-  if(!trouble.length){
-    $("payroll").innerHTML = `<p class="muted" style="margin:0">Nothing to do here:
-      ${st.total} staff averaging ${st.avgSatisfaction}% satisfaction, none unhappy,
-      none absent, no complaints. ${st.roles.map(r => `${r.count} ${r.role.toLowerCase()}`)
-        .join(", ")}.</p>`;
-    return;
-  }
-  $("payroll").innerHTML =
-    [["Average satisfaction", `${st.avgSatisfaction}%`],
-     ...trouble.map(([l,v]) => [l[0].toUpperCase()+l.slice(1), v])]
-      .map(([l,v])=>`<div class="stat"><span>${l}</span><b class="num">${v}</b></div>`).join("")
-    + `<div class="stat" style="border-top:1px solid var(--rule); margin-top:8px; padding-top:12px">
-         <span class="eyebrow">Headcount by role</span></div>`
-    + st.roles.map(r=>`<div class="stat"><span>${r.role}</span><b class="num">${r.count}</b></div>`).join("");
+  const trouble = [["unhappy", st.unhappy, "Satisfaction below 70%"],
+                   ["out", st.absent, "Absent today"],
+                   ["complaining", st.complaining, "With an open complaint"]].filter(([,v]) => v);
+  const max = Math.max(...st.roles.map(r => r.count), 1);
+  $("secPayroll").innerHTML = sechead("Payroll", {
+    quiet: `${st.total} people · ${fmt(st.dailyCost)} / day`,
+    aside: chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
+        `Average satisfaction across ${st.total} staff`)
+      + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join(""),
+  }) + `<div class="roles">${st.roles.map(r => `<div class="role rv">
+      <span>${r.role}</span>
+      <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
+      <span class="c">${r.cost != null
+        ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
+        : r.count}</span></div>`).join("")}</div>`;
 }
 
+/* The career totals as a checklist, then the house rules. The stored difficulty
+   is only a slot number, and a custom game keeps its own multipliers whatever
+   that slot says, so the settings themselves are what answers "how hard is
+   this game" — and they are worth stating, because several of them are doing
+   real work here. */
 function drawGoals(){
   const g = D.goals, h = D.meta.houseRules;
-  $("goalsNote").textContent = `Career totals · playing on ${D.meta.difficulty}`;
-  /* The stored difficulty is only a slot number, so the settings themselves are
-     what answers "how hard is this game" — and they are worth stating, because
-     several of them are doing real work here. */
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
-  $("goals").innerHTML = `<p class="muted" style="margin:0 0 12px">${g.completed} personal
-    goal${g.completed===1?"":"s"} completed, ${g.diplomas} diploma${g.diplomas===1?"":"s"},
-    ${g.goodsProduced.toLocaleString()} goods produced in the factories,
-    ${fmt(g.taxesPaid)} paid in tax.</p>`
-    + (h && moved.length ? `<div class="stat" style="border-top:1px solid var(--rule);
-         padding-top:12px"><span class="eyebrow">House rules: ${h.label.toLowerCase()},
-         ${h.harder} harder${h.easier ? `, ${h.easier} easier` : ""}, started on ${
-         fmt(h.startingMoney)}</span></div>`
-      + moved.map(r => `<div class="stat" title="${r.what}">
-          <span>${r.name} <span class="muted">${r.what}</span></span>
-          <b class="num"><span class="chip ${r.lean === "harder" ? "warn" : "ok"}">×${
-            r.value}</span></b></div>`).join("")
+  /* Every row is a total the player has already banked; the board knows no
+     target to count them against, so a row is ticked once it is off zero. */
+  const miles = [
+    ["Personal goals completed", g.completed, g.completed.toLocaleString()],
+    [`Diploma${g.diplomas === 1 ? "" : "s"} earned`, g.diplomas, g.diplomas],
+    ["Goods produced in the factories", g.goodsProduced, g.goodsProduced.toLocaleString()],
+    ["Tax paid", g.taxesPaid, fmt(g.taxesPaid)],
+  ];
+  $("secGoals").innerHTML = sechead("Milestones", {
+    why: "The stored difficulty is only a slot number, and a custom game keeps its own"
+      + " multipliers whatever that slot says, so the house rules below are the honest"
+      + " answer to how hard this game is. Only the rules that moved off stock are listed.",
+    quiet: h ? `career totals · playing on ${h.label.toLowerCase()}, ${h.harder} harder${
+        h.easier ? `, ${h.easier} easier` : ""}, started on ${fmt(h.startingMoney)}`
+      : `career totals · playing on ${D.meta.difficulty}`,
+  }) + `<div class="miles">${miles.map(([label, value, text]) =>
+      `<div class="mile${value ? " done" : ""}"><span class="box">${icon("tick")}</span>${
+        label}<span class="c">${text}</span></div>`).join("")}</div>`
+    + (moved.length ? `<div class="rules">${moved.map(r =>
+        `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
+          r.neutral}, so this game is ${r.lean}.`)}">${r.name}<b>×${r.value}</b></span>`).join("")}</div>`
       : "");
 }
 
