@@ -4482,51 +4482,11 @@ section.measured{content-visibility:visible}
 /* A finding's link scrolls to a section; the sticky masthead must not cover it. */
 section,.sitehead{scroll-margin-top:116px}
 
-/* ===== LEGACY: delete per view as it is ported =============================
-   Everything in this block styles markup the old draw*() functions still
-   produce. Each view's engineer deletes their own sub-block when their view is
-   ported; the shared sub-block goes when the last user is gone. Where a name
-   here collides with one in the new stylesheet below, the new rule wins. */
-
-/* legacy: shared (sections, cards, buttons, toolbars; the web landing in
-   build_web.py still uses .eyebrow) ---------------------------------------- */
-svg{width:100%;overflow:visible}
-.eyebrow{
-  font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:500;
-  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
-}
-.eyebrow span{color:var(--accent)}
-.head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px}
-.head h2{margin:0; font-size:17px; font-weight:600; letter-spacing:-.01em}
-.head .tools{margin-left:auto; display:flex; gap:6px}
-.card{background:var(--surface); border:1px solid var(--rule); border-radius:3px; box-shadow:var(--shadow)}
-.pad{padding:18px 20px}
-.scroll{overflow-x:auto}
-.muted{color:var(--ink-3); font-size:13px; margin:4px 0}
-.verdict{margin:0 2px 14px; font-size:13.5px; color:var(--ink-2)}
-.verdict b{color:var(--ink); font-weight:600}
-.stat{display:flex; justify-content:space-between; gap:16px; padding:7px 0; border-bottom:1px solid var(--rule-soft)}
-.stat:last-child{border-bottom:none}
-.stat span{color:var(--ink-2); font-size:13.5px}
-.trio{display:grid; grid-template-columns:repeat(3,1fr); gap:20px}
-.chip.neutral{background:#8b94991f; color:var(--ink-2)}
-.expand-more{padding:10px 16px; font-size:12.5px; color:var(--ink-3); background:var(--surface)}
-.expand-more button{margin-left:8px; padding:2px 8px; font-size:11px}
-button{
-  font:inherit; font-size:12px; font-weight:500; color:var(--ink-2);
-  background:var(--surface); border:1px solid var(--rule); border-radius:2px;
-  padding:5px 11px; cursor:pointer; transition:color .12s, border-color .12s;
-}
-button:hover{color:var(--ink); border-color:var(--ink-3)}
-button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--ground)}
-button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
-
-/* legacy: today: nothing left; tiles, findings and the kinds panel are the redesign's */
-.minor{margin:10px 2px 0; font-size:12.5px; color:var(--ink-3)}
-
-/* legacy: results — the old markup is gone; what stays is what the mockup
-   could not show: header sorting, the site picker's full list inside its
-   .seg, and the open site's row in the portfolio -------------------------- */
+/* ===== kept from the old board: what the artboards could not show ==========
+   Header sorting, the site picker's full list inside its .seg, the open
+   site's row in the portfolio, a paused import pipe, the two pipe tables
+   under the map, the naming controls on the factory-lines view, and the
+   growth grid's sortable columns and empty cells. ============================ */
 thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
 thead th svg.sort{width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
@@ -4534,11 +4494,6 @@ thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
 tr.kid.on td{background:var(--accent-soft)}
 .seg select.sitepick{appearance:none; -webkit-appearance:none; font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif; color:var(--ground); background:var(--ink); border:0; border-radius:5px; padding:6px 12px; cursor:pointer; max-width:260px}
 .seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
-
-/* supply: what the artboard did not need — a paused import pipe, the two pipe
-   tables under the map, and the naming controls on the factory-lines view.
-   .legend-note is kept for the growth page's market legend, which still
-   uses it. ------------------------------------------------------------------ */
 .flow .pipe.paused{stroke:var(--neg);stroke-opacity:.7}
 .scrollx{overflow-x:auto}
 #stock td.l+td.l,#importPlan td.l,#topupPlan td.l{white-space:normal}
@@ -4553,18 +4508,13 @@ button.unname{
   border:1px solid var(--rule);border-radius:5px;padding:0 6px;margin-left:4px;cursor:pointer;
 }
 button.unname:hover{color:var(--ink);border-color:var(--ink-3)}
-.legend-note{margin:10px 2px 0; font-size:12px; color:var(--ink-3); display:flex; gap:18px; flex-wrap:wrap}
-
-/* growth: what the port adds to the generator's grid (real data has cells
-   with no reading, and a column can be the sort key) ---------------------- */
+button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .heat .h[data-hood]{cursor:pointer}
 .heat .h.sort{color:var(--accent)}
 .cell.none{background:var(--surface);color:var(--ink-3);cursor:default}
 .cell.none:hover{transform:none;box-shadow:none}
 .waves .quiet{padding:7px 0}
 #planPicker .field select{padding:6px 10px;font-size:12.5px}
-
-/* ===== end of LEGACY ====================================================== */
 
 /* everything arrives: sections slide in when they come into view -------- */
 .rv{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
@@ -4574,8 +4524,6 @@ button.unname:hover{color:var(--ink);border-color:var(--ink-3)}
 .mast{display:flex;align-items:center;gap:40px;height:100px;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5;background:var(--ground)}
 .brand{display:flex;align-items:baseline;gap:2px;user-select:none}
 .wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer}
-/* .brand .dot rather than .dot: the web shell's own stylesheet, which comes
-   after this one, has a 7px .dot of its own for the landing. */
 .brand .dot{
   display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--accent);
   transform-origin:50% 100%;transition:transform .25s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
@@ -5238,7 +5186,7 @@ const load = (v, level) => `<span class="chip ${
 
 /* Neutral gauge: for numbers that describe a situation rather than grade it,
    like how much of a loan is paid off or how busy a street is. */
-const gauge = (v,dp=0) => `<span class="chip neutral">${v.toFixed(dp)}%</span>`
+const gauge = (v,dp=0) => `<span class="chip dim">${v.toFixed(dp)}%</span>`
   + `<span class="bar"><i style="width:${Math.min(100,Math.max(v,1.5))}%"></i></span>`;
 
 /* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
@@ -5309,9 +5257,8 @@ const chipHtml = (kind, text, tip) =>
 const hoodHtml = b => b && b.code ? `<span class="hood">${b.code}</span>` : "";
 /* $3.57M, $751k, $98: the compact money the tiles and axes use. */
 const money = compact;
-/* A segmented control, the .seg of the design, with toolbar()'s signature so a
-   view swaps one call for the other: options are [id, label] pairs, read()
-   gives the current id, write(id) stores it, redraw() repaints the view. */
+/* A segmented control, the .seg of the design: options are [id, label] pairs,
+   read() gives the current id, write(id) stores it, redraw() repaints the view. */
 function seg(host, options, read, write, redraw){
   if(typeof host === "string") host = $(host);
   host.classList.add("seg");
@@ -5331,17 +5278,16 @@ function seg(host, options, read, write, redraw){
 
 /* View state lives out here so a live refresh redraws the numbers without
    resetting whichever tab, filter or sort order the reader had chosen. */
-let alertFilter="all", chartWindow=30, shown=new Set(["profit7","profit"]);
+let chartWindow=30, shown=new Set(["profit7","profit"]);
 let view="pnl", sortKey=null, sortDir=-1, stockView="shops", marketView="types";
 /* The demand grid sorts by one neighbourhood at a time; numbers in the cells are
    off until asked for, the shade carries the reading. */
-let marketSortHood=null, marketSortDir=-1, marketDetail=false;
+let marketSortHood=null, marketSortDir=-1;
 let rhythmView="customers";
-let flowPick = null;
 /* Everything that is folded away by default, so a refresh does not re-fold what
    the reader has just opened. */
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
-let showAllStock = false, showAllShelves = false, showAllExpand = false, showRhythmCards = false;
+let showAllStock = false, showAllShelves = false, showRhythmCards = false;
 let showAllProducts = false;
 /* Which kinds of "Needs attention" finding to show, set by buildAlertSettingsPanel()
    before the first render. */
@@ -5731,7 +5677,7 @@ const SUPPLY_VIEWS = {
       const due = r.due;
       /* A holding that empties a few hours early is an order sized to
          consumption, so it gets a chip and not a red one. */
-      const cls = !due ? "neutral"
+      const cls = !due ? "dim"
         : r.coverFit === "short" ? "bad" : r.coverFit === "tight" ? "warn" : "ok";
       return `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
@@ -5778,7 +5724,7 @@ const SUPPLY_VIEWS = {
       <td>${r.perWeek ? r.perWeek.toLocaleString() : "—"}</td>
       <td>${r.weeks === null
         ? `<span class="chip bad">not moving</span>`
-        : `<span class="chip ${r.weeks >= 8 ? "warn" : "neutral"}">${r.weeks}</span>`}</td>
+        : `<span class="chip ${r.weeks >= 8 ? "warn" : "dim"}">${r.weeks}</span>`}</td>
       <td>${r.target ? r.target.toLocaleString() : "—"}</td>`,
   },
   lines: {
@@ -6066,20 +6012,6 @@ function factoryView(){
 }
 
 /* --- chrome, wired up once ----------------------------------------- */
-function toolbar(host, options, read, write, redraw){
-  options.forEach(([id,label]) => {
-    const b = el("button", null, label);
-    b.dataset.id = id;
-    b.setAttribute("aria-pressed", id === read());
-    b.onclick = () => {
-      write(id);
-      [...host.children].forEach(c => c.setAttribute("aria-pressed", c === b));
-      redraw();
-    };
-    host.append(b);
-  });
-}
-
 // changed for growth: the market views are a .seg; "Everything" went, being the
 // union of "What I sell" and "Not yet", and the numbers are always in the cells.
 seg($("marketTools"), [["types","By type"],["mine","What I sell"],["new","Not yet"]],
@@ -6225,12 +6157,10 @@ function goToAlert(a){
   if(!link) return;
   if(link.view){
     stockView = link.view; showAllStock = false;
-    [...$("stockTools").children].forEach(c => c.setAttribute("aria-pressed", c.dataset.id === stockView));
     drawStock();
   }
   if(link.port){
     view = link.port; sortKey = null;
-    [...$("portTools").children].forEach(c => c.setAttribute("aria-pressed", c.dataset.id === view));
     drawPortfolio();
   }
   if(link.site){
@@ -7365,11 +7295,11 @@ function renderAll(){
    the supply round, growth planning, the company's reference tables. Which
    page and which view are remembered on this device and mirrored in the hash. */
 const PAGES = [
-  {id:"today",   label:"Today",   host:"pageToday",   hint:"The four numbers and what needs attention"},
-  {id:"results", label:"Results", host:"pageResults", hint:"Daily result, the week, the portfolio by chain, one site at a time"},
-  {id:"supply",  label:"Supply",  host:"pageSupply",  hint:"Orders to set, stock checks, how goods move"},
-  {id:"growth",  label:"Growth",  host:"pageGrowth",  hint:"Market demand, plan a chain"},
-  {id:"company", label:"Company", host:"pageCompany", hint:"Products, payroll, milestones"},
+  {id:"today",   label:"Today",   host:"pageToday"},
+  {id:"results", label:"Results", host:"pageResults"},
+  {id:"supply",  label:"Supply",  host:"pageSupply"},
+  {id:"growth",  label:"Growth",  host:"pageGrowth"},
+  {id:"company", label:"Company", host:"pageCompany"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
@@ -7640,7 +7570,7 @@ buildAlertSettingsPanel();
                the viewport, once. wireReveal() after render; no replay.
      sechead   sechead(title, {why, quiet, aside, after}) -> <div class="sechead">
      seg       seg(host, [[id,label],...], read, write, redraw) fills a .seg with
-               <a data-id> links, like toolbar() did with buttons.
+               <a data-id> links; the view's redraw rebuilds it.
      chip      chipHtml(kind, text, tip) -> <span class="chip ok|bad|warn|dim">
      hood      hoodHtml(b) -> <span class="hood">LM</span> from b.code
      money     money(v) -> $3.57M / $751k / $98 (compact())
@@ -8045,10 +7975,12 @@ const bindPortfolio = once(() => on("click", "tr.chain[data-chain]", tr => {
 function wirePortfolio(){ bindPortfolio(); applyChains(); }
 
 /* orders: "raise" rolls the order up to its target ------------------------------ */
-const wireOrders = once(() => on("click", ".up", (u, e) => {
+const wireOrders = once(() => on("click", "td .up", (u, e) => {
+  /* Only the raise chip in an orders row, the one whose tr carries the
+     td[data-now] figure to roll up; a .wave.up on Growth is not this. */
+  const tr = u.closest("tr"), td = tr && tr.querySelector("td[data-now]"); if(!td) return;
   e.preventDefault();
   if(u.classList.contains("done")) return;
-  const td = u.closest("tr") && u.closest("tr").querySelector("td[data-now]"); if(!td) return;
   const from = +td.dataset.now, to = +td.dataset.to; const t0 = performance.now();
   const step = (t) => { const p = REDUCED ? 1 : Math.min(1, (t - t0) / 700), e2 = 1 - Math.pow(1 - p, 3);
     td.textContent = Math.round(from + (to - from) * e2).toLocaleString("en-US");
