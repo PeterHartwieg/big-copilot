@@ -3703,6 +3703,41 @@ def _alert_id(*parts: str) -> str:
     return hashlib.sha1(":".join(parts).encode("utf-8")).hexdigest()[:10]
 
 
+def _finding(
+    level: str,
+    site: str,
+    group: str,
+    text: str,
+    *,
+    key=None,
+    rank: float = 0.0,
+    subject: str = "",
+    worth=None,
+    always: bool = False,
+) -> dict:
+    """One row of the list.
+
+    `key` is the business's site key (its address) when the finding is about
+    one business; a synthetic site such as "3 shops" has none. The id hashes
+    the key where there is one, so a renamed business keeps its silences and
+    two shops that share a name never share a finding. The page navigates by
+    the key too, so it never opens a namesake.
+    """
+    return {
+        "level": level,
+        "site": site,
+        "group": group,
+        "text": text,
+        "rank": rank,
+        "subject": subject,
+        "worth": worth,
+        "unit": ALERT_UNITS.get(group, ""),
+        "id": _alert_id(group, key or site, subject),
+        "siteKey": key,
+        "always": always,
+    }
+
+
 def _alerts(
     businesses: list,
     supply: dict,
@@ -3724,20 +3759,9 @@ def _alerts(
     """
     found = []
 
-    def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False):
+    def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False, key=None):
         found.append(
-            {
-                "level": level,
-                "site": site,
-                "group": group,
-                "text": text,
-                "rank": rank,
-                "subject": subject,
-                "worth": worth,
-                "unit": ALERT_UNITS.get(group, ""),
-                "id": _alert_id(group, site, subject),
-                "always": always,
-            }
+            _finding(level, site, group, text, key=key, rank=rank, subject=subject, worth=worth, always=always)
         )
 
     planned = {link["to"] for link in supply["graph"]["links"]}
@@ -3771,6 +3795,7 @@ def _alerts(
             f"{', '.join(reasons)}, ${b['rent']:,.0f}/day rent",
             worth=b["rent"],
             always=True,
+            key=b["key"],
         )
 
     vacant = [b for b in businesses if b["status"] == "vacant"]
@@ -3794,15 +3819,16 @@ def _alerts(
                 "loss",
                 f"Lost ${abs(b['profit']):,.0f} yesterday",
                 worth=abs(b["profit"]),
+                key=b["key"],
             )
         if b["status"] == "retail" and b["staff"] == 0:
-            note("critical", b["name"], "staff", "No staff assigned", always=True)
+            note("critical", b["name"], "staff", "No staff assigned", always=True, key=b["key"])
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
-            note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%")
+            note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%", key=b["key"])
         for slug in b["missingAmenities"]:
             group, text = AMENITY_DEMANDS[slug]
-            note("warn", b["name"], group, text, always=True)
+            note("warn", b["name"], group, text, always=True, key=b["key"])
 
     # --- the promotion cap, which is reached with campaigns or not at all
     # Promotion is the foot traffic the address comes with plus whatever the
@@ -3842,7 +3868,10 @@ def _alerts(
                 f"maxed: {who}. The address sets the foot traffic, so campaigns are "
                 f"the only lever"
             )
-        note(level, where, "promotion", text, rank=-worst, always=True)
+        note(
+            level, where, "promotion", text, rank=-worst, always=True,
+            key=short[0]["key"] if len(short) == 1 else None,
+        )
 
     # --- what a hype wave is carrying, and what the day it ends costs
     grid_of = {g["key"]: g for g in grids}
@@ -3894,6 +3923,7 @@ def _alerts(
                 f"${base['revenue']:,.0f} for {base['basis']}; "
                 f"about ${drop:,.0f}/day of revenue rides on the wave.{queue}",
                 worth=drop,
+                key=top["key"],
             )
         else:
             note(
@@ -3906,6 +3936,7 @@ def _alerts(
                 f"before this one started, so there is no baseline to say what the "
                 f"drop will be",
                 always=True,
+                key=top["key"],
             )
 
     # --- a site whose week moved, against the week before it
@@ -3932,13 +3963,14 @@ def _alerts(
             f"${row['last7']:,.0f} over days {day - 7}-{day - 1} against "
             f"${row['prev7']:,.0f} the week before",
             worth=abs(row["last7"] - row["prev7"]) / 7,
+            key=b["key"],
         )
 
     # A shop only runs dry if a day of selling outruns the morning top-up.
     for row in supply["shops"]:
         if row["level"] == "ok" or businesses[row["s"]]["key"] in silent:
             continue
-        site = businesses[row["s"]]["name"]
+        site, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
         if row["pressure"] is None:
             note(
                 row["level"],
@@ -3948,6 +3980,7 @@ def _alerts(
                 f"at {row['sold']:,}/day",
                 -row["stock"],
                 row["item"],
+                key=key,
             )
         elif row["level"] == "critical":
             note(
@@ -3958,6 +3991,7 @@ def _alerts(
                 f"a {row['target']:,} top-up; empties before the next drop",
                 -row["pressure"],
                 row["item"],
+                key=key,
             )
 
     # A depot only runs dry if it cannot reach the next delivery by more than a
@@ -3967,7 +4001,7 @@ def _alerts(
     for row in supply["imports"]:
         if row["level"] != "critical" or businesses[row["s"]]["key"] in silent:
             continue
-        site = businesses[row["s"]]["name"]
+        site, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
         when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
         if row["reason"] == "paused":
             note(
@@ -3978,6 +4012,7 @@ def _alerts(
                 f"at {row['perDay']:,}/day",
                 row["cover"],
                 row["item"],
+                key=key,
             )
         elif row["reason"] == "shortfall":
             note(
@@ -3988,6 +4023,7 @@ def _alerts(
                 f"{arrives}'s import ({row['perDay']:,}/day, {row['peakPerDay']:,} at peak)",
                 row["cover"],
                 row["item"],
+                key=key,
             )
         else:
             note(
@@ -4004,6 +4040,7 @@ def _alerts(
                 ),
                 row["cover"],
                 row["item"],
+                key=key,
             )
 
     # --- what the hour-by-hour grid says that a daily total cannot
@@ -4038,7 +4075,10 @@ def _alerts(
                 f"ceiling. {limit.capitalize()} is the limit, so the answer is "
                 f"{group[0]['fix']}{who}"
             )
-        note("warn", where, "atcap", text, worth=worth)
+        note(
+            "warn", where, "atcap", text, worth=worth,
+            key=group[0]["key"] if len(group) == 1 else None,
+        )
 
     for finding in hours:
         if finding["key"] in silent or finding["kind"] != "idle":
@@ -4053,6 +4093,7 @@ def _alerts(
             f"{finding['day']} for {finding['seen']} customers an hour; "
             f"{finding['spare']} staff-hours a week that buy nothing",
             worth=finding["worth"],
+            key=finding["key"],
         )
 
     found.extend(_idle_notes(businesses, supply["idle"], silent))
@@ -4100,18 +4141,10 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"put it in the numbers"
                 )
             notes.append(
-                {
-                    "level": level,
-                    "site": business["name"],
-                    "group": group,
-                    "text": text,
-                    "rank": -machines,
-                    "subject": where,
-                    "worth": None,
-                    "unit": ALERT_UNITS.get(group, ""),
-                    "id": _alert_id(group, business["name"], where),
-                    "always": False,
-                }
+                _finding(
+                    level, business["name"], group, text,
+                    key=business["key"], rank=-machines, subject=where,
+                )
             )
     return notes
 
@@ -4135,18 +4168,11 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
                     + (f"; {lost:,} a day not made" if lost else "")
                 )
                 notes.append(
-                    {
-                        "level": "critical" if share < STAFF_CRITICAL else "warn",
-                        "site": business["name"],
-                        "group": "staff",
-                        "text": text,
-                        "rank": machine["hours"],
-                        "subject": subject,
-                        "worth": None,
-                        "unit": ALERT_UNITS.get("staff", ""),
-                        "id": _alert_id("staff", business["name"], subject),
-                        "always": False,
-                    }
+                    _finding(
+                        "critical" if share < STAFF_CRITICAL else "warn",
+                        business["name"], "staff", text,
+                        key=business["key"], rank=machine["hours"], subject=subject,
+                    )
                 )
     return notes
 
@@ -4166,12 +4192,13 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
             depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
             # An import sized wrong is one finding about the depot, however
             # many factories draw on it.
-            where = business["name"]
+            where, key = business["name"], business["key"]
             if row["status"] in ("import", "noimport"):
                 if (row["from"], row["slug"]) in said:
                     continue
                 said.add((row["from"], row["slug"]))
                 where = depot
+                key = businesses[row["from"]]["key"] if row["from"] is not None else None
             lines = ", ".join(row["lines"][:3])
             status = row["status"]
             if status == "unplanned":
@@ -4226,18 +4253,10 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"the factories eat"
                 )
             notes.append(
-                {
-                    "level": row["level"],
-                    "site": where,
-                    "group": "feed",
-                    "text": text,
-                    "rank": -row["perDay"],
-                    "subject": row["item"],
-                    "worth": None,
-                    "unit": ALERT_UNITS.get("feed", ""),
-                    "id": _alert_id("feed", where, row["item"]),
-                    "always": False,
-                }
+                _finding(
+                    row["level"], where, "feed", text,
+                    key=key, rank=-row["perDay"], subject=row["item"],
+                )
             )
     return notes
 
@@ -4256,7 +4275,7 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
     for row in (r for r in live if r["dead"]):
         dead_by_site.setdefault(row["s"], []).append(row)
     for site_index, rows in dead_by_site.items():
-        name = businesses[site_index]["name"]
+        name, key = businesses[site_index]["name"], businesses[site_index]["key"]
         for row in rows:
             # Raw materials carry no retail price, so there is no honest dollar
             # figure to gate them by — the units are the finding.
@@ -4266,18 +4285,11 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
                 else None
             )
             notes.append(
-                {
-                    "level": "info",
-                    "site": name,
-                    "group": "dead",
-                    "text": f"{row['stock']:,} {row['item']} held with nothing moving out",
-                    "rank": -row["stock"],
-                    "subject": row["item"],
-                    "worth": worth,
-                    "unit": ALERT_UNITS.get("dead", ""),
-                    "id": _alert_id("dead", name, row["item"]),
-                    "always": False,
-                }
+                _finding(
+                    "info", name, "dead",
+                    f"{row['stock']:,} {row['item']} held with nothing moving out",
+                    key=key, rank=-row["stock"], subject=row["item"], worth=worth,
+                )
             )
 
     # Everything else groups by the top-up target behind it: the same number in
@@ -4307,20 +4319,13 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
                 f"site{'s' if sites > 1 else ''} is "
                 f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
             )
-        site = f"{sites} shops" if sites > 1 else businesses[rows[0]["s"]]["name"]
+        one = businesses[rows[0]["s"]] if sites == 1 else None
+        site = one["name"] if one else f"{sites} shops"
         notes.append(
-            {
-                "level": "info",
-                "site": site,
-                "group": "target",
-                "text": text,
-                "rank": -stock,
-                "subject": items[0],
-                "worth": worth,
-                "unit": ALERT_UNITS.get("target", ""),
-                "id": _alert_id("target", site, items[0]),
-                "always": False,
-            }
+            _finding(
+                "info", site, "target", text,
+                key=one["key"] if one else None, rank=-stock, subject=items[0], worth=worth,
+            )
         )
     return notes
 
@@ -4343,12 +4348,13 @@ CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
 
 
 def _condense(found: list, gate: float) -> dict:
+    # One site is one key; a synthetic site ("3 shops") has none and is its name.
     buckets = collections.OrderedDict()
     for item in found:
-        buckets.setdefault((item["site"], item["group"]), []).append(item)
+        buckets.setdefault((item["siteKey"] or item["site"], item["group"]), []).append(item)
 
     out = []
-    for (site, group), rows in buckets.items():
+    for (where, group), rows in buckets.items():
         if len(rows) < CONDENSE_AT or group not in SUMMARIES:
             out.extend(rows)
             continue
@@ -4358,7 +4364,8 @@ def _condense(found: list, gate: float) -> dict:
         out.append(
             {
                 "level": worst["level"],
-                "site": site,
+                "site": worst["site"],
+                "siteKey": worst["siteKey"],
                 "group": group,
                 "text": SUMMARIES[group].format(n=len(rows), subject=worst["subject"]),
                 "detail": worst["text"],
@@ -4366,7 +4373,7 @@ def _condense(found: list, gate: float) -> dict:
                 "unit": ALERT_UNITS.get(group, ""),
                 # The subject is dropped here, so the merged row is keyed on
                 # where it is alone.
-                "id": _alert_id("summary", group, site),
+                "id": _alert_id("summary", group, where),
                 "always": any(r["always"] for r in rows),
             }
         )
@@ -4626,6 +4633,7 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:color .15s,border-color .15s;
 }
 .ibtn:hover{color:var(--ink);border-color:var(--ink-3)}
+button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .ibtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .quiet{color:var(--ink-3);font-size:12.5px}
 .link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
@@ -4850,7 +4858,7 @@ g[data-series].off{opacity:0}
 .shops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 14px}
 .shops i{width:12px;height:12px;border-radius:3px;background:var(--rule);transition:background .2s}
 .shops i.on{background:var(--ink-2)}
-.planstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.planstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
 .planstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
 .planstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .planstat .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
@@ -4862,6 +4870,9 @@ g[data-series].off{opacity:0}
 .step b{font:600 14px/1 "IBM Plex Mono",monospace;min-width:14px;text-align:center}
 .step .machines{margin:0 0 0 8px;gap:4px}
 .step .machines i{width:14px;height:14px;border-radius:3px}
+.step .machines em{font:500 11px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-3);align-self:center}
+.covers .sub{white-space:nowrap}
+.covers .sub .chip{vertical-align:middle}
 td .ing{font-size:12px;color:var(--ink-2);white-space:normal;font-family:Archivo,sans-serif}
 td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
 .planline{margin:14px 0 0;font-size:13.5px;color:var(--ink-2)}
@@ -5031,8 +5042,8 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
            counters) around this tune button, which is bound once at boot and
            is moved into each fresh head rather than rebuilt. -->
       <div id="alertHead">
-        <span class="ibtn tr" id="alertKindsToggle" aria-pressed="false" tabindex="0"
-          data-tip="Which kinds of finding make the list"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></span>
+        <button type="button" class="ibtn tr" id="alertKindsToggle" aria-expanded="false"
+          data-tip="Which kinds of finding make the list"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
       </div>
       <div class="finds" id="alerts"></div>
       <p class="silenced" id="silenced"><b></b> · <a class="link" href="#">undo</a></p>
@@ -5120,9 +5131,12 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
       <div class="sechead"><h2>Ingredients</h2>
         <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. The order is the weekly figure rounded up to the hundred, the way the logistics manager takes it. Hover an ingredient for what is on order today." tabindex="0"><i>?</i></span></div>
       <table>
-        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Weekly order</th></tr></thead>
+        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Weekly order</th>
+          <th>On order now</th><th>Change</th><th>Cash / week</th></tr></thead>
         <tbody id="ingBody"></tbody>
+        <tfoot id="ingFoot"></tfoot>
       </table>
+      <p class="quiet" id="ingNote" style="margin:12px 0 0"></p>
     </section>
   </div>
 
@@ -5543,6 +5557,9 @@ function flowLayout(){
 
 function drawFlow(){
   const g = D.supply.graph;
+  /* A pick outlives a re-render; one that names a node this save no longer
+     has is dropped, so nothing is dimmed and the detail shows the prompt. */
+  if(flowPickId && !g.nodes.some(n => n.id === flowPickId)) flowPickId = null;
   const {at, width, height, colX} = flowLayout();
   const heaviest = Math.max(...g.links.map(l => l.perDay), 1);
   const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
@@ -6105,11 +6122,11 @@ function drawKpis(){
   const fixed = k.rentBill + D.staff.dailyCost;
   const owed = k.debt > 0
     ? ` · ${fmt(k.debt)} owed on ${D.loans.length} loan${D.loans.length===1?"":"s"}` : "";
-  /* A tile is a number, one chip, a short sub line and a fortnight of history.
-     The sentence the tile used to print is the chip's tooltip. The arrow chips
-     read ▲/▼ with the size of the move; the dim ones carry a plain fact. */
-  const SPARK_DAYS = 14;
-  const hist = key => D.daily.slice(-SPARK_DAYS).map(key);
+  /* A tile is a number, one chip, a short sub line and the whole daily history
+     as a sparkline. The sentence the tile used to print is the chip's tooltip.
+     The arrow chips read ▲/▼ with the size of the move; the dim ones carry a
+     plain fact. */
+  const hist = key => D.daily.map(key);
   const vs7 = k.profitAvg7 ? (k.profitYesterday - k.profitAvg7) / Math.abs(k.profitAvg7) : 0;
   const cashTile = cf
     ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
@@ -6196,6 +6213,16 @@ function reveal(secId){
   const sec = $(secId);
   if(sec && !sec.hidden) requestAnimationFrame(() => sec.scrollIntoView({behavior:"smooth", block:"start"}));
 }
+/* The business a finding is about: by its site key, which survives a rename
+   and tells namesakes apart. A synthetic site ("3 shops", "2 leases") carries
+   no key and resolves to nothing, so its row never wears another shop's pill
+   and never opens one. The name is only a fallback for a row with no key
+   field at all. */
+function alertSite(a){
+  if(a.siteKey) return D.businesses.find(x => x.key === a.siteKey) || null;
+  if(a.siteKey === undefined) return D.businesses.find(x => x.name === a.site) || null;
+  return null;
+}
 function goToAlert(a){
   const link = ALERT_LINKS[a.group];
   if(!link) return;
@@ -6207,8 +6234,9 @@ function goToAlert(a){
     view = link.port; sortKey = null;
     drawPortfolio();
   }
+  /* A synthetic site has nothing to open; the section still shows. */
   if(link.site){
-    const b = D.businesses.find(x => x.name === a.site);
+    const b = alertSite(a);
     if(b) openSite(b.key, false);
   }
   reveal(link.sec);
@@ -6249,7 +6277,7 @@ function findingAmount(a){
   return "";
 }
 function findingRow(a){
-  const b = D.businesses.find(x => x.name === a.site);
+  const b = alertSite(a);
   const {what, more} = splitFinding(a);
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
@@ -6326,7 +6354,15 @@ function niceStep(span, ticks){
 function drawChart(){
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
   const rows = chartRows, n = rows.length;
-  if(!n) return;
+  /* A save on its first day has no finished day to plot yet. The web shell
+     reloads saves in place, so the last save's chart is cleared rather than
+     left standing. */
+  if(!n){
+    chartRows = [];
+    $("dailyHead").innerHTML = sechead("Daily result");
+    $("dailyBox").innerHTML = `<p class="quiet" style="margin:0">No finished day in this save yet; the chart starts tomorrow</p>`;
+    return;
+  }
   const first = rows[0], last = rows[n - 1];
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
@@ -7191,13 +7227,18 @@ function drawPlan(){
      machines × rate × 24 × 7 × factor is the same figure the logistics table
      draws for a running line. */
   const ws = D.plan.workstations || {}, sources = D.plan.sources || {}, prices = D.plan.prices || {};
-  const tips = {};
+  /* Per ingredient, by name: what is on order today, whether that contract
+     runs, and the unit price where the company already buys it. planDraw()
+     turns these into the Ingredients table's order, change and cash columns. */
+  const meta = {};
+  const wantWeek = perShop * 7 * shops;  // what the shops take of one product a week
   let bought = 0;
   const lines = cat[planType].products.map(slug => {
     const r = RECIPE_BY[slug];
     if(!r){
       bought++;
-      return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in</span></td>
+      return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in${
+          wantWeek ? ` · shops want ${Math.round(wantWeek).toLocaleString("en-US")}/week` : ""}</span></td>
         <td class="l" colspan="4"><span class="quiet">the game documents no way to make this one; the shops buy it from an importer</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
@@ -7205,11 +7246,15 @@ function drawPlan(){
     const ing = r.ingredients.map(i => `${i.item}:${i.per / r.out}`).join(",");
     r.ingredients.forEach(i => {
       const src = sources[i.slug], unit = prices[i.slug];
-      tips[i.item] = (src
-        ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}${src.active ? "" : " (contract paused)"}`
-        : "Not on any import contract yet") + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : "");
+      meta[i.item] = {
+        tip: (src
+          ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}${src.active ? "" : " (contract paused)"}`
+          : "Not on any import contract yet") + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
+        ordered: src ? src.ordered : null, active: src ? src.active : false, from: src ? src.from : null,
+        unit: unit === undefined ? null : unit,
+      };
     });
-    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="12" data-rate="${r.out}" data-ing="${attr(ing)}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
+    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
       <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
         r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
@@ -7221,16 +7266,18 @@ function drawPlan(){
     <div class="planstats">
       <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
       <div class="planstat"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
+      <div class="planstat"><span class="lab">Shops take / week</span><div class="v"><span id="vTake"></span><small>units</small></div></div>
       <div class="planstat"><span class="lab">Raw material / week</span><div class="v"><span id="vRaw"></span><small>units to import</small></div></div>
     </div>
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-ingtips="${attr(JSON.stringify(tips))}">
+    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
     </table>
+    <p class="quiet" id="vKit" style="margin:12px 0 0"></p>
     <p class="planline">${own && perShop
       ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
           perShop.toLocaleString("en-US")}</b> a day per product. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
-      : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}</p>`;
+      : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
   planDraw();
   wireTips();
 }
@@ -7689,12 +7736,14 @@ buildAlertSettingsPanel();
      .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
                           hover lights row and column, click pins the story into
                           #cellDetail ("Name: rest" splits at the first colon).
-     tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-slug][data-max]
+     tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
-                          .covers, .ing; totals in #vMachines #vMade #vRaw
-                          #vSurplus; ingredient rows go into #ingBody. The
-                          nearest ancestor with data-pershop (units a day per
-                          shop) and data-shops (shops owned) sizes the surplus;
+                          .covers, .ing; totals in #vMachines #vMade #vTake #vRaw
+                          #vSurplus #vShort #vKit; ingredient rows go into
+                          #ingBody, the total into #ingFoot, the cash sentence
+                          into #ingNote. The nearest ancestor with data-pershop
+                          (units a day per shop), data-shops (shops owned),
+                          data-peak and data-products sizes the surplus;
                           data-slug keeps planCounts in step with the stepper.
    ------------------------------------------------------------------------- */
 const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -8067,8 +8116,9 @@ const wireOrders = once(() => on("click", "td .up", (u, e) => {
 /* supply map: a pipe carries cargo while hovered; a node lights its own pipes --- */
 let flowPickId = null;
 function applyFlow(){
-  const picked = flowPickId;
   const nodes = $$(".flow .node"); if(!nodes.length) return;
+  if(flowPickId && !nodes.some(m => m.dataset.id === flowPickId)) flowPickId = null;
+  const picked = flowPickId;
   nodes.forEach(m => { m.classList.toggle("on", m.dataset.id === picked); m.classList.remove("faded"); });
   const touched = new Set();
   $$(".flow .pipe").forEach(p => { const lit = picked && (p.dataset.a === picked || p.dataset.b === picked);
@@ -8110,15 +8160,28 @@ function planDraw(){
      chain's weekly peak over its average, so a line that only keeps up on a
      Tuesday does not count as covering the shop. The surplus stays weekly. */
   const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
+  const wantWeek = perShopWeek * shopsOwned;  // one product, every shop, a week
   const fmtN = n => Math.round(n).toLocaleString("en-US");
-  let machines = 0, made = 0, raw = 0, take = 0;
-  const ing = {};
+  let machines = 0, made = 0, raw = 0, exportWeek = 0, shortLines = 0;
+  const ing = {}, kitCount = {};
   lines.forEach(tr => {
     const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
-    machines += m; made += wk; take += perShopWeek ? Math.min(wk, shopsOwned * perShopWeek) : 0;
+    machines += m; made += wk;
+    /* The line runs flat out; what the shops do not take is exported, and a
+       line under what they take is short. */
+    const surplus = wk - wantWeek;
+    if(surplus > 0) exportWeek += surplus;
+    if(surplus < 0) shortLines++;
     const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
     set(".step b", m); set(".made", fmtN(wk));
-    set(".covers", peakDay ? Math.floor(wk / 7 / peakDay) + " shops" : "—");
+    const covers = peakDay ? wk / 7 / peakDay : null;
+    const coversEl = q(".covers", tr);
+    if(coversEl) coversEl.innerHTML = (covers === null ? "—" : `${covers.toFixed(1)} shop${covers === 1 ? "" : "s"}`)
+      + (wantWeek ? `<span class="sub">shops take ${fmtN(wantWeek)} · ${surplus >= 0
+          ? chipHtml("ok", `+${fmtN(surplus)}`, "Surplus a week, for export")
+          : chipHtml("bad", fmtN(surplus), "Short a week; this line needs more machines")}</span>` : "");
+    let kit = []; try{ kit = JSON.parse(tr.dataset.kit || "[]"); }catch(e){}
+    kit.forEach(k => kitCount[k] = (kitCount[k] || 0) + m);
     const cell = q("td.l", tr);
     const product = (tr.dataset.name || (cell && cell.firstChild && cell.firstChild.textContent) || "").trim();
     const parts = (tr.dataset.ing || "").split(",").filter(Boolean).map(x => {
@@ -8133,32 +8196,71 @@ function planDraw(){
     });
     const box = q(".machines", tr);
     if(box){
-      const cur = box.children.length;
-      while(box.children.length < m){ const i = document.createElement("i"); i.className = "on new"; box.appendChild(i); }
-      while(box.children.length > m) box.lastChild.remove();
-      Array.from(box.children).forEach((i, k) => { if(k < cur) i.classList.remove("new"); });
+      /* A dozen squares is as many as the row can carry; past that the count
+         says the rest. Squares already there keep still; new ones pop. */
+      const SQUARES = 12, shown = Math.min(m, SQUARES);
+      const more = q("em", box); if(more) more.remove();
+      Array.from(box.children).forEach((i, k) => { if(k >= shown) i.remove(); else i.classList.remove("new"); });
+      while(box.children.length < shown){ const i = document.createElement("i"); i.className = "on new"; box.appendChild(i); }
+      if(m > SQUARES){ const e = document.createElement("em"); e.textContent = `+${m - SQUARES}`; box.appendChild(e); }
     }
   });
   const put = (id, v) => { const n = $(id); if(n) n.textContent = v; };
-  put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw)); put("vSurplus", fmtN(made - take));
+  /* Shelf demand counts every product of the type, the bought-in ones too:
+     the shops take a week of each whether or not a line makes it. */
+  const products = host ? (+host.dataset.products || lines.length) : lines.length;
+  put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw));
+  put("vTake", fmtN(wantWeek * products)); put("vSurplus", fmtN(exportWeek));
+  put("vShort", shortLines ? ` ${shortLines} line${shortLines === 1 ? " does" : "s do"} not keep up with the shelves; those need more machines.` : "");
+  /* What the factory has to buy: each workstation's kit, times the machines
+     on every line that uses it. */
+  const kitList = Object.entries(kitCount).sort((a, b) => b[1] - a[1]);
+  put("vKit", !machines ? "No machines set, so nothing is being made."
+    : kitList.length ? `Machines to buy: ${kitList.map(([k, n]) => `${k} ×${n}`).join(", ")} · ${kitList.reduce((a, b) => a + b[1], 0)} in all`
+    : "Nothing in this range is manufactured; it is all bought in.");
   /* the ingredient table: one row per material, summed over the lines that share it */
   const body = $("ingBody");
   if(body){
-    // changed for growth: the host's data-ingtips (JSON, name -> sentence) puts
-    // what is on order today under each ingredient's name.
-    let tips = {}; try{ tips = host && host.dataset.ingtips ? JSON.parse(host.dataset.ingtips) : {}; }catch(e){}
+    // changed for growth: the host's data-ingmeta (JSON, name -> {tip, ordered,
+    // active, from, unit}) puts what is on order today under each ingredient's
+    // name, and fills the order, change and cash columns.
+    let meta = {}; try{ meta = host && host.dataset.ingmeta ? JSON.parse(host.dataset.ingmeta) : {}; }catch(e){}
     const prev = {};
     Array.from(body.children).forEach(tr => { const w = q(".wk", tr); if(w) prev[tr.dataset.name] = w.textContent; });
-    body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) =>
-      `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
-      `<td class="l"${tips[name] ? ` data-tip="${attr(tips[name])}"` : ""}>${name}</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
-      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td></tr>`).join("");
+    let cash = 0, priced = 0, total = 0;
+    body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) => {
+      const i = meta[name] || {}, ordered = i.ordered ?? null, unit = i.unit ?? null;
+      /* The change is the weekly need against what is on order now, before
+         either is rounded; the cash is the week at the last price paid. */
+      const gap = ordered === null ? null : r.week - ordered;
+      const value = unit === null ? null : r.week * unit;
+      total++; if(unit !== null){ priced++; cash += value; }
+      return `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
+      `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", "paused", "The import contract is paused")}` : ""}</td>` +
+      `<td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
+      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td>` +
+      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")}</td>` +
+      `<td>${gap === null ? "—"
+        : Math.abs(gap) < 1 ? chipHtml("ok", "as is")
+        : gap > 0 ? chipHtml("warn", `+${Math.ceil(gap).toLocaleString("en-US")}`)
+        : chipHtml("dim", Math.floor(gap).toLocaleString("en-US"))}</td>` +
+      `<td>${value === null ? `<span class="quiet">no price</span>` : fmt(value)}</td></tr>`;
+    }).join("");
+    const foot = $("ingFoot");
+    if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td></td><td></td><td></td><td>${cash ? fmt(cash) : ""}</td></tr>` : "";
+    const note = $("ingNote");
+    if(note) note.textContent = !total ? "Nothing to import; this range is bought as finished goods."
+      : (priced
+          ? `A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
+          : `No cash figure here: none of these ${total} ingredients appear in your own goods costs.`)
+        + (priced && priced < total
+          ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : "");
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
   e.preventDefault();
   const tr = a.closest("tr.line");
-  const max = +tr.dataset.max || 12;
+  const max = +tr.dataset.max || 99;
   // changed for growth: data-min="0" lets a line be switched off (bought in instead)
   const min = tr.dataset.min !== undefined ? +tr.dataset.min : 1;
   tr.dataset.m = Math.max(min, Math.min(max, +tr.dataset.m + +a.dataset.d));
