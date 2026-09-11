@@ -118,7 +118,7 @@ Nothing is ever written to your save files. The tool only reads them.
 
 ## Game builds
 
-Every number on the board was checked against game build **3674**.
+Every number on the board was checked against game build **3675**.
 
 Saves from builds older than **3540** are refused with a message saying so. The game
 changed its save format before that, and the fields the board relies on are not there.
@@ -131,7 +131,7 @@ That sentence is the whole bug report: paste it into a GitHub issue.
 
 ## Game text
 The page carries the game text it needs, taken from the game's own English file at
-build 3674: every product, business, neighbourhood, station and skill name, the
+build 3675: every product, business, neighbourhood, station and skill name, the
 recipe pages, the item pages that state a station's customer capacity, and each
 business type's range. Nothing has to be picked. If your game is newer and a recipe or a
 name has changed, choose your own `en.json` once through the More menu; it is
