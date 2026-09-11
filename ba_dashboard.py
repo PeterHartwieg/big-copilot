@@ -4478,6 +4478,7 @@ TEMPLATE = r"""<title>__TITLE__</title>
 :root[data-theme="light"] .chip.dim{background:#00000010}
 :root[data-theme="light"] .orb::after{opacity:.2}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{
   margin:0; background:var(--ground); color:var(--ink);
   font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
@@ -5065,7 +5066,8 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
   </div>
 
   <div class="page" id="pageSupply" hidden>
-    <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav></div>
+    <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav>
+      <div class="aside" data-sub="orders"><span class="seg" id="logisticsTools" aria-label="Which orders to list"></span></div></div>
 
     <section class="sec rv" id="secLogistics" data-sub="orders">
       <div class="scrollx" id="importPlan"></div>
@@ -6761,7 +6763,7 @@ function drawLogistics(){
       ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. The import orders are read from the delivery log and are complete."
       : "No factory to feed; the import orders are read from the delivery log.")
     + " Click raise to see the order roll up; the thin line under the depot figure is how much of a day's use it holds.";
-  const check = (n, what) => `<span class="check">${icon("tick")}</span><span class="quiet">All ${n} ${what}</span>`;
+  const check = (n, what) => ({after: `<span class="check">${icon("tick")}</span>`, quiet: `All ${n} ${what}`});
   const up = (text, tip) => `<span class="up"${tip ? ` data-tip="${attr(tip)}"` : ""}>${icon("arrow_up")}${text}</span>`;
   const set = n => `<span class="set">${n.toLocaleString()}</span>`;
   const grp = (b, cols) => `<tr class="grp"><td class="l" colspan="${cols}">${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${
@@ -6850,13 +6852,12 @@ function drawLogistics(){
     <tbody>${shown.map(d => grp(D.businesses[d.s], 7) + d.rows.map(importRow).join("")).join("")}${
       looseRows.length ? `<tr class="grp"><td class="l" colspan="7">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
         looseRows.map(looseRow).join("")}` : ""}</tbody></table>` : "";
-  const importState = !importRows.length && !looseRows.length ? `<span class="quiet">No depot imports anything yet</span>`
+  const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
     : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
-    : (short ? chipHtml("bad", `${short} short`) : "")
+    : {after: (short ? chipHtml("bad", `${short} short`) : "")
       + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
-      + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "");
-  $("importPlan").innerHTML = sechead("Weekly imports", {after: importState, why: whyText,
-    aside: `<span class="seg" id="logisticsTools"></span>`}) + importTable;
+      + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
+  $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText}) + importTable;
   seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
     () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
 
@@ -6894,11 +6895,11 @@ function drawLogistics(){
       <th class="l">From</th><th>Arrives / day</th></tr></thead>
     <tbody>${sites.map(x => { const site = f.sites.find(s => s.s === x.s);
       return grp(D.businesses[x.s], 6) + x.rows.map(r => topupRow(site, r)).join(""); }).join("")}</tbody></table>` : "";
-  const topupState = !allSites.length ? `<span class="quiet">No factory line to feed</span>`
+  const topupState = !allSites.length ? {quiet: "No factory line to feed"}
     : !topShort && !topStalled ? check(topAll, "cover their day")
-    : (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
-      + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "");
-  $("topupPlan").innerHTML = sechead("Daily top-ups", {after: topupState,
+    : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
+      + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "")};
+  $("topupPlan").innerHTML = sechead("Daily top-ups", {...topupState,
     aside: allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : ""})
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
@@ -7357,7 +7358,7 @@ function showSub(pageId, id){
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   sub[pageId] = id;
-  document.querySelectorAll(`#${sv.host} section[data-sub]`).forEach(sec => { sec.hidden = sec.dataset.sub !== id; });
+  document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
   $(sv.nav).innerHTML = sv.items.map(([k, label]) =>
     `<a href="#${k}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
   remember(sv.key, id);
@@ -7702,7 +7703,10 @@ function placeTip(t){
   const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
   let x, y;
   if(t.classList.contains("why")){ x = r.right + 12; y = r.top + r.height / 2 - h / 2; tipEl.classList.add("side"); }
-  else if(t.classList.contains("cell")){ x = r.left + r.width / 2 - w / 2; y = r.top - 8 - h; tipEl.classList.add("above"); }
+  else if(t.classList.contains("cell")){
+    x = r.left + r.width / 2 - w / 2; y = r.top - 8 - h; tipEl.classList.add("above");
+    if(y < 6){ y = r.bottom + 8; tipEl.classList.remove("above"); }
+  }
   else if(t.classList.contains("tr")){ x = r.right - w; y = r.bottom + 8; }
   else { x = r.left; y = r.bottom + 8; }
   if(y + h > vh - 6) y = r.top - 8 - h;
