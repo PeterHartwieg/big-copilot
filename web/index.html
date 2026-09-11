@@ -86,8 +86,10 @@ select.linepick{
 select.linepick:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 button.unname{
   font:inherit;font-size:12px;line-height:1.4;color:var(--ink-3);background:none;
-  border:1px solid var(--rule);border-radius:5px;padding:0 6px;margin-left:4px;cursor:pointer;
+  border:1px solid var(--rule);border-radius:5px;padding:2px 5px;margin-left:4px;cursor:pointer;
+  display:inline-flex;align-items:center;vertical-align:middle;
 }
+button.unname svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 button.unname:hover{color:var(--ink);border-color:var(--ink-3)}
 button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .heat .h[data-hood]{cursor:pointer}
@@ -135,7 +137,7 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .clock b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px;letter-spacing:.01em}
 .clock b i{font-style:normal;color:var(--ink-3);margin:0 6px}
 @keyframes blink{50%{opacity:.25}}
-.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);margin-top:3px;text-transform:uppercase}
+.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
 /* The live dot for a --watch board sits in the clock's small line. */
 .live{display:inline-flex;align-items:center;gap:6px;color:var(--accent);transition:color .3s}
@@ -465,6 +467,9 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .hc:hover{transform:scale(1.3);box-shadow:0 4px 14px #0007;z-index:2;position:relative}
 .hc.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
 .hc.cap:hover{box-shadow:inset 0 0 0 1.5px var(--neg),0 4px 14px #0007}
+/* An hour with two or more on shift and capacity well above the customers seen. */
+.hc.slack{box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--info) 45%, transparent)}
+.hc.slack:hover{box-shadow:inset 0 0 0 1px var(--info),0 4px 14px #0007}
 .hourread{min-height:22px;margin-top:12px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
 .hourread b{color:var(--ink);font-weight:500}
 .crew{display:flex;flex-wrap:wrap;gap:8px}
@@ -474,6 +479,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .person small{color:var(--ink-3)}
 .person.off{opacity:.5}
 .person.off i{background:#ff625733}
+.person small .off{color:var(--neg)}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
 /* kinds popover ------------------------------------------------------------ */
@@ -923,8 +929,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "be4b5623dc";</script>
-<script src="app.js?v=be4b5623dc"></script>
+<script>window.LEDGER_BUILD = "8d930df31b";</script>
+<script src="app.js?v=8d930df31b"></script>
 
 <script>
 let D = null;
@@ -1080,7 +1086,7 @@ function seg(host, options, read, write, redraw){
 
 /* View state lives out here so a live refresh redraws the numbers without
    resetting whichever tab, filter or sort order the reader had chosen. */
-let chartWindow=30, shown=new Set(["profit7","profit"]);
+let chartWindow=30;
 let view="pnl", sortKey=null, sortDir=-1, stockView="shops", marketView="types";
 /* The demand grid sorts by one neighbourhood at a time; numbers in the cells are
    off until asked for, the shade carries the reading. */
@@ -1596,7 +1602,7 @@ const SUPPLY_VIEWS = {
               : r.basis === "you" ? "You named this line; the board takes your word for it"
               : "Identified on an earlier build and remembered"}">${
               r.basis === "you" ? "named by you" : r.basis}</span>` : ""}${r.basis === "you" && r.rid
-          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name">×</button>` : ""}${
+          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}${
           LIVE && r.basis !== "you" && r.basis !== "measured" && r.candidates && r.candidates.length
           ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
               r.candidates.filter(c => c.slug !== r.slug).map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}
@@ -1853,17 +1859,19 @@ function drawMast(){
      game's own text was available (without it names are slugs and recipes and
      station capacities are unknown), and whether the save comes from a newer
      game build than the one every figure here was checked against. */
+  /* Written in capitals, as the artboard has it, so the rule carries no
+     text-transform. */
   const bits = [];
-  if(year) bits.push(`year ${year}`);
-  bits.push(`${k.businesses} sites`, `${k.employees.toLocaleString()} staff`);
+  if(year) bits.push(`YEAR ${year}`);
+  bits.push(`${k.businesses} SITES`, `${k.employees.toLocaleString()} STAFF`);
   /* The flags go on a line of their own so the first line stays short enough
      for the sphere to rest between the nav and the clock. */
   const flags = [];
   if(m.locale === false)
-    flags.push(`<span class="flag" data-tip="Load the game's en.json for recipes and station capacities; without it the factory and capacity views cannot be filled">names only</span>`);
+    flags.push(`<span class="flag" data-tip="Load the game's en.json for recipes and station capacities; without it the factory and capacity views cannot be filled">NAMES ONLY</span>`);
   if(m.verifiedBuild && m.build > m.verifiedBuild)
-    flags.push(`<span class="flag" data-tip="This board was checked on build ${m.verifiedBuild}; a newer game may have changed what the save records">build ${m.build} unchecked</span>`);
-  if(LIVE) flags.push(`<span class="live" id="live"><b></b><em>${SOURCE.label}</em></span>`);
+    flags.push(`<span class="flag" data-tip="This board was checked on build ${m.verifiedBuild}; a newer game may have changed what the save records">BUILD ${m.build} UNCHECKED</span>`);
+  if(LIVE) flags.push(`<span class="live" id="live"><b></b><em>${String(SOURCE.label).toUpperCase()}</em></span>`);
   const clock = $("clock");
   clock.innerHTML =
     `<b>Day ${m.day}<i>·</i>${wd} ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
@@ -2345,7 +2353,7 @@ function hourGrid(g, todayWd){
       const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
         g.staffed[wd][h]} of ${g.counters} register capacity on${
         atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
-      cells += `<div class="hc${atCap ? " cap" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
+      cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
   return `<div class="hours">${cells}</div>`;
@@ -2400,9 +2408,11 @@ function drawSite(){
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
     <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
 
+  /* A pill dims when nobody in the role is in today; a part-absent role says
+     how many are off. */
   const crew = b.crew.length
-    ? b.crew.map(c => `<span class="person"><i>${roleCode(c.role)}</i>${c.role}<small>${
-        c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day</small></span>`).join("")
+    ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
+        c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
     : `<span class="quiet">Nobody assigned.</span>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
@@ -2824,7 +2834,9 @@ function wireMarketSort(){
   if(more) more.onclick = e => { e.preventDefault(); showAllMarket = !showAllMarket; drawMarket(); };
 }
 
-const MARKET_TOP = 20;  // product rows before "show all"
+/* The product views paint as many rows as they always did (60 of what you
+   sell, 40 of what you do not); "show all" only appears past that. */
+const MARKET_TOP = {mine: 60, new: 40};
 function drawMarket(){
   const m = D.market;
   if(marketSortHood && !m.hoods.includes(marketSortHood)) marketSortHood = null;
@@ -2840,8 +2852,8 @@ function drawMarket(){
     limit = 40;
   }
   rows = hoodSorted(rows, m.hoods);
-  const cap = Math.min(rows.length, limit);
-  const shown = rows.slice(0, types || showAllMarket ? cap : Math.min(MARKET_TOP, cap));
+  const cap = types || showAllMarket ? rows.length : Math.min(rows.length, limit);
+  const shown = rows.slice(0, cap);
 
   const notes = [];
   if(marketSortHood) notes.push((types
@@ -2851,9 +2863,9 @@ function drawMarket(){
   else if(types && m.typesHidden) notes.push(`${plural(m.typesHidden, "type")} with under 3 products left out`);
   else if(marketView === "new") notes.push("Strongest unserved demand first");
   else if(!m.trendDays) notes.push("Trend history starts building from today");
-  if(!types && cap > MARKET_TOP) notes.push(showAllMarket
-    ? `all ${cap} · <a class="link" href="#" id="marketMore">top ${MARKET_TOP}</a>`
-    : `${MARKET_TOP} of ${cap} · <a class="link" href="#" id="marketMore">show all ${cap}</a>`);
+  if(!types && rows.length > limit) notes.push(showAllMarket
+    ? `all ${rows.length} · <a class="link" href="#" id="marketMore">top ${limit}</a>`
+    : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
     ? `Each cell is how many of a type's products are in strong demand (60 or more) in that neighbourhood, shaded by the average demand across the range. Dots count rival sellers. An outlined cell is where you already run a shop of that type. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
@@ -2913,7 +2925,22 @@ function defaultRate(kind){
   if(!vals.length) return null;
   return Math.max(1, Math.round(vals.reduce((a,b) => a+b, 0) / vals.length));
 }
-const machinesOn = slug => Math.max(0, planCounts[slug] ?? 1);
+/* A line starts as the factories the player already runs: the machines on
+   that product across every factory, and none for a product nobody makes, so
+   the ingredient table on first paint is the logistics view's own figure.
+   Where no factory makes anything of the type, every line starts at one
+   machine, as a sketch. A stepped line keeps its count until the type changes. */
+function factoryCounts(type){
+  const made = {};
+  factoryView().sites.forEach(s => s.lines.forEach(l => { made[l.slug] = (made[l.slug] || 0) + (l.machines || 0); }));
+  const products = ((D.plan.catalogue || {})[type] || {}).products || [];
+  const any = products.some(p => made[p]);
+  const out = {};
+  products.forEach(p => out[p] = any ? (made[p] || 0) : 1);
+  return out;
+}
+let planSeed = {};
+const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
   indexPlan();
@@ -2927,6 +2954,7 @@ function drawPlan(){
     planType = types.includes("ba:businesstype_supermarket")
       ? "ba:businesstype_supermarket" : types[0];
   const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
+  planSeed = factoryCounts(planType);
   const kind = cat[planType].type, low = kind.toLowerCase();
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
@@ -2982,7 +3010,7 @@ function drawPlan(){
       <div class="planstat"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
       <div class="planstat"><span class="lab">Raw material / week</span><div class="v"><span id="vRaw"></span><small>units to import</small></div></div>
     </div>
-    <table data-pershop="${perShop}" data-shops="${shops}" data-ingtips="${attr(JSON.stringify(tips))}">
+    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-ingtips="${attr(JSON.stringify(tips))}">
       <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
     </table>
@@ -3006,7 +3034,7 @@ function drawProducts(){
   const withPeak = rows.filter(p => p.peak).length;
   const showPeak = withPeak * 2 >= rows.length;
   /* The list is sorted by revenue, so the first row is the bar's full width. */
-  const top = rows.length ? rows[0].revenue : 1;
+  const top = (rows.length && rows[0].revenue) || 1;
   const peakTip = p => p.peak
     ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
     : "No weekly cycle clears the noise test";
@@ -3509,6 +3537,9 @@ function showTip(t){
   placeTip(t); tipEl.classList.add("on");
 }
 function hideTip(t){ if(t && t !== tipFor) return; tipFor = null; tipEl.classList.remove("on"); }
+/* The host page (the in-browser board) closes a note when it opens its own
+   menu over the same button, so both live on window. */
+window.showTip = showTip; window.hideTip = hideTip;
 const bindTips = once(() => {
   onEnter("[data-tip]", showTip);
   onLeave("[data-tip]", hideTip);
@@ -3554,9 +3585,11 @@ function wireReveal(){
 let sphereWired = false;
 function wireSphere(){
   if(sphereWired) return;
-  const first = q(".orb"), dotEl = $("dot"), navEl = $("nav"), clockEl = $("clock");
+  /* By id: the web front door keeps its own landing orb (.orb too) in the
+     DOM until the board has been shown, and that one is about to be removed. */
+  const first = $("orb"), dotEl = $("dot"), navEl = $("nav"), clockEl = $("clock");
   if(!first || !dotEl || !navEl) return;
-  if(!navEl.getBoundingClientRect().width){ setTimeout(wireSphere, 200); return; }
+  if(!first.isConnected || !navEl.getBoundingClientRect().width || !first.offsetParent){ setTimeout(wireSphere, 200); return; }
   sphereWired = true;
   inkHome();  // the underline was homed while the board was hidden, so its width is 0
   const parent = first.offsetParent || first.parentElement;
@@ -3708,7 +3741,9 @@ const wireCards = once(() => {
 const sevOff = new Set();
 function applySev(){
   $$(".sev[data-kind]").forEach(s => s.classList.toggle("off", sevOff.has(s.dataset.kind)));
-  $$(".find").forEach(f => f.classList.toggle("hide", [...sevOff].some(k => f.classList.contains(k))));
+  /* The main list only: the smaller findings under "show" are filtered by
+     kind alone, as they always were. */
+  $$("#alerts .find").forEach(f => f.classList.toggle("hide", [...sevOff].some(k => f.classList.contains(k))));
 }
 const bindSev = once(() => on("click", ".sev[data-kind]", s => {
   sevOff.has(s.dataset.kind) ? sevOff.delete(s.dataset.kind) : sevOff.add(s.dataset.kind);
@@ -3858,6 +3893,10 @@ function planDraw(){
   const lines = $$("tr.line[data-m][data-rate]"); if(!lines.length) return;
   const host = lines[0].closest("[data-pershop], [data-shops]");
   const perShopWeek = host ? (+host.dataset.pershop || 0) * 7 : 0, shopsOwned = host ? (+host.dataset.shops || 0) : 0;
+  /* How many shops a line supplies is judged on a shop's busiest day: the
+     chain's weekly peak over its average, so a line that only keeps up on a
+     Tuesday does not count as covering the shop. The surplus stays weekly. */
+  const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
   const fmtN = n => Math.round(n).toLocaleString("en-US");
   let machines = 0, made = 0, raw = 0, take = 0;
   const ing = {};
@@ -3866,7 +3905,7 @@ function planDraw(){
     machines += m; made += wk; take += perShopWeek ? Math.min(wk, shopsOwned * perShopWeek) : 0;
     const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
     set(".step b", m); set(".made", fmtN(wk));
-    set(".covers", perShopWeek ? Math.floor(wk / perShopWeek) + " shops" : "—");
+    set(".covers", peakDay ? Math.floor(wk / 7 / peakDay) + " shops" : "—");
     const cell = q("td.l", tr);
     const product = (tr.dataset.name || (cell && cell.firstChild && cell.firstChild.textContent) || "").trim();
     const parts = (tr.dataset.ing || "").split(",").filter(Boolean).map(x => {
