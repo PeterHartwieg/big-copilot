@@ -4626,47 +4626,14 @@ select.linepick{
 button.unname{padding:0 6px; font-size:12px; line-height:1.4; margin-left:4px}
 .legend-note{margin:10px 2px 0; font-size:12px; color:var(--ink-3); display:flex; gap:18px; flex-wrap:wrap}
 
-/* legacy: growth (expansion list, movers, the demand table, plan sliders) -- */
-.planrow{display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap}
-.planrow label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--ink-2)}
-.planrow select, .planrow input[type=number]{
-  font:inherit; font-size:13px; color:var(--ink); background:var(--surface);
-  border:1px solid var(--rule); border-radius:2px; padding:5px 8px; min-width:200px;
-}
-.planrow input[type=range]{width:220px; accent-color:var(--accent)}
-.planrow output{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:15px; color:var(--ink)}
-.rollup{display:grid; gap:1px}
-.expand{display:grid; gap:1px; background:var(--rule)}
-.exline{background:var(--surface); display:grid; grid-template-columns:26px 1fr auto; gap:14px; align-items:baseline; padding:12px 16px}
-.exline .rank{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-3); font-weight:600}
-.exline b{font-weight:600}
-.exline .why{display:block; font-size:12.5px; color:var(--ink-2); margin-top:2px; width:auto; height:auto; border:none; border-radius:0; font-family:Archivo,sans-serif; cursor:default}
-.exline .num{white-space:nowrap; font-size:13px; font-weight:600}
-.exline .tagme{
-  font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.06em;
-  border:1px solid currentColor; border-radius:2px; padding:0 5px; margin-left:8px; text-transform:uppercase;
-}
-.exline.measured .tagme{color:var(--accent)}
-.exline.guess .tagme{color:var(--ink-3)}
-.exline .bld{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3); white-space:nowrap}
-.movers{display:grid; gap:1px; background:var(--rule); padding:0}
-.mover{background:var(--surface); display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:baseline; padding:10px 16px}
-.mover .dir{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600}
-.mover .dir.up{color:var(--pos)} .mover .dir.down{color:var(--neg)}
-.mover .where{font-size:13px; color:var(--ink-2)}
-.mover .when{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; white-space:nowrap}
-.mover b{font-weight:600}
-.mover .tagme{
-  font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.06em;
-  color:var(--accent); border:1px solid var(--accent); border-radius:2px; padding:0 5px; margin-left:8px; text-transform:uppercase;
-}
-td.heat{display:table-cell; text-align:center; font-variant-numeric:tabular-nums; position:relative; min-width:64px; height:30px}
-td.heat .v{font-weight:600; font-size:13px}
-td.heat .mk{display:inline; font-size:10px; color:var(--ink-3); line-height:1.1; letter-spacing:.06em; margin-left:4px}
-td.heat .dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--warn); box-shadow:0 0 0 2px var(--surface)}
-td.heat .rv{position:absolute; right:5px; bottom:3px; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-2); line-height:1; opacity:1; transform:none}
-td.heat.none{color:var(--ink-3)}
-#market.numbers td.heat{height:auto; padding-bottom:17px}
+/* growth: what the port adds to the generator's grid (real data has cells
+   with no reading, and a column can be the sort key) ---------------------- */
+.heat .h[data-hood]{cursor:pointer}
+.heat .h.sort{color:var(--accent)}
+.cell.none{background:var(--surface);color:var(--ink-3);cursor:default}
+.cell.none:hover{transform:none;box-shadow:none}
+.waves .quiet{padding:7px 0}
+#planPicker .field select{padding:6px 10px;font-size:12.5px}
 
 /* legacy: company (nothing of its own beyond the shared .stat, .muted,
    .expand-more and .chip above) -------------------------------------------- */
@@ -5270,37 +5237,30 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
   <div class="page" id="pageGrowth" hidden>
     <div class="sechead subhead"><nav class="seg" id="growthNav" aria-label="Growth views"></nav></div>
 
-    <section class="sec rv" id="secExpand" data-sub="expand">
-      <div class="head">
-        <h2>Where to expand</h2>
-        <p id="expandNote"></p>
-      </div>
-      <div class="card" id="expansion"></div>
-    </section>
-
     <section class="sec rv" id="secMarket" data-sub="market">
-      <div class="head">
-        <h2>Market demand</h2>
-        <p id="marketNote"></p>
-        <div class="tools" id="marketTools"></div>
-      </div>
-      <div class="card scroll"><table id="market"></table></div>
-      <p class="legend-note" id="marketLegend"></p>
-      <div class="movers card pad" id="movers" style="margin-top:14px"></div>
+      <div class="sechead"><h2>Market demand</h2>
+        <span class="why" id="marketWhy" data-tip="" tabindex="0"><i>?</i></span>
+        <span class="quiet" id="marketNote"></span>
+        <div class="aside"><span class="seg" id="marketTools" aria-label="Market views"></span></div></div>
+      <div class="waves" id="movers"></div>
+      <div class="heat" id="market"></div>
+      <p class="celldetail" id="cellDetail">Click a cell</p>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
-      <div class="head">
-        <h2>Plan a chain</h2>
-        <p id="planNote"></p>
-        <div class="tools" id="planTools"></div>
-      </div>
-      <div class="card pad" id="planPicker"></div>
-      <div class="card scroll" style="margin-top:14px"><table id="planTable"></table></div>
-      <div class="duo" style="margin-top:14px">
-        <div class="card pad" id="planMachines"></div>
-        <div class="card pad" id="planImports"></div>
-      </div>
+      <div class="sechead"><h2>Plan a chain</h2>
+        <span class="why" data-tip="Every machine runs 24 hours at its rated rate, so a line makes its full quantity whether or not the shelves need it. Build the factory first; the shops come after, and what they do not take is exported. Step a single line up when one product deserves more, down to none to buy it in instead." tabindex="0"><i>?</i></span>
+        <span class="quiet" id="planNote"></span>
+        <div class="aside" id="planPicker"></div></div>
+      <div id="planBody"></div>
+    </section>
+    <section class="sec rv" id="secIngredients" data-sub="plan">
+      <div class="sechead"><h2>Ingredients</h2>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. The order is the weekly figure rounded up to the hundred, the way the logistics manager takes it. Hover an ingredient for what is on order today." tabindex="0"><i>?</i></span></div>
+      <table>
+        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Weekly order</th></tr></thead>
+        <tbody id="ingBody"></tbody>
+      </table>
     </section>
   </div>
 
@@ -6268,21 +6228,10 @@ toolbar($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id,v]) => [id, v.lab
 let logisticsView = "changes";
 toolbar($("logisticsTools"), [["changes","Needs a change"],["all","Everything"]],
   () => logisticsView, v => logisticsView = v, () => drawLogistics());
-toolbar($("marketTools"), [["types","By business type"],["mine","What I sell"],
-                           ["new","Not selling yet"],["all","Everything"]],
-  () => marketView, v => marketView = v, () => drawMarket());
-{
-  const b = el("button", null, "Show numbers");
-  b.id = "marketNumbers";
-  b.style.marginLeft = "10px";
-  b.setAttribute("aria-pressed", marketDetail);
-  b.onclick = () => {
-    marketDetail = !marketDetail;
-    b.setAttribute("aria-pressed", marketDetail);
-    drawMarket();
-  };
-  $("marketTools").append(b);
-}
+// changed for growth: the market views are a .seg; "Everything" went, being the
+// union of "What I sell" and "Not yet", and the numbers are always in the cells.
+seg($("marketTools"), [["types","By type"],["mine","What I sell"],["new","Not yet"]],
+  () => marketView, v => { marketView = v; showAllMarket = false; }, () => drawMarket());
 
 $("legend").innerHTML = Object.entries(SERIES).map(([id,s]) =>
   `<span data-s="${id}" role="button" tabindex="0" style="cursor:pointer">
@@ -6458,7 +6407,7 @@ const SEC_PAGE = {
   alertSection:["today"],
   secDaily:["results"], secRhythm:["results"], secPortfolio:["results"], secDetail:["results"],
   secLogistics:["supply","orders"], secStock:["supply","checks"], secFlow:["supply","map"],
-  secExpand:["growth","expand"], secMarket:["growth","market"], secPlan:["growth","plan"],
+  secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company"], secPayroll:["company"], secGoals:["company"],
 };
 function reveal(secId){
@@ -7123,129 +7072,114 @@ function drawLogistics(){
         ? `All ${topAll} top-ups cover their day.` : "No factory line to feed."}</td></tr></tbody>`;
 }
 
-/* --- market demand ---------------------------------------------------- */
+/* --- market demand ----------------------------------------------------
+   The waves come first: the game's own hype events, supplier trouble, and
+   the moves the board measured against its own history, one chip each. Then
+   the grid, a business type (or a product) per row and a neighbourhood per
+   column, each cell shaded by demand and dotted with rivals. */
+let showAllMarket = false;
+
+/* One hue, ramped by demand: the generator's shade(), so a cell reads the same
+   here as on the canvas. */
+const shadeDemand = d => {
+  const a = 0.08 + (d - 40) / 55 * 0.55;
+  return `color-mix(in oklab, var(--accent) ${Math.round(Math.max(6, Math.min(70, a * 100)))}%, var(--surface))`;
+};
+/* Column headers are ten characters wide; the full name is in the header's note. */
+const HOOD_SUFFIX = /^(District|City|Heights|Park|Island|Village)$/i;
+function shortHood(name){
+  let n = name.replace(/^The\s+/i, "");
+  if(n.length <= 10) return n;
+  const w = n.split(/\s+/);
+  if(w.length === 1) return n;
+  if(HOOD_SUFFIX.test(w[w.length - 1])){
+    const cut = w.slice(0, -1).join(" ");
+    if(cut.length <= 10) return cut;
+  }
+  const head = w.slice(0, -1).join(" "), last = w[w.length - 1];
+  const three = `${head} ${last.slice(0, 3)}.`;
+  return three.length <= 10 ? three : `${head} ${last[0]}.`;
+}
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
+/* A rival per dot, ten at most; the exact count is in the cell's note. */
+const rivalDots = n => n > 0 ? `<span class="rv2">${"<i></i>".repeat(Math.min(n, 10))}</span>` : "";
+
+function waveHtml(dir, place, what, tag, tip, hood){
+  const body = `${icon(dir === "up" ? "trend_up" : "trend_dn")}<b>${place}</b>${what}<span class="t">${tag}</span>`;
+  return hood
+    ? `<a class="wave ${dir}" href="#secMarket" data-hood="${attr(hood)}" data-tip="${attr(tip)}">${body}</a>`
+    : `<span class="wave ${dir}" data-tip="${attr(tip)}">${body}</span>`;
+}
 function drawMovers(){
   const m = D.market;
   const out = [];
-  m.hype.slice(0,5).forEach(h => out.push(`
-    <div class="mover">
-      <span class="dir up">▲ hype</span>
-      <span><b>${h.count > 1 ? `${h.count} products` : h.items[0]}</b>
-        <span class="where">in ${h.hood}${
-          h.count > 1 ? `: ${h.items.slice(0,3).join(", ")}${h.count > 3 ? "…" : ""}` : ""}</span>${
-        h.sellHere ? `<span class="tagme">you sell here</span>`
-        : h.mine ? `<span class="tagme">you stock it</span>` : ""}</span>
-      <span class="when">${h.daysLeft} day${h.daysLeft === 1 ? "" : "s"} left</span>
-    </div>`));
-  m.shortages.slice(0,5).forEach(x => out.push(`
-    <div class="mover">
-      <span class="dir down">▼ ${x.kind.toLowerCase()}</span>
-      <span><b>${x.item}</b> <span class="where">at ${
-        x.count > 1 ? `${x.count} suppliers` : x.where}</span>${
-        x.mine ? `<span class="tagme">affects you</span>` : ""}</span>
-      <span class="when">${x.daysLeft} day${x.daysLeft === 1 ? "" : "s"} left</span>
-    </div>`));
-  /* One wave, or one shop opening, moves a whole range at once — so it reads as
-     one line, and where our own shop opened in that window it says so. */
-  (m.movers || []).slice(0,6).forEach(x => out.push(`
-    <div class="mover">
-      <span class="dir ${x.up ? "up" : "down"}">${x.up ? "▲" : "▼"} ${
-        x.delta > 0 ? "+" : ""}${x.delta}</span>
-      <span><b>${x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]}</b>
-        <span class="where">in ${x.hood}${x.count > 1
-          ? `: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""}` : ""}${
-          x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window`
-                       : ""}</span>${
-        x.sell ? `<span class="tagme">you sell here</span>` : ""}</span>
-      <span class="when">over ${m.trendDays} day${m.trendDays === 1 ? "" : "s"}</span>
-    </div>`));
-  $("movers").innerHTML = out.length
-    ? out.join("")
-    : `<div class="mover"><span class="dir">—</span><span class="where">No demand events running right now.</span><span class="when"></span></div>`;
+  const days = n => `${n} d`;
+  m.hype.slice(0,5).forEach(h => {
+    const what = (h.count > 1 ? `${h.count} products` : h.items[0])
+      + (h.sellHere ? " you sell here" : h.mine ? " you stock" : "");
+    const tip = `Hype in ${h.hood} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
+      h.items.join(", ")}. Click to sort the grid by ${h.hood}.`;
+    out.push(waveHtml("up", h.hood, what, days(h.daysLeft), tip, h.hood));
+  });
+  m.shortages.slice(0,5).forEach(x => {
+    const where = x.count > 1 ? `${x.count} suppliers` : x.where;
+    const kind = x.kind.toLowerCase();
+    out.push(waveHtml("dn", x.item, `${kind} at ${where}${x.mine ? ", affects you" : ""}`, days(x.daysLeft),
+      `${x.item}: ${kind} at ${where}, ${plural(x.daysLeft, "day")} left${x.mine ? "; you sell or make it" : ""}`));
+  });
+  /* One wave, or one shop opening, moves a whole range at once, so it reads as
+     one chip, and where our own shop opened in that window the note says so. */
+  (m.movers || []).slice(0,6).forEach(x => {
+    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]) + (x.sell ? " you sell here" : "");
+    const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
+    const tip = `${x.hood}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
+      plural(m.trendDays, "day")}${x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window` : ""}. Click to sort the grid by ${x.hood}.`;
+    out.push(waveHtml(x.up ? "up" : "dn", x.hood, what, delta, tip, x.hood));
+  });
+  $("movers").innerHTML = out.length ? out.join("")
+    : `<span class="quiet">No demand events running right now${m.trendDays ? "" : "; trend history starts building from today"}.</span>`;
+  $$("#movers a[data-hood]").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    marketSortHood = a.dataset.hood; marketSortDir = -1;
+    drawMarket();
+  });
 }
 
-function heatCell(cell){
-  if(!cell) return `<td class="heat none">—</td>`;
-  // Demand is a magnitude, not a grade, so this ramps one hue rather than
-  // running red-to-green.
-  const pct = Math.round(Math.min(cell.demand, 100) * 0.32);
-  const marks = [];
-  if(cell.monopoly) marks.push("only you");
-  else if(cell.sell) marks.push(`${cell.providers} sellers`);
-  else marks.push(`${cell.providers} sellers`);
-  if(cell.hype) marks.push("▲hype");
-  if(cell.delta) marks.push(`${cell.delta > 0 ? "+" : ""}${cell.delta}`);
-  return `<td class="heat ${cell.sell ? "here" : ""}"
-    style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
-    title="${cell.hood}: demand ${cell.demand}, ${marks.join(", ")}${
-      cell.sell ? ", you sell here" : ""}${cell.monopoly ? ", you have a monopoly" : ""}">${
-    marketDetail ? `<span class="v">${cell.demand}</span>` : ""}${
-    cell.sell ? `<span class="dot" aria-label="you sell here"></span>` : ""}${
-    cell.hype ? `<span class="mk">▲</span>` : ""}<span class="rv" title="${cell.monopoly ? "only you sell here" : cell.providers + " sellers"}">${
-    cell.monopoly ? "only you" : cell.providers}</span></td>`;
+/* A business type is only worth opening if most of its range sells, so the
+   cell leads with how much of the range is wanted; the shade is the average. */
+function typeRow(r, i, hoods){
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.products} products${r.mine ? " · you run one" : ""}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    const tip = `${r.type} in ${c.hood}: ${c.strong} of ${c.count} products in strong demand (60+), average demand ${
+      c.demand}, ${plural(c.providers, "rival seller")} on average across the range${c.here ? ", you have a store here" : ""}`;
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.strong}/${c.count}${rivalDots(c.providers)}</div>`;
+  });
+  return h;
 }
-
-/* A business type is only worth opening if most of its range sells, so the cell
-   leads with how much of the range is in strong demand. */
-function typeCell(cell){
-  if(!cell) return `<td class="heat none">—</td>`;
-  const share = cell.strong / cell.count;
-  const pct = Math.round(share * 40);
-  return `<td class="heat ${cell.here ? "here" : ""}"
-    style="background:color-mix(in srgb, var(--accent) ${pct}%, var(--surface))"
-    title="${cell.hood}: ${cell.strong} of ${cell.count} products in strong demand, ${cell.demand} average, ${cell.providers} rival sellers on average${
-      cell.here ? ", you have a store here" : ""}">${
-    marketDetail ? `<span class="v" title="average demand across the range">${cell.demand}</span>` : ""}${
-    cell.here ? `<span class="dot" aria-label="you have a store here"></span>` : ""}<span class="rv" title="${cell.providers} rival sellers on average across the range">${cell.providers}</span></td>`;
-}
-
-/* --- where to expand --------------------------------------------------
-   One list, two kinds of evidence. A shop turning people away at the door is a
-   fact with a date on it; a gap in the demand grid is an inference about a shop
-   that does not exist yet. Measured always outranks inferred. */
-function drawExpansion(){
-  const list = D.expansion || [];
-  const measured = list.filter(e => e.measured).length;
-  const TOP = 5;
-  const shown = showAllExpand ? list : list.slice(0, TOP);
-  $("expandNote").textContent = list.length
-    ? `${measured} measured at the ceiling, ${list.length - measured} inferred from demand`
-    : "Nothing is at its ceiling and nothing unserved ranks.";
-  const line = (e, i) => `
-        <div class="exline ${e.measured ? "measured" : "guess"}">
-          <span class="rank">${i+1}</span>
-          <span><b>${e.what}</b> <span class="where">in ${e.where}</span>${
-            e.traffic != null ? ` <span class="bld">traffic ${e.traffic} · ${e.size}</span>` : ""}
-            <span class="tagme">${e.measured ? "measured" : "demand grid"}</span>
-            <span class="why">${e.reason}; ${e.action}</span></span>
-          <span class="num">${e.worth ? fmt(e.worth) + "/day" : e.number}</span>
-        </div>`;
-  /* The top of the list is the decision; the tail is there for checking it. */
-  const more = list.length > TOP ? `<div class="expand-more">${showAllExpand
-      ? `All ${list.length} shown`
-      : `${list.length - TOP} more below the top ${TOP}`}
-      <button type="button" id="expandToggle" aria-expanded="${showAllExpand}">${
-        showAllExpand ? `just the top ${TOP}` : `show all ${list.length}`}</button></div>` : "";
-  $("expansion").innerHTML = list.length
-    ? `<div class="expand">${shown.map(line).join("")}</div>${more}`
-    : `<p class="pad muted">Nothing to rank yet.</p>`;
-  const toggle = $("expandToggle");
-  if(toggle) toggle.onclick = () => { showAllExpand = !showAllExpand; drawExpansion(); };
+function productRow(r, i, hoods, trendDays){
+  const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
+  let h = `<div class="r" data-r="${i}">${r.item}<small>${tag}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
+      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
+      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
+      c.sell && !c.monopoly ? ", you sell it here" : ""}`;
+    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.demand}${rivalDots(c.monopoly ? 0 : c.providers)}</div>`;
+  });
+  return h;
 }
 
 /* One click on a neighbourhood puts its strongest demand at the top; a second
    flips it. Cells with no reading stay at the bottom either way. */
-function hoodHeaders(hoods){
-  const at = hoods.indexOf(marketSortHood);
-  const q = h => h.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  return hoods.map((h, j) => `<th data-hood="${q(h)}" title="Sort by demand in ${q(h)}" ${
-    j === at ? `data-dir="${marketSortDir < 0 ? "desc" : "asc"}"` : ""}>${h}</th>`).join("");
-}
 function hoodSorted(rows, hoods){
   const at = hoods.indexOf(marketSortHood);
   if(at < 0) return rows;
-  // A type cell is shaded by how much of its range is wanted, a product cell
-  // by demand; the sort follows the shade, with the average as the tiebreak.
+  // A type row sorts by how much of its range is wanted, a product row by
+  // demand, with the average as the tiebreak.
   const d = r => { const c = r.cells[at];
     return !c ? null : "strong" in c ? [c.strong / c.count, c.demand] : [c.demand, 0]; };
   return rows.slice().sort((a, b) => {
@@ -7255,88 +7189,27 @@ function hoodSorted(rows, hoods){
   });
 }
 function wireMarketSort(){
-  const t = $("market");
-  t.querySelectorAll("thead th[data-hood]").forEach(th => th.onclick = () => {
-    const h = th.dataset.hood;
-    if(marketSortHood === h) marketSortDir = -marketSortDir;
-    else { marketSortHood = h; marketSortDir = -1; }
+  $$("#market .h[data-hood]").forEach(h => h.onclick = () => {
+    const name = h.dataset.hood;
+    if(marketSortHood === name) marketSortDir = -marketSortDir;
+    else { marketSortHood = name; marketSortDir = -1; }
     drawMarket();
   });
-  const first = t.querySelector("thead th.l");
-  if(first){
-    first.title = marketSortHood ? "Back to the usual order" : "";
-    first.onclick = () => { marketSortHood = null; drawMarket(); };
-  }
+  const usual = $("marketUsual");
+  if(usual) usual.onclick = e => { e.preventDefault(); marketSortHood = null; drawMarket(); };
+  const more = $("marketMore");
+  if(more) more.onclick = e => { e.preventDefault(); showAllMarket = !showAllMarket; drawMarket(); };
 }
 
+const MARKET_TOP = 20;  // product rows before "show all"
 function drawMarket(){
   const m = D.market;
   if(marketSortHood && !m.hoods.includes(marketSortHood)) marketSortHood = null;
-  const sortedBy = !marketSortHood ? ""
-    : marketView === "types"
-    ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
-    : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`;
-  const numbers = $("marketNumbers");
-  if(numbers) numbers.setAttribute("aria-pressed", marketDetail);
-  $("market").classList.toggle("numbers", marketDetail);
-  const trend = m.trendDays
-    ? `Change over the last ${m.trendDays} days`
-    : `Trend history starts building from today`;
-  $("marketNote").textContent = sortedBy || (marketView === "types"
-    ? ""
-    : marketView === "new"
-    ? "Strongest demand first"
-    : trend);
-  $("marketLegend").innerHTML = (marketView === "types"
-    ? [`<span>Hover a cell for the numbers: how much of the range is in strong demand (60+), the average, the rivals</span>`,
-       `<span>Darker cell = more of the range wanted</span>`,
-       `<span>Orange dot = you have a store of this type there</span>`,
-       `<span>Small number = rival sellers, averaged over the range</span>`,
-       `<span>Click a neighbourhood to sort by its demand</span>`]
-    : [`<span>Darker cell = stronger demand</span>`,
-       `<span>Orange dot = you sell it there</span>`,
-       `<span>Small number = rival sellers</span>`,
-       `<span>▲hype = the game flagged rising demand</span>`,
-       `<span>Click a neighbourhood to sort by its demand</span>`]).join("");
-
-  if(marketView === "types"){
-    const t = D.market.types;
-    if(m.typesHidden && !sortedBy) $("marketNote").textContent =
-      `${m.typesHidden} type${m.typesHidden===1?"":"s"} with under 3 products left out`;
-    $("market").innerHTML = `
-      <thead><tr><th class="l">Business type</th>${hoodHeaders(m.hoods)}</tr></thead>` + (t.length ? `
-      <tbody>${hoodSorted(t, m.hoods).map(r => `<tr>
-        <td class="l"><b>${r.type}</b>${r.mine ? ` <span class="chip ok">you run one</span>` : ""}
-          <span class="sub">${r.products} products</span></td>
-        ${r.cells.map(typeCell).join("")}</tr>`).join("")}</tbody>`
-      : `<tbody><tr><td class="l muted">No business types matched.</td></tr></tbody>`);
-    wireMarketSort();
-    return;
-  }
-
-  if(marketView === "gaps"){
-    const gaps = m.gaps;
-    $("market").innerHTML = gaps.length ? `
-      <thead><tr><th class="l">Product</th><th class="l">Neighbourhood</th>
-        <th>Demand</th><th>Sellers</th><th class="l">You</th></tr></thead>
-      <tbody>${gaps.map(g => `<tr>
-        <td class="l">${g.item}</td>
-        <td class="l">${g.hood}</td>
-        <td class="num">${meter(g.demand)}</td>
-        <td class="num">${g.providers === 0
-          ? `<span class="chip ok">none</span>` : g.providers}</td>
-        <td class="l">${g.make
-          ? `<span class="chip ok">you make this</span>`
-          : `<span style="color:var(--ink-3)">not stocked</span>`}</td></tr>`).join("")}</tbody>`
-      : `<tbody><tr><td class="l" style="color:var(--ink-3)">No unserved demand above 50.</td></tr></tbody>`;
-    return;
-  }
-
-  let rows = m.rows, limit = 30;
-  if(marketView === "mine"){
-    rows = m.rows.filter(r => r.sell || r.make);
-    limit = 60;
-  } else if(marketView === "new"){
+  const types = marketView === "types";
+  let rows, limit;
+  if(types){ rows = m.types; limit = rows.length; }
+  else if(marketView === "mine"){ rows = m.rows.filter(r => r.sell || r.make); limit = 60; }
+  else {
     // Strongest unserved demand first, and among equals the emptiest market.
     rows = m.rows.filter(r => !r.sell)
       .sort((a,b) => (b.gap?.demand ?? 0) - (a.gap?.demand ?? 0)
@@ -7344,30 +7217,51 @@ function drawMarket(){
     limit = 40;
   }
   rows = hoodSorted(rows, m.hoods);
-  $("market").innerHTML = `
-    <thead><tr><th class="l">Product</th>${hoodHeaders(m.hoods)}</tr></thead>` + (rows.length ? `
-    <tbody>${rows.slice(0, limit).map(r => `<tr>
-      <td class="l"><b>${r.item}</b>${
-        r.make && !r.sell ? ` <span class="chip warn">you make this</span>`
-        : r.make ? ` <span class="chip ok">make</span>`
-        : r.sell ? ` <span class="chip neutral">sell</span>` : ""}</td>
-      ${r.cells.map(heatCell).join("")}</tr>`).join("")}</tbody>`
-    : `<tbody><tr><td class="l" style="color:var(--ink-3)">Nothing here.</td></tr></tbody>`);
+  const cap = Math.min(rows.length, limit);
+  const shown = rows.slice(0, types || showAllMarket ? cap : Math.min(MARKET_TOP, cap));
+
+  const notes = [];
+  if(marketSortHood) notes.push((types
+      ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
+      : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`)
+    + ` · <a class="link" href="#" id="marketUsual">usual order</a>`);
+  else if(types && m.typesHidden) notes.push(`${plural(m.typesHidden, "type")} with under 3 products left out`);
+  else if(marketView === "new") notes.push("Strongest unserved demand first");
+  else if(!m.trendDays) notes.push("Trend history starts building from today");
+  if(!types && cap > MARKET_TOP) notes.push(showAllMarket
+    ? `all ${cap} · <a class="link" href="#" id="marketMore">top ${MARKET_TOP}</a>`
+    : `${MARKET_TOP} of ${cap} · <a class="link" href="#" id="marketMore">show all ${cap}</a>`);
+  $("marketNote").innerHTML = notes.join(" · ");
+  $("marketWhy").dataset.tip = types
+    ? `Each cell is how many of a type's products are in strong demand (60 or more) in that neighbourhood, shaded by the average demand across the range. Dots count rival sellers. An outlined cell is where you already run a shop of that type. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
+    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
+
+  const grid = $("market");
+  grid.style.gridTemplateColumns = `200px repeat(${m.hoods.length},minmax(0,1fr))`;
+  grid.innerHTML = shown.length
+    ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
+        attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
+      + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
+    : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
+  $("cellDetail").textContent = "Click a cell";
   wireMarketSort();
+  wireTips();
 }
 
 /* --- plan a chain -----------------------------------------------------
    The recipes, the workstations and the prices come across from the save as
-   they were read; every number below is worked out here, so a slider is
+   they were read; every number is worked out in the browser, so a stepper is
    instant and nothing about the plan is decided in Python.
 
    Two facts set the shape of this. A workstation runs flat out around the
    clock, so a line's output is fixed by how many machines are on it and never
    by what the shops happen to want. And anything the shops do not take is
    exported rather than wasted. So the number that has to be right is the raw
-   material a week — order short and the machines stop; the shop count is a
-   consequence, not the plan. */
-let planType = null, planRate = null, planShops = null, planCounts = {};
+   material a week — order short and the machines stop; the shops are the
+   ones the player already runs, and what they take is what they sell today.
+   The arithmetic itself (machines × rate × 24 h × 7 d, the ingredient sums,
+   the surplus) lives in planDraw() with the other wiring. */
+let planType = null, planCounts = {};
 
 const RECIPE_BY = {};
 function indexPlan(){
@@ -7398,231 +7292,83 @@ function defaultRate(kind){
 }
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? 1);
 
-function planFor(kind, perShop, shops){
-  const products = ((D.plan.catalogue || {})[kind] || {}).products || [];
-  const peak = D.plan.peak || 1;
-  const shelfDay = perShop * peak;          // one shop, on its busiest day
-  const shelfWeek = perShop * 7;            // a week of ordinary trading
-  const rows = [], kitCount = {}, ingredients = {};
-  let madeWeek = 0, shelfDemandWeek = 0, exportWeek = 0;
-
-  products.forEach(slug => {
-    const r = RECIPE_BY[slug];
-    const wantWeek = shelfWeek * shops;
-    shelfDemandWeek += wantWeek;
-    if(!r){
-      rows.push({slug, item:itemName(slug), made:false, wantWeek, shelfDay});
-      return;
-    }
-    const ws = (D.plan.workstations || {})[r.workstation] || {};
-    const machines = machinesOn(slug);
-    const oneHour = r.out, oneDay = oneHour * HOURS;
-    /* Full tilt, always: the line does not idle because a shelf is full. */
-    const perDay = oneDay * machines, perWeek = perDay * 7;
-    madeWeek += perWeek;
-    const surplus = perWeek - wantWeek;
-    if(surplus > 0) exportWeek += surplus;
-    const kit = [...(ws.assembly || []), ...(ws.machines || [])];
-    kit.forEach(m => kitCount[m] = (kitCount[m] || 0) + machines);
-    const ings = r.ingredients.map(i => {
-      const weekly = perWeek * i.per / r.out;
-      ingredients[i.slug] = (ingredients[i.slug] || 0) + weekly;
-      return {...i, weekly, hourly: weekly / 7 / HOURS};
-    });
-    rows.push({
-      slug, item:r.item, made:true, machines, out:oneHour, oneDay, perDay, perWeek,
-      wantWeek, surplus, kit, ings, shelfDay,
-      workstation: ws.name || r.workstation,
-      covers: shelfDay > 0 ? perDay / shelfDay : Infinity,
-      short: surplus < 0,
-    });
-  });
-
-  const prices = D.plan.prices || {};
-  let cash = 0, priced = 0, total = 0;
-  const sources = D.plan.sources || {};
-  const imports = Object.entries(ingredients).map(([slug, weekly]) => {
-    const unit = prices[slug];
-    total++;
-    if(unit !== undefined){ priced++; cash += weekly * unit; }
-    const src = sources[slug];
-    return {slug, item:itemName(slug), weekly, daily: weekly / 7, unit,
-            value: unit === undefined ? null : weekly * unit,
-            from: src ? src.from : null, warehouse: src ? src.warehouse : null,
-            ordered: src ? src.ordered : null, active: src ? src.active : false,
-            gap: src ? weekly - src.ordered : null};
-  }).sort((a,b) => b.weekly - a.weekly);
-
-  return {rows, machines: kitCount, imports, cash, priced, total,
-          madeWeek, shelfDemandWeek, exportWeek,
-          totalMachines: rows.reduce((a,r) => a + (r.machines || 0), 0),
-          bought: rows.filter(r => !r.made).length,
-          shortLines: rows.filter(r => r.short).length};
-}
-
 function drawPlan(){
   indexPlan();
   const types = planTypes();
-  if(!types.length){ $("planNote").textContent = "No product catalogue in this save."; return; }
+  if(!types.length){
+    $("planNote").textContent = "No product catalogue in this save.";
+    $("planPicker").innerHTML = ""; $("planBody").innerHTML = ""; $("ingBody").innerHTML = "";
+    return;
+  }
   if(!types.includes(planType))
     planType = types.includes("ba:businesstype_supermarket")
       ? "ba:businesstype_supermarket" : types[0];
-  if(planRate === null) planRate = defaultRate(planType) || 200;
-  if(planShops === null) planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
+  const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
+  const kind = cat[planType].type, low = kind.toLowerCase();
+  const shops = own ? (own.shops ?? own.sites) || 0 : 0;
+  const perShop = defaultRate(planType) || 0;
+  const pick = k => { planType = k; planCounts = {}; drawPlan(); };
 
-  const cat = D.plan.catalogue[planType], own = (D.plan.own || {})[planType];
-  $("planNote").textContent = "";
-  $("planPicker").innerHTML = `
-    <div class="planrow">
-      <label>Business type
-        <select id="planPick">${types.map(k =>
-          `<option value="${k}" ${k===planType?"selected":""}>${D.plan.catalogue[k].type} · ${
-            D.plan.catalogue[k].products.length} products</option>`).join("")}</select></label>
-      <label>Shops taking the output
-        <input type="range" id="planShopSlide" min="1" max="30" step="1" value="${planShops}"></label>
-      <label>Sales per product, in each shop
-        <input type="range" id="planSlide" min="10" max="2000" step="10" value="${planRate}"></label>
-      <label>&nbsp;<output id="planOut"></output></label>
+  /* The types the player runs are the segments, as on the canvas; every other
+     type the city sells is one select away. */
+  const owned = types.filter(k => (D.plan.own || {})[k]);
+  const others = types.filter(k => !owned.includes(k));
+  $("planPicker").innerHTML = (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
+    ? `<span class="field" style="margin:0"><select id="planPick" aria-label="Another business type">
+        <option value="" ${others.includes(planType) ? "" : "selected"} disabled>Another type…</option>${
+        others.map(k => `<option value="${attr(k)}" ${k === planType ? "selected" : ""}>${cat[k].type} · ${cat[k].products.length}</option>`).join("")}
+      </select></span>` : "");
+  if(owned.length) seg($("planTypes"), owned.map(k => [k, cat[k].type]), () => planType, k => { planType = k; planCounts = {}; }, drawPlan);
+  const sel = $("planPick");
+  if(sel) sel.onchange = e => pick(e.target.value);
+
+  /* One line per product with a recipe. The ingredient factors are the recipe
+     page flattened: units of ingredient per unit made, so the wiring's
+     machines × rate × 24 × 7 × factor is the same figure the logistics table
+     draws for a running line. */
+  const ws = D.plan.workstations || {}, sources = D.plan.sources || {}, prices = D.plan.prices || {};
+  const tips = {};
+  let bought = 0;
+  const lines = cat[planType].products.map(slug => {
+    const r = RECIPE_BY[slug];
+    if(!r){
+      bought++;
+      return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in</span></td>
+        <td class="l" colspan="4"><span class="quiet">the game documents no way to make this one; the shops buy it from an importer</span></td></tr>`;
+    }
+    const station = ws[r.workstation] || {};
+    const kit = [...(station.assembly || []), ...(station.machines || [])];
+    const ing = r.ingredients.map(i => `${i.item}:${i.per / r.out}`).join(",");
+    r.ingredients.forEach(i => {
+      const src = sources[i.slug], unit = prices[i.slug];
+      tips[i.item] = (src
+        ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}${src.active ? "" : " (contract paused)"}`
+        : "Not on any import contract yet") + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : "");
+    });
+    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="12" data-rate="${r.out}" data-ing="${attr(ing)}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
+      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
+        r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
+      <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
+  });
+
+  $("planNote").textContent = bought ? `${plural(bought, "product")} of ${cat[planType].products.length} bought in` : "";
+  $("planBody").innerHTML = `
+    <div class="planstats">
+      <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
+      <div class="planstat"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
+      <div class="planstat"><span class="lab">Raw material / week</span><div class="v"><span id="vRaw"></span><small>units to import</small></div></div>
     </div>
-    <p class="muted" style="margin:10px 0 0" id="planSummary"></p>
-    <p class="muted" style="margin:10px 0 0">Machines run ${HOURS} hours at their rated rate,
-      so every line makes its full quantity whether or not the shelves need it; the
-      ingredient order is sized on that, never on demand. What the shops do not take is
-      surplus for export. ${own
-      ? `Your ${own.sites} ${cat.type.toLowerCase()}${own.sites===1?"":"s"} average ${
-          defaultRate(planType).toLocaleString()} a day per product, which is where the
-         shop figures started.`
-      : "You do not run this type, so the shop figures are yours to choose; nothing there is measured."}</p>`;
-  $("planPick").onchange = e => {
-    planType = e.target.value;
-    planRate = defaultRate(planType) || planRate;
-    planShops = ((D.plan.own || {})[planType] || {}).sites || 1;
-    planCounts = {};
-    drawPlan();
-  };
-  $("planShopSlide").oninput = e => { planShops = +e.target.value; paintPlan(); };
-  $("planSlide").oninput = e => { planRate = +e.target.value; paintPlan(); };
-  paintPlan();
-}
-
-function paintPlan(){
-  const p = planFor(planType, planRate, planShops);
-  const cat = D.plan.catalogue[planType];
-  const focused = document.activeElement;
-  const keep = focused && focused.dataset ? focused.dataset.slug : null;
-
-  $("planOut").textContent = `${Math.round(p.madeWeek).toLocaleString()} units/week`;
-  $("planSummary").innerHTML = p.totalMachines
-    ? `<b>${p.totalMachines} machine${p.totalMachines === 1 ? "" : "s"}</b> across the range
-       turn out <b>${Math.round(p.madeWeek).toLocaleString()}</b> units a week and need
-       <b class="num">${Math.round(p.imports.reduce((a,i)=>a+i.weekly,0)).toLocaleString()}</b>
-       units of raw material delivered to keep going${p.priced
-         ? `, costing <b class="num">${fmt(p.cash)}</b> a week` : ""}.
-       ${planShops} ${cat.type.toLowerCase()}${planShops === 1 ? "" : "s"} would take
-       ${Math.round(p.shelfDemandWeek).toLocaleString()} of it${p.exportWeek > 0
-         ? `, leaving <b>${Math.round(p.exportWeek).toLocaleString()}</b> a week for export`
-         : ""}.${p.shortLines
-         ? ` ${p.shortLines} line${p.shortLines === 1 ? " does" : "s do"} not keep up with
-             the shelves; those need more machines.` : ""}`
-    : `No machines set, so nothing is being made.`;
-
-  $("planTable").innerHTML = `
-    <thead><tr><th class="l">Product</th><th>Machines</th><th class="l">Workstation</th>
-      <th>One machine / day</th><th>Made / week</th><th>Shops take</th><th>Surplus / week</th>
-      <th class="l">Raw material per week</th></tr></thead>
-    <tbody>${p.rows.map(r => r.made ? `<tr>
-      <td class="l"><b>${r.item}</b><span class="sub">${r.out.toLocaleString()}/h rated · one
-        machine covers ${r.covers.toFixed(1)} shop${r.covers === 1 ? "" : "s"}</span></td>
-      <td class="num"><input class="mcount" type="number" min="0" max="99" step="1"
-        data-slug="${r.slug}" value="${r.machines}"></td>
-      <td class="l">${r.workstation}<span class="sub">${r.kit.join(" + ")}</span></td>
-      <td class="num">${r.oneDay.toLocaleString()}</td>
-      <td class="num">${Math.round(r.perWeek).toLocaleString()}</td>
-      <td class="num">${Math.round(r.wantWeek).toLocaleString()}</td>
-      <td class="num">${r.surplus >= 0
-        ? `<span class="chip ok">+${Math.round(r.surplus).toLocaleString()}</span>`
-        : `<span class="chip bad">${Math.round(r.surplus).toLocaleString()}</span>`}</td>
-      <td class="l">${r.ings.map(i =>
-        `${Math.round(i.weekly).toLocaleString()} ${i.item}`).join(", ")}</td></tr>`
-    : `<tr><td class="l"><b>${r.item}</b><span class="sub">shops want ${
-        Math.round(r.wantWeek).toLocaleString()}/week</span></td>
-       <td class="l" colspan="7"><span class="chip neutral">imported, no recipe</span>
-       <span class="sub">the game documents no way to make this one; buy it in</span></td></tr>`
-    ).join("")}</tbody>`;
-
-  $("planTable").querySelectorAll(".mcount").forEach(el => {
-    el.oninput = e => {
-      planCounts[e.target.dataset.slug] = Math.max(0, +e.target.value || 0);
-      paintPlan();
-    };
-  });
-  if(keep){
-    const back = $("planTable").querySelector(`.mcount[data-slug="${keep}"]`);
-    if(back){ back.focus(); back.select?.(); }
-  }
-
-  const machines = Object.entries(p.machines).sort((a,b) => b[1]-a[1]);
-  $("planMachines").innerHTML = `<span class="eyebrow">Machines to buy</span>` + (machines.length
-    ? machines.map(([m,n]) =>
-        `<div class="stat"><span>${m}</span><b class="num">${n}</b></div>`).join("")
-      + `<div class="stat"><span><b>Total</b></span><b class="num">${
-          machines.reduce((a,b)=>a+b[1],0)}</b></div>`
-    : `<p class="muted">Nothing in this range is manufactured; it is all bought in.</p>`);
-
-  /* Orders are placed one importer at a time, so the list is cut the same way.
-     Each line carries what is on order now and the difference, which is the
-     only number that actually has to be typed. */
-  const byImporter = new Map();
-  p.imports.forEach(i => {
-    const key = i.from || "Not on any import contract";
-    if(!byImporter.has(key)) byImporter.set(key, []);
-    byImporter.get(key).push(i);
-  });
-  const blocks = [...byImporter.entries()].sort((a,b) =>
-    (a[0] === "Not on any import contract" ? 1 : 0) - (b[0] === "Not on any import contract" ? 1 : 0)
-    || b[1].reduce((x,i)=>x+i.weekly,0) - a[1].reduce((x,i)=>x+i.weekly,0));
-
-  $("planImports").innerHTML = `<span class="eyebrow">Weekly import order: what the machines
-    eat, by importer</span>` + (p.imports.length
-    ? blocks.map(([who, list]) => {
-        const sum = list.reduce((a,i) => a+i.weekly, 0);
-        const money = list.reduce((a,i) => a + (i.value || 0), 0);
-        const raise = list.filter(i => i.gap !== null && i.gap > 0);
-        return `<div class="impblock">
-          <div class="imphead"><b>${who}</b>
-            <span class="sub">${list.length} ingredient${list.length===1?"":"s"} ·
-              ${Math.round(sum).toLocaleString()} units a week${
-              money ? ` · ${fmt(money)}` : ""}${
-              raise.length ? ` · ${raise.length} to raise` : ""}</span></div>
-          <div class="scroll"><table>
-            <thead><tr><th class="l">Ingredient</th><th>Order / week</th>
-              <th>On order now</th><th>Change</th><th>Cash</th></tr></thead>
-            <tbody>${list.map(i => `<tr>
-              <td class="l">${i.item}${i.from && !i.active
-                ? ` <span class="chip bad">paused</span>` : ""}</td>
-              <td class="num"><b>${Math.ceil(i.weekly).toLocaleString()}</b></td>
-              <td class="num">${i.ordered === null
-                ? `<span class="sub">not ordered</span>` : i.ordered.toLocaleString()}</td>
-              <td class="num">${i.gap === null ? "—"
-                : Math.abs(i.gap) < 1 ? `<span class="chip ok">as is</span>`
-                : i.gap > 0 ? `<span class="chip warn">+${Math.ceil(i.gap).toLocaleString()}</span>`
-                : `<span class="chip neutral">${Math.floor(i.gap).toLocaleString()}</span>`}</td>
-              <td class="num">${i.value === null
-                ? `<span class="sub">no price</span>` : fmt(i.value)}</td></tr>`).join("")}</tbody>
-            <tfoot><tr><td class="l">Total</td>
-              <td class="num">${Math.round(sum).toLocaleString()}</td>
-              <td class="num"></td><td class="num"></td>
-              <td class="num">${money ? fmt(money) : ""}</td></tr></tfoot>
-          </table></div></div>`;
-      }).join("")
-      + `<p class="muted" style="margin-top:12px">${p.priced
-          ? `A week costs <b class="num">${fmt(p.cash)}</b> across the ${
-              p.priced} of ${p.total} ingredients this company already buys.`
-          : `No cash figure here: none of these ${p.total} ingredients appear in your own
-             goods costs.`}${p.priced && p.priced < p.total
-           ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${
-               p.total - p.priced} show quantities only.` : ""}</p>`
-    : `<p class="muted">Nothing to import; this range is bought as finished goods.</p>`);
+    <table data-pershop="${perShop}" data-shops="${shops}" data-ingtips="${attr(JSON.stringify(tips))}">
+      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <tbody>${lines.join("")}</tbody>
+    </table>
+    <p class="planline">${own && perShop
+      ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
+          perShop.toLocaleString("en-US")}</b> a day per product. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
+      : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}</p>`;
+  planDraw();
+  wireTips();
 }
 
 /* The top of the list is the money; the full list is what a factory planner
@@ -7722,7 +7468,7 @@ function renderAll(){
   drawMast(); drawKpis(); drawAlerts();
   drawChart(); drawRhythm(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
-  drawExpansion(); drawMovers(); drawMarket(); drawPlan();
+  drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFooter();
   wireAll();
 }
@@ -7736,14 +7482,15 @@ const PAGES = [
   {id:"today",   label:"Today",   host:"pageToday",   hint:"The four numbers and what needs attention"},
   {id:"results", label:"Results", host:"pageResults", hint:"Daily result, the week, the portfolio by chain, one site at a time"},
   {id:"supply",  label:"Supply",  host:"pageSupply",  hint:"Orders to set, stock checks, how goods move"},
-  {id:"growth",  label:"Growth",  host:"pageGrowth",  hint:"Where to expand, market demand, plan a chain"},
+  {id:"growth",  label:"Growth",  host:"pageGrowth",  hint:"Market demand, plan a chain"},
   {id:"company", label:"Company", host:"pageCompany", hint:"Products, payroll, milestones"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
            items:[["orders","Orders"],["checks","Checks"],["map","Map"]]},
-  growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"expand",
-           items:[["expand","Expand"],["market","Demand"],["plan","Plan a chain"]]},
+  // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
+  growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
+           items:[["market","Demand"],["plan","Plan a chain"]]},
 };
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
@@ -8362,11 +8109,14 @@ function planDraw(){
   /* the ingredient table: one row per material, summed over the lines that share it */
   const body = $("ingBody");
   if(body){
+    // changed for growth: the host's data-ingtips (JSON, name -> sentence) puts
+    // what is on order today under each ingredient's name.
+    let tips = {}; try{ tips = host && host.dataset.ingtips ? JSON.parse(host.dataset.ingtips) : {}; }catch(e){}
     const prev = {};
     Array.from(body.children).forEach(tr => { const w = q(".wk", tr); if(w) prev[tr.dataset.name] = w.textContent; });
     body.innerHTML = Object.entries(ing).sort((a, b) => b[1].week - a[1].week).map(([name, r]) =>
       `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
-      `<td class="l">${name}</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
+      `<td class="l"${tips[name] ? ` data-tip="${attr(tips[name])}"` : ""}>${name}</td><td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td></tr>`).join("");
   }
 }
@@ -8374,7 +8124,9 @@ const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
   e.preventDefault();
   const tr = a.closest("tr.line");
   const max = +tr.dataset.max || 12;
-  tr.dataset.m = Math.max(1, Math.min(max, +tr.dataset.m + +a.dataset.d));
+  // changed for growth: data-min="0" lets a line be switched off (bought in instead)
+  const min = tr.dataset.min !== undefined ? +tr.dataset.min : 1;
+  tr.dataset.m = Math.max(min, Math.min(max, +tr.dataset.m + +a.dataset.d));
   if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
   planDraw();
 }));
