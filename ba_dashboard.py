@@ -4515,13 +4515,9 @@ button:hover{color:var(--ink); border-color:var(--ink-3)}
 button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--ground)}
 button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 
-/* legacy: today (tiles, the findings list, the kinds panel) ---------------- */
+/* legacy: today (tiles, the findings list) --------------------------------- */
 .kpi .d{font-size:12.5px; color:var(--ink-2)}
 svg.spark{height:26px; width:100%; margin-top:2px}
-.settings-panel{margin:0 0 14px; padding:14px 20px}
-.settings-panel .minor{margin:0 0 10px}
-.settings-grid{display:flex; flex-wrap:wrap; gap:8px}
-.settings-grid button{font-size:11.5px}
 .alerts{display:grid; gap:1px; background:var(--rule)}
 .alert{
   background:var(--surface); display:grid; grid-template-columns:4px 1fr auto;
@@ -5096,6 +5092,21 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .btn2.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .btn2.primary:hover{color:var(--ground)}
 .btn2[aria-disabled="true"]{opacity:.4;pointer-events:none}
+/* On the artboard the panel is the whole page, centred in it. Here it is a
+   popover hung off the tune button, so the id carries what the artboard did
+   not need: where it sits, and how it arrives. The board has 26 kinds against
+   the artboard's eight, so the rows scroll inside it and the title, the note
+   and the foot stay put. */
+#alertPop{
+  position:fixed;left:0;top:0;margin:0;z-index:60;max-width:calc(100vw - 24px);
+  opacity:0;visibility:hidden;transform:translateY(-6px);transform-origin:100% 0;
+  transition:opacity .16s ease,transform .16s cubic-bezier(.2,.7,.2,1),visibility .16s;
+}
+#alertPop.on{opacity:1;visibility:visible;transform:none}
+#alertPop .kinds{max-height:min(52vh,430px);overflow-y:auto;overscroll-behavior:contain}
+#alertPop .kind:last-child{border-bottom:none}
+#alertPop .foot2{border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.sw:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* company ------------------------------------------------------------------ */
 .roles{display:flex;flex-direction:column;gap:8px}
@@ -5173,13 +5184,11 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
         <h2>Needs attention</h2>
         <p id="alertCount"></p>
         <div class="tools" id="alertTools"></div>
-        <button type="button" id="alertKindsToggle" aria-pressed="false"
+        <button type="button" id="alertKindsToggle" aria-expanded="false"
           title="Choose which kinds of finding make the list">Filter kinds</button>
       </div>
-      <div class="card settings-panel" id="alertSettingsPanel" hidden>
-        <p class="minor">Saved on this device.</p>
-        <div class="settings-grid" id="alertSettingsGrid"></div>
-      </div>
+      <!-- The kinds panel is a popover built at body level, next to #tip:
+           buildAlertSettingsPanel() makes it, the tune button opens it. -->
       <div class="alerts card" id="alerts"></div>
       <p class="minor" id="alertMinor"></p>
     </section>
@@ -7732,58 +7741,190 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        on:true},
-  {id:"vacant",       label:"Vacant leases",          on:true},
-  {id:"loss",         label:"Losing money",           on:true},
-  {id:"staff",        label:"Staffing",               on:true},
-  {id:"satisfaction", label:"Low satisfaction",       on:true},
-  {id:"promotion",    label:"Promotion below cap",   on:true},
-  {id:"uniform",      label:"No staff uniforms",      on:true},
-  {id:"bathroom",     label:"No customer bathroom",   on:true},
-  {id:"toiletprivacy",label:"Bathroom has no privacy",on:true},
-  {id:"sink",         label:"No customer sink",       on:true},
-  {id:"music",        label:"No music playing",       on:true},
-  {id:"interior",     label:"Interior design too low",on:true},
-  {id:"hype",         label:"Demand wave ending",     on:true},
-  {id:"trend",        label:"Revenue trend",          on:true},
-  {id:"unplanned",    label:"No distribution plan",   on:true},
-  {id:"outruns",      label:"Outsells its top-up",    on:true},
-  {id:"paused",       label:"Import paused",          on:true},
-  {id:"feed",         label:"Factory inputs",         on:true},
-  {id:"unnamed",      label:"Unnamed factory line",   on:true},
-  {id:"unset",        label:"Machine with no recipe", on:true},
-  {id:"shortfall",    label:"Import shortfall",       on:true},
-  {id:"order",        label:"Weekly order too small", on:true},
-  {id:"atcap",        label:"At capacity (door/staff/registers)", on:false},
-  {id:"idlestaff",    label:"Overstaffed hours",      on:false},
-  {id:"dead",         label:"Stock not moving",       on:true},
-  {id:"target",       label:"Top-up target too high", on:true},
+  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no stock or no trading day", on:true},
+  {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
+  {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
+  {id:"staff",        label:"Staffing",               note:"A shop with nobody on, or a machine nobody is posted to", on:true},
+  {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
+  {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
+  {id:"uniform",      label:"No staff uniforms",      note:"Customers notice staff with no uniform set", on:true},
+  {id:"bathroom",     label:"No customer bathroom",   note:"Customers here expect a bathroom and there is none", on:true},
+  {id:"toiletprivacy",label:"Bathroom has no privacy",note:"A customer bathroom with no stall or door", on:true},
+  {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
+  {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
+  {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
+  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
+  {id:"trend",        label:"Revenue trend",          note:"A shop's week up or down by more than 15%", on:true},
+  {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
+  {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
+  {id:"paused",       label:"Import paused",          note:"An import switched off with the depot still drawing", on:true},
+  {id:"feed",         label:"Factory inputs",         note:"An input arriving short of what the machines need", on:true},
+  {id:"unnamed",      label:"Unnamed factory line",   note:"A machine running a recipe the board cannot name", on:true},
+  {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
+  {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import lands", on:true},
+  {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
+  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff or registers turn people away", on:false},
+  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters staffed through hours that buy nothing", on:false},
+  {id:"dead",         label:"Stock not moving",       note:"Goods sitting in a depot no line draws from", on:true},
+  {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
+/* The control that opens the panel: the tune button in the Needs attention
+   section head, anything marked data-kinds, or the legacy "Filter kinds"
+   button while the old markup is still there. Whichever one is clicked becomes
+   the anchor; with none on the page the panel hangs off the section's top
+   right. */
+const KINDS_TOGGLE = "#alertSection .sechead .ibtn, [data-kinds], #alertKindsToggle";
+let kindsPop = null, kindsAnchor = null;
 
+/* How many findings each kind puts on the board today — read from the whole
+   unfiltered set, the read-out lines and the smaller ones counted below them
+   together, so the number does not change as the switches move. */
+function kindCounts(){
+  const n = {};
+  const add = rows => (rows || []).forEach(r => { n[r.group] = (n[r.group] || 0) + 1; });
+  if(D){ add(D.alerts); add((D.minor || {}).rows); }
+  return n;
+}
+function drawKindRows(){
+  const host = kindsPop && kindsPop.querySelector(".kinds");
+  if(!host) return;
+  const n = kindCounts(), at = host.scrollTop;
+  host.innerHTML = ALERT_GROUPS.map(g => {
+    const on = !!alertGroupPrefs[g.id];
+    return `<div class="kind"><div><b>${g.label}</b><small>${g.note}</small></div>`
+      + `<span class="c">${n[g.id] || 0} today</span>`
+      + `<span class="sw${on ? " on" : ""}" data-kind="${g.id}" role="switch"`
+      + ` aria-checked="${on}" aria-label="${attr(g.label)}" tabindex="0"></span></div>`;
+  }).join("");
+  host.scrollTop = at;
+}
+/* Where the panel sits: under the button that opened it, its right edge in
+   line with the button's, clamped into the window. With no button on the page
+   yet it hangs off the top right of the Needs attention section. */
+function placeKindsPop(){
+  /* The page has no doctype, so it runs in quirks mode and
+     documentElement.clientHeight is the document's height, not the window's:
+     innerHeight is the one that means "how much of the window is left". */
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  let r = kindsAnchor && kindsAnchor.getBoundingClientRect();
+  if(!r || !r.width){
+    const sec = document.getElementById("alertSection");
+    const s = sec && sec.getBoundingClientRect();
+    r = s && s.width ? {right: s.right, top: s.top, bottom: s.top + 8}
+                     : {right: vw - 40, top: 120, bottom: 128};
+  }
+  const rows = kindsPop.querySelector(".kinds");
+  if(rows) rows.style.maxHeight = "";
+  let h = kindsPop.offsetHeight;
+  const y0 = r.bottom + 10, room = vh - 12 - y0;
+  /* Twenty-six kinds are taller than a short window. The rows give up whatever
+     height the window cannot spare, down to a floor; only past that does the
+     panel leave the button it hangs from. */
+  if(rows && h > room && room > 240){
+    rows.style.maxHeight = Math.max(200, rows.offsetHeight - (h - room)) + "px";
+    h = kindsPop.offsetHeight;
+  }
+  let y = y0;
+  if(y + h > vh - 12){
+    const above = r.top - 10 - h;
+    y = above >= 12 ? above : vh - 12 - h;
+  }
+  kindsPop.style.left = Math.max(12, Math.min(r.right - kindsPop.offsetWidth, vw - kindsPop.offsetWidth - 12)) + "px";
+  kindsPop.style.top = Math.max(12, y) + "px";
+}
+function closeKindsPanel(){
+  if(!kindsPop || !kindsPop.classList.contains("on")) return;
+  kindsPop.classList.remove("on");
+  document.querySelectorAll(KINDS_TOGGLE).forEach(a => a.setAttribute("aria-expanded", "false"));
+}
+function openKindsPanel(anchor){
+  if(!kindsPop) buildAlertSettingsPanel();
+  kindsAnchor = anchor && anchor.nodeType === 1 ? anchor : document.querySelector(KINDS_TOGGLE);
+  drawKindRows();
+  kindsPop.classList.add("on");
+  placeKindsPop();
+  if(kindsAnchor) kindsAnchor.setAttribute("aria-expanded", "true");
+}
+/* The one entry point the Needs attention head calls: the tune button toggles
+   the panel and anchors it under itself. */
+function toggleKindsPanel(anchor){
+  if(kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
+  else openKindsPanel(anchor);
+}
+
+/* The panel is a body-level popover, like #tip: a section's paint containment
+   would clip one rendered inside it. Built once, on boot, because the
+   preferences it reads have to be in place before the first drawAlerts(); the
+   counts are filled in each time it opens, so a live refresh cannot leave a
+   stale number behind. */
 function buildAlertSettingsPanel(){
   let saved = {};
   try{ saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)) || {}; }catch(e){}
   ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = saved.hasOwnProperty(g.id) ? !!saved[g.id] : g.on; });
-  $("alertSettingsGrid").innerHTML = ALERT_GROUPS.map(g =>
-    `<button type="button" data-kind="${g.id}" aria-pressed="${alertGroupPrefs[g.id]}">${g.label}</button>`
-  ).join("");
-  $("alertSettingsGrid").addEventListener("click", e => {
-    const btn = e.target.closest("button[data-kind]");
-    if(!btn) return;
-    const id = btn.dataset.kind;
-    alertGroupPrefs[id] = !alertGroupPrefs[id];
-    btn.setAttribute("aria-pressed", String(alertGroupPrefs[id]));
-    try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
+  if(kindsPop){ drawKindRows(); return; }
+  kindsPop = document.createElement("div");
+  kindsPop.className = "pop";
+  kindsPop.id = "alertPop";
+  kindsPop.setAttribute("role", "dialog");
+  kindsPop.setAttribute("aria-label", "Which kinds make the list");
+  kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
+    <p>Off means the kind is left out of the list and its counts. Saved on this device.</p>
+    <div class="kinds"></div>
+    <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
+    + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
+  document.body.appendChild(kindsPop);
+  drawKindRows();
+
+  /* The switches themselves are wired by wireKinds(), with everything else. */
+  kindsPop.addEventListener("click", e => {
+    if(!e.target.closest) return;
+    if(e.target.closest("[data-kinds-done]")){ e.preventDefault(); closeKindsPanel(); return; }
+    if(!e.target.closest("[data-kinds-reset]")) return;
+    e.preventDefault();
+    /* Back to the board's defaults, and out of storage entirely, so a later
+       change to a default is picked up rather than frozen. */
+    ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = g.on; });
+    try{ localStorage.removeItem(ALERT_SETTINGS_KEY); }catch(e2){}
+    drawKindRows();
     drawAlerts();
   });
+  /* A switch is not a button, so the keyboard needs saying out loud. */
+  kindsPop.addEventListener("keydown", e => {
+    const sw = e.target.closest && e.target.closest(".sw");
+    if(!sw || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    sw.click();
+  });
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest(KINDS_TOGGLE);
+    if(!t) return;
+    e.preventDefault();
+    toggleKindsPanel(t);
+  });
+  /* Outside click closes it; mousedown, so the click that follows lands on
+     whatever was clicked rather than on a panel that is still there. */
+  document.addEventListener("mousedown", e => {
+    if(!kindsPop.classList.contains("on")) return;
+    if(kindsPop.contains(e.target) || (e.target.closest && e.target.closest(KINDS_TOGGLE))) return;
+    closeKindsPanel();
+  });
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Escape" || !kindsPop.classList.contains("on")) return;
+    closeKindsPanel();
+    if(kindsAnchor) kindsAnchor.focus();
+  });
+  window.addEventListener("resize", () => { if(kindsPop.classList.contains("on")) placeKindsPop(); });
+  /* The panel follows the button as the page scrolls — but the rows scrolling
+     inside it are not the page moving, and re-measuring would fight them. */
+  window.addEventListener("scroll", e => {
+    if(!kindsPop.classList.contains("on")) return;
+    if(e.target && e.target.nodeType === 1 && kindsPop.contains(e.target)) return;
+    placeKindsPop();
+  }, true);
 }
 buildAlertSettingsPanel();
-$("alertKindsToggle").onclick = () => {
-  const panel = $("alertSettingsPanel");
-  panel.hidden = !panel.hidden;
-  $("alertKindsToggle").setAttribute("aria-pressed", String(!panel.hidden));
-};
 
 /* --- the redesign's interactions ---------------------------------------------
    MARKUP CONTRACT. Each wire*() below works on whatever is in the DOM, found by
@@ -7829,6 +7970,13 @@ $("alertKindsToggle").onclick = () => {
      .sw[data-kind=<alert group id>]  click toggles .on, flips alertGroupPrefs,
                           saves under ALERT_SETTINGS_KEY, redraws the findings.
                           A .sw without data-kind only toggles .on.
+     the panel itself    a body-level popover (#alertPop), built once by
+                          buildAlertSettingsPanel(). toggleKindsPanel(anchor)
+                          opens and closes it under whatever element is passed.
+                          The tune button needs no wiring of its own: a click
+                          on any KINDS_TOGGLE match — ".sechead .ibtn" inside
+                          #alertSection, or anything marked data-kinds — opens
+                          it and anchors it there.
 
    Results — wireChart, wirePortfolio, wireSiteHours:
      .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
@@ -8311,13 +8459,22 @@ function wirePlan(){ bindPlan(); planDraw(); }
 const wireSiteHours = once(() => onEnter(".hc[data-read]", c => { const hr = $("hourRead"); if(hr) hr.innerHTML = c.dataset.read; }));
 
 /* kinds popover: switches flip; with a data-kind they also flip the preference --- */
-const wireKinds = once(() => on("click", ".sw", s => {
+const bindKinds = once(() => on("click", ".sw", s => {
   s.classList.toggle("on");
+  /* changed for kinds: the switch is a span carrying role="switch", so the
+     state a screen reader hears has to move with the class. */
+  if(s.getAttribute("role") === "switch") s.setAttribute("aria-checked", String(s.classList.contains("on")));
   const kind = s.dataset.kind; if(!kind) return;
   alertGroupPrefs[kind] = s.classList.contains("on");
   try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
   drawAlerts();
 }));
+/* changed for kinds: bound once as before, plus the "n today" counts of an
+   open panel, which a live refresh would otherwise leave a day behind. */
+function wireKinds(){
+  bindKinds();
+  if(kindsPop && kindsPop.classList.contains("on")) drawKindRows();
+}
 
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
