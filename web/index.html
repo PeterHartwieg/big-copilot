@@ -102,14 +102,16 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* everything arrives: sections slide in when they come into view -------- */
 .rv{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
-.rv.in{opacity:1;transform:none}
+.rv.in{opacity:1}
+.rv.in:not(.move){transform:none}
 
 /* masthead: wordmark, five places, the clock ------------------------------ */
 .mast{display:flex;align-items:center;gap:40px;height:100px;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5;background:var(--ground)}
-.brand{display:flex;align-items:baseline;gap:2px;user-select:none}
+.brand{display:flex;align-items:baseline;gap:2px;user-select:none;flex:none}
 .wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer}
+.mast .wordmark{max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .brand .dot{
-  display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--accent);
+  display:inline-block;flex:none;width:11px;height:11px;border-radius:50%;background:var(--accent);
   transform-origin:50% 100%;transition:transform .25s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
 }
 .brand:hover .dot{transform:translateY(-6px) scale(1.15)}
@@ -493,8 +495,6 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .person.off i{background:#ff625733}
 .person small .off{color:var(--neg)}
 .person.more{color:var(--ink-2);border-style:dashed}
-/* A career total with no target is a line, not a box to tick. */
-.mile.plain{padding-left:30px;color:var(--ink-2)}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
 /* kinds popover ------------------------------------------------------------ */
@@ -947,8 +947,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "e1373f034e";</script>
-<script src="app.js?v=e1373f034e"></script>
+<script>window.LEDGER_BUILD = "4e34470202";</script>
+<script src="app.js?v=4e34470202"></script>
 
 <script>
 let D = null;
@@ -1175,6 +1175,7 @@ const VIEWS = {
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
                  c.margin===null?"—":`${c.margin.toFixed(1)}%`],
+    chainKey: (c, i) => i === 2 ? c.change ?? -999 : VIEWS.pnl.cols[i][3](c),
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
                   fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
                   `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, ""],
@@ -1195,6 +1196,8 @@ const VIEWS = {
       ["Security", b=>b.security?`${b.security}%`:"—", "", b=>b.security],
     ],
     chain: c => [null, "", c.staff||"—", "", "", "", "", "", "", ""],
+    // Staff is the only aggregate printed here; blank columns retain chain order.
+    chainKey: (c, i) => i === 2 ? c.staff : 0,
     total: null,
   },
 };
@@ -1460,6 +1463,8 @@ function drawFlowDetail(){
 }
 
 /* --- supply chain ---------------------------------------------------- */
+// Match the missing-plan chips, independently of the days-of-cover grade.
+const stockUnplanned = r => r.pressure === null || r.status === "unplanned";
 const SUPPLY_VIEWS = {
   shops: {
     label: "Before the drop",
@@ -1471,9 +1476,15 @@ const SUPPLY_VIEWS = {
       if(!rows.length) return "No shelf is on a top-up plan yet.";
       const worst = rows.filter(r => r.pressure !== null)
         .sort((a,b) => b.pressure - a.pressure)[0];
-      const bad = rows.filter(r => r.level !== "ok").length;
-      return `<b>${rows.length} shelves</b> clear their top-up${
-        bad ? `, ${bad} do not` : ""}${worst
+      const unplanned = rows.filter(stockUnplanned).length;
+      const bad = rows.filter(r => !stockUnplanned(r) && r.level !== "ok").length;
+      const clear = rows.length - unplanned - bad;
+      const problems = [
+        unplanned ? `${unplanned} ${unplanned===1?"shelf has":"shelves have"} no top-up plan` : "",
+        bad ? `${bad} ${bad===1?"shelf does not clear its":"shelves do not clear their"} top-up` : "",
+      ].filter(Boolean);
+      return `${problems.length ? `<b>${problems.join("; ")}</b>; ${clear}`
+        : `<b>${clear} ${clear===1?"shelf":"shelves"}</b>`} ${clear===1?"clears its":"clear their"} top-up${worst
         ? `; tightest ${worst.item} at ${shortName(D.businesses[worst.s])}, ${
             worst.pressure}% on a ${worst.peakDay || "normal day"}` : ""}.`;
     },
@@ -1513,13 +1524,20 @@ const SUPPLY_VIEWS = {
       const short = rows.filter(r => r.coverFit === "short").length;
       const close = rows.filter(r => r.coverFit === "tight").length;
       const tight = rows.filter(r => r.orderFit === "tight").length;
+      const small = rows.filter(r => r.orderFit === "short").length;
+      const paused = rows.filter(r => r.paused).length;
       const worst = rows.slice().sort((a,b) => a.cover - b.cover)[0];
-      return `<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
+      const problems = [
+        paused ? `${paused} import${paused===1?" is":"s are"} paused` : "",
+        small ? `${small} order${small===1?" is":"s are"} too small` : "",
+        short ? `${short} holding${short===1?" does":"s do"} not reach the import` : "",
+        close ? `${close} land within half a day of it` : "",
+        tight ? `${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : "",
+      ].filter(Boolean);
+      return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
         D.supply.nextImportWeekday || "the next"}'s import, ${
         D.supply.hoursToImport} days off; thinnest ${worst.item} at ${
-        shortName(D.businesses[worst.s])}, ${worst.cover} days${
-        close ? `. ${close} land within half a day of it` : ""}${
-        tight ? `. ${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : ""}.`;
+        shortName(D.businesses[worst.s])}, ${worst.cover} days.`;
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
     tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => a.cover - b.cover),
@@ -1591,12 +1609,16 @@ const SUPPLY_VIEWS = {
       const piling = rows.filter(r => r.piling).length;
       const guessed = rows.filter(r => !r.unnamed && r.basis !== "measured" && r.basis !== "paired").length;
       const short = rows.filter(r => r.fullWeek && r.hoursWeek < r.fullWeek).length;
-      return `<b>${f.sites.length} factor${f.sites.length===1?"y":"ies"}, ${f.machines} assembly machines</b> on ${
-        rows.filter(r => !r.unnamed).length} lines${
-        f.unnamed ? `; ${f.unnamed} machine${f.unnamed===1?"":"s"} on recipes the flow has not identified` : ""}${
-        guessed ? `; ${guessed} named from what they eat or hold rather than ship` : ""}${
-        piling ? `. ${piling} line${piling===1?"":"s"} make more than leaves` : ""}${
-        short ? `. <b>${short} line${short===1?" is":"s are"} not staffed round the clock</b>` : ""}.`;
+      const missing = rows.filter(r => r.missing && r.missing.length).length;
+      const problems = [
+        f.unnamed ? `${f.unnamed} machine${f.unnamed===1?"":"s"} on recipes the flow has not identified` : "",
+        short ? `${short} line${short===1?" is":"s are"} not staffed round the clock` : "",
+        missing ? `${missing} line${missing===1?" is":"s are"} missing inputs` : "",
+        piling ? `${piling} line${piling===1?" makes":"s make"} more than leaves` : "",
+        guessed ? `${guessed} named from what they eat or hold rather than ship` : "",
+      ].filter(Boolean);
+      return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${f.sites.length} factor${f.sites.length===1?"y":"ies"}, ${f.machines} assembly machines</b> on ${
+        rows.filter(r => !r.unnamed).length} lines.`;
     },
     keep: r => r.unnamed || r.piling || (r.basis !== "measured" && r.basis !== "paired") || (r.missing && r.missing.length)
               || (r.fullWeek && r.hoursWeek < r.fullWeek),
@@ -1654,11 +1676,15 @@ const SUPPLY_VIEWS = {
       const bad = rows.filter(r => r.level === "critical").length;
       const watch = rows.filter(r => r.level === "warn").length;
       const wait = rows.filter(r => r.level === "info").length;
+      const unplanned = rows.filter(stockUnplanned).length;
       const worst = rows.filter(r => r.level === "critical" || r.level === "warn").sort((a,b) => b.perDay - a.perDay)[0];
-      return `<b>${rows.length - bad - watch - wait} of ${rows.length} inputs</b> are fed as the machines need${
-        bad ? `; ${bad} ${bad===1?"is":"are"} not` : ""}${
-        watch ? `; ${watch} worth watching` : ""}${
-        wait ? `; ${wait} wait on a stopped line` : ""}${
+      const problems = [
+        bad ? `${bad} input${bad===1?" is":"s are"} not fed as the machines need${
+          unplanned ? ` (${unplanned} ${unplanned===1?"has":"have"} no top-up plan)` : ""}` : "",
+        watch ? `${watch} worth watching` : "",
+        wait ? `${wait} wait on a stopped line` : "",
+      ].filter(Boolean);
+      return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - bad - watch - wait} of ${rows.length} inputs</b> are fed as the machines need${
         worst ? `; largest ${worst.item} at ${shortName(D.businesses[worst.s])}` : ""}.`;
     },
     keep: r => r.level !== "ok",
@@ -2316,7 +2342,7 @@ const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l
 function drawPortfolio(){
   const v = VIEWS[view];
   $("portHead").innerHTML = sechead("Portfolio", {
-    why: `${v.note}. Click a chain to open its sites, a site to open its detail. Click a column to sort the sites by it.`,
+    why: `${v.note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.`,
     aside: `<span class="seg" id="portTools"></span>`,
   });
   seg($("portTools"), Object.entries(VIEWS).map(([id, o]) => [id, o.label]),
@@ -2329,7 +2355,9 @@ function drawPortfolio(){
   /* Every site row is in the table; wirePortfolio() shows the ones whose
      chain is open, from the openChains set, so a refresh keeps them open. */
   const body = [];
-  (D.chains||[]).forEach(c => {
+  const chains = (D.chains || []).slice();
+  if(sorter) chains.sort((a, z) => (v.chainKey(a, sortKey) - v.chainKey(z, sortKey)) * sortDir);
+  chains.forEach(c => {
     body.push(chainRow(c, v));
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
@@ -2644,10 +2672,12 @@ function drawStock(){
     aside: `<span class="seg" id="stockTools"></span>`});
   seg($("stockTools"), Object.entries(SUPPLY_VIEWS).map(([id, x]) => [id, x.label]),
     () => stockView, x => { stockView = x; showAllStock = false; }, () => { drawStock(); wireAll(); });
-  /* The tick means nothing in this view is graded critical or warn; a row the
-     view flags without grading it (an unnamed line) counts against it. */
+  /* A missing plan is a finding even with plenty of stock. Check every row,
+     including grades outside keep(), and retain ungraded findings such as
+     unnamed factory lines. Tight but healthy shelves can still be all-clear. */
   const calm = all.length > 0
-    && !worth.some(r => r.level ? r.level === "critical" || r.level === "warn" : true);
+    && !all.some(r => stockUnplanned(r) || r.level === "critical" || r.level === "warn"
+      || (!r.level && v.keep(r)));
   $("stockVerdict").innerHTML = (calm ? checkMark : "") + v.verdict(all);
   const nothing = all.length
     ? `Nothing here needs reading: ${all.length === 1 ? "the one row is" : `all ${all.length} rows are`} inside their limits.`
@@ -3269,22 +3299,18 @@ function drawGoals(){
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
   /* The checklist is the design's: every business type run, every building
      owned, the story rivals taken over, the personal goals, the diplomas —
-     each "n / total", the box filled only when complete. What the save keeps
-     no target for (the goals, where it stores only the completed ids; the
-     goods made; the tax paid) is a plain line under the boxes, never ticked. */
+     each "n / total", the box filled only when complete. Personal goals have
+     no stored total, so show the completed count with an unfilled box. Goods
+     made and tax paid are running totals below the checklist. */
   const num = n => (n || 0).toLocaleString();
   const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${num(n)} / ${num(total)}`]] : [];
   const miles = [
     ...ofAll("Every business type run", g.typesRun, g.typesTotal),
     ...ofAll("Every building owned", g.buildingsOwned, g.buildingsTotal),
     ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
-    ...ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal),
+    ...(g.goalsTotal > 0 ? ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal)
+      : [["Personal goals done", false, `${num(g.goalsDone ?? g.completed)} done`]]),
     ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
-  ];
-  const plain = [
-    ...(g.goalsTotal ? [] : [["Personal goals completed", num(g.goalsDone ?? g.completed)]]),
-    ["Goods produced in the factories", num(g.goodsProduced)],
-    ["Tax paid", fmt(g.taxesPaid || 0)],
   ];
   $("secGoals").innerHTML = sechead("Milestones", {
     why: "The stored difficulty is only a slot number, and a custom game keeps its own"
@@ -3295,8 +3321,8 @@ function drawGoals(){
       : `career totals · playing on ${D.meta.difficulty}`,
   }) + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
-        label}<span class="c">${text}</span></div>`).join("")}${plain.map(([label, text]) =>
-      `<div class="mile plain">${label}<span class="c">${text}</span></div>`).join("")}</div>`
+        label}<span class="c">${text}</span></div>`).join("")}</div>`
+    + `<p class="quiet">${num(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid</p>`
     + (moved.length ? `<div class="rules">${moved.map(r =>
         `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
           r.neutral}, so this game is ${r.lean}.`)}">${r.name}<b>×${r.value}</b></span>`).join("")}</div>`
