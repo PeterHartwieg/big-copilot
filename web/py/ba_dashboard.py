@@ -630,7 +630,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "ledgerDays": len(ledger),
         "alerts": alerts["lines"],
         "minor": alerts["minor"],
-        "goals": _goals(save, names),
+        "goals": _goals(save, names, businesses),
         "weekly": _weekly(save),
     }
 
@@ -915,6 +915,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
+        "people": _people(crew),
         "rhythm": rhythm,
         "customerRhythm": customer_rhythm,
         "swing": _swing(rhythm or customer_rhythm),
@@ -945,6 +946,30 @@ def _crew(crew: list) -> list:
     for entry in roles.values():
         entry["daily"] = money(entry["daily"])
     return sorted(roles.values(), key=lambda r: -r["count"])
+
+
+def _people(crew: list) -> list:
+    """The same crew one person at a time, so a site can name who works it.
+
+    A character without a name — the save permits it, and _staff then reads
+    "?" — still gets a stable label: its role plus a number within the role.
+    """
+    seen = collections.Counter()
+    out = []
+    for person in sorted(crew, key=lambda c: (c["role"], c["name"])):
+        seen[person["role"]] += 1
+        name = person["name"]
+        if name == "?":
+            name = f"{person['role']} {seen[person['role']]}"
+        out.append(
+            {
+                "name": name,
+                "role": person["role"],
+                "absent": bool(person["absent"]),
+                "daily": money(person["daily"]),
+            }
+        )
+    return out
 
 
 def _chain_rhythm(save: Save, buildings: list, daily: list, day: int) -> dict:
@@ -1100,7 +1125,24 @@ def _weekly(save: Save) -> list:
     ]
 
 
-def _goals(save: Save, names: Names) -> dict:
+def _openable_types(names: Names) -> list[str]:
+    """Every business type a player can open, as the game's own F1 pages list them.
+
+    The locale also carries display names for types nobody can open — empty,
+    notimplemented, the IRS, the government, the hospital — so the raw
+    businesstype_* keys overcount. A type gets a help page only where the
+    player can actually run one: the sixteen retail floors, the five
+    agencies, the factory, the warehouse and the headquarters.
+    """
+    found = set()
+    for key in names.locale:
+        match = _BUSINESS_HELP_RE.match(key)
+        if match:
+            found.add(match.group(1))
+    return sorted(found)
+
+
+def _goals(save: Save, names: Names, businesses: list) -> dict:
     """Career totals, with a denominator where the save carries one.
 
     The save lists every diploma the player can study and every story rival,
@@ -1111,14 +1153,25 @@ def _goals(save: Save, names: Names) -> dict:
     ach = save.deref(save.root.get("achievementsData")) or {}
     diplomas = save.items(save.root["PlayerDiplomas"])
     rivals = save.items(save.root.get("specialRivalStates"))
+    goals_done = save.items(save.root["completedPersonalGoals"])
     return {
-        "completed": len(save.items(save.root["completedPersonalGoals"])),
+        "completed": len(goals_done),
         "diplomas": sum(1 for d in diplomas if d.get("completed")),
         "diplomasTotal": len(diplomas),
         "rivalsDefeated": sum(1 for r in rivals if r.get("isDefeated")),
         "rivalsTotal": len(rivals),
         "goodsProduced": ach.get("goodsProducedInFactories", 0),
         "taxesPaid": money(ach.get("taxesPaid", 0)),
+        # Types the player runs versus the types the game offers, and buildings
+        # bought outright (root realEstate, each with its purchase day) versus
+        # every building in the city's table. The goals carry no total: the
+        # save stores only the ids of the ones already completed.
+        "typesRun": len({b["typeSlug"] for b in businesses if b["status"] == "retail"}),
+        "typesTotal": len(_openable_types(names)),
+        "buildingsOwned": len(save.items(save.root.get("realEstate"))),
+        "buildingsTotal": len(load_buildings()),
+        "goalsDone": len(goals_done),
+        "goalsTotal": None,
     }
 
 
@@ -4446,6 +4499,7 @@ def render(
 
 
 TEMPLATE = r"""<title>__TITLE__</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -4662,13 +4716,15 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .chip.warn{background:#f0913a22;color:var(--warn)}
 .chip.dim{background:#ffffff10;color:var(--ink-2)}
 .kpi .sub{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2)}
-.spark{position:relative;height:34px;margin-top:2px}
+/* The read-out sits in a band of its own between the chip row and the line:
+   the extra margin is that band, so the value never lands on "vs 7-day". */
+.spark{position:relative;height:34px;margin-top:12px}
 .spark svg{width:100%;height:34px;overflow:visible}
 .spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round}
 .spark .area{fill:var(--accent);opacity:.08}
 .spark .pt{fill:var(--accent);opacity:0;transition:opacity .15s}
 .spark .scrub{
-  position:absolute;top:-22px;left:0;transform:translateX(-50%);opacity:0;
+  position:absolute;top:-14px;left:0;transform:translateX(-50%);opacity:0;
   font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink);white-space:nowrap;transition:opacity .15s;
 }
 .kpi:hover .spark .pt,.kpi:hover .spark .scrub{opacity:1}
@@ -4858,7 +4914,12 @@ g[data-series].off{opacity:0}
 .shops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 14px}
 .shops i{width:12px;height:12px;border-radius:3px;background:var(--rule);transition:background .2s}
 .shops i.on{background:var(--ink-2)}
-.planstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.planstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+/* Ingredients: the "used by" cell keeps to two names and an ellipsis so the
+   order columns stay on screen at 1180px; the full list is on hover. The cash
+   column only exists once one ingredient has a price. */
+.ingtable .usedby{display:block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2);font-family:Archivo,sans-serif}
+.ingtable.nocash .cash{display:none}
 .planstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
 .planstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .planstat .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
@@ -4928,6 +4989,9 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .person.off{opacity:.5}
 .person.off i{background:#ff625733}
 .person small .off{color:var(--neg)}
+.person.more{color:var(--ink-2);border-style:dashed}
+/* A career total with no target is a line, not a box to tick. */
+.mile.plain{padding-left:30px;color:var(--ink-2)}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
 /* kinds popover ------------------------------------------------------------ */
@@ -5129,10 +5193,10 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2>Ingredients</h2>
-        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. The order is the weekly figure rounded up to the hundred, the way the logistics manager takes it. Hover an ingredient for what is on order today." tabindex="0"><i>?</i></span></div>
-      <table>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. The order is the weekly figure rounded up to the hundred, the way the logistics manager takes it. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+      <table class="ingtable" id="ingTable">
         <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Weekly order</th>
-          <th>On order now</th><th>Change</th><th>Cash / week</th></tr></thead>
+          <th>On order now</th><th>Change</th><th class="cash">Cash / week</th></tr></thead>
         <tbody id="ingBody"></tbody>
         <tfoot id="ingFoot"></tfoot>
       </table>
@@ -5687,6 +5751,9 @@ const SUPPLY_VIEWS = {
             worst.pressure}% on a ${worst.peakDay || "normal day"}` : ""}.`;
     },
     keep: r => r.level !== "ok" || r.pressure === null || r.pressure >= 85,
+    /* Under an all-clear the tightest shelves still get read out, gauge and
+       all, so the verdict has something to stand on. */
+    tightest: rows => rows.filter(r => r.pressure !== null).sort((a, b) => b.pressure - a.pressure),
     head: `<th class="l">Shop</th><th class="l">Product</th><th>Sells / day</th>
            <th>Busiest day</th><th>Daily top-up</th><th>Pressure</th><th>On hand</th>`,
     rows: () => D.supply.shops,
@@ -5728,6 +5795,7 @@ const SUPPLY_VIEWS = {
         tight ? `. ${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : ""}.`;
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
+    tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => a.cover - b.cover),
     head: `<th class="l">Site</th><th class="l">Product</th><th>On hand</th>
            <th>Uses / day</th><th>Busiest day</th><th>Runs out</th><th>Weekly order</th>
            <th>A week takes</th>`,
@@ -6253,29 +6321,98 @@ const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
    that is dropped (with a following "is"/"are"); then the first colon,
    semicolon or full stop splits the headline from the detail. A condensed row
    (three of a kind at one site) carries its worst member's sentence as detail. */
+const HEADLINE_MAX = 60;
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function splitFinding(a){
   let t = String(a.text || "");
   if(a.site && t.startsWith(a.site)){
     t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
   }
-  const m = t.match(/^(.*?)(?::|;|\.\s)\s*(.*)$/s);
+  /* A colon between digits is a time of day, not a break. */
+  const m = t.match(/^(.*?)(?:(?<!\d):(?!\d)|;|\.\s)\s*(.*)$/s);
   let what = m ? m[1] : t, more = m ? m[2] : "";
+  /* "at <site>" inside the headline is the pill again. */
+  if(a.site) what = what.replace(new RegExp(`\\s+at ${escapeRe(a.site)}\\b`), "");
+  const lead = rest => { more = more ? `${rest.replace(/[.\s]+$/, "")}. ${more}` : rest; };
+  /* Two sentences lead with a list. The list is detail; the verb is the
+     headline: "3 machines run a recipe the board cannot name", "Top-up target
+     of 3,000 is 43x daily sales in 1 shop". */
+  let r;
+  if((r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
+    what = `${r[1]} ${r[2]} ${r[4]}`; lead(`At ${r[3]}`);
+  } else if((r = what.match(/^(.+?) (top-up target of .+)$/)) && r[1].includes(", ")){
+    what = r[2]; lead(r[1]);
+  }
+  /* Still long: the last comma or bracket inside the limit ends the headline
+     and the rest unfolds on hover, so the row keeps to the design's one line. */
+  if(what.length > HEADLINE_MAX){
+    let at = Math.max(what.lastIndexOf(", ", HEADLINE_MAX), what.lastIndexOf(" (", HEADLINE_MAX));
+    if(at < 20) at = Math.min(...[what.indexOf(", "), what.indexOf(" (")].filter(i => i > 0));
+    if(isFinite(at) && at > 0){
+      lead(what.slice(at).replace(/^[,\s(]+/, "").replace(/\)(?=[^)]*$)/, ""));
+      what = what.slice(0, at);
+    }
+  }
   what = what.charAt(0).toUpperCase() + what.slice(1);
   if(a.detail) more = more ? `${more.replace(/[.\s]+$/, "")}. ${a.detail}` : a.detail;
   return {what, more};
 }
 /* The figure on the right: the finding's worth in its unit, whole dollars up
-   to a million and compact beyond it; a condensed row with no money shows
-   how many findings it stands for; anything else leaves the column empty. */
+   to a million and compact beyond it. A row with no money still carries a
+   number worth reading — the units an order is short, the machines on an
+   unnamed line, the multiple a target is over — so that comes out of the
+   sentence, in its unit; only a row with no number at all leaves the column
+   empty. A condensed row with no money shows how many findings it stands for. */
+const amtHtml = (n, unit) => `${n}<small>${unit || ""}</small>`;
 function findingAmount(a){
   if(typeof a.worth === "number")
-    return `${Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth)}<small>${a.unit || ""}</small>`;
-  if(a.detail){
-    const n = (String(a.text).match(/^\d+/) || [])[0];
-    if(n) return `${n}<small>findings</small>`;
+    return amtHtml(Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth), a.unit);
+  const t = String(a.text || "");
+  let m;
+  if(a.detail && (m = t.match(/^(\d+) (weekly orders?|orders?|holdings?|shops?|lines?)?/)))
+    return amtHtml(m[1], m[2] ? m[2].replace(/^weekly /, "") : "findings");
+  switch(a.group){
+    case "unnamed": case "unset":
+      if((m = t.match(/^(\d+) machines?/))) return amtHtml(m[1], m[1] === "1" ? "machine" : "machines");
+      break;
+    case "staff":
+      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return amtHtml(`${m[1]}/${m[2]}`, "hours staffed");
+      break;
+    case "target":
+      if((m = t.match(/(\d+)x daily sales/))) return amtHtml(`${m[1]}x`, "daily sales");
+      break;
+    case "order":
+      if((m = t.match(/([\d,]+) short/))) return amtHtml(m[1], "units short");
+      break;
+    case "shortfall":
+      if((m = t.match(/([\d.]+) days before/))) return amtHtml(m[1], "days early");
+      break;
+    case "hype":
+      if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${m[1]}`, "/day under hype");
+      break;
+    case "feed":
+      if((m = t.match(/against ([\d,]+) (?:needed|the machines)/))) return amtHtml(m[1], "/day needed");
+      if((m = t.match(/covers (\d+) hours/))) return amtHtml(m[1], "hours covered");
+      if((m = t.match(/eat ([\d,]+) a week/))) return amtHtml(m[1], "/week eaten");
+      break;
+    case "satisfaction":
+      if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "satisfied");
+      break;
+    case "promotion":
+      if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "promotion");
+      break;
   }
+  if((m = t.match(/\$([\d,]+)(\/day)?/))) return amtHtml(`$${m[1]}`, m[2] || "");
+  if((m = t.match(/([\d,]+)\/day/))) return amtHtml(m[1], "/day");
+  if((m = t.match(/(\d[\d,]*(?:\.\d+)?) (units|days|hours|machines|shops|lines|orders|weeks|customers)\b/)))
+    return amtHtml(m[1], m[2]);
+  if((m = t.match(/\b(\d+)x\b/))) return amtHtml(`${m[1]}x`, "");
   return "";
 }
+/* A finding whose kind is switched off still shows, under the list, wearing
+   its kind's name so it is clear why it is down there. */
+const kindLabel = id => ((typeof ALERT_GROUPS !== "undefined" && ALERT_GROUPS.find(g => g.id === id)) || {}).label || id;
+const kindOff = a => alertGroupPrefs[a.group] === false;
 function findingRow(a){
   const b = alertSite(a);
   const {what, more} = splitFinding(a);
@@ -6285,7 +6422,7 @@ function findingRow(a){
   return `<a class="find ${SEV_KIND[a.level] || "opp"}" href="#${alertPage(a)}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
     <span class="site">${site}</span>
-    <span class="what">${what}</span>
+    <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</span>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
     <span class="more">${more}</span>` : ""}</a>`;
@@ -6323,10 +6460,10 @@ function drawAlerts(){
   bindFindingRows($("alerts"), list);
 
   /* Anything worth less than the materiality gate is counted rather than read
-     out. It is never dropped — the count and the money are both here, and
-     "show" lays the rows out like the list above. Hidden kinds are dropped
-     from both the count and the total, the same as above. */
-  const rows = ((D.minor || {}).rows || []).filter(kindOn);
+     out, and so is a finding whose kind is switched off: neither is dropped.
+     The count and the money cover both, and "show" lays the rows out like the
+     list above, a switched-off kind wearing its name as a dim chip. */
+  const rows = ((D.minor || {}).rows || []).concat(D.alerts.filter(a => !kindOn(a)));
   const host = $("alertMinor"), more = $("minorList");
   if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
   else {
@@ -6657,12 +6794,27 @@ function drawSite(){
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
     <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
 
-  /* A pill dims when nobody in the role is in today; a part-absent role says
-     how many are off. */
-  const crew = b.crew.length
-    ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
-        c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
-    : `<span class="quiet">Nobody assigned.</span>`;
+  /* One pill a person, as on the canvas: the name, the role under it, dimmed
+     when they are off today. A big site keeps to a dozen and a "+n more"
+     pill; the roles with their headcount and daily cost are the section's ?.
+     A save built before people were named falls back to the role groups. */
+  const CREW_MAX = 12;
+  const people = b.people || [];
+  const offToday = people.filter(p => p.absent).length;
+  const roleTip = b.crew.length
+    ? `${b.crew.map(c => `${c.role} ${c.count > 1 ? `×${c.count} · ` : "· "}${fmt(c.daily)}/day${
+        c.absent ? ` (${c.absent} off)` : ""}`).join("; ")}.${offToday ? ` ${plural(offToday, "person", "people")} off today.` : ""}`
+    : "";
+  const personPill = p => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
+    p.role}${p.absent ? " · off today" : ""}</small></span>`;
+  const crew = people.length
+    ? people.slice(0, CREW_MAX).map(personPill).join("") + (people.length > CREW_MAX
+        ? `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
+            people.length - CREW_MAX} more</span>` : "")
+    : b.crew.length
+      ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
+          c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
+      : `<span class="quiet">Nobody assigned.</span>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
@@ -6712,13 +6864,13 @@ function drawSite(){
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
         Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.counters} register capacity across ${
-        grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}${grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.`})}
+        grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}${grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
+        notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`})}
       <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>
-      ${notes.map(n => `<p class="quiet">${n}</p>`).join("")}
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv">
-        ${sechead("Crew", {quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
         <div class="crew">${crew}</div>
       </section>
       <section class="rv">
@@ -6753,7 +6905,13 @@ function drawStock(){
   const v = SUPPLY_VIEWS[stockView];
   const all = v.rows();
   const worth = all.filter(v.keep);
-  const rows = showAllStock ? all : worth;
+  /* The rows worth reading lead; under them, where the view can rank the
+     rest, the tightest few follow so an all-clear is never a bare line. */
+  const TIGHT = 8;
+  const tight = !showAllStock && v.tightest && worth.length < TIGHT
+    ? v.tightest(all.filter(r => !worth.includes(r))).slice(0, TIGHT - worth.length) : [];
+  const shown = worth.concat(tight);
+  const rows = showAllStock ? all : shown;
   const note = v.note();
   $("stockHead").innerHTML = sechead("Stock checks", {why: note || null,
     aside: `<span class="seg" id="stockTools"></span>`});
@@ -6772,10 +6930,10 @@ function drawStock(){
        <tbody>${rows.slice(0, 40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
     : `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>`;
   const more = $("stockMore");
-  more.innerHTML = all.length > worth.length
+  more.innerHTML = all.length > shown.length
     ? (showAllStock
-        ? `<a class="link" href="#" id="stockToggle">just the ${worth.length} worth reading</a>`
-        : `${all.length - worth.length} more &nbsp;<a class="link" href="#" id="stockToggle">show all ${all.length}</a>`)
+        ? `<a class="link" href="#" id="stockToggle">just the ${shown.length} worth reading</a>`
+        : `${all.length - shown.length} more &nbsp;<a class="link" href="#" id="stockToggle">show all ${all.length}</a>`)
       + (rows.length > 40 ? ` &nbsp;first 40 shown` : "")
     : "";
   more.hidden = !more.innerHTML;
@@ -6879,26 +7037,32 @@ function drawLogistics(){
     : r.fit === "tight" ? `${set(r.setTo)}${up("raise", "Within 5% of the week it has to cover")}`
     : r.surplus ? `${r.setTo.toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what leaves in a week")}`
     : chipHtml("ok", "covered");
+  /* The design's five columns. Who draws the material, and how the week
+     splits between the factory lines and the shops, stay on hover: the
+     material name says who, the Used / week figure says how much of each. */
+  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line draws it; what leaves goes to the shops";
+  const splitTip = r => r.factoryWeek && r.otherWeek
+    ? `Factories ${r.factoryWeek.toLocaleString()} · shops ${r.otherWeek.toLocaleString()} a week`
+    : r.factoryWeek ? `All ${r.factoryWeek.toLocaleString()} a week to the factory lines`
+    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "";
   const importRow = r => `<tr>
-      <td class="l">${r.item}<span class="sub">${r.users.length ? users(r) : "no factory line draws it"}</span></td>
-      <td>${r.factoryWeek ? r.factoryWeek.toLocaleString() : "—"}</td>
-      <td>${r.otherWeek ? r.otherWeek.toLocaleString() : "—"}</td>
-      <td>${r.total ? r.total.toLocaleString() : "—"}</td>
+      <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}</td>
+      <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
       <td data-now="${r.current || 0}" data-to="${r.setTo || 0}">${
         r.current !== undefined ? r.current.toLocaleString() : chipHtml("bad", "not imported")}</td>
       <td>${setCell(r)}</td>
       ${depotCell(r)}</tr>`;
   const looseRow = r => `<tr>
-      <td class="l">${r.item}<span class="sub">${users(r)}</span></td>
-      <td>${r.week.toLocaleString()}</td><td>—</td><td>${r.week.toLocaleString()}</td>
+      <td class="l" data-tip="${attr(`Drawn by ${users(r)}`)}">${r.item}</td>
+      <td data-tip="${attr(`All ${r.week.toLocaleString()} a week to the factory lines`)}">${r.week.toLocaleString()}</td>
       <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
       <td>${set(ceil100(r.week))}${up("add")}</td>
       <td>—</td></tr>`;
   const importTable = shown.length || looseRows.length ? `<table>
-    <thead><tr><th class="l">Material</th><th>Factories / week</th><th>Shops / week</th><th>Used / week</th>
+    <thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
       <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>
-    <tbody>${shown.map(d => grp(D.businesses[d.s], 7) + d.rows.map(importRow).join("")).join("")}${
-      looseRows.length ? `<tr class="grp"><td class="l" colspan="7">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
+    <tbody>${shown.map(d => grp(D.businesses[d.s], 5) + d.rows.map(importRow).join("")).join("")}${
+      looseRows.length ? `<tr class="grp"><td class="l" colspan="5">On no depot's plan<span class="sub" style="display:inline;margin-left:10px;letter-spacing:0">needed by a factory line, but no top-up brings it from anywhere; add it to a depot's plan and import it there</span></td></tr>${
         looseRows.map(looseRow).join("")}` : ""}</tbody></table>` : "";
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
     : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
@@ -7003,11 +7167,31 @@ function drawMovers(){
       h.items.join(", ")}. Click to sort the grid by ${h.hood}.`;
     out.push(waveHtml("up", h.hood, what, days(h.daysLeft), tip, h.hood));
   });
-  m.shortages.slice(0,5).forEach(x => {
+  /* Python already folds one product short at several suppliers into one
+     entry (count = suppliers). The entries that share a place fold again
+     here, so a pier short of three products is one chip, not three. The chip
+     is the place (or the one product), a short phrase and the days; the
+     sentence is on hover. */
+  const trouble = k => k.toLowerCase().replace(/^product /, "");
+  const byPlace = new Map();
+  m.shortages.forEach(x => {
     const where = x.count > 1 ? `${x.count} suppliers` : x.where;
-    const kind = x.kind.toLowerCase();
-    out.push(waveHtml("dn", x.item, `${kind} at ${where}${x.mine ? ", affects you" : ""}`, days(x.daysLeft),
-      `${x.item}: ${kind} at ${where}, ${plural(x.daysLeft, "day")} left${x.mine ? "; you sell or make it" : ""}`));
+    const g = byPlace.get(where) || {where, rows: [], mine: 0, lo: Infinity, hi: 0};
+    g.rows.push(x); g.mine += x.mine ? 1 : 0;
+    g.lo = Math.min(g.lo, x.daysLeft); g.hi = Math.max(g.hi, x.daysLeft);
+    byPlace.set(where, g);
+  });
+  [...byPlace.values()].slice(0,5).forEach(g => {
+    const n = g.rows.length, one = g.rows[0];
+    const kinds = [...new Set(g.rows.map(x => trouble(x.kind)))];
+    const kind = kinds.length === 1 ? kinds[0] : "supply trouble";
+    const left = g.lo === g.hi ? days(g.lo) : `${g.lo}–${g.hi} d`;
+    const tip = `${g.where}: ${g.rows.map(x => `${x.item} (${trouble(x.kind)}, ${plural(x.daysLeft, "day")} left${
+      x.mine ? ", you sell or make it" : ""})`).join(", ")}.`;
+    /* Whether it touches the player's own shelves is in the sentence on
+       hover; the chip itself stays as short as the design's. */
+    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${g.where}`, left, tip));
+    else out.push(waveHtml("dn", g.where, `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
@@ -7265,8 +7449,7 @@ function drawPlan(){
   $("planBody").innerHTML = `
     <div class="planstats">
       <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
-      <div class="planstat"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
-      <div class="planstat"><span class="lab">Shops take / week</span><div class="v"><span id="vTake"></span><small>units</small></div></div>
+      <div class="planstat" id="vMadeTile"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
       <div class="planstat"><span class="lab">Raw material / week</span><div class="v"><span id="vRaw"></span><small>units to import</small></div></div>
     </div>
     <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
@@ -7276,7 +7459,7 @@ function drawPlan(){
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>
     <p class="planline">${own && perShop
       ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
-          perShop.toLocaleString("en-US")}</b> a day per product. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
+          perShop.toLocaleString("en-US")}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
       : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
   planDraw();
   wireTips();
@@ -7357,16 +7540,24 @@ function drawPayroll(){
 function drawGoals(){
   const g = D.goals, h = D.meta.houseRules;
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
-  /* A row with a denominator is ticked when it is complete; the rest are
-     totals the player has banked, with no target to count them against, so
-     they are ticked once off zero. */
-  const ofAll = (n, total) => [total > 0 && n >= total, `${n} / ${total}`];
+  /* The checklist is the design's: every business type run, every building
+     owned, the story rivals taken over, the personal goals, the diplomas —
+     each "n / total", the box filled only when complete. What the save keeps
+     no target for (the goals, where it stores only the completed ids; the
+     goods made; the tax paid) is a plain line under the boxes, never ticked. */
+  const num = n => (n || 0).toLocaleString();
+  const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${num(n)} / ${num(total)}`]] : [];
   const miles = [
-    ["Personal goals completed", g.completed > 0, g.completed.toLocaleString()],
-    ["Diplomas earned", ...ofAll(g.diplomas, g.diplomasTotal)],
-    ...(g.rivalsTotal ? [["Rivals seen off", ...ofAll(g.rivalsDefeated, g.rivalsTotal)]] : []),
-    ["Goods produced in the factories", g.goodsProduced > 0, g.goodsProduced.toLocaleString()],
-    ["Tax paid", g.taxesPaid > 0, fmt(g.taxesPaid)],
+    ...ofAll("Every business type run", g.typesRun, g.typesTotal),
+    ...ofAll("Every building owned", g.buildingsOwned, g.buildingsTotal),
+    ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
+    ...ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal),
+    ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
+  ];
+  const plain = [
+    ...(g.goalsTotal ? [] : [["Personal goals completed", num(g.goalsDone ?? g.completed)]]),
+    ["Goods produced in the factories", num(g.goodsProduced)],
+    ["Tax paid", fmt(g.taxesPaid || 0)],
   ];
   $("secGoals").innerHTML = sechead("Milestones", {
     why: "The stored difficulty is only a slot number, and a custom game keeps its own"
@@ -7377,7 +7568,8 @@ function drawGoals(){
       : `career totals · playing on ${D.meta.difficulty}`,
   }) + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
-        label}<span class="c">${text}</span></div>`).join("")}</div>`
+        label}<span class="c">${text}</span></div>`).join("")}${plain.map(([label, text]) =>
+      `<div class="mile plain">${label}<span class="c">${text}</span></div>`).join("")}</div>`
     + (moved.length ? `<div class="rules">${moved.map(r =>
         `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
           r.neutral}, so this game is ${r.lean}.`)}">${r.name}<b>×${r.value}</b></span>`).join("")}</div>`
@@ -7607,7 +7799,7 @@ function buildAlertSettingsPanel(){
   kindsPop.setAttribute("role", "dialog");
   kindsPop.setAttribute("aria-label", "Which kinds make the list");
   kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
-    <p>Off means the kind is left out of the list and its counts. Saved on this device.</p>
+    <p>Off is counted, never dropped: the kind leaves the list, and its findings show up in the "smaller" line under it, wearing the kind's name. Saved on this device.</p>
     <div class="kinds"></div>
     <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
     + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
@@ -8211,6 +8403,12 @@ function planDraw(){
   const products = host ? (+host.dataset.products || lines.length) : lines.length;
   put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw));
   put("vTake", fmtN(wantWeek * products)); put("vSurplus", fmtN(exportWeek));
+  /* What the shops take of that sits behind the Made tile and in the sentence
+     under the table, not in a tile of its own. */
+  const madeTile = $("vMadeTile");
+  if(madeTile) madeTile.dataset.tip = wantWeek
+    ? `The shops take ${fmtN(wantWeek * products)} units a week across the range; ${fmtN(exportWeek)} is surplus for export`
+    : `Nothing measured yet: all ${fmtN(made)} units a week are surplus for export until the shops exist`;
   put("vShort", shortLines ? ` ${shortLines} line${shortLines === 1 ? " does" : "s do"} not keep up with the shelves; those need more machines.` : "");
   /* What the factory has to buy: each workstation's kit, times the machines
      on every line that uses it. */
@@ -8237,23 +8435,26 @@ function planDraw(){
       total++; if(unit !== null){ priced++; cash += value; }
       return `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
       `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", "paused", "The import contract is paused")}` : ""}</td>` +
-      `<td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif">${r.by.join(", ")}</td>` +
+      `<td class="l"><span class="usedby" data-tip="${attr(`Used by ${r.by.join(", ")}`)}">${
+        r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(ceil100(r.week))}</span></td>` +
       `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")}</td>` +
       `<td>${gap === null ? "—"
         : Math.abs(gap) < 1 ? chipHtml("ok", "as is")
         : gap > 0 ? chipHtml("warn", `+${Math.ceil(gap).toLocaleString("en-US")}`)
         : chipHtml("dim", Math.floor(gap).toLocaleString("en-US"))}</td>` +
-      `<td>${value === null ? `<span class="quiet">no price</span>` : fmt(value)}</td></tr>`;
+      `<td class="cash">${value === null ? `<span class="quiet">no price</span>` : fmt(value)}</td></tr>`;
     }).join("");
+    /* No price known anywhere: the column goes, and the ? says why. */
+    const table = $("ingTable");
+    if(table) table.classList.toggle("nocash", !priced);
     const foot = $("ingFoot");
-    if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td></td><td></td><td></td><td>${cash ? fmt(cash) : ""}</td></tr>` : "";
+    if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td></td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
     const note = $("ingNote");
     if(note) note.textContent = !total ? "Nothing to import; this range is bought as finished goods."
-      : (priced
-          ? `A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
-          : `No cash figure here: none of these ${total} ingredients appear in your own goods costs.`)
-        + (priced && priced < total
+      : !priced ? ""
+      : `A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
+        + (priced < total
           ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : "");
   }
 }
