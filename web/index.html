@@ -7,6 +7,82 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
+/* The map artwork keeps its approved dark palette in either dashboard theme. */
+.map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
+.map-shortcut svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.map-shortcut:hover{color:var(--accent);border-color:var(--accent)}
+.map-shortcut:focus-visible,.city-map button:focus-visible,.city-map select:focus-visible,.city-map input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.map-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px}
+ .map-toolbar .field{margin-bottom:0;min-width:125px}
+.map-toolbar .field:first-child{flex:1;min-width:170px}
+.map-toolbar input{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:8px 10px}
+.map-toolbar input,.map-toolbar select{min-width:0;max-width:100%;box-sizing:border-box}
+.map-toolbar>.btn2{min-height:36px}
+.map-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+.map-stage{position:relative;user-select:none;-webkit-user-select:none;background:#0d100f;border:1px solid var(--rule);border-radius:8px;overflow:hidden;min-width:0}
+.map-canvas{display:block;width:100%;height:clamp(360px,65vh,760px);touch-action:none;cursor:grab}
+.map-canvas.dragging{cursor:grabbing}
+.map-canvas .location{fill:transparent;stroke:none;cursor:pointer}
+.map-canvas .location.mine,.map-canvas .location.owned{fill:#43c07a;fill-opacity:.28;stroke:#65e99b;stroke-width:1.6;vector-effect:non-scaling-stroke}
+.map-canvas .location:hover{fill:#a2f8c4;fill-opacity:.35;stroke:#b7ffd5;stroke-width:2;vector-effect:non-scaling-stroke}
+.map-canvas .location.selected{fill:#65e99b;fill-opacity:.4;stroke:#fff7cc;stroke-width:3;vector-effect:non-scaling-stroke}
+.map-canvas .map-districts{pointer-events:none}
+.map-canvas .map-districts text{font:600 12px Archivo,Arial,sans-serif;fill:#bdcbbf;paint-order:stroke;stroke:#0d100f;stroke-width:5;stroke-linejoin:round}
+ .map-fast-background{display:none}
+.map-stage.interacting .map-detail-background{display:none}
+.map-stage.interacting .map-fast-background{display:inline}
+.map-stage.interacting .location{pointer-events:none}
+.map-zoom{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:4px}
+.map-zoom .ibtn{font-size:20px;box-shadow:0 2px 8px #0003;cursor:pointer}
+.map-mobile-tabs .btn2[aria-pressed="true"],.map-mobile-tabs .btn2[aria-pressed="true"]:hover{background:var(--ink);color:var(--ground)}
+.map-side{min-width:0}
+.map-detail{border-bottom:1px solid var(--rule);padding-bottom:14px;margin-bottom:12px;overflow-wrap:anywhere}
+.map-detail h3{font-size:17px;margin:0 0 8px}
+.map-detail p{font-size:13px;line-height:1.6;margin:6px 0}
+.map-detail ul{padding-left:18px;font-size:13px;line-height:1.5}
+.map-detail .map-detail-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.map-results{max-height:340px;overflow:auto;overscroll-behavior:contain}
+.map-results button{display:block;width:100%;text-align:left;background:none;color:var(--ink);border:0;border-bottom:1px solid var(--rule-soft);padding:10px 7px;font:inherit;font-size:13px;cursor:pointer;overflow-wrap:anywhere}
+.map-results button small{display:block;color:var(--ink-2);margin-top:4px}
+.map-results button[aria-pressed="true"]{background:var(--accent-soft);box-shadow:inset 3px 0 var(--accent)}
+.map-results button:hover{background:var(--raised)}
+.map-count,.map-status{font-size:12px;color:var(--ink-2);line-height:1.5;margin:8px 0}
+.map-mobile-tabs{display:none}
+.map-dialog{width:min(1320px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto;border:1px solid var(--rule);border-radius:12px;background:var(--ground);color:var(--ink);padding:20px}
+.map-dialog::backdrop{background:#000a}
+.map-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.map-dialog-head h2{margin:0;font-size:20px}
+
+body.map-modal-open{overflow:hidden}
+.finding-link{color:inherit;text-decoration:none}
+.find .site .finding-link{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.finding-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* The sixth page must remain reachable without widening the document. */
+@media(max-width:1100px){
+ .wrap .mast{height:auto;min-height:100px;gap:10px 16px;flex-wrap:wrap;padding:12px 0}
+ .mast .brand{max-width:45%;min-width:0}
+ .mast .wordmark{font-size:24px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .mast .clock{max-width:50%;margin-left:auto}
+ .mast .clock b{font-size:13px}
+ .mast .nav{order:3;flex-basis:100%;min-width:0;margin-left:0;flex-wrap:wrap;gap:4px}
+ .mast .nav a{padding:8px 10px}
+ .mast .nav a.on{background:var(--accent-soft)}
+ .mast .nav .ink,.mast .orb{display:none}
+}
+@media(max-width:760px){
+ .map-layout{grid-template-columns:1fr}
+ .map-canvas{height:52dvh;min-height:300px}
+ .map-mobile-tabs{display:flex;gap:6px;margin-bottom:10px}
+ .city-map[data-mobile-view="map"] .map-results,.city-map[data-mobile-view="map"] .map-count{display:none}
+ .city-map[data-mobile-view="list"] .map-stage{display:none}
+ .map-results{max-height:45dvh}
+ .map-dialog{width:calc(100vw - 12px);max-height:calc(100dvh - 12px);padding:12px}
+ .map-toolbar .field{flex:1;min-width:125px}
+ .map-toolbar .field:first-child{flex-basis:100%}
+ .map-toolbar input,.map-toolbar select{font-size:16px;width:100%;box-sizing:border-box}
+}
+@media(pointer:coarse){.map-shortcut{min-width:32px;min-height:32px}.city-map .btn2,.map-results button{min-height:44px}}
+
 /* Tokens: the generator's .board palette. Dark is the base, as on the canvas;
    the light values follow the system setting or an explicit data-theme, the way
    the board has always done it. */
@@ -257,7 +333,7 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .finds{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .find{
   display:grid;grid-template-columns:22px 150px 1fr auto 28px;gap:0 14px;align-items:center;
-  padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;
+  padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;cursor:pointer;
   transition:background .15s,opacity .35s,transform .35s;border-radius:0 6px 6px 0;
 }
 .find:hover{background:var(--surface);color:inherit}
@@ -1100,6 +1176,9 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 
+  <div class="page" id="pageMap" hidden>
+    <div id="cityMapPage"></div>
+  </div>
   <footer class="foot" id="footer">
     <span>Big Copilot</span>
     <span id="footFile"></span>
@@ -1108,10 +1187,15 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "0efa99173a";</script>
-<script src="app.js?v=0efa99173a"></script>
+<dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
+  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="btn2" autofocus>Close map</button></div>
+  <div id="cityMapOverlay"></div>
+</dialog>
+<script>window.LEDGER_BUILD = "60aa95e62c";</script>
+<script src="app.js?v=60aa95e62c"></script>
 
 <script>
+
 let D = null;
 const LIVE = true;
 /* Where fresh numbers come from. By default the local server that wrote this
@@ -1181,7 +1265,7 @@ const gauge = v => graded(v, "ink-3");
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
   title="${b.neighbourhood||"Unassigned"}">${b.code}</span>` : "";
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
-  <span class="sub">${b.type} · ${b.address}</span></span></div>`;
+  <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
    line, a point and a read-out that follow the pointer (wireTiles). x runs
@@ -1229,7 +1313,7 @@ const ICON = {
 const icon = name => ICON[name] || "";
 /* Text that lands in an attribute (a tooltip, a data-id) is escaped once, here. */
 const attr = s => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-/* A ? mark whose sentence opens beside it; the sentence is the old .head p note. */
+/* Tooltips are plain text: do not pass button/link markup into why(). */
 const why = text => `<span class="why" data-tip="${attr(text)}" tabindex="0"><i>?</i></span>`;
 /* A section head: title, optional ? mark, optional quiet aside text, and the
    right-hand aside (a .seg, a .link, counters). `after` is raw markup that sits
@@ -1593,7 +1677,7 @@ function drawFlowDetail(){
     return;
   }
   const named = id => { const n = g.nodes.find(x => x.id === id);
-    return n ? `${hoodHtml({code: n.tag})}${n.tag ? "&nbsp; " : ""}${shortText(n.name, 60)}` : id; };
+    return n ? `${hoodHtml({code: n.tag})}${n.tag ? "&nbsp; " : ""}${shortText(n.name, 60)}${mapButton(id.replace(/^import:/,""),n.name)}` : id; };
   const inbound = g.links.filter(l => l.to === node.id);
   const outbound = g.links.filter(l => l.from === node.id);
   const pipeTable = (title, links, other, empty) => `<table>
@@ -1610,7 +1694,7 @@ function drawFlowDetail(){
   const flags = (node.short ? chipHtml("bad", `${plural(node.short, "order")} too small`) : "")
     + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
   host.innerHTML = `
-    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}),
+    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}) + mapButton(node.id.replace(/^import:/,""),node.name),
       quiet: `${node.sub}${node.hood ? ` · ${node.hood}` : ""}`,
       aside: `<a class="link" href="#" id="flowClear">clear selection</a>`})}
     <div class="flowpipes">
@@ -1655,7 +1739,7 @@ const SUPPLY_VIEWS = {
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ${clear}`
         : `<b>${clear} ${clear===1?"shelf":"shelves"}</b>`} ${clear===1?"clears its":"clear their"} top-up${worst
-        ? `; tightest ${worst.item} at ${shortName(D.businesses[worst.s])}, ${
+        ? `; tightest ${worst.item} at ${mapRef(D.businesses[worst.s])}, ${
             worst.pressure}% on a ${worst.peakDay || "normal day"}` : ""}.`;
     },
     keep: r => r.level !== "ok" || r.pressure === null || r.pressure >= 85,
@@ -1706,7 +1790,7 @@ const SUPPLY_VIEWS = {
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
         D.supply.nextImportWeekday || "the next"}'s import, ${
         D.supply.hoursToImport} days off; thinnest ${worst.item} at ${
-        shortName(D.businesses[worst.s])}, ${worst.cover} days.`;
+        mapRef(D.businesses[worst.s])}, ${worst.cover} days.`;
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
     tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => a.cover - b.cover),
@@ -1750,7 +1834,7 @@ const SUPPLY_VIEWS = {
       return `<b>${rows.length} holding${rows.length===1?"":"s"}</b> above ${
         D.supply.idleWeeks} weeks of cover${dead.length
         ? `, ${dead.length} with nothing flowing out at all` : ""}${deepest
-        ? `; deepest ${deepest.item} at ${shortName(D.businesses[deepest.s])}, ${
+        ? `; deepest ${deepest.item} at ${mapRef(D.businesses[deepest.s])}, ${
             deepest.weeks} weeks` : ""}.`;
     },
     keep: r => r.dead || r.weeks >= 5,
@@ -1839,7 +1923,7 @@ const SUPPLY_VIEWS = {
         wait ? `${wait} wait on a stopped line` : "",
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - bad - watch - wait} of ${rows.length} inputs</b> are fed as the machines need${
-        worst ? `; largest ${worst.item} at ${shortName(D.businesses[worst.s])}` : ""}.`;
+        worst ? `; largest ${worst.item} at ${mapRef(D.businesses[worst.s])}` : ""}.`;
     },
     keep: r => r.level !== "ok",
     head: `<th class="l">Factory</th><th class="l">Input</th><th>Needs / day</th>
@@ -1847,7 +1931,7 @@ const SUPPLY_VIEWS = {
            <th>Import / week</th><th class="l">Change</th>`,
     rows: () => factoryView().sites.flatMap(s => s.needs.map(n => ({...n, s: s.s}))),
     row: r => {
-      const depot = r.from !== null ? shortName(D.businesses[r.from]) : "a depot";
+      const depot = r.from !== null ? mapRef(D.businesses[r.from]) : "a depot";
       const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
       const stalled = r.stalled ? `; none arrived last week though ${depot} holds ${r.depotStock.toLocaleString()}` : "";
       const change = {
@@ -1862,7 +1946,7 @@ const SUPPLY_VIEWS = {
           ? `${chip("bad", "import short")} raise the weekly import to ${r.raiseImport.toLocaleString()}`
           : `${chip("warn", "import tight")} within 5% of what the factories eat`,
         noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.depotNeed, 1)).toFixed(1)} weeks of it`,
-        made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => shortName(D.businesses[i])).join(", ")}`,
+        made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => mapRef(D.businesses[i])).join(", ")}`,
         ok: () => chip("ok", "covered"),
       }[r.status]();
       return `
@@ -2331,13 +2415,13 @@ function findingRow(a){
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   const site = !b ? a.site : b.code ? hoodHtml(b) + baseName(b) : shortName(b);
-  return `<a class="find ${SEV_KIND[a.level] || "opp"}" href="#${alertPage(a)}" data-id="${attr(a.id)}">
+  return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
-    <span class="site">${site}</span>
+    <span class="site"><a class="finding-link" href="#${alertPage(a)}">${site}</a>${b ? mapButton(b.key,b.name) : ""}</span>
     <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</span>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
-    <span class="more">${more}</span>` : ""}</a>`;
+    <span class="more">${more}</span>` : ""}</div>`;
 }
 /* Row click opens the finding's page; a click on the mark is stopped in the
    capture phase by wireFinds() and never reaches this. */
@@ -2482,7 +2566,7 @@ const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
 /* A site in a table: its neighbourhood pill, its short name, and the type and
    address underneath. With `chev`, the arrow that says the row opens. */
 const siteLabel = (b, chev) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}${chev ? ` ${CHEV()}` : ""}
-  <span class="sub">${b.type} · ${b.address}</span>`;
+  ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
 const kidCell = b => siteLabel(b, true);
 
 function chainRow(c, v){
@@ -2581,7 +2665,7 @@ function drawSitePicker(){
   const at = order.findIndex(b => b.key === siteKey);
   const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
   const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
-  const step = b => b ? `<a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>` : "";
+  const step = b => b ? `<span><a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>${mapButton(b.key,b.name)}</span>` : "";
   host.innerHTML = `${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
     support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}`;
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
@@ -2773,7 +2857,7 @@ function drawSite(){
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
-      <div><h2>${baseName(b)}</h2><span class="sub">${sub}</span></div>
+      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
     <div class="sstats rv">${stats}</div>
@@ -2815,7 +2899,7 @@ function drawSite(){
 
 /* The site cell of the redesign's tables: the hood pill, the short name, and
    the type on a line under the name. */
-const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}<span class="sub"${
+const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${mapRef(b)}<span class="sub"${
   b.code ? ` style="padding-left:34px"` : ""}>${b.type}</span>`;
 const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
 
@@ -2887,7 +2971,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]);
-    rows.push({key, group, item, current, proposed, reason, kind, site: s});
+    rows.push({key, group, item, current, proposed, reason, kind, site: s, source});
   };
   importRows.forEach(d => d.rows.forEach(r => {
     if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
@@ -2960,7 +3044,7 @@ function supplyLocation(section, s, count, content, first = false){
   const open = supplyLocationState.has(key) ? supplyLocationState.get(key) : first;
   return `<details class="supply-location" data-location="${attr(key)}" ${open ? "open" : ""}>
     <summary class="order-group-head" data-tip="${attr(business?.address || "Assign a depot in-game")}">
-      ${business ? hoodHtml(business) : ""}<span class="location-name">${attr(name)}</span>
+      ${business ? hoodHtml(business) : ""}<span class="location-name">${attr(name)}${business ? mapButton(business.key,business.name) : ""}</span>
       <span class="location-count">${count} item${count === 1 ? "" : "s"}</span>
       <span class="location-toggle" aria-hidden="true"></span></summary>
     <div class="location-content">${content}</div></details>`;
@@ -3019,7 +3103,7 @@ function drawOrderChecklist(rows, factories){
               : `<span class="order-before" aria-label="Saved setting ${r.current ?? "not set"}">${r.current === null ? "—" : r.current.toLocaleString()}</span>
                  <span class="order-arrow" aria-hidden="true">${icon("go")}</span><b class="order-after" aria-label="Proposed setting ${r.proposed}">${r.proposed.toLocaleString()}</b><small>${r.kind === "Weekly imports" ? "/week" : "/day"}</small>`}</span>
             <span class="order-chevron" aria-hidden="true">${icon("chev")}</span></summary>
-            <p class="order-reason">${attr(r.reason)}</p></details></div>`).join(""), groupIndex === 0)
+            <p class="order-reason">${attr(r.reason)}${r.source !== null && r.source !== undefined ? mapButton(D.businesses[r.source]?.key,D.businesses[r.source]?.name) : ""}</p></details></div>`).join(""), groupIndex === 0)
       ).join("") : `<div class="order-empty">${icon("tick")}<span>No changes found</span>${why("No changes identified from available supply data. New routes may need more history; unidentified factory recipes are not included.")}</div>`}
     <p id="orderCopyStatus" class="order-copy-status" role="status"></p>
     <textarea id="orderCopyFallback" aria-label="Checklist to copy manually" readonly hidden></textarea>`;
@@ -3215,7 +3299,7 @@ function drawLogistics(){
         : r.status === "target" ? `${set(ceil100(r.perDay))}${up("raise")}`
         : over ? `${ceil100(r.perDay).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line eats")}`
         : chipHtml("ok", "covered")}</td>
-      <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
+      <td class="l">${r.from !== null ? mapRef(D.businesses[r.from]) : "—"}</td>
       <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
         ? ` ${chipHtml("dim", "waiting", `${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`)}`
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
@@ -3315,8 +3399,8 @@ function drawMovers(){
       x.mine ? ", you sell or make it" : ""})`).join(", ")}.`;
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${g.where}`, left, tip));
-    else out.push(waveHtml("dn", g.where, `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
+    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${mapAddress(g.where)}`, left, tip));
+    else out.push(waveHtml("dn", mapAddress(g.where), `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
@@ -3763,6 +3847,338 @@ function drawFooter(){
   $("footBuild").textContent = `Game build ${m.build}`;
 }
 
+/* Shared city viewer. This file is embedded by render() into the shared script.
+   Geometry and the decoded background are loaded once for page and modal views. */
+const MAP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16M15 5v16"></path><circle cx="12" cy="10" r="2"></circle></svg>';
+ICON.map = MAP_ICON;
+function mapButton(key, label = "this building"){
+  if(!key) return "";
+  return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(`Show ${label} on map`)}" title="Show on map">${MAP_ICON}</button>`;
+}
+function mapRef(b, label){
+  return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
+}
+let cityMapAssets = null, cityMapPage = null, cityMapOverlay = null, cityMapCharacter;
+const mapViews = new Set();
+const mapText = value => String(value ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function loadCityMap(){
+  if(!cityMapAssets){
+    cityMapAssets = (async () => {
+      const embedded = window.BIG_COPILOT_MAP;
+      const response = embedded ? null : await fetch(`maps/locations.json?v=${window.LEDGER_BUILD || "1"}`);
+      if(response && !response.ok) throw new Error("Map data could not be loaded.");
+      const data = embedded?.data || await response.json();
+      if(data.schema !== 1 || !Array.isArray(data.buildings)) throw new Error("Unsupported map data.");
+      let imageUrl = embedded?.image;
+      if(!imageUrl){
+        const image = await fetch(`maps/${data.image}?v=${data.imageHash}`);
+        if(!image.ok) throw new Error("Map background could not be loaded.");
+        imageUrl = URL.createObjectURL(await image.blob());
+      }
+      const image = new Image(); image.src = imageUrl;
+      try { await image.decode(); } catch(error){
+        if(!embedded) URL.revokeObjectURL(imageUrl);
+        throw new Error("Map background could not be displayed.");
+      }
+      // Repainting the detailed SVG on every drag frame is expensive. Share a
+      // decoded bitmap while moving; restore the original vector when settled.
+      let previewUrl = imageUrl;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 3600; canvas.height = Math.round(3600*data.viewBox[3]/data.viewBox[2]);
+        canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+        const blob = await new Promise(resolve=>canvas.toBlob(resolve));
+        if(blob){
+          const url=URL.createObjectURL(blob), preview=new Image(); preview.src=url;
+          try {await preview.decode(); previewUrl=url;} catch(error){URL.revokeObjectURL(url);}
+        }
+        canvas.width=canvas.height=0;
+      } catch(error){ /* Vector rendering remains available if caching fails. */ }
+      return {...data, imageUrl, previewUrl, byKey:new Map(data.buildings.map(b => [b.key,b]))};
+    })().catch(error => { cityMapAssets = null; throw error; });
+  }
+  return cityMapAssets;
+}
+function mapBusinesses(){ return new Map((D?.businesses || []).map(b => [b.key,b])); }
+function mapFindings(){
+  const result = new Map();
+  for(const a of [...(D?.alerts || []), ...(D?.minor?.rows || [])]){
+    if(!a.siteKey) continue;
+    if(!result.has(a.siteKey)) result.set(a.siteKey, []);
+    result.get(a.siteKey).push(a);
+  }
+  return result;
+}
+function mapAddressKey(label){
+  // Only explicit address labels, never business names or free-text matching.
+  const found = /^(\d+)\s+(.+)$/.exec(label || "");
+  if(!found) return null;
+  if(!/(?:Street|Avenue|Road|Lane|Way|Turnpike|Pier)$/i.test(found[2])) return null;
+  const street = found[2].toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalized = {'21st':'twentyfirst','22nd':'twentysecond','23rd':'twentythird','24th':'twentyfourth','25th':'twentyfifth','26th':'twentysixth'};
+  return `ba:street_${street.replace(/^(21st|22nd|23rd|24th|25th|26th)/, s => normalized[s])}#${+found[1]}`;
+}
+function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || mapAddressKey(label),label)}`; }
+
+class CityMapView {
+  constructor(root){
+    this.root = root; this.selected = null; this.region = "world"; this.box = null;
+    this.root.classList.add("city-map"); this.root.dataset.mobileView = "map";
+    root.innerHTML = `<p class="map-status" role="status">Loading map…</p>`;
+    mapViews.add(this);
+    this.ready = this.load();
+  }
+  async load(){
+    try {
+      this.assets = await loadCityMap();
+      this.build(); this.update();
+      return true;
+    } catch(error){
+      this.root.innerHTML = `<p class="map-status" role="status">${mapText(error.message)}</p><button type="button" class="btn2">Retry map</button>`;
+      this.root.querySelector('button').onclick = () => {
+        this.ready = this.load();
+        this.ready.then(ok=>{if(ok && this.selected)this.select(this.selected,true,this.freshSelection);});
+      };
+      return false;
+    }
+  }
+  build(){
+    const a = this.assets;
+    const clipId = `${this.root.id}-clip`;
+    this.root.innerHTML = `<div class="map-toolbar">
+      <div class="field"><input id="${this.root.id}-search" aria-label="Find a place" type="search" data-control="search" placeholder="Business name or address" autocomplete="off"></div>
+      <div class="field"><select id="${this.root.id}-region" aria-label="Area" data-control="region"><option value="world">All regions</option>${a.regions.map(r => `<option value="${r.id}">${mapText(r.label)}</option>`).join('')}</select></div>
+      <div class="field"><select id="${this.root.id}-filter" aria-label="Show" data-control="filter"><option value="mine">My businesses</option><option value="owned">Buildings I own</option><option value="issues">With issues</option><option value="all">All addresses</option></select></div>
+      <div class="field"><select id="${this.root.id}-type" aria-label="Business type" data-control="type"><option value="">All types</option></select></div>
+      <button class="btn2" data-action="reset">Reset</button>
+      </div><div class="map-mobile-tabs"><button class="btn2" data-action="map" aria-pressed="true">Map</button><button class="btn2" data-action="list" aria-pressed="false">List</button></div>
+      <div class="map-layout"><div class="map-stage"><svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="City map. Select a building or use the places list.">
+      <defs><clipPath id="${clipId}"><rect class="map-region-clip"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
+      <g class="map-footprints">${a.buildings.map(b => `<path class="location" data-location="${mapText(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${mapText(b.address)}</title></path>`).join('')}</g><g class="map-districts">${(a.districtLabels || []).map(l=>`<g data-x="${l.anchor[0]}" data-y="${l.anchor[1]}"><text text-anchor="middle">${mapText(l.label)}</text></g>`).join('')}</g></g></svg>
+      <div class="map-zoom" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button></div></div>
+      <aside class="map-side"><div class="map-detail" aria-live="polite"></div><p class="map-count" role="status"></p><div class="map-results" aria-label="Matching places"></div></aside></div>`;
+    this.svg = this.root.querySelector('.map-canvas');
+    this.search = this.root.querySelector('[data-control="search"]');
+    this.filter = this.root.querySelector('[data-control="filter"]');
+    this.typeControl = this.root.querySelector('[data-control="type"]');
+    this.regionControl = this.root.querySelector('[data-control="region"]');
+    this.paths = new Map([...this.root.querySelectorAll('[data-location]')].map(p => [p.dataset.location,p]));
+    this.stage = this.root.querySelector('.map-stage');
+    this.clip = this.root.querySelector('.map-region-clip');
+    this.districts = [...this.root.querySelectorAll('.map-districts g')];
+    this.search.oninput = () => {this.selected=null;this.update();};
+    this.filter.onchange = this.typeControl.onchange = () => {this.selected=null;this.update();};
+    this.regionControl.onchange = () => { this.selected=null;this.region = this.regionControl.value; this.reset(); this.update(); };
+    this.root.addEventListener('click', e => {
+      const pick = e.target.closest('[data-pick]');
+      if(pick){ this.select(pick.dataset.pick); return; }
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
+      if(action === 'reset') this.reset();
+      if(action === 'map' || action === 'list'){
+        this.root.dataset.mobileView = action;
+        this.root.querySelectorAll('.map-mobile-tabs button').forEach(b => b.setAttribute('aria-pressed',b.dataset.action === action));
+      }
+      if(action === 'details'){
+        if($('locationMapDialog').open) $('locationMapDialog').close();
+        openSite(this.selected);
+      }
+    });
+    this.wirePan();
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => {this.rect=null;this.paintView();});
+    this.resizeObserver.observe(this.svg);
+    this.reset();
+  }
+  reset(){
+    this.box = [...(this.assets.regions.find(r => r.id === this.region)?.bounds || this.assets.viewBox)];
+    this.paintView();
+  }
+  paintView(){
+    if(!this.svg || !this.box || this.frame) return;
+    this.frame=requestAnimationFrame(()=>{this.frame=null;this.drawView();});
+  }
+  drawView(){
+    const rect = this.rect || (this.rect=this.svg.getBoundingClientRect());
+    this.svg.setAttribute('viewBox',this.box.join(' '));
+    const bounds=this.assets.regions.find(r=>r.id===this.region)?.bounds || this.assets.viewBox;
+    if(this.clipRegion!==this.region){
+      ['x','y','width','height'].forEach((k,i)=>this.clip.setAttribute(k,bounds[i]));
+      this.clipRegion=this.region;
+    }
+    const scale = Math.min(rect.width / this.box[2], rect.height / this.box[3]);
+    if(!scale) return;
+    this.districts.forEach(g=>{
+      g.setAttribute('transform',`translate(${g.dataset.x} ${g.dataset.y}) scale(${1/scale})`);
+      g.style.display=this.box[2]<bounds[2]*.4 ? 'none' : '';
+    });
+  }
+  point(e){
+    const r=this.rect || (this.rect=this.svg.getBoundingClientRect()), [x,y,w,h]=this.box;
+    const scale=Math.min(r.width/w,r.height/h);
+    return {x:x+(e.clientX-r.left-(r.width-w*scale)/2)/scale,y:y+(e.clientY-r.top-(r.height-h*scale)/2)/scale};
+  }
+  beginInteraction(){
+    clearTimeout(this.idleTimer); this.stage.classList.add('interacting');
+  }
+  endInteraction(){
+    clearTimeout(this.idleTimer);
+    if(!this.dragging) this.idleTimer=setTimeout(()=>this.stage.classList.remove('interacting'),120);
+  }
+  zoom(factor, point){
+    if(!this.box) return;
+    this.beginInteraction();
+    const [x,y,w,h] = this.box, width = Math.min(this.assets.viewBox[2]*1.5, Math.max(35,w*factor));
+    const f = width/w, p = point || {x:x+w/2,y:y+h/2};
+    this.box = [p.x-(p.x-x)*f,p.y-(p.y-y)*f,width,h*f]; this.paintView();
+    this.endInteraction();
+  }
+  wirePan(){
+    const pointers = new Map(); let previous = null, origin = null, down = null, moved = false;
+    const midpoint = () => {
+      const pts = [...pointers.values()];
+      return {clientX:pts.reduce((s,p)=>s+p.x,0)/pts.length,clientY:pts.reduce((s,p)=>s+p.y,0)/pts.length,
+        distance:pts.length===2 ? Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y) : 0};
+    };
+    this.svg.onpointerdown = e => {
+      if(e.button !== 0) return;
+      e.preventDefault(); this.rect=this.svg.getBoundingClientRect();
+      this.dragging=true; this.beginInteraction();
+      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      previous = midpoint(); down = e.target.closest('[data-location]')?.dataset.location; moved = pointers.size>1;
+      origin=previous;
+      this.svg.setPointerCapture(e.pointerId); this.svg.classList.add('dragging');
+    };
+    this.svg.onpointermove = e => {
+      if(!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      const next = midpoint();
+      const from = this.point(previous), to = this.point(next);
+      if(Math.hypot(next.clientX-origin.clientX,next.clientY-origin.clientY)>4) moved=true;
+      this.box[0] += from.x-to.x; this.box[1] += from.y-to.y;
+      if(previous.distance && next.distance) this.zoom(previous.distance/next.distance,this.point(next));
+      this.paintView(); previous = next;
+    };
+    const end = e => {
+      if(!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      if(e.type==='pointerup' && !moved && down) this.select(down,false);
+      moved = true;
+      if(pointers.size) previous=midpoint(); else {
+        this.dragging=false; this.svg.classList.remove('dragging'); this.endInteraction();
+      }
+    };
+    this.svg.onpointerup = end; this.svg.onpointercancel = end; this.svg.onlostpointercapture = end;
+    this.stage.onselectstart = this.svg.ondragstart = e=>e.preventDefault();
+    this.svg.addEventListener('wheel', e => {e.preventDefault(); this.rect=this.svg.getBoundingClientRect(); this.zoom(Math.exp(Math.max(-1,Math.min(1,e.deltaY*.002))),this.point(e));},{passive:false});
+  }
+  update(){
+    if(!this.svg) return;
+    this.businesses = mapBusinesses(); this.findings = mapFindings();
+    this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
+    this.typeControl.disabled = this.filter.value==='owned';
+    if(this.typeControl.disabled) this.typeControl.value='';
+    const types=[...new Set([...this.businesses.values()].map(b=>b.type).filter(Boolean))].sort();
+    const type=this.typeControl.value;
+    this.typeControl.innerHTML='<option value="">All types</option>'+types.map(t=>`<option value="${mapText(t)}">${mapText(t)}</option>`).join('');
+    this.typeControl.value=types.includes(type)?type:'';
+    const query = this.search.value.trim().toLowerCase();
+    const show = this.filter.value;
+    let rows = this.assets.buildings.map(b => ({...b,business:this.businesses.get(b.key)}));
+    const known = new Set(rows.map(b=>b.key));
+    for(const b of [...this.businesses.values(),...this.owned.values()]) if(!known.has(b.key)){
+      rows.push({key:b.key,address:b.address,hood:b.neighbourhood,business:this.businesses.get(b.key)});known.add(b.key);
+    }
+    this.matches = rows.filter(b => (show==='all' || (show==='owned' ? this.owned.has(b.key) : show==='issues' ? this.findings.has(b.key) : b.business))
+      && (!this.typeControl.value || b.business?.type===this.typeControl.value)
+      && (this.region==='world' || b.region===this.region || !b.region)
+      && `${b.address} ${b.hood || ''} ${b.business?.name || ''} ${b.business?.type || ''}`.toLowerCase().includes(query));
+    const keys = new Set(this.matches.map(b=>b.key));
+    this.paths.forEach((path,key) => {
+      const visible = keys.has(key) || key===this.selected;
+      path.style.display = visible ? '' : 'none';
+      path.classList.toggle('mine',this.businesses.has(key));
+      path.classList.toggle('owned',this.owned.has(key));
+      path.classList.toggle('selected',key===this.selected);
+      path.querySelector('title').textContent=[this.businesses.get(key)?.name,this.assets.byKey.get(key).address].filter(Boolean).join(' · ');
+    });
+    const list=this.root.querySelector('.map-results'), focusedKey=list.contains(document.activeElement)?document.activeElement.dataset.pick:null;
+    const listScroll=list.scrollTop;
+    list.innerHTML = this.matches.map(b=>`<button type="button" data-pick="${mapText(b.key)}" aria-pressed="${b.key===this.selected}">${mapText(show==='owned' ? b.address : b.business?.name || b.address)}<small>${mapText(b.business ? b.address+' · '+b.business.type : b.hood)}${this.owned.has(b.key)?' · Owned':''}${!b.region?' · Map position unavailable':''}</small></button>`).join('');
+    if(focusedKey) [...list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
+    list.scrollTop=listScroll;
+    this.root.querySelector('.map-count').textContent = `${this.matches.length} matching place${this.matches.length===1?'':'s'}${this.matches.length ? '' : '. Try another area, All addresses, or clear the search.'}`;
+
+    this.detail(); this.paintView();
+  }
+  detail(){
+    const host=this.root.querySelector('.map-detail'), b=this.businesses.get(this.selected), location=this.assets.byKey.get(this.selected), owned=this.owned.get(this.selected);
+    if(!this.selected){host.innerHTML=`<h3>${mapText(this.filter.selectedOptions[0].text)}</h3><p>Select a footprint or a place in the list.</p>`;return;}
+    const findings=this.findings.get(this.selected)||[];
+    const title=owned && (!b || b.status==='vacant') ? owned.address : b?.name || location?.address || owned?.address || 'Location unavailable';
+    host.innerHTML=`<h3>${mapText(title)}</h3><p>${mapText(b?.address || location?.address || owned?.address || this.selected)}</p><p>${mapText([b?.type,location?.hood || b?.neighbourhood].filter(Boolean).join(' · '))}</p>${!location?'<p>Map position unavailable for this address. The map has not been moved to a guessed location.</p>':!location.path?'<p>Centered on the entrance; no building footprint is available.</p>':''}${owned?`<p>Owned building${owned.purchaseDay!=null?' · Purchased on day '+mapText(owned.purchaseDay):''}${owned.purchasePrice!=null?'<br>Purchase price: '+mapText(fmt(owned.purchasePrice)):''}</p>`:''}${b?`<p>Yesterday’s profit: ${mapText(fmt(b.profit || 0))}<br>Daily rent: ${mapText(fmt(b.rent || 0))}</p>`:owned?'':'<p>Static address information. Rental availability and business eligibility are not shown.</p>'}${findings.length?`<ul>${findings.map(f=>`<li>${mapText(f.text)}</li>`).join('')}</ul>`:''}${b?'<div class="map-detail-actions"><button class="btn2" data-action="details">Open business details</button></div>':''}`;
+  }
+  async select(key, focus=true, fresh=false){
+    this.selected=key;this.freshSelection=fresh;
+    if(!await this.ready) return;
+    if(this.selected!==key) return; // A newer selection or character superseded this request.
+    if(fresh){
+      // A shortcut is a new location request, independent of earlier searches.
+      this.region='world';this.regionControl.value='world';
+      this.search.value='';this.typeControl.value='';this.filter.value='all';
+    }
+    const b=this.assets.byKey.get(key);
+    if(b && focus){
+      // Moving the camera must not narrow the user's result list.
+      const [x,y,w,h]=b.bounds, size=Math.max(110,w*4,h*4);
+      this.box=[x+w/2-size/2,y+h/2-size/2,size,size];
+    }
+    this.update();
+  }
+  resetCharacter(){
+    this.selected=null;this.region='world';
+    if(this.svg){this.search.value='';this.filter.value='mine';this.typeControl.value='';this.regionControl.value=this.region;this.reset();this.update();}
+  }
+}
+function showCityMap(){
+  if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage')); else cityMapPage.paintView();
+}
+function refreshCityMaps(){
+  const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;
+  if(cityMapCharacter !== undefined && character!==cityMapCharacter){
+    if($('locationMapDialog').open) $('locationMapDialog').close();
+    mapViews.forEach(view=>view.resetCharacter());
+  }
+  cityMapCharacter=character;
+  mapViews.forEach(view=>view.update());
+}
+function openLocationMap(key, trigger){
+  const dialog=$('locationMapDialog');
+  if(!dialog.open){
+    dialog._returnFocus=trigger || document.activeElement;
+    dialog.showModal();document.body.classList.add('map-modal-open');
+  }
+  if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'));
+  cityMapOverlay.root.dataset.mobileView='map';
+  cityMapOverlay.root.querySelectorAll('.map-mobile-tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.action==='map'));
+  cityMapOverlay.select(key,true,true);
+}
+document.addEventListener('click', e=>{
+  const button=e.target.closest('[data-map-key]');
+  if(!button) return;
+  // Capture prevents a table-row, finding link, or summary opening underneath.
+  e.preventDefault();e.stopImmediatePropagation();openLocationMap(button.dataset.mapKey,button);
+},true);
+const locationMapDialog=$('locationMapDialog');
+$('closeLocationMap').onclick=()=>locationMapDialog.close();
+locationMapDialog.addEventListener('close',()=>{
+  document.body.classList.remove('map-modal-open');
+  const trigger=locationMapDialog._returnFocus;
+  if(trigger?.isConnected) trigger.focus({preventScroll:true});
+});
+locationMapDialog.addEventListener('click',e=>{if(e.target===locationMapDialog){const r=locationMapDialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)locationMapDialog.close();}});
+
+
 function renderAll(){
   indexTrends();
   drawMast(); drawKpis(); drawAlerts();
@@ -3771,6 +4187,7 @@ function renderAll(){
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFooter();
   wireAll();
+  refreshCityMaps();
 }
 
 /* --- pages ------------------------------------------------------------ */
@@ -3784,10 +4201,11 @@ const PAGES = [
   {id:"supply",  label:"Supply",  host:"pageSupply"},
   {id:"growth",  label:"Growth",  host:"pageGrowth"},
   {id:"company", label:"Company", host:"pageCompany"},
+  {id:"map", label:"Map", host:"pageMap"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
-           items:[["orders","Orders"],["checks","Checks"],["map","Map"]]},
+           items:[["orders","Orders"],["checks","Checks"],["map","Map","secFlow"]]},
   // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
            items:[["market","Demand"],["plan","Plan a chain"]]},
@@ -3807,8 +4225,8 @@ function showSub(pageId, id){
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   sub[pageId] = id;
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
-  $(sv.nav).innerHTML = sv.items.map(([k, label]) =>
-    `<a href="#${k}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
+  $(sv.nav).innerHTML = sv.items.map(([k, label, anchor=k]) =>
+    `<a href="#${anchor}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
   remember(sv.key, id);
   wireReveal();
 }
@@ -3827,6 +4245,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
   if(id === "results") drawChart();
+  if(id === "map") showCityMap();
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
   wireReveal();
@@ -3836,13 +4255,13 @@ $("nav").innerHTML = PAGES.map(p =>
   `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span></a>`).join("") + '<i class="ink"></i>';
 $("nav").addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
-  if(!a) return;
+  if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   showPage(a.dataset.id);
 });
 Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
-  if(!a) return;
+  if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   showSub(id, a.dataset.id);
 }));
@@ -4723,6 +5142,7 @@ function boot(){
   renderAll();
   Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
   const h = location.hash.slice(1);
+  if(SEC_PAGE[h]?.[1]) showSub(...SEC_PAGE[h]);
   showPage(PAGES.some(p => p.id === h) ? h
     : SEC_PAGE[h] ? SEC_PAGE[h][0]
     : remembered(PAGE_KEY) || "today", false, "replace");

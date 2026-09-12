@@ -125,10 +125,14 @@ analysis; it is more than a label issue.
 | Supply | Import orders, replenishment checklists, stock checks and goods flows. |
 | Growth | Market demand, expansion opportunities and factory planning. |
 | Company | Product totals, payroll and milestones. |
+| Map | Your premises, existing issues and searchable city addresses. |
 
 See the [dashboard reference](docs/dashboard-reference.md) for calculations,
 assumptions and detailed views. Recommendations are estimates to apply in-game;
 checklist ticks are your own notes, not confirmation that a game setting changed.
+The map button beside a building opens a zoomed location overlay without leaving
+your current page. Close it or press Escape to return. Map highlights update when
+you change filters or load another save; the map does not show simulated deliveries.
 
 ## Troubleshooting and contributing
 
