@@ -89,6 +89,7 @@
 
   let handlers = null;    // what the board wants told: changed(data), stale(why), lost()
   let lastFile = null;    // the File most recently built, for rebuilds after naming
+  let lastFileGen = -1;
   let lastGood = null;    // the File behind the board on screen
   let lastGoodDir = "";   // and the character folder it was found in
   let sourceGen = 0;      // bumps when a different folder or file set comes in
@@ -105,34 +106,88 @@
   const WATCH_MS = 30000;
   const pending = new Map();
   let nextId = 1;
+  let attempt = null;
+  let readerError = null;
+  let worker = null;
+  const LOAD_TIMEOUT_MS = 120000;
+
+  function finishAttempt(gen) {
+    if (attempt && attempt.gen === gen) {
+      clearTimeout(attempt.timer);
+      attempt = null;
+    }
+  }
+  function startAttempt(gen, restoring = false) {
+    if (gen !== sourceGen || readerError) return false;
+    if (!attempt) {
+      attempt = {gen, restoring, timer: setTimeout(() => {
+        failReader(new Error("Loading timed out. Reload the app to try again."));
+      }, LOAD_TIMEOUT_MS)};
+    }
+    if (restoring) attempt.restoring = true;
+    return true;
+  }
+  // Cancel ownership, not the worker's computation. Its late replies are ignored.
+  function supersede() {
+    finishAttempt(sourceGen);
+    sourceGen++;
+    busy = false;
+    queued = null;
+    for (const p of pending.values()) p.reject(new Error("Save selection changed"));
+    pending.clear();
+    stopWatch();
+    return sourceGen;
+  }
+  function failReader(err) {
+    readerError = err;
+    supersede();
+    if (worker) worker.terminate();
+    note("");
+    state("bad", "The reader could not finish loading", err.message);
+    if (handlers) handlers.stale(err.message);
+  }
 
   // The build stamp on the URL means a deploy is never served a stale worker.
-  const worker = new Worker("worker.js?v=" + (window.LEDGER_BUILD || "dev"), {type: "module"});
-  worker.onmessage = (e) => {
-    const msg = e.data;
-    if (msg.kind === "progress") {
-      if (msg.stage === "ready") { runtimeReady = true; if (!busy) idleState(); }
-      // A remembered folder keeps its own line while the runtime loads.
-      else if (!lastFile && !dirHandle) state("busy", "Preparing the reader…", msg.detail);
-      return;
-    }
-    const p = pending.get(msg.id);
-    if (!p) return;
-    pending.delete(msg.id);
-    if (msg.kind === "built") {
-      stored.set(HISTORY_KEY, msg.history);
-      p.resolve(JSON.parse(msg.data));
-    } else {
-      p.reject(new Error(msg.error));
-    }
-  };
-  worker.onerror = (e) => state("bad", "The reader failed to start", e.message);
+  function startWorker() {
+    try { worker = new Worker("worker.js?v=" + (window.LEDGER_BUILD || "dev"), {type: "module"}); }
+    catch (err) { failReader(err); return; }
+    worker.onmessage = (e) => {
+      const msg = e.data;
+      if (readerError) return;
+      if (!msg || typeof msg.kind !== "string") { failReader(new Error("Invalid reader response.")); return; }
+      if (msg.kind === "startup-failed") { failReader(new Error(msg.error)); return; }
+      if (msg.kind === "progress") {
+        if (msg.stage === "ready") {
+          runtimeReady = true;
+          if (!attempt && strip.tone === "ready") idleState();
+        }
+        return;
+      }
+      const p = pending.get(msg.id);
+      if (!p) return;
+      pending.delete(msg.id);
+      try {
+        if (p.gen !== sourceGen) throw new Error("Save selection changed");
+        if (msg.kind !== "built") throw new Error(msg.error || "Invalid reader response");
+        const data = JSON.parse(msg.data);
+        if (!data || typeof data !== "object") throw new Error("Invalid reader response");
+        if (typeof msg.history === "string") stored.set(HISTORY_KEY, msg.history);
+        p.resolve(data);
+      } catch (err) {
+        p.reject(err);
+      }
+    };
+    worker.onerror = (e) => { e.preventDefault(); failReader(new Error(e.message || "The reader stopped unexpectedly.")); };
+    worker.onmessageerror = () => failReader(new Error("The reader returned an unreadable response."));
+  }
 
-  function ask(msg, transfer) {
+  function ask(msg, transfer, gen = sourceGen) {
     return new Promise((resolve, reject) => {
+      if (readerError || gen !== sourceGen) { reject(readerError || new Error("Save selection changed")); return; }
       const id = nextId++;
-      pending.set(id, {resolve, reject});
-      worker.postMessage(Object.assign({id}, msg), transfer || []);
+      pending.set(id, {resolve, reject, gen});
+      try { worker.postMessage(Object.assign({id}, msg), transfer || []); }
+      catch (err) { pending.delete(id); reject(err); }
     });
   }
 
@@ -167,26 +222,31 @@
   function paintStrip() {
     const board = onBoard();
     const bad = strip.tone === "bad";
+    const restoring = !board && attempt && attempt.restoring && strip.tone === "busy";
+    const landing = $("landing");
+    if (landing) landing.classList.toggle("lg-resume", !!dirHandle);
     const led = $("srcLed");
     led.className = "led" + (strip.tone === "busy" ? " busy" : bad ? " err" : strip.tone === "ok" ? "" : " lg-dim");
     const st = $("srcStatus");
     st.className = bad ? "err" : "";
-    st.textContent = bad && noted.text ? `${strip.head}: ${noted.text.replace(/\.$/, "")}` : strip.head;
+    st.textContent = restoring ? "Loading your previous save…"
+      : bad && noted.text ? `${strip.head}: ${noted.text.replace(/\.$/, "")}` : strip.head;
     $("srcProg").hidden = strip.tone !== "busy";
     let meta = bad && noted.sub ? noted.sub
       : strip.tone === "busy" && lastGood ? "last good board stays on screen"
       : strip.meta;
     if (watchTimer && strip.tone === "ok") meta += " · watching";
-    $("srcMeta").textContent = meta;
+    $("srcMeta").textContent = restoring ? "" : meta;
     const btn = $("updateBtn");
-    btn.disabled = busy || !(dirHandle || lastFile);
+    btn.disabled = !!readerError || !!attempt || busy || !(dirHandle || lastFile);
     const opens = !board && dirHandle && !lastFile;
     btn.textContent = opens ? (pick.dir || pick.name ? "Open chosen save" : "Open newest save") : "Update";
     btn.classList.toggle("primary", opens);
     $("recoverBtn").hidden = !(bad && noted.recover);
+    $("reloadBtn").hidden = !readerError;
     // On the landing the strip only shows when it has something to say: a
     // remembered folder, a save being read, a folder that would not read.
-    const quietLoad = strip.tone === "busy" && !lastFile && !dirHandle;
+    const quietLoad = strip.tone === "busy" && !lastFile && !dirHandle && !attempt;
     $("srcStrip").hidden = !board && (strip.tone === "ready" || quietLoad);
     const n = $("srcNote");
     const showNote = !!noted.text && !bad;
@@ -199,6 +259,7 @@
     paintStrip();
   }
   function idleState() {
+    if (readerError || attempt) return;
     if (lastGood) state("ok", "Up to date", fileLine(lastGood));
     else if (dirHandle) state("remembered", "Folder remembered", dirHandle.name);
     else state("ready", "No save loaded", runtimeReady ? "ready to read" : "");
@@ -279,29 +340,36 @@
   }
   function enterBoard() {
     if (onBoard()) return;
+    const focusLeaves = $("landing").contains(document.activeElement);
     document.body.classList.add("has-board");
     place();
     window.scrollTo(0, 0);
+    if (focusLeaves && document.activeElement === document.body) $("nav").querySelector("a.on").focus();
   }
 
   /* --- building ----------------------------------------------------------- */
   async function buildFrom(file, dir, gen) {
+    if (gen === undefined) gen = sourceGen;
+    if (!startAttempt(gen)) return;
     // A build asked for while one runs is not lost: the latest request, a
     // pick, a folder or a file dropped by hand, runs once this build ends.
     if (busy) { queued = () => buildFrom(file, dir, gen); return; }
     busy = true;
-    if (gen === undefined) gen = sourceGen;  // the source this file came from
     lastFile = file;
+    lastFileGen = gen;
     note("");
     state("busy", `Reading ${file.name}`, fileLine(file));
     const t = performance.now();
     try {
       const bytes = await file.arrayBuffer();
+      if (gen !== sourceGen) return;
       const data = await ask({
         kind: "build", name: file.name, bytes, mtime: file.lastModified,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
-      }, [bytes]);
+      }, [bytes], gen);
+      if (gen !== sourceGen) return;
       busy = false;
+      finishAttempt(gen);
       lastGood = file;
       lastGoodDir = dir || "";
       lastGoodSource = gen;
@@ -311,15 +379,19 @@
       enterBoard();
       state("ok", "Up to date", fileLine(file, `built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
     } catch (err) {
+      if (gen !== sourceGen) return;
       busy = false;
+      finishAttempt(gen);
       state("bad", "Could not read the save", `${file.name} · attempted ${fmtTime(Date.now())}`);
       const rewritten = err.name === "NotReadableError";
       note("bad",
         rewritten ? "the game has rewritten this file since it was chosen" : err.message,
-        lastGood ? `Last good board kept · saved ${fmtTime(lastGood.lastModified)}` : "",
+        [lastGood ? `Last good board kept · saved ${fmtTime(lastGood.lastModified)}` : "",
+         dirHandle && watching && !watchTimer ? "Automatic updates are paused. Click Update to retry." : ""].filter(Boolean).join(" · "),
         true);
       if (handlers) handlers.stale(err.message);
     }
+    if (gen !== sourceGen) return;
     const next = queued;
     queued = null;
     if (next) next();
@@ -497,50 +569,64 @@
   }
   saveSel.addEventListener("change", () => {
     const [dir, name] = saveSel.value.split("|");
+    supersede();
     setPick(dir, name);
     applyPick();
   });
 
-  async function loadFromEntries(entries, label, moved, gen) {
+  async function loadFromEntries(entries, label, moved, gen = sourceGen) {
+    if (gen !== sourceGen || readerError) return false;
     const {file, dir, fellBack} = chooseFrom(entries);
     if (!file) {
+      finishAttempt(gen);
       state("bad", "No save found", label || "");
       note("bad", "no .hsg save in that folder", "Choose the folder named Big Ambitions inside SaveGames", true);
       return false;
     }
     if (onScreen(file, dir)) {
+      finishAttempt(gen);
       state("ok", "No newer save found", fileLine(file));
     } else {
       await buildFrom(file, dir, gen);
     }
+    if (gen !== sourceGen) return false;
     // A build that failed keeps its own reason; the move is only worth
     // saying under a board that shows.
     if (strip.tone !== "bad") {
       if (fellBack) note("warn", `Could not find ${fellBack}; showing the newest save instead.`);
       else note(moved ? "warn" : "", moved);
     }
-    return true;
+    return strip.tone !== "bad";
   }
 
   async function loadFromHandle(handle, why) {
+    const gen = sourceGen;
+    if (!startAttempt(gen)) return;
     note("");
     state("busy", why || "Looking for the save to read", handle.name);
     // A scan that ends after another source was chosen is thrown away, so
     // a slow folder never overwrites a newer one.
-    const gen = sourceGen;
     let entries;
     try { entries = await scanHandle(handle); }
-    catch (err) { state("bad", "Could not read the folder", handle.name); note("bad", err.message, "", true); return; }
+    catch (err) {
+      if (gen !== sourceGen) return;
+      finishAttempt(gen);
+      state("bad", "Could not read the folder", handle.name);
+      note("bad", err.message, "", true);
+      return;
+    }
     if (gen !== sourceGen) return;
     const moved = await refreshSaveMenu(entries, gen);
     if (gen !== sourceGen) return;
     if (!(await loadFromEntries(entries, handle.name, moved, gen))) return;
+    if (gen !== sourceGen) return;
     lastCheck = Date.now();
     armWatch();  // the folder is readable now, so watching can begin
   }
 
-  async function takeHandle(handle, why) {
-    if (handle !== dirHandle) sourceGen++;
+  async function takeHandle(handle, why, gen) {
+    if (gen === undefined) gen = supersede();
+    if (gen !== sourceGen) return;
     dirHandle = handle;
     handles.set("saves", handle);
     if (!onBoard()) place();
@@ -549,10 +635,12 @@
 
   async function pickFolder() {
     if (canHandle) {
+      const gen = sourceGen;
       let handle;
       try {
         handle = await window.showDirectoryPicker({id: "ba-saves", mode: "read"});
       } catch (e) { return; }  // the picker was dismissed
+      if (gen !== sourceGen) return;
       await takeHandle(handle, "Looking through the folder");
     } else {
       $("folderPick").click();
@@ -560,14 +648,22 @@
   }
 
   async function update() {
-    if (busy) return;
+    if (busy || attempt || readerError) return;
     if (dirHandle) {
-      const have = await dirHandle.queryPermission({mode: "read"});
-      if (have !== "granted") {
-        const asked = await dirHandle.requestPermission({mode: "read"});
-        if (asked !== "granted") { state("bad", "Folder access was not granted", dirHandle.name); note("bad", "", "", true); return; }
+      const handle = dirHandle, gen = sourceGen;
+      try {
+        // Request from this explicit click, before awaiting unrelated work.
+        const asked = await handle.requestPermission({mode: "read"});
+        if (gen !== sourceGen || handle !== dirHandle) return;
+        if (asked !== "granted") { state("bad", "Folder access was not granted", handle.name); note("bad", "", "", true); return; }
+      } catch (err) {
+        if (gen !== sourceGen) return;
+        state("bad", "Could not access the folder", handle.name);
+        note("bad", err.message, "Choose the folder again to restore access.", true);
+        return;
       }
-      await loadFromHandle(dirHandle, "Checking for a newer save");
+      if (!onBoard()) startAttempt(gen, true);
+      await loadFromHandle(handle, "Checking for a newer save");
     } else if (canHandle) {
       await pickFolder();
     } else {
@@ -578,17 +674,20 @@
 
   /* --- watching the folder ---------------------------------------------- */
   async function checkFolder() {
-    if (!dirHandle || busy) return;
+    if (!dirHandle || busy || attempt || readerError) return;
+    const gen = sourceGen, handle = dirHandle;
     try {
-      if (await dirHandle.queryPermission({mode: "read"}) !== "granted") { stopWatch(); return; }
-      const gen = sourceGen;
-      const entries = await scanHandle(dirHandle);
+      const permission = await handle.queryPermission({mode: "read"});
+      if (gen !== sourceGen) return;
+      if (permission !== "granted") { stopWatch(); return; }
+      const entries = await scanHandle(handle);
       if (gen !== sourceGen) return;
       const moved = await refreshSaveMenu(entries, gen);
       if (gen !== sourceGen) return;
       const {file, dir, fellBack} = chooseFrom(entries);
       lastCheck = Date.now();
       if (file && !onScreen(file, dir)) await buildFrom(file, dir, gen);
+      if (gen !== sourceGen) return;
       // A character or save that vanished mid-watch is said, not skipped.
       const msg = fellBack ? `Could not find ${fellBack}; showing the newest save instead.` : moved;
       if (msg && strip.tone !== "bad") note("warn", msg);
@@ -653,21 +752,25 @@
     if (hint) hint.textContent = has ? "your en.json is remembered · click to replace" : "built in · choose en.json only if your game is newer";
   }
 
-  async function takeLocale(file) {
-    const text = await file.text();
+  async function takeLocale(file, rebuild = true) {
+    const gen = sourceGen;
+    let text;
     try {
+      text = await file.text();
+      if (gen !== sourceGen) return;
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== "object" || !("ba:neighborhood_global" in parsed)) {
         note("warn", "That file is not the game's en.json.", "No ba: keys inside.");
         return;
       }
     } catch (e) {
+      if (gen !== sourceGen) return;
       note("warn", "That file is not JSON.");
       return;
     }
     if (stored.set(LOCALE_KEY, text)) note("");
     localeState();
-    if (lastFile) buildFrom(lastFile);
+    if (rebuild && lastFile && lastFileGen === gen) buildFrom(lastFile);
   }
 
   /* --- what the board asks for ----------------------------------------- */
@@ -815,7 +918,7 @@
   /* --- wiring ------------------------------------------------------------ */
   window.addEventListener("DOMContentLoaded", async () => {
     localeState();
-    state("busy", "Preparing the reader…", "Loading the Python runtime · about 6 MB, cached after the first visit");
+    startWorker();
     if (!canHandle) {
       $("folderBtn").title = "Choose the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
       $("drop").title = $("folderBtn").title;
@@ -829,12 +932,25 @@
     // asynchronous work (a dropped folder's walk); otherwise a new one.
     const takeEntries = async (entries, fromFolder, gen) => {
       const locale = entries.find((e) => isLocale(e.file));
-      if (locale) takeLocale(locale.file);
       const wanted = entries.filter((e) => isSave(e.file) || isMeta(e.file));
       const saves = wanted.filter((e) => isSave(e.file));
-      if (!saves.length) { if (!locale) note("warn", "That is neither a .hsg save nor en.json."); return; }
-      if (gen === undefined) gen = ++sourceGen;  // a new set of files, whatever its shape
+      if (!saves.length) {
+        if (locale) takeLocale(locale.file);
+        if (gen !== undefined && gen === sourceGen) {
+          finishAttempt(gen);
+          state("bad", "No save found");
+          note("bad", "No .hsg save in that folder.", "Choose another folder or a save file.", true);
+        } else if (!locale) note("warn", "That is neither a .hsg save nor en.json.");
+        return;
+      }
+      if (gen === undefined) gen = supersede();  // a new set of files, whatever its shape
       else if (gen !== sourceGen) return;        // superseded during the walk
+      dirHandle = null; // A manual file/snapshot must not be replaced by the old watcher.
+      if (!onBoard()) place();
+      if (!startAttempt(gen)) return;
+      state("busy", "Opening the selected save…");
+      if (locale) await takeLocale(locale.file, false);
+      if (gen !== sourceGen) return;
       if (fromFolder) {
         const moved = await refreshSaveMenu(wanted, gen);
         if (gen !== sourceGen) return;  // superseded while the sidecars were read
@@ -872,11 +988,19 @@
       const asked = items.map((it) => typeof it.getAsFileSystemHandle === "function" ? it.getAsFileSystemHandle().catch(() => null) : null);
       const entries = items.map((it) => typeof it.webkitGetAsEntry === "function" ? it.webkitGetAsEntry() : null);
       const files = [...dt.files];
+      if (!items.length && !files.length) return;
+      if (files.length && files.every(isLocale) && !entries.some(en => en && en.isDirectory)) { take(files); return; }
+      const gen = supersede(); // Own the drop before resolving its directory handle.
+      if (!startAttempt(gen)) return;
+      note("");
+      state("busy", "Opening the selected save…");
       const dirs = (await Promise.all(asked)).filter((h) => h && h.kind === "directory");
-      if (dirs.length && canHandle) { await takeHandle(dirs[0], "Looking through the folder"); return; }
+      if (gen !== sourceGen) return;
+      if (dirs.length && canHandle) { await takeHandle(dirs[0], "Looking through the folder", gen); return; }
       const dirEntries = entries.filter((en) => en && en.isDirectory);
       if (dirEntries.length) {
-        const gen = ++sourceGen;  // taken now: the walk can take seconds
+        startAttempt(gen);
+        state("busy", "Looking through the folder");
         const out = [];
         for (const en of dirEntries) await walkEntry(en, 0, out, "");
         if (gen !== sourceGen) return;
@@ -887,11 +1011,15 @@
         takeEntries(out.concat(loose), true, gen);
         return;
       }
-      take(files);
+      takeEntries(entriesOf(files), files.some((f) => f.webkitRelativePath), gen);
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
     $("recoverBtn").addEventListener("click", pickFolder);
+    $("reloadBtn").addEventListener("click", () => location.reload());
+    $("savePickLabel").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("savePick").click(); }
+    });
     $("updateBtn").addEventListener("click", update);
     $("folderPick").addEventListener("change", (e) => take(e.target.files));
     $("savePick").addEventListener("change", (e) => take(e.target.files));
@@ -925,21 +1053,36 @@
     // A folder chosen on an earlier visit: resume when access is still
     // granted. Requesting fresh access stays in the Update click handler.
     const resumeGen = sourceGen;
+    wireLanding();
+    if (!startAttempt(resumeGen)) return;
+    state("busy", "Checking for a previous save…");
     const rememberedHandle = canHandle ? await handles.get("saves") : null;
     if (resumeGen !== sourceGen) return;
     dirHandle = rememberedHandle;
     place();
-    if (runtimeReady || dirHandle) idleState();
-    if (dirHandle) note("info", `One click opens its ${pick.dir || pick.name ? "chosen" : "newest"} save; your browser may ask for folder access first.`);
-    wireLanding();
+    paintStrip();
     if (rememberedHandle) {
       let permission;
       try { permission = await rememberedHandle.queryPermission({mode: "read"}); }
-      catch (e) { return; } // Keep the manual recovery controls available.
+      catch (e) {
+        if (resumeGen !== sourceGen) return;
+        finishAttempt(resumeGen);
+        state("bad", "Could not check folder access", rememberedHandle.name);
+        note("bad", e.message, "Open the save or choose the folder again.", true);
+        return;
+      }
       if (resumeGen !== sourceGen || dirHandle !== rememberedHandle) return;
       if (permission === "granted") {
+        startAttempt(resumeGen, true);
         await loadFromHandle(rememberedHandle, "Opening the remembered save");
+        return;
       }
+      finishAttempt(resumeGen);
+      idleState();
+      note("info", "Allow folder access to reopen your save.");
+    } else {
+      finishAttempt(resumeGen);
+      idleState();
     }
   });
 })();

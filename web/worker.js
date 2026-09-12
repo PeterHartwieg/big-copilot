@@ -54,6 +54,9 @@ import ba_save, ba_dashboard
 `);
   say("ready", "");
 })();
+// Report startup failures even before a save request is queued. The build path
+// still observes the rejected promise and returns its normal failed response.
+ready.catch(err => postMessage({kind: "startup-failed", error: String(err.message || err)}));
 
 function writeText(path, text) {
   if (text) py.FS.writeFile(path, text);

@@ -137,6 +137,18 @@ button.btn{border:0;cursor:pointer}
 .strip #srcStatus.err{flex:1 1 0;min-width:200px}
 .landing .strip{width:560px;margin:0}
 .landing #updateBtn:disabled{display:none}
+.landing .strip{flex-direction:column;align-items:stretch}
+.landing .strip .right{margin:0;flex-wrap:wrap}
+.landing .strip #srcStatus,.landing .strip .file{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.landing .strip .lg-sel{max-width:100%}
+.landing.lg-resume #welcomeLede,.landing.lg-resume #drop,.landing.lg-resume #lgOrb{display:none}
+.landing.lg-resume #srcStatus{font-size:22px;font-weight:600;flex-basis:100%;min-width:0}
+.landing.lg-resume .strip{padding:24px;gap:20px}
+.landing.lg-resume .strip .st{gap:14px}
+.landing.lg-resume #srcLed{display:none}
+.landing.lg-resume #srcProg{width:100%}
+.lg-pick:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+@media (prefers-reduced-motion:reduce){.strip .prog i,.strip .led.busy{animation:none!important}}
 .lg-src{display:contents}
 .lg-note{margin:-14px 0 0;max-width:560px;text-align:center}
 .lg-note.warn{color:var(--warn)}
@@ -239,13 +251,14 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <div class="row rv" id="entryRow">
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">__ICON_FOLDER__Choose the folder</button>
-    <label class="link lg-pick" id="savePickLabel" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
+    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
   <div class="lg-src" id="srcSlot">
     <div class="strip" id="srcStrip" hidden>
-      <div class="st"><span class="led" id="srcLed"></span><span id="srcStatus"></span><span class="prog" id="srcProg" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
+      <div class="st"><span class="led" id="srcLed" aria-hidden="true"></span><span id="srcStatus" role="status" aria-live="polite" aria-atomic="true"></span><span class="prog" id="srcProg" role="progressbar" aria-label="Loading save" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
       <div class="right" id="srcActions">
         <button type="button" class="btn2 primary" id="recoverBtn" hidden>__ICON_FOLDER__Choose the folder again</button>
+        <button type="button" class="btn2 primary" id="reloadBtn" hidden>Reload app</button>
         <button type="button" class="btn2" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
       </div>
     </div>
