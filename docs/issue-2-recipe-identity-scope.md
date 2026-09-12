@@ -1,6 +1,6 @@
 # Issue #2: name factory lines immediately
 
-Smaller design implemented locally, 12 September 2026. In-game verification is still required before release.
+Smaller design implemented 12 September 2026. The owner authorized merging and deploying after the CLI review fixes; independent in-game mapping verification remains open.
 
 ## The change
 
@@ -25,7 +25,7 @@ There are also paired disagreements involving other electronics and Cigar/Cigare
 
 **Easiest check:** use a disposable copy of the company. Save, explicitly change one machine's recipe in-game, then save again. Compare the same machine's ID across the two saves to see which recipe token changed. Repeat for the disputed products. This avoids matching list positions or waiting for deliveries.
 
-The local implementation uses this pinned table for review; no deployment has been made. Verify these mappings before release. If reliable checks show it is wrong, drop this source.
+The implementation uses this pinned table. Release authorization does not verify the disputed mappings. If reliable checks show it is wrong, drop this source.
 
 ## Implemented rules
 
