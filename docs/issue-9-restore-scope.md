@@ -1,6 +1,6 @@
 # Issue #9: loading a previous save
 
-Selected scope, 12 September 2026. The user chose the prominent loading indicator and subsequently authorized implementation. Implemented locally; not deployed.
+Selected scope, 12 September 2026. The user chose the prominent loading indicator and subsequently authorized implementation and release.
 
 ## Proposed change
 
@@ -50,7 +50,7 @@ Two findings make this more than a text change: `buildFrom` can deliver an obsol
 4. Folder/save errors, reader failure, and timeout stop loading and expose working recovery. Late results cannot revive an expired attempt.
 5. Existing resume/navigation tests pass, with added delayed-restore and remembered-selection coverage. Browser checks verify the actual landing-to-board transition, narrow layouts, keyboard access, and reduced motion.
 
-Validation: 58 JavaScript/browser tests and 17 Python tests pass. The save checker passed all 25 supported saves and skipped 40 older saves. A real-reader smoke test loaded a 4.9 MB save into the remembered Supply / Checks page in about 5.8 seconds, including a deliberate two-second worker-start delay; reload also passed with no uncaught errors. That smoke test used a simulated granted folder handle with the actual worker, save processing, and board rendering. Native permission-dialog behavior was not manually tested. Desktop and narrow loading layouts were visually inspected.
+Validation: 62 JavaScript/browser tests and 17 Python tests pass. The save checker passed all 25 supported saves and skipped 40 older saves. A real-reader smoke test loaded a 4.9 MB save into the remembered Supply / Checks page in about 5.8 seconds, including a deliberate two-second worker-start delay; reload also passed with no uncaught errors. That smoke test used a simulated granted folder handle with the actual worker, save processing, and board rendering. Native permission-dialog behavior was not manually tested. Desktop and narrow loading layouts were visually inspected.
 
 The 120-second timeout remains a conservative default, not a measured limit for every device. Obsolete callbacks, permission states, malformed responses, worker failure, timeout/reload, and source changes during loading have browser regression coverage in `tests/restore.test.cjs`.
 
@@ -58,4 +58,4 @@ Review decision: the user accepted the two medium-severity findings without chan
 
 Source: [issue #9](https://github.com/PeterHartwieg/big-copilot/issues/9), inspected with no comments; code at `ee867829b31647e5e063d022729ef6bab80859a7`. No further product decision is needed to scope the indicator approach.
 
-Excluded: cached content, performance optimization, navigation redesign, new browser/file restoration support, README/Mac documentation, and product-grouped shipments. No deployment, GitHub edits, or external messages were made.
+Excluded: cached content, performance optimization, navigation redesign, new browser/file restoration support, README/Mac documentation, and product-grouped shipments. The pull request and deployment record track the release of this scope.

@@ -119,6 +119,8 @@ test('loading is prominent until data arrives, including runtime ready; remember
   assert.equal(await page.locator('#srcProg i').evaluate(el => getComputedStyle(el).animationName), 'none');
   const box = await page.locator('#srcStrip').boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 390);
+  const helpBox = await page.locator('#saveLocation').boundingBox();
+  assert.ok(helpBox.y >= box.y + box.height, 'folder help follows the restore message');
   if (process.env.RESTORE_SCREENSHOT) await page.screenshot({path:process.env.RESTORE_SCREENSHOT});
   await page.evaluate(() => fixture.worker.emit({kind:'progress', stage:'ready'}));
   assert.equal(await text(page), 'Loading your previous save…');
@@ -132,6 +134,7 @@ test('loading is prominent until data arrives, including runtime ready; remember
   assert.equal(await page.evaluate(() => history.length), historyLength);
   assert.equal(await page.locator('#landing').count(), 0);
   assert.equal(await page.locator('#folderBtn').count(), 1);
+  assert.equal(await page.locator('#help #saveLocation').count(), 1);
   await page.reload();
   await page.evaluate(() => { renderAll = () => {}; });
   await messages(page);
