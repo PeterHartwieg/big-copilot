@@ -1,0 +1,2 @@
+# Generated map metadata records exact SVG hashes; preserve bytes across hosts.
+web/maps/*.svg -text
