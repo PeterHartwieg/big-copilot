@@ -6,6 +6,7 @@ dashboard.html
 # Python
 __pycache__/
 *.pyc
+.venv-map/
 
 # Cloudflare and Node
 .wrangler/
@@ -21,3 +22,10 @@ watch.err
 
 # Local research notes, never published
 research/
+
+# Private map generation tools, recipes, tests, and investigation notes.
+# Only the finished assets in web/maps/ belong in the repository.
+mockup/maps/
+tests/test_map_pipeline.py
+docs/location-map-assets.md
+docs/location-selector-scope.md
