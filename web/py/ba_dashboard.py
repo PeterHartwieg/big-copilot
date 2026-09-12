@@ -207,6 +207,77 @@ def weekday(day: int) -> str:
     return WEEKDAYS[day % 7]
 
 
+# Recipe identity only; rates and ingredients still come from _recipes(names).
+# Source (MIT stated in README; no upstream LICENSE file), pinned for review:
+# https://github.com/tiagovitorin/BigAmbitionsCompanion/blob/5db2e6a07145db9b19239efddc63c101be7346d6/data/normalized/recipes.json
+# Extraction build is unknown. In-game mapping verification is pending; see
+# docs/issue-2-recipe-identity-scope.md before releasing this change.
+RECIPE_ITEMS = {
+    'Vqbpzomo9k67pEjqY+aXag==': 'ba:itemname_apple',
+    'AKSV3auI1UySifPRajzUhQ==': 'ba:itemname_banana',
+    'LScSWfyqVU+2BYQazKeF6g==': 'ba:itemname_beer',
+    'N70Uz8bJ+0aByOA4lGaf6w==': 'ba:itemname_bottleofwine',
+    'sicETTel+UWhOqmjeOsvg==': 'ba:itemname_burger',
+    'GlhBaNljg0Oq4xtZhGXgWw==': 'ba:itemname_carrot',
+    'zaHExU1rEqMKnESC27yhw==': 'ba:itemname_cheapflower',
+    'w5GONqSNk63hwRC+mcKKw==': 'ba:itemname_cheapgift',
+    'HwB9e2WlA0C40se8zQehSw==': 'ba:itemname_cheapjewelry',
+    '2ovCFgDUpUaXYWlwGNBA9w==': 'ba:itemname_cheeseplatter',
+    'spcAv9c2SU2D88vyBHT0iA==': 'ba:itemname_cigar',
+    'SAgLVvhYkUaeLryoFEtneQ==': 'ba:itemname_cigarette',
+    'vVvk67SwE0uGGv5fIFdfwQ==': 'ba:itemname_classiccheapfemaleclothing',
+    'adOIn3ReSUaZtmeMVOJg1A==': 'ba:itemname_classiccheapmaleclothing',
+    'xKnvtsotTE6OgAYki+7pKA==': 'ba:itemname_classicexpensivefemaleclothing',
+    'dUXBvSJiU0KNFDdrLVMpg==': 'ba:itemname_classicexpensivemaleclothing',
+    'UnFkOENySk2hnZTdhlEPpg==': 'ba:itemname_cottoncandy',
+    'P+91dxSpz0OKelineyYEuA==': 'ba:itemname_croissant',
+    'Rvh1C8xMXESQqWKUQSCWOQ==': 'ba:itemname_cupcake',
+    '3yNOkxHO9E27pHTF0YMy8g==': 'ba:itemname_cupofcoffee',
+    'W9bsOTPSikSpfETFfpNH0A==': 'ba:itemname_cupoftea',
+    'vgwf6RZdUkW9MLRrCJ2hkA==': 'ba:itemname_donut',
+    'IQ4tC7CP9k+Wopyn0nbSA==': 'ba:itemname_earbuds01',
+    '+jtEirIs2kOlRwbuagYx8A==': 'ba:itemname_energydrink',
+    '0qFyC0Rp1U60SX2LwuGkPg==': 'ba:itemname_expensiveflower',
+    'YgXlaycnnUSE4szw6I9qiA==': 'ba:itemname_expensivegift',
+    'RioodCXVJ0uweKLPcaRqCg==': 'ba:itemname_expensivejewelry',
+    'nhhtNIgicEqvIvXIhAQrRA==': 'ba:itemname_frenchfries',
+    '5l2skel6LEiY8GGwB3of5Q==': 'ba:itemname_freshfood',
+    'LoeDjBhY9UuQEPZMEV6Kg==': 'ba:itemname_frozenfood',
+    'tF96CwCLMUSHXzvmsiQfKA==': 'ba:itemname_haircareproduct',
+    'buvcJRWqukKvDtwZVXyR6g==': 'ba:itemname_headphones01',
+    '74dgjcxcn0OR0ow3QJK17g==': 'ba:itemname_hotdog',
+    'tKUNVlztSEKQc9xc8sAB2Q==': 'ba:itemname_icecream',
+    'La6MjfmikuX09StO8lrJA==': 'ba:itemname_kabob',
+    '7+PPDCxINEWrWZm45OX14w==': 'ba:itemname_lettuce',
+    'iCfnLPkwnkiYKcatlxDfw==': 'ba:itemname_limitededitionbook',
+    'teJUZQgihU2Lw5eFGL8bYQ==': 'ba:itemname_margarita',
+    'XMndnWD5o0SgWbgdUecVw==': 'ba:itemname_martini',
+    'i7Bt1uozD0KhiKPIVvYYJw==': 'ba:itemname_moderncheapfemaleclothing',
+    'PqztEZTuVEyfrK5vDJJJ1w==': 'ba:itemname_moderncheapmaleclothing',
+    'GITZ2ncOGUaNEesypJrLcA==': 'ba:itemname_modernexpensivefemaleclothing',
+    '+YCYRm8Ct0eqxFBFD1+2g==': 'ba:itemname_modernexpensivemaleclothing',
+    'T4wN5+QR6ESpDVZRWvHdBg==': 'ba:itemname_motivationalbook',
+    '3ItGMbz99kiYApVBzNOx5Q==': 'ba:itemname_novel',
+    'bP2tJxM8mkO+wCyz0qvJQ==': 'ba:itemname_paperbag',
+    '1gihrgudU2ONQuPlFWdiw==': 'ba:itemname_pear',
+    'JRzqjt5DnE6AqblYhUZs+g==': 'ba:itemname_picturebook',
+    'W7mF6tcfU28s1cul1SyQA==': 'ba:itemname_pizza',
+    '6YfCHfTegUOawi8oiLevkw==': 'ba:itemname_popcorn',
+    'cz8s5vseE+IgGDln04aA==': 'ba:itemname_salad',
+    'Rp2iltH7ykyu6MuGVL1sEw==': 'ba:itemname_slushi',
+    'D6O7ZfRxEalvxUZn9oRKg==': 'ba:itemname_smartphone1',
+    'Ed0LZCclVUuWAFXFCbHPww==': 'ba:itemname_smartphone2',
+    'GDEE2bJ1wUW1bjVasjoUqA==': 'ba:itemname_smartwatch1',
+    'mFpiOPcgFUKtjFu2TYBUCg==': 'ba:itemname_smartwatch2',
+    '0VvgxdL5d0u9CVp4UM9S8g==': 'ba:itemname_sodacan',
+    'bUTw1MMrkkGI+pMiomsfWw==': 'ba:itemname_technicalmanual',
+    'qBJy9M6lzUOH1e5CE9F9oA==': 'ba:itemname_tomato',
+    '19B3VRBISkCOnEKtMQf7w==': 'ba:itemname_umbrella',
+    '6FwXLAY4S0qEWikfkkX5iQ==': 'ba:itemname_whisky',
+    'kg12iT+IjUKGsAvUFMFlCg==': 'ba:itemname_youngnovel',
+}
+
+
 # --- what the game's own help text knows -------------------------------
 # The save stores ids and counts; the rules behind them live in the locale
 # file the game ships. Both are parsed here rather than written down, so a
@@ -366,10 +437,6 @@ SHIPPED_MIN_DAYS = 3
 # A factory input topped up every morning and holding less than this many
 # rounds' worth is a buffer the machines eat through, not a pile.
 BUFFER_DAYS = 2
-# Naming a machine's recipe from what leaves the factory: within this of the
-# rated output it is identified; with only the product in stock it is likely.
-LINE_MEASURED = 0.15
-LINE_LIKELY = 1.0
 LINE_STARVED = 0.75  # a line fed less than this share of its need is losing hours
 # The week's arrivals are measured backwards; the need is counted from the
 # machines standing there today. A recipe switched on yesterday has six days of
@@ -379,7 +446,6 @@ LINE_STARVED = 0.75  # a line fed less than this share of its need is losing hou
 FEED_SETTLED = 0.7
 FEED_SLACK = 0.02  # a top-up within this of the need is sized to it
 PILE_DAYS = 3  # output held beyond this many days of making it is piling up
-LINE_OVERDRAW = 0.3  # a recipe that would eat this much more than arrives is not running
 STAFF_HOURS = 168  # a machine runs only while a factory worker is posted to it
 STAFF_CRITICAL = 0.5  # below this share of the week a line is barely running
 WS_PREFIX = "ba:factoryworkstationtype_"
@@ -1861,57 +1927,6 @@ def _hour_phrase(hours_by_day: dict) -> str:
     return f"{phrase} and {spare} scattered hours" if spare else phrase
 
 
-def _assign(cost: list) -> list:
-    """Hungarian assignment: the column for each row, at least total cost.
-
-    Rows are recipe ids and columns candidate recipes. There are never more ids
-    than recipes on a workstation, but if there were, the extra rows get None.
-    """
-    n = len(cost)
-    if not n:
-        return []
-    width = max(len(row) for row in cost)
-    m = max(width, n)
-    big = 1e6
-    a = [[row[j] if j < len(row) else big for j in range(m)] for row in cost]
-    u, v = [0.0] * (n + 1), [0.0] * (m + 1)
-    p, way = [0] * (m + 1), [0] * (m + 1)
-    for i in range(1, n + 1):
-        p[0], j0 = i, 0
-        minv, used = [float("inf")] * (m + 1), [False] * (m + 1)
-        while True:
-            used[j0] = True
-            i0, delta, j1 = p[j0], float("inf"), 0
-            for j in range(1, m + 1):
-                if used[j]:
-                    continue
-                cur = a[i0 - 1][j - 1] - u[i0] - v[j]
-                if cur < minv[j]:
-                    minv[j], way[j] = cur, j0
-                if minv[j] < delta:
-                    delta, j1 = minv[j], j
-            for j in range(m + 1):
-                if used[j]:
-                    u[p[j]] += delta
-                    v[j] -= delta
-                else:
-                    minv[j] -= delta
-            j0 = j1
-            if p[j0] == 0:
-                break
-        while True:
-            j1 = way[j0]
-            p[j0] = p[j1]
-            j0 = j1
-            if j0 == 0:
-                break
-    out = [None] * n
-    for j in range(1, m + 1):
-        if p[j] and j - 1 < len(cost[p[j] - 1]):
-            out[p[j] - 1] = j - 1
-    return out
-
-
 def _off_hours(covered: set) -> str:
     """Group identical gaps, preserving exception days and split shifts."""
     weekdays = (1, 2, 3, 4, 5, 6, 0)
@@ -1993,6 +2008,17 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
     return depots, depot_other
 
 
+def _recipe_identity(rid: str | None, station: str, recipes: dict, chosen: dict) -> tuple:
+    """Prefer a usable table identity, then a manual choice; never infer from flow."""
+    if not rid:
+        return None, None
+    for slug, basis in ((RECIPE_ITEMS.get(rid), "table"), (chosen.get(rid), "you")):
+        rec = recipes.get(slug)
+        if rec and rec["workstation"] == station:
+            return slug, basis
+    return None, None
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -2004,14 +2030,9 @@ def _factories(
 ) -> dict:
     """What each factory line makes and eats, against the flow set up to feed it.
 
-    A machine's recipe is stored in the save only as an opaque id, so it is named
-    from the flow instead: two machines rated 60 an hour that ship 2,880 garments
-    a day are the cheap-clothing line. An id named once is remembered, so a line
-    that stops for want of an ingredient keeps its name. Every assembly machine
-    runs its recipe around the clock at the rated rate — the delivery log shows
-    four tobacco machines at 100 an hour drawing exactly 9,600 a day — so a
-    line's need is machines × rate × 24, and the question is whether the top-up
-    and the import behind it are set to that.
+    The recipe table names usable IDs; the player names unresolved ones. Both use
+    the game's help pages for quantities. Full-rate need is machines × hourly
+    ingredients × 24; the roster supplies the separate staffed estimate.
     """
     index = flow["index"]
     empty = {"sites": [], "machines": 0, "unnamed": 0}
@@ -2094,10 +2115,6 @@ def _factories(
             return flow["received"](key, slug) or 0.0
         return seen[max(drawn)] if drawn else 0.0
 
-    def hours_a_day(key, station, rid) -> float:
-        """Machine-hours a day this line actually runs, from the roster."""
-        return sum(m["hours"] for m in roster[key][(station, rid)]) / 7.0
-
     # The help text links an ingredient under one name and the game moves it
     # under another — "Bag of Tomatoes" is rawtomato on the page and tomato in
     # every warehouse — so each ingredient is matched to the item the city
@@ -2114,119 +2131,8 @@ def _factories(
             return ing["slug"]
         return next((alt for alt in by_label.get(ing["item"], []) if alt in seen), ing["slug"])
 
-    # --- name the recipe ids: first from what the lines ship
-    remembered = history.recipes(character, {}) if history else {}
-    sites_of = collections.defaultdict(lambda: collections.defaultdict(dict))
-    for key, counter in machines.items():
-        for (station, rid), n in counter.items():
-            if rid:
-                sites_of[station][rid][key] = n
-    named, basis, learned, guessed, recalled = {}, {}, {}, {}, {}
-    fits = {}  # rid -> recipes whose rated output matches what the id ships
-    for station, rid_sites in sites_of.items():
-        candidates = by_station.get(station, [])
-        rids = list(rid_sites)
-        if not candidates:
-            continue
-        cost, total = [], []
-        for rid in rids:
-            row, row_total = [], []
-            for slug in candidates:
-                rec = recipes[slug]
-                # A line measured at any one site is measured; the same id
-                # standing idle elsewhere does not weaken that. But every
-                # site votes on which id is which: the one that also stands
-                # at the liquor factory beside 12,000 bottles of wine is the
-                # wine id, however alike two single machines look elsewhere.
-                best, summed = None, 0.0
-                for key, n in rid_sites[rid].items():
-                    predicted = hours_a_day(key, station, rid) * rec["out"]
-                    shipped = out_of(key, slug)
-                    if predicted <= 0:
-                        here = 2.0  # nobody rostered: it makes nothing
-                    elif shipped > 0:
-                        here = min(abs(predicted - shipped) / predicted, 1.0)
-                    elif held(key, slug) > 0:
-                        here = LINE_LIKELY
-                    else:
-                        here = 2.0
-                    # An ingredient never seen at the site argues against it.
-                    here += 0.1 * sum(
-                        1
-                        for ing in rec["ingredients"]
-                        if not held(key, resolve(ing)) and not arrives(key, resolve(ing))
-                    )
-                    best = here if best is None else min(best, here)
-                    summed += here
-                row.append(best)
-                row_total.append(summed)
-            cost.append(row)
-            total.append(row_total)
-            consistent = [slug for slug, c in zip(candidates, row) if c <= LINE_MEASURED]
-            if consistent:
-                fits[rid] = consistent
-        # A name learnt earlier only breaks ties; fresh evidence outranks it.
-        biased = [
-            [c - (0.3 if remembered.get(rid) == slug else 0.0) for c, slug in zip(row, candidates)]
-            for row, rid in zip(total, rids)
-        ]
-        assignment = _assign(biased)
-        own = [cost[i][j] if j is not None else 9.0 for i, j in enumerate(assignment)]
-        if os.environ.get("BA_DEBUG"):
-            print("STAGE1", station, [r[:6] for r in rids])
-            for i, rid in enumerate(rids):
-                print("   ", rid[:6], "->", candidates[assignment[i]].split("_")[-1] if assignment[i] is not None else None,
-                      "best", [round(c, 2) for c in cost[i]], "total", [round(c, 2) for c in total[i]])
-        for i, j in enumerate(assignment):
-            if j is None:
-                continue
-            rid, slug, c = rids[i], candidates[j], cost[i][j]
-            # Two ids that could swap recipes at no cost cannot be told apart;
-            # calling either a measurement would put a need on the wrong
-            # machines and be remembered as fact.
-            tied = any(
-                k != i
-                and assignment[k] is not None
-                and abs(
-                    (total[i][assignment[k]] + total[k][j]) - (total[i][j] + total[k][assignment[k]])
-                ) < 0.02
-                for k in range(len(rids))
-            )
-            if c <= LINE_MEASURED:
-                # Same rate, same machine count, same shipment: the recipes
-                # are certain as a set, and the needs follow from the set. Only
-                # which id is which is a guess, so a tie is named but never
-                # remembered.
-                named[rid], basis[rid] = slug, "paired" if tied else "measured"
-                if not tied:
-                    learned[rid] = slug
-            elif remembered.get(rid) == slug:
-                # Kept back too: what the line eats today outranks what it
-                # shipped on an earlier build.
-                recalled[rid] = slug
-            elif c <= LINE_LIKELY + 0.2 and not tied:
-                # Held but never shipped: a guess, kept back until what the
-                # line eats has had its say.
-                guessed[rid] = slug
-
-    # A name the player gave by hand outranks a guess, never a measurement.
     chosen = history.named(character) if history else {}
-    for rid, slug in chosen.items():
-        if (
-            slug in recipes
-            and (rid not in named or basis[rid] != "measured")
-            and slug not in named.values()
-        ):
-            named[rid], basis[rid] = slug, "you"
 
-    # --- then from what they eat: a line whose output never leaves the
-    # factory still draws its ingredients every morning. Cigars and cigarettes
-    # sit unsold, but 960 cigar paper a day is two machines at 20 an hour and
-    # nothing else on that workstation. What the named lines eat is taken off
-    # first; what is left has to be explained by the lines still unnamed. An
-    # ingredient only one candidate could be eating decides before a shared
-    # one: fresh food and french fries both take potatoes, but only fresh food
-    # takes the ground beef that is also arriving.
     def missing(key, slug):
         """Inputs of a recipe that neither arrive nor are held at the site."""
         if flow["received"](key, "") is None:
@@ -2237,115 +2143,13 @@ def _factories(
             if not arrives(key, resolve(ing)) and not held(key, resolve(ing))
         ]
 
-    for key, counter in machines.items():
-        residual = {}
-
-        def left(slug):
-            if slug not in residual:
-                residual[slug] = arrives(key, slug)
-            return residual[slug]
-
-        def eat(slug, station, rid):
-            for ing in recipes[slug]["ingredients"]:
-                item = resolve(ing)
-                residual[item] = left(item) - hours_a_day(key, station, rid) * ing["per"]
-
-        for (station, rid), n in counter.items():
-            # A line stopped for want of one input eats none of the others.
-            if rid and rid in named and not missing(key, named[rid]):
-                eat(named[rid], station, rid)
-        pending = [(st, rid, n) for (st, rid), n in counter.items() if rid and rid not in named]
-        paired = set()
-        while pending:
-            options = {}
-            for station, rid, n in pending:
-                # First the recipes its shipments allow; if every one of those
-                # is already another line's, anything on the workstation.
-                pool = [
-                    s for s in fits.get(rid, [])
-                    if s in by_station.get(station, []) and s not in named.values()
-                ]
-                restricted = bool(pool)
-                pool = pool or [s for s in by_station.get(station, []) if s not in named.values()]
-                feasible = {}
-                for slug in pool:
-                    errors, over = {}, False
-                    for ing in recipes[slug]["ingredients"]:
-                        item = resolve(ing)
-                        predicted = hours_a_day(key, station, rid) * ing["per"]
-                        have = max(left(item), 0.0)
-                        if predicted <= 0:
-                            over = True
-                            break
-                        if have <= 0 or predicted > have * (1 + LINE_OVERDRAW):
-                            over = True
-                            break
-                        errors[item] = abs(predicted - have) / predicted
-                    if not over and errors:
-                        feasible[slug] = errors
-                scored = []
-                for slug, errors in feasible.items():
-                    shared = {
-                        resolve(ing)
-                        for other in feasible
-                        if other != slug
-                        for ing in recipes[other]["ingredients"]
-                    }
-                    own = [e for item, e in errors.items() if item not in shared]
-                    scored.append((0, min(own), slug) if own else (1, min(errors.values()), slug))
-                options[rid] = sorted(scored)
-                if restricted:
-                    fits[rid] = pool
-                else:
-                    fits.pop(rid, None)
-            best = None
-            for station, rid, n in pending:
-                scored = options.get(rid) or []
-                if not scored:
-                    continue
-                rank, err, slug = scored[0]
-                # Sure when the anchor fits, or when the output already matched
-                # and this is the only recipe left that it could be.
-                if err > LINE_MEASURED and not (len(scored) == 1 and rid in fits):
-                    continue
-                if best is None or (rank, err) < best[:2]:
-                    best = (rank, err, rid, station, n, slug)
-            if best is None:
-                break
-            _rank, _err, rid, station, n, slug = best
-            # A twin — same workstation, same machine count, and this recipe
-            # open to it too — would fit exactly as well. The pair of lines is
-            # certain; which id is which is not, so neither is remembered.
-            twins = [
-                r for st, r, m in pending
-                if r != rid and st == station and m == n
-                and any(s == slug for _r, _e, s in options.get(r, []))
-            ]
-            if twins:
-                paired.update(twins)
-                paired.add(rid)
-            named[rid] = slug
-            basis[rid] = "paired" if rid in paired else "measured"
-            if rid not in paired:
-                learned[rid] = slug
-            eat(slug, station, rid)
-            pending = [p for p in pending if p[1] != rid]
-    for rid, slug in recalled.items():
-        if rid not in named and slug not in named.values():
-            named[rid], basis[rid] = slug, "remembered"
-    for rid, slug in guessed.items():
-        if rid not in named and slug not in named.values():
-            named[rid], basis[rid] = slug, "likely"
-    if history and learned:
-        history.recipes(character, learned)
-
     # --- each factory: its lines, and what they eat
     made_by = collections.defaultdict(set)
     sites, depot_need = [], collections.defaultdict(float)
     for key, counter in machines.items():
         lines, unnamed, needs = [], [], {}
         for (station, rid), n in sorted(counter.items(), key=lambda kv: -kv[1]):
-            slug = named.get(rid) if rid else None
+            slug, basis = _recipe_identity(rid, station, recipes, chosen)
             staffing = {
                 "hoursWeek": sum(m["hours"] for m in roster[key][(station, rid)]),
                 "fullWeek": n * STAFF_HOURS,
@@ -2355,35 +2159,6 @@ def _factories(
                 ],
             }
             if not slug:
-                # The plan still speaks: a recipe whose every input has a
-                # top-up into this factory is what the machines were set up
-                # for, even if what they need never turns up.
-                hint, best_score, best = None, 0.0, []
-                for cand in by_station.get(station, []):
-                    ings = recipes[cand]["ingredients"]
-                    if cand in named.values() or not ings:
-                        continue
-                    covered = sum(
-                        1
-                        for ing in ings
-                        if (key, resolve(ing)) in flow["targets"]
-                        or held(key, resolve(ing))
-                        or arrives(key, resolve(ing))
-                    )
-                    score = covered / len(ings)
-                    if score > best_score:
-                        best_score, best = score, [cand]
-                    elif score == best_score:
-                        best.append(cand)
-                if rid and best_score == 1.0 and len(best) == 1:
-                    hint = {
-                        "item": recipes[best[0]]["item"],
-                        "missing": [
-                            ing["item"]
-                            for ing in recipes[best[0]]["ingredients"]
-                            if not arrives(key, resolve(ing))
-                        ],
-                    }
                 unnamed.append(
                     {
                         "rid": rid,
@@ -2394,9 +2169,7 @@ def _factories(
                         "candidates": [
                             {"slug": c, "item": recipes[c]["item"]}
                             for c in by_station.get(station, [])
-                            if c not in named.values()
-                        ],
-                        "hint": hint,
+                        ] if rid else [],
                         **staffing,
                     }
                 )
@@ -2417,12 +2190,6 @@ def _factories(
                     "missing": stopped,
                     "workstation": station_name(station),
                     "slots": sorted(slots[key][(station, rid)]),
-                    # A line named without a measurement can be corrected.
-                    "candidates": [
-                        {"slug": c, "item": recipes[c]["item"]}
-                        for c in by_station.get(station, [])
-                        if c == slug or (c not in named.values())
-                    ] if basis[rid] != "measured" else [],
                     "machines": n,
                     "rate": rec["out"],
                     "makes": round(makes),
@@ -2430,7 +2197,7 @@ def _factories(
                     "stock": stock,
                     "toCity": to_city,
                     "toPier": to_pier,
-                    "basis": basis[rid],
+                    "basis": basis,
                     "piling": stock > makes * PILE_DAYS and ships < makes * share * 0.8,
                     "atRoster": round(makes * share),
                     **staffing,
@@ -3270,12 +3037,6 @@ class History:
             del store[old]
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int)]
 
-    def recipes(self, character: str, learned: dict) -> dict:
-        """Recipe ids the flow has identified, kept so an idle line stays named."""
-        store = self._for(character).setdefault("recipes", {})
-        store.update(learned)
-        return dict(store)
-
     def named(self, character: str, updates: dict | None = None) -> dict:
         """Lines the player named by hand, by recipe id; a None clears one."""
         store = self._for(character).setdefault("lineNames", {})
@@ -3292,7 +3053,7 @@ class History:
             return
         # A build takes seconds and loads this file at its start; a name given
         # in between must not be undone by the build writing what it loaded.
-        # Names and learnt recipes are merged with the file as it is now: only
+        # Manual names and legacy recipe guesses are preserved from disk: only
         # the names this instance itself changed overrule it.
         disk = self._load()
         for character, ours in self.book.items():
@@ -4254,7 +4015,7 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
 
     Two different things wear the same badge on the lines table. A machine with
     no recipe selected at all is standing still and costing rent; one that is
-    running a recipe the flow cannot pin down is working perfectly well, but
+    running a recipe the board cannot identify may be working, but
     every input need at that site is short by whatever it eats — which is worth
     saying out loud, because nothing else on the board looks wrong.
     """
@@ -4278,13 +4039,11 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
                 )
             else:
-                guesses = sorted({u["hint"]["item"] for u in rows if u.get("hint")})
-                likely = f"; the flow reads {' and '.join(guesses)}" if guesses else ""
                 text = (
                     f"{machines} machine{'s' if many else ''} at {where} "
-                    f"{'run' if many else 'runs'} a recipe the board cannot name{likely}. "
-                    f"Every input need here is short by what it eats; name the line to "
-                    f"put it in the numbers"
+                    f"{'run' if many else 'runs'} a recipe without usable details. "
+                    f"Its inputs are missing from the totals; name unknown recipes or "
+                    f"load matching game text to include them"
                 )
             notes.append(
                 _finding(
@@ -6089,25 +5848,23 @@ const SUPPLY_VIEWS = {
   },
   lines: {
     label: "Factory lines",
-    note: () => `Every assembly machine runs its recipe round the clock at the rated rate; the board reads the recipe from what the line ships`,
+    note: () => `Recipes come from the recipe table or your selection. Makes / day assumes full-rate production; staffing is shown separately.`,
     verdict: rows => {
       const f = factoryView();
       if(!f || !f.sites.length) return "No factory is set up.";
       const piling = rows.filter(r => r.piling).length;
-      const guessed = rows.filter(r => !r.unnamed && r.basis !== "measured" && r.basis !== "paired").length;
       const short = rows.filter(r => r.fullWeek && r.hoursWeek < r.fullWeek).length;
       const missing = rows.filter(r => r.missing && r.missing.length).length;
       const problems = [
-        f.unnamed ? `${f.unnamed} machine${f.unnamed===1?"":"s"} on recipes the flow has not identified` : "",
+        f.unnamed ? `${f.unnamed} machine${f.unnamed===1?"":"s"} without usable recipe details` : "",
         short ? `${short} line${short===1?" is":"s are"} not staffed round the clock` : "",
         missing ? `${missing} line${missing===1?" is":"s are"} missing inputs` : "",
         piling ? `${piling} line${piling===1?" makes":"s make"} more than leaves` : "",
-        guessed ? `${guessed} named from what they eat or hold rather than ship` : "",
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${f.sites.length} factor${f.sites.length===1?"y":"ies"}, ${f.machines} assembly machines</b> on ${
         rows.filter(r => !r.unnamed).length} lines.`;
     },
-    keep: r => r.unnamed || r.piling || (r.basis !== "measured" && r.basis !== "paired") || (r.missing && r.missing.length)
+    keep: r => r.unnamed || r.piling || (r.missing && r.missing.length)
               || (r.fullWeek && r.hoursWeek < r.fullWeek),
     head: `<th class="l">Factory</th><th class="l">Line</th><th>Machines</th><th>Staffed</th>
            <th>Makes / day</th><th>Ships / day</th><th>Held</th><th>Top-up out</th>`,
@@ -6118,30 +5875,20 @@ const SUPPLY_VIEWS = {
       <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.workstation}${slotText(r)} <span class="chip dim">${
           r.idle ? "no recipe chosen" : "recipe not identified"}</span>${r.rid && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
+          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="No usable recipe match. Choose the recipe shown in-game to include its inputs"><option value="">name this line…</option>${
               r.candidates.map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}<span class="sub">${
           r.idle ? "the machines stand idle"
-          : r.hint ? `set up as ${r.hint.item} by the look of the top-up plan${r.hint.missing.length
-              ? `, but ${r.hint.missing.join(", ")} never arrive${r.hint.missing.length === 1 ? "s" : ""}` : ""}`
-          : `nothing it could make has shipped or been fed in a week; one of ${r.candidates.length} recipes`}</span></td>
+          : r.candidates.length ? "Choose the recipe shown in-game; its inputs are missing from the totals"
+          : "Recipe details unavailable; load matching game text"}</span></td>
       <td>${r.machines}</td>
       <td>${staffCell(r)}</td>
       <td>—</td><td>—</td><td>—</td><td>—</td>` : `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
-      <td class="l">${r.item}${r.basis !== "measured" && r.basis !== "paired"
-          ? ` <span class="chip dim" data-tip="${r.basis === "likely"
-              ? "Nothing has shipped; named from the product held at the factory"
-              : r.basis === "paired"
-              ? "Twin lines with the same machine count: the pair is certain from what it eats, which is which is not"
-              : r.basis === "you" ? "You named this line; the board takes your word for it"
-              : "Identified on an earlier build and remembered"}">${
-              r.basis === "you" ? "named by you" : r.basis}</span>` : ""}${r.basis === "you" && r.rid
-          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}${
-          LIVE && r.basis !== "you" && r.basis !== "measured" && r.candidates && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
-              r.candidates.filter(c => c.slug !== r.slug).map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}
-        <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine${r.basis === "paired"
-          ? ` · one of a twin pair: which id is which cannot be told` : ""}</span></td>
+      <td class="l">${r.item} <span class="chip dim" data-tip="${r.basis === "table"
+          ? "Identified by recipe ID in the bundled table" : "You selected this recipe"}">${
+          r.basis === "table" ? "Recipe table" : "named by you"}</span>${r.basis === "you" && r.rid
+          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}
+        <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine</span></td>
       <td>${r.machines}</td>
       <td>${staffCell(r)}</td>
       <td>${r.makes.toLocaleString()}${r.missing && r.missing.length
@@ -6199,9 +5946,7 @@ const SUPPLY_VIEWS = {
       }[r.status]();
       return `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
-      <td class="l">${r.item}<span class="sub">${r.lines.map(l => {
-          const line = (factoryView().sites.find(s => s.s === r.s) || {lines: []}).lines.find(x => x.item === l);
-          return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ")}</span></td>
+      <td class="l">${r.item}<span class="sub">${factoryLineText(factoryView().sites.find(s => s.s === r.s), r)}</span></td>
       <td>${r.perDay.toLocaleString()}</td>
       <td>${r.perWeek.toLocaleString()}</td>
       <td>${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
@@ -6239,13 +5984,16 @@ const staffCell = r => {
 const slotText = r => r.slots && r.slots.length
   ? ` · list position${r.slots.length > 1 ? "s" : ""} ${r.slots.join(", ")}` : "";
 
-/* --- naming a factory line by hand ------------------------------------
-   The flow can only name a line that ships or eats something. One set up
-   before its ingredients arrive — beer waiting on hops — is named here, kept
-   in this browser, and sent to the watcher when the page is live so the
-   alerts follow too. The needs of a line named here are worked out on the
-   page from the same recipes the planner uses. */
+/* --- naming unresolved recipe IDs by hand ----------------------------
+   Table identities arrive from Python. Local choices apply only to unnamed
+   rows whose workstation offers that recipe, including static HTML output. */
 const LINE_NAMES_KEY = "ba_line_names";
+function factoryLineText(site, need){
+  return need.lines.map(item => {
+    const machines = (site?.lines || []).reduce((n, line) => n + (line.item === item ? line.machines : 0), 0);
+    return machines > 1 ? `${item} ×${machines}` : item;
+  }).join(", ");
+}
 function localNames(){
   try{ return JSON.parse(localStorage.getItem(LINE_NAMES_KEY)) || {}; }catch(e){ return {}; }
 }
@@ -6292,7 +6040,7 @@ const syncedNames = new Set();
 function syncLocalNames(view){
   if(!LIVE) return;
   const names = localNames();
-  const missing = view.sites.flatMap(s => s.unnamed).filter(u => u.rid && names[u.rid] && !syncedNames.has(u.rid));
+  const missing = view.sites.flatMap(s => s.unnamed).filter(u => u.rid && u.candidates.some(c => c.slug === names[u.rid]) && !syncedNames.has(u.rid));
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
@@ -6310,17 +6058,11 @@ function factoryView(){
   const recipes = {};
   (D.plan?.recipes || []).forEach(r => recipes[r.slug] = r);
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
-  const taken = new Set();
-  view.sites.forEach(s => s.lines.forEach(l => taken.add(l.slug)));
   const touched = new Set();
   view.sites.forEach(s => {
     s.unnamed = s.unnamed.filter(u => {
       const slug = u.rid && names[u.rid], rec = slug && recipes[slug];
-      if(!rec || taken.has(slug)){
-        u.candidates = u.candidates.filter(c => !taken.has(c.slug));
-        return true;
-      }
-      taken.add(slug);
+      if(!rec || !u.candidates.some(c => c.slug === slug)) return true;
       const makes = u.machines * rec.out * 24, stock = held(s.s, slug);
       const missing = s.known ? rec.ingredients
         .filter(ing => { const a = view.aliases[ing.slug] || ing.slug;
@@ -6360,7 +6102,10 @@ function factoryView(){
     view.sites.forEach(s => {
       s.needs.forEach(n => { if(n.from !== null){
         const k = n.from + "|" + n.slug; depotNeed[k] = (depotNeed[k] || 0) + n.perWeek; } });
-      s.lines.forEach(l => (madeAt[l.slug] = madeAt[l.slug] || []).push(s.s));
+      s.lines.forEach(l => {
+        const sites = madeAt[l.slug] = madeAt[l.slug] || [];
+        if(!sites.includes(s.s)) sites.push(s.s);
+      });
     });
     const shares = new Set([...touched].map(t => t.from + "|" + t.slug));
     view.sites.forEach(s => {
@@ -6378,9 +6123,6 @@ function factoryView(){
       s.needs.sort((a, b) => rank[a.level] - rank[b.level] || b.perDay - a.perDay);
     });
   }
-  // A recipe one line now runs is no longer on offer to the others.
-  view.sites.forEach(s => s.unnamed.forEach(u => {
-    u.candidates = u.candidates.filter(c => !taken.has(c.slug)); }));
   view.unnamed = view.sites.reduce((n, s) => n + s.unnamed.reduce((m, u) => m + u.machines, 0), 0);
   return view;
 }
@@ -7542,13 +7284,10 @@ function drawLogistics(){
   const sites = changesOnly
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
-  const lineText = (s, r) => r.lines.map(l => {
-    const line = s.lines.find(x => x.item === l);
-    return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ");
   const topupRow = (site, r) => {
     const over = r.target && r.target > r.perDay * 1.5;
     return `<tr>
-      <td class="l">${r.item}<span class="sub">${lineText(site, r)}</span></td>
+      <td class="l">${r.item}<span class="sub">${factoryLineText(site, r)}</span></td>
       <td>${r.perDay.toLocaleString()}</td>
       <td data-now="${r.target || 0}" data-to="${ceil100(r.perDay)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
       <td>${r.status === "unplanned" ? `${set(ceil100(r.perDay))}${up("add")}`

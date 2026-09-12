@@ -1089,8 +1089,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "1248ed7408";</script>
-<script src="app.js?v=1248ed7408"></script>
+<script>window.LEDGER_BUILD = "41a0d8736e";</script>
+<script src="app.js?v=41a0d8736e"></script>
 
 <script>
 let D = null;
@@ -1750,25 +1750,23 @@ const SUPPLY_VIEWS = {
   },
   lines: {
     label: "Factory lines",
-    note: () => `Every assembly machine runs its recipe round the clock at the rated rate; the board reads the recipe from what the line ships`,
+    note: () => `Recipes come from the recipe table or your selection. Makes / day assumes full-rate production; staffing is shown separately.`,
     verdict: rows => {
       const f = factoryView();
       if(!f || !f.sites.length) return "No factory is set up.";
       const piling = rows.filter(r => r.piling).length;
-      const guessed = rows.filter(r => !r.unnamed && r.basis !== "measured" && r.basis !== "paired").length;
       const short = rows.filter(r => r.fullWeek && r.hoursWeek < r.fullWeek).length;
       const missing = rows.filter(r => r.missing && r.missing.length).length;
       const problems = [
-        f.unnamed ? `${f.unnamed} machine${f.unnamed===1?"":"s"} on recipes the flow has not identified` : "",
+        f.unnamed ? `${f.unnamed} machine${f.unnamed===1?"":"s"} without usable recipe details` : "",
         short ? `${short} line${short===1?" is":"s are"} not staffed round the clock` : "",
         missing ? `${missing} line${missing===1?" is":"s are"} missing inputs` : "",
         piling ? `${piling} line${piling===1?" makes":"s make"} more than leaves` : "",
-        guessed ? `${guessed} named from what they eat or hold rather than ship` : "",
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${f.sites.length} factor${f.sites.length===1?"y":"ies"}, ${f.machines} assembly machines</b> on ${
         rows.filter(r => !r.unnamed).length} lines.`;
     },
-    keep: r => r.unnamed || r.piling || (r.basis !== "measured" && r.basis !== "paired") || (r.missing && r.missing.length)
+    keep: r => r.unnamed || r.piling || (r.missing && r.missing.length)
               || (r.fullWeek && r.hoursWeek < r.fullWeek),
     head: `<th class="l">Factory</th><th class="l">Line</th><th>Machines</th><th>Staffed</th>
            <th>Makes / day</th><th>Ships / day</th><th>Held</th><th>Top-up out</th>`,
@@ -1779,30 +1777,20 @@ const SUPPLY_VIEWS = {
       <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.workstation}${slotText(r)} <span class="chip dim">${
           r.idle ? "no recipe chosen" : "recipe not identified"}</span>${r.rid && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Nothing this line makes or eats has moved, so the board cannot tell what it runs. Say which, and its needs are worked out below"><option value="">name this line…</option>${
+          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="No usable recipe match. Choose the recipe shown in-game to include its inputs"><option value="">name this line…</option>${
               r.candidates.map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}<span class="sub">${
           r.idle ? "the machines stand idle"
-          : r.hint ? `set up as ${r.hint.item} by the look of the top-up plan${r.hint.missing.length
-              ? `, but ${r.hint.missing.join(", ")} never arrive${r.hint.missing.length === 1 ? "s" : ""}` : ""}`
-          : `nothing it could make has shipped or been fed in a week; one of ${r.candidates.length} recipes`}</span></td>
+          : r.candidates.length ? "Choose the recipe shown in-game; its inputs are missing from the totals"
+          : "Recipe details unavailable; load matching game text"}</span></td>
       <td>${r.machines}</td>
       <td>${staffCell(r)}</td>
       <td>—</td><td>—</td><td>—</td><td>—</td>` : `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
-      <td class="l">${r.item}${r.basis !== "measured" && r.basis !== "paired"
-          ? ` <span class="chip dim" data-tip="${r.basis === "likely"
-              ? "Nothing has shipped; named from the product held at the factory"
-              : r.basis === "paired"
-              ? "Twin lines with the same machine count: the pair is certain from what it eats, which is which is not"
-              : r.basis === "you" ? "You named this line; the board takes your word for it"
-              : "Identified on an earlier build and remembered"}">${
-              r.basis === "you" ? "named by you" : r.basis}</span>` : ""}${r.basis === "you" && r.rid
-          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}${
-          LIVE && r.basis !== "you" && r.basis !== "measured" && r.candidates && r.candidates.length
-          ? ` <select class="linepick" data-rid="${r.rid}" data-tip="Named from evidence that could not tell it from its twin; correct it if the game says otherwise"><option value="">correct…</option>${
-              r.candidates.filter(c => c.slug !== r.slug).map(c => `<option value="${c.slug}">${c.item}</option>`).join("")}</select>` : ""}
-        <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine${r.basis === "paired"
-          ? ` · one of a twin pair: which id is which cannot be told` : ""}</span></td>
+      <td class="l">${r.item} <span class="chip dim" data-tip="${r.basis === "table"
+          ? "Identified by recipe ID in the bundled table" : "You selected this recipe"}">${
+          r.basis === "table" ? "Recipe table" : "named by you"}</span>${r.basis === "you" && r.rid
+          ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}
+        <span class="sub">${r.workstation}${slotText(r)}, ${r.rate}/h a machine</span></td>
       <td>${r.machines}</td>
       <td>${staffCell(r)}</td>
       <td>${r.makes.toLocaleString()}${r.missing && r.missing.length
@@ -1860,9 +1848,7 @@ const SUPPLY_VIEWS = {
       }[r.status]();
       return `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
-      <td class="l">${r.item}<span class="sub">${r.lines.map(l => {
-          const line = (factoryView().sites.find(s => s.s === r.s) || {lines: []}).lines.find(x => x.item === l);
-          return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ")}</span></td>
+      <td class="l">${r.item}<span class="sub">${factoryLineText(factoryView().sites.find(s => s.s === r.s), r)}</span></td>
       <td>${r.perDay.toLocaleString()}</td>
       <td>${r.perWeek.toLocaleString()}</td>
       <td>${r.target ? r.target.toLocaleString() : "—"}${r.from !== null
@@ -1900,13 +1886,16 @@ const staffCell = r => {
 const slotText = r => r.slots && r.slots.length
   ? ` · list position${r.slots.length > 1 ? "s" : ""} ${r.slots.join(", ")}` : "";
 
-/* --- naming a factory line by hand ------------------------------------
-   The flow can only name a line that ships or eats something. One set up
-   before its ingredients arrive — beer waiting on hops — is named here, kept
-   in this browser, and sent to the watcher when the page is live so the
-   alerts follow too. The needs of a line named here are worked out on the
-   page from the same recipes the planner uses. */
+/* --- naming unresolved recipe IDs by hand ----------------------------
+   Table identities arrive from Python. Local choices apply only to unnamed
+   rows whose workstation offers that recipe, including static HTML output. */
 const LINE_NAMES_KEY = "ba_line_names";
+function factoryLineText(site, need){
+  return need.lines.map(item => {
+    const machines = (site?.lines || []).reduce((n, line) => n + (line.item === item ? line.machines : 0), 0);
+    return machines > 1 ? `${item} ×${machines}` : item;
+  }).join(", ");
+}
 function localNames(){
   try{ return JSON.parse(localStorage.getItem(LINE_NAMES_KEY)) || {}; }catch(e){ return {}; }
 }
@@ -1953,7 +1942,7 @@ const syncedNames = new Set();
 function syncLocalNames(view){
   if(!LIVE) return;
   const names = localNames();
-  const missing = view.sites.flatMap(s => s.unnamed).filter(u => u.rid && names[u.rid] && !syncedNames.has(u.rid));
+  const missing = view.sites.flatMap(s => s.unnamed).filter(u => u.rid && u.candidates.some(c => c.slug === names[u.rid]) && !syncedNames.has(u.rid));
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
@@ -1971,17 +1960,11 @@ function factoryView(){
   const recipes = {};
   (D.plan?.recipes || []).forEach(r => recipes[r.slug] = r);
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
-  const taken = new Set();
-  view.sites.forEach(s => s.lines.forEach(l => taken.add(l.slug)));
   const touched = new Set();
   view.sites.forEach(s => {
     s.unnamed = s.unnamed.filter(u => {
       const slug = u.rid && names[u.rid], rec = slug && recipes[slug];
-      if(!rec || taken.has(slug)){
-        u.candidates = u.candidates.filter(c => !taken.has(c.slug));
-        return true;
-      }
-      taken.add(slug);
+      if(!rec || !u.candidates.some(c => c.slug === slug)) return true;
       const makes = u.machines * rec.out * 24, stock = held(s.s, slug);
       const missing = s.known ? rec.ingredients
         .filter(ing => { const a = view.aliases[ing.slug] || ing.slug;
@@ -2021,7 +2004,10 @@ function factoryView(){
     view.sites.forEach(s => {
       s.needs.forEach(n => { if(n.from !== null){
         const k = n.from + "|" + n.slug; depotNeed[k] = (depotNeed[k] || 0) + n.perWeek; } });
-      s.lines.forEach(l => (madeAt[l.slug] = madeAt[l.slug] || []).push(s.s));
+      s.lines.forEach(l => {
+        const sites = madeAt[l.slug] = madeAt[l.slug] || [];
+        if(!sites.includes(s.s)) sites.push(s.s);
+      });
     });
     const shares = new Set([...touched].map(t => t.from + "|" + t.slug));
     view.sites.forEach(s => {
@@ -2039,9 +2025,6 @@ function factoryView(){
       s.needs.sort((a, b) => rank[a.level] - rank[b.level] || b.perDay - a.perDay);
     });
   }
-  // A recipe one line now runs is no longer on offer to the others.
-  view.sites.forEach(s => s.unnamed.forEach(u => {
-    u.candidates = u.candidates.filter(c => !taken.has(c.slug)); }));
   view.unnamed = view.sites.reduce((n, s) => n + s.unnamed.reduce((m, u) => m + u.machines, 0), 0);
   return view;
 }
@@ -3203,13 +3186,10 @@ function drawLogistics(){
   const sites = changesOnly
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
-  const lineText = (s, r) => r.lines.map(l => {
-    const line = s.lines.find(x => x.item === l);
-    return line && line.machines > 1 ? `${l} ×${line.machines}` : l; }).join(", ");
   const topupRow = (site, r) => {
     const over = r.target && r.target > r.perDay * 1.5;
     return `<tr>
-      <td class="l">${r.item}<span class="sub">${lineText(site, r)}</span></td>
+      <td class="l">${r.item}<span class="sub">${factoryLineText(site, r)}</span></td>
       <td>${r.perDay.toLocaleString()}</td>
       <td data-now="${r.target || 0}" data-to="${ceil100(r.perDay)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
       <td>${r.status === "unplanned" ? `${set(ceil100(r.perDay))}${up("add")}`

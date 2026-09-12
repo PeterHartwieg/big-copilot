@@ -34,7 +34,7 @@ async function board(width) {
 async function factory(page) {
   await page.evaluate(() => {
     const off = 'Mon 12-24; Tue 12-24; Wed 12-24; Thu 12-24; Fri 12-24; Sat 12-24; Sun 12-24';
-    const line = {item: 'Clothing (Classic Expensive Male)', slug: 'clothing', basis: 'measured',
+    const line = {item: 'Clothing (Classic Expensive Male)', slug: 'clothing', basis: 'table',
       workstation: 'Clothing Workstation', slots: [7, 8, 9, 10], machines: 4, rate: 30,
       hoursWeek: 336, fullWeek: 672, gaps: [7, 8, 9, 10].map(slot => ({slot, off})),
       makes: 2880, atRoster: 1440, ships: 1440, stock: 12345, toCity: 1234, toPier: 500};
@@ -48,6 +48,51 @@ async function factory(page) {
     document.querySelector('#secStock').classList.add('measured');
   });
 }
+
+test('table lines show their source and unresolved recipes offer a picker', async () => {
+  const page = await board(1280);
+  try {
+    await factory(page);
+    await page.evaluate(() => {
+      const f = D.supply.factories;
+      f.sites[0].unnamed = [{rid: 'future-id', workstation: 'Clothing Workstation',
+        slots: [11], machines: 1, idle: false, hoursWeek: 0, fullWeek: 168, gaps: [],
+        candidates: [{slug: 'clothing', item: 'Clothing (Classic Expensive Male)'}]}];
+      f.unnamed = 1;
+      drawStock();
+    });
+    assert.equal(await page.locator('.linepick').count(), 1);
+    assert.equal(await page.locator('.linepick').getAttribute('data-rid'), 'future-id');
+    assert.match(await page.locator('#secStock').innerText(), /Recipe table/);
+    assert.doesNotMatch(await page.locator('#secStock').innerText(), /paired|earlier build|named from what they eat/);
+    assert.equal(await page.locator('.unname').count(), 0);
+  } finally {
+    await page.close();
+  }
+});
+
+test('feed and top-up labels count all machines making the same product', async () => {
+  const page = await board(1280);
+  try {
+    await factory(page);
+    await page.evaluate(() => {
+      const site = D.supply.factories.sites[0];
+      site.lines = [{...site.lines[0], machines: 2},
+        {...site.lines[0], machines: 3, basis: 'you'}];
+      D.supply.factories.machines = 5;
+      site.needs = [{item: 'Fabric', slug: 'fabric', lines: [site.lines[0].item],
+        perDay: 1200, perWeek: 8400, target: 0, from: null, known: false,
+        importWeekly: null, depotNeed: 0, depotStock: 0, status: 'unplanned', level: 'critical'}];
+      stockView = 'feed';
+      drawStock();
+      drawLogistics();
+    });
+    for (const selector of ['#stock', '#topupPlan']) {
+      assert.match(await page.locator(selector).textContent(), /Clothing \(Classic Expensive Male\) ×5/);
+      assert.doesNotMatch(await page.locator(selector).textContent(), /×[23]/);
+    }
+  } finally { await page.close(); }
+});
 
 test('factory metrics fit at desktop widths without crushing line names', async () => {
   for (const width of [1280, 1655, 1920]) {
