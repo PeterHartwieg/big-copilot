@@ -15,13 +15,14 @@ The browser downloads a Python runtime on first use.
 
 Chrome and Edge can remember and watch a connected folder for new saves. Returning
 visits reopen it automatically when access is still granted; otherwise, click
-**Update** to reconnect. Firefox and Safari read a snapshot of the selected files;
+**Open newest save** or **Open chosen save** to reconnect. Firefox and Safari read a snapshot of the selected files;
 use **Update** to pick them again. Dropping a single file does not watch its folder.
 
 ## Find your saves
 
 The file-selection screen detects Windows or macOS and shows a copyable save
-path. Use its operating-system selector to switch paths. On other devices, choose
+path. Use its operating-system selector to switch paths; your choice is remembered.
+On other devices, choose
 the system your game runs on or select a `.hsg` file you already have.
 
 Choose the `Big Ambitions` folder inside `SaveGames`. Each character has a subfolder
@@ -80,6 +81,9 @@ working directory unless you specify `-o`.
 Add `--watch` to either startup command to keep the board live while playing.
 The server listens on `127.0.0.1` and rebuilds only when the game writes a save.
 
+With the default Windows save folder, you can also select a save or character by
+name: `python ba_dashboard.py "Costy Co"` or `python ba_dashboard.py "Costy" --watch`.
+
 ### Product names and game text in local runs
 
 **Browser:** game text is built in. To override it with a newer game's `en.json`,
@@ -101,6 +105,11 @@ path, for example (replace the path with your checkout's location):
 ```python
 DEFAULT_LOCALE = "/Users/yourname/big-copilot/web/py/gametext.json"
 ```
+
+To find the game's own text on macOS, use **Steam → Manage → Browse local files**
+and search that folder for `en.json`. If the files are inside an app bundle, use
+Finder's **Show Package Contents**. Installation layouts can vary; the bundled
+file above is an alternative that does not depend on the game installation.
 
 Restart the script after changing it. There is currently no `--locale` option.
 If names appear as `Haircareproduct` or `Expensiveflower`, the locale was not

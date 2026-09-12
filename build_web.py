@@ -161,11 +161,10 @@ button.btn{border:0;cursor:pointer}
 .lg-gametext p.quiet{margin-top:4px}
 .lg-gametext .path-label{margin-top:12px}
 .save-location{width:560px;max-width:calc(100vw - 48px);min-width:0}
-.save-location label{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12px;color:var(--ink-3)}
-.save-location select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:4px 6px}
+.save-location label{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 8px;font-size:12px;color:var(--ink-3)}
+.save-location select{max-width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:4px 6px}
 .save-location p{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--ink-3)}
 .menu-panel .save-location{width:100%;max-width:100%}
-#savePathRow[hidden]{display:none}
 .foot #footerLinks a.lg-footlink{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--rule)}
 .foot #footerLinks a.lg-footlink:hover{color:var(--ink);border-color:var(--ink-3)}
 @media (max-width:1100px){.landing .orb{display:none}}
@@ -206,8 +205,6 @@ details.help[open] summary::after{content:"\2013"}
 .path-row code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;flex:1;overflow-wrap:anywhere;user-select:all;color:var(--ink)}
 .path-row button{font:inherit;font-size:11px;border:1px solid var(--rule);border-radius:3px;padding:4px 10px;background:var(--surface);
   color:var(--ink);cursor:pointer;flex:none}
-.help-content .mac{font-size:10px;margin:7px 0}
-.help-content .mac code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;overflow-wrap:anywhere;user-select:all}
 
 /* the More menu's panel ------------------------------------------------- */
 .menu{position:relative}
@@ -247,10 +244,10 @@ details.help[open] summary::after{content:"\2013"}
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">__ICON_FOLDER__Choose the folder</button>
     <label class="link lg-pick" id="savePickLabel" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
-  <div class="save-location" id="saveLocation">
+  <div class="save-location rv" id="saveLocation">
     <label for="savePlatform">Save folder <select id="savePlatform" aria-label="Operating system for save folder help"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected>Other / unknown</option></select></label>
     <div class="path-row" id="savePathRow" hidden><code id="savePath"></code><button type="button" class="copy" id="savePathCopy" data-copy="savePath">Copy</button></div>
-    <p id="saveLocationHint" aria-live="polite">Choose Windows or macOS to see its save folder, or select a .hsg file.</p>
+    <p id="saveLocationHint">Choose Windows or macOS to see its save folder, or select a .hsg file.</p>
   </div>
   <div class="lg-src" id="srcSlot">
     <div class="strip" id="srcStrip" hidden>
@@ -284,7 +281,7 @@ details.help[open] summary::after{content:"\2013"}
         <div id="localeWindows" hidden><div class="path-label">en.json lives here &middot; default Windows Steam installation</div>
         <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
         </div>
-        <p id="localeOther" class="quiet">For an optional override, locate your game's <code>en.json</code> in its installation files. Names, recipes and station capacities are already included with this page.</p>
+        <p id="localeOther" class="quiet">To find your game's <code>en.json</code>, open Steam &rarr; Manage &rarr; Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle.</p>
       </div>
       <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button> &middot; the page only reads your save files.</p>
     </div>

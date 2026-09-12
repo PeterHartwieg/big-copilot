@@ -78,9 +78,16 @@
 
   function wireSaveLocation() {
     const select = $("savePlatform");
-    select.value = savePlatform(navigator);
+    // A cached older page may load the newest script during a deployment.
+    if (!select) return;
+    const remembered = stored.get("ledger_save_platform");
+    select.value = ["windows", "mac", "other"].includes(remembered) ? remembered : savePlatform(navigator);
     showSaveLocation(select.value);
-    select.addEventListener("change", () => showSaveLocation(select.value));
+    $("saveLocationHint").setAttribute("aria-live", "polite");
+    select.addEventListener("change", () => {
+      showSaveLocation(select.value);
+      try { localStorage.setItem("ledger_save_platform", select.value); } catch (e) {}
+    });
   }
 
   const stored = {
@@ -260,7 +267,7 @@
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
       $("menuChipSlot").appendChild($("localeChip"));
-      $("help").querySelector(".help-content").prepend($("saveLocation"));
+      if ($("saveLocation")) $("help").querySelector(".help-content").prepend($("saveLocation"));
       $("help").open = false;
       $("menuHelpSlot").appendChild($("help"));
       const links = [...$("footSlot").querySelectorAll("a")];
