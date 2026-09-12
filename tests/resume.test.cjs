@@ -18,7 +18,8 @@ async function resume(permission, options = {}) {
     canHandle:options.supported !== false, dirHandle:null, sourceGen:0,
     handles:{async get(){return options.missing ? null : handle;}},
     runtimeReady:true, pick:{dir:'character', name:'chosen.hsg'},
-    place(){}, idleState(){}, wireLanding(){},
+    place(){}, idleState(){}, wireLanding(){}, paintStrip(){},
+    startAttempt(){return true;}, finishAttempt(){}, state(){},
     note(...args){notes.push(args);},
     async loadFromHandle(value){loads.push(value);},
   });
