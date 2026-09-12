@@ -46,6 +46,50 @@
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
 
+  // This only chooses help text. File access still uses feature detection.
+  function savePlatform(nav) {
+    const platform = nav.userAgentData?.platform || nav.platform || "";
+    const ua = nav.userAgent || "";
+    if (/Android|iPhone|iPad|iPod/i.test(platform + " " + ua) ||
+        (/Mac/i.test(platform) && nav.maxTouchPoints > 1)) return "other";
+    if (/Win/i.test(platform)) return "windows";
+    if (/Mac/i.test(platform)) return "mac";
+    if (!platform && /Windows/i.test(ua)) return "windows";
+    if (!platform && /Macintosh|Mac OS X/i.test(ua)) return "mac";
+    return "other";
+  }
+
+  function showSaveLocation(platform) {
+    const paths = {
+      windows: String.raw`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions`,
+      mac: "~/Library/Application Support/com.Hovgaard-Games.Big-Ambitions/SaveGames/Big Ambitions/",
+    };
+    $("savePath").textContent = paths[platform] || "";
+    $("savePathRow").hidden = !paths[platform];
+    $("savePathCopy").textContent = "Copy";
+    $("saveLocationHint").textContent = platform === "windows"
+      ? 'Paste this into the folder picker’s File name box and press Enter.'
+      : platform === "mac"
+        ? "In the folder picker, press Cmd+Shift+G and paste this path (Steam native)."
+        : "Select Windows or macOS to find a save on your game computer, or choose a .hsg file you already have. Other installations may store saves elsewhere.";
+    $("localeWindows").hidden = platform !== "windows";
+    $("localeOther").hidden = platform === "windows";
+  }
+
+  function wireSaveLocation() {
+    const select = $("savePlatform");
+    // A cached older page may load the newest script during a deployment.
+    if (!select) return;
+    const remembered = stored.get("ledger_save_platform");
+    select.value = ["windows", "mac", "other"].includes(remembered) ? remembered : savePlatform(navigator);
+    showSaveLocation(select.value);
+    $("saveLocationHint").setAttribute("aria-live", "polite");
+    select.addEventListener("change", () => {
+      showSaveLocation(select.value);
+      try { localStorage.setItem("ledger_save_platform", select.value); } catch (e) {}
+    });
+  }
+
   const stored = {
     get(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } },
     set(key, value) {
@@ -223,6 +267,7 @@
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
       $("menuChipSlot").appendChild($("localeChip"));
+      if ($("saveLocation")) $("help").querySelector(".help-content").prepend($("saveLocation"));
       $("help").open = false;
       $("menuHelpSlot").appendChild($("help"));
       const links = [...$("footSlot").querySelectorAll("a")];
@@ -814,6 +859,7 @@
 
   /* --- wiring ------------------------------------------------------------ */
   window.addEventListener("DOMContentLoaded", async () => {
+    wireSaveLocation();
     localeState();
     state("busy", "Preparing the reader…", "Loading the Python runtime · about 6 MB, cached after the first visit");
     if (!canHandle) {
