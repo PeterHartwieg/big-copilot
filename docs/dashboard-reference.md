@@ -17,10 +17,28 @@ knows are in `NEIGHBOURHOODS` in `ba_dashboard.py`.
 
 ## What's on the board
 
-The board is five pages behind one bar, and shows one page at a time. **Today** is
-the daily check; the other four are places you go on purpose. Which page you were
+The board is six pages behind one bar, and shows one page at a time. **Today** is
+the daily check; the other five are places you go on purpose. Which page you were
 on, and which view inside it, is remembered on the device and mirrored in the URL
 hash, so a live refresh and a reopened tab both land where you left off.
+
+**Map** highlights your business footprints and shows site-specific findings in the detail panel.
+The map starts with all regions and omits the poster legend.
+Search by business name/address, choose a region or business type, and switch
+between your businesses, buildings you own, places with issues and all mapped addresses.
+Buildings I own uses purchased real estate from the save, including properties without a player business. Drag to pan,
+scroll/pinch or use the compact zoom buttons inside the map. A matching list provides keyboard access; narrow screens offer Map/List
+buttons. Ordinary addresses contain static map information, not a rental quote or
+an eligibility recommendation. Player homes are not part of My businesses.
+
+The small map button beside a building reference opens a location overlay focused
+on its footprint. Closing it or pressing Escape restores focus to that button and
+leaves the underlying page unchanged. The overlay and Map page share cached assets.
+Save refresh updates highlights; changing characters clears the previous selection.
+Unknown addresses remain in the list with “Map position unavailable.” The casino
+centers on its entrance because no footprint is available. The map covers 883
+addresses; 80 Third Street and 1 Airport Avenue are excluded from the geometry.
+No logistics connections or moving deliveries are shown.
 
 - **Today**: four tiles and the *Needs attention* list, nothing else. Profit yesterday
   with its seven-day average and trend, revenue with customers served, cash on hand

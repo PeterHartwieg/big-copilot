@@ -353,7 +353,7 @@ def stamp() -> str:
     import hashlib
 
     h = hashlib.md5()
-    for name in ("web/app.js", "web/worker.js", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
+    for name in ("web/app.js", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()[:10]

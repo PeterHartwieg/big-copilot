@@ -640,6 +640,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
 
     return {
         "meta": {
+            "character": character,
             "save": root.get("SaveGameName") or "Save",
             "day": day,
             "hour": root["Hour"],
@@ -678,6 +679,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         },
         "daily": daily,
         "businesses": businesses,
+        "ownedBuildings": _owned_buildings(save, names),
         "products": products,
         "staff": _staff_summary(staff, businesses),
         "loans": loans,
@@ -1208,6 +1210,20 @@ def _openable_types(names: Names) -> list[str]:
         if match:
             found.add(match.group(1))
     return sorted(found)
+
+
+def _owned_buildings(save: Save, names: Names) -> list[dict]:
+    """Purchased real estate, independent of rented business registrations."""
+    result = []
+    for entry in save.items(save.root.get("realEstate")):
+        address = save.address(entry.get("address"))
+        if address:
+            result.append({
+                "key": site_key(address), "address": names.addr(address),
+                "purchaseDay": entry.get("purchaseDay"),
+                "purchasePrice": money(entry["purchasePrice"]) if entry.get("purchasePrice") is not None else None,
+            })
+    return result
 
 
 def _goals(save: Save, names: Names, businesses: list) -> dict:
@@ -4319,6 +4335,7 @@ def render(
     banner: str = "",
     before_script: str = "",
     head: str = "",
+    map_external: bool = False,
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
@@ -4341,8 +4358,26 @@ def render(
     else:
         payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
         title = f"{data['meta']['save']} · Big Copilot"
+    # UI source stays shared between the local HTML and browser build. Static
+    # exports embed geography so opening a file needs no local server or fetch.
+    asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+    with open(os.path.join(asset_root, "map.js"), encoding="utf-8") as fh:
+        map_script = fh.read()
+    with open(os.path.join(asset_root, "map.css"), encoding="utf-8") as fh:
+        map_css = fh.read()
+    map_payload = ""
+    if data is not None and not live and not map_external:
+        import base64
+        with open(os.path.join(asset_root, "maps", "locations.json"), encoding="utf-8") as fh:
+            locations = json.load(fh)
+        with open(os.path.join(asset_root, "maps", locations["image"]), "rb") as fh:
+            image = "data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode("ascii")
+        map_payload = "window.BIG_COPILOT_MAP=" + json.dumps({"data": locations, "image": image}, separators=(",", ":")).replace("</", "<\\/") + ";"
     return "<!doctype html>" + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
+        .replace("/*__MAP_CSS__*/", map_css)
+        .replace("/*__MAP_SCRIPT__*/", map_script)
+        .replace("/*__MAP_PAYLOAD__*/", map_payload)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
         .replace("<!--__BANNER__-->", banner)
@@ -4356,6 +4391,7 @@ TEMPLATE = r"""<title>__TITLE__</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
+/*__MAP_CSS__*/
 /* Tokens: the generator's .board palette. Dark is the base, as on the canvas;
    the light values follow the system setting or an explicit data-theme, the way
    the board has always done it. */
@@ -4606,7 +4642,7 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .finds{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .find{
   display:grid;grid-template-columns:22px 150px 1fr auto 28px;gap:0 14px;align-items:center;
-  padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;
+  padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;cursor:pointer;
   transition:background .15s,opacity .35s,transform .35s;border-radius:0 6px 6px 0;
 }
 .find:hover{background:var(--surface);color:inherit}
@@ -5181,6 +5217,9 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     </div>
   </div>
 
+  <div class="page" id="pageMap" hidden>
+    <div id="cityMapPage"></div>
+  </div>
   <footer class="foot" id="footer">
     <span>Big Copilot</span>
     <span id="footFile"></span>
@@ -5189,8 +5228,13 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
     <span id="footBuild"></span>
   </footer>
 </div>
+<dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
+  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="btn2" autofocus>Close map</button></div>
+  <div id="cityMapOverlay"></div>
+</dialog>
 <!--__BEFORE_SCRIPT__-->
 <script>
+/*__MAP_PAYLOAD__*/
 let D = /*__DATA__*/null;
 const LIVE = /*__LIVE__*/false;
 /* Where fresh numbers come from. By default the local server that wrote this
@@ -5260,7 +5304,7 @@ const gauge = v => graded(v, "ink-3");
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
   title="${b.neighbourhood||"Unassigned"}">${b.code}</span>` : "";
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
-  <span class="sub">${b.type} · ${b.address}</span></span></div>`;
+  <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
    line, a point and a read-out that follow the pointer (wireTiles). x runs
@@ -5308,7 +5352,7 @@ const ICON = {
 const icon = name => ICON[name] || "";
 /* Text that lands in an attribute (a tooltip, a data-id) is escaped once, here. */
 const attr = s => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-/* A ? mark whose sentence opens beside it; the sentence is the old .head p note. */
+/* Tooltips are plain text: do not pass button/link markup into why(). */
 const why = text => `<span class="why" data-tip="${attr(text)}" tabindex="0"><i>?</i></span>`;
 /* A section head: title, optional ? mark, optional quiet aside text, and the
    right-hand aside (a .seg, a .link, counters). `after` is raw markup that sits
@@ -5672,7 +5716,7 @@ function drawFlowDetail(){
     return;
   }
   const named = id => { const n = g.nodes.find(x => x.id === id);
-    return n ? `${hoodHtml({code: n.tag})}${n.tag ? "&nbsp; " : ""}${shortText(n.name, 60)}` : id; };
+    return n ? `${hoodHtml({code: n.tag})}${n.tag ? "&nbsp; " : ""}${shortText(n.name, 60)}${mapButton(id.replace(/^import:/,""),n.name)}` : id; };
   const inbound = g.links.filter(l => l.to === node.id);
   const outbound = g.links.filter(l => l.from === node.id);
   const pipeTable = (title, links, other, empty) => `<table>
@@ -5689,7 +5733,7 @@ function drawFlowDetail(){
   const flags = (node.short ? chipHtml("bad", `${plural(node.short, "order")} too small`) : "")
     + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
   host.innerHTML = `
-    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}),
+    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}) + mapButton(node.id.replace(/^import:/,""),node.name),
       quiet: `${node.sub}${node.hood ? ` · ${node.hood}` : ""}`,
       aside: `<a class="link" href="#" id="flowClear">clear selection</a>`})}
     <div class="flowpipes">
@@ -5734,7 +5778,7 @@ const SUPPLY_VIEWS = {
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ${clear}`
         : `<b>${clear} ${clear===1?"shelf":"shelves"}</b>`} ${clear===1?"clears its":"clear their"} top-up${worst
-        ? `; tightest ${worst.item} at ${shortName(D.businesses[worst.s])}, ${
+        ? `; tightest ${worst.item} at ${mapRef(D.businesses[worst.s])}, ${
             worst.pressure}% on a ${worst.peakDay || "normal day"}` : ""}.`;
     },
     keep: r => r.level !== "ok" || r.pressure === null || r.pressure >= 85,
@@ -5785,7 +5829,7 @@ const SUPPLY_VIEWS = {
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
         D.supply.nextImportWeekday || "the next"}'s import, ${
         D.supply.hoursToImport} days off; thinnest ${worst.item} at ${
-        shortName(D.businesses[worst.s])}, ${worst.cover} days.`;
+        mapRef(D.businesses[worst.s])}, ${worst.cover} days.`;
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
     tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => a.cover - b.cover),
@@ -5829,7 +5873,7 @@ const SUPPLY_VIEWS = {
       return `<b>${rows.length} holding${rows.length===1?"":"s"}</b> above ${
         D.supply.idleWeeks} weeks of cover${dead.length
         ? `, ${dead.length} with nothing flowing out at all` : ""}${deepest
-        ? `; deepest ${deepest.item} at ${shortName(D.businesses[deepest.s])}, ${
+        ? `; deepest ${deepest.item} at ${mapRef(D.businesses[deepest.s])}, ${
             deepest.weeks} weeks` : ""}.`;
     },
     keep: r => r.dead || r.weeks >= 5,
@@ -5918,7 +5962,7 @@ const SUPPLY_VIEWS = {
         wait ? `${wait} wait on a stopped line` : "",
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - bad - watch - wait} of ${rows.length} inputs</b> are fed as the machines need${
-        worst ? `; largest ${worst.item} at ${shortName(D.businesses[worst.s])}` : ""}.`;
+        worst ? `; largest ${worst.item} at ${mapRef(D.businesses[worst.s])}` : ""}.`;
     },
     keep: r => r.level !== "ok",
     head: `<th class="l">Factory</th><th class="l">Input</th><th>Needs / day</th>
@@ -5926,7 +5970,7 @@ const SUPPLY_VIEWS = {
            <th>Import / week</th><th class="l">Change</th>`,
     rows: () => factoryView().sites.flatMap(s => s.needs.map(n => ({...n, s: s.s}))),
     row: r => {
-      const depot = r.from !== null ? shortName(D.businesses[r.from]) : "a depot";
+      const depot = r.from !== null ? mapRef(D.businesses[r.from]) : "a depot";
       const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
       const stalled = r.stalled ? `; none arrived last week though ${depot} holds ${r.depotStock.toLocaleString()}` : "";
       const change = {
@@ -5941,7 +5985,7 @@ const SUPPLY_VIEWS = {
           ? `${chip("bad", "import short")} raise the weekly import to ${r.raiseImport.toLocaleString()}`
           : `${chip("warn", "import tight")} within 5% of what the factories eat`,
         noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.depotNeed, 1)).toFixed(1)} weeks of it`,
-        made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => shortName(D.businesses[i])).join(", ")}`,
+        made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => mapRef(D.businesses[i])).join(", ")}`,
         ok: () => chip("ok", "covered"),
       }[r.status]();
       return `
@@ -6410,13 +6454,13 @@ function findingRow(a){
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   const site = !b ? a.site : b.code ? hoodHtml(b) + baseName(b) : shortName(b);
-  return `<a class="find ${SEV_KIND[a.level] || "opp"}" href="#${alertPage(a)}" data-id="${attr(a.id)}">
+  return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
-    <span class="site">${site}</span>
+    <span class="site"><a class="finding-link" href="#${alertPage(a)}">${site}</a>${b ? mapButton(b.key,b.name) : ""}</span>
     <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</span>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
-    <span class="more">${more}</span>` : ""}</a>`;
+    <span class="more">${more}</span>` : ""}</div>`;
 }
 /* Row click opens the finding's page; a click on the mark is stopped in the
    capture phase by wireFinds() and never reaches this. */
@@ -6561,7 +6605,7 @@ const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
 /* A site in a table: its neighbourhood pill, its short name, and the type and
    address underneath. With `chev`, the arrow that says the row opens. */
 const siteLabel = (b, chev) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}${chev ? ` ${CHEV()}` : ""}
-  <span class="sub">${b.type} · ${b.address}</span>`;
+  ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
 const kidCell = b => siteLabel(b, true);
 
 function chainRow(c, v){
@@ -6660,7 +6704,7 @@ function drawSitePicker(){
   const at = order.findIndex(b => b.key === siteKey);
   const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
   const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
-  const step = b => b ? `<a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>` : "";
+  const step = b => b ? `<span><a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>${mapButton(b.key,b.name)}</span>` : "";
   host.innerHTML = `${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
     support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}`;
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
@@ -6852,7 +6896,7 @@ function drawSite(){
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
-      <div><h2>${baseName(b)}</h2><span class="sub">${sub}</span></div>
+      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
     <div class="sstats rv">${stats}</div>
@@ -6894,7 +6938,7 @@ function drawSite(){
 
 /* The site cell of the redesign's tables: the hood pill, the short name, and
    the type on a line under the name. */
-const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}<span class="sub"${
+const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${mapRef(b)}<span class="sub"${
   b.code ? ` style="padding-left:34px"` : ""}>${b.type}</span>`;
 const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
 
@@ -6966,7 +7010,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]);
-    rows.push({key, group, item, current, proposed, reason, kind, site: s});
+    rows.push({key, group, item, current, proposed, reason, kind, site: s, source});
   };
   importRows.forEach(d => d.rows.forEach(r => {
     if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
@@ -7039,7 +7083,7 @@ function supplyLocation(section, s, count, content, first = false){
   const open = supplyLocationState.has(key) ? supplyLocationState.get(key) : first;
   return `<details class="supply-location" data-location="${attr(key)}" ${open ? "open" : ""}>
     <summary class="order-group-head" data-tip="${attr(business?.address || "Assign a depot in-game")}">
-      ${business ? hoodHtml(business) : ""}<span class="location-name">${attr(name)}</span>
+      ${business ? hoodHtml(business) : ""}<span class="location-name">${attr(name)}${business ? mapButton(business.key,business.name) : ""}</span>
       <span class="location-count">${count} item${count === 1 ? "" : "s"}</span>
       <span class="location-toggle" aria-hidden="true"></span></summary>
     <div class="location-content">${content}</div></details>`;
@@ -7098,7 +7142,7 @@ function drawOrderChecklist(rows, factories){
               : `<span class="order-before" aria-label="Saved setting ${r.current ?? "not set"}">${r.current === null ? "—" : r.current.toLocaleString()}</span>
                  <span class="order-arrow" aria-hidden="true">${icon("go")}</span><b class="order-after" aria-label="Proposed setting ${r.proposed}">${r.proposed.toLocaleString()}</b><small>${r.kind === "Weekly imports" ? "/week" : "/day"}</small>`}</span>
             <span class="order-chevron" aria-hidden="true">${icon("chev")}</span></summary>
-            <p class="order-reason">${attr(r.reason)}</p></details></div>`).join(""), groupIndex === 0)
+            <p class="order-reason">${attr(r.reason)}${r.source !== null && r.source !== undefined ? mapButton(D.businesses[r.source]?.key,D.businesses[r.source]?.name) : ""}</p></details></div>`).join(""), groupIndex === 0)
       ).join("") : `<div class="order-empty">${icon("tick")}<span>No changes found</span>${why("No changes identified from available supply data. New routes may need more history; unidentified factory recipes are not included.")}</div>`}
     <p id="orderCopyStatus" class="order-copy-status" role="status"></p>
     <textarea id="orderCopyFallback" aria-label="Checklist to copy manually" readonly hidden></textarea>`;
@@ -7294,7 +7338,7 @@ function drawLogistics(){
         : r.status === "target" ? `${set(ceil100(r.perDay))}${up("raise")}`
         : over ? `${ceil100(r.perDay).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line eats")}`
         : chipHtml("ok", "covered")}</td>
-      <td class="l">${r.from !== null ? shortName(D.businesses[r.from]) : "—"}</td>
+      <td class="l">${r.from !== null ? mapRef(D.businesses[r.from]) : "—"}</td>
       <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
         ? ` ${chipHtml("dim", "waiting", `${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`)}`
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
@@ -7394,8 +7438,8 @@ function drawMovers(){
       x.mine ? ", you sell or make it" : ""})`).join(", ")}.`;
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${g.where}`, left, tip));
-    else out.push(waveHtml("dn", g.where, `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
+    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${mapAddress(g.where)}`, left, tip));
+    else out.push(waveHtml("dn", mapAddress(g.where), `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
@@ -7842,6 +7886,8 @@ function drawFooter(){
   $("footBuild").textContent = `Game build ${m.build}`;
 }
 
+/*__MAP_SCRIPT__*/
+
 function renderAll(){
   indexTrends();
   drawMast(); drawKpis(); drawAlerts();
@@ -7850,6 +7896,7 @@ function renderAll(){
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFooter();
   wireAll();
+  refreshCityMaps();
 }
 
 /* --- pages ------------------------------------------------------------ */
@@ -7863,13 +7910,14 @@ const PAGES = [
   {id:"supply",  label:"Supply",  host:"pageSupply"},
   {id:"growth",  label:"Growth",  host:"pageGrowth"},
   {id:"company", label:"Company", host:"pageCompany"},
+  {id:"map", label:"Map", host:"pageMap"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
-           items:[["orders","Orders"],["checks","Checks"],["map","Map"]]},
+           items:[["orders","Orders","secLogistics"],["checks","Checks","secStock"],["map","Map","secFlow"]]},
   // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
-           items:[["market","Demand"],["plan","Plan a chain"]]},
+           items:[["market","Demand","secMarket"],["plan","Plan a chain","secPlan"]]},
 };
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
@@ -7886,8 +7934,8 @@ function showSub(pageId, id){
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   sub[pageId] = id;
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
-  $(sv.nav).innerHTML = sv.items.map(([k, label]) =>
-    `<a href="#${k}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
+  $(sv.nav).innerHTML = sv.items.map(([k, label, anchor=k]) =>
+    `<a href="#${anchor}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
   remember(sv.key, id);
   wireReveal();
 }
@@ -7906,6 +7954,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
   if(id === "results") drawChart();
+  if(id === "map") showCityMap();
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
   wireReveal();
@@ -7915,13 +7964,13 @@ $("nav").innerHTML = PAGES.map(p =>
   `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span></a>`).join("") + '<i class="ink"></i>';
 $("nav").addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
-  if(!a) return;
+  if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   showPage(a.dataset.id);
 });
 Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
-  if(!a) return;
+  if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   showSub(id, a.dataset.id);
 }));
@@ -8802,6 +8851,7 @@ function boot(){
   renderAll();
   Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
   const h = location.hash.slice(1);
+  if(SEC_PAGE[h]?.[1]) showSub(...SEC_PAGE[h]);
   showPage(PAGES.some(p => p.id === h) ? h
     : SEC_PAGE[h] ? SEC_PAGE[h][0]
     : remembered(PAGE_KEY) || "today", false, "replace");
@@ -9206,6 +9256,23 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = self.path.split("?")[0].rstrip("/") or "/"
+        # Explicit allowlist: the watch server exposes no arbitrary workspace files.
+        map_assets = {"/maps/locations.json": "application/json", "/maps/map-background.svg": "image/svg+xml"}
+        if route in map_assets:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", route.lstrip("/"))
+            try:
+                with open(path, "rb") as fh:
+                    body = fh.read()
+            except OSError:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", map_assets[route])
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         with self.board.lock:
             body, ctype = {
                 "/": (self.board.html, "text/html; charset=utf-8"),
