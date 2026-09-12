@@ -324,7 +324,7 @@
       $("srcActions").appendChild($("boardControls").content.cloneNode(true));
       fb.className = "lg-btn"; fb.textContent = "Choose save folder";
       sp.className = "lg-btn lg-pick"; $("savePickText").textContent = "One save file";
-      $("menuSourceSlot").append(saveSel, fb, sp);
+      $("menuSourceSlot").append(savePicker, fb, sp);
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
       $("menuChipSlot").appendChild($("localeChip"));
@@ -356,7 +356,7 @@
         // draws them: Open newest save, Change folder, one file.
         fb.className = "btn2"; fb.textContent = "Change folder";
         $("savePickText").textContent = "one file";
-        $("srcActions").append(saveSel, fb, sp);
+        $("srcActions").append(savePicker, fb, sp);
         $("entryRow").hidden = true;
         // Keep the restore message ahead of the platform-specific folder help.
         if ($("saveLocation")) $("srcSlot").after($("saveLocation"));
@@ -364,7 +364,7 @@
         fb.className = "btn"; fb.innerHTML = ICON_FOLDER + "Choose the folder";
         $("savePickText").textContent = "or one save file";
         $("entryRow").append(fb, sp);
-        $("srcActions").prepend(saveSel);
+        $("srcActions").prepend(savePicker);
         $("entryRow").hidden = false;
       }
     }
@@ -375,6 +375,7 @@
       const open = !$("srcMenu").classList.contains("open");
       $("srcMenu").classList.toggle("open", open);
       $("menuBtn").setAttribute("aria-expanded", String(open));
+      if (!open) closeSavePicker();
       if (typeof window.hideTip === "function") window.hideTip();
     });
     $("srcMenu").addEventListener("click", (e) => e.stopPropagation());
@@ -382,6 +383,7 @@
   function closeMenu() {
     const m = $("srcMenu");
     if (!m) return;
+    closeSavePicker();
     m.classList.remove("open");
     $("menuBtn").setAttribute("aria-expanded", "false");
   }
@@ -518,10 +520,116 @@
   // inside each, the newest-of entry first and then every save, newest first.
   const saveSel = document.createElement("select");
   saveSel.id = "saveSel";
-  saveSel.className = "lg-sel";
-  saveSel.title = "Which save the board reads. The newest anywhere follows whatever you play; a character keeps to that folder; a named save stays on that file.";
-  saveSel.setAttribute("aria-label", "Which save to read");
+  // Keep the selection model separate from the themed, keyboard-accessible UI.
   saveSel.hidden = true;
+  const savePicker = document.createElement("div");
+  savePicker.className = "save-picker";
+  savePicker.hidden = true;
+  savePicker.innerHTML = `<button type="button" class="save-trigger" aria-label="Which save to read" aria-haspopup="listbox" aria-expanded="false" aria-controls="saveOptions">
+    ${ICON_FOLDER}<span class="save-current">Newest save anywhere</span><svg class="save-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+    </button><div id="saveOptions" class="save-options" role="listbox" aria-label="Saves" hidden></div>`;
+  savePicker.prepend(saveSel);
+  const saveTrigger = savePicker.querySelector("button");
+  const saveOptions = savePicker.querySelector(".save-options");
+  saveTrigger.querySelector("svg").setAttribute("aria-hidden", "true");
+  const optionRows = () => [...saveOptions.querySelectorAll('[role="option"]')];
+  function closeSavePicker(focus = false) {
+    saveOptions.hidden = true;
+    saveTrigger.setAttribute("aria-expanded", "false");
+    if (focus) saveTrigger.focus();
+  }
+  function focusSaveOption(row) {
+    if (!row) return;
+    row.focus({preventScroll: true});
+    row.scrollIntoView({block: "nearest"});
+  }
+  function openSavePicker() {
+    saveOptions.hidden = false;
+    saveTrigger.setAttribute("aria-expanded", "true");
+    focusSaveOption(saveOptions.querySelector('[aria-selected="true"]') || optionRows()[0]);
+  }
+  function paintSavePicker() {
+    const focusedValue = saveOptions.contains(document.activeElement) ? document.activeElement.dataset.value : null;
+    const selected = saveSel.selectedOptions[0];
+    const label = selected?.dataset.current || selected?.textContent || "Newest save anywhere";
+    saveTrigger.querySelector(".save-current").textContent = label;
+    saveTrigger.setAttribute("aria-label", `Which save to read: ${label}`);
+    saveTrigger.title = label;
+    saveOptions.replaceChildren();
+    function addOption(option, host) {
+      const row = document.createElement("div");
+      row.className = "save-option";
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(option.selected));
+      row.tabIndex = -1;
+      row.dataset.value = option.value;
+      const title = document.createElement("span");
+      title.className = "save-option-title";
+      title.textContent = option.dataset.title;
+      const detail = document.createElement("span");
+      detail.className = "save-option-meta";
+      detail.textContent = option.dataset.detail;
+      row.append(title, detail);
+      host.appendChild(row);
+    }
+    [...saveSel.children].forEach((child, index) => {
+      if (child.tagName === "OPTION") { addOption(child, saveOptions); return; }
+      const group = document.createElement("div");
+      group.className = "save-group";
+      group.setAttribute("role", "group");
+      const heading = document.createElement("div");
+      heading.className = "save-group-label";
+      heading.id = `saveGroup${index}`;
+      heading.textContent = child.label;
+      group.setAttribute("aria-labelledby", heading.id);
+      group.appendChild(heading);
+      [...child.children].forEach(option => addOption(option, group));
+      saveOptions.appendChild(group);
+    });
+    if (focusedValue !== null) focusSaveOption(optionRows().find(row => row.dataset.value === focusedValue) || saveOptions.querySelector('[aria-selected="true"]'));
+  }
+  function chooseSaveOption(row) {
+    if (!row) return;
+    saveSel.value = row.dataset.value;
+    closeSavePicker(true);
+    saveSel.dispatchEvent(new Event("change"));
+  }
+  saveTrigger.addEventListener("click", () => saveOptions.hidden ? openSavePicker() : closeSavePicker(true));
+  saveTrigger.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openSavePicker(); }
+  });
+  saveOptions.addEventListener("click", e => chooseSaveOption(e.target.closest('[role="option"]')));
+  let saveSearch = "", saveSearchAt = 0;
+  saveOptions.addEventListener("keydown", e => {
+    const rows = optionRows(), index = rows.indexOf(document.activeElement);
+    let next;
+    if (e.key === "ArrowDown") next = rows[Math.min(index + 1, rows.length - 1)];
+    else if (e.key === "ArrowUp") next = rows[Math.max(index - 1, 0)];
+    else if (e.key === "Home") next = rows[0];
+    else if (e.key === "End") next = rows[rows.length - 1];
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); chooseSaveOption(rows[index]); return; }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeSavePicker(true); return; }
+    else if (e.key === "Tab") {
+      // Restore the trigger's place in the tab order before the browser advances.
+      closeSavePicker(true); return;
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const now = Date.now();
+      saveSearch = (now - saveSearchAt < 700 ? saveSearch : "") + e.key.toLowerCase();
+      saveSearchAt = now;
+      next = rows.find(row => row.querySelector(".save-option-title").textContent.toLowerCase().startsWith(saveSearch));
+    }
+    if (next) { e.preventDefault(); focusSaveOption(next); }
+  });
+  document.addEventListener("click", e => { if (!savePicker.contains(e.target)) closeSavePicker(); });
+  savePicker.addEventListener("focusout", e => {
+    // Pointer-driven focus changes run microtasks before the next focus event.
+    // Use the destination when available; defer only for rows replaced by a scan.
+    if (e.relatedTarget) {
+      if (!savePicker.contains(e.relatedTarget)) closeSavePicker();
+      return;
+    }
+    queueMicrotask(() => { if (!savePicker.contains(document.activeElement)) closeSavePicker(); });
+  });
   const metaCache = new Map();  // "dir/name@mtime" -> {character, day, autosave}
   async function readMeta(e) {
     const key = `${e.dir}/${e.file.name}@${e.file.lastModified}`;
@@ -587,16 +695,25 @@
       else { moved = `Could not find ${was}; following the newest save anywhere instead.`; setPick("", ""); }
     }
     const total = groups.reduce((n, g) => n + g.saves.length, 0);
-    saveSel.hidden = total < 2;
-    if (saveSel.hidden) return moved;
+    savePicker.hidden = total < 2;
+    if (savePicker.hidden) { closeSavePicker(); return moved; }
     saveSel.textContent = "";
-    const opt = (parent, value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; parent.appendChild(o); return o; };
-    opt(saveSel, pickKey("", ""), "Newest save anywhere");
+    const opt = (parent, value, title, detail, current = title) => {
+      const o = document.createElement("option");
+      o.value = value; o.textContent = `${title} · ${detail}`;
+      Object.assign(o.dataset, {title, detail, current});
+      parent.appendChild(o);
+    };
+    opt(saveSel, pickKey("", ""), "Newest save anywhere", "Follow the latest across all characters");
     for (const g of groups) {
       const og = document.createElement("optgroup");
       og.label = g.character;
-      if (g.saves.length > 1) opt(og, pickKey(g.dir, ""), `${g.character} · newest`);
-      for (const s of g.saves) opt(og, pickKey(g.dir, s.file.name), `${saveLabel(s.file.name, s.info)} · ${fmtTime(s.file.lastModified)}`);
+      if (g.saves.length > 1) opt(og, pickKey(g.dir, ""), "Newest for this character", "Follow new saves in this folder", `${g.character} · newest`);
+      for (const s of g.saves) {
+        const title = saveLabel(s.file.name, s.info && {...s.info, day: null});
+        const detail = [s.info?.day != null ? `Day ${s.info.day}` : "", fmtTime(s.file.lastModified)].filter(Boolean).join(" · ");
+        opt(og, pickKey(g.dir, s.file.name), title, detail, `${g.character} · ${title}`);
+      }
       saveSel.appendChild(og);
     }
     saveSel.value = pickKey(pick.dir, pick.name);
@@ -605,6 +722,7 @@
     if (saveSel.selectedIndex < 0 && home && !pick.name) saveSel.value = pickKey(home.dir, home.saves[0].file.name);
     // Nothing in the menu stands for the pick: the rule follows the menu.
     if (saveSel.selectedIndex < 0) { setPick("", ""); saveSel.value = pickKey("", ""); }
+    paintSavePicker();
     return moved;
   }
   // Whatever was asked for while a build ran; the latest request wins.
@@ -618,6 +736,7 @@
     const [dir, name] = saveSel.value.split("|");
     supersede();
     setPick(dir, name);
+    paintSavePicker();
     applyPick();
   });
 
@@ -1004,7 +1123,7 @@
         if (gen !== sourceGen) return;  // superseded while the sidecars were read
         await loadFromEntries(wanted, "", moved, gen);
       } else {
-        if (!dirHandle) { saveSel.hidden = true; lastEntries = null; }
+        if (!dirHandle) { savePicker.hidden = true; closeSavePicker(); lastEntries = null; }
         buildFrom(newestOf(saves.map((e) => e.file)), "", gen);
       }
     };

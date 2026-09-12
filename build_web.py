@@ -156,11 +156,30 @@ button.btn{border:0;cursor:pointer}
 .lg-pick{cursor:pointer}
 .lg-pick input{display:none}
 /* the save menu: which character or save the board follows */
-.lg-sel{font:inherit;font-size:12.5px;font-weight:500;line-height:1.4;color:var(--ink);background:var(--surface);
-  border:1px solid var(--rule);border-radius:7px;padding:7px 10px;max-width:260px;cursor:pointer}
-.lg-sel:hover{border-color:var(--ink-3)}
-.lg-sel:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.menu-panel .lg-sel{display:block;width:100%;max-width:none;margin:0 0 6px;border-radius:4px}
+.save-picker{position:relative;min-width:0;width:260px;max-width:100%}
+.save-trigger{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:1px solid var(--rule);border-radius:8px;
+  font:500 12.5px/1.4 Archivo,"Helvetica Neue",Arial,sans-serif;text-align:left;color:var(--ink);background:var(--raised);cursor:pointer}
+.save-trigger:hover{border-color:var(--ink-3)}
+.save-trigger[aria-expanded="true"]{border-color:var(--accent)}
+.save-trigger:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.save-trigger svg{width:16px;height:16px;flex:none;fill:none;stroke:var(--ink-2);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.save-trigger .save-chevron{margin-left:auto;width:12px;transition:transform .15s}
+.save-trigger[aria-expanded="true"] .save-chevron{transform:rotate(180deg)}
+.save-current{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.save-options{position:absolute;right:0;top:calc(100% + 6px);z-index:41;width:320px;max-width:calc(100vw - 48px);
+  max-height:300px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--rule) transparent;
+  padding:5px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);box-shadow:var(--shadow);text-align:left}
+.save-group{margin-top:5px;padding-top:5px;border-top:1px solid var(--rule-soft)}
+.save-group-label{padding:7px 9px 5px;font:500 10px/1.5 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);overflow-wrap:anywhere}
+.save-option{position:relative;padding:9px 30px 9px 9px;border-radius:5px;cursor:pointer;white-space:normal;overflow-wrap:anywhere}
+.save-option:hover,.save-option:focus{background:var(--raised);outline:none}
+.save-option:focus-visible{box-shadow:inset 0 0 0 1px var(--accent)}
+.save-option[aria-selected="true"]{background:var(--accent-soft)}
+.save-option[aria-selected="true"]::after{content:"\2713";position:absolute;right:10px;top:10px;color:var(--accent);font-weight:600}
+.save-option-title{display:block;font-size:12.5px;font-weight:500;line-height:1.5;color:var(--ink)}
+.save-option-meta{display:block;margin-top:2px;font:400 10px/1.5 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.menu-panel .save-picker{width:100%;margin-bottom:8px}
+.menu-panel .save-options{position:relative;top:auto;right:auto;width:100%;max-width:none;margin-top:6px;box-shadow:none}
 .strip .right .menu-panel{white-space:normal}
 .lg-foot{display:contents}
 .landing footer a{cursor:pointer}
@@ -221,7 +240,7 @@ details.help[open] summary::after{content:"\2013"}
 /* the More menu's panel ------------------------------------------------- */
 .menu{position:relative}
 .menu-panel{display:none;position:absolute;right:0;top:calc(100% + 8px);width:320px;padding:10px;background:var(--surface);
-  border:1px solid var(--rule);border-radius:5px;box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);z-index:40;
+  border:1px solid var(--rule);border-radius:10px;box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);z-index:40;
   max-height:min(650px,80vh);overflow:auto;text-align:left}
 .menu.open .menu-panel{display:block}
 .menu.open>.ibtn{color:var(--ink);border-color:var(--ink-3)}

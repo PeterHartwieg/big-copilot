@@ -191,7 +191,8 @@ for (const delay of ['lookup', 'permission', 'scan', 'sidecar', 'bytes']) test(`
 test('new save selection rejects both stale data and history after an old build', async t => {
   const page = await setup(t);
   await messages(page);
-  await page.locator('#saveSel').selectOption('bob|newer.hsg');
+  await page.locator('.save-trigger').click();
+  await page.locator('[role="option"][data-value="bob|newer.hsg"]').click();
   await messages(page, 2);
   await page.evaluate(() => fixture.complete(0, 'obsolete-history'));
   assert.equal(await hasBoard(page), false);
@@ -325,7 +326,8 @@ test('corrupt save can be retried; a failed live refresh retains the board', asy
   await page.evaluate(() => fixture.complete(1));
   assert.doesNotMatch(await page.locator('#srcMeta').textContent(), /Automatic updates are paused/);
   await page.locator('#menuBtn').click();
-  await page.locator('#saveSel').selectOption('bob|newer.hsg');
+  await page.locator('.save-trigger').click();
+  await page.locator('[role="option"][data-value="bob|newer.hsg"]').click();
   await messages(page, 3);
   await page.evaluate(() => fixture.worker.emit({kind:'failed', id:fixture.worker.messages[2].id, error:'Corrupt save'}));
   assert.equal(await hasBoard(page), true);
