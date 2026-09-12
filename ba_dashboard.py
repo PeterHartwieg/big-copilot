@@ -7914,10 +7914,10 @@ const PAGES = [
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
-           items:[["orders","Orders"],["checks","Checks"],["map","Map","secFlow"]]},
+           items:[["orders","Orders","secLogistics"],["checks","Checks","secStock"],["map","Map","secFlow"]]},
   // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
-           items:[["market","Demand"],["plan","Plan a chain"]]},
+           items:[["market","Demand","secMarket"],["plan","Plan a chain","secPlan"]]},
 };
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };

@@ -91,3 +91,20 @@ test('Supply Map has an unambiguous link and fresh section navigation selects th
   assert.equal(b.page(),'supply');
   assert.equal(vm.runInContext('sub.supply',b.context),'map');
 });
+
+for(const [pageId,view,anchor] of [
+  ['supply','orders','secLogistics'],['supply','checks','secStock'],
+  ['growth','market','secMarket'],['growth','plan','secPlan'],
+]) test(`modified-click destination boots ${pageId}/${view}`,()=>{
+  const b=board();b.context.showSub(pageId,view);
+  const nav=b.$(pageId==='supply'?'supplyNav':'growthNav');
+  assert.ok(nav.innerHTML.includes(`href="#${anchor}" data-id="${view}"`));
+  let prevented=false;
+  nav.click({ctrlKey:true,preventDefault(){prevented=true;},target:{closest(){return {dataset:{id:view}};}}});
+  assert.equal(prevented,false);
+  b.context.location.hash='#'+anchor;
+  b.context.renderAll=b.context.wireNav=b.context.wireCoin=b.context.wireSphere=()=>{};
+  vm.runInContext(source.slice(source.indexOf('function boot(){'),source.indexOf('/* A page written with its numbers')),b.context);
+  b.context.boot();assert.equal(b.page(),pageId);
+  assert.equal(vm.runInContext(`sub.${pageId}`,b.context),view);
+});
