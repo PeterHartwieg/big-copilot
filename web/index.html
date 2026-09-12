@@ -785,6 +785,12 @@ button.btn{border:0;cursor:pointer}
 .lg-gametext p{margin:8px 0 0;line-height:1.7}
 .lg-gametext p.quiet{margin-top:4px}
 .lg-gametext .path-label{margin-top:12px}
+.save-location{width:560px;max-width:calc(100vw - 48px);min-width:0}
+.save-location label{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:12px;color:var(--ink-3)}
+.save-location select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:4px 6px}
+.save-location p{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--ink-3)}
+.menu-panel .save-location{width:100%;max-width:100%}
+#savePathRow[hidden]{display:none}
 .foot #footerLinks a.lg-footlink{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--rule)}
 .foot #footerLinks a.lg-footlink:hover{color:var(--ink);border-color:var(--ink-3)}
 @media (max-width:1100px){.landing .orb{display:none}}
@@ -866,6 +872,11 @@ details.help[open] summary::after{content:"\2013"}
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save."><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Choose the folder</button>
     <label class="link lg-pick" id="savePickLabel" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
+  <div class="save-location" id="saveLocation">
+    <label for="savePlatform">Save folder <select id="savePlatform" aria-label="Operating system for save folder help"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected>Other / unknown</option></select></label>
+    <div class="path-row" id="savePathRow" hidden><code id="savePath"></code><button type="button" class="copy" id="savePathCopy" data-copy="savePath">Copy</button></div>
+    <p id="saveLocationHint" aria-live="polite">Choose Windows or macOS to see its save folder, or select a .hsg file.</p>
+  </div>
   <div class="lg-src" id="srcSlot">
     <div class="strip" id="srcStrip" hidden>
       <div class="st"><span class="led" id="srcLed"></span><span id="srcStatus"></span><span class="prog" id="srcProg" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
@@ -888,18 +899,17 @@ details.help[open] summary::after{content:"\2013"}
   <details class="help" id="help">
     <summary>Where is my save?</summary>
     <div class="help-content">
-      <p>In the folder picker, paste the Windows path into <b>File name</b> and press Enter. Choose the <b>Big Ambitions</b> folder; the page finds the newest save across the company folders inside it, whose generated names cannot be told apart by eye.</p>
-      <div class="path-label">Save folder &middot; Windows</div>
-      <div class="path-row"><code id="savePath">%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions</code><button type="button" class="copy" data-copy="savePath">Copy</button></div>
-      <p class="mac">On macOS: <code>~/Library/Application Support/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions</code></p>
+      <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
       <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build 3675; the Python runtime the page needs is about 6 MB, fetched once and cached. Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
         <p id="asideText">Names, recipes and station capacities come with the page, from game build 3675.</p>
         <p class="quiet" id="asideQuiet">If your game is newer, click the chip and choose its <code>en.json</code>; it is remembered in this browser and wins over the built-in text.</p>
-        <div class="path-label">en.json lives here</div>
+        <div id="localeWindows" hidden><div class="path-label">en.json lives here &middot; default Windows Steam installation</div>
         <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
+        </div>
+        <p id="localeOther" class="quiet">For an optional override, locate your game's <code>en.json</code> in its installation files. Names, recipes and station capacities are already included with this page.</p>
       </div>
       <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button> &middot; the page only reads your save files.</p>
     </div>
@@ -1069,8 +1079,8 @@ details.help[open] summary::after{content:"\2013"}
     <span id="footBuild"></span>
   </footer>
 </div>
-<script>window.LEDGER_BUILD = "f6dbc89ecf";</script>
-<script src="app.js?v=f6dbc89ecf"></script>
+<script>window.LEDGER_BUILD = "bea4ed2e4f";</script>
+<script src="app.js?v=bea4ed2e4f"></script>
 
 <script>
 let D = null;
