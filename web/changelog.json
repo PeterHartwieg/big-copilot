@@ -1,5 +1,11 @@
 [
   {
+    "pr": 21,
+    "date": "2026-09-13",
+    "title": "Missing uniform lockers now trigger a warning",
+    "summary": "Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count."
+  },
+  {
     "pr": 20,
     "date": "2026-09-13",
     "title": "Import deliveries count where they arrive",
