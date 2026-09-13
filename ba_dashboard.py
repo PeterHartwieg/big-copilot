@@ -8446,6 +8446,23 @@ function wireSphere(){
     requestAnimationFrame(step);
   };
   balls.push(makeBall(first, 0)); enter(balls[0], 400);
+  /* Something on the page (the ball on the map) may swallow every ball on the
+     shelf: they fly to the given viewport point one after another and vanish. */
+  window.__consumeBalls = (tx, ty, onEach) => {
+    if (!balls.length || balls.some(b => b.busy)) return false;
+    const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6), taken = balls.splice(0, balls.length);
+    if (REDUCED) { taken.forEach(b => { b.el.remove(); onEach && onEach(); }); return true; }
+    taken.forEach((b, i) => {
+      const r = b.el.getBoundingClientRect(), dx = tx - (r.left + r.width / 2), dy = ty - (r.top + r.height / 2);
+      const t0 = performance.now() + i * 140, dur = 700, x0 = b.px + roll, y0 = b.py, s0 = b.sc;
+      const step = (t) => { const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = p * p * (3 - 2 * p);
+        b.el.style.transform = 'translate(' + (x0 + dx * e) + 'px,' + (y0 + dy * e - Math.sin(p * Math.PI) * 60) + 'px) scale(' + (s0 * (1 - .8 * e)) + ')';
+        b.el.style.opacity = String(1 - Math.max(0, p - .85) / .15);
+        if (p < 1) requestAnimationFrame(step); else { b.el.remove(); onEach && onEach(); } };
+      requestAnimationFrame(step);
+    });
+    return true;
+  };
   const wordmark = q('.wordmark');
   if (wordmark) wordmark.addEventListener('click', spawn);
   document.addEventListener('mousemove', (e) => balls.forEach(b => {
