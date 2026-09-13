@@ -9,7 +9,7 @@
 .layers{display:inline-flex;gap:2px}
 .sev.lay{border:1px solid transparent;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;appearance:none;-webkit-appearance:none}
 .sev.lay.off{opacity:.35}.sev.lay.off:hover{opacity:.6}
-.sev.mine i{background:var(--accent)}.sev.own i{background:var(--info)}.sev.fnd i{background:var(--warn)}.sev.all i{background:transparent;border:1px solid var(--ink-3);box-sizing:border-box}
+.sev.mine i{background:var(--accent)}.sev.own i{background:var(--info)}.sev.home i{background:var(--ink)}.sev.fnd i{background:var(--warn)}.sev.all i{background:transparent;border:1px solid var(--ink-3);box-sizing:border-box}
 .srch{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-3);width:250px;transition:border-color .15s,width .25s;cursor:text}
 .srch:focus-within{border-color:var(--ink-3);color:var(--ink-2);width:300px}
 .srch svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -27,9 +27,11 @@
 .map-canvas .fp{fill:transparent;stroke:none;cursor:pointer;transition:fill .2s,stroke .2s}
 .map-canvas .fp.mine{fill:#43c07a;fill-opacity:.26;stroke:#65e99b;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .map-canvas .fp.owned{fill:#6ea8ff;fill-opacity:.2;stroke:#8fbcff;stroke-width:1.5;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
+.map-canvas .fp.home{fill:#e9ece6;fill-opacity:.18;stroke:#e9ece6;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .stage.all .map-canvas .fp{stroke:#9aa39d;stroke-opacity:.35;stroke-width:1;vector-effect:non-scaling-stroke}
 .stage.all .map-canvas .fp.mine{stroke:#65e99b;stroke-opacity:1}
 .stage.all .map-canvas .fp.owned{stroke:#8fbcff;stroke-opacity:1}
+.stage.all .map-canvas .fp.home{stroke:#e9ece6;stroke-opacity:1}
 .map-canvas .fp.dim{fill-opacity:.06;stroke-opacity:.35}
 .map-canvas .fp.hot,.map-canvas .fp:hover{fill:#a2f8c4;fill-opacity:.4;stroke:#d9ffe8;stroke-width:2;vector-effect:non-scaling-stroke}
 .map-canvas .fp.sel{fill:#65e99b;fill-opacity:.45;stroke:#fff7cc;stroke-width:2.5;vector-effect:non-scaling-stroke}

@@ -680,6 +680,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "daily": daily,
         "businesses": businesses,
         "ownedBuildings": _owned_buildings(save, names),
+        "homes": _homes(buildings, residential, names),
         "products": products,
         "staff": _staff_summary(staff, businesses),
         "loans": loans,
@@ -1222,6 +1223,20 @@ def _owned_buildings(save: Save, names: Names) -> list[dict]:
                 "key": site_key(address), "address": names.addr(address),
                 "purchaseDay": entry.get("purchaseDay"),
                 "purchasePrice": money(entry["purchasePrice"]) if entry.get("purchasePrice") is not None else None,
+            })
+    return result
+
+
+def _homes(buildings: list, residential: set, names: Names) -> list[dict]:
+    """Rented homes: registrations the save bills as residences, never businesses."""
+    result = []
+    for b in buildings:
+        addr = (b["StreetName"], b["StreetNumber"])
+        if addr in residential:
+            result.append({
+                "key": site_key(addr),
+                "address": f"{b['StreetNumber']} {names.street(b['StreetName'])}",
+                "rent": money(b.get("RentPerDay") or 0),
             })
     return result
 

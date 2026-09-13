@@ -215,11 +215,11 @@ test('dragging the map cannot select text or accidentally select a building',asy
   }finally{await page.close();}
 });
 
-test('the map head keeps four layer chips, a why mark, search with a count, and zoom inside the stage',async()=>{
+test('the map head keeps five layer chips, a why mark, search with a count, and zoom inside the stage',async()=>{
   const {page,errors}=await fixture();
   try{
     await openPage(page);
-    assert.equal(await page.locator('#cityMapPage .map-head .lay').count(),4);
+    assert.equal(await page.locator('#cityMapPage .map-head .lay').count(),5);
     assert.equal(await page.locator('#cityMapPage .map-head .why').count(),1);
     assert.equal(await page.locator('#cityMapPage .srch input[data-control="search"]').count(),1);
     assert.equal(await page.locator('#cityMapPage [data-stage] .zoomer .ibtn[data-action="in"]').count(),1);
@@ -640,4 +640,29 @@ test('owned vacant property is listed under its address rather than Vacant lease
     assert.doesNotMatch(await page.locator('#cityMapPage .site').innerText(),/Vacant lease/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
+});
+
+test('a rented home is its own layer: white footprint, a row, and a card with the rent',async()=>{
+  const {page,errors}=await fixture();
+  try{
+    const home=geometry.buildings.find(b=>b.key==='ba:street_tenthstreet#2' && b.path) || geometry.buildings.find(b=>b.region==='mainland' && b.path && b.key!==place.key);
+    await openPage(page);
+    await page.evaluate(h=>{ D.homes=[{key:h.key,address:h.address,rent:34}]; refreshCityMaps(); },home);
+    assert.equal(await page.locator('#cityMapPage .sev.lay.home .n').innerText(),'1');
+    assert.equal(await page.locator(`#cityMapPage .fp.home[data-location="${home.key}"]`).count(),1);
+    const row=page.locator(`#cityMapPage .place[data-pick="${home.key}"]`);
+    assert.equal(await row.count(),1);
+    assert.match(await row.locator('small').innerText(),/home/);
+    await pickRow(page,home.key);
+    const card=page.locator('#cityMapPage .site');
+    assert.equal(await card.locator('h3').innerText(),home.address);
+    assert.match(await card.locator('.sub').innerText(),/Home/);
+    assert.equal(await card.locator('.nums .num').count(),1);
+    assert.match(await card.locator('.nums').innerText(),/\$34/);
+    assert.equal(await card.locator('.go2').isHidden(),true);
+    await page.locator('#cityMapPage .sev.lay.home').click();
+    assert.equal(await row.count(),0);
+    assert.equal(await page.locator('#cityMapPage .sev.lay.home').getAttribute('aria-pressed'),'false');
+    assert.deepEqual(errors,[]);
+  } finally { await page.close(); }
 });

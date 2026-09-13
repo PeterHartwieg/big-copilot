@@ -100,7 +100,7 @@ class CityMapView {
   constructor(root, options = {}){
     this.root = root; this.selected = null; this.box = null; this.hot = null;
     this.panel = options.panel !== false;
-    this.layers = {mine:true, own:true, fnd:true, all:false}; this.query = "";
+    this.layers = {mine:true, own:true, home:true, fnd:true, all:false}; this.query = "";
     this.root.classList.add("city-map");
     this.buildToken = 0;
     // One breakpoint for CSS and script alike: the panel floats over the map
@@ -150,10 +150,11 @@ class CityMapView {
       <span class="layers" role="group" aria-label="Layers">
         <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
+      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage${this.panel ? " panel" : ""}" data-stage>
@@ -418,6 +419,7 @@ class CityMapView {
       mine.filter(r => this.owned.has(r.key)).forEach(add);
       for(const o of this.owned.values()) add({key:o.key, address:o.address, hood:this.assets.byKey.get(o.key)?.hood, owned:o, region:this.assets.byKey.get(o.key)?.region, bounds:this.assets.byKey.get(o.key)?.bounds});
     }
+    if(this.layers.home) for(const h of this.homes.values()) add({key:h.key, address:h.address, hood:this.assets.byKey.get(h.key)?.hood, home:h, region:this.assets.byKey.get(h.key)?.region, bounds:this.assets.byKey.get(h.key)?.bounds});
     if(this.layers.all) this.assets.buildings.forEach(b => add({key:b.key, address:b.address, hood:b.hood, business:this.businesses.get(b.key), region:b.region, bounds:b.bounds}));
     const q = this.query.trim().toLowerCase();
     return q ? rows.filter(r => `${r.address} ${r.hood || ''} ${r.business?.name || ''} ${r.business?.type || ''}`.toLowerCase().includes(q)) : rows;
@@ -426,7 +428,8 @@ class CityMapView {
     if(!this.svg) return;
     this.businesses = mapBusinesses(); this.findings = mapFindings();
     this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
-    const counts = {mine:this.businesses.size, own:this.owned.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
+    this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
+    const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });
     this.matches = this.rows();
     const keys = new Set(this.matches.map(b=>b.key));
@@ -435,6 +438,7 @@ class CityMapView {
       const business = this.businesses.has(key), owned = this.owned.has(key);
       path.classList.toggle('mine', business);
       path.classList.toggle('owned', !business && owned);
+      path.classList.toggle('home', !business && this.homes.has(key));
       path.classList.toggle('dim', !keys.has(key) && key!==this.selected);
       path.classList.toggle('sel', key===this.selected);
       path.querySelector('title').textContent=[this.businesses.get(key)?.name,this.assets.byKey.get(key).address].filter(Boolean).join(' · ');
@@ -450,7 +454,7 @@ class CityMapView {
       this.list.innerHTML = shown.map(r => {
         const b = r.business, trading = b && b.status !== 'vacant', kind = mapKind(this.findings.get(r.key));
         const name = b ? b.name.replace(/^\[\w+\]\s*/, '') : r.address;
-        const small = b ? `${r.address} · ${b.type}${this.owned.has(r.key) ? ' · owned' : ''}` : r.owned ? `${r.hood || ''} · owned` : r.hood || '';
+        const small = b ? `${r.address} · ${b.type}${this.owned.has(r.key) ? ' · owned' : ''}` : r.owned ? `${r.hood || ''} · owned` : r.home ? `${r.hood || ''} · home` : r.hood || '';
         const amt = trading ? `<span class="amt ${b.profit >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>` : '<span class="amt"></span>';
         return `<button type="button" class="place ${kind}${r.key===this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key===this.selected}"><i class="mark"></i><span class="hood">${mapText(hoodCode(b, r.hood))}</span><span class="nm">${mapText(name)}<small>${mapText(small)}${!r.region ? ' · no map position' : ''}</small></span>${amt}</button>`;
       }).join('') + (this.matches.length > shown.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${this.matches.length - shown.length}</button>` : '') + (this.matches.length ? '' : '<div class="empty">Nothing here.</div>');
@@ -464,20 +468,21 @@ class CityMapView {
      numbers, the findings as dot + verb + amount, and the arrow to the site. */
   fillCard(){
     const card = this.card; if(!card) return;
-    const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key);
+    const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key), home = this.homes.get(key);
     if(!key){ card.hidden = true; card.classList.remove('in'); return; }
     // Filled now, shown by showCard() once the camera has settled: until then
     // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
-    const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || loc?.address || owned?.address || 'Location unavailable';
+    const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
     card.querySelector('h3').textContent = title.replace(/^\[\w+\]\s*/, '');
-    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : mapText([loc?.address, loc?.hood].filter(Boolean).join(' · '));
+    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}` : mapText([loc?.address, loc?.hood].filter(Boolean).join(' · '));
     card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ' · no map position' : ''}</span>`;
     const num = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
     card.querySelector('.nums').innerHTML = trading
       ? num(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, 'yesterday') + num(mapText(fmt(b.rent || 0)), 'rent / day') + num(mapText(b.staff ?? '—'), 'staff')
       : b ? num(mapText(fmt(b.rent || 0)), 'rent / day') + num('—', 'not trading')
-      : owned ? num(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid') : '';
+      : owned ? num(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid')
+      : home ? num(mapText(fmt(home.rent || 0)), 'rent / day') : '';
     const findings = this.findings.get(key) || [];
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
@@ -553,7 +558,7 @@ class CityMapView {
   resetCharacter(){
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     if(this.orb) this.orb.size = 170;
-    if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, fnd:true, all:false};
+    if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
       this.root.querySelectorAll('.lay').forEach(c => { c.classList.toggle('off', !this.layers[c.dataset.l]); c.setAttribute('aria-pressed', String(this.layers[c.dataset.l])); });
       this.reset(); this.update(); }
   }
