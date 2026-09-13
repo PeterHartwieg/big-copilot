@@ -100,7 +100,7 @@ test('lazy map retains geometry through searches and shares the load with the lo
     assert.equal(await page.locator('#cityMapPage .place').evaluate(b=>document.activeElement===b),true);
     assert.equal(await page.locator('#cityMapPage .location.fp.sel').getAttribute('data-location'),place.key);
     await page.evaluate(key=>openLocationMap(key),other.key);await ready(page,'#cityMapOverlay');
-    assert.equal(await page.locator('#cityMapOverlay .location.fp.selected').getAttribute('data-location'),other.key);
+    assert.equal(await page.locator('#cityMapOverlay .location.fp.sel').getAttribute('data-location'),other.key);
     assert.equal(await page.evaluate(()=>cityMapPage.assets===cityMapOverlay.assets),true);
     assert.equal(requests.length,2);
     assert.deepEqual(errors,[]);
@@ -163,7 +163,7 @@ test('refresh changes the card, missing addresses stay escaped, and a character 
     assert.match(await page.locator('#cityMapPage .site').innerText(),/no map position/);
     assert.equal(await page.locator('#cityMapPage .site img').count(),0);
     await page.evaluate(()=>{D={...D,meta:{character:'map-b',day:1},businesses:[]};refreshCityMaps();});
-    assert.equal(await page.locator('#cityMapPage .location.fp.selected').count(),0);
+    assert.equal(await page.locator('#cityMapPage .location.fp.sel').count(),0);
     assert.equal(await page.locator('#cityMapPage [data-control="search"]').inputValue(),'');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'0');
     await page.locator('#cityMapPage .lay[data-l="all"]').click();
@@ -207,7 +207,7 @@ test('dragging the map cannot select text or accidentally select a building',asy
     await page.mouse.up();
     assert.notEqual(await page.locator('#cityMapPage .map-canvas').getAttribute('viewBox'),before);
     assert.equal(await page.evaluate(()=>getSelection().toString()),'');
-    assert.equal(await page.locator('#cityMapPage .location.fp.selected').count(),0);
+    assert.equal(await page.locator('#cityMapPage .location.fp.sel').count(),0);
     await page.waitForFunction(()=>!document.querySelector('#cityMapPage [data-stage]').classList.contains('interacting'));
     assert.equal(await page.locator('#cityMapPage .map-detail-background').isVisible(),true);
     assert.equal(await page.locator('#cityMapPage .map-fast-background').isVisible(),false);
@@ -589,7 +589,7 @@ test('finding map buttons remain visible beside long business names',async()=>{
     const bounds=await button.evaluate(b=>({button:b.getBoundingClientRect().toJSON(),parent:b.parentElement.getBoundingClientRect().toJSON()}));
     assert.ok(bounds.button.right<=bounds.parent.right && bounds.button.left>=bounds.parent.left);
     await button.click();await ready(page,'#cityMapOverlay');
-    assert.equal(await page.locator('#cityMapOverlay .location.fp.selected').getAttribute('data-location'),place.key);
+    assert.equal(await page.locator('#cityMapOverlay .location.fp.sel').getAttribute('data-location'),place.key);
     // The card speaks the name without the pill.
     await page.locator('#cityMapOverlay .site.in').waitFor();
     assert.equal(await page.locator('#cityMapOverlay .site h3').innerText(),'Z-Clothing Factory and Warehouse');
