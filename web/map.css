@@ -47,6 +47,19 @@
 .stage.panel .zoomer{right:332px}
 .zoomer .ibtn{font:500 18px/1 "IBM Plex Mono",monospace;box-shadow:0 2px 8px #0003}
 
+/* the ball lives in Central Park ------------------------------------------------ */
+.ball{position:absolute;left:0;top:0;width:60px;height:60px;z-index:4;cursor:pointer;will-change:transform;transform-origin:50% 100%;pointer-events:auto}
+.ball i{display:block;width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at var(--hx,32%) var(--hy,30%),#d9ffe8 0%,#7fe3a8 14%,#43c07a 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 18px 40px #43c07a3d,inset -14px -20px 34px #00000066,inset 6px 8px 18px #ffffff22}
+.ball u{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%),radial-gradient(circle at 62% 80%,#0002 0 3%,transparent 4%),radial-gradient(circle at 40% 22%,#0002 0 2%,transparent 3%)}
+.ball .squish{animation:squish .7s cubic-bezier(.34,1.56,.64,1)}
+.ball.spin i{animation:coinspin .6s linear}
+.shadow{position:absolute;left:0;top:0;width:88px;height:14px;border-radius:50%;background:#000;opacity:.5;filter:blur(5px);z-index:3;pointer-events:none;transform-origin:50% 50%}
+.layer .ball{pointer-events:auto;z-index:4}
+.layer .shadow{z-index:3}
+
 /* places: a floating panel over the map ------------------------------------------ */
 .places{position:absolute;top:16px;right:16px;bottom:16px;width:300px;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
 .places .list{overflow:auto;overscroll-behavior:contain;flex:1;padding:4px 0}
@@ -64,8 +77,9 @@
 .places .more{padding:10px 12px;font:400 11.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3);border-top:1px solid var(--rule-soft)}
 .places .empty{padding:24px 14px;font-size:12.5px;color:var(--ink-3);text-align:center}
 
-/* the site card: opens beside the footprint ---------------------------------------- */
-.site{position:absolute;left:0;top:0;width:290px;z-index:6;border-radius:10px;border:1px solid var(--rule);background:var(--surface);box-shadow:0 12px 40px #0008;padding:14px 16px 14px;opacity:0;pointer-events:none;transition:opacity .25s}
+/* the site card: opens beside the footprint. Scoped to the map views: the
+   board's finding rows wrap business names in a .site span of their own. */
+.city-map .site{position:absolute;left:0;top:0;width:290px;z-index:6;border-radius:10px;border:1px solid var(--rule);background:var(--surface);box-shadow:0 12px 40px #0008;padding:14px 16px 14px;opacity:0;pointer-events:none;transition:opacity .25s}
 .site.in{opacity:1;pointer-events:auto}
 .site[hidden]{display:none}
 .site h3{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em;padding-right:26px}

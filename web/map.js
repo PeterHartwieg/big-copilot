@@ -139,6 +139,7 @@ class CityMapView {
       <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${mapText(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${mapText(b.address)}</title></path>`).join('')}</g>
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
+        <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
         <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" data-tip="Open business details">${ICON.go}</a></div>
       </div>
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city" data-tip="Whole city">${ICON.home}</button></div>
@@ -293,6 +294,86 @@ class CityMapView {
     this.svg.addEventListener('wheel', e => {e.preventDefault(); this.rect=this.svg.getBoundingClientRect(); this.zoom(Math.exp(Math.max(-1,Math.min(1,e.deltaY*.002))),this.point(e));},{passive:false});
     this.svg.addEventListener('mouseover', e => { const fp = e.target.closest('[data-location]'); if(fp) this.light(fp.dataset.location, false); });
     this.svg.addEventListener('mouseout', e => { const fp = e.target.closest('[data-location]'); if(fp) this.light(null, false); });
+  }
+  /* The brand ball in Central Park. It breathes, watches the pointer like its
+     masthead siblings, and pays out when clicked. It sits in the HTML layer,
+     so pointer events never reach the SVG beneath: no drag, no pick, and an
+     open card stays open. */
+  wireBall(){
+    this.ball = this.root.querySelector('.ball');
+    this.shadow = this.root.querySelector('.shadow');
+    if(!this.ball) return;
+    // Central Park spans about x 590-1060, y 405-680; the ball stays inside it.
+    this.orb = {x:880, y:542, size:170};
+    this.busy = false;
+    this.ball.addEventListener('click', () => {
+      if(this.busy) return;
+      this.squishBall(); this.ballRing();
+      const r = this.ball.getBoundingClientRect();
+      // The masthead balls are the same sphere: this one swallows them and
+      // grows a little per gulp. busy until every last orb has arrived.
+      let orbs = document.querySelectorAll('.orb').length;
+      const onEach = () => {
+        this.squishBall();
+        this.orb.size = Math.min(230, this.orb.size * 1.08);
+        this.paintBall();
+        if(--orbs <= 0) this.busy = false;
+      };
+      if(window.__consumeBalls && window.__consumeBalls(r.left + r.width/2, r.top + r.height/2, onEach)){
+        if(orbs > 0) this.busy = true;
+        return;
+      }
+      // nothing to swallow: spin and pay out
+      this.ball.classList.remove('spin'); void this.ball.offsetWidth; this.ball.classList.add('spin');
+      if(REDUCED) return;
+      for(let i = 0; i < 10; i++){
+        const c = document.createElement('i'); c.className = 'coin';
+        const a = Math.random() * Math.PI - Math.PI, d = 50 + Math.random() * 110;
+        c.style.left = (r.left + window.scrollX + r.width/2) + 'px'; c.style.top = (r.top + window.scrollY + r.height*.4) + 'px';
+        c.style.setProperty('--dx', Math.cos(a) * d + 'px'); c.style.setProperty('--dy', (Math.abs(Math.sin(a)) * d + 120) + 'px');
+        c.style.animationDelay = (Math.random() * .12) + 's';
+        document.body.appendChild(c); setTimeout(() => c.remove(), 1400);
+      }
+    });
+    if(REDUCED){ this.lift = 0; return; } // drawView paints it still, once per camera move
+    document.addEventListener('mousemove', this.ballHover = e => {
+      const r = this.ball.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2), d = Math.hypot(dx, dy) || 1;
+      this.ball.style.setProperty('--hx', (34 + dx/d * 20) + '%'); this.ball.style.setProperty('--hy', (32 + dy/d * 20) + '%');
+    });
+    const loop = t => {
+      if(!this.svg.isConnected) return;
+      if(!document.hidden){
+        const px = this.orb.size * this.scale();
+        this.lift = (1 + Math.sin(t/700)) * px * .012;
+        this.paintBall();
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+  squishBall(){
+    [this.ball.querySelector('i'), this.ball.querySelector('u')].forEach(el => { el.classList.remove('squish'); void el.offsetWidth; el.classList.add('squish'); });
+  }
+  ballRing(){
+    const r = this.ball.getBoundingClientRect(), i = document.createElement('i');
+    i.className = 'ring';
+    i.style.left = (r.left + window.scrollX) + 'px'; i.style.top = (r.top + window.scrollY) + 'px';
+    i.style.width = r.width + 'px'; i.style.height = r.height + 'px';
+    document.body.appendChild(i); setTimeout(() => i.remove(), 900);
+  }
+  /* Ball and shadow in stage pixels from map units: it scales with the camera
+     exactly, never clamped. lift is the breathing offset (0 under REDUCED). */
+  paintBall(){
+    if(!this.ball || !this.box) return;
+    const s = this.scale(), p = this.proj(this.orb.x, this.orb.y), px = this.orb.size * s;
+    const lift = this.lift || 0;
+    this.ball.style.width = this.ball.style.height = px + 'px';
+    this.ball.style.transform = `translate(${(p.x - px/2).toFixed(1)}px,${(p.y - px/2 - lift).toFixed(1)}px)`;
+    const k = Math.max(.35, 1 - lift/(px*3));
+    this.shadow.style.width = px + 'px'; this.shadow.style.height = (px*.16) + 'px';
+    this.shadow.style.transform = `translate(${(p.x - px/2).toFixed(1)}px,${(p.y + px*.42).toFixed(1)}px) scale(${k.toFixed(3)})`;
+    this.shadow.style.opacity = (.5*k).toFixed(2);
   }
   /* Hovering a row lights its footprint; hovering a footprint marks its row. */
   light(key, fromList = true){
