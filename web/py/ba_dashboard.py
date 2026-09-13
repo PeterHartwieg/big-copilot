@@ -1287,6 +1287,36 @@ def _import_catch_up(stock, per_day, weekly, day, arrives, left_today):
     return max(0, math.ceil(need - stock))
 
 
+def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today):
+    """Project stock through the last upcoming drop, retaining each quantity.
+
+    The maximum running deficit is the one-off amount that bridges every gap;
+    a small early drop must not make a much larger later shipment arrive early.
+    The last delivery day itself is excluded, as in _import_catch_up.
+    """
+    drops = collections.defaultdict(float)
+    for delivery in deliveries:
+        if delivery["day"] >= day:
+            drops[delivery["day"]] += delivery["amount"]
+    if len(drops) < 2:
+        return None
+    until = max(drops)
+    remaining, elapsed, deficit = stock, 0.0, 0.0
+    cover = runs_out = None
+    for when in range(day, until):
+        remaining += drops.get(when, 0)
+        share = left_today if when == day else 1.0
+        use = per_day * weekly[when % 7] * share
+        if use > remaining and cover is None:
+            cover = elapsed + share * max(remaining, 0) / use if use else elapsed
+            runs_out = when
+        remaining -= use
+        deficit = max(deficit, -remaining)
+        elapsed += share
+    return {"until": until, "cover": cover if cover is not None else elapsed,
+            "runsOut": runs_out, "catchUp": math.ceil(deficit)}
+
+
 def _supply(
     save: Save,
     names: Names,
@@ -1443,18 +1473,31 @@ def _supply(
             # and zero orders must never replace or inflate its active supply.
             supply = imports.setdefault((warehouse, product["itemName"]), {
                 "weekly": 0, "lastWeek": 0, "arrives": arrives,
-                "active": False, "from": "", "suppliers": [],
+                "active": False, "from": "",
+                "suppliers": {"active": [], "paused": [], "zero": []},
+                "history": {"active": 0, "paused": 0, "zero": 0},
+                "pausedWeekly": 0, "deliveries": [],
             })
             supplying = active and amount > 0
             if supplying:
                 supply["arrives"] = min(supply["arrives"], arrives) if supply["weekly"] else arrives
                 supply["weekly"] += amount
+                supply["deliveries"].append({"day": arrives, "amount": amount})
+            elif not active:
+                supply["pausedWeekly"] += amount
             supply["active"] = supply["active"] or active
-            supply["lastWeek"] += ordered
+            group = "active" if supplying else "paused" if not active else "zero"
+            supply["history"][group] += ordered
             who = names.addr(save.address(partnership.get("importAddress")))
-            if who not in supply["suppliers"]:
-                supply["suppliers"].append(who)
-            supply["from"] = ", ".join(supply["suppliers"])
+            if who not in supply["suppliers"][group]:
+                supply["suppliers"][group].append(who)
+
+    for supply in imports.values():
+        group = "active" if supply["weekly"] else "paused" if supply["pausedWeekly"] else "zero"
+        supply["lastWeek"] = supply["history"][group]
+        supply["from"] = ", ".join(supply["suppliers"][group])
+        if group == "paused":
+            supply["active"] = False
 
     days_to_import = (next_day - day) if next_day is not None else None
     # The delivery lands at the start of its day, so the stock has to reach it
@@ -1572,7 +1615,9 @@ def _supply(
             week_need = sum(per_day * weekly[(start + ahead) % 7] for ahead in range(7))
             # Last week's order against this week's is a change of mind, not a
             # shortfall; without a measured draw the order is not judged.
-            order_fit = _fit(week_need, supply["weekly"]) if basis != "order" else "ok"
+            order_fit = (
+                "short" if week_need and not supply["weekly"] else _fit(week_need, supply["weekly"])
+            ) if basis != "order" else "ok"
 
             # An order sized to consumption always looks as though it runs out a
             # few hours before the next drop — that is the design, not a finding.
@@ -1584,6 +1629,22 @@ def _supply(
             cover_fit = (
                 "short" if short_by > slack else "tight" if short_by > 0 else "ok"
             )
+            catch_up = _import_catch_up(
+                line["units"], per_day, weekly, day, supply["arrives"], left_today
+            ) if supply["active"] and basis != "order" else None
+            schedule = _scheduled_import_gap(
+                line["units"], per_day, weekly, day, supply["deliveries"], left_today
+            ) if basis != "order" else None
+            if schedule:
+                cover, runs_out = schedule["cover"], schedule["runsOut"]
+                due = max(schedule["until"] - day - spent_today, 0.0)
+                short_by = max(due - cover, 0.0)
+                cover_fit = "short" if short_by > slack else "tight" if short_by > 0 else "ok"
+                catch_up = schedule["catchUp"]
+            if basis == "order":
+                # An old order is not observed consumption. It can provide a
+                # labelled estimate, but cannot establish a stockout warning.
+                cover_fit, short_by = "ok", 0.0
 
             # An order too small for its week and a shelf that runs dry before
             # the next drop are usually the same fact at two stages: the order
@@ -1624,9 +1685,8 @@ def _supply(
                     "coverFit": cover_fit,
                     "due": round(due, 2) if due is not None else None,
                     "shortBy": round(short_by, 2),
-                    "catchUp": _import_catch_up(
-                        line["units"], per_day, weekly, day, supply["arrives"], left_today
-                    ) if supply["active"] and basis != "order" else None,
+                    "catchUp": catch_up,
+                    "coverageUntil": schedule["until"] if schedule else supply["arrives"],
                     "paused": not supply["active"],
                     "arrives": supply["arrives"],
                     "from": supply["from"],
@@ -2017,7 +2077,9 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
     depots = collections.defaultdict(dict)
     for (depot, slug), supply in flow["imports"].items():
         if depot in index:
-            depots[index[depot]][slug] = {"weekly": supply["weekly"]}
+            depots[index[depot]][slug] = {
+                "weekly": supply["weekly"], "pausedWeekly": supply.get("pausedWeekly", 0),
+            }
     # A depot's outflow that is not a factory's intake: the shops it also
     # serves, so an import order can be sized to the whole of what leaves.
     # Matched day by day: a single 2,500 of hops sent on Sunday must not turn
@@ -2263,7 +2325,12 @@ def _factories(
             # A factory can itself be an import destination. Weekly deliveries
             # do not require a daily logistics target, nor can their delivery
             # log be judged as a daily warehouse round.
-            direct = not target and (key, slug) in flow["imports"]
+            own_import = flow["imports"].get((key, slug))
+            direct_weekly = own_import["weekly"] if own_import else 0
+            mixed = bool(own_import and target and source)
+            direct_need = min(direct_weekly, row["perDay"] * 7) if mixed else row["perDay"] * 7 if own_import else 0
+            warehouse_need = max(row["perDay"] * 7 - direct_need, 0) if source and (mixed or not own_import) else 0
+            direct = bool(own_import and not warehouse_need)
             import_source = key if direct else source
             # An input that only sits because every line using it is stopped
             # for want of something else is waiting, not being ignored.
@@ -2273,18 +2340,25 @@ def _factories(
                 else []
             )
             row["target"] = target
-            row["source"] = source
+            row["source"] = import_source
             row["from"] = index.get(source) if source and not direct else None
             row["directImport"] = direct
+            row["factoryImportSite"] = index[key] if own_import else None
+            row["directWeekly"] = direct_weekly if own_import else None
+            row["directNeed"] = direct_need
+            row["warehouseNeed"] = warehouse_need
+            row["dailyNeed"] = warehouse_need / 7 if mixed else row["perDay"]
             row["importSite"] = index.get(import_source)
-            row["known"] = not direct and flow["received"](key, slug) is not None
+            row["known"] = not own_import and flow["received"](key, slug) is not None
             row["arrives"] = round(arrives(key, slug))
             row["stock"] = held(key, slug)
-            row["depotStock"] = held(source, slug) if source else 0
+            row["depotStock"] = held(source, slug) if source and not direct else 0
             # Planned, stocked at the depot, and yet nothing came all week.
             row["stalled"] = bool(row["known"] and not row["arrives"] and row["depotStock"] > 0)
-            if import_source:
-                depot_need[(import_source, slug)] += row["perDay"] * 7
+            if own_import:
+                depot_need[(key, slug)] += direct_need
+            if source:
+                depot_need[(source, slug)] += warehouse_need
         # What the page needs to work out a line the player names by hand:
         # every top-up into this factory, and what arrived over the week.
         into = {
@@ -2320,12 +2394,15 @@ def _factories(
             row["perWeek"] = round(per_day * 7)
             row["depotNeed"] = round(weekly_need)
             row["importWeekly"] = supply["weekly"] if supply else None
+            row["importPaused"] = bool(supply and not supply["weekly"] and supply.get("pausedWeekly"))
             row["importFit"] = (
                 "short" if weekly_need and not supply["weekly"] else _fit(weekly_need, supply["weekly"])
             ) if supply else None
             row["madeAt"] = sorted(index[k] for k in made_by.get(row["slug"], ()) if k in index)
             row["raiseTarget"] = row["raiseImport"] = None
-            if row["directImport"]:
+            if row["importPaused"]:
+                status, level = "paused", "critical"
+            elif row["directImport"]:
                 if row["importFit"] in ("short", "tight"):
                     status, level = "import", "critical" if row["importFit"] == "short" else "warn"
                     if row["importFit"] == "short":
@@ -2334,9 +2411,9 @@ def _factories(
                     status, level = "ok", "ok"
             elif not row["target"]:
                 status, level = "unplanned", "critical"
-            elif row["target"] < per_day * (1 - FEED_SLACK):
+            elif row["target"] < row["dailyNeed"] * (1 - FEED_SLACK):
                 status, level = "target", "critical"
-                row["raiseTarget"] = _ceil_hundred(per_day)
+                row["raiseTarget"] = _ceil_hundred(row["dailyNeed"])
             elif row["known"] and row["arrives"] < per_day * LINE_STARVED:
                 if row["waitingOn"]:
                     status, level = "waiting", "info"
@@ -3965,11 +4042,11 @@ def _alerts(
     # A depot only runs dry if it cannot reach the next delivery by more than a
     # few hours, and an order is only wrong if it cannot cover the week it has to
     # cover.
-    arrives = supply["nextImportWeekday"] or "the next"
     for row in supply["imports"]:
         if row["level"] != "critical" or businesses[row["s"]]["key"] in silent:
             continue
         site, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
+        arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
         when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
         if row["reason"] == "paused":
             note(
@@ -4159,7 +4236,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
             # An import sized wrong is one finding about the depot, however
             # many factories draw on it.
             where, key = business["name"], business["key"]
-            if row["status"] in ("import", "noimport"):
+            if row["status"] in ("import", "noimport", "paused"):
                 import_site = row.get("importSite", row["from"])
                 if (import_site, row["slug"]) in said:
                     continue
@@ -4168,7 +4245,9 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                 key = businesses[import_site]["key"] if import_site is not None else None
             lines = ", ".join(row["lines"][:3])
             status = row["status"]
-            if status == "unplanned":
+            if status == "paused":
+                text = f"{row['item']} import is paused; resume the contract supplying {where}"
+            elif status == "unplanned":
                 text = (
                     f"{row['item']} feeds {lines} at {row['perDay']:,}/day "
                     f"but no depot tops it up"
@@ -4204,13 +4283,13 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                 )
             elif status == "import" and row["raiseImport"]:
                 text = (
-                    f"{row['item']}: the factories eat {row['depotNeed']:,} a week and the "
+                    f"{row['item']}: this import needs to cover {row['depotNeed']:,} a week and the "
                     f"import order is {row['importWeekly']:,}; raise it to {row['raiseImport']:,}"
                 )
             elif status == "import":
                 text = (
                     f"{row['item']} import of {row['importWeekly']:,} is within 5% of the "
-                    f"{row['depotNeed']:,} the factories eat a week"
+                    f"{row['depotNeed']:,} it needs to cover a week"
                 )
             else:
                 weeks = row["depotStock"] / row["depotNeed"] if row["depotNeed"] else 0
@@ -6095,6 +6174,7 @@ const SUPPLY_VIEWS = {
       const chip = (cls, t) => `<span class="chip ${cls}">${t}</span>`;
       const stalled = r.stalled ? `; none arrived last week though ${depot} holds ${r.depotStock.toLocaleString()}` : "";
       const change = {
+        paused: () => `${chip("bad", "import paused")} resume the import contract`,
         unplanned: () => `${chip("bad", "no top-up")} put ${r.item} on a plan at ${r.perDay.toLocaleString()} a day`,
         target: () => `${chip("bad", "top-up short")} raise ${depot}'s top-up to ${r.raiseTarget.toLocaleString()}${stalled}`,
         waiting: () => `${chip("dim", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
@@ -6119,8 +6199,9 @@ const SUPPLY_VIEWS = {
       <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay
           ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
       <td>${r.importWeekly !== null ? r.importWeekly.toLocaleString() : "—"}${
+          !r.directImport && r.directWeekly ? `<span class="sub">plus ${r.directWeekly.toLocaleString()} direct</span>` : ""}${
           r.depotNeed && r.depotNeed !== r.perWeek
-          ? `<span class="sub"> all factories ${r.depotNeed.toLocaleString()}</span>` : ""}</td>
+          ? `<span class="sub"> ${r.directWeekly ? "warehouse share" : "all factories"} ${r.depotNeed.toLocaleString()}</span>` : ""}</td>
       <td class="l">${change}</td>`;
     },
   },
@@ -6185,7 +6266,8 @@ function feedVerdict(n){
   n.raiseTarget = n.raiseImport = null;
   n.stalled = !!(n.known && !n.arrives && n.depotStock > 0);
   let status, level;
-  if(n.directImport){
+  if(n.importPaused){ status = "paused"; level = "critical"; }
+  else if(n.directImport){
     n.known = false; n.stalled = false;
     if(n.importFit === "short"){
       status = "import"; level = "critical"; n.raiseImport = ceil100(n.depotNeed);
@@ -6193,7 +6275,7 @@ function feedVerdict(n){
     else { status = "ok"; level = "ok"; }
   }
   else if(!n.target){ status = "unplanned"; level = "critical"; }
-  else if(n.target < n.perDay * 0.98){ status = "target"; level = "critical"; n.raiseTarget = ceil100(n.perDay); }
+  else if(n.target < (n.dailyNeed ?? n.perDay) * 0.98){ status = "target"; level = "critical"; n.raiseTarget = ceil100(n.dailyNeed ?? n.perDay); }
   else if(n.known && n.arrives < n.perDay * 0.75){
     [status, level] = n.waitingOn.length ? ["waiting", "info"]
       : n.arrives >= n.perDay * (n.staffedShare ?? 1) * 0.85 ? ["staffing", "warn"]
@@ -6219,6 +6301,27 @@ function syncLocalNames(view){
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
     .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderAll(); } })
     .catch(() => {});
+}
+
+/* Recompute the split after recipe choices change total input consumption. */
+function feedRoute(site, n, view, held){
+  const t = site.targets?.[n.slug], target = t ? t[0] : 0, source = t ? t[1] : null;
+  const own = (view.depots[site.s] || {})[n.slug];
+  const mixed = !!(own && target && source !== null);
+  n.factoryImportSite = own ? site.s : null;
+  n.directWeekly = own ? own.weekly : null;
+  n.directNeed = mixed ? Math.min(own.weekly, n.perWeek) : own ? n.perWeek : 0;
+  n.warehouseNeed = source !== null && (mixed || !own) ? Math.max(n.perWeek - n.directNeed, 0) : 0;
+  n.directImport = !!(own && !n.warehouseNeed);
+  n.importSite = n.directImport ? site.s : source;
+  n.target = target;
+  n.from = n.directImport ? null : source;
+  n.dailyNeed = mixed ? n.warehouseNeed / 7 : n.perDay;
+  n.known = !own && site.known;
+  n.depotStock = n.from !== null ? held(n.from, n.slug) : 0;
+  const supply = n.importSite !== null ? (view.depots[n.importSite] || {})[n.slug] : null;
+  n.importWeekly = supply ? supply.weekly : null;
+  n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly);
 }
 
 /* The factories as the board built them, plus any line named in this browser. */
@@ -6261,6 +6364,7 @@ function factoryView(){
             const d = (view.depots[importSite] || {})[islug];
             row.depotStock = from !== null ? held(from, islug) : 0;
             row.importWeekly = d ? d.weekly : null;
+            row.importPaused = !!(d && !d.weekly && d.pausedWeekly);
           }
           s.needs.push(row);
         }
@@ -6276,20 +6380,23 @@ function factoryView(){
   if(touched.size){
     const depotNeed = {}, madeAt = {};
     view.sites.forEach(s => {
-      s.needs.forEach(n => { const source = n.importSite ?? n.from; if(source !== null){
-        const k = source + "|" + n.slug; depotNeed[k] = (depotNeed[k] || 0) + n.perWeek; } });
+      s.needs.forEach(n => {
+        feedRoute(s, n, view, held);
+        for(const [source, week] of [[n.factoryImportSite, n.directNeed], [n.from, n.warehouseNeed]]){
+          if(source === null) continue;
+          const k = source + "|" + n.slug; depotNeed[k] = (depotNeed[k] || 0) + week;
+        }
+      });
       s.lines.forEach(l => {
         const sites = madeAt[l.slug] = madeAt[l.slug] || [];
         if(!sites.includes(s.s)) sites.push(s.s);
       });
     });
-    const shares = new Set([...touched].map(t => (t.importSite ?? t.from) + "|" + t.slug));
     view.sites.forEach(s => {
       const stopped = {};
       s.lines.forEach(l => { if(l.missing && l.missing.length) stopped[l.item] = l.missing; });
       s.needs.forEach(n => {
         const source = n.importSite ?? n.from;
-        if(!touched.has(n) && !shares.has(source + "|" + n.slug)) return;
         n.depotNeed = Math.round(depotNeed[source + "|" + n.slug] || 0);
         n.madeAt = madeAt[n.slug] || [];
         n.waitingOn = n.lines.every(l => stopped[l])
@@ -7147,7 +7254,10 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     rows.push({key, group, item, current, proposed, reason, kind, site: s, source});
   };
   importRows.forEach(d => d.rows.forEach(r => {
-    if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
+    if(r.paused){
+      add("Weekly imports", r.s, r.item, null, null,
+        `Resume the paused import contract. It is configured for ${r.pausedWeekly.toLocaleString()} units/week; the estimated requirement is ${ceil100(r.total).toLocaleString()}. Review the quantity after resuming.`);
+    } else if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
       const why = r.factoryWeek
         ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}; confirm the production plan before increasing.`
         : "Based on recorded shop deliveries over a week.";
@@ -7157,15 +7267,15 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   looseRows.forEach(r => add("Weekly imports", null, r.item, null, null,
     `Choose a supplying depot before setting an order. Full-rate factory inputs need ${ceil100(r.week).toLocaleString()} units/week.`));
   imports.forEach(r => {
-    if(r.paused) add("Weekly imports", r.s, r.item, null, null,
+    if(r.paused && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if(r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+    else if(!r.paused && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
       Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
-      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand until delivery minus current stock, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before the next delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
+      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });
   sites.forEach(s => s.rows.forEach(r => {
     if(r.status === "unplanned" || r.status === "target") add("Factory daily top-ups", s.s,
-      r.item, r.target || 0, ceil100(r.perDay),
+      r.item, r.target || 0, ceil100(r.dailyNeed ?? r.perDay),
       `${r.from === null ? "Choose a supplying depot" : `From ${address(r.from)}`}. Full-rate input requirement; confirm staffing and output limits.`, r.from);
     if(r.stalled) add("Check the delivery route", s.s, r.item, null, null,
       `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from);
@@ -7357,15 +7467,18 @@ function drawLogistics(){
   /* --- imports, one group per depot ------------------------------------ */
   const depots = {}, loose = {};
   f.sites.forEach(s => s.needs.forEach(n => {
-    const source = n.importSite ?? n.from;
-    if(source === null){
+    const own = n.factoryImportSite ?? (n.directImport ? s.s : null);
+    if(own === null && n.from === null){
       const row = loose[n.slug] = loose[n.slug] || {item: n.item, slug: n.slug, week: 0, users: []};
       row.week += n.perWeek; row.users.push({s: s.s, perDay: n.perDay, lines: n.lines});
       return;
     }
-    const d = depots[source] = depots[source] || {};
-    const row = d[n.slug] = d[n.slug] || {item: n.item, slug: n.slug, factoryWeek: 0, users: []};
-    row.factoryWeek += n.perWeek; row.users.push({s: s.s, perDay: n.perDay, lines: n.lines});
+    for(const [source, week] of [[own, n.directNeed ?? n.perWeek], [n.from, n.warehouseNeed ?? n.perWeek]]){
+      if(source === null || !week) continue;
+      const d = depots[source] = depots[source] || {};
+      const row = d[n.slug] = d[n.slug] || {item: n.item, slug: n.slug, factoryWeek: 0, users: []};
+      row.factoryWeek += week; row.users.push({s: s.s, perDay: Math.round(week / 7), lines: n.lines});
+    }
   }));
   Object.entries(depotsKnown).forEach(([si, items]) => {
     const d = depots[si] = depots[si] || {};
@@ -7379,12 +7492,14 @@ function drawLogistics(){
     const rows = Object.values(items).map(r => {
       const otherWeek = (other[si] || {})[r.slug] || 0;
       const total = r.factoryWeek + otherWeek;
-      const current = ((depotsKnown[si] || {})[r.slug] || {}).weekly;
-      const fit = current === undefined ? (total ? "none" : "idle")
+      const contract = (depotsKnown[si] || {})[r.slug] || {};
+      const current = contract.weekly, pausedWeekly = contract.pausedWeekly || 0;
+      const paused = !current && pausedWeekly > 0;
+      const fit = paused ? "paused" : current === undefined ? (total ? "none" : "idle")
         : current === 0 && total > 0 ? "short" : feedFit(total, current);
       // A weekly order carries a buffer by design; only half again over is worth a word.
       const surplus = current !== undefined && total && current > total * 1.5;
-      return {...r, s, otherWeek, total, current, fit, surplus, stock: held(s, r.slug),
+      return {...r, s, otherWeek, total, current, fit, surplus, paused, pausedWeekly, stock: held(s, r.slug),
               setTo: total ? ceil100(total) : null};
     }).sort((a, b) => b.total - a.total);
     importRows.push({s, rows});
@@ -7393,9 +7508,10 @@ function drawLogistics(){
   const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
   const short = count(r => r.fit === "short" || r.fit === "none");
   const tight = count(r => r.fit === "tight");
+  const pausedCount = count(r => r.paused);
   const importAll = count(() => true);
   const shown = (changesOnly
-    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
+    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => r.paused || r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
     : importRows).filter(d => d.rows.length);
   /* The thin line under the depot figure: how much of a day's draw it holds,
      from the delivery log's measured draw where one is on record, else from
@@ -7411,7 +7527,8 @@ function drawLogistics(){
       : `<td class="gauge${days < 1 ? " low" : ""}"><i><b style="--w:${Math.min(100, days * 100).toFixed(0)}%"></b></i>${
           r.stock.toLocaleString()}</td>`;
   };
-  const setCell = r => r.setTo === null ? chipHtml("dim", "nothing draws it")
+  const setCell = r => r.paused ? chipHtml("warn", "resume import")
+    : r.setTo === null ? chipHtml("dim", "nothing draws it")
     : r.fit === "none" ? `${set(r.setTo)}${up("add")}`
     : r.fit === "short" ? `${set(r.setTo)}${up("raise")}`
     : r.fit === "tight" ? `${set(r.setTo)}${up("raise", "Within 5% of the week it has to cover")}`
@@ -7429,7 +7546,8 @@ function drawLogistics(){
       <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}</td>
       <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
       <td data-now="${r.current || 0}" data-to="${r.setTo || 0}">${
-        r.current !== undefined ? r.current.toLocaleString() : chipHtml("bad", "not imported")}</td>
+        r.paused ? `${r.pausedWeekly.toLocaleString()} ${chipHtml("warn", "paused")}`
+        : r.current !== undefined ? r.current.toLocaleString() : chipHtml("bad", "not imported")}</td>
       <td>${setCell(r)}</td>
       ${depotCell(r)}</tr>`;
   const looseRow = r => `<tr>
@@ -7445,9 +7563,10 @@ function drawLogistics(){
     + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
       `<div class="scrollx"><table>${importHead}<tbody>${looseRows.map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
-    : !short && !tight && !looseRows.length ? check(importAll, "cover what leaves")
+    : !short && !tight && !pausedCount && !looseRows.length ? check(importAll, "cover what leaves")
     : {after: (short ? chipHtml("bad", `${short} short`) : "")
       + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
+      + (pausedCount ? chipHtml("warn", `${pausedCount} paused`) : "")
       + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
   $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText}) + importTable;
   seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
@@ -7464,14 +7583,15 @@ function drawLogistics(){
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
   const topupRow = (site, r) => {
-    const over = r.target && r.target > r.perDay * 1.5;
+    const dailyNeed = r.dailyNeed ?? r.perDay;
+    const over = r.target && r.target > dailyNeed * 1.5;
     return `<tr>
       <td class="l">${r.item}<span class="sub">${factoryLineText(site, r)}</span></td>
-      <td>${r.perDay.toLocaleString()}</td>
-      <td data-now="${r.target || 0}" data-to="${ceil100(r.perDay)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
-      <td>${r.status === "unplanned" ? `${set(ceil100(r.perDay))}${up("add")}`
-        : r.status === "target" ? `${set(ceil100(r.perDay))}${up("raise")}`
-        : over ? `${ceil100(r.perDay).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line eats")}`
+      <td>${dailyNeed.toLocaleString()}${r.directWeekly ? '<span class="sub">after direct imports</span>' : ''}</td>
+      <td data-now="${r.target || 0}" data-to="${ceil100(dailyNeed)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
+      <td>${r.status === "unplanned" ? `${set(ceil100(dailyNeed))}${up("add")}`
+        : r.status === "target" ? `${set(ceil100(dailyNeed))}${up("raise")}`
+        : over ? `${ceil100(dailyNeed).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line draws from this route")}`
         : chipHtml("ok", "covered")}</td>
       <td class="l">${r.from !== null ? mapRef(D.businesses[r.from]) : "—"}</td>
       <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
