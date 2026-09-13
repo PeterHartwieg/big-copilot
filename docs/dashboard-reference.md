@@ -91,6 +91,23 @@ the map.
     transport limits and a custom buffer are not modelled in this first increment.
   - *Orders to set*: the weekly import order per depot and the daily top-up per factory,
     opening on the ones that need a change.
+    Current active contracts are added by destination and material, even before
+    the first delivery; paused contracts do not count toward weekly supply.
+    A factory supplied directly by an importer is checked against its weekly
+    input requirement. If it also has a warehouse route, active direct imports
+    cover the factory's demand first, and the warehouse's weekly order covers
+    the remainder. The daily top-up is still a fill-to stock level sufficient
+    for a full production day; weekly imports do not reduce that daily level.
+    Its direct order belongs to the factory in the weekly checklist; an order
+    covering the whole requirement does not generate a daily top-up action.
+    Paused orders show their configured quantity and, when there is identified
+    demand, a resume action. Unused paused orders do not recommend resuming.
+    Direct weekly deliveries are not reported as measured daily arrivals.
+    For staggered imports, the stock check retains each delivery's date and
+    quantity through the last upcoming drop. Stock-on-hand coverage is kept
+    separately from this delivery window when comparing the thinnest holding.
+    Estimates based only on past orders
+    do not trigger stockout warnings; measured shipments or sales are required.
   - *Stock checks*: the five questions your logistics actually raise. Each view opens
     with a one-line verdict and then lists only the rows that break it.
   - *How goods move*: the chain drawn as a flow diagram, with importers, factories,

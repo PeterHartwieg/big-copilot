@@ -1,5 +1,11 @@
 [
   {
+    "pr": 20,
+    "date": "2026-09-13",
+    "title": "Import deliveries count where they arrive",
+    "summary": "Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps."
+  },
+  {
     "pr": 19,
     "date": "2026-09-13",
     "title": "See who is online and vote on what comes next",
