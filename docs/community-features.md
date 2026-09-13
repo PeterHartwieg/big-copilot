@@ -1,7 +1,9 @@
 # Community features
 
 The hosted dashboard shows an approximate online count and lets visitors vote for
-the existing **Optimize staffing** and **Find a location** ideas. The count means
+the **Optimize staffing**, **Find a location**, and **Time to break even** ideas.
+Time to break even would estimate how many in-game days each business needs to
+earn back its setup costs, based on its net profit. The count means
 dashboard browsers seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.
 The count paints into the masthead's live status, replacing the "In browser"

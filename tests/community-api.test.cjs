@@ -516,7 +516,7 @@ test('features: curated listing starts at zero votes with nothing voted', async 
     `per-IP features response must not be publicly cacheable, got "${cc}"`,
   );
 
-  assert.equal(body.features.length, 2, 'exactly the two curated SOON options');
+  assert.equal(body.features.length, 3, 'exactly the three curated voting options');
   const ids = new Set();
   for (const feature of body.features) {
     assert.equal(typeof feature.id, 'string', 'feature id');
@@ -528,7 +528,7 @@ test('features: curated listing starts at zero votes with nothing voted', async 
     assert.equal(feature.votes, 0, 'no votes yet');
     assert.equal(feature.voted, false, 'voting IP has not voted yet');
   }
-  assert.equal(ids.size, 2, 'curated feature ids are unique');
+  assert.equal(ids.size, body.features.length, 'curated feature ids are unique');
 });
 
 test('votes: one vote per IP is idempotent under duplicates and races, per-IP flags never leak', async () => {
