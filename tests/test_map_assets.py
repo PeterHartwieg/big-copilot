@@ -23,6 +23,7 @@ class MapAssets(unittest.TestCase):
         self.assertEqual(sum(not b['path'] for b in data['buildings']), 1)
         self.assertEqual(hashlib.sha256((ROOT / 'web/maps' / data['image']).read_bytes()).hexdigest(), data['imageHash'])
         self.assertEqual(hashlib.sha256((ROOT / 'web/maps/full-map.svg').read_bytes()).hexdigest(), data['source']['svgHash'])
+        self.assertNotIn(b'<image', (ROOT / 'web/maps/map-background.svg').read_bytes())
         regions = {r['id']: r['bounds'] for r in data['regions']}
         for b in data['buildings']:
             x, y, w, h = regions[b['region']]
