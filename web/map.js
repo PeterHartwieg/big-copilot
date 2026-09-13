@@ -71,7 +71,6 @@ function mapFindings(){
   return result;
 }
 /* Worst level of a site's findings, in the board's three kinds. */
-const MAP_KIND = {critical:"crit", warn:"watch"};
 function mapKind(findings){
   if(!findings || !findings.length) return "";
   if(findings.some(a => a.level === "critical")) return "crit";
@@ -102,6 +101,26 @@ class CityMapView {
     this.panel = options.panel !== false;
     this.layers = {mine:true, own:true, fnd:true, all:false}; this.query = "";
     this.root.classList.add("city-map");
+    this.buildToken = 0;
+    // One breakpoint for CSS and script alike: the panel floats over the map
+    // on wide stages and drops under it on narrow ones.
+    this.mq = window.matchMedia ? window.matchMedia('(max-width:760px)') : null;
+    this.narrow = !!this.mq?.matches;
+    this.mq?.addEventListener?.('change', () => { this.narrow = this.mq.matches; this.citymap?.classList.toggle('narrow', this.narrow); this.rect = null; this.paintView(); });
+    this.root.addEventListener('click', e => {
+      if(!this.svg) return;
+      const pick = e.target.closest('[data-pick]');
+      if(pick){ this.select(pick.dataset.pick); return; }
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
+      if(action === 'reset') this.reset(true);
+      if(action === 'close') this.deselect();
+      if(action === 'details'){
+        e.preventDefault();
+        if($('locationMapDialog').open) $('locationMapDialog').close();
+        openSite(this.selected);
+      }
+    });
     root.innerHTML = `<p class="map-status" role="status">Loading map…</p>`;
     mapViews.add(this);
     this.ready = this.load();
@@ -133,20 +152,20 @@ class CityMapView {
       <span class="why" data-tip="The dots are layers: your businesses, buildings you own, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
-    this.root.innerHTML = `${head}<div class="citymap"><div class="stage${this.panel ? " panel" : ""}" data-stage>
+    this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage${this.panel ? " panel" : ""}" data-stage>
       <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="City map. Select a building or use the places list.">
       <defs><clipPath id="${clipId}"><rect class="map-region-clip" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
       <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${mapText(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${mapText(b.address)}</title></path>`).join('')}</g>
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" data-tip="Open business details">${ICON.go}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
       </div>
-      <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city" data-tip="Whole city">${ICON.home}</button></div>
-      ${this.panel ? `<aside class="places" aria-label="Matching places"><div class="list" role="listbox"></div></aside>` : ""}
-    </div></div>`;
+      <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button></div>
+    </div>${this.panel ? `<aside class="places" aria-label="Matching places"><div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
     this.stage = this.root.querySelector('[data-stage]');
+    this.citymap = this.root.querySelector('.citymap');
     this.layer = this.root.querySelector('.layer');
     this.card = this.root.querySelector('.site');
     this.search = this.root.querySelector('[data-control="search"]');
@@ -160,24 +179,12 @@ class CityMapView {
       chip.classList.toggle('off', !this.layers[l]); chip.setAttribute('aria-pressed', String(this.layers[l]));
       this.update();
     });
-    this.root.addEventListener('click', e => {
-      const pick = e.target.closest('[data-pick]');
-      if(pick){ this.select(pick.dataset.pick); return; }
-      const action = e.target.closest('[data-action]')?.dataset.action;
-      if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
-      if(action === 'reset') this.reset(true);
-      if(action === 'close') this.deselect();
-      if(action === 'details'){
-        e.preventDefault();
-        if($('locationMapDialog').open) $('locationMapDialog').close();
-        openSite(this.selected);
-      }
-    });
     this.card.querySelector('.x').dataset.action = 'close';
     if(this.list){
       this.list.addEventListener('mouseover', e => { const p = e.target.closest('[data-pick]'); if(p) this.light(p.dataset.pick); });
       this.list.addEventListener('mouseout', e => { const p = e.target.closest('[data-pick]'); if(p) this.light(null); });
     }
+    this.buildToken++;
     this.wirePan();
     this.wireBall?.();
     this.resizeObserver?.disconnect();
@@ -188,7 +195,8 @@ class CityMapView {
   }
   /* The camera: a viewBox with the stage's aspect, so nothing letterboxes. */
   stageRect(){ return this.rect || (this.rect=this.svg.getBoundingClientRect()); }
-  freeWidth(){ const r = this.stageRect(); return Math.max(120, r.width - (this.stage.classList.contains('panel') && r.width > 760 ? PANEL_W : 0)); }
+  hasPanel(){ return this.panel && !this.narrow; }
+  freeWidth(){ const r = this.stageRect(); return Math.max(120, r.width - (this.hasPanel() ? PANEL_W : 0)); }
   fitBox(bounds){
     const r = this.stageRect(); if(!r.width || !r.height) return [...this.assets.viewBox];
     const free = this.freeWidth(), [bx, by, bw, bh] = bounds;
@@ -203,8 +211,11 @@ class CityMapView {
   }
   reset(animate = false){
     const box = this.fitBox(this.assets.viewBox);
-    if(animate && this.box) this.glide(box); else { this.goal = null; this.box = box; this.paintView(); }
+    if(animate && this.box) this.glide(box); else { this.cancelGlide(); this.box = box; this.paintView(); }
   }
+  /* A drag, a wheel or a button cuts a glide short; whatever waited for the
+     glide (the card) must still happen. */
+  cancelGlide(){ if(!this.goal) return; this.goal = null; this.endInteraction(); const done = this.onSettled; this.onSettled = null; done?.(); }
   glide(box, ms = GLIDE_MS){
     if(REDUCED || !this.box){ this.goal = null; this.box = box; this.paintView(); return; }
     this.goal = {from:[...this.box], to:box, t0:performance.now(), ms};
@@ -214,7 +225,7 @@ class CityMapView {
       const p = Math.min(1, (t - g.t0) / g.ms), e = 1 - Math.pow(1 - p, 3);
       this.box = g.from.map((v, i) => v + (g.to[i] - v) * e);
       this.paintView();
-      if(p < 1) requestAnimationFrame(step); else { this.goal = null; this.endInteraction(); this.onSettled?.(); }
+      if(p < 1) requestAnimationFrame(step); else { this.goal = null; this.endInteraction(); const done = this.onSettled; this.onSettled = null; done?.(); }
     };
     requestAnimationFrame(step);
   }
@@ -246,7 +257,7 @@ class CityMapView {
   }
   zoom(factor, point){
     if(!this.box) return;
-    this.goal = null;
+    this.cancelGlide();
     this.beginInteraction();
     const [x,y,w,h] = this.box, width = Math.min(this.assets.viewBox[2]*1.5, Math.max(35,w*factor));
     const f = width/w, p = point || {x:x+w/2,y:y+h/2};
@@ -262,7 +273,7 @@ class CityMapView {
     };
     this.svg.onpointerdown = e => {
       if(e.button !== 0) return;
-      e.preventDefault(); this.rect=this.svg.getBoundingClientRect(); this.goal = null;
+      e.preventDefault(); this.rect=this.svg.getBoundingClientRect(); this.cancelGlide();
       this.dragging=true; this.beginInteraction();
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
       previous = midpoint(); down = e.target.closest('[data-location]')?.dataset.location; moved = pointers.size>1;
@@ -312,17 +323,15 @@ class CityMapView {
       const r = this.ball.getBoundingClientRect();
       // The masthead balls are the same sphere: this one swallows them and
       // grows a little per gulp. busy until every last orb has arrived.
-      let orbs = document.querySelectorAll('.orb').length;
+      let orbs = 0;
       const onEach = () => {
         this.squishBall();
         this.orb.size = Math.min(230, this.orb.size * 1.08);
         this.paintBall();
         if(--orbs <= 0) this.busy = false;
       };
-      if(window.__consumeBalls && window.__consumeBalls(r.left + r.width/2, r.top + r.height/2, onEach)){
-        if(orbs > 0) this.busy = true;
-        return;
-      }
+      orbs = window.__consumeBalls ? window.__consumeBalls(r.left + r.width/2, r.top + r.height/2, onEach) : 0;
+      if(orbs > 0){ this.busy = true; return; }
       // nothing to swallow: spin and pay out
       this.ball.classList.remove('spin'); void this.ball.offsetWidth; this.ball.classList.add('spin');
       if(REDUCED) return;
@@ -336,14 +345,16 @@ class CityMapView {
       }
     });
     if(REDUCED){ this.lift = 0; return; } // drawView paints it still, once per camera move
+    if(this.ballHover) document.removeEventListener('mousemove', this.ballHover);
     document.addEventListener('mousemove', this.ballHover = e => {
       const r = this.ball.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2), d = Math.hypot(dx, dy) || 1;
       this.ball.style.setProperty('--hx', (34 + dx/d * 20) + '%'); this.ball.style.setProperty('--hy', (32 + dy/d * 20) + '%');
     });
+    const token = this.buildToken;
     const loop = t => {
-      if(!this.svg.isConnected) return;
-      if(!document.hidden){
+      if(token !== this.buildToken || !this.svg.isConnected) return;
+      if(!document.hidden && this.stage.offsetParent){
         const px = this.orb.size * this.scale();
         this.lift = (1 + Math.sin(t/700)) * px * .012;
         this.paintBall();
@@ -413,7 +424,7 @@ class CityMapView {
       path.classList.toggle('mine', business);
       path.classList.toggle('owned', !business && owned);
       path.classList.toggle('dim', !keys.has(key) && key!==this.selected);
-      path.classList.toggle('selected', key===this.selected); path.classList.toggle('sel', key===this.selected);
+      path.classList.toggle('sel', key===this.selected);
       path.querySelector('title').textContent=[this.businesses.get(key)?.name,this.assets.byKey.get(key).address].filter(Boolean).join(' · ');
     });
     // Finding dots at the footprint centres; the stage shows them once zoomed in.
@@ -429,7 +440,7 @@ class CityMapView {
         const name = b ? b.name.replace(/^\[\w+\]\s*/, '') : r.address;
         const small = b ? `${r.address} · ${b.type}${this.owned.has(r.key) ? ' · owned' : ''}` : r.owned ? `${r.hood || ''} · owned` : r.hood || '';
         const amt = trading ? `<span class="amt ${b.profit >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>` : '<span class="amt"></span>';
-        return `<button type="button" role="option" class="place ${kind}${r.key===this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key===this.selected}" aria-selected="${r.key===this.selected}"><i class="mark"></i><span class="hood">${mapText(hoodCode(b, r.hood))}</span><span class="nm">${mapText(name)}<small>${mapText(small)}${!r.region ? ' · no map position' : ''}</small></span>${amt}</button>`;
+        return `<button type="button" class="place ${kind}${r.key===this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key===this.selected}"><i class="mark"></i><span class="hood">${mapText(hoodCode(b, r.hood))}</span><span class="nm">${mapText(name)}<small>${mapText(small)}${!r.region ? ' · no map position' : ''}</small></span>${amt}</button>`;
       }).join('') + (this.matches.length > shown.length ? `<div class="more">+${this.matches.length - shown.length}</div>` : '') + (this.matches.length ? '' : '<div class="empty">Nothing here.</div>');
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
@@ -465,7 +476,7 @@ class CityMapView {
     const card = this.card; if(!card || card.hidden || !this.selected) return;
     const loc = this.assets.byKey.get(this.selected); if(!loc?.bounds) return;
     const r = this.stageRect(), [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2);
-    const limit = r.width - (this.stage.classList.contains('panel') && r.width > 760 ? PANEL_W + 14 : 16);
+    const limit = r.width - (this.hasPanel() ? PANEL_W + 14 : 16);
     const flip = p.x + 40 + card.offsetWidth > limit;
     card.classList.toggle('flip', flip);
     const left = flip ? p.x - 40 - card.offsetWidth : p.x + 40;
@@ -489,10 +500,11 @@ class CityMapView {
       const s = Math.max(this.scale(), this.cityScale() * PICK_ZOOM);
       const free = this.freeWidth();
       const box = [cx - (free*.44)/s, cy - (r.height/2)/s, r.width/s, r.height/s];
-      this.onSettled = () => { this.onSettled = null; if(this.selected === key) this.card?.classList.add('in'); };
+      this.cancelGlide();
+      this.onSettled = () => { if(this.selected === key) this.card?.classList.add('in'); };
       this.update();
       this.glide(box);
-      if(REDUCED || !this.goal) this.onSettled?.();
+      if(!this.goal){ const done = this.onSettled; this.onSettled = null; done?.(); }
     } else {
       this.update();
       if(b?.bounds) this.card?.classList.add('in');
@@ -504,7 +516,8 @@ class CityMapView {
     this.update();
   }
   resetCharacter(){
-    this.selected=null; this.query='';
+    this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
+    if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, fnd:true, all:false};
       this.root.querySelectorAll('.lay').forEach(c => { c.classList.toggle('off', !this.layers[c.dataset.l]); c.setAttribute('aria-pressed', String(this.layers[c.dataset.l])); });
       this.reset(); this.update(); }

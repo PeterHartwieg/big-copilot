@@ -45,12 +45,12 @@ test('the map hook swallows every shelf ball one after another and the shelf rec
     await rollOut(page,2);await rollOut(page,3);
     assert.equal(await orbs(page),3);
     const started=await page.evaluate(()=>window.__consumeBalls(600,400,()=>window.__eaten=(window.__eaten||0)+1));
-    assert.equal(started,true);
+    assert.equal(started,3);
     await settle(2500);
     assert.equal(await orbs(page),0);
     assert.equal(await page.evaluate(()=>window.__eaten),3);
     // the shelf is empty now, so there is nothing left to swallow
-    assert.equal(await page.evaluate(()=>window.__consumeBalls(600,400)),false);
+    assert.equal(await page.evaluate(()=>window.__consumeBalls(600,400)),0);
     // clicking the wordmark still rolls a fresh ball out of the dot
     await page.click('.wordmark');
     await page.waitForFunction(()=>document.querySelectorAll('.orb').length===1,undefined,{timeout:2000});
@@ -64,7 +64,7 @@ test('with reduced motion the hook empties the shelf at once and reports each ba
     await settle(700); // under reduced motion an entrance ends at its 400 ms mark
     assert.equal(await orbs(page),1);
     const started=await page.evaluate(()=>window.__consumeBalls(600,400,()=>window.__eaten=(window.__eaten||0)+1));
-    assert.equal(started,true);
+    assert.equal(started,1);
     assert.equal(await orbs(page),0);
     assert.equal(await page.evaluate(()=>window.__eaten),1);
     assert.deepEqual(errors,[]);

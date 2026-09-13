@@ -17,8 +17,8 @@ from ba_save import Names
 
 ROOT = Path(__file__).resolve().parent
 NS = {'s': 'http://www.w3.org/2000/svg'}
-# The master artwork paints the brand orb as an embedded raster; the board
-# draws a live ball there, so exports must not ship the painted one.
+# Older master artwork carried the brand orb as an embedded raster; the board
+# draws a live ball there, so exports drop any embedded raster.
 ORB = re.compile(r'[ \t]*<image\b[^>]*?/>[ \t]*(?:\r?\n|\Z)')
 
 
