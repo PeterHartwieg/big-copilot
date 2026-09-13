@@ -23,9 +23,10 @@ on, and which view inside it, is remembered on the device and mirrored in the UR
 hash, so a live refresh and a reopened tab both land where you left off.
 
 **Map** shows the city with your business footprints in green, buildings you own dashed
-blue, and a floating list of places over the right edge. Four chips above the map are
-layers that add up: your businesses, buildings you own, sites with a finding from Today,
-and every address (off by default, drawn as faint outlines). Clicking a chip switches that
+blue, homes you rent in white, and a floating list of places over the right edge. Five
+chips above the map are layers that add up: your businesses, buildings you own, homes you
+rent, sites with a finding from Today, and every address (off by default, drawn as faint
+outlines). Clicking a chip switches that
 layer off; off is dimmed, never removed. The search field narrows the list and shows its
 count; the `?` mark explains the layers. Drag to pan, scroll or pinch to zoom, or use the
 `+`, `−` and house buttons inside the map. Picking a place from the list or on the map
@@ -35,8 +36,8 @@ site's findings as a dot, a short phrase and an amount, and an arrow to the busi
 Once zoomed in, red, amber and grey dots mark buildings with findings and the district
 names fade out. Buildings I own uses purchased real estate from the save, including
 properties without a player business. Ordinary addresses carry static map information,
-not a rental quote or an eligibility recommendation. Player homes are not part of your
-businesses.
+not a rental quote or an eligibility recommendation. A rented home is billed as a residence, so it is a home, never a business; its card
+shows the rent.
 
 The green ball in Central Park is the board's brand sphere: it scales with the map, and
 clicking it swallows any spheres on the masthead shelf (click the wordmark to roll more
