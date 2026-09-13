@@ -1,5 +1,11 @@
 [
   {
+    "pr": 19,
+    "date": "2026-09-13",
+    "title": "See who is online and vote on what comes next",
+    "summary": "An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature."
+  },
+  {
     "pr": 16,
     "date": "2026-09-13",
     "title": "Your rented homes, on the map",
