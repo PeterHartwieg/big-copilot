@@ -1635,6 +1635,7 @@ def _supply(
             schedule = _scheduled_import_gap(
                 line["units"], per_day, weekly, day, supply["deliveries"], left_today
             ) if basis != "order" else None
+            stock_cover = cover
             if schedule:
                 cover, runs_out = schedule["cover"], schedule["runsOut"]
                 due = max(schedule["until"] - day - spent_today, 0.0)
@@ -1674,6 +1675,7 @@ def _supply(
                     "peakDay": peak_day,
                     "peakPerDay": round(per_day * factor),
                     "cover": round(cover, 1),
+                    "stockCover": round(stock_cover, 1),
                     # The plain division, without the weekday walk: units on the
                     # shelf against a flat day of draw.
                     "daysOnHand": round(line["units"] / per_day, 1) if per_day else None,
@@ -1694,7 +1696,7 @@ def _supply(
                     "reason": reason,
                 }
             )
-    import_rows.sort(key=lambda r: r["cover"])
+    import_rows.sort(key=lambda r: r["stockCover"])
 
     # --- 3. anything just sitting there
     idle_rows = []
@@ -2347,7 +2349,9 @@ def _factories(
             row["directWeekly"] = direct_weekly if own_import else None
             row["directNeed"] = direct_need
             row["warehouseNeed"] = warehouse_need
-            row["dailyNeed"] = warehouse_need / 7 if mixed else row["perDay"]
+            # A daily route fills to a stock level; weekly imports reduce its
+            # shipment volume, not the level needed for a full production day.
+            row["dailyNeed"] = row["perDay"]
             row["importSite"] = index.get(import_source)
             row["known"] = not own_import and flow["received"](key, slug) is not None
             row["arrives"] = round(arrives(key, slug))
@@ -6018,7 +6022,7 @@ const SUPPLY_VIEWS = {
       const tight = rows.filter(r => r.orderFit === "tight").length;
       const small = rows.filter(r => r.orderFit === "short").length;
       const paused = rows.filter(r => r.paused).length;
-      const worst = rows.slice().sort((a,b) => a.cover - b.cover)[0];
+      const worst = rows.slice().sort((a,b) => (a.stockCover ?? a.cover) - (b.stockCover ?? b.cover))[0];
       const problems = [
         paused ? `${paused} import${paused===1?" is":"s are"} paused` : "",
         small ? `${small} order${small===1?" is":"s are"} too small` : "",
@@ -6029,10 +6033,10 @@ const SUPPLY_VIEWS = {
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
         D.supply.nextImportWeekday || "the next"}'s import, ${
         D.supply.hoursToImport} days off; thinnest ${worst.item} at ${
-        mapRef(D.businesses[worst.s])}, ${worst.cover} days.`;
+        mapRef(D.businesses[worst.s])}, ${worst.stockCover ?? worst.cover} days from stock on hand.`;
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
-    tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => a.cover - b.cover),
+    tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => (a.stockCover ?? a.cover) - (b.stockCover ?? b.cover)),
     head: `<th class="l">Site</th><th class="l">Product</th><th>On hand</th>
            <th>Uses / day</th><th>Busiest day</th><th>Runs out</th><th>Weekly order</th>
            <th>A week takes</th>`,
@@ -6316,7 +6320,7 @@ function feedRoute(site, n, view, held){
   n.importSite = n.directImport ? site.s : source;
   n.target = target;
   n.from = n.directImport ? null : source;
-  n.dailyNeed = mixed ? n.warehouseNeed / 7 : n.perDay;
+  n.dailyNeed = n.perDay; // Fill-to level still has to cover a full day.
   n.known = !own && site.known;
   n.depotStock = n.from !== null ? held(n.from, n.slug) : 0;
   const supply = n.importSite !== null ? (view.depots[n.importSite] || {})[n.slug] : null;
@@ -7254,7 +7258,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     rows.push({key, group, item, current, proposed, reason, kind, site: s, source});
   };
   importRows.forEach(d => d.rows.forEach(r => {
-    if(r.paused){
+    if(r.paused && r.total > 0){
       add("Weekly imports", r.s, r.item, null, null,
         `Resume the paused import contract. It is configured for ${r.pausedWeekly.toLocaleString()} units/week; the estimated requirement is ${ceil100(r.total).toLocaleString()}. Review the quantity after resuming.`);
     } else if(r.setTo !== null && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
@@ -7508,10 +7512,10 @@ function drawLogistics(){
   const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
   const short = count(r => r.fit === "short" || r.fit === "none");
   const tight = count(r => r.fit === "tight");
-  const pausedCount = count(r => r.paused);
+  const pausedCount = count(r => r.paused && r.total > 0);
   const importAll = count(() => true);
   const shown = (changesOnly
-    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => r.paused || r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
+    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => (r.paused && r.total > 0) || r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
     : importRows).filter(d => d.rows.length);
   /* The thin line under the depot figure: how much of a day's draw it holds,
      from the delivery log's measured draw where one is on record, else from
@@ -7527,8 +7531,8 @@ function drawLogistics(){
       : `<td class="gauge${days < 1 ? " low" : ""}"><i><b style="--w:${Math.min(100, days * 100).toFixed(0)}%"></b></i>${
           r.stock.toLocaleString()}</td>`;
   };
-  const setCell = r => r.paused ? chipHtml("warn", "resume import")
-    : r.setTo === null ? chipHtml("dim", "nothing draws it")
+  const setCell = r => r.setTo === null ? chipHtml("dim", "nothing draws it")
+    : r.paused ? chipHtml("warn", "resume import")
     : r.fit === "none" ? `${set(r.setTo)}${up("add")}`
     : r.fit === "short" ? `${set(r.setTo)}${up("raise")}`
     : r.fit === "tight" ? `${set(r.setTo)}${up("raise", "Within 5% of the week it has to cover")}`
@@ -7587,7 +7591,7 @@ function drawLogistics(){
     const over = r.target && r.target > dailyNeed * 1.5;
     return `<tr>
       <td class="l">${r.item}<span class="sub">${factoryLineText(site, r)}</span></td>
-      <td>${dailyNeed.toLocaleString()}${r.directWeekly ? '<span class="sub">after direct imports</span>' : ''}</td>
+      <td>${dailyNeed.toLocaleString()}</td>
       <td data-now="${r.target || 0}" data-to="${ceil100(dailyNeed)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
       <td>${r.status === "unplanned" ? `${set(ceil100(dailyNeed))}${up("add")}`
         : r.status === "target" ? `${set(ceil100(dailyNeed))}${up("raise")}`

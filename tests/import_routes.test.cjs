@@ -116,3 +116,58 @@ for (const amount of [700, 2000]) {
     } finally { await page.close(); }
   });
 }
+
+for (const target of [130, 300]) {
+  test(`mixed imports keep a full-day fill target when target is ${target}`, async () => {
+    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+      + 'from test_import_routes import ImportRoutesTests,contract; '
+      + `print(json.dumps(ImportRoutesTests().build([contract(840,destination=("factory",0)),contract(900)],routed=True,target=${target})))`));
+    const page = await browser.newPage();
+    try {
+      await page.route('https://**', route => route.abort());
+      await page.setContent(html, {waitUntil: 'load'});
+      await page.evaluate(data => {
+        D = data; logisticsView = 'all';
+        const draw = drawOrderChecklist;
+        drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+        drawLogistics();
+      }, data);
+      const topups = await page.locator('#topupPlan').textContent();
+      assert.match(topups, /240/);
+      assert.doesNotMatch(topups, /after direct imports|could lower/);
+      const actions = await page.evaluate(() => window.fixtureActions);
+      const daily = actions.filter(a => a.kind === 'Factory daily top-ups');
+      if (target === 130) {
+        assert.equal(daily.length, 1);
+        assert.equal(daily[0].proposed, 300);
+        assert.match(topups, /raise/);
+      } else {
+        assert.equal(daily.length, 0);
+        assert.match(topups, /covered/);
+      }
+      assert.equal(actions.filter(a => a.kind === 'Weekly imports').length, 0);
+    } finally { await page.close(); }
+  });
+}
+
+test('unused paused contract stays paused without a resume recommendation', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_import_routes import ImportRoutesTests,contract; '
+    + 'print(json.dumps(ImportRoutesTests().build([contract(5000,active=False)])))'));
+  data.supply.factories.sites = [];
+  const page = await browser.newPage();
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    await page.evaluate(data => {
+      D = data; logisticsView = 'all';
+      const draw = drawOrderChecklist;
+      drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+      drawLogistics();
+    }, data);
+    const imports = await page.locator('#importPlan').textContent();
+    assert.match(imports, /nothing draws it/);
+    assert.doesNotMatch(imports, /resume import/);
+    assert.equal((await page.evaluate(() => window.fixtureActions)).length, 0);
+  } finally { await page.close(); }
+});

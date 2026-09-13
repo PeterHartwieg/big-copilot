@@ -34,7 +34,7 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertIsNone(_scheduled_import_gap(0, 100, [1] * 7, 10,
                           [{"day": 12, "amount": 100}, {"day": 12, "amount": 600}], .5))
 
-    def build(self, contracts, *, routed=False, rid=RID, with_recipes=True):
+    def build(self, contracts, *, routed=False, rid=RID, with_recipes=True, target=300):
         save = SaveStub([[rid]], hours=24)
         save.address = lambda value: value
         save.root.update(Hour=12, Minute=0, importPartnerships=contracts,
@@ -43,7 +43,7 @@ class ImportRoutesTests(unittest.TestCase):
             save.root["logisticsManagerPlans"] = [{
                 "targetAddress": ("depot", 1), "destinations": [{
                     "deliveryTargetAddress": ("factory", 0),
-                    "stockTargets": [{"itemName": WATER, "targetAmount": 300}],
+                    "stockTargets": [{"itemName": WATER, "targetAmount": target}],
                 }],
             }]
         businesses = [{
@@ -143,7 +143,29 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertEqual(need["directNeed"], 840)
         self.assertEqual(need["warehouseNeed"], 840)
         self.assertEqual(need["depotNeed"], 840)
-        self.assertEqual(need["dailyNeed"], 120)
+        self.assertEqual(need["dailyNeed"], 240)
+
+    def test_partial_direct_import_does_not_lower_daily_fill_target(self):
+        need = self.need(self.build([contract(840, destination=("factory", 0)), contract(900)],
+                                   routed=True, target=130))
+        self.assertEqual(need["status"], "target")
+        self.assertEqual(need["raiseTarget"], 300)
+        self.assertEqual(need["warehouseNeed"], 840)
+
+    def test_staggered_deliveries_preserve_stock_cover_for_cross_row_ranking(self):
+        import test_import_routes as fixtures
+        real_supply = _supply
+        def supply(save, names, businesses, *args, **kwargs):
+            businesses[1]["lines"][0].update(rate=240, units=4800)
+            return real_supply(save, names, businesses, *args, **kwargs)
+        early, late = contract(50), contract(1950, pier=2)
+        early["nextDeliveryDay"], late["nextDeliveryDay"] = 11, 16
+        with patch.object(fixtures, "_supply", supply):
+            data = self.build([early, late])
+        row = next(r for r in data["supply"]["imports"] if r["s"] == 1)
+        self.assertEqual(row["cover"], 5.5)
+        self.assertEqual(row["stockCover"], 20)
+        self.assertEqual(row["coverFit"], "ok")
 
     def test_measured_warehouse_draw_marks_zero_order_as_short(self):
         import test_import_routes as fixtures
@@ -159,14 +181,15 @@ class ImportRoutesTests(unittest.TestCase):
 
     def test_browser_parity_for_paused_and_mixed_routes(self):
         cases = [
-            ([contract(2000, active=False, destination=("factory", 0))], False),
-            ([contract(2000, destination=("factory", 0))], True),
-            ([contract(840, destination=("factory", 0)), contract(900)], True),
-            ([contract(840, destination=("factory", 0)), contract(100)], True),
+            ([contract(2000, active=False, destination=("factory", 0))], False, 300),
+            ([contract(2000, destination=("factory", 0))], True, 300),
+            ([contract(840, destination=("factory", 0)), contract(900)], True, 300),
+            ([contract(840, destination=("factory", 0)), contract(900)], True, 130),
+            ([contract(840, destination=("factory", 0)), contract(100)], True, 300),
         ]
-        for contracts, routed in cases:
+        for contracts, routed, target in cases:
             with self.subTest(contracts=contracts, routed=routed):
-                data = self.build(contracts, routed=routed, rid="unknown")
+                data = self.build(contracts, routed=routed, rid="unknown", target=target)
                 script = "const D = " + json.dumps(data) + "; const LIVE = false;\n"
                 script += "const localStorage = {getItem: () => " + json.dumps(json.dumps({"unknown": BEER})) + "};\n"
                 script += TEMPLATE[TEMPLATE.index("const LINE_NAMES_KEY"):TEMPLATE.index("/* --- chrome, wired up once")]
@@ -174,7 +197,7 @@ class ImportRoutesTests(unittest.TestCase):
                 result = json.loads(subprocess.run(["node", "-e", script], check=True,
                                                    text=True, capture_output=True).stdout)
                 actual = result["sites"][0]["needs"][0]
-                expected = self.need(self.build(contracts, routed=routed))
+                expected = self.need(self.build(contracts, routed=routed, target=target))
                 for key in ("status", "importWeekly", "importPaused", "directImport", "directWeekly",
                             "directNeed", "warehouseNeed", "dailyNeed", "depotNeed", "depotStock",
                             "raiseImport", "raiseTarget", "importSite", "from"):
