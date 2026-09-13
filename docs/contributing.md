@@ -65,6 +65,44 @@ process details. Run `python build_web.py` to include the entry in the footer
 changelog on both the landing screen and the dashboard. Entries appear newest
 first and link to their PR; reading them does not require GitHub access.
 
+## Deployment baseline
+
+Before deploying, run `git fetch origin` and
+`git merge-base --is-ancestor origin/main HEAD` from the release checkout; stop
+if the second command fails. Check the previous release for changes that have
+not reached main yet, and preserve them too. Build and test that checkout, then
+deploy with its explicit `--config` path. A passing suite on an older feature
+branch does not establish that newer live features are preserved.
+
+Verify the generated page on the live domain after deployment, including the
+map's layer chips, rented homes and interactive ball, plus the feature being
+released. The map code is embedded in `index.html`, so checking the standalone
+`map.js` file alone is insufficient.
+
+Run `node --test tests/release.test.cjs` before deploying; set `RELEASE_URL` to
+`https://bigcopilot.com/` and run it again afterwards. It checks the generated
+page's map controls, ball interaction and persistent feature badges together.
+
+## New feature badges
+
+New user-facing features get a small `New` badge on their navigation link or
+entry button until the player first opens them. Reuse the shared
+`featureDiscovery` helper in `ba_dashboard.py`; keep a stable feature ID across
+releases so routine updates do not reannounce an already visited feature.
+
+For a top-level page, add `newFeature: "your-feature-id"` to its `PAGES` entry;
+navigation renders the badge and records the visit automatically, including
+direct links and restored pages. For other entry buttons, add
+`<span class="feature-new" data-new-feature="your-feature-id" hidden>New</span>`
+and call `featureDiscovery.visit('your-feature-id')` after opening the feature.
+Call `featureDiscovery.refresh()` after inserting badges dynamically. Reuse the
+same ID on all entry points so their badges disappear together.
+
+Visits are stored per browser under `ba_dash_feature_seen:<id>`, independently
+of the loaded save. If storage is unavailable, dismissal lasts for the current
+page session. Map and Changelog are the first examples; new changelog entries
+do not reset the Changelog feature badge. Rebuild with `python build_web.py`.
+
 ## Map assets
 
 `python export_map.py --geometry PATH/geometry.json --recipe PATH/recipe.json`

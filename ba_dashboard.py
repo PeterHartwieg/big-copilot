@@ -5097,9 +5097,11 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 
 /* footer ------------------------------------------------------------------- */
 .foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:16px 22px;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
-.foot span:last-child{margin-left:auto}
+.foot > span:last-child{margin-left:auto}
 #footerLinks{display:flex;flex-wrap:wrap;gap:14px;align-items:center;text-transform:none}
 #footerLinks:empty{display:none}
+.feature-new{display:inline-block;flex:none;margin-left:6px;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+.nav .feature-new{margin-left:0}
 .changelog-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;color:var(--ink-3);font:inherit;letter-spacing:inherit;cursor:pointer}
 .changelog-link:hover{color:var(--ink);border-color:var(--ink-3)}
 .changelog-link:focus-visible,.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
@@ -5270,7 +5272,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
     <span>Big Copilot</span>
     <span id="footFile"></span>
     <!-- a host page may append its own project links here -->
-    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog</button></span>
+    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button></span>
     <span id="footBuild"></span>
   </footer>
 </div>
@@ -5279,11 +5281,33 @@ body:has(#changelogDialog[open]){overflow:hidden}
   <ol class="changelog-list"><!--__CHANGELOG__--></ol>
 </dialog>
 <script>
+/* Shared feature discovery: stable IDs persist across releases and saves. */
+const featureDiscovery = (() => {
+  const seen = new Set();
+  const key = id => 'ba_dash_feature_seen:' + id;
+  function refresh(){
+    document.querySelectorAll('[data-new-feature]').forEach(badge => {
+      const id = badge.dataset.newFeature;
+      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
+      badge.hidden = seen.has(id);
+    });
+  }
+  function visit(id){
+    if(!id) return;
+    seen.add(id);
+    try { localStorage.setItem(key(id), '1'); } catch(e) {}
+    refresh();
+  }
+  return {refresh, visit};
+})();
+featureDiscovery.refresh();
+/* --- changelog dialog ------------------------------------------------ */
 (() => {
   const dialog = document.getElementById('changelogDialog');
   document.addEventListener('click', event => {
     if(event.target.closest('[data-changelog]')) {
       dialog.showModal();
+      featureDiscovery.visit('changelog');
       dialog.scrollTop = 0;
     }
   });
@@ -7976,7 +8000,7 @@ const PAGES = [
   {id:"supply",  label:"Supply",  host:"pageSupply"},
   {id:"growth",  label:"Growth",  host:"pageGrowth"},
   {id:"company", label:"Company", host:"pageCompany"},
-  {id:"map", label:"Map", host:"pageMap"},
+  {id:"map", label:"Map", host:"pageMap", newFeature:"map"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
@@ -8021,13 +8045,15 @@ function showPage(id, scroll = true, historyMode = "push"){
      page was hidden. */
   if(id === "results") drawChart();
   if(id === "map") showCityMap();
+  featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
   wireReveal();
   requestAnimationFrame(inkHome);
 }
 $("nav").innerHTML = PAGES.map(p =>
-  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span></a>`).join("") + '<i class="ink"></i>';
+  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span>${p.newFeature ? `<span class="feature-new" data-new-feature="${p.newFeature}" hidden>New</span>` : ''}</a>`).join("") + '<i class="ink"></i>';
+featureDiscovery.refresh();
 $("nav").addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
