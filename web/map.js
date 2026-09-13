@@ -11,6 +11,7 @@ const MAP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 
 ICON.map = MAP_ICON;
 ICON.search = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg>';
 ICON.x = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>';
+ICON.full = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>';
 ICON.home = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"></path></svg>';
 function mapButton(key, label = "this building"){
   if(!key) return "";
@@ -116,6 +117,7 @@ class CityMapView {
       const action = e.target.closest('[data-action]')?.dataset.action;
       if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
       if(action === 'reset') this.reset(true);
+      if(action === 'full') this.toggleFullscreen();
       if(action === 'close') this.deselect();
       if(action === 'details'){
         e.preventDefault();
@@ -163,7 +165,7 @@ class CityMapView {
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
         <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
       </div>
-      <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button></div>
+      <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
     </div>${this.panel ? `<aside class="places" aria-label="Matching places"><div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
     this.stage = this.root.querySelector('[data-stage]');
@@ -191,9 +193,17 @@ class CityMapView {
     this.wireBall?.();
     this.resizeObserver?.disconnect();
     this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintView();});
+    this.citymap.addEventListener('fullscreenchange', () => { this.rect = null; if(this.selected) this.select(this.selected, true); else this.reset(); });
     this.resizeObserver.observe(this.svg);
     this.reset();
     if(typeof wireTips === "function") wireTips();
+  }
+  /* Full screen takes the whole map box (stage and panel); the camera refits
+     when the size changes, keeping the selection. */
+  toggleFullscreen(){
+    const box = this.citymap; if(!box) return;
+    if(document.fullscreenElement === box) document.exitFullscreen?.();
+    else box.requestFullscreen?.().catch(() => {});
   }
   /* The camera: a viewBox with the stage's aspect, so nothing letterboxes. */
   stageRect(){ return this.rect || (this.rect=this.svg.getBoundingClientRect()); }

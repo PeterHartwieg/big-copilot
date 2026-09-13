@@ -22,9 +22,16 @@ NS = {'s': 'http://www.w3.org/2000/svg'}
 ORB = re.compile(r'[ \t]*<image\b[^>]*?/>[ \t]*(?:\r?\n|\Z)')
 
 
+TITLES = ('WORLD MAP', '>Big Ambitions<', 'addresses')
+TITLE_GROUP = re.compile(r'[ \t]*<g id="text_\d+">\s*<text\b[^>]*>[^<]*(?:%s)[^<]*</text>\s*</g>[ \t]*(?:\r?\n|\Z)'
+                         % '|'.join(re.escape(t.strip('><')) for t in TITLES))
+
+
 def strip_orb(svg_text):
-    """Remove every embedded <image/> element (the painted orb) from SVG text."""
-    return ORB.sub('', svg_text)
+    """Remove every embedded <image/> element (the painted orb) and the poster
+    headline (title, crumb, address count) from SVG text: the board draws its
+    own chrome over the map."""
+    return TITLE_GROUP.sub('', ORB.sub('', svg_text))
 
 
 def export(geometry_path, recipe_path, svg_path):

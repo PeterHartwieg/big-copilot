@@ -213327,16 +213327,7 @@ L 60.48 1371.24
 z
 " style="fill: #a56415; stroke: #60766b; stroke-width: 0.4; stroke-linejoin: miter"/>
   </g>
-  <g id="text_953">
-   <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #9aa39d" x="60.48" y="50.544" transform="rotate(-0 60.48 50.544)">BIG COPILOT  /  WORLD MAP</text>
-  </g>
-  <g id="text_954">
-   <text style="font-weight: 700; font-size: 33px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #e9ece6" x="60.48" y="98.496" transform="rotate(-0 60.48 98.496)">Big Ambitions</text>
-  </g>
-  <g id="text_955">
-   <text style="font-size: 13px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #9aa39d" x="812.16" y="80.352" transform="rotate(-0 812.16 80.352)">883 addresses · 7 districts</text>
-  </g>
-  <g id="text_956">
+        <g id="text_956">
    <text style="font-size: 11px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: start; fill: #9aa39d" x="570.24" y="1224.72" transform="rotate(-0 570.24 1224.72)">Buildings and entrances · Courtyards, trees and parking · Shared world geometry</text>
   </g>
   <g id="text_957">
