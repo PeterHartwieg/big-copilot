@@ -838,10 +838,28 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
 
 /* footer ------------------------------------------------------------------- */
-.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:22px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
+.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:16px 22px;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
 .foot span:last-child{margin-left:auto}
-#footerLinks{display:flex;gap:14px;align-items:center;text-transform:none}
+#footerLinks{display:flex;flex-wrap:wrap;gap:14px;align-items:center;text-transform:none}
 #footerLinks:empty{display:none}
+.changelog-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;color:var(--ink-3);font:inherit;letter-spacing:inherit;cursor:pointer}
+.changelog-link:hover{color:var(--ink);border-color:var(--ink-3)}
+.changelog-link:focus-visible,.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+body:has(#changelogDialog[open]){overflow:hidden}
+.changelog-dialog{width:min(640px,calc(100vw - 32px));max-width:none;max-height: min(780px,calc(100dvh - 48px));padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
+.changelog-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
+.changelog-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 28px;border-bottom:1px solid var(--rule);background:var(--ground)}
+.changelog-head h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em}
+.changelog-head p{margin:5px 0 0;color:var(--ink-2);font-size:12px}
+.changelog-list{list-style:none;margin:0;padding:0 28px}
+.changelog-entry{padding:24px 0;border-bottom:1px solid var(--rule-soft)}
+.changelog-entry:last-child{border-bottom:0}
+.changelog-meta{display:flex;justify-content:space-between;gap:12px;font:400 11px/1.5 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.changelog-meta a{color:var(--accent);text-decoration:none}
+.changelog-meta a:hover{text-decoration:underline;text-underline-offset:3px}
+.changelog-entry h3{margin:10px 0 6px;font-size:15px;font-weight:600;letter-spacing:-.02em}
+.changelog-entry p{margin:0;color:var(--ink-2);font-size:13px;line-height:1.7}
+@media(max-width:480px){.changelog-head{padding:20px}.changelog-list{padding:0 20px}}
 
 /* The web shell hides .wrap until a save is loaded; the source strip it fills
    sits under the masthead and takes no room while empty. */
@@ -1073,6 +1091,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <footer class="rv">
     <a class="link" id="helpLink" href="#help">Where saves live</a><span>&middot;</span>
+    <button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog</button><span>&middot;</span>
     <span class="lg-foot" id="footSlot">
       <a class="link" id="issueLink" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="https://github.com/sponsors/PeterHartwieg" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
@@ -1261,17 +1280,37 @@ details.help[open] summary::after{content:"\2013"}
   <footer class="foot" id="footer">
     <span>Big Copilot</span>
     <span id="footFile"></span>
-    <!-- a host page may put its own links here; empty on the local page -->
-    <span id="footerLinks"></span>
+    <!-- a host page may append its own project links here -->
+    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog</button></span>
     <span id="footBuild"></span>
   </footer>
 </div>
+<dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
+  <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+</dialog>
+<script>
+(() => {
+  const dialog = document.getElementById('changelogDialog');
+  document.addEventListener('click', event => {
+    if(event.target.closest('[data-changelog]')) {
+      dialog.showModal();
+      dialog.scrollTop = 0;
+    }
+  });
+  document.getElementById('closeChangelog').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => {
+    const box = dialog.getBoundingClientRect();
+    if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
+  });
+})();
+</script>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "6edbe5dd82";</script>
-<script src="app.js?v=6edbe5dd82"></script>
+<script>window.LEDGER_BUILD = "f82d50b629";</script>
+<script src="app.js?v=f82d50b629"></script>
 
 <script>
 

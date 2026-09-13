@@ -293,6 +293,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <footer class="rv">
     <a class="link" id="helpLink" href="#help">Where saves live</a><span>&middot;</span>
+    <button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog</button><span>&middot;</span>
     <span class="lg-foot" id="footSlot">
       <a class="link" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
@@ -353,7 +354,7 @@ def stamp() -> str:
     import hashlib
 
     h = hashlib.md5()
-    for name in ("web/app.js", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
+    for name in ("web/app.js", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()[:10]

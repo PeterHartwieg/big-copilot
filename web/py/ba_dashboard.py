@@ -4376,6 +4376,18 @@ def render(
     # UI source stays shared between the local HTML and browser build. Static
     # exports embed geography so opening a file needs no local server or fetch.
     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+    with open(os.path.join(asset_root, "changelog.json"), encoding="utf-8") as fh:
+        changes = json.load(fh)
+    changelog = "".join(
+        '<li class="changelog-entry"><div class="changelog-meta">'
+        f'<time datetime="{html_escape(entry["date"])}">'
+        f'{dt.date.fromisoformat(entry["date"]).strftime("%d %b %Y")}</time>'
+        f'<a href="https://github.com/PeterHartwieg/big-copilot/pull/{int(entry["pr"])}" '
+        f'target="_blank" rel="noopener" aria-label="View pull request {int(entry["pr"])}">'
+        f'PR #{int(entry["pr"])} ↗</a></div>'
+        f'<h3>{html_escape(entry["title"])}</h3><p>{html_escape(entry["summary"])}</p></li>'
+        for entry in sorted(changes, key=lambda entry: (entry["date"], entry["pr"]), reverse=True)
+    )
     with open(os.path.join(asset_root, "map.js"), encoding="utf-8") as fh:
         map_script = fh.read()
     with open(os.path.join(asset_root, "map.css"), encoding="utf-8") as fh:
@@ -4393,6 +4405,7 @@ def render(
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
         .replace("/*__MAP_PAYLOAD__*/", map_payload)
+        .replace("<!--__CHANGELOG__-->", changelog)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
         .replace("<!--__BANNER__-->", banner)
@@ -5083,10 +5096,28 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
 
 /* footer ------------------------------------------------------------------- */
-.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:22px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
+.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:16px 22px;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
 .foot span:last-child{margin-left:auto}
-#footerLinks{display:flex;gap:14px;align-items:center;text-transform:none}
+#footerLinks{display:flex;flex-wrap:wrap;gap:14px;align-items:center;text-transform:none}
 #footerLinks:empty{display:none}
+.changelog-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;color:var(--ink-3);font:inherit;letter-spacing:inherit;cursor:pointer}
+.changelog-link:hover{color:var(--ink);border-color:var(--ink-3)}
+.changelog-link:focus-visible,.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+body:has(#changelogDialog[open]){overflow:hidden}
+.changelog-dialog{width:min(640px,calc(100vw - 32px));max-width:none;max-height: min(780px,calc(100dvh - 48px));padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
+.changelog-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
+.changelog-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 28px;border-bottom:1px solid var(--rule);background:var(--ground)}
+.changelog-head h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em}
+.changelog-head p{margin:5px 0 0;color:var(--ink-2);font-size:12px}
+.changelog-list{list-style:none;margin:0;padding:0 28px}
+.changelog-entry{padding:24px 0;border-bottom:1px solid var(--rule-soft)}
+.changelog-entry:last-child{border-bottom:0}
+.changelog-meta{display:flex;justify-content:space-between;gap:12px;font:400 11px/1.5 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.changelog-meta a{color:var(--accent);text-decoration:none}
+.changelog-meta a:hover{text-decoration:underline;text-underline-offset:3px}
+.changelog-entry h3{margin:10px 0 6px;font-size:15px;font-weight:600;letter-spacing:-.02em}
+.changelog-entry p{margin:0;color:var(--ink-2);font-size:13px;line-height:1.7}
+@media(max-width:480px){.changelog-head{padding:20px}.changelog-list{padding:0 20px}}
 
 /* The web shell hides .wrap until a save is loaded; the source strip it fills
    sits under the masthead and takes no room while empty. */
@@ -5238,11 +5269,31 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
   <footer class="foot" id="footer">
     <span>Big Copilot</span>
     <span id="footFile"></span>
-    <!-- a host page may put its own links here; empty on the local page -->
-    <span id="footerLinks"></span>
+    <!-- a host page may append its own project links here -->
+    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog</button></span>
     <span id="footBuild"></span>
   </footer>
 </div>
+<dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
+  <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
+  <ol class="changelog-list"><!--__CHANGELOG__--></ol>
+</dialog>
+<script>
+(() => {
+  const dialog = document.getElementById('changelogDialog');
+  document.addEventListener('click', event => {
+    if(event.target.closest('[data-changelog]')) {
+      dialog.showModal();
+      dialog.scrollTop = 0;
+    }
+  });
+  document.getElementById('closeChangelog').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => {
+    const box = dialog.getBoundingClientRect();
+    if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
+  });
+})();
+</script>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>

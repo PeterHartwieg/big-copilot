@@ -56,6 +56,15 @@ width or use an unbroken note to size a metric column. Issue #7's screenshots sh
 why both the shared layout and the displayed content need regression coverage.
 
 
+## Changelog
+
+For every merged PR, add one entry to `web/changelog.json` with its PR number,
+merge date (`YYYY-MM-DD`), a short title and a plain-language summary of what
+changed for the player. Include fixes and documentation changes; omit review
+process details. Run `python build_web.py` to include the entry in the footer
+changelog on both the landing screen and the dashboard. Entries appear newest
+first and link to their PR; reading them does not require GitHub access.
+
 ## Map assets
 
 `python export_map.py --geometry PATH/geometry.json --recipe PATH/recipe.json`
