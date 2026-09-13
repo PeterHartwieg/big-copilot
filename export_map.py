@@ -10,12 +10,28 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 from ba_save import Names
 
 ROOT = Path(__file__).resolve().parent
 NS = {'s': 'http://www.w3.org/2000/svg'}
+# Older master artwork carried the brand orb as an embedded raster; the board
+# draws a live ball there, so exports drop any embedded raster.
+ORB = re.compile(r'[ \t]*<image\b[^>]*?/>[ \t]*(?:\r?\n|\Z)')
+
+
+TITLES = ('WORLD MAP', '>Big Ambitions<', 'addresses')
+TITLE_GROUP = re.compile(r'[ \t]*<g id="text_\d+">\s*<text\b[^>]*>[^<]*(?:%s)[^<]*</text>\s*</g>[ \t]*(?:\r?\n|\Z)'
+                         % '|'.join(re.escape(t.strip('><')) for t in TITLES))
+
+
+def strip_orb(svg_text):
+    """Remove every embedded <image/> element (the painted orb) and the poster
+    headline (title, crumb, address count) from SVG text: the board draws its
+    own chrome over the map."""
+    return TITLE_GROUP.sub('', ORB.sub('', svg_text))
 
 
 def export(geometry_path, recipe_path, svg_path):
@@ -95,7 +111,8 @@ def export(geometry_path, recipe_path, svg_path):
     ET.register_namespace('', NS['s'])
     ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
     background = svg_path.with_name('map-background.svg')
-    background.write_bytes(ET.tostring(svg, encoding='utf-8', xml_declaration=True))
+    text = strip_orb(ET.tostring(svg, encoding='utf-8', xml_declaration=True).decode('utf-8'))
+    background.write_bytes(text.encode('utf-8'))
     digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
     return {'schema': 1, 'image': background.name, 'imageHash': digest(background),
             'viewBox': list(map(float, svg.attrib['viewBox'].split())),

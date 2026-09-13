@@ -5229,7 +5229,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
   </footer>
 </div>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
-  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="btn2" autofocus>Close map</button></div>
+  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
 <!--__BEFORE_SCRIPT__-->
@@ -8423,7 +8423,7 @@ function wireSphere(){
     const needed = balls.reduce((n, b) => n + b.size + GAP, 0) + nextSize;
     if(balls.length >= MAX || needed > room()){
       if(balls.length > 1) eat();
-      else squish(balls[0]);
+      else if(balls.length) squish(balls[0]);
       return;
     }
     const el = first.cloneNode(true); el.removeAttribute('id'); parent.appendChild(el);
@@ -8446,6 +8446,28 @@ function wireSphere(){
     requestAnimationFrame(step);
   };
   balls.push(makeBall(first, 0)); enter(balls[0], 400);
+  /* Something on the page (the ball on the map) may swallow every ball on the
+     shelf: they fly to the given viewport point one after another and vanish. */
+  window.__consumeBalls = (tx, ty, onEach) => {
+    /* Returns how many balls it took; 0 when the shelf is empty, busy or hidden
+       (narrow mastheads hide the balls but keep them in the DOM). */
+    if (!balls.length || balls.some(b => b.busy) || getComputedStyle(balls[0].el).display === 'none') return 0;
+    const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6), taken = balls.splice(0, balls.length);
+    /* The first ball is the clone template for spawn(); it must not keep the
+       animation's final opacity or transform. */
+    const gone = (b) => { b.el.style.opacity = ''; b.el.style.transform = ''; b.el.remove(); onEach && onEach(); };
+    if (REDUCED) { taken.forEach(gone); return taken.length; }
+    taken.forEach((b, i) => {
+      const r = b.el.getBoundingClientRect(), dx = tx - (r.left + r.width / 2), dy = ty - (r.top + r.height / 2);
+      const t0 = performance.now() + i * 140, dur = 700, x0 = b.px + roll, y0 = b.py, s0 = b.sc;
+      const step = (t) => { const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = p * p * (3 - 2 * p);
+        b.el.style.transform = 'translate(' + (x0 + dx * e) + 'px,' + (y0 + dy * e - Math.sin(p * Math.PI) * 60) + 'px) scale(' + (s0 * (1 - .8 * e)) + ')';
+        b.el.style.opacity = String(1 - Math.max(0, p - .85) / .15);
+        if (p < 1) requestAnimationFrame(step); else gone(b); };
+      requestAnimationFrame(step);
+    });
+    return taken.length;
+  };
   const wordmark = q('.wordmark');
   if (wordmark) wordmark.addEventListener('click', spawn);
   document.addEventListener('mousemove', (e) => balls.forEach(b => {
