@@ -6299,6 +6299,7 @@ function drawMast(){
     + `<small>${bits.join(" · ")}</small>` + (flags.length ? `<small>${flags.join(" · ")}</small>` : "");
   clock.dataset.tip = `Game time when the save was written: ${m.cityDate}. Day 1 was a Monday.`
     + (k.vacant ? ` ${k.vacant} lease${k.vacant === 1 ? "" : "s"} vacant on top of the ${k.businesses} sites.` : "");
+  window.BigCopilotCommunity?.paintOnline();
 }
 
 function drawKpis(){
@@ -8990,6 +8991,7 @@ function startWatching(){
     dot.classList.toggle("stale", !!why);
     dot.querySelector("em").textContent = why ? "Stale" : SOURCE.label;
     dot.title = why ? "The save moved on but the board would not rebuild: " + why : "";
+    window.BigCopilotCommunity?.paintOnline();
   };
   SOURCE.watch({
     changed(data){

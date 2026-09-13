@@ -387,7 +387,7 @@ def stamp() -> str:
     import hashlib
 
     h = hashlib.md5()
-    for name in ("build_web.py", "web/app.js", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
+    for name in ("build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()[:10]
@@ -400,6 +400,7 @@ BEFORE_SCRIPT = (
     + '<script>window.LEDGER_RELEASE = __RELEASE__;</script>' + chr(10)
     + '<script>__UPDATE_SCRIPT__</script>' + chr(10)
     + '<script src="app.js?v=__STAMP__"></script>' + chr(10)
+    + '<script src="community.js?v=__STAMP__"></script>' + chr(10)
 )
 
 
@@ -432,6 +433,7 @@ def main() -> None:
         changes = json.load(fh)
     release = {"version": stamp(), "latest": max(changes, key=lambda entry: (entry["date"], entry["pr"]), default=None)}
     release_json = json.dumps(release, ensure_ascii=False, separators=(",", ":"))
+    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
     with open(os.path.join(WEB, "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
     scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(

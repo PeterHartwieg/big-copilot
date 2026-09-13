@@ -392,6 +392,7 @@
     const focusLeaves = $("landing").contains(document.activeElement);
     document.body.classList.add("has-board");
     place();
+    window.BigCopilotCommunity?.start();
     window.scrollTo(0, 0);
     if (focusLeaves && document.activeElement === document.body) $("nav").querySelector("a.on").focus();
   }

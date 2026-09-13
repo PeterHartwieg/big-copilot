@@ -136,6 +136,13 @@ you switch layers or load another save; the map does not show simulated deliveri
 
 ## Troubleshooting and contributing
 
+The website's community controls show an approximate count of dashboard browsers
+active within the last ten minutes and a vote on upcoming features. Each feature
+allows one vote per connection IP; shared networks can share a vote. Presence sends
+a random browser ID, and voting stores a protected hash of the IP. Save and company
+data stay on your computer. See [Community features](docs/community-features.md)
+for how the count works and what is stored.
+
 Checked against game build **3675**. Saves older than **3540** are unsupported;
 load and save them in a current game build first. Game updates can change the format.
 

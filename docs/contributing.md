@@ -14,7 +14,9 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
 | `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
 | `check_saves.py` | Parses and extracts every save under the save root and prints a table, plus spot-checks of known numbers. Run `python check_saves.py [folder]`. |
-| `wrangler.jsonc` | Assets-only Cloudflare Worker config. `npx wrangler deploy` publishes `web/`. |
+| `wrangler.jsonc` | Cloudflare assets and community Worker config. `npx wrangler deploy` publishes the server and `web/`. |
+| `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
+| `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
 | `dashboard.html` | The generated page from a local run. Overwritten each time. |
 | `market_history.json` | Rolling demand snapshots and the cash/net-worth ledger, per character, from local runs. Safe to delete; it rebuilds, but the accumulated trend history is lost, so back it up rather than deleting it. |
 | `LICENSE` | MIT. |
@@ -40,14 +42,20 @@ run `python build_web.py` so the browser copies match.
 Run `python -m unittest discover -s tests` for the portable planner regressions.
 These require Node.js for the embedded JavaScript checks and do not need a save file.
 
-The UI regressions also run in a real browser. Install the test-only dependencies
-with `npm install --no-save --package-lock=false playwright` and
+The UI regressions also run in a real browser. Install the development dependencies
+with `npm ci` and
 `npx playwright install chromium`, then run `node --test tests/*.test.cjs`.
 Alternatively, set `PLAYWRIGHT_CHANNEL=msedge` or `chrome` to use an installed browser.
 Set `BOARD_TARGET=web` to check the generated browser page after rebuilding it.
 The layout fixtures are synthetic; no game or save is needed. They cover desktop
 table sizing, crowded planner controls, keyboard access to downtime, and scrolling
 inside tables on narrow screens.
+
+Community checks use real local D1 via Miniflare and browser fixtures with synthetic
+identities. Run `npm run test:community` after `python build_web.py`, and
+`npm run check:worker` to validate the deployment bundle without publishing it.
+See [Community features](community-features.md) for database/secret setup and the
+first production release steps. No live API credentials are needed for tests.
 
 Keep layout changes in the shared template in `ba_dashboard.py`: let section
 controls wrap, let text cells grow and wrap while keeping amounts intact, and put
