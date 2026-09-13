@@ -112,6 +112,7 @@ class CityMapView {
       if(!this.svg) return;
       const pick = e.target.closest('[data-pick]');
       if(pick){ this.select(pick.dataset.pick); return; }
+      if(e.target.closest('[data-more]')){ this.showAll = true; this.update(); return; }
       const action = e.target.closest('[data-action]')?.dataset.action;
       if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
       if(action === 'reset') this.reset(true);
@@ -174,9 +175,9 @@ class CityMapView {
     this.paths = new Map([...this.root.querySelectorAll('[data-location]')].map(p => [p.dataset.location,p]));
     this.pips = this.root.querySelector('.map-pips');
     this.districts = [...this.root.querySelectorAll('.dlabel')];
-    if(this.search) this.search.oninput = () => { this.query = this.search.value; this.update(); };
+    if(this.search) this.search.oninput = () => { this.query = this.search.value; this.showAll = false; this.update(); };
     this.root.querySelectorAll('.lay').forEach(chip => chip.onclick = () => {
-      const l = chip.dataset.l; this.layers[l] = !this.layers[l];
+      const l = chip.dataset.l; this.layers[l] = !this.layers[l]; this.showAll = false;
       chip.classList.toggle('off', !this.layers[l]); chip.setAttribute('aria-pressed', String(this.layers[l]));
       this.update();
     });
@@ -295,7 +296,7 @@ class CityMapView {
       if(!pointers.has(e.pointerId)) return;
       pointers.delete(e.pointerId);
       // A still click picks a footprint; a still click on empty map closes the card.
-      if(e.type==='pointerup' && !moved){ if(down) this.select(down,false); else this.deselect(); }
+      if(e.type==='pointerup' && !moved){ if(down) this.select(down, this.scale() < this.cityScale() * PICK_ZOOM * .9); else this.deselect(); }
       moved = true;
       if(pointers.size) previous=midpoint(); else {
         this.dragging=false; this.svg.classList.remove('dragging'); this.endInteraction();
@@ -435,14 +436,14 @@ class CityMapView {
     }).join('') : '';
     if(this.list){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
-      const shown = this.matches.slice(0, 80);
+      const shown = this.showAll ? this.matches : this.matches.slice(0, 80);
       this.list.innerHTML = shown.map(r => {
         const b = r.business, trading = b && b.status !== 'vacant', kind = mapKind(this.findings.get(r.key));
         const name = b ? b.name.replace(/^\[\w+\]\s*/, '') : r.address;
         const small = b ? `${r.address} · ${b.type}${this.owned.has(r.key) ? ' · owned' : ''}` : r.owned ? `${r.hood || ''} · owned` : r.hood || '';
         const amt = trading ? `<span class="amt ${b.profit >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>` : '<span class="amt"></span>';
         return `<button type="button" class="place ${kind}${r.key===this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key===this.selected}"><i class="mark"></i><span class="hood">${mapText(hoodCode(b, r.hood))}</span><span class="nm">${mapText(name)}<small>${mapText(small)}${!r.region ? ' · no map position' : ''}</small></span>${amt}</button>`;
-      }).join('') + (this.matches.length > shown.length ? `<div class="more">+${this.matches.length - shown.length}</div>` : '') + (this.matches.length ? '' : '<div class="empty">Nothing here.</div>');
+      }).join('') + (this.matches.length > shown.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${this.matches.length - shown.length}</button>` : '') + (this.matches.length ? '' : '<div class="empty">Nothing here.</div>');
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
       const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
@@ -488,9 +489,20 @@ class CityMapView {
     const limit = r.width - (this.hasPanel() ? PANEL_W + 14 : 16);
     const flip = p.x + 40 + card.offsetWidth > limit;
     card.classList.toggle('flip', flip);
-    const left = flip ? p.x - 40 - card.offsetWidth : p.x + 40;
-    const top = Math.max(12, Math.min(r.height - card.offsetHeight - 12, p.y - 34));
-    card.style.transform = `translate(${Math.max(12, left).toFixed(1)}px,${top.toFixed(1)}px)`;
+    const cw = card.offsetWidth, ch = card.offsetHeight;
+    let left = flip ? p.x - 40 - cw : p.x + 40;
+    left = Math.max(12, Math.min(limit - cw, left)); // never under the panel, even after a drag
+    let top = Math.max(12, Math.min(r.height - ch - 12, p.y - 34));
+    // the zoom buttons keep their corner: a card that would cover them moves aside
+    const z = this.root.querySelector('.zoomer');
+    if(z){
+      const zr = z.getBoundingClientRect(), sr = this.stageRect();
+      const zl = zr.left - sr.left - 8, zt = zr.top - sr.top - 8, zrgt = zr.right - sr.left + 8, zb = zr.bottom - sr.top + 8;
+      if(left < zrgt && left + cw > zl && top < zb && top + ch > zt){
+        if(zl - cw >= 12) left = zl - cw; else top = Math.max(12, zt - ch);
+      }
+    }
+    card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
   }
   async select(key, focus=true, fresh=false){
     this.selected=key;this.freshSelection=fresh;

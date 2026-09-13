@@ -75,7 +75,8 @@
 .place:hover .nm small,.place.on .nm small,.place.hot .nm small{max-height:16px;opacity:1;margin-top:1px}
 .place .amt{font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right;white-space:nowrap}
 .place .amt.pos{color:var(--pos)}.place .amt.neg{color:var(--neg)}
-.places .more{padding:10px 12px;font:400 11.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3);border-top:1px solid var(--rule-soft)}
+.places .more{display:block;width:100%;padding:10px 12px;border:0;border-top:1px solid var(--rule-soft);background:none;text-align:left;font:400 11.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3);cursor:pointer}
+.places .more:hover{color:var(--ink);background:var(--raised)}
 .places .empty{padding:24px 14px;font-size:12.5px;color:var(--ink-3);text-align:center}
 
 /* the site card: opens beside the footprint. Scoped to the map views: the

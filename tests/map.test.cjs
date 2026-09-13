@@ -355,7 +355,7 @@ test('the card opens beside the picked footprint, clear of the panel, and closes
       return c.right<=p.left+1;
     });
     assert.equal(clear2,true);
-    // A footprint picked on the map opens the card to its left.
+    // A footprint picked on the map at the city view glides in like a list pick; the card stays clear of the panel.
     await page.locator('#cityMapPage .zoomer [data-action="reset"]').click();
     await page.waitForFunction(()=>{const s=document.querySelector('#cityMapPage [data-stage]');
       return !s.classList.contains('zoomed')&&!s.classList.contains('interacting')&&cityMapPage.goal===null;},null,{timeout:3000});
@@ -364,7 +364,13 @@ test('the card opens beside the picked footprint, clear of the panel, and closes
     await page.mouse.click(at.x,at.y);
     await page.waitForFunction(()=>document.querySelector('#cityMapPage .site h3')?.textContent==='Edge shop',null,{timeout:3000});
     await page.locator('#cityMapPage .site.in').waitFor();
-    assert.equal(await card.evaluate(c=>c.classList.contains('flip')),true);
+    assert.equal(await page.evaluate(()=>document.querySelector('#cityMapPage [data-stage]').classList.contains('zoomed')),true);
+    const clear3=await page.evaluate(()=>{
+      const c=document.querySelector('#cityMapPage .site').getBoundingClientRect();
+      const p=document.querySelector('#cityMapPage .places').getBoundingClientRect();
+      return c.right<=p.left+1;
+    });
+    assert.equal(clear3,true);
     assert.equal(await card.locator('h3').innerText(),'Edge shop');
     // The arrow opens the site page. (The section fades in, so read textContent.)
     await page.locator('#cityMapPage .site .go2').click();
