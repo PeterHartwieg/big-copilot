@@ -29,6 +29,7 @@
 .map-canvas .fp.owned{fill:#6ea8ff;fill-opacity:.2;stroke:#8fbcff;stroke-width:1.5;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
 .stage.all .map-canvas .fp{stroke:#9aa39d;stroke-opacity:.35;stroke-width:1;vector-effect:non-scaling-stroke}
 .stage.all .map-canvas .fp.mine{stroke:#65e99b;stroke-opacity:1}
+.stage.all .map-canvas .fp.owned{stroke:#8fbcff;stroke-opacity:1}
 .map-canvas .fp.dim{fill-opacity:.06;stroke-opacity:.35}
 .map-canvas .fp.hot,.map-canvas .fp:hover{fill:#a2f8c4;fill-opacity:.4;stroke:#d9ffe8;stroke-width:2;vector-effect:non-scaling-stroke}
 .map-canvas .fp.sel{fill:#65e99b;fill-opacity:.45;stroke:#fff7cc;stroke-width:2.5;vector-effect:non-scaling-stroke}

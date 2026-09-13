@@ -38,6 +38,7 @@
 .map-canvas .fp.owned{fill:#6ea8ff;fill-opacity:.2;stroke:#8fbcff;stroke-width:1.5;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
 .stage.all .map-canvas .fp{stroke:#9aa39d;stroke-opacity:.35;stroke-width:1;vector-effect:non-scaling-stroke}
 .stage.all .map-canvas .fp.mine{stroke:#65e99b;stroke-opacity:1}
+.stage.all .map-canvas .fp.owned{stroke:#8fbcff;stroke-opacity:1}
 .map-canvas .fp.dim{fill-opacity:.06;stroke-opacity:.35}
 .map-canvas .fp.hot,.map-canvas .fp:hover{fill:#a2f8c4;fill-opacity:.4;stroke:#d9ffe8;stroke-width:2;vector-effect:non-scaling-stroke}
 .map-canvas .fp.sel{fill:#65e99b;fill-opacity:.45;stroke:#fff7cc;stroke-width:2.5;vector-effect:non-scaling-stroke}
@@ -1260,8 +1261,8 @@ details.help[open] summary::after{content:"\2013"}
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "593d9d4c08";</script>
-<script src="app.js?v=593d9d4c08"></script>
+<script>window.LEDGER_BUILD = "288db41416";</script>
+<script src="app.js?v=288db41416"></script>
 
 <script>
 
@@ -4024,7 +4025,8 @@ class CityMapView {
     // on wide stages and drops under it on narrow ones.
     this.mq = window.matchMedia ? window.matchMedia('(max-width:760px)') : null;
     this.narrow = !!this.mq?.matches;
-    this.mq?.addEventListener?.('change', () => { this.narrow = this.mq.matches; this.citymap?.classList.toggle('narrow', this.narrow); this.rect = null; this.paintView(); });
+    this.mq?.addEventListener?.('change', () => { this.narrow = this.mq.matches; this.citymap?.classList.toggle('narrow', this.narrow); this.rect = null;
+      if(!this.svg) return; if(this.selected) this.select(this.selected, true); else this.reset(); });
     this.root.addEventListener('click', e => {
       if(!this.svg) return;
       const pick = e.target.closest('[data-pick]');
@@ -4062,10 +4064,10 @@ class CityMapView {
     const clipId = `${id}-clip`;
     const head = this.panel ? `<div class="sechead map-head">
       <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
       </span>
       <span class="why" data-tip="The dots are layers: your businesses, buildings you own, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
@@ -4372,6 +4374,8 @@ class CityMapView {
     const card = this.card; if(!card) return;
     const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key);
     if(!key){ card.hidden = true; card.classList.remove('in'); return; }
+    // Filled now, shown by showCard() once the camera has settled: until then
+    // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || loc?.address || owned?.address || 'Location unavailable';
     card.querySelector('h3').textContent = title.replace(/^\[\w+\]\s*/, '');
@@ -4387,13 +4391,19 @@ class CityMapView {
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
     card.querySelector('.go2').hidden = !b;
-    card.hidden = false;
-    this.placeCard();
+    if(card.classList.contains('in')) this.placeCard();
+  }
+  showCard(){
+    const card = this.card; if(!card || !this.selected) return;
+    card.hidden = false; this.placeCard(); card.classList.add('in');
   }
   placeCard(){
     const card = this.card; if(!card || card.hidden || !this.selected) return;
-    const loc = this.assets.byKey.get(this.selected); if(!loc?.bounds) return;
-    const r = this.stageRect(), [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2);
+    const loc = this.assets.byKey.get(this.selected), r = this.stageRect();
+    if(!loc?.bounds){ // no geometry: the card sits in the free corner of the stage
+      card.classList.remove('flip'); card.style.transform = 'translate(16px,16px)'; return;
+    }
+    const [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2);
     const limit = r.width - (this.hasPanel() ? PANEL_W + 14 : 16);
     const flip = p.x + 40 + card.offsetWidth > limit;
     card.classList.toggle('flip', flip);
@@ -4405,6 +4415,10 @@ class CityMapView {
     this.selected=key;this.freshSelection=fresh;
     if(!await this.ready) return;
     if(this.selected!==key) return; // A newer selection or character superseded this request.
+    // A dialog that was just reopened has no layout yet; a cached rect from
+    // its closed state is zero. Measure afresh and wait a frame if needed.
+    this.rect = null;
+    if(!this.stageRect().width){ this.rect = null; requestAnimationFrame(() => { if(this.selected === key) this.select(key, focus, fresh); }); return; }
     if(fresh){
       // A shortcut is a new location request, independent of earlier searches.
       this.query = ''; if(this.search) this.search.value = '';
@@ -4419,13 +4433,13 @@ class CityMapView {
       const free = this.freeWidth();
       const box = [cx - (free*.44)/s, cy - (r.height/2)/s, r.width/s, r.height/s];
       this.cancelGlide();
-      this.onSettled = () => { if(this.selected === key) this.card?.classList.add('in'); };
+      this.onSettled = () => { if(this.selected === key) this.showCard(); };
       this.update();
       this.glide(box);
       if(!this.goal){ const done = this.onSettled; this.onSettled = null; done?.(); }
     } else {
       this.update();
-      if(b?.bounds) this.card?.classList.add('in');
+      this.showCard();
     }
   }
   deselect(){
@@ -5019,7 +5033,7 @@ function wireSphere(){
     const needed = balls.reduce((n, b) => n + b.size + GAP, 0) + nextSize;
     if(balls.length >= MAX || needed > room()){
       if(balls.length > 1) eat();
-      else squish(balls[0]);
+      else if(balls.length) squish(balls[0]);
       return;
     }
     const el = first.cloneNode(true); el.removeAttribute('id'); parent.appendChild(el);
@@ -5047,7 +5061,7 @@ function wireSphere(){
   window.__consumeBalls = (tx, ty, onEach) => {
     /* Returns how many balls it took; 0 when the shelf is empty, busy or hidden
        (narrow mastheads hide the balls but keep them in the DOM). */
-    if (!balls.length || balls.some(b => b.busy) || getComputedStyle(first).display === 'none') return 0;
+    if (!balls.length || balls.some(b => b.busy) || getComputedStyle(balls[0].el).display === 'none') return 0;
     const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6), taken = balls.splice(0, balls.length);
     /* The first ball is the clone template for spawn(); it must not keep the
        animation's final opacity or transform. */

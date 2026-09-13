@@ -8423,7 +8423,7 @@ function wireSphere(){
     const needed = balls.reduce((n, b) => n + b.size + GAP, 0) + nextSize;
     if(balls.length >= MAX || needed > room()){
       if(balls.length > 1) eat();
-      else squish(balls[0]);
+      else if(balls.length) squish(balls[0]);
       return;
     }
     const el = first.cloneNode(true); el.removeAttribute('id'); parent.appendChild(el);
@@ -8451,7 +8451,7 @@ function wireSphere(){
   window.__consumeBalls = (tx, ty, onEach) => {
     /* Returns how many balls it took; 0 when the shelf is empty, busy or hidden
        (narrow mastheads hide the balls but keep them in the DOM). */
-    if (!balls.length || balls.some(b => b.busy) || getComputedStyle(first).display === 'none') return 0;
+    if (!balls.length || balls.some(b => b.busy) || getComputedStyle(balls[0].el).display === 'none') return 0;
     const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6), taken = balls.splice(0, balls.length);
     /* The first ball is the clone template for spawn(); it must not keep the
        animation's final opacity or transform. */
