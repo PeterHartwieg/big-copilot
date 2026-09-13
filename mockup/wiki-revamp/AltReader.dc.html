@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&amp;display=swap">
+  <style>
+body{margin:0;background:#f4f2ec}
+a{color:#333}a:hover{color:#000}
+.lo{width:720px;min-height:100vh;padding:36px 40px;box-sizing:border-box;background:#f4f2ec;color:#2a2a2a;
+  font-family:"Patrick Hand","Comic Sans MS",cursive;font-size:15px;line-height:1.4}
+.lo *{box-sizing:border-box}
+.lo .t{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#888;margin-bottom:6px}
+.lo h1{margin:0 0 4px;font-size:26px;font-weight:400}
+.lo p.d{margin:0 0 22px;color:#666;max-width:560px}
+.bx{border:1.5px solid #555;border-radius:4px;padding:10px 12px;position:relative;background:#faf9f5}
+.bx.dash{border-style:dashed;color:#888}
+.row{display:flex;gap:12px}
+.col{display:flex;flex-direction:column;gap:12px}
+.ln{height:8px;background:#ddd8cc;border-radius:4px}
+.ln.s{width:40%}.ln.m{width:65%}
+.big{font-size:24px}
+.sm{font-size:12px;color:#777}
+</style>
+</helmet>
+<div class="lo">
+  <div class="t">Alternate direction</div>
+  <h1>Reader with a contents rail</h1>
+  <p class="d">The prototype's shape: a sticky contents rail and one long article per page. Faithful to the help text, and the rail scales to 851 pages. Trade-off: it reads as a document, not as the board; the relationships stay flattened into lists and nothing on it rewards the mouse.</p>
+  
+<div class="row" style="align-items:flex-start">
+  <div class="col" style="width:180px;flex:none">
+    <div class="bx"><div class="sm">CONTENTS</div><div class="ln m" style="margin:8px 0"></div>Business types<br>Products<br>Furniture<br>Suppliers<br>Recipes<br>Machines<br>Ingredients<br>Buildings<br>…</div>
+  </div>
+  <div class="col" style="flex:1">
+    <div class="bx"><span class="big">Gift Shop</span><div class="sm">Wiki / Business types</div><p style="margin:8px 0 0">A paragraph lede, a legend of five badges, then the game's bullet lists rendered as bullet lists with a source key after each one.</p></div>
+    <div class="bx"><div class="sm">REQUIREMENTS</div>• Stack of Shopping Baskets<br>• Point of Sales<br>• At least one product</div>
+    <div class="bx"><div class="sm">PRIMARILY SELLS</div>• Gift (Cheap) · • Gift (Expensive) · • Umbrella</div>
+    <div class="bx dash">Three tables: products × five axes, size codes, build metadata</div>
+    <div class="bx dash">Nine disclosures, closed at rest</div>
+  </div>
+</div>
+</div>
+</x-dc>
+</body>
+</html>

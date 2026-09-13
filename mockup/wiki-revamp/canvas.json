@@ -1,0 +1,108 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Wiki",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1000,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Search.dc.html",
+      "title": "Wiki \u00b7 searching",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1000,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "GiftShop.dc.html",
+      "title": "Wiki \u00b7 Gift Shop",
+      "x": 0,
+      "y": 1180,
+      "w": 1440,
+      "h": 3180,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "GiftShopPicked.dc.html",
+      "title": "Gift Shop \u00b7 a product picked",
+      "x": 1560,
+      "y": 1180,
+      "w": 1440,
+      "h": 1160,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "Phone.dc.html",
+      "title": "Gift Shop \u00b7 phone",
+      "x": 1560,
+      "y": 2520,
+      "w": 390,
+      "h": 1840,
+      "is_interactive": true
+    },
+    {
+      "file": "AltReader.dc.html",
+      "title": "Alternative \u00b7 reader with a rail",
+      "x": 2080,
+      "y": 2520,
+      "w": 720,
+      "h": 760
+    }
+  ],
+  "annotations": [
+    {
+      "id": "try-wiki",
+      "x": 0,
+      "y": -170,
+      "w": 600,
+      "text": "The Wiki tab, in the board's own vocabulary. Home is a shelf of the 14 categories the game's help menu has, with the page counts read from helpstructure.json; the cards tilt under the mouse like Next moves. Type in the search and pages come up as findings-style rows while the shelf dims to the categories that still match. Sentences live behind the ? marks; the badge colours are explained there too. Nothing from the game files shows by name: no keys, no file names."
+    },
+    {
+      "id": "note-search",
+      "x": 1560,
+      "y": -110,
+      "w": 460,
+      "text": "The search state, for reading: 'gift' finds five pages, the shelf keeps only the categories that hold one."
+    },
+    {
+      "id": "note-page",
+      "x": 0,
+      "y": 1070,
+      "w": 600,
+      "text": "The Gift Shop page. One authored line, four glance tiles, then: To open (tick the squares; each card keeps a score; the amber dot is the Paper Bags catch), Sells (three cards, the one red pill is the story), Fits together (click a node, its lines light, the dashed ones march, and the ball parked on the rule rolls along them: supplier into product, product onto shelf, looping until you let go), Make it (hover a recipe and the dots travel), Where to go (pins open the map), Yours (empty until a save is open), and where it all came from. Hover any chip or fact for where it comes from."
+    },
+    {
+      "id": "note-picked",
+      "x": 1560,
+      "y": 1070,
+      "w": 460,
+      "text": "The picked state: Gift (Cheap). Five links stay lit, everything else steps back, and the ball rides them in turn: three suppliers into the gift, the gift onto its two fixtures. The x lets go and it rolls home. The 'Plan a chain' link hands the three recipes to Growth."
+    },
+    {
+      "id": "note-phone",
+      "x": 1560,
+      "y": 2410,
+      "w": 420,
+      "text": "At 390 the nav keeps icons only, tiles go two-up, the lanes stack and the wires are dropped: the picked state still reads from the dimming alone. Recipes run top to bottom."
+    },
+    {
+      "id": "note-alt",
+      "x": 2080,
+      "y": 2410,
+      "w": 460,
+      "text": "Alternative kept for comparison: the prototype's reader with a contents rail. Low-fi on purpose; pick it if the wiki should read as a document rather than as another page of the board."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
