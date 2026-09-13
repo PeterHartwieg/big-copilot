@@ -1,0 +1,1316 @@
+{
+"rows": [
+{
+"name": "[LM] Costco Electric",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Electronics Store",
+"status": "retail",
+"key": "ba:street_fifthavenue#57",
+"address": "57 Fifth Avenue",
+"profit": 516794.06,
+"rent": 453.0,
+"staff": 27,
+"customers": 601,
+"opened": 123,
+"path": "M742.907,880.404 L742.907,886.671 L742.46,886.671 L742.46,891.148 L742.907,891.148 L742.907,903.093 L730.373,903.093 L730.372,871.003 L742.907,871.003 L742.907,875.927 L742.459,875.927 L742.46,880.404 L742.907,880.404 Z",
+"bounds": [
+730.372,
+871.003,
+12.535000000000082,
+32.08999999999992
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "[LM] Costco Electric runs 3 counters 00:00-14:00 on a Wednesday for 13 customers an hour; 24 staff-hours a week that buy nothing",
+"worth": 161.11,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[MT] Costco Electric",
+"code": "MT",
+"hood": "Midtown",
+"type": "Electronics Store",
+"status": "retail",
+"key": "ba:street_secondavenue#30",
+"address": "30 Second Avenue",
+"profit": 386327.44,
+"rent": 1911.0,
+"staff": 26,
+"customers": 551,
+"opened": 129,
+"path": "M931.439,373.268 L931.306,373.268 L931.306,373.196 L931.439,373.196 L931.439,373.268 Z M928.28,371.63 L928.28,371.497 L928.351,371.497 L928.351,371.63 L928.28,371.63 Z M928.351,370.242 L928.28,370.242 L928.28,370.108 L928.351,370.108 L928.351,370.242 Z M928.28,369.759 L928.28,369.593 L928.057,369.517 L928.057,368.545 L928.147,368.545 L928.147,368.469 L928.28,368.469 L928.28,368.304 L928.351,368.304 L928.351,369.759 L928.28,369.759 Z M928.28,367.821 L928.351,367.821 L928.351,367.954 L928.28,367.954 L928.28,367.821 Z M928.28,366.566 L928.28,366.433 L928.351,366.433 L928.351,366.566 L928.28,366.566 Z M928.351,364.629 L928.351,366.083 L928.28,366.083 L928.28,365.918 L928.057,365.842 L928.057,364.87 L928.147,364.87 L928.147,364.794 L928.28,364.794 L928.28,364.629 L928.351,364.629 Z M928.351,355.539 L928.28,355.539 L928.28,355.406 L928.351,355.406 L928.351,355.539 Z M928.057,354.815 L928.057,353.843 L928.28,353.767 L928.28,353.602 L928.351,353.602 L928.351,355.056 L928.28,355.056 L928.28,354.891 L928.057,354.815 Z M928.28,351.381 L928.28,351.215 L928.351,351.381 L928.28,351.381 Z M928.28,351.215 L928.147,351.215 L928.147,351.139 L928.057,351.139 L928.057,350.653 L928.28,351.215 Z M951.621,373.197 L951.621,373.268 L951.456,373.268 L951.38,373.491 L950.408,373.491 L950.332,373.268 L950.167,373.268 L950.167,373.197 L951.621,373.197 Z M940.595,373.196 L940.595,373.268 L940.429,373.268 L940.353,373.491 L939.381,373.491 L939.381,373.401 L939.305,373.401 L939.305,373.268 L939.14,373.268 L939.14,373.196 L940.595,373.196 Z M936.754,373.268 L936.678,373.491 L935.706,373.49 L935.63,373.268 L935.465,373.268 L935.465,373.196 L936.919,373.196 L936.919,373.268 L936.754,373.268 Z M933.078,373.268 L933.002,373.49 L932.03,373.49 L931.954,373.268 L931.789,373.268 L931.789,373.196 L933.244,373.196 L933.244,373.268 L933.078,373.268 Z M953.493,373.268 L953.359,373.268 L953.359,373.197 L953.493,373.197 L953.493,373.268 Z M951.971,373.268 L951.971,373.197 L952.105,373.197 L952.105,373.268 L951.971,373.268 Z M941.078,373.268 L940.944,373.268 L940.944,373.196 L941.078,373.197 L941.078,373.268 Z M938.79,373.268 L938.657,373.268 L938.657,373.196 L938.79,373.196 L938.79,373.268 Z M937.269,373.268 L937.269,373.196 L937.402,373.196 L937.402,373.268 L937.269,373.268 Z M928.351,364.629 L928.351,364.279 L928.28,364.279 L928.28,364.145 L928.351,364.145 L928.351,362.891 L928.28,362.891 L928.28,362.757 L928.351,362.757 L928.351,362.407 L928.28,362.407 L928.28,362.242 L928.057,362.166 L928.057,361.194 L928.147,361.194 L928.147,361.118 L928.425,361.152 L928.425,358.533 L928.147,358.567 L928.147,358.491 L928.057,358.491 L928.057,357.519 L928.28,357.443 L928.28,357.277 L928.351,357.277 L928.28,356.794 L928.351,356.794 L928.351,355.539 L928.351,353.602 L928.351,353.252 L928.28,353.252 L928.28,353.119 L928.351,353.119 L928.351,351.864 L928.28,351.864 L928.28,351.73 L928.351,351.73 L928.351,351.381 L928.057,350.653 L954.57,350.653 L954.57,373.491 L954.084,373.491 L954.008,373.268 L953.843,373.268 L953.843,373.197 L950.167,373.197 L949.817,373.197 L949.817,373.268 L949.684,373.268 L949.684,373.197 L948.429,373.197 L948.429,373.268 L948.296,373.268 L948.296,373.197 L947.946,373.197 L947.946,373.268 L947.781,373.268 L947.705,373.491 L946.733,373.491 L946.733,373.401 L946.657,373.401 L946.691,373.123 L944.071,373.123 L944.105,373.401 L944.029,373.401 L944.029,373.491 L943.057,373.491 L942.981,373.268 L942.816,373.268 L942.816,373.197 L942.333,373.268 L942.333,373.197 L935.465,373.196 L935.115,373.196 L935.115,373.268 L934.981,373.268 L934.981,373.196 L933.727,373.196 L933.727,373.268 L933.593,373.268 L933.593,373.196 L933.244,373.196 L931.306,373.196 L930.051,373.196 L930.051,373.268 L929.568,373.196 L929.568,373.268 L929.403,373.268 L929.327,373.49 L928.075,373.49 L928.057,372.221 L928.28,372.145 L928.28,371.98 L928.351,371.98 L928.351,368.304 L928.351,364.629 Z",
+"bounds": [
+928.057,
+350.653,
+26.513000000000034,
+22.837999999999965
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "[MT] Costco Electric runs 3 counters 00:00-15:00 on a Wednesday for 13 customers an hour; 28 staff-hours a week that buy nothing",
+"worth": 187.96,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[LM] Costco Cloth",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Clothing Store",
+"status": "retail",
+"key": "ba:street_eighthstreet#9",
+"address": "9 Eighth Street",
+"profit": 367499.56,
+"rent": 416.0,
+"staff": 18,
+"customers": 767,
+"opened": 137,
+"path": "M971.069,796.366 L970.839,796.092 L971.075,795.894 L971.069,796.366 Z M971.069,796.366 L971.081,795.901 L990.148,779.901 L990.407,780.022 L990.416,805.221 L990.058,805.221 L990.058,806.618 L990.416,806.618 L990.416,807.738 L968.916,807.738 L968.916,797.717 L969.769,796.99 L969.999,797.264 L971.069,796.366 Z",
+"bounds": [
+968.916,
+779.901,
+21.5,
+27.837000000000103
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "warn",
+"text": "[LM] Costco Cloth is at the 75/h door cap Fri-Sun 14-18, 12 hours a week at the ceiling with $63,805/day of trade going through it. The building is the limit, so the answer is a bigger site or a second shop nearby",
+"worth": 63804.86,
+"unit": "/day trade",
+"group": "atcap"
+},
+{
+"level": "info",
+"text": "[LM] Costco Cloth runs 3 counters 00:00-09:00 on a Sunday for 5 customers an hour; 18 staff-hours a week that buy nothing",
+"worth": 120.83,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[MT] Costco Cloth",
+"code": "MT",
+"hood": "Midtown",
+"type": "Clothing Store",
+"status": "retail",
+"key": "ba:street_firstavenue#34",
+"address": "34 First Avenue",
+"profit": 280984.94,
+"rent": 1738.0,
+"staff": 22,
+"customers": 687,
+"opened": 150,
+"path": "M1103.699,242.175 L1103.672,242.201 L1103.21,242.175 L1103.699,242.175 Z M1108.7,242.201 L1108.691,242.175 L1109.181,242.175 L1108.7,242.201 Z M1097.737,242.201 L1097.728,242.175 L1098.217,242.175 L1097.737,242.201 Z M1092.709,242.201 L1092.246,242.175 L1092.736,242.175 L1092.709,242.201 Z M1092.736,242.175 L1092.087,242.175 L1091.621,242.201 L1091.594,242.157 L1092.736,242.175 Z M1087.227,242.201 L1086.762,242.175 L1087.254,242.157 L1087.227,242.201 Z M1086.14,242.201 L1086.113,242.175 L1086.14,241.712 L1086.14,242.201 Z M1086.14,236.231 L1086.157,236.72 L1086.113,236.239 L1086.14,236.231 Z M1086.14,225.108 L1086.113,225.099 L1086.157,224.615 L1086.14,225.108 Z M1125.598,242.202 L1125.136,242.175 L1125.625,242.175 L1125.598,242.202 Z M1120.117,242.202 L1119.654,242.175 L1120.144,242.175 L1120.117,242.202 Z M1130.617,242.175 L1129.965,242.157 L1131.107,242.157 L1131.107,242.175 L1130.626,242.202 L1130.617,242.175 Z M1129.992,242.202 L1129.965,242.157 L1130.458,242.175 L1129.992,242.202 Z M1125.625,242.157 L1124.976,242.175 L1124.967,242.202 L1124.484,242.157 L1125.625,242.157 Z M1119.002,242.157 L1120.144,242.157 L1119.495,242.175 L1119.486,242.202 L1119.029,242.202 L1119.002,242.157 Z M1132.163,242.202 L1132.136,242.157 L1132.628,242.175 L1132.163,242.202 Z M1113.521,242.157 L1114.013,242.175 L1113.548,242.202 L1113.521,242.157 Z M1086.683,235.578 L1086.683,231.238 L1086.113,231.211 L1086.157,230.097 L1086.113,225.73 L1086.113,225.276 L1086.14,225.267 L1086.157,224.615 L1086.14,222.445 L1133.282,222.445 L1133.25,242.202 L1132.797,242.202 L1132.788,242.175 L1132.136,242.157 L1109.181,242.157 L1108.532,242.175 L1108.523,242.201 L1108.066,242.201 L1108.039,241.639 L1103.699,241.639 L1103.699,242.175 L1103.05,242.175 L1103.041,242.201 L1098.217,242.157 L1097.568,242.175 L1097.559,242.201 L1097.076,242.157 L1092.736,242.157 L1087.254,242.157 L1086.602,242.175 L1086.593,242.201 L1086.14,242.201 L1086.157,236.72 L1086.14,236.071 L1086.113,236.062 L1086.113,235.605 L1086.683,235.578 Z",
+"bounds": [
+1086.113,
+222.445,
+47.16899999999987,
+19.757000000000005
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "[MT] Costco Cloth runs 3 counters 00:00-14:00 on a Thursday for 14 customers an hour; 27 staff-hours a week that buy nothing",
+"worth": 181.25,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[HA] Costco Ele2",
+"code": "HA",
+"hood": "The Hamptons",
+"type": "Electronics Store",
+"status": "retail",
+"key": "ba:street_seventhavenue#24",
+"address": "24 Seventh Avenue",
+"profit": 261478.08,
+"rent": 96.0,
+"staff": 16,
+"customers": 248,
+"opened": 134,
+"path": "M223.272,895.286 L221.018,895.604 L220.306,891.562 L222.559,891.243 L222.607,891.513 L224.338,891.144 L224.307,890.967 L228.434,890.24 L229.111,894.077 L224.984,894.805 L224.952,894.628 L223.221,894.997 L223.272,895.286 Z M222.897,893.241 L222.897,893.241 L221.193,895.574 L222.897,893.241 Z",
+"bounds": [
+220.306,
+890.24,
+8.804999999999978,
+5.364000000000033
+],
+"region": "the-hamptons",
+"alerts": []
+},
+{
+"name": "[LM] Costco Jewels",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Jewelry Store",
+"status": "retail",
+"key": "ba:street_eighthstreet#21",
+"address": "21 Eighth Street",
+"profit": 233871.28,
+"rent": 416.0,
+"staff": 24,
+"customers": 401,
+"opened": 137,
+"path": "M979.642,979.289 L979.642,950.287 L990.389,950.287 L990.389,979.289 L979.642,979.289 Z",
+"bounds": [
+979.642,
+950.287,
+10.746999999999957,
+29.001999999999953
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "[LM] Costco Jewels runs 4 counters 00:00-24:00 on a Monday for 16 customers an hour; 61 staff-hours a week that buy nothing",
+"worth": 409.48,
+"unit": "/day wages",
+"group": "idlestaff"
+},
+{
+"level": "info",
+"text": "6,590 units of Cup Of Coffee across 1 site is 50 weeks of supply",
+"worth": 92.63,
+"unit": "/day excess",
+"group": "target"
+}
+]
+},
+{
+"name": "[IC] Costco Electric",
+"code": "IC",
+"hood": "Industry City",
+"type": "Electronics Store",
+"status": "retail",
+"key": "ba:street_ninthavenue#3",
+"address": "3 Ninth Avenue",
+"profit": 205516.33,
+"rent": 102.0,
+"staff": 18,
+"customers": 234,
+"opened": 115,
+"path": "M365.439,497.278 L365.439,483.221 L375.55,483.221 L375.55,497.277 L365.439,497.278 Z",
+"bounds": [
+365.439,
+483.221,
+10.11099999999999,
+14.057000000000016
+],
+"region": "industry-city",
+"alerts": []
+},
+{
+"name": "[GD] Costco Cloth",
+"code": "GD",
+"hood": "Garment District",
+"type": "Clothing Store",
+"status": "retail",
+"key": "ba:street_thirdstreet#78",
+"address": "78 Third Street",
+"profit": 179848.97,
+"rent": 492.0,
+"staff": 24,
+"customers": 686,
+"opened": 149,
+"path": "M1396.723,978.934 L1396.723,952.875 L1413.259,952.875 L1413.259,978.934 L1396.723,978.934 Z",
+"bounds": [
+1396.723,
+952.875,
+16.536000000000058,
+26.05899999999997
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "[GD] Costco Cloth runs 3 counters 00:00-14:00 on a Wednesday for 12 customers an hour; 27 staff-hours a week that buy nothing",
+"worth": 181.25,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[HA] Costco Cloth",
+"code": "HA",
+"hood": "The Hamptons",
+"type": "Clothing Store",
+"status": "retail",
+"key": "ba:street_seventhavenue#9",
+"address": "9 Seventh Avenue",
+"profit": 171632.98,
+"rent": 97.0,
+"staff": 20,
+"customers": 302,
+"opened": 166,
+"path": "M221.778,879.608 L221.282,877.173 L222.618,876.899 L222.126,874.464 L225.129,873.852 L225.628,876.285 L226.965,876.015 L227.462,878.45 L221.778,879.608 Z",
+"bounds": [
+221.282,
+873.852,
+6.179999999999978,
+5.755999999999972
+],
+"region": "the-hamptons",
+"alerts": [
+{
+"level": "info",
+"text": "Revenue up 344% week on week: $1,117,204 over days 183-189 against $251,483 the week before",
+"worth": 123674.46,
+"unit": "/day revenue",
+"group": "trend"
+},
+{
+"level": "info",
+"text": "[HA] Costco Cloth runs 2 counters 00:00-14:00 on a Sunday for 7 customers an hour; 14 staff-hours a week that buy nothing",
+"worth": 93.98,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[IC] Electronics Fac",
+"code": "IC",
+"hood": "Industry City",
+"type": "Factory",
+"status": "support",
+"key": "ba:street_twentysecondstreet#11",
+"address": "11 22nd Street",
+"profit": 151122.14,
+"rent": 781.0,
+"staff": 24,
+"customers": 0,
+"opened": 100,
+"path": "M365.724,458.986 L365.519,458.986 L365.519,455.162 L365.724,455.162 L365.724,453.911 L365.519,453.911 L365.519,443.447 L374.666,443.447 L374.666,443.651 L388.66,443.651 L388.665,443.447 L415.101,443.447 L415.101,450.484 L414.897,450.484 L414.897,458.745 L415.101,458.745 L415.101,470.331 L409.369,470.331 L409.369,478.929 L415.101,478.929 L415.101,482.883 L388.665,482.883 L388.665,482.679 L374.666,482.679 L374.666,482.883 L365.519,482.883 L365.519,467.247 L365.724,467.247 L365.724,458.986 Z",
+"bounds": [
+365.519,
+443.447,
+49.581999999999994,
+39.43599999999998
+],
+"region": "industry-city",
+"alerts": []
+},
+{
+"name": "[IC] Costco Cloth",
+"code": "IC",
+"hood": "Industry City",
+"type": "Clothing Store",
+"status": "retail",
+"key": "ba:street_tenthavenue#2",
+"address": "2 Tenth Avenue",
+"profit": 143168.03,
+"rent": 102.0,
+"staff": 18,
+"customers": 301,
+"opened": 162,
+"path": "M402.815,654.374 L402.815,645.707 L414.677,645.656 L414.677,648.561 L414.191,648.561 L414.191,649.998 L414.677,649.998 L414.677,654.374 L402.815,654.374 Z",
+"bounds": [
+402.815,
+645.656,
+11.862000000000023,
+8.718000000000075
+],
+"region": "industry-city",
+"alerts": [
+{
+"level": "warn",
+"text": "[IC] Costco Cloth is at the 30/h door cap Mon, Fri 16; Sun 14-16, 4 hours a week at the ceiling with $8,493/day of trade going through it. The building is the limit, so the answer is a bigger site or a second shop nearby",
+"worth": 8493.26,
+"unit": "/day trade",
+"group": "atcap"
+},
+{
+"level": "info",
+"text": "[IC] Costco Cloth runs 2 counters 00:00-14:00 on a Tuesday for 7 customers an hour; 14 staff-hours a week that buy nothing",
+"worth": 94.14,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[IC] Costco Jewel",
+"code": "IC",
+"hood": "Industry City",
+"type": "Jewelry Store",
+"status": "retail",
+"key": "ba:street_ninthavenue#12",
+"address": "12 Ninth Avenue",
+"profit": 108354.32,
+"rent": 94.0,
+"staff": 15,
+"customers": 150,
+"opened": 162,
+"path": "M211.888,539.775 L211.888,549.839 L204.723,549.839 L204.723,539.775 L211.888,539.775 Z",
+"bounds": [
+204.723,
+539.775,
+7.164999999999992,
+10.064000000000078
+],
+"region": "industry-city",
+"alerts": [
+{
+"level": "info",
+"text": "[IC] Costco Jewel runs 2 counters 00:00-04:00 on a Sunday for 2 customers an hour; 4 staff-hours a week that buy nothing",
+"worth": 26.85,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[HK] Costco Rivals",
+"code": "HK",
+"hood": "Hell's Kitchen",
+"type": "Cinema",
+"status": "retail",
+"key": "ba:street_thirdavenue#15",
+"address": "15 Third Avenue",
+"profit": 97844.45,
+"rent": 3051.0,
+"staff": 24,
+"customers": 1294,
+"opened": 87,
+"path": "M1345.9,559.924 L1346.024,560.601 L1367.271,556.85 L1367.147,556.173 L1376.0,554.61 L1376.622,558.019 L1371.62,560.697 L1371.711,561.198 L1376.91,562.052 L1376.91,565.681 L1371.711,566.535 L1371.802,567.033 L1381.363,568.79 L1381.363,586.665 L1337.09,586.676 L1337.048,561.487 L1345.9,559.924 Z",
+"bounds": [
+1337.048,
+554.61,
+44.315000000000055,
+32.06600000000003
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "warn",
+"text": "[HK] Costco Rivals is at the 100/h door cap Thu-Sun 19-24; Tue, Wed 19-23, 28 hours a week at the ceiling with $34,588/day of trade going through it. The building is the limit, so the answer is a bigger site or a second shop nearby",
+"worth": 34588.0,
+"unit": "/day trade",
+"group": "atcap"
+},
+{
+"level": "info",
+"text": "[HK] Costco Rivals runs 2 counters 00:00-15:00 on a Monday for 24 customers an hour; 15 staff-hours a week that buy nothing",
+"worth": 101.1,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[HK] Costco Jewel",
+"code": "HK",
+"hood": "Hell's Kitchen",
+"type": "Jewelry Store",
+"status": "retail",
+"key": "ba:street_secondavenue#1",
+"address": "1 Second Avenue",
+"profit": 93629.18,
+"rent": 311.0,
+"staff": 15,
+"customers": 151,
+"opened": 162,
+"path": "M1533.95,422.395 L1533.923,423.339 L1533.905,423.339 L1533.95,422.395 Z M1533.95,408.067 L1533.905,409.011 L1533.95,411.648 L1533.905,412.595 L1533.95,415.232 L1533.905,416.176 L1533.95,418.813 L1533.905,419.758 L1533.905,422.379 L1533.905,425.959 L1533.95,425.976 L1533.923,429.538 L1524.994,429.538 L1524.994,408.094 L1533.95,408.067 Z",
+"bounds": [
+1524.994,
+408.067,
+8.956000000000131,
+21.471000000000004
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[HK] Costco Cloth",
+"code": "HK",
+"hood": "Hell's Kitchen",
+"type": "Clothing Store",
+"status": "retail",
+"key": "ba:street_secondavenue#12",
+"address": "12 Second Avenue",
+"profit": 79094.09,
+"rent": 337.0,
+"staff": 18,
+"customers": 280,
+"opened": 162,
+"path": "M1365.084,372.305 L1365.081,345.869 L1379.313,345.864 L1379.316,371.956 L1379.412,371.956 L1379.412,372.402 L1378.962,372.404 L1378.962,372.303 L1365.084,372.305 Z",
+"bounds": [
+1365.081,
+345.864,
+14.331000000000131,
+26.54000000000002
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "[HK] Costco Cloth runs 2 counters 00:00-14:00 on a Tuesday for 6 customers an hour; 14 staff-hours a week that buy nothing",
+"worth": 94.16,
+"unit": "/day wages",
+"group": "idlestaff"
+}
+]
+},
+{
+"name": "[HA] Costco Jewel",
+"code": "HA",
+"hood": "The Hamptons",
+"type": "Jewelry Store",
+"status": "retail",
+"key": "ba:street_seventhavenue#22",
+"address": "22 Seventh Avenue",
+"profit": 76817.66,
+"rent": 36.0,
+"staff": 17,
+"customers": 86,
+"opened": 107,
+"path": "M234.84,890.106 L235.571,889.977 L235.655,890.454 L235.684,890.449 L236.218,893.479 L234.336,893.811 L233.802,890.78 L234.924,890.582 L234.84,890.106 Z",
+"bounds": [
+233.802,
+889.977,
+2.415999999999997,
+3.83400000000006
+],
+"region": "the-hamptons",
+"alerts": []
+},
+{
+"name": "[MT] Costco 38 1stAV",
+"code": "MT",
+"hood": "Midtown",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_firstavenue#38",
+"address": "38 First Avenue",
+"profit": 60533.15,
+"rent": 1762.0,
+"staff": 14,
+"customers": 1067,
+"opened": 22,
+"path": "M1043.381,241.469 L1045.18,241.469 L1045.153,242.436 L1043.407,242.436 L1043.381,241.469 Z M1015.294,241.413 L1015.167,241.366 L1017.194,241.366 L1017.067,241.413 L1017.04,242.436 L1015.321,242.436 L1015.294,241.413 Z M1006.741,237.323 L1005.775,237.296 L1005.775,235.524 L1006.848,235.497 L1006.848,235.058 L1007.162,235.036 L1007.162,231.536 L1006.848,231.514 L1006.848,231.019 L1005.775,230.992 L1005.775,229.22 L1006.741,229.193 L1006.741,225.591 L1005.775,225.564 L1005.775,223.792 L1006.741,223.765 L1006.741,220.163 L1005.775,220.136 L1005.802,215.549 L1050.543,215.549 L1050.521,242.436 L1049.262,242.436 L1049.235,241.47 L1045.18,241.469 L1037.48,241.469 L1037.453,242.436 L1035.708,242.436 L1035.681,241.366 L1035.231,241.366 L1035.208,241.052 L1031.454,241.052 L1031.432,241.366 L1030.676,241.366 L1030.649,242.436 L1028.908,242.436 L1028.881,241.469 L1023.871,241.469 L1023.844,242.436 L1022.099,242.436 L1022.072,241.413 L1021.944,241.366 L1015.167,241.366 L1009.517,241.366 L1009.389,241.413 L1009.362,242.436 L1005.802,242.436 L1005.775,240.951 L1006.741,240.924 L1006.741,237.323 Z",
+"bounds": [
+1005.775,
+215.549,
+44.767999999999915,
+26.887
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "warn",
+"text": "[MT] Costco 38 1stAV fills the counters Sat 8-13, 18-20; Sun 8-13, 18-21 and 2 scattered hours, 17 hours a week at 60/h and $10,921/day through the ceiling. Staffing is the limit, so the answer is more service staff on those hours",
+"worth": 10921.29,
+"unit": "/day trade",
+"group": "atcap"
+}
+]
+},
+{
+"name": "[HA] Costco Liquor",
+"code": "HA",
+"hood": "The Hamptons",
+"type": "Liquor Store",
+"status": "retail",
+"key": "ba:street_seventhavenue#11",
+"address": "11 Seventh Avenue",
+"profit": 39866.43,
+"rent": 101.0,
+"staff": 12,
+"customers": 360,
+"opened": 184,
+"path": "M212.95,878.641 L214.743,878.281 L215.733,883.211 L212.147,883.932 L211.427,880.346 L211.875,880.256 L211.515,878.463 L212.86,878.193 L212.95,878.641 Z M217.234,875.922 L219.615,875.452 L220.326,879.004 L220.206,879.028 L220.193,878.962 L219.096,879.182 L219.243,879.153 L219.256,879.219 L219.017,879.267 L219.003,879.201 L218.053,879.392 L218.067,879.458 L217.949,879.481 L217.234,875.922 Z",
+"bounds": [
+211.427,
+875.452,
+8.899000000000001,
+8.480000000000018
+],
+"region": "the-hamptons",
+"alerts": [
+{
+"level": "warn",
+"text": "The Hamptons hype on 2 lines has 10 days left; [HA] Costco Liquor does $43,725/day under it against $39,569 for the no-hype [MT] Costco Liquor; about $4,156/day of revenue rides on the wave.",
+"worth": 4155.9,
+"unit": "/day revenue",
+"group": "hype"
+}
+]
+},
+{
+"name": "[MT] Costco Liquor",
+"code": "MT",
+"hood": "Midtown",
+"type": "Liquor Store",
+"status": "retail",
+"key": "ba:street_thirdavenue#4",
+"address": "4 Third Avenue",
+"profit": 31801.58,
+"rent": 1837.0,
+"staff": 40,
+"customers": 591,
+"opened": 184,
+"path": "M1217.546,511.592 L1217.389,511.659 L1217.366,511.91 L1216.806,511.91 L1216.784,511.659 L1216.626,511.592 L1217.546,511.592 Z M1213.807,511.659 L1213.785,511.91 L1213.225,511.91 L1213.18,511.636 L1213.045,511.592 L1213.965,511.592 L1213.807,511.659 Z M1220.97,511.659 L1220.948,511.91 L1220.387,511.91 L1220.365,511.659 L1220.208,511.592 L1221.127,511.592 L1220.97,511.659 Z M1224.865,507.814 L1224.613,507.837 L1224.546,507.994 L1224.546,507.074 L1224.613,507.232 L1224.865,507.254 L1224.865,507.814 Z M1224.865,504.233 L1224.613,504.255 L1224.546,504.413 L1224.546,503.493 L1224.613,503.65 L1224.865,503.673 L1224.865,504.233 Z M1224.865,500.652 L1224.613,500.674 L1224.546,500.831 L1224.546,499.912 L1224.613,500.069 L1224.865,500.091 L1224.865,500.652 Z M1224.613,488.753 L1224.865,488.776 L1224.865,489.908 L1224.613,489.93 L1224.546,490.087 L1224.546,492.749 L1224.613,492.906 L1224.865,492.929 L1224.865,493.489 L1224.613,493.511 L1224.546,493.669 L1224.546,499.912 L1224.546,503.493 L1224.546,507.074 L1224.546,510.656 L1224.613,510.813 L1224.865,510.835 L1224.865,511.91 L1223.969,511.91 L1223.946,511.659 L1223.789,511.592 L1221.127,511.592 L1216.626,511.592 L1210.383,511.592 L1210.226,511.659 L1210.226,511.888 L1210.097,511.91 L1210.084,511.991 L1209.763,511.991 L1209.75,511.91 L1209.621,511.888 L1209.621,511.659 L1209.508,511.636 L1209.464,511.524 L1207.493,511.524 L1207.484,511.31 L1205.737,511.31 L1205.727,511.524 L1203.758,511.524 L1203.713,511.636 L1203.6,511.659 L1203.6,511.888 L1203.472,511.91 L1203.459,511.991 L1203.137,511.991 L1203.124,511.91 L1202.995,511.888 L1202.995,511.659 L1202.838,511.592 L1200.176,511.592 L1200.019,511.659 L1199.997,511.91 L1199.436,511.91 L1199.414,511.659 L1199.257,511.592 L1196.595,511.592 L1196.438,511.659 L1196.415,511.91 L1195.855,511.91 L1195.833,511.659 L1195.675,511.592 L1193.014,511.592 L1192.856,511.659 L1192.834,511.91 L1192.274,511.91 L1192.251,511.659 L1192.094,511.592 L1189.432,511.592 L1189.275,511.659 L1189.253,511.91 L1188.871,511.91 L1188.849,511.659 L1188.692,511.592 L1188.728,488.632 L1224.546,488.596 L1224.613,488.753 Z M1224.613,497.093 L1224.546,497.25 L1224.546,496.33 L1224.591,496.465 L1224.865,496.51 L1224.865,497.07 L1224.613,497.093 Z",
+"bounds": [
+1188.692,
+488.596,
+36.173,
+23.394999999999982
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "3 top-up targets are set far above what sells; Cigar the deepest",
+"worth": 2336.43,
+"unit": "/day excess",
+"group": "target"
+}
+]
+},
+{
+"name": "[HA] Costco 28 7AV",
+"code": "HA",
+"hood": "The Hamptons",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_seventhavenue#28",
+"address": "28 Seventh Avenue",
+"profit": 27469.66,
+"rent": 101.0,
+"staff": 6,
+"customers": 414,
+"opened": 15,
+"path": "M213.857,896.097 L213.762,895.537 L216.935,894.996 L217.476,898.169 L213.245,898.891 L212.8,896.278 L213.857,896.097 Z",
+"bounds": [
+212.8,
+894.996,
+4.675999999999988,
+3.894999999999982
+],
+"region": "the-hamptons",
+"alerts": []
+},
+{
+"name": "[IC] Factory- Liquor",
+"code": "IC",
+"hood": "Industry City",
+"type": "Factory",
+"status": "support",
+"key": "ba:street_twentythirdstreet#4",
+"address": "4 23rd Street",
+"profit": 23814.68,
+"rent": 928.0,
+"staff": 37,
+"customers": 0,
+"opened": 166,
+"path": "M236.535,368.508 L236.535,334.114 L285.854,334.114 L285.854,352.128 L285.685,352.128 L285.685,353.429 L285.854,353.429 L285.854,368.508 L274.204,368.508 L274.204,368.21 L272.097,368.21 L272.097,368.508 L268.878,368.508 L268.878,368.21 L257.938,368.21 L257.938,368.508 L236.535,368.508 Z",
+"bounds": [
+236.535,
+334.114,
+49.31899999999999,
+34.394000000000005
+],
+"region": "industry-city",
+"alerts": []
+},
+{
+"name": "[LM] Costco 19 BW",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_broadwaystreet#19",
+"address": "19 Broadway Street",
+"profit": 22530.72,
+"rent": 98.0,
+"staff": 6,
+"customers": 419,
+"opened": 4,
+"path": "M955.636,809.274 L955.831,809.11 L955.912,809.207 L959.2,806.447 L961.995,804.102 L961.914,804.005 L962.475,803.535 L962.583,803.663 L965.249,801.426 L965.141,801.298 L965.696,800.832 L965.777,800.929 L968.572,798.584 L968.491,798.487 L968.667,798.339 L968.566,798.148 L968.874,797.889 L968.874,827.639 L954.551,827.639 L954.551,809.907 L955.466,809.141 L955.636,809.274 Z M958.626,806.765 L959.119,806.351 L959.2,806.447 L958.707,806.862 L958.626,806.765 Z",
+"bounds": [
+954.551,
+797.889,
+14.322999999999979,
+29.75
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[HK] Costco 10 4AV",
+"code": "HK",
+"hood": "Hell's Kitchen",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_fourthavenue#10",
+"address": "10 Fourth Avenue",
+"profit": 18137.98,
+"rent": 264.0,
+"staff": 6,
+"customers": 423,
+"opened": 31,
+"path": "M1445.107,679.538 L1445.107,665.213 L1459.343,665.213 L1459.343,679.538 L1445.107,679.538 Z",
+"bounds": [
+1445.107,
+665.213,
+14.236000000000104,
+14.325000000000045
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[MH] Costco 23 5AV",
+"code": "MH",
+"hood": "Murray Hill",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_fifthavenue#23",
+"address": "23 Fifth Avenue",
+"profit": 14323.87,
+"rent": 179.0,
+"staff": 6,
+"customers": 423,
+"opened": 37,
+"path": "M1288.661,894.864 L1288.661,871.457 L1303.038,871.457 L1303.038,894.864 L1288.661,894.864 Z",
+"bounds": [
+1288.661,
+871.457,
+14.376999999999953,
+23.40700000000004
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[GD] Costco",
+"code": "GD",
+"hood": "Garment District",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_fourthavenue#15",
+"address": "15 Fourth Avenue",
+"profit": 13193.08,
+"rent": 129.0,
+"staff": 6,
+"customers": 417,
+"opened": 58,
+"path": "M1370.468,727.096 L1370.468,703.857 L1381.146,703.857 L1381.146,727.096 L1370.468,727.096 Z",
+"bounds": [
+1370.468,
+703.857,
+10.677999999999884,
+23.239000000000033
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[IC] Costco 12 19AV",
+"code": "IC",
+"hood": "Industry City",
+"type": "Supermarket",
+"status": "retail",
+"key": "ba:street_tenthavenue#12",
+"address": "12 Tenth Avenue",
+"profit": 12966.87,
+"rent": 101.0,
+"staff": 4,
+"customers": 390,
+"opened": 40,
+"path": "M341.381,645.699 L350.098,645.699 L350.048,662.199 L341.381,662.199 L341.381,645.699 Z",
+"bounds": [
+341.381,
+645.699,
+8.717000000000041,
+16.5
+],
+"region": "industry-city",
+"alerts": [
+{
+"level": "warn",
+"text": "[IC] Costco 12 19AV is at the 30/h door cap Fri-Sun 8-13, 18-22; Mon 8-13, 18-20, 21, 35 hours a week at the ceiling with $6,208/day of trade going through it. The building is the limit, so the answer is a bigger site or a second shop nearby",
+"worth": 6208.5,
+"unit": "/day trade",
+"group": "atcap"
+},
+{
+"level": "info",
+"text": "Revenue up 51% week on week: $100,179 over days 183-189 against $66,341 the week before",
+"worth": 4834.0,
+"unit": "/day revenue",
+"group": "trend"
+}
+]
+},
+{
+"name": "[LM] Costco Liquor",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Liquor Store",
+"status": "retail",
+"key": "ba:street_ninthstreet#12",
+"address": "12 Ninth Street",
+"profit": 10802.55,
+"rent": 98.0,
+"staff": 12,
+"customers": 231,
+"opened": 184,
+"path": "M898.829,747.314 L898.829,724.069 L912.331,724.069 L912.367,725.462 L912.247,725.498 L912.247,729.769 L912.367,729.805 L912.367,730.833 L912.247,730.869 L912.247,735.141 L912.367,735.177 L912.367,736.205 L912.247,736.241 L912.193,739.223 L912.247,739.232 L912.247,740.457 L912.367,740.493 L912.367,741.577 L912.247,741.613 L912.247,745.884 L912.367,745.92 L912.367,747.289 L898.829,747.314 Z",
+"bounds": [
+898.829,
+724.069,
+13.538000000000011,
+23.245000000000005
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "Cigar, Pack of Cigarettes, Paper Bag top-up target of 1,500 is 59x daily sales in 1 shop; lower the target",
+"worth": 516.64,
+"unit": "/day excess",
+"group": "target"
+}
+]
+},
+{
+"name": "[HK] Costco Liquor",
+"code": "HK",
+"hood": "Murray Hill",
+"type": "Liquor Store",
+"status": "retail",
+"key": "ba:street_fifthavenue#37",
+"address": "37 Fifth Avenue",
+"profit": 0.0,
+"rent": 179.0,
+"staff": 0,
+"customers": 0,
+"opened": 190,
+"path": "M1083.947,885.923 L1083.947,871.546 L1107.354,871.546 L1107.354,885.923 L1083.947,885.923 Z",
+"bounds": [
+1083.947,
+871.546,
+23.407000000000153,
+14.376999999999953
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "critical",
+"text": "[HK] Costco Liquor opened day 190, not trading yet: no staff, no delivery plan, $179/day rent",
+"worth": 179.0,
+"unit": "/day rent",
+"group": "notrading"
+}
+]
+},
+{
+"name": "[IC] Costco Liquor",
+"code": "IC",
+"hood": "Industry City",
+"type": "Liquor Store",
+"status": "retail",
+"key": "ba:street_tenthavenue#20",
+"address": "20 Tenth Avenue",
+"profit": 0.0,
+"rent": 98.0,
+"staff": 0,
+"customers": 0,
+"opened": 190,
+"path": "M306.787,655.715 L306.787,645.734 L315.389,645.734 L315.389,655.715 L306.787,655.715 Z",
+"bounds": [
+306.787,
+645.734,
+8.602000000000032,
+9.980999999999995
+],
+"region": "industry-city",
+"alerts": [
+{
+"level": "critical",
+"text": "[IC] Costco Liquor opened day 190, not trading yet: no staff, no delivery plan, $98/day rent",
+"worth": 98.0,
+"unit": "/day rent",
+"group": "notrading"
+}
+]
+},
+{
+"name": "Vacant lease",
+"code": "HA",
+"hood": "The Hamptons",
+"type": "Empty",
+"status": "vacant",
+"key": "ba:street_harborstreet#5",
+"address": "5 Harbor Street",
+"profit": 0.0,
+"rent": 0.0,
+"staff": 0,
+"customers": 0,
+"opened": -1,
+"path": "M261.281,985.723 L261.281,1000.393 L242.943,1000.393 L242.943,985.723 L261.281,985.723 Z M246.45,998.647 L246.45,999.323 L251.632,999.323 L251.632,998.646 L252.08,998.576 L252.401,998.362 L252.628,998.02 L252.7,997.642 L252.628,997.265 L252.401,996.923 L252.08,996.708 L251.632,996.639 L251.632,995.961 L246.45,995.961 L246.45,996.638 L245.999,996.714 L245.673,996.932 L245.455,997.258 L245.379,997.642 L245.455,998.027 L245.673,998.353 L245.999,998.571 L246.45,998.647 Z",
+"bounds": [
+242.943,
+985.723,
+18.337999999999994,
+14.670000000000073
+],
+"region": "the-hamptons",
+"alerts": []
+},
+{
+"name": "[GD] Costco Liquor",
+"code": "GD",
+"hood": "Garment District",
+"type": "Liquor Store",
+"status": "retail",
+"key": "ba:street_fifthavenue#17",
+"address": "17 Fifth Avenue",
+"profit": -132.0,
+"rent": 132.0,
+"staff": 0,
+"customers": 0,
+"opened": 190,
+"path": "M1370.445,889.383 L1370.445,871.434 L1381.24,871.434 L1381.24,889.383 L1370.445,889.383 Z",
+"bounds": [
+1370.445,
+871.434,
+10.795000000000073,
+17.94900000000007
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "critical",
+"text": "[GD] Costco Liquor opened day 190, not trading yet: no staff, no delivery plan, $132/day rent",
+"worth": 132.0,
+"unit": "/day rent",
+"group": "notrading"
+}
+]
+},
+{
+"name": "[LM] Costco HQ",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Headquarters",
+"status": "overhead",
+"key": "ba:street_tenthstreet#13",
+"address": "13 Tenth Street",
+"profit": -284.0,
+"rent": 284.0,
+"staff": 43,
+"customers": 0,
+"opened": 73,
+"path": "M859.652,978.175 L867.052,978.175 L867.052,978.618 L866.018,978.618 L866.009,978.466 L860.196,978.466 L860.187,978.618 L859.652,978.618 L859.652,978.175 Z M850.873,969.143 L850.873,963.33 L850.721,963.321 L850.721,962.786 L851.181,962.786 L851.181,970.186 L850.73,970.141 L850.721,969.152 L850.873,969.143 Z M850.721,972.274 L850.721,971.739 L851.181,971.739 L851.181,962.786 L851.181,961.232 L850.721,961.232 L850.721,960.199 L850.873,960.19 L850.873,954.376 L850.721,954.367 L850.73,953.637 L875.991,953.635 L876.02,978.618 L874.972,978.618 L874.963,978.466 L869.149,978.466 L869.14,978.618 L868.606,978.618 L868.606,978.175 L859.652,978.175 L858.099,978.175 L858.099,978.618 L857.065,978.618 L857.056,978.466 L851.243,978.466 L851.234,978.618 L850.753,978.618 L850.721,978.106 L850.873,978.097 L850.873,972.283 L850.721,972.274 Z",
+"bounds": [
+850.721,
+953.635,
+25.298999999999978,
+24.98300000000006
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[LM] CostcoWH 12th",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Warehouse",
+"status": "overhead",
+"key": "ba:street_twelfthstreet#7",
+"address": "7 Twelfth Street",
+"profit": -542.53,
+"rent": 240.0,
+"staff": 1,
+"customers": 0,
+"opened": 26,
+"path": "M693.266,824.225 L693.384,824.225 L693.384,821.539 L693.266,821.539 L693.266,820.262 L693.41,820.262 L693.41,817.38 L693.266,817.38 L693.266,817.176 L692.985,817.062 L692.985,816.403 L693.139,816.289 L710.769,816.289 L710.769,825.336 L709.415,825.336 L709.294,825.412 L709.294,825.124 L705.403,825.124 L705.403,825.412 L705.282,825.336 L694.206,825.336 L694.096,825.47 L693.104,825.47 L693.104,824.569 L693.266,824.435 L693.266,824.225 Z M693.266,813.05 L692.985,812.937 L692.985,812.277 L693.139,812.164 L710.769,812.164 L710.769,816.289 L693.266,816.289 L693.266,816.085 L693.41,816.085 L693.41,813.255 L693.266,813.255 L693.266,813.05 Z M693.27,810.423 L693.485,810.423 L693.485,809.317 L693.27,809.317 L693.27,809.203 L693.41,809.173 L693.266,809.173 L693.266,808.66 L693.51,808.318 L693.51,804.327 L693.266,803.984 L693.266,803.676 L693.11,803.568 L693.11,802.846 L694.05,802.846 L694.206,802.953 L710.769,802.953 L710.769,812.164 L693.266,812.164 L693.266,811.959 L693.41,811.959 L693.41,810.566 L693.27,810.536 L693.27,810.423 Z",
+"bounds": [
+692.985,
+802.846,
+17.783999999999992,
+22.624000000000024
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "critical",
+"text": "Cupcake runs dry on Sunday, 0.8 days before Monday's import (266/day, 293 at peak)",
+"worth": null,
+"unit": "",
+"group": "shortfall"
+},
+{
+"level": "critical",
+"text": "Croissant runs dry on Sunday, 0.8 days before Monday's import (268/day, 295 at peak)",
+"worth": null,
+"unit": "",
+"group": "shortfall"
+}
+]
+},
+{
+"name": "[LM] Liquor Distr.",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Warehouse",
+"status": "overhead",
+"key": "ba:street_eleventhstreet#23",
+"address": "23 Eleventh Street",
+"profit": -601.3,
+"rent": 300.0,
+"staff": 1,
+"customers": 0,
+"opened": 185,
+"path": "M771.232,978.138 L771.232,977.928 L771.35,977.928 L771.35,975.242 L771.232,975.242 L771.232,973.964 L771.376,973.964 L771.376,971.083 L771.232,971.083 L771.232,970.878 L770.951,970.765 L770.951,970.106 L771.232,969.992 L771.232,969.787 L771.376,969.787 L771.376,966.957 L771.232,966.957 L771.232,966.753 L770.951,966.639 L770.951,965.98 L771.232,965.866 L771.232,965.662 L771.376,965.662 L771.376,964.239 L771.236,964.239 L771.236,964.125 L771.451,964.125 L771.451,963.019 L771.236,963.019 L771.236,962.906 L771.376,962.876 L771.232,962.876 L771.232,962.363 L771.476,962.02 L771.476,960.712 L771.232,960.369 L771.232,960.061 L771.076,959.953 L771.076,959.23 L772.016,959.23 L772.171,959.338 L782.487,959.338 L782.487,979.039 L781.133,979.039 L781.073,979.114 L781.012,979.114 L781.012,978.992 L777.122,978.992 L777.122,979.114 L777.0,979.039 L772.171,979.039 L772.062,979.172 L771.07,979.172 L771.07,978.271 L771.232,978.138 Z",
+"bounds": [
+770.951,
+959.23,
+11.535999999999945,
+19.942000000000007
+],
+"region": "mainland",
+"alerts": [
+{
+"level": "info",
+"text": "Energy Drink, Soda Can top-up target of 2,000 is 78x daily sales in 1 shop; lower the target",
+"worth": null,
+"unit": "/day excess",
+"group": "target"
+},
+{
+"level": "info",
+"text": "Martini top-up target of 3,000 is 33x daily sales in 1 shop; lower the target",
+"worth": null,
+"unit": "/day excess",
+"group": "target"
+}
+]
+},
+{
+"name": "[IC] Costco Distrib",
+"code": "IC",
+"hood": "Industry City",
+"type": "Warehouse",
+"status": "overhead",
+"key": "ba:street_twentythirdstreet#11",
+"address": "11 23rd Street",
+"profit": -1062.59,
+"rent": 460.0,
+"staff": 2,
+"customers": 0,
+"opened": 109,
+"path": "M301.32,467.606 L301.531,467.605 L301.532,465.079 L301.32,465.077 L301.32,458.745 L308.003,458.745 L308.003,458.835 L310.153,458.835 L310.153,458.745 L316.8,458.745 L316.8,459.333 L316.456,459.333 L316.456,461.93 L316.8,461.93 L316.8,479.766 L301.32,479.766 L301.32,473.445 L301.524,473.445 L301.524,470.849 L301.32,470.849 L301.32,467.606 Z",
+"bounds": [
+301.32,
+458.745,
+15.480000000000018,
+21.021000000000015
+],
+"region": "industry-city",
+"alerts": []
+},
+{
+"name": "[LM] Costco Import",
+"code": "LM",
+"hood": "Lower Manhattan",
+"type": "Warehouse",
+"status": "overhead",
+"key": "ba:street_sixthavenue#44",
+"address": "44 Sixth Avenue",
+"profit": -1196.59,
+"rent": 594.0,
+"staff": 2,
+"customers": 0,
+"opened": 168,
+"path": "M721.371,979.315 L721.371,957.264 L756.119,957.264 L756.119,979.315 L721.371,979.315 Z",
+"bounds": [
+721.371,
+957.264,
+34.74800000000005,
+22.051000000000045
+],
+"region": "mainland",
+"alerts": []
+},
+{
+"name": "[IC] Factory - Food",
+"code": "IC",
+"hood": "Industry City",
+"type": "Factory",
+"status": "support",
+"key": "ba:street_twentythirdstreet#9",
+"address": "9 23rd Street",
+"profit": -8785.03,
+"rent": 751.0,
+"staff": 43,
+"customers": 0,
+"opened": 65,
+"path": "M316.311,455.372 L315.967,455.372 L315.967,434.183 L318.994,434.183 L318.994,434.527 L324.405,434.527 L324.405,434.183 L341.98,434.183 L341.98,434.387 L347.335,434.387 L347.335,434.183 L350.234,434.183 L350.234,458.238 L350.021,458.238 L350.021,469.382 L350.234,469.382 L350.234,479.106 L338.378,479.106 L338.378,471.563 L327.95,471.563 L327.95,479.106 L315.967,479.106 L315.967,466.516 L316.311,466.516 L316.311,455.372 Z",
+"bounds": [
+315.967,
+434.183,
+34.266999999999996,
+44.923
+],
+"region": "industry-city",
+"alerts": []
+},
+{
+"name": "[IC] Factory - Jewel",
+"code": "IC",
+"hood": "Industry City",
+"type": "Factory",
+"status": "support",
+"key": "ba:street_twentyfifthstreet#6",
+"address": "6 25th Street",
+"profit": -50655.15,
+"rent": 972.0,
+"staff": 9,
+"customers": 0,
+"opened": 134,
+"path": "M126.344,387.783 L126.344,388.08 L137.432,388.08 L137.432,387.783 L146.408,387.783 L146.408,388.08 L151.763,388.08 L151.763,387.783 L157.302,387.783 L157.302,402.55 L157.129,402.55 L157.129,403.764 L157.302,403.764 L157.302,407.582 L157.005,407.582 L157.005,418.67 L157.302,418.67 L157.302,429.918 L123.736,429.918 L123.736,387.783 L126.344,387.783 Z",
+"bounds": [
+123.736,
+387.783,
+33.56599999999999,
+42.13499999999999
+],
+"region": "industry-city",
+"alerts": []
+},
+{
+"name": "[IC] Factory - Cloth",
+"code": "IC",
+"hood": "Industry City",
+"type": "Factory",
+"status": "support",
+"key": "ba:street_twentysecondstreet#5",
+"address": "5 22nd Street",
+"profit": -107658.76,
+"rent": 850.0,
+"staff": 58,
+"customers": 0,
+"opened": 135,
+"path": "M365.317,334.917 L390.295,334.917 L390.295,364.373 L365.317,364.373 L365.317,334.917 Z",
+"bounds": [
+365.317,
+334.917,
+24.97800000000001,
+29.456000000000017
+],
+"region": "industry-city",
+"alerts": []
+}
+],
+"owned": [
+{
+"key": "ba:street_harborstreet#5",
+"address": "5 Harbor Street",
+"purchaseDay": 156,
+"purchasePrice": 18250000.0,
+"path": "M261.281,985.723 L261.281,1000.393 L242.943,1000.393 L242.943,985.723 L261.281,985.723 Z M246.45,998.647 L246.45,999.323 L251.632,999.323 L251.632,998.646 L252.08,998.576 L252.401,998.362 L252.628,998.02 L252.7,997.642 L252.628,997.265 L252.401,996.923 L252.08,996.708 L251.632,996.639 L251.632,995.961 L246.45,995.961 L246.45,996.638 L245.999,996.714 L245.673,996.932 L245.455,997.258 L245.379,997.642 L245.455,998.027 L245.673,998.353 L245.999,998.571 L246.45,998.647 Z",
+"bounds": [
+242.943,
+985.723,
+18.337999999999994,
+14.670000000000073
+]
+},
+{
+"key": "ba:street_secondstreet#49",
+"address": "49 Second Street",
+"purchaseDay": 159,
+"purchasePrice": 8980000.0,
+"path": "M1432.545,910.08 L1432.545,889.362 L1459.318,889.362 L1459.318,910.08 L1432.545,910.08 Z",
+"bounds": [
+1432.545,
+889.362,
+26.77299999999991,
+20.718000000000075
+]
+}
+],
+"regions": [
+{
+"id": "mainland",
+"label": "Manhattan",
+"bounds": [
+585.706943,
+142.56,
+1066.346114,
+1036.8
+]
+},
+{
+"id": "industry-city",
+"label": "Industry City",
+"bounds": [
+60.48,
+145.014545,
+449.28,
+571.810909
+]
+},
+{
+"id": "the-hamptons",
+"label": "The Hamptons",
+"bounds": [
+60.48,
+823.737306,
+449.28,
+290.045388
+]
+}
+],
+"labels": [
+{
+"label": "GARMENT DISTRICT",
+"anchor": [
+1434.87754,
+818.985751
+]
+},
+{
+"label": "MURRAY HILL",
+"anchor": [
+1160.576368,
+868.774107
+]
+},
+{
+"label": "HELL'S KITCHEN",
+"anchor": [
+1448.640278,
+511.572409
+]
+},
+{
+"label": "LOWER MANHATTAN",
+"anchor": [
+812.742127,
+852.051762
+]
+},
+{
+"label": "MIDTOWN",
+"anchor": [
+1142.533811,
+421.499108
+]
+}
+],
+"meta": {
+"character": "s5mOzMQ7L0GrbArBjFmdPA==",
+"save": "Costco",
+"day": 190,
+"hour": 11,
+"minute": 47,
+"cityDate": "Year 4, day 10 of 60",
+"build": 3675,
+"verifiedBuild": 3675,
+"locale": true,
+"difficulty": "Custom",
+"houseRules": {
+"label": "Custom",
+"slot": 0,
+"harder": 7,
+"easier": 1,
+"startingMoney": 0,
+"rules": [
+{
+"name": "Public prices",
+"value": 1.3,
+"neutral": 1.0,
+"lean": "harder",
+"what": "cost of wholesale and imported goods, hospital fees and the like"
+},
+{
+"name": "Salary demands",
+"value": 1.3,
+"neutral": 1.0,
+"lean": "harder",
+"what": "what staff cost an hour"
+},
+{
+"name": "Bank interest",
+"value": 1.3,
+"neutral": 1.0,
+"lean": "harder",
+"what": "interest on loans and investments"
+},
+{
+"name": "Rival attacks",
+"value": 1.2,
+"neutral": 1.0,
+"lean": "harder",
+"what": "severity of rival attacks; 0 switches them off entirely"
+},
+{
+"name": "Base customers",
+"value": 0.5,
+"neutral": 1.0,
+"lean": "harder",
+"what": "customers you get before any traffic or marketing"
+},
+{
+"name": "Export income",
+"value": 0.5,
+"neutral": 1.0,
+"lean": "harder",
+"what": "what exporting pays"
+},
+{
+"name": "Resale value",
+"value": 0.5,
+"neutral": 1.0,
+"lean": "harder",
+"what": "what selling something back returns"
+},
+{
+"name": "Urgent wholesale fee",
+"value": 0.3,
+"neutral": 1.0,
+"lean": "easier",
+"what": "surcharge for rushing a wholesale order"
+},
+{
+"name": "Urgent import fee",
+"value": 1.0,
+"neutral": 1.0,
+"lean": "level",
+"what": "surcharge for rushing an import"
+},
+{
+"name": "Tax rate",
+"value": 30,
+"neutral": 30,
+"lean": "level",
+"what": "annual rate from the IRS"
+}
+]
+},
+"generated": "13 Sep 2026, 09:16",
+"source": "Costco.hsg",
+"saved": "11 Sep 2026, 12:55"
+}
+}

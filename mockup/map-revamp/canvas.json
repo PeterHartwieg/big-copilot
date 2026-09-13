@@ -1,0 +1,77 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Map",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1060,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "MapSelected.dc.html",
+      "title": "Map \u00b7 a place picked",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1060,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "MapShortcut.dc.html",
+      "title": "Map shortcut from a finding",
+      "x": 0,
+      "y": 1300,
+      "w": 1440,
+      "h": 940,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "MapSplit.dc.html",
+      "title": "Alternative \u00b7 list beside the map",
+      "x": 1560,
+      "y": 1300,
+      "w": 1440,
+      "h": 1060,
+      "is_interactive": true,
+      "expand": "fill"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "try-map",
+      "x": 0,
+      "y": -150,
+      "w": 560,
+      "text": "The ball is an object on the map: it sits in Central Park, breathes, and zooms with the city. Hover a row and its footprint lights. Finding dots appear on the footprints once you zoom in. Click a place (list or footprint) and the camera glides in and the card opens beside the building. Click the ball: it squishes and swallows every ball on the masthead shelf (click Costco for more of them); with none left it pays out coins. The house button fits the whole city again. Drag to pan, wheel to zoom. Row details show on hover; the count sits in the search field."
+    },
+    {
+      "id": "note-selected",
+      "x": 1560,
+      "y": -110,
+      "w": 460,
+      "text": "The picked state, for reading: 19 Broadway Street. Three mono numbers, findings as dots, one link to the business page. No sentences in the card; the ? mark on the page carries the explanation."
+    },
+    {
+      "id": "note-shortcut",
+      "x": 0,
+      "y": 1190,
+      "w": 460,
+      "text": "The map button beside a finding: a dialog over Today, camera already on the building, card open. No list, no filters; just the place and its card."
+    },
+    {
+      "id": "note-split",
+      "x": 1560,
+      "y": 1190,
+      "w": 460,
+      "text": "Alternative kept for comparison: the list as a fixed column beside the map (closer to today's layout). Trade-off: the map is 300px narrower and never full-bleed, but nothing ever covers a footprint."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
