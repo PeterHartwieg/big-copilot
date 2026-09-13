@@ -1,0 +1,17 @@
+{
+  "name": "big-copilot",
+  "private": true,
+  "scripts": {
+    "build": "python build_web.py",
+    "dev": "wrangler dev",
+    "test": "node --test tests/*.test.cjs",
+    "test:community": "node --test tests/community-*.test.cjs",
+    "check:worker": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "miniflare": "^5.20260911.0-alpha",
+    "playwright": "^1.63.0",
+    "wrangler": "^4.131.1"
+  }
+}

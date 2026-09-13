@@ -1,10 +1,20 @@
 {
-  // Assets only: there is no "main", so no Worker script runs. `npx wrangler deploy`
-  // uploads the ./web folder and Cloudflare serves those files directly, which is
-  // all this project needs -- the analysis happens in the visitor's browser.
+  // The Worker in server/worker.mjs only handles /api/* (see run_worker_first);
+  // every other request is served straight from the ./web assets folder. The
+  // server code lives outside web/ on purpose: web/worker.js is the existing
+  // in-browser Python worker and must stay independent of this backend.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "big-copilot",
+  "main": "server/worker.mjs",
   "compatibility_date": "2026-09-01",
+  // Keep local request URLs and Origin aligned instead of rewriting to the
+  // production custom domain; these settings apply only to `wrangler dev`.
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 8789,
+    "host": "127.0.0.1:8789",
+    "upstream_protocol": "http"
+  },
   // The page's own address. Custom domains: wrangler creates the DNS records and
   // the certificate itself, since the zone lives in the same Cloudflare account.
   "workers_dev": true,
@@ -13,7 +23,34 @@
     { "pattern": "www.bigcopilot.com", "custom_domain": true }
   ],
   "assets": {
+    "binding": "ASSETS",
     "directory": "./web",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "COMMUNITY_DB",
+      "database_name": "big-copilot-community",
+      "database_id": "7631f7ae-78b3-4175-9844-7c55b823770d",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Best-effort per-IP guard for every /api/* call. Keys are HMACs of the client
+  // IP, so raw IPs never reach D1 or responses. Not a global enforcement promise.
+  "ratelimits": [
+    {
+      "name": "COMMUNITY_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 120, "period": 60 }
+    }
+  ],
+  // Daily cleanup of presence rows older than 24 hours.
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
   }
 }

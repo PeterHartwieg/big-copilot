@@ -1,0 +1,4 @@
+# Sample values for `npx wrangler dev`. Copy this file to .dev.vars (gitignored).
+# The value below is a fixed, clearly nonproduction sample -- never use it in
+# production. Set the real secret with: npx wrangler secret put COMMUNITY_IP_SECRET
+COMMUNITY_IP_SECRET=local-dev-sample-secret-not-for-production

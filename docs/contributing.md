@@ -14,7 +14,9 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
 | `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
 | `check_saves.py` | Parses and extracts every save under the save root and prints a table, plus spot-checks of known numbers. Run `python check_saves.py [folder]`. |
-| `wrangler.jsonc` | Assets-only Cloudflare Worker config. `npx wrangler deploy` publishes `web/`. |
+| `wrangler.jsonc` | Cloudflare assets and community Worker config. `npx wrangler deploy` publishes the server and `web/`. |
+| `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
+| `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
 | `dashboard.html` | The generated page from a local run. Overwritten each time. |
 | `market_history.json` | Rolling demand snapshots and the cash/net-worth ledger, per character, from local runs. Safe to delete; it rebuilds, but the accumulated trend history is lost, so back it up rather than deleting it. |
 | `LICENSE` | MIT. |
@@ -40,8 +42,8 @@ run `python build_web.py` so the browser copies match.
 Run `python -m unittest discover -s tests` for the portable planner regressions.
 These require Node.js for the embedded JavaScript checks and do not need a save file.
 
-The UI regressions also run in a real browser. Install the test-only dependencies
-with `npm install --no-save --package-lock=false playwright` and
+The UI regressions also run in a real browser. Install the development dependencies
+with `npm ci` and
 `npx playwright install chromium`, then run `node --test tests/*.test.cjs`.
 Alternatively, set `PLAYWRIGHT_CHANNEL=msedge` or `chrome` to use an installed browser.
 Set `BOARD_TARGET=web` to check the generated browser page after rebuilding it.
@@ -49,12 +51,79 @@ The layout fixtures are synthetic; no game or save is needed. They cover desktop
 table sizing, crowded planner controls, keyboard access to downtime, and scrolling
 inside tables on narrow screens.
 
+Community checks use real local D1 via Miniflare and browser fixtures with synthetic
+identities. Run `npm run test:community` after `python build_web.py`, and
+`npm run check:worker` to validate the deployment bundle without publishing it.
+See [Community features](community-features.md) for database/secret setup and the
+first production release steps. No live API credentials are needed for tests.
+
 Keep layout changes in the shared template in `ba_dashboard.py`: let section
 controls wrap, let text cells grow and wrap while keeping amounts intact, and put
 lengthy per-machine detail behind a disclosure. Do not reintroduce a fixed board
 width or use an unbroken note to size a metric column. Issue #7's screenshots show
 why both the shared layout and the displayed content need regression coverage.
 
+
+## Changelog
+
+For every merged PR, add one entry to `web/changelog.json` with its PR number,
+merge date (`YYYY-MM-DD`), a short title and a plain-language summary of what
+changed for the player. Include fixes and documentation changes; omit review
+process details. Run `python build_web.py` to include the entry in the footer
+changelog on both the landing screen and the dashboard. Entries appear newest
+first and link to their PR; reading them does not require GitHub access.
+
+## Deployment baseline
+
+`python build_web.py` also generates `web/version.json` with the same content
+fingerprint embedded in the page and the latest changelog entry. Deploy the whole
+`web/` directory together. Rebuilding identical inputs keeps the same version;
+shell, Python, map and changelog changes update it.
+
+Open browser tabs check this small, uncached file once a minute while visible,
+and on return to the tab or reconnection. A different version shows a compact
+top banner with Reload and Dismiss. The latest changelog title expands to its
+summary only when it is new or changed relative to the loaded page. Dismissal
+lasts for that version in that tab (with an in-memory fallback if storage is
+blocked); a later version can notify again. Reload is always manual and uses
+the existing save restoration flow. Single-file imports may need selecting
+again. Existing tabs from before this feature need one manual reload first.
+
+Before deploying, run `git fetch origin` and
+`git merge-base --is-ancestor origin/main HEAD` from the release checkout; stop
+if the second command fails. Check the previous release for changes that have
+not reached main yet, and preserve them too. Build and test that checkout, then
+deploy with its explicit `--config` path. A passing suite on an older feature
+branch does not establish that newer live features are preserved.
+
+Verify the generated page on the live domain after deployment, including the
+map's layer chips, rented homes and interactive ball, plus the feature being
+released. The map code is embedded in `index.html`, so checking the standalone
+`map.js` file alone is insufficient.
+
+Run `node --test tests/release.test.cjs` before deploying; set `RELEASE_URL` to
+`https://bigcopilot.com/` and run it again afterwards. It checks the generated
+page's map controls, ball interaction and persistent feature badges together.
+
+## New feature badges
+
+New user-facing features get a small `New` badge on their navigation link or
+entry button until the player first opens them. Reuse the shared
+`featureDiscovery` helper in `ba_dashboard.py`; keep a stable feature ID across
+releases so routine updates do not reannounce an already visited feature.
+
+For a top-level page, add `newFeature: "your-feature-id"` to its `PAGES` entry;
+navigation renders the badge and records the visit automatically, including
+direct links and restored pages. For other entry buttons, add
+`<span class="feature-new" data-new-feature="your-feature-id" hidden>New</span>`
+and call `featureDiscovery.visit('your-feature-id')` after opening the feature.
+Call `featureDiscovery.refresh()` after inserting badges dynamically. Reuse the
+same ID on all entry points so their badges disappear together.
+
+Visits are stored per browser under `ba_dash_feature_seen:<id>`, independently
+of the loaded save. If storage is unavailable, dismissal lasts for the current
+page session. Map and Changelog are the first examples; new changelog entries
+do not reset the Changelog feature badge. Rebuild with `python build_web.py`.
 
 ## Map assets
 

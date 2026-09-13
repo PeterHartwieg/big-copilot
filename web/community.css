@@ -1,0 +1,35 @@
+/* Community footer control and voting dialog. Hosted build only: build_web.py
+   puts this in the head. Everything custom is prefixed community-; colours and
+   fonts come from the board's own tokens, and the buttons reuse .btn2 and the
+   .changelog-link footer treatment. */
+
+/* The count lives in the masthead's .live status, taking over its em beside
+   the green dot, so it wears the board's own typography and this file adds
+   only the unavailable state: the dot greys and stops pulsing. Voting stays
+   a control in the footer. */
+.live.community-unavailable{color:var(--ink-3)}
+.live.community-unavailable b{animation:none}
+
+/* The dialog: the changelog's shape, a little narrower. A closed dialog stays
+   display:none through the user-agent default; nothing here re-enables it. */
+body:has(.community-dialog[open]){overflow:hidden}
+.community-dialog{width:min(560px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
+.community-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
+.community-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 28px;border-bottom:1px solid var(--rule);background:var(--ground)}
+.community-head h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em}
+.community-head p{margin:5px 0 0;color:var(--ink-2);font-size:12px}
+.community-body{padding:18px 28px 24px}
+.community-status{margin:0;color:var(--ink-3);font-size:12.5px;line-height:1.6}
+.community-status:empty{display:none}
+.community-status .btn2{margin-left:8px}
+.community-cards{display:flex;flex-direction:column}
+.community-card{padding:16px 0 14px;border-bottom:1px solid var(--rule-soft)}
+.community-card:last-child{border-bottom:0}
+.community-card-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.community-card-top h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.02em;min-width:0;overflow-wrap:anywhere}
+.community-votes{flex:none;font:500 11px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.community-card p{margin:6px 0 12px;color:var(--ink-2);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.community-card .btn2:disabled{opacity:.45;cursor:default;transform:none}
+.community-privacy{margin:14px 0 0;padding-top:14px;border-top:1px solid var(--rule-soft);color:var(--ink-3);font-size:11.5px;line-height:1.6}
+.community-dialog button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:640px){.community-head{padding:20px}.community-body{padding:14px 20px 20px}}

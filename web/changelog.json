@@ -1,0 +1,80 @@
+[
+  {
+    "pr": 19,
+    "date": "2026-09-13",
+    "title": "See who is online and vote on what comes next",
+    "summary": "An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature."
+  },
+  {
+    "pr": 16,
+    "date": "2026-09-13",
+    "title": "Your rented homes, on the map",
+    "summary": "A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties."
+  },
+  {
+    "pr": 15,
+    "date": "2026-09-13",
+    "title": "A clearer view of the city",
+    "summary": "The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement."
+  },
+  {
+    "pr": 14,
+    "date": "2026-09-12",
+    "title": "Explore your company on the map",
+    "summary": "An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page."
+  },
+  {
+    "pr": 13,
+    "date": "2026-09-12",
+    "title": "Factory lines get their names sooner",
+    "summary": "Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes."
+  },
+  {
+    "pr": 12,
+    "date": "2026-09-12",
+    "title": "Know when your previous save is loading",
+    "summary": "A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save."
+  },
+  {
+    "pr": 11,
+    "date": "2026-09-12",
+    "title": "Find saves on Windows and Mac",
+    "summary": "Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS."
+  },
+  {
+    "pr": 10,
+    "date": "2026-09-11",
+    "title": "More room for your dashboard",
+    "summary": "The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted."
+  },
+  {
+    "pr": 8,
+    "date": "2026-09-11",
+    "title": "Turn supply plans into a checklist",
+    "summary": "Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game."
+  },
+  {
+    "pr": 6,
+    "date": "2026-09-11",
+    "title": "Better shared-ingredient planning",
+    "summary": "Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans."
+  },
+  {
+    "pr": 5,
+    "date": "2026-09-11",
+    "title": "A lighter touch for the clock",
+    "summary": "A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes."
+  },
+  {
+    "pr": 4,
+    "date": "2026-09-11",
+    "title": "Smoother little interactions",
+    "summary": "Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them."
+  },
+  {
+    "pr": 3,
+    "date": "2026-09-11",
+    "title": "Meet the redesigned Big Copilot",
+    "summary": "A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes."
+  }
+]

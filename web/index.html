@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="community.css?v=2307af4a24">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -838,10 +839,30 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
 
 /* footer ------------------------------------------------------------------- */
-.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:22px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
-.foot span:last-child{margin-left:auto}
-#footerLinks{display:flex;gap:14px;align-items:center;text-transform:none}
+.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:16px 22px;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
+.foot > span:last-child{margin-left:auto}
+#footerLinks{display:flex;flex-wrap:wrap;gap:14px;align-items:center;text-transform:none}
 #footerLinks:empty{display:none}
+.feature-new{display:inline-block;flex:none;margin-left:6px;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+.nav .feature-new{margin-left:0}
+.changelog-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;color:var(--ink-3);font:inherit;letter-spacing:inherit;cursor:pointer}
+.changelog-link:hover{color:var(--ink);border-color:var(--ink-3)}
+.changelog-link:focus-visible,.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+body:has(#changelogDialog[open]){overflow:hidden}
+.changelog-dialog{width:min(640px,calc(100vw - 32px));max-width:none;max-height: min(780px,calc(100dvh - 48px));padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
+.changelog-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
+.changelog-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 28px;border-bottom:1px solid var(--rule);background:var(--ground)}
+.changelog-head h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em}
+.changelog-head p{margin:5px 0 0;color:var(--ink-2);font-size:12px}
+.changelog-list{list-style:none;margin:0;padding:0 28px}
+.changelog-entry{padding:24px 0;border-bottom:1px solid var(--rule-soft)}
+.changelog-entry:last-child{border-bottom:0}
+.changelog-meta{display:flex;justify-content:space-between;gap:12px;font:400 11px/1.5 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.changelog-meta a{color:var(--accent);text-decoration:none}
+.changelog-meta a:hover{text-decoration:underline;text-underline-offset:3px}
+.changelog-entry h3{margin:10px 0 6px;font-size:15px;font-weight:600;letter-spacing:-.02em}
+.changelog-entry p{margin:0;color:var(--ink-2);font-size:13px;line-height:1.7}
+@media(max-width:480px){.changelog-head{padding:20px}.changelog-list{padding:0 20px}}
 
 /* The web shell hides .wrap until a save is loaded; the source strip it fills
    sits under the masthead and takes no room while empty. */
@@ -858,6 +879,29 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 body.has-board .landing{display:none}
 body:not(.has-board) .wrap{display:none}
 button.btn,button.btn2,button.ibtn{font-family:inherit;line-height:inherit}
+.release-banner{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:5px clamp(16px,2.5vw,40px);border-bottom:1px solid var(--rule-soft);background:color-mix(in srgb,var(--accent) 5%,var(--ground));color:var(--ink-2);font-size:12px;line-height:1.5}
+.release-copy{display:flex;align-items:baseline;gap:12px;flex:1;min-width:0}
+.release-copy p{margin:0}
+#releaseMessage{flex:none;white-space:nowrap;font-weight:500;color:var(--ink)}
+#releaseMessage::before{content:"";display:inline-block;width:5px;height:5px;margin-right:8px;border-radius:50%;background:var(--accent);vertical-align:2px}
+.release-copy details{min-width:0;max-width:72ch;border-left:1px solid var(--rule);padding-left:12px;overflow-wrap:anywhere}
+.release-copy summary{display:block;position:relative;padding-right:16px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.release-copy summary::-webkit-details-marker{display:none}
+.release-copy summary::after{content:"";position:absolute;right:2px;top:5px;width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg)}
+.release-copy summary:hover{color:var(--accent)}
+.release-copy details[open] summary{white-space:normal;color:var(--ink)}
+.release-copy details[open] summary::after{top:8px;transform:rotate(225deg)}
+.release-copy details p{margin:5px 0 3px;font-size:12px;line-height:1.6}
+.release-actions{display:flex;align-items:center;gap:6px;flex:none}
+.release-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;border-radius:6px;font-family:inherit;font-size:11px;font-weight:500;line-height:1;cursor:pointer}
+.release-actions .release-reload{padding:0 9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-family:inherit;font-size:11px}
+.release-actions .release-reload:hover{border-color:var(--accent);color:var(--accent)}
+.release-actions .release-dismiss{width:28px;padding:0;border:0;background:transparent;color:var(--ink-3)}
+.release-actions .release-dismiss:hover{background:var(--raised);color:var(--ink)}
+.release-actions svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.release-banner :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+body .mast{top:var(--release-height,0px)}
+@media(max-width:540px){.release-banner{gap:10px;padding-top:6px;padding-bottom:6px}.release-copy{display:block;font-size:11px}.release-copy details{margin-top:1px;border-left:0;padding-left:13px}}
 
 /* landing (generator) ------------------------------------------------------ */
 .landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:80px 0;perspective:1000px}
@@ -1043,6 +1087,16 @@ details.help[open] summary::after{content:"\2013"}
 .menu-foot .foot-links .lg-text{margin-top:6px}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
+<aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>
+  <div class="release-copy">
+    <p id="releaseMessage" role="status" aria-live="polite"></p>
+    <details id="releaseDetails" hidden><summary id="releaseTitle"></summary><p id="releaseSummary"></p></details>
+  </div>
+  <div class="release-actions">
+    <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg>Reload</button>
+    <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+  </div>
+</aside>
 <section class="landing" id="landing">
   <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
   <p class="rv" id="welcomeLede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
@@ -1073,6 +1127,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <footer class="rv">
     <a class="link" id="helpLink" href="#help">Where saves live</a><span>&middot;</span>
+    <button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button><span>&middot;</span>
     <span class="lg-foot" id="footSlot">
       <a class="link" id="issueLink" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="https://github.com/sponsors/PeterHartwieg" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
@@ -1261,17 +1316,129 @@ details.help[open] summary::after{content:"\2013"}
   <footer class="foot" id="footer">
     <span>Big Copilot</span>
     <span id="footFile"></span>
-    <!-- a host page may put its own links here; empty on the local page -->
-    <span id="footerLinks"></span>
+    <!-- a host page may append its own project links here -->
+    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button></span>
     <span id="footBuild"></span>
   </footer>
 </div>
+<dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
+  <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+</dialog>
+<script>
+/* Shared feature discovery: stable IDs persist across releases and saves. */
+const featureDiscovery = (() => {
+  const seen = new Set();
+  const key = id => 'ba_dash_feature_seen:' + id;
+  function refresh(){
+    document.querySelectorAll('[data-new-feature]').forEach(badge => {
+      const id = badge.dataset.newFeature;
+      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
+      badge.hidden = seen.has(id);
+    });
+  }
+  function visit(id){
+    if(!id) return;
+    seen.add(id);
+    try { localStorage.setItem(key(id), '1'); } catch(e) {}
+    refresh();
+  }
+  return {refresh, visit};
+})();
+featureDiscovery.refresh();
+/* --- changelog dialog ------------------------------------------------ */
+(() => {
+  const dialog = document.getElementById('changelogDialog');
+  document.addEventListener('click', event => {
+    if(event.target.closest('[data-changelog]')) {
+      dialog.showModal();
+      featureDiscovery.visit('changelog');
+      dialog.scrollTop = 0;
+    }
+  });
+  document.getElementById('closeChangelog').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => {
+    const box = dialog.getBoundingClientRect();
+    if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
+  });
+})();
+</script>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "6edbe5dd82";</script>
-<script src="app.js?v=6edbe5dd82"></script>
+<script>window.LEDGER_BUILD = "2307af4a24";</script>
+<script>window.LEDGER_RELEASE = {"version":"2307af4a24","latest":{"pr":19,"date":"2026-09-13","title":"See who is online and vote on what comes next","summary":"An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature."}};</script>
+<script>/* Embedded in the browser shell so the loaded release is the baseline even
+ * when the first version check happens after another deployment. */
+(() => {
+  const loaded = window.LEDGER_RELEASE;
+  if (!loaded?.version || !/^https?:$/.test(location.protocol)) return;
+  const $ = id => document.getElementById(id);
+  const banner = $('releaseBanner');
+  if (!banner) return;
+  const key = 'ledger_dismissed_release';
+  let dismissed = '';
+  try { dismissed = sessionStorage.getItem(key) || ''; } catch (_) {}
+  let available = '', checking = false, lastCheck = -Infinity;
+  const measure = () => document.documentElement.style.setProperty(
+    '--release-height', `${banner.hidden ? 0 : banner.getBoundingClientRect().height}px`);
+  new ResizeObserver(measure).observe(banner);
+
+  $('releaseDismiss').addEventListener('click', () => {
+    dismissed = available;
+    try { sessionStorage.setItem(key, dismissed); } catch (_) {}
+    banner.hidden = true;
+    measure();
+  });
+  $('releaseReload').addEventListener('click', () => location.reload());
+
+  async function check() {
+    // Coalesce focus/visibility events and avoid polling background tabs.
+    if (document.hidden || navigator.onLine === false || checking || Date.now() - lastCheck < 15000) return;
+    checking = true;
+    lastCheck = Date.now();
+    try {
+      const response = await fetch(new URL('version.json', location.href), {cache: 'no-store'});
+      if (!response.ok) return;
+      const release = await response.json();
+      if (!release || typeof release.version !== 'string' || !/^[a-f0-9]{10}$/.test(release.version)) return;
+      if (release.version === loaded.version || release.version === dismissed) {
+        banner.hidden = true;
+        measure();
+        return;
+      }
+      if (available === release.version && !banner.hidden) return;
+      available = release.version;
+      const latest = release.latest;
+      const previous = loaded.latest;
+      const hasChange = latest && typeof latest.title === 'string' && latest.title.trim() &&
+        typeof latest.summary === 'string' && typeof latest.date === 'string' && Number.isInteger(latest.pr) &&
+        (!previous || latest.date > previous.date ||
+          (latest.date === previous.date && latest.pr > previous.pr) ||
+          (latest.pr === previous.pr && (latest.title !== previous.title || latest.summary !== previous.summary)));
+      $('releaseDetails').hidden = !hasChange;
+      $('releaseDetails').open = false;
+      $('releaseTitle').textContent = hasChange ? latest.title : '';
+      $('releaseSummary').textContent = hasChange ? latest.summary : '';
+      banner.hidden = false;
+      $('releaseMessage').textContent = 'Update available';
+      measure();
+    } catch (_) {
+      // Offline, missing manifests and transient deploy failures stay quiet.
+    } finally {
+      checking = false;
+    }
+  }
+  setInterval(check, 60000);
+  window.addEventListener('focus', check);
+  window.addEventListener('online', () => { lastCheck = -Infinity; check(); });
+  document.addEventListener('visibilitychange', check);
+  check();
+})();
+</script>
+<script src="app.js?v=2307af4a24"></script>
+<script src="community.js?v=2307af4a24"></script>
 
 <script>
 
@@ -2249,6 +2416,7 @@ function drawMast(){
     + `<small>${bits.join(" · ")}</small>` + (flags.length ? `<small>${flags.join(" · ")}</small>` : "");
   clock.dataset.tip = `Game time when the save was written: ${m.cityDate}. Day 1 was a Monday.`
     + (k.vacant ? ` ${k.vacant} lease${k.vacant === 1 ? "" : "s"} vacant on top of the ${k.businesses} sites.` : "");
+  window.BigCopilotCommunity?.paintOnline();
 }
 
 function drawKpis(){
@@ -4556,7 +4724,7 @@ const PAGES = [
   {id:"supply",  label:"Supply",  host:"pageSupply"},
   {id:"growth",  label:"Growth",  host:"pageGrowth"},
   {id:"company", label:"Company", host:"pageCompany"},
-  {id:"map", label:"Map", host:"pageMap"},
+  {id:"map", label:"Map", host:"pageMap", newFeature:"map"},
 ];
 const SUBS = {
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
@@ -4601,13 +4769,15 @@ function showPage(id, scroll = true, historyMode = "push"){
      page was hidden. */
   if(id === "results") drawChart();
   if(id === "map") showCityMap();
+  featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
   wireReveal();
   requestAnimationFrame(inkHome);
 }
 $("nav").innerHTML = PAGES.map(p =>
-  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span></a>`).join("") + '<i class="ink"></i>';
+  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span>${p.newFeature ? `<span class="feature-new" data-new-feature="${p.newFeature}" hidden>New</span>` : ''}</a>`).join("") + '<i class="ink"></i>';
+featureDiscovery.refresh();
 $("nav").addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -5544,6 +5714,7 @@ function startWatching(){
     dot.classList.toggle("stale", !!why);
     dot.querySelector("em").textContent = why ? "Stale" : SOURCE.label;
     dot.title = why ? "The save moved on but the board would not rebuild: " + why : "";
+    window.BigCopilotCommunity?.paintOnline();
   };
   SOURCE.watch({
     changed(data){

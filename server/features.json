@@ -1,0 +1,12 @@
+[
+  {
+    "id": "optimize-staffing",
+    "title": "Optimize staffing",
+    "description": "Shifts from the hour grid: registers, door caps and who is off today."
+  },
+  {
+    "id": "find-a-location",
+    "title": "Find a location",
+    "description": "Free buildings ranked by demand, rivals and the door cap you would get."
+  }
+]

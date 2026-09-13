@@ -78,6 +78,29 @@ BANNER = r"""<style>
 body.has-board .landing{display:none}
 body:not(.has-board) .wrap{display:none}
 button.btn,button.btn2,button.ibtn{font-family:inherit;line-height:inherit}
+.release-banner{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:5px clamp(16px,2.5vw,40px);border-bottom:1px solid var(--rule-soft);background:color-mix(in srgb,var(--accent) 5%,var(--ground));color:var(--ink-2);font-size:12px;line-height:1.5}
+.release-copy{display:flex;align-items:baseline;gap:12px;flex:1;min-width:0}
+.release-copy p{margin:0}
+#releaseMessage{flex:none;white-space:nowrap;font-weight:500;color:var(--ink)}
+#releaseMessage::before{content:"";display:inline-block;width:5px;height:5px;margin-right:8px;border-radius:50%;background:var(--accent);vertical-align:2px}
+.release-copy details{min-width:0;max-width:72ch;border-left:1px solid var(--rule);padding-left:12px;overflow-wrap:anywhere}
+.release-copy summary{display:block;position:relative;padding-right:16px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.release-copy summary::-webkit-details-marker{display:none}
+.release-copy summary::after{content:"";position:absolute;right:2px;top:5px;width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg)}
+.release-copy summary:hover{color:var(--accent)}
+.release-copy details[open] summary{white-space:normal;color:var(--ink)}
+.release-copy details[open] summary::after{top:8px;transform:rotate(225deg)}
+.release-copy details p{margin:5px 0 3px;font-size:12px;line-height:1.6}
+.release-actions{display:flex;align-items:center;gap:6px;flex:none}
+.release-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;border-radius:6px;font-family:inherit;font-size:11px;font-weight:500;line-height:1;cursor:pointer}
+.release-actions .release-reload{padding:0 9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-family:inherit;font-size:11px}
+.release-actions .release-reload:hover{border-color:var(--accent);color:var(--accent)}
+.release-actions .release-dismiss{width:28px;padding:0;border:0;background:transparent;color:var(--ink-3)}
+.release-actions .release-dismiss:hover{background:var(--raised);color:var(--ink)}
+.release-actions svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.release-banner :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+body .mast{top:var(--release-height,0px)}
+@media(max-width:540px){.release-banner{gap:10px;padding-top:6px;padding-bottom:6px}.release-copy{display:block;font-size:11px}.release-copy details{margin-top:1px;border-left:0;padding-left:13px}}
 
 /* landing (generator) ------------------------------------------------------ */
 .landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:80px 0;perspective:1000px}
@@ -263,6 +286,16 @@ details.help[open] summary::after{content:"\2013"}
 .menu-foot .foot-links .lg-text{margin-top:6px}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
+<aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>
+  <div class="release-copy">
+    <p id="releaseMessage" role="status" aria-live="polite"></p>
+    <details id="releaseDetails" hidden><summary id="releaseTitle"></summary><p id="releaseSummary"></p></details>
+  </div>
+  <div class="release-actions">
+    <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg>Reload</button>
+    <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+  </div>
+</aside>
 <section class="landing" id="landing">
   <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
   <p class="rv" id="welcomeLede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
@@ -293,6 +326,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <footer class="rv">
     <a class="link" id="helpLink" href="#help">Where saves live</a><span>&middot;</span>
+    <button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button><span>&middot;</span>
     <span class="lg-foot" id="footSlot">
       <a class="link" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
@@ -353,7 +387,7 @@ def stamp() -> str:
     import hashlib
 
     h = hashlib.md5()
-    for name in ("web/app.js", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
+    for name in ("build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()[:10]
@@ -363,7 +397,10 @@ def stamp() -> str:
 # worker, which hands it to the Python files: one deploy, one version.
 BEFORE_SCRIPT = (
     '<script>window.LEDGER_BUILD = "__STAMP__";</script>' + chr(10)
+    + '<script>window.LEDGER_RELEASE = __RELEASE__;</script>' + chr(10)
+    + '<script>__UPDATE_SCRIPT__</script>' + chr(10)
     + '<script src="app.js?v=__STAMP__"></script>' + chr(10)
+    + '<script src="community.js?v=__STAMP__"></script>' + chr(10)
 )
 
 
@@ -392,13 +429,25 @@ def main() -> None:
             "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
             + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
         )
+    with open(os.path.join(WEB, "changelog.json"), encoding="utf-8") as fh:
+        changes = json.load(fh)
+    release = {"version": stamp(), "latest": max(changes, key=lambda entry: (entry["date"], entry["pr"]), default=None)}
+    release_json = json.dumps(release, ensure_ascii=False, separators=(",", ":"))
+    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
+    with open(os.path.join(WEB, "update.js"), encoding="utf-8") as fh:
+        update_script = fh.read()
+    scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
+        "__RELEASE__", release_json.replace("<", "\\u003c")
+    ).replace("__UPDATE_SCRIPT__", update_script)
     page = render(
-        None, live=True, banner=BANNER, before_script=BEFORE_SCRIPT.replace("__STAMP__", stamp()),
+        None, live=True, banner=BANNER, before_script=scripts,
         head=head,
     )
     out = os.path.join(WEB, "index.html")
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
+    with open(os.path.join(WEB, "version.json"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(release_json + "\n")
     print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
 
 

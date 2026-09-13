@@ -26,6 +26,7 @@ function board() {
     drawChart(){}, wireReveal(){}, requestAnimationFrame(){}, inkHome(){}, icon(){return '';},
   });
   vm.runInContext(source.slice(source.indexOf('const SEC_PAGE ='), source.indexOf('/* The business a finding')), context);
+  vm.runInContext(source.slice(source.indexOf('const featureDiscovery ='), source.indexOf('/* --- changelog dialog')), context);
   vm.runInContext(source.slice(source.indexOf('const PAGES ='), source.indexOf('/* --- which kinds of finding')), context);
   return {context, entries, $, move(delta){
     position = Math.max(0, Math.min(entries.length - 1, position + delta));
