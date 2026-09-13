@@ -64,6 +64,12 @@ the map.
   where one exists. Below the list, a count of everything too small to be worth a line.
   *Filter kinds* chooses which kinds of finding make the list; every *details ›* link
   opens the page and view the finding is spelt out on and scrolls to it.
+  *Uniforms / locker* checks retail sites for an installed Uniform Locker even when
+  the save marks the uniforms customer demand fulfilled. Gym Lockers and boxed
+  Uniform Lockers do not count. With a locker installed, the saved customer demand
+  still determines whether staff uniforms need attention. If both are missing,
+  one warning points to installing the locker first; new sites not yet trading
+  retain their combined setup warning.
 - **Results**: the company, then its chains, then one site.
   - *Daily result*: a seven-day rolling profit line over the daily ones. Daily profit
     swings by a million between a weekend and a Tuesday purely because that is when the

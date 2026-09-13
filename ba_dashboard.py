@@ -879,10 +879,13 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     span = max(len(recent), 1)
 
     stock = collections.Counter()
+    has_uniform_locker = False
     for holder in save.items(b["itemInstances"]):
         item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
         if not item:
             continue
+        if item.get("itemName") == "ba:itemname_uniformlocker":
+            has_uniform_locker = True
         for cargo in save.items(item.get("cargoInstances")):
             stock[cargo["itemName"]] += cargo.get("amount", 0)
 
@@ -983,6 +986,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
         "missingAmenities": missing_amenities,
+        # Customer demands can report uniforms fulfilled without a locker.
+        # Check installed furniture directly; a locker still in cargo is boxed.
+        "missingUniformLocker": status == "retail" and not has_uniform_locker,
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
@@ -3875,8 +3881,16 @@ def _alerts(
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
             note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%", key=b["key"])
+        if b.get("missingUniformLocker"):
+            note(
+                "warn", b["name"], "uniform",
+                "No uniform locker installed; add one to manage employee uniforms",
+                always=True, key=b["key"],
+            )
         for slug in b["missingAmenities"]:
             group, text = AMENITY_DEMANDS[slug]
+            if group == "uniform" and b.get("missingUniformLocker"):
+                continue  # Installing the locker is the first action to take.
             note("warn", b["name"], group, text, always=True, key=b["key"])
 
     # --- the promotion cap, which is reached with campaigns or not at all
@@ -8252,7 +8266,7 @@ const ALERT_GROUPS = [
   {id:"staff",        label:"Staffing",               note:"A shop with nobody on, or a machine nobody is posted to", on:true},
   {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
   {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
-  {id:"uniform",      label:"No staff uniforms",      note:"Customers notice staff with no uniform set", on:true},
+  {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
   {id:"bathroom",     label:"No customer bathroom",   note:"Customers here expect a bathroom and there is none", on:true},
   {id:"toiletprivacy",label:"Bathroom has no privacy",note:"A customer bathroom with no stall or door", on:true},
   {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
