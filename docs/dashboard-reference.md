@@ -22,23 +22,36 @@ the daily check; the other five are places you go on purpose. Which page you wer
 on, and which view inside it, is remembered on the device and mirrored in the URL
 hash, so a live refresh and a reopened tab both land where you left off.
 
-**Map** highlights your business footprints and shows site-specific findings in the detail panel.
-The map starts with all regions and omits the poster legend.
-Search by business name/address, choose a region or business type, and switch
-between your businesses, buildings you own, places with issues and all mapped addresses.
-Buildings I own uses purchased real estate from the save, including properties without a player business. Drag to pan,
-scroll/pinch or use the compact zoom buttons inside the map. A matching list provides keyboard access; narrow screens offer Map/List
-buttons. Ordinary addresses contain static map information, not a rental quote or
-an eligibility recommendation. Player homes are not part of My businesses.
+**Map** shows the city with your business footprints in green, buildings you own dashed
+blue, and a floating list of places over the right edge. Four chips above the map are
+layers that add up: your businesses, buildings you own, sites with a finding from Today,
+and every address (off by default, drawn as faint outlines). Clicking a chip switches that
+layer off; off is dimmed, never removed. The search field narrows the list and shows its
+count; the `?` mark explains the layers. Drag to pan, scroll or pinch to zoom, or use the
+`+`, `−` and house buttons inside the map. Picking a place from the list or on the map
+glides the camera in and opens a card beside the building: one line with the
+neighbourhood tag, address and type, yesterday's profit, rent per day and staff, the
+site's findings as a dot, a short phrase and an amount, and an arrow to the business page.
+Once zoomed in, red, amber and grey dots mark buildings with findings and the district
+names fade out. Buildings I own uses purchased real estate from the save, including
+properties without a player business. Ordinary addresses carry static map information,
+not a rental quote or an eligibility recommendation. Player homes are not part of your
+businesses.
 
-The small map button beside a building reference opens a location overlay focused
-on its footprint. Closing it or pressing Escape restores focus to that button and
-leaves the underlying page unchanged. The overlay and Map page share cached assets.
-Save refresh updates highlights; changing characters clears the previous selection.
-Unknown addresses remain in the list with “Map position unavailable.” The casino
-centers on its entrance because no footprint is available. The map covers 883
-addresses; 80 Third Street and 1 Airport Avenue are excluded from the geometry.
-No logistics connections or moving deliveries are shown.
+The green ball in Central Park is the board's brand sphere: it scales with the map, and
+clicking it swallows any spheres on the masthead shelf (click the wordmark to roll more
+out); with none there it pays out coins.
+
+The small map button beside a building reference opens a location overlay with the camera
+already on its footprint and the card open, titled with the place's name and address.
+Closing it or pressing Escape restores focus to that button and leaves the underlying page
+unchanged. The overlay and Map page share cached assets. Save refresh updates highlights;
+changing characters clears the previous selection and resets the layers. Addresses without
+a map position stay in the list, marked so, and their card opens in the corner of the map.
+The casino centers on its entrance because no footprint is available. The map covers 883
+addresses; 80 Third Street and 1 Airport Avenue are excluded from the geometry. No
+logistics connections or moving deliveries are shown. Below 760 px the list moves under
+the map.
 
 - **Today**: four tiles and the *Needs attention* list, nothing else. Profit yesterday
   with its seven-day average and trend, revenue with customers served, cash on hand
