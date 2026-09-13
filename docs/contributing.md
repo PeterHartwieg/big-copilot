@@ -67,6 +67,20 @@ first and link to their PR; reading them does not require GitHub access.
 
 ## Deployment baseline
 
+`python build_web.py` also generates `web/version.json` with the same content
+fingerprint embedded in the page and the latest changelog entry. Deploy the whole
+`web/` directory together. Rebuilding identical inputs keeps the same version;
+shell, Python, map and changelog changes update it.
+
+Open browser tabs check this small, uncached file once a minute while visible,
+and on return to the tab or reconnection. A different version shows a compact
+top banner with Reload and Dismiss. The latest changelog title expands to its
+summary only when it is new or changed relative to the loaded page. Dismissal
+lasts for that version in that tab (with an in-memory fallback if storage is
+blocked); a later version can notify again. Reload is always manual and uses
+the existing save restoration flow. Single-file imports may need selecting
+again. Existing tabs from before this feature need one manual reload first.
+
 Before deploying, run `git fetch origin` and
 `git merge-base --is-ancestor origin/main HEAD` from the release checkout; stop
 if the second command fails. Check the previous release for changes that have
