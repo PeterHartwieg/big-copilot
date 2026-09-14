@@ -17,6 +17,8 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `wrangler.jsonc` | Cloudflare assets and community Worker config. `npx wrangler deploy` publishes the server and `web/`. |
 | `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
 | `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
+| `web/wiki.js`, `web/wiki.css` | Wiki navigation, readers and the visual Gift Shop guide. |
+| `tools/build_wiki_data.py`, `web/wiki-data.json` | Build the public Wiki catalogue from the installed game's help. The browser build refreshes this before calculating its cache version. |
 | `dashboard.html` | The generated page from a local run. Overwritten each time. |
 | `market_history.json` | Rolling demand snapshots and the cash/net-worth ledger, per character, from local runs. Safe to delete; it rebuilds, but the accumulated trend history is lost, so back it up rather than deleting it. |
 | `LICENSE` | MIT. |

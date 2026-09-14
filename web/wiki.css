@@ -1,0 +1,324 @@
+/* The Wiki page. Embedded by render() into the board's own stylesheet, so it
+   inherits every token and every shared piece (.sec, .sechead, .chip, .kpi,
+   .why, .link, .ibtn, .hood, .rv). Everything this page adds is prefixed wk-
+   and scoped to .wiki, so nothing here can reach another page of the board.
+
+   Dark is the base, as everywhere; light comes from the same tokens. Motion is
+   a flourish only: the global reduced-motion rule switches every transition and
+   animation below off, and the ball and the tilt ask REDUCED themselves. */
+
+.wiki{margin-top:28px}
+.wiki .wk-wrap{min-width:0}
+.wiki h1{margin:0;font-size:34px;letter-spacing:-.025em;font-weight:600;line-height:1.15}
+
+/* the state a page wears before its words are in ---------------------------- */
+.wiki .wk-state{margin:60px 0;font:400 13px/1.7 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.wiki .wk-state.err{max-width:60ch;color:var(--ink-2);font-family:inherit;font-size:14px}
+.wiki .wk-state.err b{color:var(--ink)}
+.wiki .wk-state p{margin:0 0 12px}
+
+/* home: the search and the shelf of categories ------------------------------ */
+.wiki .wk-top{margin-top:8px}
+.wiki .wk-srch{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:8px;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink-3);width:min(420px,100%);
+  transition:border-color .15s,color .15s}
+.wiki .wk-srch:focus-within{border-color:var(--ink-3);color:var(--ink-2)}
+.wiki .wk-srch svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.wiki .wk-srch input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;outline:none}
+.wiki .wk-srch input::placeholder{color:var(--ink-3)}
+.wiki .wk-srch input::-webkit-search-cancel-button{filter:grayscale(1) opacity(.6)}
+.wiki .wk-cnt{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);flex:none}
+
+.wiki .wk-shelf{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:22px}
+.wiki .wk-cat{position:relative;padding:18px 18px 16px;border-radius:12px;background:var(--surface);
+  border:1px solid var(--rule-soft);text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:12px;
+  transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+  transition:transform .12s ease-out,border-color .2s,opacity .25s;transform-style:preserve-3d}
+.wiki .wk-cat:hover,.wiki .wk-cat:focus-visible{border-color:var(--rule);color:inherit}
+.wiki .wk-cat .wk-ic{width:40px;height:40px;border-radius:10px;background:var(--raised);display:grid;place-items:center;
+  color:var(--accent);transition:transform .2s}
+.wiki .wk-cat .wk-ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.wiki .wk-cat:hover .wk-ic{transform:translateZ(24px)}
+.wiki .wk-cat b{font-size:15px;font-weight:600;transition:transform .2s}
+.wiki .wk-cat:hover b{transform:translateZ(16px)}
+.wiki .wk-cat .wk-n{position:absolute;top:16px;right:16px;font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;
+  color:var(--ink-3);transition:color .2s}
+.wiki .wk-cat:hover .wk-n{color:var(--accent)}
+.wiki .wk-cat.off{opacity:.18;pointer-events:none}
+
+/* the rows a search and a category share ------------------------------------ */
+.wiki .wk-hits{display:flex;flex-direction:column;border-top:1px solid var(--rule);margin-top:22px}
+.wiki .wk-hit{display:grid;grid-template-columns:22px minmax(0,1fr) auto 28px;gap:0 14px;align-items:center;
+  padding:11px 6px 11px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;
+  border-radius:0 6px 6px 0;transition:background .15s}
+.wiki .wk-hit:hover,.wiki .wk-hit:focus-visible{background:var(--surface);color:inherit}
+.wiki .wk-mark{width:8px;height:8px;border-radius:50%;background:var(--accent);justify-self:center;
+  transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-hit:hover .wk-mark{transform:scale(1.6)}
+.wiki .wk-what{font-weight:600;font-size:14px;min-width:0;overflow-wrap:anywhere}
+.wiki .wk-what em{font-style:normal;color:var(--accent)}
+.wiki .wk-cat2{font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);white-space:nowrap}
+.wiki .wk-go{color:var(--ink-3);display:grid;place-items:center;transition:transform .2s,color .15s}
+.wiki .wk-go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.wiki .wk-hit:hover .wk-go{color:var(--accent);transform:translateX(3px)}
+.wiki .wk-none{padding:18px 0;font:400 12px/1.6 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.wiki .wk-more{margin:12px 0 0}
+.wiki .wk-more .link{background:none;border:0;border-bottom:1px solid var(--rule);padding:0;cursor:pointer;font:inherit;font-size:12.5px}
+.wiki .wk-foot{margin-top:18px}
+
+.wiki .wk-legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:36px;align-items:center}
+
+/* chips: two kinds the board did not have yet ------------------------------- */
+.wiki .chip{display:inline-flex;align-items:center;gap:6px}
+.wiki .chip i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
+.wiki .chip.help{background:#6ea8ff1f;color:var(--info)}
+.wiki .chip.save{background:#ffffff10;color:var(--ink-2);border:1px dashed var(--rule)}
+:root[data-theme="light"] .wiki .chip.save{background:#00000008}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .wiki .chip.save{background:#00000008}}
+
+/* a page's head ------------------------------------------------------------- */
+.wiki .wk-crumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;
+  font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.wiki .wk-crumb a{color:var(--ink-3);text-decoration:none;border-bottom:1px solid transparent}
+.wiki .wk-crumb a:hover{color:var(--ink);border-color:var(--rule)}
+.wiki .wk-crumb svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wiki .wk-titlerow{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:10px}
+.wiki .wk-titlerow .chips{display:flex;gap:6px;flex-wrap:wrap}
+.wiki .wk-lede{font-size:15.5px;line-height:1.6;color:var(--ink-2);margin:12px 0 0;max-width:62ch}
+.wiki .wk-lede b{color:var(--ink);font-weight:600}
+.wiki .wk-tiles{margin-top:28px}
+.wiki .kpi .v.t{font-size:22px;padding-top:4px}
+
+/* the reader ---------------------------------------------------------------- */
+.wiki .wk-read{margin-top:26px;max-width:70ch;font-size:14.5px;line-height:1.75;color:var(--ink-2)}
+.wiki .wk-read p{margin:0 0 14px}
+.wiki .wk-read b{color:var(--ink);font-weight:600}
+.wiki .wk-lab{margin:26px 0 10px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3)}
+.wiki .wk-list{margin:0 0 16px;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.wiki .wk-list li{position:relative;padding-left:18px}
+.wiki .wk-list li::before{content:"";position:absolute;left:2px;top:.72em;width:5px;height:5px;border-radius:50%;background:var(--ink-3)}
+.wiki .wk-link{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--rule);transition:border-color .15s,color .15s}
+.wiki .wk-link:hover{color:var(--accent);border-color:var(--accent)}
+.wiki .wk-addr{display:inline-flex;align-items:center;gap:6px}
+.wiki .wk-addr .map-shortcut{vertical-align:middle}
+
+/* where it came from -------------------------------------------------------- */
+.wiki .wk-src{margin-top:32px;border-top:1px solid var(--rule-soft);max-width:70ch}
+.wiki .wk-src > summary{list-style:none;cursor:pointer;padding:14px 0;font:500 12px/1 "IBM Plex Mono",monospace;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+.wiki .wk-src > summary::-webkit-details-marker{display:none}
+.wiki .wk-src > summary::after{content:"+";font-family:inherit;color:var(--ink-3)}
+.wiki .wk-src[open] > summary{color:var(--ink)}
+.wiki .wk-src[open] > summary::after{content:"\2013"}
+.wiki .wk-src:focus-within > summary{color:var(--ink)}
+.wiki .wk-srcbody{padding-bottom:18px;font-size:13px;line-height:1.75;color:var(--ink-2)}
+.wiki .wk-srcbody p{margin:0 0 10px;max-width:66ch}
+.wiki .wk-files{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.wiki .wk-files li{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink-3)}
+.wiki code{font:400 11.5px "IBM Plex Mono",monospace;color:var(--ink-2);overflow-wrap:anywhere}
+
+/* to open: four cards of squares -------------------------------------------- */
+.wiki .wk-groups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.wiki .wk-group{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);padding:16px 18px 18px;
+  display:flex;flex-direction:column;gap:12px;min-width:0}
+.wiki .wk-group h3{margin:0;font-size:13.5px;font-weight:600}
+.wiki .wk-item{display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;font:inherit;font-size:13px;line-height:1.45;
+  text-align:left;background:none;border:0;padding:0;color:inherit;cursor:pointer}
+.wiki .wk-tick{width:14px;height:14px;margin-top:3px;border:1.5px solid var(--ink-3);border-radius:3px;position:relative;
+  transition:border-color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-tick::after{content:"";position:absolute;inset:2.5px;border-radius:1px;background:var(--accent);opacity:0;
+  transform:scale(.4);transition:opacity .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-item.req .wk-tick{border-color:var(--accent)}
+.wiki .wk-item.req .wk-tick::after{opacity:.35;transform:scale(1)}
+.wiki .wk-item:hover .wk-tick{transform:scale(1.15)}
+.wiki .wk-item:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.wiki .wk-item.done .wk-tick{border-color:var(--accent)}
+.wiki .wk-item.done .wk-tick::after{opacity:1;transform:scale(1)}
+.wiki .wk-item.done strong{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--rule)}
+.wiki .wk-item strong{font-weight:600;color:var(--ink);display:block}
+.wiki .wk-m{display:block;color:var(--ink-3);font:400 11.5px/1.5 "IBM Plex Mono",monospace;margin-top:2px}
+.wiki .wk-m b{font-weight:500;color:var(--ink-2)}
+.wiki .wk-catch{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn);margin-left:7px;vertical-align:2px}
+.wiki .wk-ph{margin-top:auto;padding-top:4px;display:flex;align-items:center;gap:8px;
+  font:400 11px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.wiki .wk-track{height:3px;width:44px;border-radius:3px;background:var(--rule);overflow:hidden}
+.wiki .wk-track i{display:block;height:100%;background:var(--accent);transform:scaleX(var(--done,0));transform-origin:left;
+  transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.wiki .wk-ph.complete{color:var(--accent)}
+
+/* sells: one card per product ------------------------------------------------ */
+.wiki .wk-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.wiki .wk-card{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);overflow:hidden;
+  display:flex;flex-direction:column;min-width:0;transition:border-color .2s}
+.wiki .wk-card:hover{border-color:var(--rule)}
+.wiki .wk-cardtop{padding:16px 18px 12px;display:flex;align-items:center;gap:10px}
+.wiki .wk-card h3{margin:0;font-size:15.5px;font-weight:600;letter-spacing:-.01em;flex:1;min-width:0}
+.wiki .wk-card dl{margin:0;padding:6px 18px 16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 14px;
+  font-size:13px;border-top:1px solid var(--rule-soft)}
+.wiki .wk-card dt{color:var(--ink-3);font:500 10px/1.8 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;
+  white-space:nowrap;padding-top:6px}
+.wiki .wk-card dd{margin:0;min-width:0;display:flex;flex-wrap:wrap;gap:5px;padding-top:4px}
+.wiki .wk-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--rule);
+  font-size:12px;color:var(--ink-2);background:var(--raised);white-space:nowrap;
+  transition:border-color .15s,color .15s,transform .2s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-pill:hover{border-color:var(--ink-3);color:var(--ink);transform:translateY(-1px)}
+.wiki .wk-pill b{font:500 11px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.wiki .wk-pill.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.wiki .wk-pill.on b{color:var(--accent);opacity:.8}
+.wiki .wk-pill.no{border-style:dashed;color:var(--neg);background:#ff625714}
+/* Not a door that is shut, only one the help never opens. */
+.wiki .wk-pill.unknown{border-style:dashed;color:var(--ink-3)}
+
+/* fits together: the lanes, the wires and the ball --------------------------- */
+.wiki .wk-graph{position:relative;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);
+  padding:18px 20px 16px;overflow:hidden}
+.wiki .wk-lanes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 110px}
+.wiki .wk-lane h3{margin:0 0 10px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.wiki .wk-stack{display:flex;flex-direction:column;gap:10px}
+.wiki .wk-node{width:100%;text-align:left;font:inherit;font-size:13px;color:var(--ink);background:var(--raised);
+  border:1px solid var(--rule);border-radius:9px;padding:10px 12px;cursor:pointer;position:relative;
+  transition:opacity .18s,border-color .18s,background .18s,transform .2s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-node small{display:block;color:var(--ink-3);font:400 11px "IBM Plex Mono",monospace;margin-top:2px}
+.wiki .wk-node:hover{border-color:var(--ink-3);transform:translateX(2px)}
+.wiki .wk-node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wiki .wk-node.on{border-color:var(--accent);background:var(--accent-soft)}
+.wiki .wk-graph.picked .wk-node:not(.lit){opacity:.28}
+.wiki .wk-graph.picked .wk-node.lit{border-color:var(--accent)}
+.wiki .wk-wires{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:visible;width:100%;height:100%}
+.wiki .wk-wires path{fill:none;stroke:var(--rule);stroke-width:1.5;transition:stroke .18s,opacity .18s}
+.wiki .wk-wires path.hop{stroke-dasharray:3 5}
+.wiki .wk-wires path.hot{stroke:var(--ink-2)}
+.wiki .wk-graph.picked .wk-wires path{opacity:.12}
+.wiki .wk-graph.picked .wk-wires path.lit{opacity:1;stroke:var(--accent);stroke-width:2}
+.wiki .wk-graph.picked .wk-wires path.lit.hop{animation:wkmarch 1.2s linear infinite}
+@keyframes wkmarch{to{stroke-dashoffset:-16}}
+.wiki .wk-graphfoot{display:flex;align-items:center;gap:14px;margin-top:16px;padding-top:12px;
+  border-top:1px solid var(--rule-soft);min-height:40px;flex-wrap:wrap}
+.wiki .wk-say{font:500 12px "IBM Plex Mono",monospace;color:var(--ink)}
+.wiki .wk-key{display:flex;gap:14px;align-items:center;font:400 11px "IBM Plex Mono",monospace;color:var(--ink-3);margin-left:auto}
+/* The seat the ball waits in, so it never rests on top of the key or the x. */
+.wiki .wk-park{width:52px;flex:none}
+.wiki .wk-key i{display:inline-block;width:22px;height:0;border-top:1.5px solid var(--ink-3);vertical-align:middle;margin-right:6px}
+.wiki .wk-key i.d{border-top-style:dashed;margin-left:8px}
+.wiki .wk-ball{position:absolute;left:0;top:0;width:44px;height:44px;z-index:2;pointer-events:none;will-change:transform}
+.wiki .wk-ball i{display:block;width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at 32% 30%,#d9ffe8 0%,#7fe3a8 14%,var(--accent) 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 10px 24px #43c07a3d,inset -8px -12px 20px #00000066,inset 4px 5px 10px #ffffff22}
+.wiki .wk-ball u{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),
+             radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%)}
+.wiki .wk-shadow{position:absolute;left:0;top:0;width:44px;height:8px;border-radius:50%;background:#000;opacity:.4;
+  filter:blur(4px);z-index:1;pointer-events:none}
+
+/* make it: the recipes ------------------------------------------------------- */
+.wiki .wk-flows{display:flex;flex-direction:column;gap:14px}
+.wiki .wk-flow{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);display:grid;
+  grid-template-columns:minmax(0,1.3fr) 60px minmax(0,1fr) 60px minmax(0,.9fr);align-items:center;gap:0 12px;
+  padding:14px 18px;transition:border-color .2s}
+.wiki .wk-flow:hover{border-color:var(--rule)}
+.wiki .wk-box{border:1px solid var(--rule);border-radius:9px;background:var(--raised);padding:10px 13px;min-width:0}
+.wiki .wk-box.mid{border-color:var(--accent);background:var(--accent-soft);text-align:center}
+.wiki .wk-box.mid b{display:block;font-size:14px;font-weight:600}
+.wiki .wk-box.mid small{display:block;font:400 11px "IBM Plex Mono",monospace;color:var(--ink-2);margin-top:3px}
+.wiki .wk-ing{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0;align-items:baseline}
+.wiki .wk-ing .wk-r{font:500 12px "IBM Plex Mono",monospace;color:var(--ink-2);white-space:nowrap}
+.wiki .wk-from{display:block;font:400 11px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.wiki .wk-arrow{position:relative;height:2px;background:var(--rule);border-radius:2px}
+.wiki .wk-arrow::after{content:"";position:absolute;right:-1px;top:-4px;width:8px;height:8px;
+  border-top:1.5px solid var(--ink-3);border-right:1.5px solid var(--ink-3);transform:rotate(45deg)}
+.wiki .wk-arrow i{position:absolute;top:-2px;left:0;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:0}
+.wiki .wk-flow:hover .wk-arrow i{animation:wktravel 1.1s linear infinite}
+.wiki .wk-flow:hover .wk-arrow i:nth-child(2){animation-delay:.37s}
+.wiki .wk-flow:hover .wk-arrow i:nth-child(3){animation-delay:.74s}
+@keyframes wktravel{0%{left:0;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:calc(100% - 6px);opacity:0}}
+.wiki .wk-out{display:flex;flex-direction:column;gap:4px;min-width:0}
+.wiki .wk-out b{font:500 22px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em;color:var(--accent)}
+.wiki .wk-out b small{font-size:12px}
+.wiki .wk-out span{font-size:13px}
+.wiki .wk-out .chip{align-self:flex-start;margin-top:2px}
+
+/* where to go ---------------------------------------------------------------- */
+.wiki .wk-places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 40px;border-top:1px solid var(--rule)}
+.wiki .wk-place{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:0 12px;align-items:center;padding:10px 0;
+  border-bottom:1px solid var(--rule-soft);min-width:0}
+.wiki .wk-nm{font-size:13.5px;font-weight:500;min-width:0}
+.wiki .wk-nm small{display:block;font:400 11px "IBM Plex Mono",monospace;color:var(--ink-3);margin-top:1px}
+.wiki .wk-role{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+  white-space:nowrap}
+.wiki .wk-flag{width:7px;height:7px;border-radius:50%;background:var(--warn);display:inline-block;margin-left:6px;vertical-align:middle}
+
+/* yours ---------------------------------------------------------------------- */
+.wiki .wk-savebox{border:1px dashed var(--rule);border-radius:12px;padding:18px 20px;display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.wiki .wk-savebox.empty{display:block}
+.wiki .wk-savebox.empty p{margin:0;max-width:64ch}
+.wiki .wk-slot{border:1px solid var(--rule-soft);border-radius:9px;padding:12px 14px;background:var(--surface);
+  display:flex;flex-direction:column;gap:6px;min-width:0}
+.wiki .wk-lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.wiki .wk-slot .wk-v{font:500 20px/1.2 "IBM Plex Mono",monospace;color:var(--ink);overflow-wrap:anywhere}
+.wiki .wk-slot .wk-v.none{color:var(--ink-3)}
+
+/* source --------------------------------------------------------------------- */
+.wiki .wk-gaps{border-top:1px solid var(--rule);max-width:60ch}
+.wiki .wk-gap{display:grid;grid-template-columns:22px minmax(0,1fr);gap:0 12px;align-items:center;padding:9px 0;
+  border-bottom:1px solid var(--rule-soft);font-size:13px;cursor:help}
+.wiki .wk-gap i{width:7px;height:7px;border-radius:50%;background:var(--neg);justify-self:center;
+  transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-gap:hover i,.wiki .wk-gap:focus-visible i{transform:scale(1.6)}
+.wiki .wk-gap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* narrower: the tablet step, then the phone --------------------------------- */
+@media (max-width:1100px){
+  .wiki .wk-shelf{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .wiki .wk-groups{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wiki .wk-savebox{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wiki .wk-lanes{gap:20px 60px}
+}
+@media (max-width:760px){
+  .wiki h1{font-size:28px}
+  /* The board's tiles are a fixed four; on the wiki they go two-up rather than
+     pushing the page sideways. The rule is scoped, so Today keeps its own. */
+  .wiki .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .wiki .kpi{padding:12px 14px}
+  .wiki .kpi .v.t{font-size:18px}
+  .wiki .wk-shelf{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .wiki .wk-cards{grid-template-columns:minmax(0,1fr)}
+  .wiki .wk-places{grid-template-columns:minmax(0,1fr);gap:0}
+  .wiki .wk-lanes{grid-template-columns:minmax(0,1fr);gap:18px}
+  .wiki .wk-wires,.wiki .wk-ball,.wiki .wk-shadow,.wiki .wk-park{display:none}
+  .wiki .wk-flow{grid-template-columns:minmax(0,1fr);gap:10px}
+  .wiki .wk-arrow{width:2px;height:28px;margin:0 auto}
+  .wiki .wk-arrow::after{right:-3px;top:auto;bottom:-1px;transform:rotate(135deg)}
+  .wiki .wk-flow:hover .wk-arrow i{animation:none;opacity:0}
+  .wiki .wk-key{margin-left:0}
+  .wiki .wk-lede{max-width:none}
+}
+@media (max-width:480px){
+  .wiki .wk-shelf{grid-template-columns:minmax(0,1fr)}
+  .wiki .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wiki .wk-groups,.wiki .wk-savebox{grid-template-columns:minmax(0,1fr)}
+  .wiki .wk-hit{grid-template-columns:16px minmax(0,1fr) 24px;gap:0 10px}
+  .wiki .wk-cat2{display:none}
+  .wiki .wk-srch{width:100%}
+  .wiki .wk-place{grid-template-columns:26px minmax(0,1fr);row-gap:2px}
+  .wiki .wk-role{grid-column:2;text-align:left}
+}
+
+/* The ball and the tilt are flourishes. With less motion asked for, the shared
+   rule stops every transition and the script never sets the ball running — but
+   it still sits on its rule, because it is part of the picture, not part of the
+   movement. */
+@media (prefers-reduced-motion:reduce){
+  .wiki .wk-cat{transform:none}
+}
+/* Discovery badges must not widen the icons in the phone's shared nav. */
+@media(max-width:560px){
+  .wrap .mast .brand{max-width:none}
+  .wrap .mast .wordmark{max-width:none}
+  .wrap .mast .nav{flex-wrap:nowrap;justify-content:space-between}
+  #nav a > span:not(.feature-new){position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+    overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+  #nav a .feature-new{display:none!important}
+}

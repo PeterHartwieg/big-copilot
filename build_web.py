@@ -16,6 +16,7 @@ import shutil
 
 from ba_dashboard import VERIFIED_BUILD, render
 from ba_save import DEFAULT_LOCALE, load_locale
+from tools.build_wiki_data import write_public_wiki
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
@@ -390,6 +391,9 @@ def stamp() -> str:
     for name in ("build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
+    for name in ("web/wiki.js", "web/wiki.css", "web/wiki-data.json"):
+        with open(os.path.join(HERE, name), "rb") as fh:
+            h.update(fh.read())
     return h.hexdigest()[:10]
 
 
@@ -406,6 +410,9 @@ BEFORE_SCRIPT = (
 
 def main() -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
+    # Refresh reference content before stamping assets, so a game update also
+    # invalidates browser caches for the Wiki catalogue.
+    write_public_wiki(os.path.join(WEB, "wiki-data.json"))
     for name in ("ba_save.py", "ba_dashboard.py"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     # The building table travels with the code; make_buildings.py has to have

@@ -1,0 +1,126 @@
+{
+  "_comment": [
+    "Authored wording for the public wiki payload (tools/build_wiki_data.py).",
+    "Only words live here: every number, name, address, rate and hash is read",
+    "from the game's own files at build time. Slots in braces are filled in by",
+    "the builder; a slot the builder cannot fill leaves the sentence out rather",
+    "than guessing. organised by the section of sample each entry serves."
+  ],
+  "sourceNotes": {
+    "locale": "{entries} keys. Every fact in the sample with a locale key beside it, and the full text of every help page.",
+    "helpStructure": "{categories} categories, {entries} page entries, {unique} distinct page slugs. {parse}",
+    "layout": "{items} placed items, authored at game build {build}. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain.",
+    "buildings": "{count} buildings from the game's fixed map. Gives every supplier address its neighbourhood, size code, floor area and traffic index."
+  },
+  "lenientParse": "not strict JSON: trailing commas dropped before parsing",
+  "strictParse": "strict JSON, no repair needed",
+  "buildRows": {
+    "product": {
+      "label": "Product",
+      "where": "Big Ambitions_Data/app.info",
+      "certain": true
+    },
+    "unity": {
+      "label": "Unity engine",
+      "where": "version string in Big Ambitions_Data/globalgamemanagers",
+      "certain": true
+    },
+    "steam": {
+      "label": "Steam app / depot build",
+      "where": "steamapps/appmanifest_1331550.acf",
+      "certain": true,
+      "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
+    },
+    "saveBuild": {
+      "label": "Save build number",
+      "where": "read from a save file, which this payload is not built from",
+      "certain": false,
+      "caveat": "Three build numbers exist and only two are visible here: Steam's depot build id for the install, and the build each shipped layout was authored at. Neither is the number a save carries, so this stays null rather than borrowing one of them."
+    }
+  },
+  "supplierKinds": {
+    "the furniture can be purchased from the following locations": "Furniture vendor",
+    "the machine can be purchased from the following locations": "Machine vendor",
+    "wholesaler locations": "Wholesaler",
+    "the vehicle can be purchased from the following locations": "Vehicle vendor",
+    "the vehicle can be purchased or delivered from the following locations": "Vehicle vendor",
+    "the product can be imported from the following locations": "Importer",
+    "they can be hired from": "Recruitment",
+    "recruits can come from the following sources": "Recruitment",
+    "you can get marketing campaigns from the following locations": "Marketing agency",
+    "visit or call either bank": "Bank",
+    "your taxes can be paid by going to the following location": "Tax office",
+    "your taxes and back taxes can be paid by going to the following location": "Tax office",
+    "for every employee assigned to the hr manager, hr will": "Health insurance",
+    "to set up health insurance, perform the following steps": "Health insurance",
+    "they are located here": "",
+    "_fallback": "Named in help"
+  },
+  "importerKinds": {
+    "ingredient": "Importer (factory raw goods)",
+    "product": "Importer (retail goods)",
+    "fee": "Importer (retail goods)"
+  },
+  "pierFlag": "The bundled building table puts the piers in {hoods}. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone.",
+  "servingWords": {
+    "Customers are self-serving.": "Self-serving",
+    "Customers are served.": "Served"
+  },
+  "buildingWords": {
+    "retail buildings": "Retail",
+    "office buildings": "Office",
+    "industrial buildings": "Industrial"
+  },
+  "gaps": {
+    "prices": {
+      "what": "Sample prices",
+      "detail": "None of the {pages} help pages the sample reads carries a money figure, so the sample states no price for any fixture, product, recipe or business it describes. {elsewhere}"
+    },
+    "pricesElsewhereOne": "Money figures do appear in en.json, on {count} help page this sample does not read.",
+    "pricesElsewhereMany": "Money figures do appear in en.json, on {count} help pages this sample does not read.",
+    "pricesNowhereElse": "No other help page in en.json carries a money figure either.",
+    "missingProducts": {
+      "what": "Primary products the sample cannot describe",
+      "detail": "The Gift Shop page names {products} as primary, but the matching help pages are missing from this build, so those sample entries hold nulls instead of facts."
+    },
+    "weeklyLimits": {
+      "what": "Weekly delivery limits",
+      "detail": "help_wholesalers_weeklylimits_content says every importer and wholesaler caps each item per week and that the cap resets Monday 08:00, but never gives a number for any item."
+    },
+    "ratedRate": {
+      "what": "Rated rate is a ceiling, not a measurement",
+      "detail": "Every recipe page gives a 'Max Production Rate Per Hour'. The help states that ceiling and nothing more: it does not say what a line achieves in practice, nor what happens when an ingredient runs out mid-hour. Big Copilot's day model takes that hourly maximum times 24, which assumes an uninterrupted line at full utilisation; no measured output lies behind it, and help text cannot supply one."
+    },
+    "sizeCodes": {
+      "what": "Customer capacity by size code is ambiguous",
+      "detail": "{page} lists the same size code under more than one building type: {rows}. A size code alone therefore does not fix a shop's door limit, and the bundled building table stores only the letter."
+    },
+    "danglingLinks": {
+      "what": "Help links that point at no page",
+      "detail": "{count} links across {slugs} distinct targets name a page the help menu does not contain, the most often {top}. The renderer has to degrade those links to plain text, not throw."
+    },
+    "sourceQuirks": {
+      "what": "Malformed markdown and inconsistent names in the source",
+      "detail": "{oddBoldClause} Supplier names are spelled more than one way for the same address: {spelled}."
+    },
+    "buildNumber": {
+      "what": "Three different build numbers",
+      "detail": "Steam's depot build id for this install is {steam}. The shipped layouts counted for placement were authored at builds {layouts}. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
+    },
+    "wholesaleNegative": {
+      "what": "A wholesale 'no' is an absence, not a rule",
+      "detail": "{productsClause} the wholesaler product list, so the wholesale flag is false. That is two help pages agreeing, not a game rule: the help may simply not mention it."
+    },
+    "sampleCoverage": {
+      "what": "The sample is one business, the pages are all of them",
+      "detail": "The pages array covers every help page in the menu. The sample keeps the Gift Shop worked example the wiki page is written around: its fixtures, products, recipes and suppliers. Every other business reads its facts from pages, not from this sample."
+    }
+  },
+  "provenanceNotes": {
+    "sourceDate": "sourceDate is the newest file modification date among the game help and counted layouts, not the moment this payload was built. An unchanged install therefore rebuilds byte-identical output; the sample's SOURCES block repeats it as sourceDate, and keeps the older extracted key with the same value for shapes written against the mockup.",
+    "determinism": "Built from the game files named in sources. No run timestamp is written, so an unchanged install builds byte-identical output.",
+    "privacy": "Source paths are game-relative. No absolute path, user name or save data travels in this file.",
+    "unparsed": "{count} statements in the help could not be read into a field; they remain in the page text verbatim and are listed per record in the catalogue the extractor writes.",
+    "requirements": "BUSINESS.requirements reads the business page's own requirement list. Its wording is kept in raw: the help says these are needed for the business to function, but not that the list is the complete set of rules the game enforces."
+  }
+}

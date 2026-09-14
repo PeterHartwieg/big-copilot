@@ -1080,6 +1080,41 @@
     $("helpLink").addEventListener("click", (e) => { e.preventDefault(); $("help").open = !$("help").open; });
     wireCoin();
     wireSphere();
+    // A bookmarked Wiki route can remove the landing immediately. Bind its
+    // controls before opening that route so save-source setup can finish too.
+    offerWiki(landing);
+  }
+
+  // The wiki is the game's own help text; it needs no save at all. The way in
+  // is offered under the drop zone, but only by a build that carries the wiki:
+  // an offer that opened an empty page would be worse than no offer.
+  function offerWiki(landing) {
+    const board = window.BigCopilotBoard;
+    if (!board || !board.hasWiki || !board.hasWiki()) return;
+    const row = document.createElement("p");
+    // This row is inserted after the landing's reveal pass has collected its
+    // elements, so give it the visible state explicitly.
+    row.className = "rv in lg-wiki";
+    row.style.cssText = "margin:-14px 0 0;font-size:12.5px;color:var(--ink-3)";
+    const link = document.createElement("button");
+    link.type = "button";
+    link.className = "lg-text";
+    link.textContent = "Browse the wiki";
+    link.title = "The game's own help, read out of the installed game: businesses, products, furniture, recipes and where to buy them.";
+    link.addEventListener("click", openWiki);
+    row.append(link, document.createTextNode(" — no save needed"));
+    ($("entryRow") || landing).after(row);
+    // A wiki link opened cold, or reloaded, is the same request as the button:
+    // the wiki needs no save, so it opens without waiting for a click.
+    if (wikiHash()) openWiki();
+    window.addEventListener("hashchange", () => { if (!onBoard() && wikiHash()) openWiki(); });
+  }
+  const wikiHash = () => /^#wiki(\/|$)/.test(location.hash);
+  function openWiki() {
+    const board = window.BigCopilotBoard;
+    if (!board || !board.browseWiki || !board.browseWiki()) return;
+    // The board paints its own navigation first, so entering finds a page.
+    enterBoard();
   }
 
   /* --- wiring ------------------------------------------------------------ */
