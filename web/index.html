@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=5b61bf92c2">
+<link rel="stylesheet" href="community.css?v=980fe900ca">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -467,6 +467,20 @@ body.map-modal-open{overflow:hidden}
 .wiki .wk-lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .wiki .wk-slot .wk-v{font:500 20px/1.2 "IBM Plex Mono",monospace;color:var(--ink);overflow-wrap:anywhere}
 .wiki .wk-slot .wk-v.none{color:var(--ink-3)}
+.wiki .wk-prices{border-bottom:1px solid var(--rule);padding:12px 0}
+.wiki .wk-prices summary{cursor:pointer;font-weight:500;padding:4px 0}
+.wiki .wk-price-scroll{overflow-x:auto;margin-top:12px}
+.wiki .wk-prices table{width:100%;min-width:480px;border-collapse:collapse}
+.wiki .wk-prices th,.wiki .wk-prices td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--rule-soft);white-space:normal;overflow-wrap:anywhere}
+.wiki .wk-prices td small{display:block;color:var(--ink-3)}
+@media(max-width:600px){
+  .wiki .wk-prices table,.wiki .wk-prices tbody{display:block;min-width:0}
+  .wiki .wk-prices thead{display:none}
+  .wiki .wk-prices tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--rule)}
+  .wiki .wk-prices th{grid-column:1/-1}
+  .wiki .wk-prices th,.wiki .wk-prices td{padding:8px 4px;border:0}
+  .wiki .wk-prices td::before{content:attr(data-label);display:block;font-size:11px;color:var(--ink-3);margin-bottom:6px}
+}
 
 /* source --------------------------------------------------------------------- */
 .wiki .wk-gaps{border-top:1px solid var(--rule);max-width:60ch}
@@ -1772,8 +1786,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "5b61bf92c2";</script>
-<script>window.LEDGER_RELEASE = {"version":"5b61bf92c2","latest":{"pr":25,"date":"2026-09-14","title":"Explore guides for every shop","summary":"All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation."}};</script>
+<script>window.LEDGER_BUILD = "980fe900ca";</script>
+<script>window.LEDGER_RELEASE = {"version":"980fe900ca","latest":{"pr":25,"date":"2026-09-14","title":"Explore guides for every shop","summary":"All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1842,8 +1856,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=5b61bf92c2"></script>
-<script src="community.js?v=5b61bf92c2"></script>
+<script src="app.js?v=980fe900ca"></script>
+<script src="community.js?v=980fe900ca"></script>
 
 <script>
 
@@ -5744,7 +5758,7 @@ function wikiYours(page, extra){
       "Your own sites with this product on a shelf, from yesterday's trading."));
     slots.push(wikiSlot("Sold a day", wikiNum(own.product.units),
       "Units your shops sold yesterday, added up."));
-    slots.push(wikiSlot("Your price", wikiMoney(own.product.price),
+    slots.push(wikiSlot("Average sold price", wikiMoney(own.product.price),
       "Your own average take per unit yesterday: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
   }
   if(own && own.sites.length)
@@ -6017,6 +6031,7 @@ ${wikiGuideRecipes(g, ours, "primary", plan === "recipes")}
 ${wikiGuideRecipes(g, rest, "secondary", false)}
 ${wikiGuidePlaces(g)}
 ${wikiYours(page, wikiGuideOwn(g, goods))}
+${wikiGuidePrices(g, offers)}
 ${wikiGuideSource(g, page, ctx)}`;
 }
 
@@ -6848,10 +6863,53 @@ function wikiPlanControl(){
       >${hasData() ? "Not in this save's catalogue" : "Open a save to plan this range"}</span>`;
 }
 
+/* Prices are joined by stable item/type IDs, never names or yesterday's sales.
+   Native disclosures keep neighbourhoods compact without extra saved UI state. */
+function wikiGuidePrices(g, offers){
+  if(!offers.length) return "";
+  const heading = `<div class="sechead"><h2>Prices in your save</h2>
+    <span class="aside">${wikiChip("save", hasData() ? `save day ${D.meta?.day ?? "unknown"}` : "no save open")}</span></div>`;
+  if(!hasData()) return `<section class="sec">${heading}
+    <p class="quiet">Open a save to see your configured prices and neighbourhood market prices.</p></section>`;
+  const mine = (D.businesses || []).filter(b => b.typeSlug === g.BUSINESS.nameSrc && b.status !== "vacant");
+  const hoodOf = b => b.neighbourhood || "Unknown neighbourhood";
+  const rows = new Map(((D.market || {}).rows || []).map(r => [r.slug, r]));
+  const hoods = [...new Set([
+    ...mine.map(hoodOf),
+    ...offers.flatMap(p => (rows.get(p.slug)?.cells || []).filter(Boolean).map(c => c.hood)),
+  ].filter(Boolean))];
+  const price = n => Number.isFinite(n) && n >= 0 ? `$${n.toFixed(2)}` : null;
+  const body = hoods.map((hood, index) => {
+    const shops = mine.filter(b => hoodOf(b) === hood);
+    const lines = offers.map(p => {
+      const own = shops.map(b => {
+        const line = (b.lines || []).find(l => l.slug === p.slug);
+        const value = line && !("configuredPrice" in line) ? "Unavailable" : price(line?.configuredPrice) ?? "Not set";
+        return `<div>${wikiText(b.name)}: <b>${wikiText(value)}</b></div>`;
+      }).join("") || "No matching shop";
+      const cell = (rows.get(p.slug)?.cells || []).find(c => c && c.hood === hood);
+      const market = price(cell?.marketPrice);
+      return `<tr><th scope="row">${wikiText(p.name)}</th><td data-label="Your configured price">${own}</td><td data-label="Lowest market price">${
+        market === null ? `<span class="quiet">Unavailable</span><small>${wikiText(cell?.marketPriceNote || "Not available in this save")}</small>`
+          : wikiText(market)}</td></tr>`;
+    }).join("");
+    return `<details class="wk-prices"${index === 0 ? " open" : ""}>
+      <summary>${wikiText(hood)}</summary>
+      <div class="wk-price-scroll" role="region" aria-label="${attr(hood + " prices")}" tabindex="0">
+      <table aria-label="${attr(hood + " prices per unit or service")}">
+        <thead><tr><th scope="col">Product or service</th><th scope="col">Your configured price</th>
+        <th scope="col">Lowest market price</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
+  }).join("");
+  return `<section class="sec">${heading}
+    <p class="quiet">Prices per unit or service. The market minimum includes your shops and other business types selling the item.
+    Reconstructed from this save; MarketInsider's cached display may differ. These are not recommended prices.</p>
+    ${body || '<p class="quiet">No matching shops or neighbourhood market data in this save.</p>'}</section>`;
+}
+
 function wikiGuideOwn(g, goods){
   if(!hasData()) return [];
   const b = g.BUSINESS || {};
-  const mine = (D.businesses || []).filter(x => String(x.type || "").toLowerCase() === String(b.name || "").toLowerCase());
+  const mine = (D.businesses || []).filter(x => x.typeSlug === b.nameSrc && x.status !== "vacant");
   const slots = [];
   if(mine.length) slots.push(wikiSlot("Your shops", `${mine.length}`,
     `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));
