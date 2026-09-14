@@ -70,7 +70,8 @@ the map.
   still determines whether staff uniforms need attention. If both are missing,
   one warning points to installing the locker first; new sites not yet trading
   retain their combined setup warning.
-- **Results**: the company, then its chains, then one site.
+- **Company / Results**: the company, then its chains, then one site. Results is
+  the first Company view; existing `#results` links still open it.
   - *Daily result*: a seven-day rolling profit line over the daily ones. Daily profit
     swings by a million between a weekend and a Tuesday purely because that is when the
     week's goods are paid for, so the rolling line is the one that says whether trading
@@ -116,7 +117,7 @@ the map.
     do not trigger stockout warnings; measured shipments or sales are required.
   - *Stock checks*: the five questions your logistics actually raise. Each view opens
     with a one-line verdict and then lists only the rows that break it.
-  - *How goods move*: the chain drawn as a flow diagram, with importers, factories,
+  - *Goods flow*: the chain drawn as a flow diagram, with importers, factories,
     depots and shops, and line width for daily volume. Click a site for what it holds
     against what it has to cover.
 - **Growth**: planning, one view at a time.
@@ -128,9 +129,21 @@ the map.
   - *Plan a chain*: machines run flat out, so the answer is the weekly raw material
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
-- **Company**: the reference tables, being products, payroll, milestones and house
+- **Company / Products, Payroll, Milestones**: the reference tables and house
   rules. There is no debt page; loans cap at $2M, which is beside the point at this
   stage.
+
+- **Wiki**: browse the game's help without loading a save, starting with a shelf
+  of categories and searchable pages. The Gift Shop guide presents setup
+  checklists, products and their fixtures/suppliers, recipe flows and map links.
+  Checklist ticks are planning notes, not proof that equipment is installed.
+  Game help and Big Copilot's calculations are labelled separately; live company
+  information belongs in the guide's Yours section.
+
+The Wiki catalogue is refreshed from the installed game when the site is built.
+It is a versioned snapshot of the game's help, which can lag runtime behaviour.
+A visitor's game update does not automatically change the hosted catalogue.
+See [Wiki data pipeline](wiki-data-pipeline.md) for extraction and provenance.
 
 ## What counts as a finding
 

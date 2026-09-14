@@ -86,7 +86,7 @@ async function setup(t, options = {}) {
     };
     fixture.complete = (index = 0, history = 'fresh-history') => {
       const msg = fixture.worker.messages[index];
-      fixture.worker.emit({kind:'built', id:msg.id, history, data:JSON.stringify({meta:{save:msg.name}})});
+      fixture.worker.emit({kind:'built', id:msg.id, history, data:JSON.stringify({meta:{save:msg.name},daily:[]})});
     };
   }, options);
   await context.route('**/*', route => {

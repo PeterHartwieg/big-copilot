@@ -121,11 +121,11 @@ analysis; it is more than a label issue.
 | Page | Use it for |
 | --- | --- |
 | Today | Profit, cash and issues needing attention. |
-| Results | Trends, chains and individual business details. |
+| Company | Results, trends and business details, plus product totals, payroll and milestones. |
 | Supply | Import orders, replenishment checklists, stock checks and goods flows. |
 | Growth | Market demand, expansion opportunities and factory planning. |
-| Company | Product totals, payroll and milestones. |
 | Map | The city with your premises, findings and owned buildings as layers; pick a place for its card. |
+| Wiki | Search the game's help, browse categories, and explore the Gift Shop's setup, products, recipes and suppliers. No save required. |
 
 See the [dashboard reference](docs/dashboard-reference.md) for calculations,
 assumptions and detailed views. Recommendations are estimates to apply in-game;

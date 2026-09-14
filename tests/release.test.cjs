@@ -14,7 +14,7 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     page.on('pageerror', error => errors.push(error.message));
     const base = process.env.RELEASE_URL || 'http://release.test/';
     if(!process.env.RELEASE_URL) {
-      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg']);
+      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.json']);
       await page.route('**/*', route => {
         const url = new URL(route.request().url());
         if(url.hostname === 'release.test' && url.pathname === '/api/community/features') return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[]})});
@@ -24,7 +24,7 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       });
     }
     await page.goto(base);
-    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),4);
+    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),5);
     await page.locator('#landing [data-community-open]').click();
     assert.equal(await page.locator('.community-dialog').evaluate(d => d.open),true);
     assert.equal(await page.locator('[data-new-feature="community-voting"]:not([hidden])').count(),0);
@@ -46,6 +46,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     assert.equal(await page.locator('[data-new-feature="map"]:not([hidden])').count(),0);
     await page.locator('#cityMapPage .layer .ball').click();
     await page.waitForFunction(() => document.querySelectorAll('body > .coin').length > 0);
+    await page.locator('#nav a[data-id="wiki"]').click();
+    await page.getByRole('searchbox', {name:'Search the wiki'}).waitFor();
+    assert.equal(await page.locator('[data-new-feature="wiki"]:not([hidden])').count(),0);
     await page.reload();
     assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),0);
     assert.deepEqual(errors,[]);

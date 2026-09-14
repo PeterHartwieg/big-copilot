@@ -4520,6 +4520,20 @@ def render(
         map_script = fh.read()
     with open(os.path.join(asset_root, "map.css"), encoding="utf-8") as fh:
         map_css = fh.read()
+
+    # The wiki travels the same way as the map: one source, shared by the local
+    # HTML and the browser build. A checkout without the two files still renders
+    # a whole board — the Wiki page then says so instead of throwing, and the
+    # tab is left out of the top navigation.
+    def optional_asset(name: str) -> str:
+        try:
+            with open(os.path.join(asset_root, name), encoding="utf-8") as fh:
+                return fh.read()
+        except OSError:
+            return ""
+
+    wiki_script = optional_asset("wiki.js")
+    wiki_css = optional_asset("wiki.css")
     map_payload = ""
     if data is not None and not live and not map_external:
         import base64
@@ -4528,11 +4542,27 @@ def render(
         with open(os.path.join(asset_root, "maps", locations["image"]), "rb") as fh:
             image = "data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode("ascii")
         map_payload = "window.BIG_COPILOT_MAP=" + json.dumps({"data": locations, "image": image}, separators=(",", ":")).replace("</", "<\\/") + ";"
+    # A page that is saved and opened from a file has nowhere to fetch the help
+    # from, so an export carries it. The hosted build fetches it instead, with
+    # the build stamp on it, and would only be made heavier by a copy. The wiki
+    # needs no save, so this travels even in an export that has no numbers.
+    wiki_payload = ""
+    if wiki_script and not live:
+        catalogue = optional_asset("wiki-data.json")
+        if catalogue:
+            wiki_payload = ("window.BIG_COPILOT_WIKI="
+                            + catalogue.strip().replace("</", "<\\/") + ";")
     return "<!doctype html>" + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
         .replace("/*__MAP_PAYLOAD__*/", map_payload)
+        .replace("/*__WIKI_CSS__*/", wiki_css)
+        .replace("/*__WIKI_SCRIPT__*/", wiki_script)
+        .replace("/*__WIKI_PAYLOAD__*/", wiki_payload)
+        # One table of neighbourhood tags, written once here, so a wiki address
+        # wears the same two letters a business does.
+        .replace("/*__HOOD_TAGS__*/{}", json.dumps(HOOD_TAG, separators=(",", ":")))
         .replace("<!--__CHANGELOG__-->", changelog)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -4548,6 +4578,7 @@ TEMPLATE = r"""<title>__TITLE__</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 /*__MAP_CSS__*/
+/*__WIKI_CSS__*/
 /* Tokens: the generator's .board palette. Dark is the base, as on the canvas;
    the light values follow the system setting or an explicit data-theme, the way
    the board has always done it. */
@@ -4674,6 +4705,40 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .nav a svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
 .nav a:hover svg{transform:translateY(-2px) rotate(-6deg)}
 .nav a:hover,.nav a.on{color:var(--ink)}
+/* Before a save is open only the Wiki has anything to show. The rest stay
+   legible and say why on hover rather than opening an empty page. */
+.nav a.off{color:var(--ink-3);opacity:.55;cursor:default}
+.nav a.off:hover{color:var(--ink-3)}
+.nav a.off:hover svg{transform:none}
+/* On a phone the top row keeps its icons only, as the canvas draws it, and the
+   page you are on keeps its word. The others' words are hidden from the eye,
+   never from a screen reader, so every link still has its name. */
+@media(max-width:560px){
+  .mast{gap:14px;height:64px}
+  .mast .wordmark{font-size:22px;max-width:120px}
+  .nav{gap:0;margin-left:0}
+  .nav a{padding:8px 6px;gap:6px}
+  .nav a > span:not(.feature-new){position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+    overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+  .nav a.on > span:not(.feature-new){position:static;width:auto;height:auto;margin:0;clip-path:none}
+}
+/* Narrower than this the six icons and the wordmark take the whole rule, and
+   the clock would be squeezed into two lines of nothing, so it steps out as the
+   canvas has it. The sphere is absolutely positioned and takes no room, so it
+   stays where it is: hiding it would leave wireSphere waiting for a layout that
+   never comes. */
+@media(max-width:500px){
+  .mast .clock{display:none}
+}
+/* At the narrowest phone the six icons still have to share one rule with the
+   wordmark, so both give up what they can rather than the row wrapping or the
+   page growing sideways. */
+@media(max-width:400px){
+  .mast{gap:8px}
+  .mast .wordmark{font-size:19px;max-width:88px}
+  .nav a{padding:8px 4px}
+  .nav a svg{width:17px;height:17px}
+}
 .nav .ink{
   position:absolute;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;
   left:var(--nx,0);width:var(--nw,0);transition:left .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
@@ -5303,26 +5368,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
   </div>
 
-  <div class="page" id="pageResults" hidden>
-    <section class="sec rv" id="secDaily">
-      <div id="dailyHead"></div>
-      <div id="dailyBox"></div>
-    </section>
-
-    <section class="sec rv" id="secRhythm">
-      <div id="rhythmHead"></div>
-      <div id="rhythmChart"></div>
-      <div id="rhythmSitesBox" style="margin-top:20px" hidden><table id="rhythmSites"></table></div>
-    </section>
-
-    <section class="sec rv" id="secPortfolio">
-      <div id="portHead"></div>
-      <div style="overflow-x:auto"><table id="portfolio"></table></div>
-    </section>
-
-    <section class="sec rv" id="secDetail" hidden><div id="sitePanel"></div></section>
-  </div>
-
   <div class="page" id="pageSupply" hidden>
     <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav>
       <div class="aside" data-sub="orders"><span class="seg" id="logisticsTools" aria-label="Which orders to list"></span></div></div>
@@ -5383,18 +5428,46 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
   </div>
 
-  <!-- The reference page: the product table full width, then payroll beside the
-       milestones. Each section's head and body are drawn by its own draw*(). -->
+  <!-- The company page: how it went first, then the reference tables, one view
+       at a time behind the secondary nav. Each section's head and body are
+       drawn by its own draw*(). -->
   <div class="page" id="pageCompany" hidden>
-    <section class="sec rv" id="secProducts"></section>
-    <div class="duo sec">
-      <section class="rv" style="margin:0" id="secPayroll"></section>
-      <section class="rv" style="margin:0" id="secGoals"></section>
-    </div>
+    <div class="sechead subhead"><nav class="seg" id="companyNav" aria-label="Company views"></nav></div>
+
+    <section class="sec rv" id="secDaily" data-sub="results">
+      <div id="dailyHead"></div>
+      <div id="dailyBox"></div>
+    </section>
+
+    <section class="sec rv" id="secRhythm" data-sub="results">
+      <div id="rhythmHead"></div>
+      <div id="rhythmChart"></div>
+      <div id="rhythmSitesBox" style="margin-top:20px" hidden><table id="rhythmSites"></table></div>
+    </section>
+
+    <section class="sec rv" id="secPortfolio" data-sub="results">
+      <div id="portHead"></div>
+      <div style="overflow-x:auto"><table id="portfolio"></table></div>
+    </section>
+
+    <section class="sec rv" id="secDetail" data-sub="results" hidden><div id="sitePanel"></div></section>
+
+    <section class="sec rv" id="secProducts" data-sub="products"></section>
+    <section class="sec rv" id="secPayroll" data-sub="payroll"></section>
+    <section class="sec rv" id="secGoals" data-sub="milestones"></section>
   </div>
 
   <div class="page" id="pageMap" hidden>
     <div id="cityMapPage"></div>
+  </div>
+
+  <!-- The wiki: the game's own help, read without a save. wiki.js takes this
+       host over on the first visit; the sentence below is what a build without
+       the wiki files shows instead. -->
+  <div class="page" id="pageWiki" hidden>
+    <div class="wiki" id="wikiRoot">
+      <p class="quiet" style="margin-top:44px">The wiki is not part of this build.</p>
+    </div>
   </div>
   <footer class="foot" id="footer">
     <span>Big Copilot</span>
@@ -5453,6 +5526,7 @@ featureDiscovery.refresh();
 <!--__BEFORE_SCRIPT__-->
 <script>
 /*__MAP_PAYLOAD__*/
+/*__WIKI_PAYLOAD__*/
 let D = /*__DATA__*/null;
 const LIVE = /*__LIVE__*/false;
 /* Where fresh numbers come from. By default the local server that wrote this
@@ -5552,6 +5626,7 @@ const ICON = {
   growth: '<svg viewBox="0 0 24 24"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg>',
   company: '<svg viewBox="0 0 24 24"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg>',
   go: '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>',
+  wiki: '<svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5M20 18v3H6.5"></path><path d="M9 8h7M9 11.5h5"></path></svg>',
   tune: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>',
   tick: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg>',
   arrow_up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>',
@@ -5568,6 +5643,9 @@ const ICON = {
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
 };
 const icon = name => ICON[name] || "";
+/* The board's own two letters for each neighbourhood, filled in from the one
+   table Python keeps. A place it does not name wears no pill. */
+const HOOD_TAGS = /*__HOOD_TAGS__*/{};
 /* Text that lands in an attribute (a tooltip, a data-id) is escaped once, here. */
 const attr = s => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 /* Tooltips are plain text: do not pass button/link markup into why(). */
@@ -6563,10 +6641,11 @@ const ALERT_LINKS = {
    section. */
 const SEC_PAGE = {
   alertSection:["today"],
-  secDaily:["results"], secRhythm:["results"], secPortfolio:["results"], secDetail:["results"],
+  secDaily:["company","results"], secRhythm:["company","results"],
+  secPortfolio:["company","results"], secDetail:["company","results"],
   secLogistics:["supply","orders"], secStock:["supply","checks"], secFlow:["supply","map"],
   secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
-  secProducts:["company"], secPayroll:["company"], secGoals:["company"],
+  secProducts:["company","products"], secPayroll:["company","payroll"], secGoals:["company","milestones"],
 };
 function reveal(secId, historyMode = "push"){
   const [p, sv] = SEC_PAGE[secId] || ["today"];
@@ -8161,6 +8240,8 @@ function drawFooter(){
 
 /*__MAP_SCRIPT__*/
 
+/*__WIKI_SCRIPT__*/
+
 function renderAll(){
   indexTrends();
   drawMast(); drawKpis(); drawAlerts();
@@ -8170,24 +8251,39 @@ function renderAll(){
   drawProducts(); drawPayroll(); drawGoals(); drawFooter();
   wireAll();
   refreshCityMaps();
+  /* The wiki is the game's own text and does not move with a save, but the one
+     strip on it that does is redrawn with everything else. */
+  if(page === "wiki") wikiVisit();
 }
 
 /* --- pages ------------------------------------------------------------ */
 /* One page at a time. Today is the daily check: four tiles and the list.
-   Everything else is a place you go on purpose — results by chain and site,
-   the supply round, growth planning, the company's reference tables. Which
-   page and which view are remembered on this device and mirrored in the hash. */
+   Everything else is a place you go on purpose — the company's own results and
+   reference tables, the supply round, growth planning, the city, and the game's
+   help. Which page and which view are remembered on this device and mirrored in
+   the hash. */
 const PAGES = [
   {id:"today",   label:"Today",   host:"pageToday"},
-  {id:"results", label:"Results", host:"pageResults"},
+  {id:"company", label:"Company", host:"pageCompany"},
   {id:"supply",  label:"Supply",  host:"pageSupply"},
   {id:"growth",  label:"Growth",  host:"pageGrowth"},
-  {id:"company", label:"Company", host:"pageCompany"},
   {id:"map", label:"Map", host:"pageMap", newFeature:"map"},
+  /* A build without the wiki files carries no Wiki tab: an empty page is worse
+     than no page at all. */
+  ...(typeof showWikiRoute === "function" ? [{id:"wiki", label:"Wiki", host:"pageWiki", newFeature:"wiki"}] : []),
 ];
+/* Hashes that named a page which has since become a view of another. Every link
+   already saved, printed or shared keeps working, without a page behind it. */
+const PAGE_ALIASES = {results: ["company", "results"]};
+/* The board opens on the Wiki with no save at all, so everything the pages do
+   with numbers asks first. */
+const hasData = () => typeof D !== "undefined" && !!D;
 const SUBS = {
+  company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
+            items:[["results","Results","secDaily"],["products","Products","secProducts"],
+                   ["payroll","Payroll","secPayroll"],["milestones","Milestones","secGoals"]]},
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"orders",
-           items:[["orders","Orders","secLogistics"],["checks","Checks","secStock"],["map","Map","secFlow"]]},
+           items:[["orders","Orders","secLogistics"],["checks","Checks","secStock"],["map","Goods flow","secFlow"]]},
   // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
            items:[["market","Demand","secMarket"],["plan","Plan a chain","secPlan"]]},
@@ -8207,27 +8303,40 @@ function showSub(pageId, id){
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   sub[pageId] = id;
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
+  /* The site panel is only on screen while a site is open, so it owns its own
+     visibility and the sweep above is corrected by the panel itself. */
+  if(pageId === "company" && hasData()) drawSite();
   $(sv.nav).innerHTML = sv.items.map(([k, label, anchor=k]) =>
     `<a href="#${anchor}" data-id="${k}" class="${k === id ? "on" : ""}">${label}</a>`).join("");
   remember(sv.key, id);
+  /* A view that was hidden until now measured nothing while it was: the chart
+     inside Results has to be drawn again once its container is on screen. Same
+     rule as in showPage. */
+  if(page === pageId && id === "results" && hasData()) drawChart();
   wireReveal();
 }
 function showPage(id, scroll = true, historyMode = "push"){
+  /* An old page hash opens the view that replaced it. */
+  if(PAGE_ALIASES[id]){ showSub(...PAGE_ALIASES[id]); id = PAGE_ALIASES[id][0]; }
   if(!PAGES.some(p => p.id === id)) id = "today";
   page = id;
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
   remember(PAGE_KEY, id);
   /* Clicks add a visit; boot normalises the current entry. History replay
-     only renders, so Back/Forward never changes the stack it is traversing. */
+     only renders, so Back/Forward never changes the stack it is traversing. A
+     hash that already resolves to this page is left alone while normalising, so
+     a section link or a wiki page survives a reload. */
   try{
-    if(historyMode !== "none" && location.hash !== "#" + id)
+    const keep = historyMode === "replace" && pageFromHash(location.hash.slice(1)) === id;
+    if(historyMode !== "none" && !keep && location.hash !== "#" + id)
       history[historyMode === "replace" ? "replaceState" : "pushState"](null, "", "#" + id);
   }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
-  if(id === "results") drawChart();
+  if(id === "company" && sub.company === "results" && hasData()) drawChart();
   if(id === "map") showCityMap();
+  if(id === "wiki") wikiVisit();
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
@@ -8237,10 +8346,23 @@ function showPage(id, scroll = true, historyMode = "push"){
 $("nav").innerHTML = PAGES.map(p =>
   `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span>${p.newFeature ? `<span class="feature-new" data-new-feature="${p.newFeature}" hidden>New</span>` : ''}</a>`).join("") + '<i class="ink"></i>';
 featureDiscovery.refresh();
+/* Which pages a reader can be on. Without a save only the Wiki has anything to
+   show, so the rest say so rather than opening blank. */
+function paintNav(){
+  const open = hasData();
+  document.querySelectorAll("#nav a[data-id]").forEach(a => {
+    const off = !open && a.dataset.id !== "wiki";
+    a.classList.toggle("off", off);
+    a.setAttribute("aria-disabled", String(off));
+    if(off) a.dataset.tip = "Open a save to see this page";
+    else delete a.dataset.tip;
+  });
+}
 $("nav").addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
+  if(!hasData() && a.dataset.id !== "wiki") return;
   showPage(a.dataset.id);
 });
 Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e => {
@@ -8249,10 +8371,36 @@ Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e
   e.preventDefault();
   showSub(id, a.dataset.id);
 }));
+/* What a hash opens: a page, an old page name that has become a view, one of
+   the wiki's own routes (#wiki/<page>), or a section, which knows its page and
+   view. Anything else is not ours. */
+function pageFromHash(h){
+  if(PAGES.some(p => p.id === h)) return h;
+  if(PAGE_ALIASES[h]) return PAGE_ALIASES[h][0];
+  if(/^wiki(\/|$)/.test(h)) return "wiki";
+  if(SEC_PAGE[h]) return SEC_PAGE[h][0];
+  return null;
+}
+/* Opening a hash means opening its view too. An old page name carries the view
+   that replaced it, so #results is handed to showPage whole rather than mapped
+   to Company first — mapping it first would leave whichever Company view was
+   last used on screen. */
+function openHash(h, historyMode = "none"){
+  if(PAGE_ALIASES[h]){ showPage(h, false, historyMode); return true; }
+  const id = pageFromHash(h);
+  if(!id) return false;
+  if(SEC_PAGE[h]){ reveal(h, historyMode); return true; }
+  showPage(id, false, historyMode);
+  return true;
+}
+/* The wiki module, when the build carries it, owns everything under #wiki. */
+function wikiVisit(){ if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1)); }
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
-  if(PAGES.some(p => p.id === h)) showPage(h, false, "none");
-  else if(SEC_PAGE[h]) reveal(h, "none");
+  /* With no save open only the wiki has anything behind it; the rest would be
+     empty chrome, so the nav's own lock holds for a typed hash too. */
+  if(!hasData() && pageFromHash(h) !== "wiki") return;
+  openHash(h, "none");
 });
 
 /* --- which kinds of finding make the list ------------------------------- */
@@ -9144,14 +9292,38 @@ function wireAll(){
   wireReveal();
 }
 
+/* The board with no numbers in it: the Wiki reads straight from the game's own
+   help, so it opens on its own, with the rest of the top row saying it needs a
+   save. The first delivery boots the rest without moving the reader. */
+let shellOnly = false;
+function bootShell(){
+  if(hasData() || shellOnly || !PAGES.some(p => p.id === "wiki")) return;
+  shellOnly = true;
+  document.body.classList.add("no-save");
+  $("title").textContent = "Big Copilot";
+  paintNav();
+  Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
+  showPage("wiki", false, "replace");
+  wireNav(); wireCoin(); wireSphere(); wireTips();
+}
 function boot(){
   renderAll();
   Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
   const h = location.hash.slice(1);
   if(SEC_PAGE[h]?.[1]) showSub(...SEC_PAGE[h]);
-  showPage(PAGES.some(p => p.id === h) ? h
-    : SEC_PAGE[h] ? SEC_PAGE[h][0]
-    : remembered(PAGE_KEY) || "today", false, "replace");
+  if(shellOnly){
+    /* A save arriving while the wiki is open: the numbers fill in behind it and
+       the reader stays on the page being read. */
+    shellOnly = false;
+    document.body.classList.remove("no-save");
+    paintNav();
+    showPage(page, false, "none");
+    return;
+  }
+  paintNav();
+  /* An old page name is handed over whole, so the view that replaced it is the
+     one that opens — not whichever view of its new page was last used. */
+  showPage(PAGE_ALIASES[h] ? h : pageFromHash(h) || remembered(PAGE_KEY) || "today", false, "replace");
   /* Bound once: the nav underline, the coin, and the sphere's entrance. A live
      refresh re-renders the numbers but never replays these. */
   wireNav(); wireCoin(); wireSphere();
@@ -9159,6 +9331,18 @@ function boot(){
 /* A page written with its numbers boots now. One that receives them later,
    as the in-browser board does, boots on the first delivery. */
 if(D) boot();
+
+/* What a host page may ask of the board. The web front door offers the wiki
+   from its landing, before any save is open; everything else waits for one. */
+window.BigCopilotBoard = {
+  hasWiki: () => typeof showWikiRoute === "function",
+  hasData,
+  browseWiki(){
+    if(typeof showWikiRoute !== "function") return false;
+    if(hasData()) showPage("wiki"); else bootShell();
+    return true;
+  },
+};
 
 /* --- live refresh --------------------------------------------------- */
 /* The save on disk only changes when the game writes one, so this polls a
@@ -9554,8 +9738,14 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = self.path.split("?")[0].rstrip("/") or "/"
-        # Explicit allowlist: the watch server exposes no arbitrary workspace files.
-        map_assets = {"/maps/locations.json": "application/json", "/maps/map-background.svg": "image/svg+xml"}
+        # Explicit allowlist: the watch server exposes no arbitrary workspace
+        # files. The wiki's catalogue is the public one beside the page, never
+        # the extractor's own working copies.
+        map_assets = {
+            "/maps/locations.json": "application/json",
+            "/maps/map-background.svg": "image/svg+xml",
+            "/wiki-data.json": "application/json",
+        }
         if route in map_assets:
             path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", route.lstrip("/"))
             try:
