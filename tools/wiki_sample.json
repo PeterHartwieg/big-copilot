@@ -7,7 +7,7 @@
     "than guessing. organised by the section of sample each entry serves."
   ],
   "sourceNotes": {
-    "locale": "{entries} keys. Every fact in the sample with a locale key beside it, and the full text of every help page.",
+    "locale": "{entries} locale keys. Guide facts and original help text are read from this file.",
     "helpStructure": "{categories} categories, {entries} page entries, {unique} distinct page slugs. {parse}",
     "layout": "{items} placed items, authored at game build {build}. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain.",
     "buildings": "{count} buildings from the game's fixed map. Gives every supplier address its neighbourhood, size code, floor area and traffic index."
@@ -64,24 +64,29 @@
   "pierFlag": "The bundled building table puts the piers in {hoods}. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone.",
   "servingWords": {
     "Customers are self-serving.": "Self-serving",
-    "Customers are served.": "Served"
+    "Customers are served.": "Served",
+    "Customers are served by employees.": "Employee-served",
+    "Customers are handled digitally": "Digital customers"
   },
   "buildingWords": {
     "retail buildings": "Retail",
     "office buildings": "Office",
-    "industrial buildings": "Industrial"
+    "industrial buildings": "Industrial",
+    "cinema buildings": "Cinema",
+    "theater buildings": "Theater",
+    "warehouse buildings": "Warehouse"
   },
   "gaps": {
     "prices": {
-      "what": "Sample prices",
-      "detail": "None of the {pages} help pages the sample reads carries a money figure, so the sample states no price for any fixture, product, recipe or business it describes. {elsewhere}"
+      "what": "Prices",
+      "detail": "The {pages} help pages used by this guide contain no prices for its equipment, products or recipes. {elsewhere}"
     },
-    "pricesElsewhereOne": "Money figures do appear in en.json, on {count} help page this sample does not read.",
-    "pricesElsewhereMany": "Money figures do appear in en.json, on {count} help pages this sample does not read.",
-    "pricesNowhereElse": "No other help page in en.json carries a money figure either.",
+    "pricesElsewhereOne": "A money figure appears on {count} other help page.",
+    "pricesElsewhereMany": "Money figures appear on {count} other help pages.",
+    "pricesNowhereElse": "No other help page contains a money figure either.",
     "missingProducts": {
-      "what": "Primary products the sample cannot describe",
-      "detail": "The Gift Shop page names {products} as primary, but the matching help pages are missing from this build, so those sample entries hold nulls instead of facts."
+      "what": "Missing product details",
+      "detail": "The business lists {products}, but their matching help pages are missing from this build. Their details remain unknown."
     },
     "weeklyLimits": {
       "what": "Weekly delivery limits",
@@ -107,13 +112,19 @@
       "what": "Three different build numbers",
       "detail": "Steam's depot build id for this install is {steam}. The shipped layouts counted for placement were authored at builds {layouts}. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
     },
+    "guideBuildNumber": {
+      "what": "Source build numbers",
+      "detail": "The installed Steam build is {steam}. {layoutClause} A save's build number is not included because this payload is built without reading a save."
+    },
+    "guideBuildLayouts": "Shipped layouts used by this guide were authored at builds {layouts}.",
+    "guideBuildNoLayouts": "No layout build number is available for this guide.",
     "wholesaleNegative": {
       "what": "A wholesale 'no' is an absence, not a rule",
       "detail": "{productsClause} the wholesaler product list, so the wholesale flag is false. That is two help pages agreeing, not a game rule: the help may simply not mention it."
     },
     "sampleCoverage": {
-      "what": "The sample is one business, the pages are all of them",
-      "detail": "The pages array covers every help page in the menu. The sample keeps the Gift Shop worked example the wiki page is written around: its fixtures, products, recipes and suppliers. Every other business reads its facts from pages, not from this sample."
+      "what": "Guide coverage",
+      "detail": "Visual guides cover customer-facing businesses. Other Wiki pages remain available in the original help reader."
     }
   },
   "provenanceNotes": {
@@ -122,5 +133,762 @@
     "privacy": "Source paths are game-relative. No absolute path, user name or save data travels in this file.",
     "unparsed": "{count} statements in the help could not be read into a field; they remain in the page text verbatim and are listed per record in the catalogue the extractor writes.",
     "requirements": "BUSINESS.requirements reads the business page's own requirement list. Its wording is kept in raw: the help says these are needed for the business to function, but not that the list is the complete set of rules the game enforces."
+  },
+  "guideUi": {
+    "primaryTitle": "Primary range",
+    "secondaryTitle": "Secondary products",
+    "primaryRecipesTitle": "Make the primary range",
+    "secondaryRecipesTitle": "Make the secondary products",
+    "servicesTitle": "Services",
+    "dependenciesTitle": "To provide this service",
+    "automaticFee": "Collected automatically on entry",
+    "noRecipe": "No factory recipe listed",
+    "missingRecipe": "Recipe details unavailable",
+    "noRequirements": "No collection requirements stated",
+    "chooseProduct": "Explore a product",
+    "stockTitle": "Stock and consumables",
+    "primaryHint": "The main range listed for this business. Cards show the equipment and supply options for each item.",
+    "secondaryHint": "This business can also sell these products. Their equipment, suppliers and recipes are included here.",
+    "recipeHint": "Maximum output per workstation. Daily figures assume 24 hours at full speed.",
+    "setupHint": "Listed requirements and suggested equipment, grouped for setup. Tick items as you go; checkmarks reset on reload.",
+    "graphHint": "Choose a product to explore its equipment and supply options. Select a node to highlight its connections.",
+    "placesHint": "Select a map pin to locate a supplier or recruitment agency.",
+    "sourceHint": "Read the original help and sources below. Missing information is marked as a gap.",
+    "suppliersTitle": "Suppliers",
+    "staffTitle": "People",
+    "fixturesTitle": "Equipment",
+    "plannerHint": "Open Growth with this business selected. The planner uses its primary range; secondary-product recipes remain available here.",
+    "plannerLabel": "Plan the primary range",
+    "listedRequirements": "Listed requirements",
+    "linkedRequirements": "Equipment and service requirements",
+    "suggestedEquipment": "Additional equipment",
+    "noListedSuppliers": "No supplier listed",
+    "noListedEquipment": "No equipment listed",
+    "conditionalRequirements": "Before adding these products",
+    "sharedRecipe": "Primary and secondary range",
+    "recipeLink": "Read the recipe",
+    "originalHelp": "Read the game help",
+    "roomTitle": "The room",
+    "setupTitle": "To open",
+    "graphTitle": "Fits together",
+    "sourceTitle": "Source",
+    "roomHint": "Rent the building type listed by the game help.",
+    "equipmentHint": "Equipment requirements and alternatives are shown in the source wording.",
+    "capacityHint": "Capacities describe this equipment. Check the product label and unit for each value.",
+    "peopleHint": "These skills can be assigned to this business. Service cards show which skills a service requires.",
+    "rangeHint": "Primary and secondary offerings are shown below with their equipment and supply options.",
+    "noOtherSellers": "No other seller listed",
+    "noEquipment": "No selling equipment listed",
+    "missingProduct": "Product details unavailable",
+    "fullDayHint": "Maximum hourly output multiplied by 24. This assumes uninterrupted production at full speed.",
+    "secondaryRecipeHint": "Recipes for products this business can sell alongside its primary range.",
+    "equipmentSourceHint": "Listed by the equipment help. Its requirements apply when you use that equipment or offer the associated product.",
+    "linkedRequirementsHint": "Required when using this equipment or offering this service.",
+    "linkedRequirementsHint": "These requirements apply when using the named equipment or offering the named service.",
+    "servicesHint": "Each service lists the equipment, skills and consumables named by its help page.",
+    "alsoCarried": "Secondary product",
+    "alsoCarriedTip": "This business can sell this product alongside its primary range.",
+    "alsoOffered": "Secondary service",
+    "alsoOfferedTip": "This business can offer this service alongside its primary range.",
+    "automaticFeeTip": "The game help says this fee is collected automatically when a customer enters.",
+    "missingRecipeTip": "This recipe is referenced by the product help, but its details are unavailable in this build.",
+    "recruitmentTitle": "Recruitment",
+    "recruitmentHint": "Recruiters named by this business’s skill help pages."
+  },
+  "guides": {
+    "giftshop": {
+      "lede": {
+        "text": "Start with gifts and umbrellas, then use the secondary range to broaden what customers can buy.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_giftshop_content",
+            "includes": "Customers are self-serving."
+          },
+          {
+            "src": "help_ba:businesstype_giftshop_content",
+            "includes": "(products-cheapgift)"
+          },
+          {
+            "src": "help_ba:businesstype_giftshop_content",
+            "includes": "(products-expensivegift)"
+          },
+          {
+            "src": "help_ba:businesstype_giftshop_content",
+            "includes": "(products-umbrella)"
+          },
+          {
+            "src": "help_ba:businesstype_giftshop_content",
+            "includes": "And can additionally sell:"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "florist": {
+      "lede": {
+        "text": "Build the main range around flowers, with gifts, umbrellas and drinks available alongside them.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_florist_content",
+            "includes": "(products-cheapflower)"
+          },
+          {
+            "src": "help_ba:businesstype_florist_content",
+            "includes": "(products-expensiveflower)"
+          },
+          {
+            "src": "help_ba:businesstype_florist_content",
+            "includes": "(products-cheapgift)"
+          },
+          {
+            "src": "help_ba:businesstype_florist_content",
+            "includes": "(products-umbrella)"
+          },
+          {
+            "src": "help_ba:businesstype_florist_content",
+            "includes": "(products-sodacan)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "coffeeshop": {
+      "lede": {
+        "text": "Serve hot drinks and pastries from a retail space, with staff handling customer service.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_coffeeshop_content",
+            "includes": "retail buildings"
+          },
+          {
+            "src": "help_ba:businesstype_coffeeshop_content",
+            "includes": "Customers are served by employees."
+          },
+          {
+            "src": "help_ba:businesstype_coffeeshop_content",
+            "includes": "(products-cupofcoffee)"
+          },
+          {
+            "src": "help_ba:businesstype_coffeeshop_content",
+            "includes": "(products-croissant)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "bookstore": {
+      "lede": {
+        "text": "A self-service bookshop, with gifts and accessories available alongside the main book range.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "Customers are self-serving."
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-limitededitionbook)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-motivationalbook)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-novel)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-picturebook)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-technicalmanual)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-youngnovel)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-cheapgift)"
+          },
+          {
+            "src": "help_ba:businesstype_bookstore_content",
+            "includes": "(products-earbuds01)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "fruitandvegetablestore": {
+      "lede": {
+        "text": "Sell fresh produce from a self-service shop. Include a digital scale in the opening setup.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_fruitandvegetablestore_content",
+            "includes": "Customers are self-serving."
+          },
+          {
+            "src": "help_ba:businesstype_fruitandvegetablestore_content",
+            "includes": "(furniture-standingdigitalscale)"
+          },
+          {
+            "src": "help_ba:businesstype_fruitandvegetablestore_content",
+            "includes": "(products-apple)"
+          },
+          {
+            "src": "help_ba:businesstype_fruitandvegetablestore_content",
+            "includes": "(products-carrot)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "supermarket": {
+      "lede": {
+        "text": "Stock the main food and drinks range, then add produce, pastries or wine to suit the shop.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_supermarket_content",
+            "includes": "(products-freshfood)"
+          },
+          {
+            "src": "help_ba:businesstype_supermarket_content",
+            "includes": "(products-frozenfood)"
+          },
+          {
+            "src": "help_ba:businesstype_supermarket_content",
+            "includes": "(products-sodacan)"
+          },
+          {
+            "src": "help_ba:businesstype_supermarket_content",
+            "includes": "(products-apple)"
+          },
+          {
+            "src": "help_ba:businesstype_supermarket_content",
+            "includes": "(products-croissant)"
+          },
+          {
+            "src": "help_ba:businesstype_supermarket_content",
+            "includes": "(products-bottleofwine)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "Adding fruit or vegetables also requires a Standing Digital Scale.",
+          "src": "help_ba:businesstype_supermarket_content",
+          "when": [
+            {
+              "src": "help_ba:businesstype_supermarket_content",
+              "includes": "A [Standing Digital Scale](furniture-standingdigitalscale) is required to sell Fruits and Vegetables."
+            }
+          ]
+        }
+      ]
+    },
+    "fastfoodrestaurant": {
+      "lede": {
+        "text": "Staff serve the food and drinks. Match the equipment to the products you choose to offer.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_fastfoodrestaurant_content",
+            "includes": "Customers are served by employees."
+          },
+          {
+            "src": "help_ba:businesstype_fastfoodrestaurant_content",
+            "includes": "(products-burger)"
+          },
+          {
+            "src": "help_ba:businesstype_fastfoodrestaurant_content",
+            "includes": "(products-sodacan)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "clothingstore": {
+      "lede": {
+        "text": "Offer classic and modern clothing at different price levels, with a changing room in the opening setup.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_clothingstore_content",
+            "includes": "(products-classiccheapfemaleclothing)"
+          },
+          {
+            "src": "help_ba:businesstype_clothingstore_content",
+            "includes": "(products-modernexpensivemaleclothing)"
+          },
+          {
+            "src": "help_ba:businesstype_clothingstore_content",
+            "includes": "(furniture-changingroom)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "electronicsstore": {
+      "lede": {
+        "text": "Build the main range around phones, watches and audio products, with drinks available as extras.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_electronicsstore_content",
+            "includes": "(products-smartphone1)"
+          },
+          {
+            "src": "help_ba:businesstype_electronicsstore_content",
+            "includes": "(products-smartwatch2)"
+          },
+          {
+            "src": "help_ba:businesstype_electronicsstore_content",
+            "includes": "(products-earbuds01)"
+          },
+          {
+            "src": "help_ba:businesstype_electronicsstore_content",
+            "includes": "(products-headphones01)"
+          },
+          {
+            "src": "help_ba:businesstype_electronicsstore_content",
+            "includes": "(products-sodacan)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "jewelrystore": {
+      "lede": {
+        "text": "Jewelry and smartwatches share the main range. Check the supply and production options for each product.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_jewelrystore_content",
+            "includes": "(products-cheapjewelry)"
+          },
+          {
+            "src": "help_ba:businesstype_jewelrystore_content",
+            "includes": "(products-expensivejewelry)"
+          },
+          {
+            "src": "help_ba:businesstype_jewelrystore_content",
+            "includes": "(products-smartwatch1)"
+          },
+          {
+            "src": "help_ba:businesstype_jewelrystore_content",
+            "includes": "(products-smartwatch2)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "liquorstore": {
+      "lede": {
+        "text": "Beer, wine, whisky and tobacco form the main range; cocktails and soft drinks can be added alongside them.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_liquorstore_content",
+            "includes": "(products-beer)"
+          },
+          {
+            "src": "help_ba:businesstype_liquorstore_content",
+            "includes": "(products-bottleofwine)"
+          },
+          {
+            "src": "help_ba:businesstype_liquorstore_content",
+            "includes": "(products-whisky)"
+          },
+          {
+            "src": "help_ba:businesstype_liquorstore_content",
+            "includes": "(products-cigar)"
+          },
+          {
+            "src": "help_ba:businesstype_liquorstore_content",
+            "includes": "(products-margarita)"
+          },
+          {
+            "src": "help_ba:businesstype_liquorstore_content",
+            "includes": "(products-sodacan)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "hairdresser": {
+      "lede": {
+        "text": "Provide hair services with the right equipment and stylists. Hair Care Product supports the services and can also be sold.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_hairdresser_content",
+            "includes": "(skill-hairstylist)"
+          },
+          {
+            "src": "help_ba:businesstype_hairdresser_content",
+            "includes": "(products-haircareproduct)"
+          },
+          {
+            "src": "help_ba:businesstype_hairdresser_content",
+            "includes": "And can additionally sell:"
+          },
+          {
+            "src": "help_ba:businesstype_hairdresser_content",
+            "includes": "(fees-haircuttingfee)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "A standard or modern hairdresser chair can satisfy the chair requirement; the help lists them as alternatives.",
+          "src": "help_ba:businesstype_hairdresser_content",
+          "when": [
+            {
+              "src": "help_ba:businesstype_hairdresser_content",
+              "includes": "[Hairdresser Chair](furniture-hairdresserchair) or [Hairdresser Chair (Modern)](furniture-hairdresserchairmodern)"
+            }
+          ]
+        }
+      ]
+    },
+    "gym": {
+      "lede": {
+        "text": "Combine a gym cover charge with drink sales, and prepare the workout and changing facilities before opening.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_gym_content",
+            "includes": "(fees-gymcovercharge)"
+          },
+          {
+            "src": "help_ba:businesstype_gym_content",
+            "includes": "(products-energydrink)"
+          },
+          {
+            "src": "help_ba:businesstype_gym_content",
+            "includes": "(products-sodacan)"
+          },
+          {
+            "src": "help_ba:businesstype_gym_content",
+            "includes": "(furniture-gymlockers)"
+          },
+          {
+            "src": "help_ba:businesstype_gym_content",
+            "includes": "(furniture-itemgroupworkoutmachine)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "eventplanningagency": {
+      "lede": {
+        "text": "Event planners serve customers digitally from an office equipped with computer workstations.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_eventplanningagency_content",
+            "includes": "office buildings"
+          },
+          {
+            "src": "help_ba:businesstype_eventplanningagency_content",
+            "includes": "Customers are handled digitally"
+          },
+          {
+            "src": "help_ba:businesstype_eventplanningagency_content",
+            "includes": "(furniture-computerworkstation)"
+          },
+          {
+            "src": "help_ba:businesstype_eventplanningagency_content",
+            "includes": "(skill-eventplanner)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "A Computer Workstation needs a desk, chair and computer. Optional accessories address employee demands.",
+          "src": "help_ba:itemname_computerworkstation_content",
+          "when": [
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "It requires a [Desk](furniture-deskgroup) and a [Chair](furniture-chairgroup) and a [Computer](furniture-computergroup)"
+            },
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "To accomodate some employee demands"
+            }
+          ]
+        }
+      ]
+    },
+    "graphicdesigner": {
+      "lede": {
+        "text": "Graphic designers serve customers digitally from an office equipped with computer workstations.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_graphicdesigner_content",
+            "includes": "office buildings"
+          },
+          {
+            "src": "help_ba:businesstype_graphicdesigner_content",
+            "includes": "Customers are handled digitally"
+          },
+          {
+            "src": "help_ba:businesstype_graphicdesigner_content",
+            "includes": "(furniture-computerworkstation)"
+          },
+          {
+            "src": "help_ba:businesstype_graphicdesigner_content",
+            "includes": "(skill-graphicdesigner)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "A Computer Workstation needs a desk, chair and computer. Optional accessories address employee demands.",
+          "src": "help_ba:itemname_computerworkstation_content",
+          "when": [
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "It requires a [Desk](furniture-deskgroup) and a [Chair](furniture-chairgroup) and a [Computer](furniture-computergroup)"
+            },
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "To accomodate some employee demands"
+            }
+          ]
+        }
+      ]
+    },
+    "lawfirm": {
+      "lede": {
+        "text": "Lawyers provide an hourly service to digital customers from an office.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_lawfirm_content",
+            "includes": "office buildings"
+          },
+          {
+            "src": "help_ba:businesstype_lawfirm_content",
+            "includes": "Customers are handled digitally"
+          },
+          {
+            "src": "help_ba:businesstype_lawfirm_content",
+            "includes": "(fees-hourlylawyerfee)"
+          },
+          {
+            "src": "help_ba:businesstype_lawfirm_content",
+            "includes": "(skill-lawyer)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "A Computer Workstation needs a desk, chair and computer. Optional accessories address employee demands.",
+          "src": "help_ba:itemname_computerworkstation_content",
+          "when": [
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "It requires a [Desk](furniture-deskgroup) and a [Chair](furniture-chairgroup) and a [Computer](furniture-computergroup)"
+            },
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "To accomodate some employee demands"
+            }
+          ]
+        }
+      ]
+    },
+    "travelagency": {
+      "lede": {
+        "text": "Travel agents provide an hourly consulting service to digital customers from an office.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_travelagency_content",
+            "includes": "office buildings"
+          },
+          {
+            "src": "help_ba:businesstype_travelagency_content",
+            "includes": "Customers are handled digitally"
+          },
+          {
+            "src": "help_ba:businesstype_travelagency_content",
+            "includes": "(fees-hourlytravelconsultantfee)"
+          },
+          {
+            "src": "help_ba:businesstype_travelagency_content",
+            "includes": "(skill-travelagent)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "A Computer Workstation needs a desk, chair and computer. Optional accessories address employee demands.",
+          "src": "help_ba:itemname_computerworkstation_content",
+          "when": [
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "It requires a [Desk](furniture-deskgroup) and a [Chair](furniture-chairgroup) and a [Computer](furniture-computergroup)"
+            },
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "To accomodate some employee demands"
+            }
+          ]
+        }
+      ]
+    },
+    "webdevelopmentagency": {
+      "lede": {
+        "text": "Programmers provide an hourly service to digital customers from an office.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_webdevelopmentagency_content",
+            "includes": "office buildings"
+          },
+          {
+            "src": "help_ba:businesstype_webdevelopmentagency_content",
+            "includes": "Customers are handled digitally"
+          },
+          {
+            "src": "help_ba:businesstype_webdevelopmentagency_content",
+            "includes": "(fees-hourlyprogrammerfee)"
+          },
+          {
+            "src": "help_ba:businesstype_webdevelopmentagency_content",
+            "includes": "(skill-programmer)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "A Computer Workstation needs a desk, chair and computer. Optional accessories address employee demands.",
+          "src": "help_ba:itemname_computerworkstation_content",
+          "when": [
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "It requires a [Desk](furniture-deskgroup) and a [Chair](furniture-chairgroup) and a [Computer](furniture-computergroup)"
+            },
+            {
+              "src": "help_ba:itemname_computerworkstation_content",
+              "includes": "To accomodate some employee demands"
+            }
+          ]
+        }
+      ]
+    },
+    "nightclub": {
+      "lede": {
+        "text": "Combine drink sales with entry and coat-check fees. The opening setup includes DJ and sound equipment.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_nightclub_content",
+            "includes": "(fees-nightclubcovercharge)"
+          },
+          {
+            "src": "help_ba:businesstype_nightclub_content",
+            "includes": "(fees-coatcheckfee)"
+          },
+          {
+            "src": "help_ba:businesstype_nightclub_content",
+            "includes": "(products-martini)"
+          },
+          {
+            "src": "help_ba:businesstype_nightclub_content",
+            "includes": "(furniture-djbooth)"
+          },
+          {
+            "src": "help_ba:businesstype_nightclub_content",
+            "includes": "(furniture-musicgroup)"
+          }
+        ]
+      },
+      "notes": [
+        {
+          "text": "Choose either the left or right coat check. The help lists these as alternatives.",
+          "src": "help_ba:businesstype_nightclub_content",
+          "when": [
+            {
+              "src": "help_ba:businesstype_nightclub_content",
+              "includes": "[Coat Check (Left)](furniture-coatcheckleft) or [Coat Check (Right)](furniture-coatcheckright)"
+            }
+          ]
+        }
+      ]
+    },
+    "cinema": {
+      "lede": {
+        "text": "Open in a cinema building with projection equipment and a ticket kiosk. Food and drinks form a separate secondary range.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_cinema_content",
+            "includes": "cinema buildings"
+          },
+          {
+            "src": "help_ba:businesstype_cinema_content",
+            "includes": "(furniture-boothprojection)"
+          },
+          {
+            "src": "help_ba:businesstype_cinema_content",
+            "includes": "(furniture-ticketkiosk)"
+          },
+          {
+            "src": "help_ba:businesstype_cinema_content",
+            "includes": "(products-popcorn)"
+          },
+          {
+            "src": "help_ba:businesstype_cinema_content",
+            "includes": "(products-sodacan)"
+          }
+        ]
+      },
+      "notes": []
+    },
+    "theater": {
+      "lede": {
+        "text": "Open in a theater building with ticketing and backstage facilities, then add food and drinks alongside ticket sales.",
+        "when": [
+          {
+            "src": "help_ba:businesstype_theater_content",
+            "includes": "theater buildings"
+          },
+          {
+            "src": "help_ba:businesstype_theater_content",
+            "includes": "(furniture-boothticket)"
+          },
+          {
+            "src": "help_ba:businesstype_theater_content",
+            "includes": "(furniture-dressingroom)"
+          },
+          {
+            "src": "help_ba:businesstype_theater_content",
+            "includes": "(products-cheeseplatter)"
+          },
+          {
+            "src": "help_ba:businesstype_theater_content",
+            "includes": "(products-whisky)"
+          }
+        ]
+      },
+      "notes": []
+    }
+  },
+  "guideGaps": {
+    "rangeItems": {
+      "what": "Missing offering help",
+      "detail": "The business lists {names}, but their help pages are missing from this build. Details remain unknown."
+    },
+    "feeKind": {
+      "what": "Unclear offering type",
+      "detail": "The help does not identify {names} as products or fees. Their type remains unknown."
+    },
+    "feeRequirements": {
+      "what": "Unstated fee requirements",
+      "detail": "The help for {names} does not list collection requirements or confirm automatic collection."
+    },
+    "recipePages": {
+      "what": "Missing recipe help",
+      "detail": "Products reference {names}, but their recipe pages are missing. Inputs and production rates remain unknown."
+    },
+    "recipeRates": {
+      "what": "Unknown production rates",
+      "detail": "No readable maximum hourly rate was found for {names}. Daily production is not calculated."
+    },
+    "workstations": {
+      "what": "Missing workstation help",
+      "detail": "Recipes reference {names}, but their workstation pages are missing. Equipment and suppliers remain unknown."
+    }
   }
 }

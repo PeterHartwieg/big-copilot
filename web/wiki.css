@@ -89,6 +89,13 @@
 .wiki .wk-lede b{color:var(--ink);font-weight:600}
 .wiki .wk-tiles{margin-top:28px}
 .wiki .kpi .v.t{font-size:22px;padding-top:4px}
+/* The notes authored beside the payload, under the opening line. Each one is
+   only in the file while the help it was written against still reads that way,
+   so they are set as reading, not as a warning. */
+.wiki .wk-notes{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;max-width:62ch}
+.wiki .wk-notes li{position:relative;padding-left:18px;font-size:13.5px;line-height:1.6;color:var(--ink-2)}
+.wiki .wk-notes li::before{content:"";position:absolute;left:2px;top:.66em;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);opacity:.7}
 
 /* the reader ---------------------------------------------------------------- */
 .wiki .wk-read{margin-top:26px;max-width:70ch;font-size:14.5px;line-height:1.75;color:var(--ink-2)}
@@ -125,15 +132,23 @@
   display:flex;flex-direction:column;gap:12px;min-width:0}
 .wiki .wk-group h3{margin:0;font-size:13.5px;font-weight:600}
 .wiki .wk-item{display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;font:inherit;font-size:13px;line-height:1.45;
-  text-align:left;background:none;border:0;padding:0;color:inherit;cursor:pointer}
+  text-align:left;background:none;border:0;padding:0;color:inherit}
+/* The square is the only control on the row, so a requirement the help writes
+   with links can keep them without a link landing inside a checkbox. */
 .wiki .wk-tick{width:14px;height:14px;margin-top:3px;border:1.5px solid var(--ink-3);border-radius:3px;position:relative;
+  padding:0;background:none;cursor:pointer;
   transition:border-color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.wiki .wk-sub{margin:6px 0 0;font:500 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3)}
+/* A line in one of those cards that names a place rather than a job to tick. */
+.wiki .wk-item.said strong{font-weight:500;color:var(--ink-2)}
+.wiki .wk-group .wk-more{margin:2px 0 0}
 .wiki .wk-tick::after{content:"";position:absolute;inset:2.5px;border-radius:1px;background:var(--accent);opacity:0;
   transform:scale(.4);transition:opacity .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
 .wiki .wk-item.req .wk-tick{border-color:var(--accent)}
 .wiki .wk-item.req .wk-tick::after{opacity:.35;transform:scale(1)}
 .wiki .wk-item:hover .wk-tick{transform:scale(1.15)}
-.wiki .wk-item:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.wiki .wk-tick:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
 .wiki .wk-item.done .wk-tick{border-color:var(--accent)}
 .wiki .wk-item.done .wk-tick::after{opacity:1;transform:scale(1)}
 .wiki .wk-item.done strong{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--rule)}
@@ -160,18 +175,40 @@
 .wiki .wk-card dt{color:var(--ink-3);font:500 10px/1.8 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;
   white-space:nowrap;padding-top:6px}
 .wiki .wk-card dd{margin:0;min-width:0;display:flex;flex-wrap:wrap;gap:5px;padding-top:4px}
-.wiki .wk-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--rule);
-  font-size:12px;color:var(--ink-2);background:var(--raised);white-space:nowrap;
+/* A pill holds a name and, where the help gives one, a number. Where the help
+   counts two kinds of goods on one shelf, both labelled rows ride in it, and a
+   pill that long has to fold inside its card rather than run off the edge of
+   it: the number is the point, so it is never cut off to keep the shape. */
+.wiki .wk-pill{display:inline-flex;align-items:center;align-content:center;flex-wrap:wrap;gap:2px 6px;
+  padding:3px 9px;border-radius:999px;border:1px solid var(--rule);max-width:100%;
+  font-size:12px;color:var(--ink-2);background:var(--raised);
   transition:border-color .15s,color .15s,transform .2s cubic-bezier(.34,1.56,.64,1)}
 .wiki .wk-pill:hover{border-color:var(--ink-3);color:var(--ink);transform:translateY(-1px)}
-.wiki .wk-pill b{font:500 11px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.wiki .wk-pill b{font:500 11px "IBM Plex Mono",monospace;color:var(--ink-3);overflow-wrap:anywhere}
 .wiki .wk-pill.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .wiki .wk-pill.on b{color:var(--accent);opacity:.8}
 .wiki .wk-pill.no{border-style:dashed;color:var(--neg);background:#ff625714}
 /* Not a door that is shut, only one the help never opens. */
 .wiki .wk-pill.unknown{border-style:dashed;color:var(--ink-3)}
+.wiki .wk-cardtop .chip{flex:none}
+/* A service is collected, not stocked: its card carries what the help says it
+   depends on, as lines rather than as pills, because the help writes them as
+   sentences with alternatives and minimums in them. */
+.wiki .wk-card.svc dd.wk-lines{flex-direction:column;gap:7px;padding-top:5px}
+.wiki .wk-need{font-size:13px;line-height:1.55;color:var(--ink-2);position:relative;padding-left:14px}
+.wiki .wk-need::before{content:"";position:absolute;left:0;top:.62em;width:4px;height:4px;border-radius:50%;background:var(--ink-3)}
 
 /* fits together: the lanes, the wires and the ball --------------------------- */
+/* A range too wide to draw at once is drawn one product at a time; the cards
+   above keep every relationship, so nothing is lost by choosing. */
+.wiki .wk-picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.wiki .wk-pickerlab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin-right:2px}
+.wiki .wk-tab{font:inherit;font-size:12.5px;color:var(--ink-2);background:var(--surface);border:1px solid var(--rule);
+  border-radius:999px;padding:5px 12px;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.wiki .wk-tab:hover{border-color:var(--ink-3);color:var(--ink)}
+.wiki .wk-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wiki .wk-tab.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .wiki .wk-graph{position:relative;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);
   padding:18px 20px 16px;overflow:hidden}
 .wiki .wk-lanes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 110px}
@@ -214,6 +251,12 @@
 
 /* make it: the recipes ------------------------------------------------------- */
 .wiki .wk-flows{display:flex;flex-direction:column;gap:14px}
+/* A recipe that makes more than one of the shop's products is drawn once, with
+   the products it belongs to named over it. */
+.wiki .wk-recipe{display:flex;flex-direction:column;gap:8px}
+.wiki .wk-for{display:flex;flex-wrap:wrap;gap:6px}
+.wiki .wk-flow.miss{border-style:dashed}
+.wiki .wk-flow.miss .wk-box.mid{border-color:var(--rule);background:var(--raised);color:var(--ink-3)}
 .wiki .wk-flow{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);display:grid;
   grid-template-columns:minmax(0,1.3fr) 60px minmax(0,1fr) 60px minmax(0,.9fr);align-items:center;gap:0 12px;
   padding:14px 18px;transition:border-color .2s}

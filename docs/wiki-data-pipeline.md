@@ -118,7 +118,7 @@ output.
 ## Tests
 
 ```sh
-python -m unittest tests.test_wiki_extract tests.test_wiki_build
+python -m unittest tests.test_wiki_extract tests.test_wiki_build tests.test_wiki_review tests.test_wiki_guides
 ```
 
 Synthetic fixtures only: the suite writes its own locale and help structure
@@ -142,26 +142,44 @@ The contract (`schemaVersion: 1`):
 - `pages` — every distinct help page, `id` being the helpstructure slug and
   `body` the help text as the game wrote it (markdown-ish, links and all). A
   slug listed twice keeps its first entry; the second is named in provenance.
-- `sample` — the worked example the wiki page is written around, in the exact
-  shapes `window.WIKI` renders: SOURCES, CATEGORIES, SUPPLIERS, WHOLESALERS,
-  FIXTURES, PRODUCTS, RECIPES, WORKSTATION, BUSINESS, RETAIL_SIZES, GAPS. The
-  wording and which fields exist are authored (tools/wiki_sample.json); every
-  number, name, address, rate and hash is read from the game files at build
-  time, and a fact the sources no longer support becomes `null` rather than a
-  stale figure.
+- `guides` — visual guides keyed by `businesstypes-*` page ID for the 21
+  customer-facing businesses. Each uses the existing sample shape and includes
+  its primary and secondary products, equipment, suppliers and recipes.
+  `BUSINESS.primary` and `BUSINESS.secondary` contain short product IDs;
+  `extras` retains the secondary product names for older consumers.
+- `sample` — the Gift Shop compatibility entry. Older payloads containing only
+  this entry still work with the reader.
 
-  The products, recipes and fixtures follow the build: `PRODUCTS` holds every
-  product the Gift Shop page names as primary plus the authored extras, so a
-  patch that adds a fourth core product gains a fourth entry instead of a
-  narrower sample. A primary product whose help page is gone keeps its entry
-  with nulls and is named in GAPS. `BUSINESS.requirements` carries the business
-  page's own requirement list — the linked furniture and a bullet stating a
-  product is needed without naming one — with the bullets kept verbatim in
-  `raw` and a note that the help does not establish the list as complete.
-  Each product's `crosscheck` reads both help directions side by side: the
-  product page's own furniture list and the furniture pages' product lists, and
-  where the two do not return each other the payload says so instead of picking
-  one.
+  `PRODUCTS` distinguishes physical goods from fees. Fee cards carry source
+  wording for collection requirements, preserving alternatives and conditions.
+  Every product can reference multiple recipes; each recipe selects its own
+  entry in `WORKSTATIONS`. `WORKSTATION` remains a compatibility field for a
+  guide with only one workstation. Secondary products receive the same cards
+  and recipe flows as the primary range, in separately labeled sections.
+
+  `BUSINESS.requirements.raw` preserves the original linked requirement lines.
+  Capacities retain their product labels and units. Missing facts remain
+  unknown, with source links or gaps, rather than reusing old values. Shipped
+  Gift Shop layout observations are scoped to Gift Shop.
+  Fixture `groups` preserve links to equipment groups, and office workstation
+  components resolve to their own equipment and suppliers. All neutral sections
+  of a group are retained, including both toilet and sink options; business-specific
+  extensions remain scoped. Linked prose requirements retain their conditions.
+  Product furniture lists honor the source's business-specific assignments, and
+  other sellers include both primary and additional businesses. `BUSINESS.hiring`
+  carries the business’s recruiters; `hiringBySkill`, when present, keeps the
+  verified recruitment links for each skill.
+
+  Each guide's `GAPS` combines missing-data notices with applicable source limits.
+  Price and source-quality checks use the pages that guide reads; recipe limits
+  appear only where recipes are shown. The legacy sample's gaps remain independent.
+
+  Authored copy lives in `tools/wiki_sample.json`: `guideUi` supplies shared
+  labels, `guideGaps` supplies missing-data messages, and `guides` contains
+  business summaries and notes. Each summary
+  and note has source conditions; it is included only while those literal
+  excerpts still appear in the named help pages. Review the wording whenever
+  related game content changes. Facts continue to come from the extractor.
 - `provenance` — schema name, source paths as game-relative names with SHA256
   and byte counts, Steam app and depot build, the sources' newest file
   modification time as `sourceDate`, duplicates, links that point at no page,
