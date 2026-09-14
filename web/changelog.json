@@ -1,5 +1,11 @@
 [
   {
+    "pr": 26,
+    "date": "2026-09-14",
+    "title": "Compare your shop prices in the Wiki",
+    "summary": "Business guides now show each shop's configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible."
+  },
+  {
     "pr": 25,
     "date": "2026-09-14",
     "title": "Explore guides for every shop",

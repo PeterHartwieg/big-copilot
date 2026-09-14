@@ -575,7 +575,7 @@ function wikiYours(page, extra){
       "Your own sites with this product on a shelf, from yesterday's trading."));
     slots.push(wikiSlot("Sold a day", wikiNum(own.product.units),
       "Units your shops sold yesterday, added up."));
-    slots.push(wikiSlot("Your price", wikiMoney(own.product.price),
+    slots.push(wikiSlot("Average sold price", wikiMoney(own.product.price),
       "Your own average take per unit yesterday: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
   }
   if(own && own.sites.length)
@@ -848,6 +848,7 @@ ${wikiGuideRecipes(g, ours, "primary", plan === "recipes")}
 ${wikiGuideRecipes(g, rest, "secondary", false)}
 ${wikiGuidePlaces(g)}
 ${wikiYours(page, wikiGuideOwn(g, goods))}
+${wikiGuidePrices(g, offers)}
 ${wikiGuideSource(g, page, ctx)}`;
 }
 
@@ -1679,10 +1680,53 @@ function wikiPlanControl(){
       >${hasData() ? "Not in this save's catalogue" : "Open a save to plan this range"}</span>`;
 }
 
+/* Prices are joined by stable item/type IDs, never names or yesterday's sales.
+   Native disclosures keep neighbourhoods compact without extra saved UI state. */
+function wikiGuidePrices(g, offers){
+  if(!offers.length) return "";
+  const heading = `<div class="sechead"><h2>Prices in your save</h2>
+    <span class="aside">${wikiChip("save", hasData() ? `save day ${D.meta?.day ?? "unknown"}` : "no save open")}</span></div>`;
+  if(!hasData()) return `<section class="sec">${heading}
+    <p class="quiet">Open a save to see your configured prices and neighbourhood market prices.</p></section>`;
+  const mine = (D.businesses || []).filter(b => b.typeSlug === g.BUSINESS.nameSrc && b.status !== "vacant");
+  const hoodOf = b => b.neighbourhood || "Unknown neighbourhood";
+  const rows = new Map(((D.market || {}).rows || []).map(r => [r.slug, r]));
+  const hoods = [...new Set([
+    ...mine.map(hoodOf),
+    ...offers.flatMap(p => (rows.get(p.slug)?.cells || []).filter(Boolean).map(c => c.hood)),
+  ].filter(Boolean))];
+  const price = n => Number.isFinite(n) && n >= 0 ? `$${n.toFixed(2)}` : null;
+  const body = hoods.map((hood, index) => {
+    const shops = mine.filter(b => hoodOf(b) === hood);
+    const lines = offers.map(p => {
+      const own = shops.map(b => {
+        const line = (b.lines || []).find(l => l.slug === p.slug);
+        const value = line && !("configuredPrice" in line) ? "Unavailable" : price(line?.configuredPrice) ?? "Not set";
+        return `<div>${wikiText(b.name)}: <b>${wikiText(value)}</b></div>`;
+      }).join("") || "No matching shop";
+      const cell = (rows.get(p.slug)?.cells || []).find(c => c && c.hood === hood);
+      const market = price(cell?.marketPrice);
+      return `<tr><th scope="row">${wikiText(p.name)}</th><td data-label="Your configured price">${own}</td><td data-label="Lowest market price">${
+        market === null ? `<span class="quiet">Unavailable</span><small>${wikiText(cell?.marketPriceNote || "Not available in this save")}</small>`
+          : wikiText(market)}</td></tr>`;
+    }).join("");
+    return `<details class="wk-prices"${index === 0 ? " open" : ""}>
+      <summary>${wikiText(hood)}</summary>
+      <div class="wk-price-scroll" role="region" aria-label="${attr(hood + " prices")}" tabindex="0">
+      <table aria-label="${attr(hood + " prices per unit or service")}">
+        <thead><tr><th scope="col">Product or service</th><th scope="col">Your configured price</th>
+        <th scope="col">Lowest market price</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
+  }).join("");
+  return `<section class="sec">${heading}
+    <p class="quiet">Prices per unit or service. The market minimum includes your shops and other business types selling the item.
+    Reconstructed from this save; MarketInsider's cached display may differ. These are not recommended prices.</p>
+    ${body || '<p class="quiet">No matching shops or neighbourhood market data in this save.</p>'}</section>`;
+}
+
 function wikiGuideOwn(g, goods){
   if(!hasData()) return [];
   const b = g.BUSINESS || {};
-  const mine = (D.businesses || []).filter(x => String(x.type || "").toLowerCase() === String(b.name || "").toLowerCase());
+  const mine = (D.businesses || []).filter(x => x.typeSlug === b.nameSrc && x.status !== "vacant");
   const slots = [];
   if(mine.length) slots.push(wikiSlot("Your shops", `${mine.length}`,
     `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));

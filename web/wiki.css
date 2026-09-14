@@ -302,6 +302,20 @@
 .wiki .wk-lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .wiki .wk-slot .wk-v{font:500 20px/1.2 "IBM Plex Mono",monospace;color:var(--ink);overflow-wrap:anywhere}
 .wiki .wk-slot .wk-v.none{color:var(--ink-3)}
+.wiki .wk-prices{border-bottom:1px solid var(--rule);padding:12px 0}
+.wiki .wk-prices summary{cursor:pointer;font-weight:500;padding:4px 0}
+.wiki .wk-price-scroll{overflow-x:auto;margin-top:12px}
+.wiki .wk-prices table{width:100%;min-width:480px;border-collapse:collapse}
+.wiki .wk-prices th,.wiki .wk-prices td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--rule-soft);white-space:normal;overflow-wrap:anywhere}
+.wiki .wk-prices td small{display:block;color:var(--ink-3)}
+@media(max-width:600px){
+  .wiki .wk-prices table,.wiki .wk-prices tbody{display:block;min-width:0}
+  .wiki .wk-prices thead{display:none}
+  .wiki .wk-prices tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--rule)}
+  .wiki .wk-prices th{grid-column:1/-1}
+  .wiki .wk-prices th,.wiki .wk-prices td{padding:8px 4px;border:0}
+  .wiki .wk-prices td::before{content:attr(data-label);display:block;font-size:11px;color:var(--ink-3);margin-bottom:6px}
+}
 
 /* source --------------------------------------------------------------------- */
 .wiki .wk-gaps{border-top:1px solid var(--rule);max-width:60ch}

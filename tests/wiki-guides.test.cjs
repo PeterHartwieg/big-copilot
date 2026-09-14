@@ -824,7 +824,7 @@ test('an office is drawn without shelves, recipes or a graph it has no use for',
   const w = wiki();
   const html = await w.load('wiki/businesstypes-lawfirm');
   const seen = headings(html);
-  assert.deepEqual(seen, ['To open', 'Services', 'Where to go', 'Yours', 'Source']);
+  assert.deepEqual(seen, ['To open', 'Services', 'Where to go', 'Yours', 'Prices in your save', 'Source']);
   assert.ok(!seen.includes('Sells') && !seen.includes('Fits together') && !seen.includes('Make it'));
   // No retail size codes borrowed from a shop that has them.
   assert.doesNotMatch(html, /A1|M1/);
@@ -984,6 +984,79 @@ test('the labels the payload carries are the ones the page wears', async () => {
 /* web/wiki-data.json is built from an installed game and arrives with the
    extraction, so this holds whatever it carries: nothing while it carries no
    guide, and every business it does describe once it does. */
+test('pricing uses configured values and stable IDs, including secondary products', async () => {
+  const save = {meta:{day:190}, businesses:[
+    {name:'Coffee <One>', type:'Localized name', typeSlug:COFFEE.BUSINESS.nameSrc,
+      neighbourhood:'Midtown', lines:[
+        {slug:'ba:itemname_coffee', configuredPrice:205.20},
+        {slug:'ba:itemname_tea', configuredPrice:0},
+        {slug:'ba:itemname_cake', configuredPrice:8.75},
+      ]},
+    {name:'Coffee Two', typeSlug:COFFEE.BUSINESS.nameSrc, neighbourhood:'Midtown',
+      lines:[{slug:'ba:itemname_coffee', configuredPrice:6.50}]},
+    {name:'Other type', type:'Coffee Shop', typeSlug:'other', neighbourhood:'Midtown',
+      lines:[{slug:'ba:itemname_coffee', configuredPrice:999.99}]},
+  ], products:[{item:'Coffee', price:111.11, stores:1, units:2}], market:{rows:[
+    {slug:'ba:itemname_coffee', cells:[{hood:'Midtown',marketPrice:4.25}, {hood:'Murray Hill',marketPrice:3.10}]},
+    {slug:'ba:itemname_cake', cells:[{hood:'Midtown',marketPrice:null,marketPriceNote:'Supply-event pricing unavailable'}]},
+  ]}};
+  const w = wiki({save});
+  const html = section(await w.load('wiki/businesstypes-coffeeshop'), 'Prices in your save');
+  assert.match(html, /save day 190/);
+  assert.match(html, /Coffee &lt;One&gt;: <b>\$205\.20/);
+  assert.match(html, /Coffee Two: <b>\$6\.50/);
+  assert.match(html, /\$0\.00/);
+  assert.match(html, /\$8\.75/);
+  assert.match(html, /\$4\.25/);
+  assert.match(html, /\$3\.10/);
+  assert.match(html, /Not set/);
+  assert.match(html, /Supply-event pricing unavailable/);
+  assert.doesNotMatch(html, /999\.99|111\.11|<One>/);
+  const midtown = html.split('<summary>Murray Hill</summary>')[0];
+  assert.doesNotMatch(midtown, /\$3\.10/);
+});
+
+test('pricing retains unlocated and closed shops, excludes vacant leases, and handles old payloads', async () => {
+  const w = wiki({save:{meta:{day:10}, businesses:[
+    {name:'Unlocated',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'',lines:[
+      {slug:'ba:itemname_coffee',configuredPrice:12.34}, {slug:'ba:itemname_tea',configuredPrice:null},
+      {slug:'ba:itemname_cake',configuredPrice:0}, {slug:'ba:itemname_mug',price:9.99}]},
+    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'Midtown',temporarilyClosed:true,
+      lines:[{slug:'ba:itemname_coffee',configuredPrice:3.25}]},
+    {name:'Vacant lease',typeSlug:COFFEE.BUSINESS.nameSrc,status:'vacant',neighbourhood:'Midtown',
+      lines:[{slug:'ba:itemname_coffee',configuredPrice:999.99}]},
+  ],market:{rows:[]}}});
+  const html = section(await w.load('wiki/businesstypes-coffeeshop'), 'Prices in your save');
+  assert.match(html, /Unknown neighbourhood/);
+  assert.match(html, /Unlocated: <b>\$12\.34/);
+  assert.match(html, /Unlocated: <b>Not set/);
+  assert.match(html, /Unlocated: <b>\$0\.00/);
+  assert.match(html, /Unlocated: <b>Unavailable/);
+  assert.match(html, /Closed Coffee: <b>\$3\.25/);
+  assert.doesNotMatch(html, /Vacant lease|999\.99|9\.99/);
+  assert.match(w.root.innerHTML, /Businesses of this type in your company: Unlocated, Closed Coffee/);
+});
+
+test('pricing works before owning a business, for services, and clears with saves', async () => {
+  const w = wiki({save:{meta:{day:8}, businesses:[], market:{rows:[
+    {slug:'ba:itemname_haircut', cells:[{hood:'Midtown',marketPrice:20.50}]},
+  ]}}});
+  let html = section(await w.load('wiki/businesstypes-hairdresser'), 'Prices in your save');
+  assert.match(html, /Hair Cutting Fee/);
+  assert.match(html, /\$20\.50/);
+  assert.match(html, /No matching shop/);
+  html = section(await w.go('wiki/businesstypes-coffeeshop'), 'Prices in your save');
+  assert.doesNotMatch(html, /\$20\.50/);
+  w.context.D = {meta:{day:9}, businesses:[], market:{rows:[]}};
+  w.call('drawWiki()');
+  assert.doesNotMatch(section(w.root.innerHTML, 'Prices in your save'), /\$20\.50/);
+  w.context.D = null;
+  w.call('drawWiki()');
+  html = section(w.root.innerHTML, 'Prices in your save');
+  assert.match(html, /Open a save/);
+  assert.doesNotMatch(html, /\$\d/);
+});
+
 const REAL = path.join(__dirname, '..', 'web', 'wiki-data.json');
 const real = fs.existsSync(REAL) ? JSON.parse(fs.readFileSync(REAL, 'utf8')) : null;
 const guided = real && real.guides && Object.keys(real.guides).length ? real : null;

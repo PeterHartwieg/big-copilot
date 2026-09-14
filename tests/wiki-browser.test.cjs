@@ -205,7 +205,7 @@ test('a guide draws its services and its side range as cards of the same make', 
   await page.getByRole('heading', {name:'Florist',exact:true,level:1}).waitFor();
   const seen = await page.locator('#wikiRoot h2').allTextContents();
   assert.deepEqual(seen, ['To open', 'Sells', 'Services', 'Also sells', 'Fits together',
-    'Make it', 'Also make', 'Where to go', 'Yours', 'Source']);
+    'Make it', 'Also make', 'Where to go', 'Yours', 'Prices in your save', 'Source']);
   assert.equal(await page.locator('.wk-card').count(), 3, 'a card each for both ranges and the fee');
   // The square is the control, and the row it belongs to answers to it.
   const square = page.locator('.wk-item .wk-tick').first();
@@ -522,6 +522,41 @@ test('unknown recipe output and wholesale availability stay unknown', async t =>
 });
 
 /* A build whose payload carries only the one worked example still draws it. */
+test('save pricing is readable at desktop and phone widths and clears with the save', async t => {
+  for(const width of [320, 1280]) {
+    const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop', width});
+    await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+    await page.evaluate(() => {
+      D = {meta:{day:190}, businesses:[{name:'My Gifts', typeSlug:'ba:businesstype_giftshop',
+        neighbourhood:'Midtown', lines:[{slug:'ba:itemname_cheapgift', configuredPrice:30.27}]}],
+        market:{rows:[{slug:'ba:itemname_cheapgift', cells:[{hood:'Midtown',marketPrice:25.63}]}]}};
+      drawWiki();
+    });
+    const section = page.locator('section').filter({has:page.getByRole('heading',{name:'Prices in your save',exact:true})});
+    await section.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('.wk-prices'))
+      .some(el => el.innerText.includes('My Gifts: $30.27')));
+    if(process.env.WIKI_PRICING_QA_DIR) await section.screenshot({path:path.join(process.env.WIKI_PRICING_QA_DIR, `pricing-${width}.png`)});
+    assert.match(await section.innerText(), /My Gifts: \$30\.27/);
+    assert.match(await section.innerText(), /\$25\.63/);
+    assert.match(await section.innerText(), /Not set/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const marketCell = section.locator('tbody tr').first().locator('td').last();
+    assert.equal(await marketCell.evaluate(el => el.getBoundingClientRect().right <= innerWidth), true);
+    const disclosure = section.locator('details').first();
+    await disclosure.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await disclosure.getAttribute('open'), null);
+    await page.keyboard.press('Enter');
+    assert.notEqual(await disclosure.getAttribute('open'), null);
+    await page.evaluate(() => { D = null; drawWiki(); });
+    await page.waitForFunction(() => document.querySelector('#wikiRoot').innerText.includes('Open a save to see your configured prices'));
+    assert.match(await section.innerText(), /Open a save/);
+    assert.doesNotMatch(await section.innerText(), /\$\d/);
+    assert.deepEqual(errors, []);
+  }
+});
+
 test('a payload with no guides falls back to the sample it does carry', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop',changeData:data=>{
     delete data.guides;

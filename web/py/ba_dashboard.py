@@ -541,6 +541,12 @@ def money(x: float) -> float:
     return round(float(x or 0), 2)
 
 
+def _configured_price(value):
+    """Keep unset prices distinct from explicit zero, including in old saves."""
+    return (round(value, 2) if type(value) in (int, float)
+            and math.isfinite(value) and value >= 0 else None)
+
+
 # ---------------------------------------------------------------- extraction
 def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     root = save.root
@@ -904,6 +910,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                 "rate": round(rate, 1),
                 "cover": round(stock[item] / rate, 1) if rate > 0.5 else None,
                 "price": money(prices.get(item, 0)),
+                "configuredPrice": _configured_price(prices.get(item)),
                 "revenue": money(revenue_by_item[item] / span),
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
@@ -2680,6 +2687,48 @@ HISTORY_DAYS = 60  # how much demand history to keep on disk
 TREND_WINDOW = 7  # compare against this many days back when the history reaches it
 
 
+def _market_event_active(event, day):
+    start = event.get("startDay") or 0
+    return not event.get("stopped") and start <= day < start + (event.get("durationInDays") or 0)
+
+
+def _wiki_market_prices(save, day):
+    """MarketInsider's observed minimum, only where eligibility is reproducible.
+
+    GetLowestMarketPrice includes player shops, all business types, and positive
+    prices at named, non-closed businesses in the neighbourhood. Rival shelf
+    availability defaults to 1 outside supplier events. Withhold affected items
+    rather than guessing event/supplier eligibility or the no-seller fallback.
+    Only active type 3/4 events reach the game's shelf-availability checks.
+    """
+    blocked = {
+        e.get("itemName"): "Supply-event pricing unavailable"
+        for e in save.items(save.root.get("marketEvents"))
+        if e and e.get("itemName") and e.get("type") in (3, 4) and _market_event_active(e, day)
+    }
+    prices = {}
+    buildings = load_buildings()
+    for b in save.items(save.root.get("BuildingRegistrations")):
+        if not b or b.get("temporarilyClosed") or not b.get("BusinessName"):
+            continue
+        building = buildings.get((b.get("StreetName"), b.get("StreetNumber")))
+        hood = building.get("h") if building else None
+        for line in save.items(b.get("retailPrices")):
+            if not line or not line.get("itemName"):
+                continue
+            price = _configured_price(line.get("price"))
+            if price is None or line["price"] <= 0:
+                continue
+            item = line["itemName"]
+            if not hood:
+                # An unmapped seller could be in any compared neighbourhood.
+                blocked[item] = "Seller location unavailable"
+                continue
+            key = (item, hood)
+            prices[key] = min(prices.get(key, price), price)
+    return prices, blocked
+
+
 def _market(
     save: Save, names: Names, businesses: list, day: int, history, character: str
 ) -> dict:
@@ -2715,7 +2764,7 @@ def _market(
         span = event.get("durationInDays") or 0
         start = event.get("startDay") or 0
         left = start + span - day
-        if event.get("stopped") or left <= 0 or start > day:
+        if not _market_event_active(event, day):
             continue
         item = event.get("itemName")
         if event["type"] == HYPE_EVENT and item:
@@ -2738,6 +2787,7 @@ def _market(
 
     # Today's demand, and the trend against whatever history exists.
     hoods, today_snapshot, rows = [], {}, []
+    market_prices, price_gaps = _wiki_market_prices(save, day)
     for entry in save.items(save.root["productMarketEntries"]):
         item = entry["itemName"]
         cells = []
@@ -2748,6 +2798,9 @@ def _market(
             if hood not in hoods:
                 hoods.append(hood)
             today_snapshot[f"{item}|{hood}"] = value["demand"]
+            market_price = None if item in price_gaps else market_prices.get((item, hood))
+            price_note = price_gaps.get(item) or (
+                "No eligible seller; game fallback unavailable" if market_price is None else "")
             cells.append(
                 {
                     "hood": hood,
@@ -2756,6 +2809,8 @@ def _market(
                     "monopoly": bool(value["hasPlayerMonopoly"]),
                     "sell": hood in sells.get(item, ()),
                     "hype": hype.get((item, hood)),
+                    "marketPrice": market_price,
+                    **({"marketPriceNote": price_note} if price_note else {}),
                 }
             )
         if cells:
