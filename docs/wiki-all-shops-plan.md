@@ -85,7 +85,7 @@ Factory, Headquarters and Warehouse retain their existing reference pages. Enhan
 
 Start implementation from the latest released main branch. The original investigation verified the live [Wiki](https://bigcopilot.com/#wiki) against `C:/Users/Peter/Coding_Projects/big-copilot-wiki-implementation` at `49b27f8`, following PR #22. The current `Big Ambitions` workspace contains earlier work and pre-existing changes; preserve them.
 
-Implementation is complete locally in `C:/Users/Peter/Coding_Projects/big-copilot-all-shops`, on `codex/wiki-all-shops`. GLM 5.3 Flash implemented the data/build work through the CLI; Opus 5 implemented the UI against the Gift Shop mockup; Codex authored the text and reviewed the integration. With user approval, Codex finished the final three corrections after GLM exhausted its provider quota. Deployment is separate.
+Implementation is complete in `C:/Users/Peter/Coding_Projects/big-copilot-all-shops`, on `codex/wiki-all-shops`, and submitted as PR #25. GLM 5.3 Flash implemented the data/build work through the CLI; Opus 5 implemented the UI against the Gift Shop mockup; Codex authored the text and reviewed the integration. With user approval, Codex finished the final three corrections after GLM exhausted its provider quota.
 
 Validation after review corrections: 233 Python tests and 274 Node/browser tests passed. Source checks verify all 21 guides, 132 offering cards (including 54 secondary products), and 118 recipe flows. Mobile, desktop and keyboard regressions cover the corrected equipment groups and focus/scroll behavior. A second build produced identical HTML, version manifest and Wiki payload bytes.
 
@@ -94,4 +94,6 @@ The independent Astra browser, Opus CLI and Grok CLI findings were assessed and 
 
 Explore every shop and service business in the Wiki. All 21 customer-facing businesses have setup checklists, product or service cards, supplier locations and the relevant production recipes. Secondary products have their own visible cards and recipe sections.
 
-This wording is ready for the release changelog when the implementation receives a pull request number.
+The implementation is tracked in [PR #25](https://github.com/PeterHartwieg/big-copilot/pull/25), with its player-facing entry in `web/changelog.json`. The release branch includes the performance improvements from PR #24.
+
+Final validation on the combined release branch: 233 Python tests and all 280 Node/browser tests passed, including the generated-page release check and the six performance regressions. The Cloudflare deployment dry run passed. Before release, the live HTML and version manifest matched `origin/main` byte for byte.
