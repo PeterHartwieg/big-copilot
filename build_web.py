@@ -240,9 +240,7 @@ button.btn{border:0;cursor:pointer}
 .lg-chip[data-state="ok"] i{background:var(--pos)}
 .lg-watch::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-3);margin-right:2px;flex:none}
 .lg-watch[data-on="true"]{color:var(--pos)}
-.lg-watch[data-on="true"]::before{background:var(--pos);animation:lgpulse 2.4s infinite}
-@keyframes lgpulse{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.lg-watch::before{animation:none!important}}
+.lg-watch[data-on="true"]::before{background:var(--pos)}
 
 /* the save-location help: on the landing under "Where saves live", in the
    More menu on the board ------------------------------------------------- */

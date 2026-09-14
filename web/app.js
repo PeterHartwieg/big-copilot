@@ -146,6 +146,7 @@
   // The preference survives; the timer does not.
   let watching = stored.get("ledger_watch") !== "off";
   let watchTimer = null;
+  let watchChecking = false;
   let lastCheck = null;
   const WATCH_MS = 30000;
   const pending = new Map();
@@ -841,16 +842,17 @@
 
   /* --- watching the folder ---------------------------------------------- */
   async function checkFolder() {
-    if (!dirHandle || busy || attempt || readerError) return;
+    if (document.hidden || watchChecking || !dirHandle || busy || attempt || readerError) return;
+    watchChecking = true;
     const gen = sourceGen, handle = dirHandle;
     try {
       const permission = await handle.queryPermission({mode: "read"});
       if (gen !== sourceGen) return;
       if (permission !== "granted") { stopWatch(); return; }
       const entries = await scanHandle(handle);
-      if (gen !== sourceGen) return;
+      if (gen !== sourceGen || document.hidden) return;
       const moved = await refreshSaveMenu(entries, gen);
-      if (gen !== sourceGen) return;
+      if (gen !== sourceGen || document.hidden) return;
       const {file, dir, fellBack} = chooseFrom(entries);
       lastCheck = Date.now();
       if (file && !onScreen(file, dir)) await buildFrom(file, dir, gen);
@@ -860,6 +862,8 @@
       if (msg && strip.tone !== "bad") note("warn", msg);
     } catch (e) {
       // A folder that vanished or a file mid-write; the next check, or Update, says so.
+    } finally {
+      watchChecking = false;
     }
     syncWatchBtn();
   }
@@ -1002,33 +1006,49 @@
     orb.addEventListener("click", () => { squish(); ring(); });
     paint(); orb.classList.add("live");
     const enter = () => {
+      if (!landingLive) return;
       if (REDUCED) { b.px = 0; b.py = 0; b.sc = 1; b.busy = false; paint(); return; }
       dot.classList.remove("kick"); void dot.offsetWidth; dot.classList.add("kick");
       const t0 = performance.now() + 180, dur = 1500, lift = 140;
       const step = (t) => {
+        if (!landingLive) return;
         const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
         b.px = sx * (1 - e); b.py = sy * (1 - e) - Math.sin(p * Math.PI) * lift; b.sc = s0 + (1 - s0) * e; paint();
-        if (p < 1) requestAnimationFrame(step); else b.busy = false;
+        if (p < 1) requestAnimationFrame(step); else { b.busy = false; wake(); }
       };
       requestAnimationFrame(step);
     };
     setTimeout(enter, 400);
     document.addEventListener("mousemove", (e) => {
-      if (b.busy || !landingLive) return;
+      if (REDUCED || b.busy || !landingLive || !orb.offsetParent) return;
       const r = orb.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
       const d = Math.hypot(dx, dy) || 1, k = Math.min(36, d * .1);
       b.tx = dx / d * k; b.ty = dy / d * k;
       orb.style.setProperty("--hx", (34 + dx / d * 20) + "%"); orb.style.setProperty("--hy", (32 + dy / d * 20) + "%");
+      wake();
     }, {signal: landingEvents.signal});
-    const loop = () => {
-      if (!landingLive) return;
-      if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; paint(); }
-      requestAnimationFrame(loop);
+    let frame = null;
+    const wake = () => {
+      if (frame === null && landingLive && !REDUCED && !document.hidden && orb.offsetParent)
+        frame = requestAnimationFrame(loop);
     };
-    loop();
+    const loop = () => {
+      frame = null;
+      if (!landingLive || document.hidden || !orb.offsetParent || b.busy) return;
+      const moving = Math.abs(b.tx - b.px) > .01 || Math.abs(b.ty - b.py) > .01;
+      b.px = moving ? b.px + (b.tx - b.px) * .06 : b.tx;
+      b.py = moving ? b.py + (b.ty - b.py) * .06 : b.ty;
+      paint();
+      if (moving) wake();
+    };
+    landingEvents.signal.addEventListener("abort", () => cancelAnimationFrame(frame), {once:true});
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) { cancelAnimationFrame(frame); frame = null; }
+      else wake();
+    }, {signal: landingEvents.signal});
     // The resting place moves when the window or the fonts do.
-    const relayout = () => { if (landingLive) { measure(); paint(); } };
+    const relayout = () => { if (landingLive) { measure(); paint(); wake(); } };
     window.addEventListener("resize", relayout, {signal: landingEvents.signal});
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
   }
