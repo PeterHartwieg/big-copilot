@@ -1,5 +1,11 @@
 [
   {
+    "pr": 22,
+    "date": "2026-09-14",
+    "title": "Explore the game-backed Wiki",
+    "summary": "Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact."
+  },
+  {
     "pr": 21,
     "date": "2026-09-13",
     "title": "Missing uniform lockers now trigger a warning",
