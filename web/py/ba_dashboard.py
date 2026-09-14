@@ -628,7 +628,6 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         _ingredient_prices(save, names, supply, businesses),
         rhythm,
     )
-    expansion = _expansion(hour_findings, market, businesses)
     net_worth = _net_worth(root, history, character)
     entry = {
         "hour": root["Hour"],
@@ -702,7 +701,6 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         # Every item name the text knows, so a material that no recipe or shop
         # line mentions is still named where the tables list it.
         "itemNames": {k: v for k, v in names.locale.items() if k.startswith("ba:itemname_")},
-        "expansion": expansion,
         "cashFlow": _cash_flow(ledger, daily, day),
         "ledgerDays": len(ledger),
         "alerts": alerts["lines"],
@@ -2923,7 +2921,6 @@ def _market(
         # cell reads "1/1" whatever the city wants.
         "types": [t for t in types if t["products"] >= TYPE_MIN_PRODUCTS],
         "typesHidden": sum(1 for t in types if t["products"] < TYPE_MIN_PRODUCTS),
-        "openings": _openings(types, mine_types),
         "movers": movers,
         "hype": _group_hype(hype, starts, names, sells, makes),
         "shortages": _group_shortages(shortages),
@@ -2999,40 +2996,6 @@ def _group_movers(singles: list, family: dict, opened_in: dict) -> list:
         )
     out.sort(key=lambda m: (not m["sell"], -abs(m["delta"]) * m["count"]))
     return out[:6]
-
-
-def _openings(types: list, mine: set) -> list:
-    """The three business types worth opening next, and why each one ranks.
-
-    Most of the range wanted first, then the emptiest market, then the loudest
-    demand — the order the decision is actually made in.
-    """
-    ranked = []
-    for row in types:
-        if row["products"] < TYPE_MIN_PRODUCTS:
-            continue
-        for cell in row["cells"]:
-            if not cell or cell["sell"]:
-                continue
-            ranked.append(
-                {
-                    "type": row["type"],
-                    "hood": cell["hood"],
-                    "strong": cell["strong"],
-                    "count": cell["count"],
-                    "demand": cell["demand"],
-                    "providers": cell["providers"],
-                    "mine": row["slug"] in mine,
-                }
-            )
-    ranked.sort(
-        key=lambda r: (
-            -(r["strong"] / r["count"]),
-            r["providers"],
-            -r["demand"],
-        )
-    )
-    return ranked[:3]
 
 
 def _type_catalogue(save: Save, names: Names, tradeable: set) -> dict:
@@ -3736,59 +3699,6 @@ def _plan(
         "peak": round(uplift, 3),
         "stations": {names.label(s): c for s, c in stations.items()},
     }
-
-
-def _expansion(findings: list, market: dict, businesses: list) -> list:
-    """Where to put the next dollar, measured first and inferred second.
-
-    A shop turning people away at the door is a fact with a date on it. A gap in
-    the demand grid is an inference about a shop that does not exist yet. They
-    answer the same question, so they belong in one list — with the measured
-    ones above the inferred ones, always.
-    """
-    by_key = {b["key"]: b for b in businesses}
-    buildings = load_buildings()
-    out = []
-    for finding in findings:
-        if finding["kind"] != "cap" or finding["limit"] != "the building":
-            continue
-        b = by_key[finding["key"]]
-        # The building itself, when the table knows the address; a site_key is
-        # "slug#number", so only a real address has both halves.
-        slug, _, number = b["key"].partition("#")
-        row = buildings.get((slug, int(number))) if number else None
-        entry = {
-            "measured": True,
-            "what": b["name"],
-            "where": b["neighbourhood"] or b["address"],
-            "reason": f"at its {finding['cap']}/h door cap for {finding['hours']} "
-            f"hours a week ({finding['when']})",
-            "number": f"{finding['hours']} h/week at the ceiling, "
-            f"${finding['basket']:,.2f} a customer",
-            "worth": finding["throughput"],
-            "action": finding["fix"],
-        }
-        if row:
-            entry["traffic"] = row["x"]
-            entry["size"] = row["z"]
-        out.append(entry)
-    out.sort(key=lambda r: -r["worth"])
-
-    for opening in market.get("openings", []):
-        out.append(
-            {
-                "measured": False,
-                "what": opening["type"],
-                "where": opening["hood"],
-                "reason": f"{opening['strong']} of {opening['count']} products in "
-                f"strong demand, {opening['providers']} rival"
-                f"{'' if opening['providers'] == 1 else 's'} on average",
-                "number": f"demand {opening['demand']}",
-                "worth": None,
-                "action": "open a second one" if opening["mine"] else "open one",
-            }
-        )
-    return out
 
 
 # What the number in a finding's "worth" is counted in, for the page to print
