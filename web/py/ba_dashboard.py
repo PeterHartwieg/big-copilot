@@ -125,6 +125,18 @@ RESELLER_TYPES = RETAIL_TYPES - {
     "ba:businesstype_theater",
 }
 
+# The office agencies left out of RETAIL_TYPES above. They have no shop floor to
+# alert on, but each sells one hourly fee that the city's demand grid tracks per
+# neighbourhood like any product, so the market view lists them as a band of
+# their own under the shops.
+OFFICE_TYPES = {
+    "ba:businesstype_eventplanningagency",
+    "ba:businesstype_graphicdesigner",
+    "ba:businesstype_lawfirm",
+    "ba:businesstype_travelagency",
+    "ba:businesstype_webdevelopmentagency",
+}
+
 # Sites that exist to carry cost for the rest of the chain.
 OVERHEAD_TYPES = {
     "ba:businesstype_headquarters",
@@ -2738,11 +2750,18 @@ def _market(
     """
     hood_of = {v: k for k, v in NEIGHBOURHOODS.items()}
 
+    # Shops and offices both sell into a neighbourhood's market: an office's
+    # hourly fee has a demand reading there like any product on a shelf.
+    trading = [
+        b
+        for b in businesses
+        if b["neighbourhood"]
+        and (b["status"] == "retail" or (b["status"] != "vacant" and b["typeSlug"] in OFFICE_TYPES))
+    ]
+
     # What we sell, and where. What we make, anywhere.
     sells = collections.defaultdict(set)
-    for b in businesses:
-        if b["status"] != "retail" or not b["neighbourhood"]:
-            continue
+    for b in trading:
         for line in b["lines"]:
             if line["price"]:
                 sells[line["slug"]].add(b["neighbourhood"])
@@ -2898,29 +2917,35 @@ def _market(
     # neighbourhood at once. That is one event, so it gets one line.
     opened_in = collections.defaultdict(list)
     if span:
-        for b in businesses:
-            if b["status"] == "retail" and day - b["opened"] <= span:
+        for b in trading:
+            if day - b["opened"] <= span:
                 opened_in[(b["neighbourhood"], b["type"])].append(b)
     movers = _group_movers(
         singles, _family_of(catalogue, names, mine_types), opened_in
     )
 
-    stores = {
-        (b["typeSlug"], b["neighbourhood"])
-        for b in businesses
-        if b["status"] == "retail" and b["neighbourhood"]
-    }
-    types = _type_demand(catalogue, by_item_hood, hoods, names, mine_types, stores)
+    stores = {(b["typeSlug"], b["neighbourhood"]) for b in trading}
+    shops = {k: v for k, v in catalogue.items() if k not in OFFICE_TYPES}
+    offices = {k: v for k, v in catalogue.items() if k in OFFICE_TYPES}
+    # An office fee is served, not made, so its product row has no chain to plan.
+    fees = set().union(*offices.values())
+    for row in rows:
+        row["office"] = row["slug"] in fees
+    types = _type_demand(shops, by_item_hood, hoods, names, mine_types, stores)
+    # Where the city has no office building at all, the game keeps no reading
+    # for a fee either, and the grid can say why the cell is empty.
+    office_hoods = {r["h"] for r in load_buildings().values() if r.get("t") == "office"}
     return {
         "hoods": hoods,
         "rows": rows,
         # The planner needs the same catalogue, so it travels once and extract
         # moves it across rather than deriving it twice.
         "catalogue": {kind: sorted(items) for kind, items in catalogue.items()},
-        # A type with one or two products says nothing about opening a shop: the
-        # cell reads "1/1" whatever the city wants.
-        "types": [t for t in types if t["products"] >= TYPE_MIN_PRODUCTS],
-        "typesHidden": sum(1 for t in types if t["products"] < TYPE_MIN_PRODUCTS),
+        # Every type ranks on its average demand, so a one-product type reads
+        # that product's own demand and needs no minimum range to be listed.
+        "types": types,
+        "offices": _office_demand(offices, by_item_hood, hoods, names, mine_types, stores),
+        "noOffices": [h for h in hoods if h not in office_hoods] if office_hoods else [],
         "movers": movers,
         "hype": _group_hype(hype, starts, names, sells, makes),
         "shortages": _group_shortages(shortages),
@@ -2928,9 +2953,6 @@ def _market(
         "trendDays": span,
         "trackedDays": seen["days"],
     }
-
-
-TYPE_MIN_PRODUCTS = 3  # below this the by-type grid is describing a single product
 
 
 def _family_of(catalogue: dict, names: Names, mine: set) -> dict:
@@ -3052,8 +3074,11 @@ def _type_demand(
 ) -> list:
     """Demand for a business type is the whole basket it sells, not one product.
 
-    Opening a shop is a commitment to its entire range, so the useful reading is
-    how much of that range a neighbourhood wants at once.
+    Opening a shop is a commitment to its entire range, so the reading is the
+    average demand across its primary products, which is all the catalogue
+    holds. Each product counts at its own demand rather than in or out of the
+    60 line, so a one-product type reads that product's demand and ranks on the
+    same scale as an eight-product one.
     """
     rows = []
     for kind, items in catalogue.items():
@@ -3067,12 +3092,10 @@ def _type_demand(
             if not scores:
                 cells.append(None)
                 continue
-            strong = [x for x in scores if x["demand"] >= 60]
             cells.append(
                 {
                     "hood": hood,
                     "demand": round(sum(x["demand"] for x in scores) / len(scores)),
-                    "strong": len(strong),
                     "count": len(scores),
                     "providers": round(
                         sum(x["providers"] for x in scores) / len(scores)
@@ -3094,10 +3117,53 @@ def _type_demand(
                 "mine": kind in mine,
                 "cells": cells,
                 "peak": max(c["demand"] for c in live),
-                "bestStrong": max(c["strong"] for c in live),
             }
         )
-    return sorted(rows, key=lambda r: (-r["bestStrong"], -r["peak"]))
+    return sorted(rows, key=lambda r: (-r["peak"], r["type"]))
+
+
+def _office_demand(
+    catalogue: dict, demand: dict, hoods: list, names: Names, mine: set, stores: set
+) -> list:
+    """An office sells one hourly fee, so its reading is that fee's own demand.
+
+    Rolled up like a shop's range it would read 1/1 or 0/1 in every cell. The
+    fee's score and the number of firms already charging it, the player's own
+    included, are what decide whether another office is worth opening there.
+    """
+    rows = []
+    for kind, fees in catalogue.items():
+        cells = []
+        for hood in hoods:
+            scores = [demand[(fee, hood)] for fee in fees if (fee, hood) in demand]
+            if not scores:
+                cells.append(None)
+                continue
+            deltas = [x["delta"] for x in scores if x["delta"] is not None]
+            cells.append(
+                {
+                    "hood": hood,
+                    "demand": round(sum(x["demand"] for x in scores) / len(scores)),
+                    "providers": round(sum(x["providers"] for x in scores) / len(scores)),
+                    "hype": max((x["hype"] or 0 for x in scores), default=0) or None,
+                    "delta": round(sum(deltas) / len(deltas)) if deltas else None,
+                    "here": (kind, hood) in stores,
+                }
+            )
+        live = [c for c in cells if c]
+        if not live:
+            continue
+        rows.append(
+            {
+                "type": names.label(kind),
+                "slug": kind,
+                "fees": [names.label(fee) for fee in sorted(fees)],
+                "mine": kind in mine,
+                "cells": cells,
+                "peak": max(c["demand"] for c in live),
+            }
+        )
+    return sorted(rows, key=lambda r: (-r["peak"], r["type"]))
 
 
 def _group_hype(hype: dict, starts: dict, names: Names, sells: dict, makes: set) -> list:
@@ -5053,6 +5119,8 @@ g[data-series].off{opacity:0}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
 .heat .r.hl{color:var(--accent)}
 .heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.heat .band{grid-column:1/-1;margin-top:14px;padding-top:14px;border-top:1px solid var(--rule);font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.heat .band small{margin-left:10px;font:400 12px/1.3 Archivo,"Helvetica Neue",Arial,sans-serif;letter-spacing:0;text-transform:none}
 .cell{
   position:relative;height:44px;border-radius:6px;display:grid;place-items:center;cursor:pointer;
   font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink);
@@ -7773,43 +7841,69 @@ function drawMovers(){
   });
 }
 
-/* A business type is only worth opening if most of its range sells, so the
-   cell leads with how much of the range is wanted; the shade is the average. */
+/* Every type reads the same way: the average demand across its primary
+   products, which is the number the grid ranks by, so a one-product type shows
+   that product's own demand. */
 function typeRow(r, i, hoods){
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.products} products${r.mine ? " · you run one" : ""}</small></div>`;
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
-    const tip = `${r.type} in ${c.hood}: ${c.strong} of ${c.count} products in strong demand (60+), average demand ${
-      c.demand}, ${plural(c.providers, "rival seller")} on average across the range${c.here ? ", you have a store here" : ""}`;
+    const range = r.products === 1 ? `demand ${c.demand} for its one product`
+      : c.count < r.products ? `average demand ${c.demand} across the ${c.count} of its ${r.products} products with a reading here`
+      : `average demand ${c.demand} across its ${c.count} products`;
+    // The game counts every seller there, the player's own shop included.
+    const sellers = `${plural(c.providers, "seller")}${c.count > 1 ? " on average" : ""}${
+      c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
+    const tip = `${r.type} in ${c.hood}: ${range}, ${sellers}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
-      c.strong}/${c.count}${rivalDots(c.providers)}</div>`;
+      c.demand}${rivalDots(c.providers)}</div>`;
+  });
+  return h;
+}
+/* An office sells one hourly fee, so its cell is that fee's demand, as on a
+   product row; a dot per firm charging it (ten at most), the player's own
+   included. Neighbourhoods without an office building have no reading, and
+   say so. */
+function officeRow(r, i, hoods, trendDays, noOffices){
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
+      noOffices.includes(hoods[j]) ? "no office buildings here" : "no reading"}`)}">—</div>`; return; }
+    const firms = c.here ? `${plural(c.providers, "firm")} charging it, yours among them`
+      : c.providers ? plural(c.providers, "rival firm") : "no firm charging it yet";
+    const tip = `${r.type} in ${c.hood}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
+      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
+      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
 }
 function productRow(r, i, hoods, trendDays){
   const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
+  const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
   let h = `<div class="r" data-r="${i}">${r.item}<small>${tag}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
       c.sell && !c.monopoly ? ", you sell it here" : ""}`;
-    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}"${office} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.monopoly ? 0 : c.providers)}</div>`;
   });
   return h;
 }
 
 /* One click on a neighbourhood puts its strongest demand at the top; a second
-   flips it. Cells with no reading stay at the bottom either way. */
+   flips the whole order, ties included, so "lowest first" leads with the least
+   inviting cell. Cells with no reading stay at the bottom either way. */
 function hoodSorted(rows, hoods){
   const at = hoods.indexOf(marketSortHood);
   if(at < 0) return rows;
-  // A type row sorts by how much of its range is wanted, a product row by
-  // demand, with the average as the tiebreak.
-  const d = r => { const c = r.cells[at];
-    return !c ? null : "strong" in c ? [c.strong / c.count, c.demand] : [c.demand, 0]; };
+  // Every row sorts by its demand there (a type's is the average across its
+  // range), and among equals the emptier market first.
+  const d = r => { const c = r.cells[at]; return !c ? null : [c.demand, -(c.providers || 0)]; };
   return rows.slice().sort((a, b) => {
     const x = d(a), y = d(b);
     if(x === null || y === null) return (x === null) - (y === null);
@@ -7849,13 +7943,13 @@ function drawMarket(){
   rows = hoodSorted(rows, m.hoods);
   const cap = types || showAllMarket ? rows.length : Math.min(rows.length, limit);
   const shown = rows.slice(0, cap);
+  // Offices are their own band under the shops and sort within it.
+  const offices = types ? hoodSorted(m.offices || [], m.hoods) : [];
 
   const notes = [];
-  if(marketSortHood) notes.push((types
-      ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
-      : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`)
-    + ` · <a class="link" href="#" id="marketUsual">usual order</a>`);
-  else if(types && m.typesHidden) notes.push(`${plural(m.typesHidden, "type")} with under 3 products left out`);
+  if(marketSortHood) notes.push(`Sorted by demand in ${marketSortHood}, ${
+      marketSortDir < 0 ? "highest" : "lowest"} first · <a class="link" href="#" id="marketUsual">usual order</a>`);
+  else if(types) notes.push("Ranked by each type's best neighbourhood");
   else if(marketView === "new") notes.push("Strongest unserved demand first");
   else if(!m.trendDays) notes.push("Trend history starts building from today");
   if(!types && rows.length > limit) notes.push(showAllMarket
@@ -7863,17 +7957,20 @@ function drawMarket(){
     : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
-    ? `Each cell is how many of a type's products are in strong demand (60 or more) in that neighbourhood, shaded by the average demand across the range. Dots count rival sellers. An outlined cell is where you already run a shop of that type. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
+    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
     : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
 
   const grid = $("market");
   grid.style.gridTemplateColumns = `200px repeat(${m.hoods.length},minmax(0,1fr))`;
-  grid.innerHTML = shown.length
+  const any = shown.length + offices.length;
+  grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
         attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
+      + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
+        + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
     : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
-  $("cellDetail").textContent = shown.length ? "Click a cell" : "";
+  $("cellDetail").textContent = any ? "Click a cell" : "";
   wireMarketSort();
   wireTips();
 }
@@ -8624,7 +8721,8 @@ buildAlertSettingsPanel();
    Growth — wireHeat, wirePlan:
      .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
                           hover lights row and column, click pins the story into
-                          #cellDetail ("Name: rest" splits at the first colon).
+                          #cellDetail ("Name: rest" splits at the first colon);
+                          a .cell[data-office] gets no Plan a chain link.
      tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
                           .covers, .ing; totals in #vMachines #vMade #vTake #vRaw
@@ -9100,8 +9198,9 @@ const wireHeat = once(() => {
     const detail = $("cellDetail"), tip = c.dataset.tip || "";
     if(!detail) return;
     const i = tip.indexOf(":");
+    // An office has no line to plan; its fee is served, not made.
     detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
-      + ` <a class="link" href="#secPlan">open in Plan a chain</a>`;
+      + (c.hasAttribute("data-office") ? "" : ` <a class="link" href="#secPlan">open in Plan a chain</a>`);
   });
 });
 

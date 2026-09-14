@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c030dac89e">
+<link rel="stylesheet" href="community.css?v=ce8322fba7">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1054,6 +1054,8 @@ g[data-series].off{opacity:0}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
 .heat .r.hl{color:var(--accent)}
 .heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.heat .band{grid-column:1/-1;margin-top:14px;padding-top:14px;border-top:1px solid var(--rule);font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.heat .band small{margin-left:10px;font:400 12px/1.3 Archivo,"Helvetica Neue",Arial,sans-serif;letter-spacing:0;text-transform:none}
 .cell{
   position:relative;height:44px;border-radius:6px;display:grid;place-items:center;cursor:pointer;
   font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink);
@@ -1786,8 +1788,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c030dac89e";</script>
-<script>window.LEDGER_RELEASE = {"version":"c030dac89e","latest":{"pr":26,"date":"2026-09-14","title":"Compare your shop prices in the Wiki","summary":"Business guides now show each shop's configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible."}};</script>
+<script>window.LEDGER_BUILD = "ce8322fba7";</script>
+<script>window.LEDGER_RELEASE = {"version":"ce8322fba7","latest":{"pr":26,"date":"2026-09-14","title":"Compare your shop prices in the Wiki","summary":"Business guides now show each shop's configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1856,8 +1858,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=c030dac89e"></script>
-<script src="community.js?v=c030dac89e"></script>
+<script src="app.js?v=ce8322fba7"></script>
+<script src="community.js?v=ce8322fba7"></script>
 
 <script>
 
@@ -4146,43 +4148,69 @@ function drawMovers(){
   });
 }
 
-/* A business type is only worth opening if most of its range sells, so the
-   cell leads with how much of the range is wanted; the shade is the average. */
+/* Every type reads the same way: the average demand across its primary
+   products, which is the number the grid ranks by, so a one-product type shows
+   that product's own demand. */
 function typeRow(r, i, hoods){
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.products} products${r.mine ? " · you run one" : ""}</small></div>`;
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
-    const tip = `${r.type} in ${c.hood}: ${c.strong} of ${c.count} products in strong demand (60+), average demand ${
-      c.demand}, ${plural(c.providers, "rival seller")} on average across the range${c.here ? ", you have a store here" : ""}`;
+    const range = r.products === 1 ? `demand ${c.demand} for its one product`
+      : c.count < r.products ? `average demand ${c.demand} across the ${c.count} of its ${r.products} products with a reading here`
+      : `average demand ${c.demand} across its ${c.count} products`;
+    // The game counts every seller there, the player's own shop included.
+    const sellers = `${plural(c.providers, "seller")}${c.count > 1 ? " on average" : ""}${
+      c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
+    const tip = `${r.type} in ${c.hood}: ${range}, ${sellers}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
-      c.strong}/${c.count}${rivalDots(c.providers)}</div>`;
+      c.demand}${rivalDots(c.providers)}</div>`;
+  });
+  return h;
+}
+/* An office sells one hourly fee, so its cell is that fee's demand, as on a
+   product row; a dot per firm charging it (ten at most), the player's own
+   included. Neighbourhoods without an office building have no reading, and
+   say so. */
+function officeRow(r, i, hoods, trendDays, noOffices){
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
+      noOffices.includes(hoods[j]) ? "no office buildings here" : "no reading"}`)}">—</div>`; return; }
+    const firms = c.here ? `${plural(c.providers, "firm")} charging it, yours among them`
+      : c.providers ? plural(c.providers, "rival firm") : "no firm charging it yet";
+    const tip = `${r.type} in ${c.hood}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
+      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
+      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
 }
 function productRow(r, i, hoods, trendDays){
   const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
+  const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
   let h = `<div class="r" data-r="${i}">${r.item}<small>${tag}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
       c.sell && !c.monopoly ? ", you sell it here" : ""}`;
-    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}"${office} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.monopoly ? 0 : c.providers)}</div>`;
   });
   return h;
 }
 
 /* One click on a neighbourhood puts its strongest demand at the top; a second
-   flips it. Cells with no reading stay at the bottom either way. */
+   flips the whole order, ties included, so "lowest first" leads with the least
+   inviting cell. Cells with no reading stay at the bottom either way. */
 function hoodSorted(rows, hoods){
   const at = hoods.indexOf(marketSortHood);
   if(at < 0) return rows;
-  // A type row sorts by how much of its range is wanted, a product row by
-  // demand, with the average as the tiebreak.
-  const d = r => { const c = r.cells[at];
-    return !c ? null : "strong" in c ? [c.strong / c.count, c.demand] : [c.demand, 0]; };
+  // Every row sorts by its demand there (a type's is the average across its
+  // range), and among equals the emptier market first.
+  const d = r => { const c = r.cells[at]; return !c ? null : [c.demand, -(c.providers || 0)]; };
   return rows.slice().sort((a, b) => {
     const x = d(a), y = d(b);
     if(x === null || y === null) return (x === null) - (y === null);
@@ -4222,13 +4250,13 @@ function drawMarket(){
   rows = hoodSorted(rows, m.hoods);
   const cap = types || showAllMarket ? rows.length : Math.min(rows.length, limit);
   const shown = rows.slice(0, cap);
+  // Offices are their own band under the shops and sort within it.
+  const offices = types ? hoodSorted(m.offices || [], m.hoods) : [];
 
   const notes = [];
-  if(marketSortHood) notes.push((types
-      ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
-      : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`)
-    + ` · <a class="link" href="#" id="marketUsual">usual order</a>`);
-  else if(types && m.typesHidden) notes.push(`${plural(m.typesHidden, "type")} with under 3 products left out`);
+  if(marketSortHood) notes.push(`Sorted by demand in ${marketSortHood}, ${
+      marketSortDir < 0 ? "highest" : "lowest"} first · <a class="link" href="#" id="marketUsual">usual order</a>`);
+  else if(types) notes.push("Ranked by each type's best neighbourhood");
   else if(marketView === "new") notes.push("Strongest unserved demand first");
   else if(!m.trendDays) notes.push("Trend history starts building from today");
   if(!types && rows.length > limit) notes.push(showAllMarket
@@ -4236,17 +4264,20 @@ function drawMarket(){
     : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
-    ? `Each cell is how many of a type's products are in strong demand (60 or more) in that neighbourhood, shaded by the average demand across the range. Dots count rival sellers. An outlined cell is where you already run a shop of that type. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
+    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
     : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
 
   const grid = $("market");
   grid.style.gridTemplateColumns = `200px repeat(${m.hoods.length},minmax(0,1fr))`;
-  grid.innerHTML = shown.length
+  const any = shown.length + offices.length;
+  grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
         attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
+      + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
+        + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
     : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
-  $("cellDetail").textContent = shown.length ? "Click a cell" : "";
+  $("cellDetail").textContent = any ? "Click a cell" : "";
   wireMarketSort();
   wireTips();
 }
@@ -7722,7 +7753,8 @@ buildAlertSettingsPanel();
    Growth — wireHeat, wirePlan:
      .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
                           hover lights row and column, click pins the story into
-                          #cellDetail ("Name: rest" splits at the first colon).
+                          #cellDetail ("Name: rest" splits at the first colon);
+                          a .cell[data-office] gets no Plan a chain link.
      tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
                           .covers, .ing; totals in #vMachines #vMade #vTake #vRaw
@@ -8198,8 +8230,9 @@ const wireHeat = once(() => {
     const detail = $("cellDetail"), tip = c.dataset.tip || "";
     if(!detail) return;
     const i = tip.indexOf(":");
+    // An office has no line to plan; its fee is served, not made.
     detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
-      + ` <a class="link" href="#secPlan">open in Plan a chain</a>`;
+      + (c.hasAttribute("data-office") ? "" : ` <a class="link" href="#secPlan">open in Plan a chain</a>`);
   });
 });
 
