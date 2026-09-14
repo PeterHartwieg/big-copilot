@@ -123,7 +123,8 @@ the map.
     against what it has to cover.
 - **Growth**: planning, one view at a time.
   - *Market demand*: what is rising, what your suppliers are short of, and a demand
-    grid by neighbourhood covering both what you sell and what you don't.
+    grid by neighbourhood covering both what you sell and what you don't, with office
+    agencies in a band under the shop types.
   - *Plan a chain*: machines run flat out, so the answer is the weekly raw material
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
@@ -606,33 +607,51 @@ need or not arriving, and *Everything* shows the full set-up.
   points in Lower Manhattan is one event, not seven. Where one of your own shops of that
   same kind opened inside the trend window, the line says so. Your new shop absorbing
   unmet demand looks exactly like the market cooling, and it is not.
-- **The grid**: demand 0-100 per product per neighbourhood, shaded by strength, with
-  the number of rival sellers under each figure. A green underline means you sell it
-  there. Four views: *By business type*, *What I sell*, *Not selling yet* (ranked by
-  strongest unserved demand, so it doubles as a shortlist of what to offer next), and
-  *Everything*.
+- **The grid**: a business type or a product per row and a neighbourhood per column,
+  shaded by demand, with a dot per seller, yours included (ten at most), under each
+  figure. An outlined cell means you already run that type, or sell that product,
+  there. Three views: *By type*, *What I sell*, and *Not yet* (ranked by strongest
+  unserved demand, so it doubles as a shortlist of what to offer next).
 
 ### Grouped by business type
 
 Opening a shop commits you to its whole range, so one product being wanted is not a
-reason to build. The default view rolls demand up by business type and asks how much of
-that type's range a neighbourhood wants at once: a cell reads `7/8`, meaning seven of a
-bookstore's eight products are in strong demand there, with the average score and the
-average number of rivals beneath it.
+reason to build. The default view rolls demand up by business type: each cell is the
+average demand, 0 to 100, across that type's primary products in the neighbourhood. Each
+product counts at its own demand rather than in or out of a strong-demand line, so a
+bookstore whose six books read 70, 70, 65, 60, 55 and 50 scores 62, and a cinema, which
+has one product, simply reads its ticket's demand. That puts one-product and
+eight-product types on the same scale, so every type is listed. Rows are ranked by their
+best neighbourhood. Clicking a neighbourhood sorts by the score there, highest first and
+fewer sellers first among equals; a second click reverses the whole order, so the least
+inviting cell leads.
 
-The product list for each business type is learned from the city itself. Every rival
-shop in the save carries its type and its price list, so the catalogue comes from around
-200 real businesses across 41 types rather than a hand-written table.
+The product list for each type is its primary range from the game's own F1 help page,
+what the type "primarily sells" and not what it "can additionally sell". A product with no
+demand reading in the save cannot be averaged; today that is only the nightclub's cover
+charge, so a nightclub averages its other five. For a type the help pages do not cover,
+the range is learned from the city's own shops of that type instead.
 
-A type with one or two products is dropped from this view. A cell reading `1/1` says
-nothing about whether a shop is worth opening there, it just says the one product it
-tracks is wanted, and five such types were crowding out the fourteen that mean something.
-The count of what was left out is printed above the grid.
+### Offices
 
-The other views remain for stocking decisions in shops you already own: *What I sell*,
-*Not selling yet*, and *Everything*. The old flat *Openings* ranking was dropped. It
-answered the per-product question that *Not selling yet* already covers in grid form, and
-this by-type view answers where to open a shop.
+The five office agencies (event planning agency, graphic designer, law firm, travel agency
+and web development agency) serve their customers online and each sells one hourly fee,
+so their score is simply that fee's demand. They sit in an *Offices* band under the shop
+types because they work differently: they need an office building, and there are none in
+Industry City or The Hamptons, so the game keeps no reading there and those cells say so.
+Each cell has a dot for every firm already charging the fee, yours included (ten at most;
+the note has the exact count).
+
+An office you run is outlined like a shop, and its fee counts as something you sell in
+*What I sell*. Clicking a neighbourhood sorts the band by the same score without mixing it
+into the shops. An office cell, in any view, does not offer *Plan a chain*, because a fee
+has no production line to plan.
+
+The product views are for what to stock and charge in the businesses you already run:
+*What I sell* covers every product and fee you sell, office fees included, and *Not yet*
+the ones you do not. The old flat *Openings* ranking was dropped. It answered the
+per-product question that *Not yet* already covers in grid form, and the by-type view
+answers where to open a business.
 
 ## What the save does not remember
 

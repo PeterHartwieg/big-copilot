@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c030dac89e">
+<link rel="stylesheet" href="community.css?v=3acf2a80f3">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1054,6 +1054,8 @@ g[data-series].off{opacity:0}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
 .heat .r.hl{color:var(--accent)}
 .heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.heat .band{grid-column:1/-1;margin-top:14px;padding-top:14px;border-top:1px solid var(--rule);font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.heat .band small{margin-left:10px;font:400 12px/1.3 Archivo,"Helvetica Neue",Arial,sans-serif;letter-spacing:0;text-transform:none}
 .cell{
   position:relative;height:44px;border-radius:6px;display:grid;place-items:center;cursor:pointer;
   font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink);
@@ -1742,7 +1744,7 @@ details.help[open] summary::after{content:"\2013"}
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
-  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves. */
@@ -1786,8 +1788,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c030dac89e";</script>
-<script>window.LEDGER_RELEASE = {"version":"c030dac89e","latest":{"pr":26,"date":"2026-09-14","title":"Compare your shop prices in the Wiki","summary":"Business guides now show each shop's configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible."}};</script>
+<script>window.LEDGER_BUILD = "3acf2a80f3";</script>
+<script>window.LEDGER_RELEASE = {"version":"3acf2a80f3","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1856,8 +1858,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=c030dac89e"></script>
-<script src="community.js?v=c030dac89e"></script>
+<script src="app.js?v=3acf2a80f3"></script>
+<script src="community.js?v=3acf2a80f3"></script>
 
 <script>
 
@@ -4146,43 +4148,69 @@ function drawMovers(){
   });
 }
 
-/* A business type is only worth opening if most of its range sells, so the
-   cell leads with how much of the range is wanted; the shade is the average. */
+/* Every type reads the same way: the average demand across its primary
+   products, which is the number the grid ranks by, so a one-product type shows
+   that product's own demand. */
 function typeRow(r, i, hoods){
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.products} products${r.mine ? " · you run one" : ""}</small></div>`;
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
-    const tip = `${r.type} in ${c.hood}: ${c.strong} of ${c.count} products in strong demand (60+), average demand ${
-      c.demand}, ${plural(c.providers, "rival seller")} on average across the range${c.here ? ", you have a store here" : ""}`;
+    const range = r.products === 1 ? `demand ${c.demand} for its one product`
+      : c.count < r.products ? `average demand ${c.demand} across the ${c.count} of its ${r.products} products with a reading here`
+      : `average demand ${c.demand} across its ${c.count} products`;
+    // The game counts every seller there, the player's own shop included.
+    const sellers = `${plural(c.providers, "seller")}${c.count > 1 ? " on average" : ""}${
+      c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
+    const tip = `${r.type} in ${c.hood}: ${range}, ${sellers}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
-      c.strong}/${c.count}${rivalDots(c.providers)}</div>`;
+      c.demand}${rivalDots(c.providers)}</div>`;
+  });
+  return h;
+}
+/* An office sells one hourly fee, so its cell is that fee's demand, as on a
+   product row; a dot per firm charging it (ten at most), the player's own
+   included. Neighbourhoods without an office building have no reading, and
+   say so. */
+function officeRow(r, i, hoods, trendDays, noOffices){
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}</small></div>`;
+  r.cells.forEach((c, j) => {
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
+      noOffices.includes(hoods[j]) ? "no office buildings here" : "no reading"}`)}">—</div>`; return; }
+    const firms = c.here ? `${plural(c.providers, "firm")} charging it, yours among them`
+      : c.providers ? plural(c.providers, "rival firm") : "no firm charging it yet";
+    const tip = `${r.type} in ${c.hood}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
+      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
+      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
 }
 function productRow(r, i, hoods, trendDays){
   const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
+  const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
   let h = `<div class="r" data-r="${i}">${r.item}<small>${tag}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
       c.sell && !c.monopoly ? ", you sell it here" : ""}`;
-    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+    h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}"${office} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.monopoly ? 0 : c.providers)}</div>`;
   });
   return h;
 }
 
 /* One click on a neighbourhood puts its strongest demand at the top; a second
-   flips it. Cells with no reading stay at the bottom either way. */
+   flips the whole order, ties included, so "lowest first" leads with the least
+   inviting cell. Cells with no reading stay at the bottom either way. */
 function hoodSorted(rows, hoods){
   const at = hoods.indexOf(marketSortHood);
   if(at < 0) return rows;
-  // A type row sorts by how much of its range is wanted, a product row by
-  // demand, with the average as the tiebreak.
-  const d = r => { const c = r.cells[at];
-    return !c ? null : "strong" in c ? [c.strong / c.count, c.demand] : [c.demand, 0]; };
+  // Every row sorts by its demand there (a type's is the average across its
+  // range), and among equals the emptier market first.
+  const d = r => { const c = r.cells[at]; return !c ? null : [c.demand, -(c.providers || 0)]; };
   return rows.slice().sort((a, b) => {
     const x = d(a), y = d(b);
     if(x === null || y === null) return (x === null) - (y === null);
@@ -4222,13 +4250,13 @@ function drawMarket(){
   rows = hoodSorted(rows, m.hoods);
   const cap = types || showAllMarket ? rows.length : Math.min(rows.length, limit);
   const shown = rows.slice(0, cap);
+  // Offices are their own band under the shops and sort within it.
+  const offices = types ? hoodSorted(m.offices || [], m.hoods) : [];
 
   const notes = [];
-  if(marketSortHood) notes.push((types
-      ? `Sorted by how much of the range ${marketSortHood} wants, ${marketSortDir < 0 ? "most" : "least"} first`
-      : `Sorted by demand in ${marketSortHood}, ${marketSortDir < 0 ? "highest" : "lowest"} first`)
-    + ` · <a class="link" href="#" id="marketUsual">usual order</a>`);
-  else if(types && m.typesHidden) notes.push(`${plural(m.typesHidden, "type")} with under 3 products left out`);
+  if(marketSortHood) notes.push(`Sorted by demand in ${marketSortHood}, ${
+      marketSortDir < 0 ? "highest" : "lowest"} first · <a class="link" href="#" id="marketUsual">usual order</a>`);
+  else if(types) notes.push("Ranked by each type's best neighbourhood");
   else if(marketView === "new") notes.push("Strongest unserved demand first");
   else if(!m.trendDays) notes.push("Trend history starts building from today");
   if(!types && rows.length > limit) notes.push(showAllMarket
@@ -4236,17 +4264,20 @@ function drawMarket(){
     : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
-    ? `Each cell is how many of a type's products are in strong demand (60 or more) in that neighbourhood, shaded by the average demand across the range. Dots count rival sellers. An outlined cell is where you already run a shop of that type. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
+    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
     : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
 
   const grid = $("market");
   grid.style.gridTemplateColumns = `200px repeat(${m.hoods.length},minmax(0,1fr))`;
-  grid.innerHTML = shown.length
+  const any = shown.length + offices.length;
+  grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
         attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
+      + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
+        + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
     : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
-  $("cellDetail").textContent = shown.length ? "Click a cell" : "";
+  $("cellDetail").textContent = any ? "Click a cell" : "";
   wireMarketSort();
   wireTips();
 }
@@ -7722,7 +7753,8 @@ buildAlertSettingsPanel();
    Growth — wireHeat, wirePlan:
      .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
                           hover lights row and column, click pins the story into
-                          #cellDetail ("Name: rest" splits at the first colon).
+                          #cellDetail ("Name: rest" splits at the first colon);
+                          a .cell[data-office] gets no Plan a chain link.
      tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
                           .covers, .ing; totals in #vMachines #vMade #vTake #vRaw
@@ -8198,8 +8230,9 @@ const wireHeat = once(() => {
     const detail = $("cellDetail"), tip = c.dataset.tip || "";
     if(!detail) return;
     const i = tip.indexOf(":");
+    // An office has no line to plan; its fee is served, not made.
     detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
-      + ` <a class="link" href="#secPlan">open in Plan a chain</a>`;
+      + (c.hasAttribute("data-office") ? "" : ` <a class="link" href="#secPlan">open in Plan a chain</a>`);
   });
 });
 
