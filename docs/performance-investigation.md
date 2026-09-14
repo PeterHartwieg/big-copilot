@@ -125,3 +125,9 @@ including the original clone template. Animation visibility therefore checks the
 current balls, so fresh balls can still move after the map consumes the originals.
 No additional regression tests were added for release integration or the pulse.
 This performance-only release intentionally has no changelog announcement.
+
+On the release checkout, all 229 Node/browser checks passed using Edge, including
+the six performance regressions and the generated-page release check. All 173
+Python checks passed. The production build, `git diff --check`, and Wrangler
+deployment dry run also passed. The earlier restoration failure did not recur
+on current main.
