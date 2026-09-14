@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=cf059efb4f">
+<link rel="stylesheet" href="community.css?v=945876cc21">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1734,8 +1734,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "cf059efb4f";</script>
-<script>window.LEDGER_RELEASE = {"version":"cf059efb4f","latest":{"pr":22,"date":"2026-09-14","title":"Explore the game-backed Wiki","summary":"Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact."}};</script>
+<script>window.LEDGER_BUILD = "945876cc21";</script>
+<script>window.LEDGER_RELEASE = {"version":"945876cc21","latest":{"pr":22,"date":"2026-09-14","title":"Explore the game-backed Wiki","summary":"Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1804,8 +1804,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=cf059efb4f"></script>
-<script src="community.js?v=cf059efb4f"></script>
+<script src="app.js?v=945876cc21"></script>
+<script src="community.js?v=945876cc21"></script>
 
 <script>
 
@@ -5172,11 +5172,11 @@ const WIKI_HITS = 10;    // search rows before the same question
    the city's building table. Two help pages agreeing with each other is still
    help, and says so. */
 const WIKI_BADGE = {
-  help: ["help", "Game help", "The game's own help page says so. A claim about the game, not a measurement of it."],
-  asset: ["ok", "Checked", "Read against a file of another kind that the game ships — a shop layout it builds, or the city's building table — not only against the help text."],
-  model: ["warn", "Big Copilot", "Our own reading, with the evidence named. This is the one that moves when the model does."],
-  save: ["save", "Your save", "Only knowable once a save is open. Never shipped as a value."],
-  gap: ["bad", "Gap", "The game files do not say. Recorded rather than filled."],
+  help: ["help", "Game help", "Stated in the game's help."],
+  asset: ["ok", "Checked", "Cross-checked with shop layouts or city data."],
+  model: ["warn", "Big Copilot", "Big Copilot's guidance or calculation."],
+  save: ["save", "Your save", "Read from your loaded save."],
+  gap: ["bad", "Gap", "Not specified in the game files."],
 };
 
 /* The shelf's own order: what a player reaches for first, not the order the
@@ -5537,10 +5537,7 @@ function wikiHome(){
       placeholder="Search ${wikiNum(held)} pages" aria-label="Search the wiki"
       value="${attr(q)}">
     <span class="wk-cnt">${q ? wikiNum(hits.length) : ""}</span></label>
-  ${wikiWhy("Everything the game's own help menu knows, read straight out of the installed game and kept beside the board. "
-    + "Type to find a page; the shelf keeps only the categories that still hold one. Every page is the game's own words, and "
-    + "every fact the board adds carries a badge saying where it came from. Where the help gives a number, it is here as the "
-    + "file writes it; where the help is silent, so is this.")}
+  ${wikiWhy("Search the game's help by page title or category. No save needed.")}
   <span class="aside">${wikiStamp()}</span>
 </div>
 ${q ? `<div class="wk-hits">${
@@ -5552,9 +5549,7 @@ ${q ? `<div class="wk-hits">${
 ${shelf ? `<div class="wk-shelf">${shelf}</div>`
   : `<p class="wk-none">This build carries the pages but not the help menu's own shelf of categories. Search still finds every one of them.</p>`}
 <div class="wk-legend">
-  ${legend}${wikiWhy("The five badges. Blue is the game's own help text; green is read against a file of another kind the game "
-    + "ships, such as a shop it builds; amber is Big Copilot's reading with its evidence named; the dashed one only fills in "
-    + "once a save is open; red is a gap the game files do not close.")}
+  ${legend}${wikiWhy("Badges show where a fact comes from. Hover or focus a badge for its meaning.")}
 </div>
 ${listed > held ? `<p class="quiet wk-foot">${wikiNum(held)} of the help menu's ${wikiNum(listed)} pages are in this build.</p>` : ""}`;
 }
@@ -5708,8 +5703,7 @@ function wikiYours(page, extra){
   return `
 <section class="sec">
   <div class="sechead"><h2>Yours</h2>
-    ${wikiWhy("Nothing above changes when you load a save; this strip is the only part that does. It is matched to this page "
-      + "by name, and stays empty rather than showing a number the save does not hold.")}
+    ${wikiWhy("Your company's figures for this page. Load a save to see matching shops, sales and demand.")}
     <span class="aside">${hasData() ? wikiChip("save", "from your save") : wikiChip("save", "no save open")}</span></div>
   ${body}
 </section>`;
@@ -5923,9 +5917,7 @@ function wikiSampleSetup(b, page){
   return `
 <section class="sec">
   <div class="sechead"><h2>To open</h2>
-    ${wikiWhy("A filled square is something this business's own help page lists under what it requires to function, in its own "
-      + "words. A hollow one is the board's suggestion, read off the help pages for the fixtures themselves — useful, but not "
-      + "the game saying you must. Hover any line for which page it came from. Ticking is a scratch pad; nothing is stored.")}
+    ${wikiWhy("Green squares mark listed requirements; hollow squares are suggestions. Tick items as you go; checkmarks reset on reload.")}
     <span class="aside">${wikiChip("help")}</span></div>
   <div class="wk-groups">${room}${fixtures}${stock}${people}</div>
 </section>`;
@@ -6002,9 +5994,7 @@ function wikiSampleProducts(primary){
   return `
 <section class="sec">
   <div class="sechead"><h2>Sells</h2>
-    ${wikiWhy("One card per product in the type's own range: what it goes on, where it comes from, who else sells it, all from "
-      + "the help pages for the product and for the fixture. The capacity rides inside the fixture pill. A dashed red pill is a "
-      + "door the help never opens — an absence, not a rule.")}
+    ${wikiWhy("Shelf numbers show storage capacity. A red dashed label means that supply option isn't listed in the help.")}
     ${extras.length ? `<span class="aside">${wikiChip("dim", `+${extras.length} on the side`,
       `${extras.join(", ")}. Each belongs to another type's main range and is documented there.`)}</span>` : ""}</div>
   <div class="wk-cards">${cards}</div>
@@ -6078,9 +6068,7 @@ function wikiSampleGraph(primary){
   return `
 <section class="sec">
   <div class="sechead"><h2>Fits together</h2>
-    ${wikiWhy("A product, the fixture it goes on, and where it comes from. Solid lines are goes-on; dashed lines are "
-      + "comes-from and pass behind the middle column, because supply reaches a product without touching its shelf. "
-      + "Pick anything to keep only its lines; pick it again, or press Escape, to let go.")}
+    ${wikiWhy("Select an item to highlight its connections. Select it again or press Escape to clear.")}
     <span class="aside">${wikiCrosscheckChip(primary)}</span></div>
   <div class="wk-graph" id="wikiGraph" data-edges="${attr(JSON.stringify(model.edges))}">
     <svg class="wk-wires" aria-hidden="true"></svg>
@@ -6140,9 +6128,7 @@ function wikiSampleRecipes(primary){
   return `
 <section class="sec">
   <div class="sechead"><h2>Make it</h2>
-    ${wikiWhy("Each recipe's ingredients with the hourly rate its page gives and the importer that carries them, the "
-      + "workstation, and what comes out. The rates are the game's own stated maximum per hour; the per-day chip is Big "
-      + "Copilot's, and assumes a line that never stops.")}
+    ${wikiWhy("Rates are per workstation at full speed. Daily output assumes 24 hours without stopping.")}
     <span class="aside" id="wikiPlanSlot"></span></div>
   <div class="wk-flows">${flows}</div>
 </section>`;
@@ -6181,17 +6167,10 @@ function wikiSamplePlaces(){
       <span class="wk-role">${wikiText([...roles[key]].join(" · "))}</span></div>`;
   }).join("");
   const wholesalers = (s.WHOLESALERS || []);
-  /* Anything this section would say about weekly limits is the extraction's own
-     gap note, quoted, rather than lore typed in here — with the key of the page
-     it read turned back into words, because a key belongs under Source and not
-     in the middle of a section about where to shop. */
-  const limits = (s.GAPS || []).find(g => /weekly|limit/i.test(g.what || ""));
   return `
 <section class="sec">
   <div class="sechead"><h2>Where to go</h2>
-    ${wikiWhy("Every address the help text gives is matched against the city table the board already ships, so each one carries "
-      + "its neighbourhood and its pin opens the map on that building."
-      + (limits ? ` ${wikiUnkey(limits.detail)}` : ""))}
+    ${wikiWhy("Select a map pin to locate a supplier or recruitment agency.")}
     ${wholesalers.length ? `<span class="aside">${wikiChip("dim", `${wikiNum(wholesalers.length)} wholesalers`,
       `${wholesalers.map(w => w.name).join(", ")}. Named on the help's own wholesale page.`)}</span>` : ""}</div>
   <div class="wk-places">${rows}</div>
@@ -6223,13 +6202,13 @@ function wikiPlanControl(){
   if(!slot) return;
   const name = ((wikiData.sample || {}).BUSINESS || {}).name || "this range";
   if(wikiCanPlan())
-    slot.innerHTML = `<button type="button" class="link" data-wiki-plan
-      data-tip="${attr(`Opens Plan a chain on Growth with the ${name} range already picked, against your own factories and orders.`)}"
+    slot.innerHTML = `<button type="button" class="btn2" data-wiki-plan
+      data-tip="${attr(`Open the Growth planner with ${name} selected.`)}"
       >Plan this range ${icon("chev")}</button>`;
   else
     slot.innerHTML = `<span class="quiet" data-tip="${attr(hasData()
-      ? "This save's product catalogue does not carry this type, so the planner has nothing to select."
-      : "Plan a chain works from your own factories and standing orders, so it needs a save.")}"
+      ? "This business type is missing from your save's planner catalogue."
+      : "Load a save to plan with your factories and orders.")}"
       >${hasData() ? "Not in this save's catalogue" : "Open a save to plan this range"}</span>`;
 }
 
@@ -6252,8 +6231,7 @@ function wikiSampleSource(page, ctx){
   return `
 <section class="sec">
   <div class="sechead"><h2>Source</h2>
-    ${wikiWhy("Everything above is read from the game's own help text and checked against the files the game ships. "
-      + "The red dots are gaps: things the game does not say, recorded rather than filled.")}
+    ${wikiWhy("Red dots mark missing information. Expand the sections below to read the original help and sources.")}
     <span class="aside">${(s.GAPS || []).length ? wikiChip("gap", `${s.GAPS.length} gaps`) : ""}</span></div>
   <div class="wk-gaps">${gaps}</div>
   <details class="wk-src">

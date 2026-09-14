@@ -750,14 +750,15 @@ test('the weekly-limit note is the extraction\'s own, not lore typed into the pa
   assert.match(html, /caps each item per week and resets Monday 08:00/, 'quoted from the gap the file records');
   assert.doesNotMatch(html, /Sunday 20:00/, 'nothing the extraction did not say');
 
-  // A gap that names the page it read by its key reads as words out here; the
-  // key itself belongs under Source.
+  // Detailed gap notes stay under Source, with readable names instead of keys.
   const keyed = wiki({data: {...DATA, sample: {...SAMPLE, GAPS: [{what: 'Weekly delivery limits',
     detail: 'help_wholesalers_weeklylimits_content says every wholesaler caps each item per week.'}]}}});
   const html3 = await keyed.load('wiki/businesstypes-giftshop');
   const where = html3.slice(html3.indexOf('<h2>Where to go</h2>'), html3.indexOf('<h2>Yours</h2>'));
-  assert.doesNotMatch(where, /help_wholesalers/);
-  assert.match(where, /the help's own page says every wholesaler caps each item per week/);
+  assert.doesNotMatch(where, /help_wholesalers|caps each item per week/);
+  const source = html3.slice(html3.indexOf('<h2>Source</h2>'));
+  assert.doesNotMatch(source, /help_wholesalers/);
+  assert.match(source, /the help's own page says every wholesaler caps each item per week/);
 
   const quiet = wiki({data: {...DATA, sample: {...SAMPLE, GAPS: []}}});
   const html2 = await quiet.load('wiki/businesstypes-giftshop');
