@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=07d81f6792">
+<link rel="stylesheet" href="community.css?v=91e652a0b5">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -712,16 +712,13 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    text, so the glow behind it is too. */
 .clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
-/* The live dot for a --watch board sits in the clock's small line. */
+/* Steady status dots let the compositor sleep while the board is idle. */
 .live{display:inline-flex;align-items:center;gap:6px;color:var(--accent);transition:color .3s}
-.live b{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2.4s infinite}
+.live b{width:6px;height:6px;border-radius:50%;background:currentColor}
 .live em{font-style:normal}
 .live.just{color:var(--info)}
 .live.off{color:var(--ink-3)}
-.live.off b{animation:none}
 .live.stale{color:var(--warn)}
-.live.stale b{animation:none}
-@keyframes pulse{0%,100%{opacity:1} 50%{opacity:.2}}
 
 /* tooltips: the sentence lives here now, not on the page --------------------
    One body-level element, positioned from the hovered [data-tip]'s rect, so a
@@ -1442,9 +1439,7 @@ button.btn{border:0;cursor:pointer}
 .lg-chip[data-state="ok"] i{background:var(--pos)}
 .lg-watch::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-3);margin-right:2px;flex:none}
 .lg-watch[data-on="true"]{color:var(--pos)}
-.lg-watch[data-on="true"]::before{background:var(--pos);animation:lgpulse 2.4s infinite}
-@keyframes lgpulse{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.lg-watch::before{animation:none!important}}
+.lg-watch[data-on="true"]::before{background:var(--pos)}
 
 /* the save-location help: on the landing under "Where saves live", in the
    More menu on the board ------------------------------------------------- */
@@ -1777,8 +1772,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "07d81f6792";</script>
-<script>window.LEDGER_RELEASE = {"version":"07d81f6792","latest":{"pr":22,"date":"2026-09-14","title":"Explore the game-backed Wiki","summary":"Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact."}};</script>
+<script>window.LEDGER_BUILD = "91e652a0b5";</script>
+<script>window.LEDGER_RELEASE = {"version":"91e652a0b5","latest":{"pr":22,"date":"2026-09-14","title":"Explore the game-backed Wiki","summary":"Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1847,8 +1842,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=07d81f6792"></script>
-<script src="community.js?v=07d81f6792"></script>
+<script src="app.js?v=91e652a0b5"></script>
+<script src="community.js?v=91e652a0b5"></script>
 
 <script>
 
@@ -7843,7 +7838,7 @@ function wireSphere(){
     const t0 = performance.now() + 180, dur = 1300, lift = 26;
     const step = (t) => { const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
       b.px = b.sx * (1 - e); b.py = b.sy * (1 - e) - Math.sin(p * Math.PI) * lift; b.sc = b.s0 + (1 - b.s0) * e; paint(b);
-      if (p < 1) requestAnimationFrame(step); else b.busy = false; };
+      if (p < 1) requestAnimationFrame(step); else { b.busy = false; wake(); } };
     requestAnimationFrame(step);
   }, delay);
   const spawn = () => {
@@ -7871,6 +7866,7 @@ function wireSphere(){
       if (p < 1) requestAnimationFrame(step); else {
         meal.el.remove(); balls.splice(1, 1);
         balls.forEach((b, k) => { const old = b.rest; b.rest = restX(k); b.el.style.left = b.rest + 'px'; b.px += old - b.rest; b.busy = false; });
+        wake();
         setTimeout(spawn, 220);
       } };
     requestAnimationFrame(step);
@@ -7901,20 +7897,41 @@ function wireSphere(){
   const wordmark = q('.wordmark');
   if (wordmark) wordmark.addEventListener('click', spawn);
   document.addEventListener('mousemove', (e) => balls.forEach(b => {
-    if (b.busy) return;
+    if (REDUCED || b.busy || !b.el.offsetParent) return;
     const r = b.el.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     const d = Math.hypot(dx, dy) || 1, k = Math.min(10, d * .1);
     b.tx = dx / d * k; b.ty = Math.min(0, dy / d * k);
     b.el.style.setProperty('--hx', (34 + dx / d * 20) + '%'); b.el.style.setProperty('--hy', (32 + dy / d * 20) + '%');
+    wake();
   }));
-  const loop = () => {
-    balls.forEach(b => { if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; } });
-    balls.forEach(paint);
-    requestAnimationFrame(loop);
+  // Decorative motion sleeps once settled; a visible second monitor must not
+  // keep this tab scheduling frames for hours while the player watches video.
+  let frame = null;
+  const wake = () => {
+    if(frame === null && !REDUCED && !document.hidden && balls.some(b => b.el.offsetParent))
+      frame = requestAnimationFrame(loop);
   };
-  loop();
+  const loop = () => {
+    frame = null;
+    if(document.hidden || !balls.some(b => b.el.offsetParent)) return;
+    let moving = false;
+    balls.forEach(b => {
+      if(b.busy) return;
+      const drift = Math.abs(b.tx - b.px) > .01 || Math.abs(b.ty - b.py) > .01;
+      b.px = drift ? b.px + (b.tx - b.px) * .06 : b.tx;
+      b.py = drift ? b.py + (b.ty - b.py) * .06 : b.ty;
+      moving = moving || drift;
+    });
+    balls.forEach(paint);
+    if(moving) wake();
+  };
+  window.addEventListener('scroll', wake, {passive:true});
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){ cancelAnimationFrame(frame); frame = null; }
+    else wake();
+  });
   /* The shelf moves when the window or the fonts do. */
-  const relayout = () => { measure(); balls.forEach((b, k) => { b.rest = restX(k); b.el.style.left = b.rest + 'px'; paint(b); }); };
+  const relayout = () => { measure(); balls.forEach((b, k) => { b.rest = restX(k); b.el.style.left = b.rest + 'px'; paint(b); }); wake(); };
   window.addEventListener('resize', relayout);
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
 }
@@ -8355,7 +8372,7 @@ window.BigCopilotBoard = {
 /* The save on disk only changes when the game writes one, so this polls a
    cheap stamp and pulls fresh numbers only when that stamp moves. */
 function startWatching(){
-  /* A failing rebuild otherwise reads as "nothing has changed" -- a pulsing
+  /* A failing rebuild otherwise reads as "nothing has changed" -- a green
      Live dot over an hour-old board -- so the source says why it is stuck and
      the dot shows it. The last good board stays on screen. */
   const markStale = (why) => {
