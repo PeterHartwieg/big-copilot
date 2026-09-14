@@ -98,13 +98,22 @@ let wikiFailure = "";           // what to tell the reader when it is error
 let wikiRoute = {kind: "home", id: "", query: ""};
 let wikiWired = false;
 let wikiShowAll = false;        // the current list is showing everything
-const wikiTicked = new Set();   // the setup squares, this visit only
+const wikiTicked = new Set();   // the setup squares, this visit only, keyed by business
 let wikiPicked = null;          // the node the relation graph is holding
+let wikiFocus = "";             // the product a wide graph is drawn around
+let wikiShowFix = false;        // the setup list is showing every alternative
+/* The guide the page on screen is drawn from, set by the draw and read by the
+   pieces that run after it. The payload is never rewritten to point at the
+   business being read: navigation moves this, and nothing else. */
+let wikiActive = null;
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
    same one whatever the browser's own locale would have chosen. */
 const wikiNum = n => Number(n || 0).toLocaleString("en-US");
+/* One of a thing or several, counted the way the rest of the page counts: the
+   board never writes "1 gaps". */
+const wikiCount = (n, word) => `${word}${Number(n) === 1 ? "" : "s"}`;
 /* Text that lands between tags. attr() is the board's, for attributes. */
 const wikiText = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
@@ -146,6 +155,10 @@ function wikiIndex(raw){
     has: id => byId.has(String(id)),
     held: id => counts.get(String(id)) || 0,
     sample: raw.sample && typeof raw.sample === "object" ? raw.sample : null,
+    /* One guide per business the extraction could describe end to end, keyed by
+       the same page id the reader routes on. A build that carries only the one
+       worked example still has it under sample, and that is the fallback. */
+    guides: raw.guides && typeof raw.guides === "object" ? raw.guides : {},
     provenance: raw.provenance && typeof raw.provenance === "object" ? raw.provenance : {},
   };
 }
@@ -206,7 +219,11 @@ function showWikiRoute(hash){
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
+    /* Another business is another set of nodes: nothing the last one was
+       holding means anything here. */
     wikiPicked = null;
+    wikiFocus = "";
+    wikiShowFix = false;
     /* A different page starts at its own top, however far down its link was. */
     if(window.scrollY > 0) window.scrollTo(0, 0);
   }
@@ -342,7 +359,8 @@ function wikiChip(kind, text, tip){
   const say = tip === undefined && badge ? badge[2] : tip;
   return `<span class="chip ${cls}"${say ? ` data-tip="${attr(say)}"` : ""}><i></i>${wikiText(label)}</span>`;
 }
-const wikiWhy = text => `<span class="why" data-tip="${attr(text)}" tabindex="0"><i>?</i></span>`;
+const wikiWhy = text => text
+  ? `<span class="why" data-tip="${attr(text)}" tabindex="0"><i>?</i></span>` : "";
 const WIKI_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
 function wikiCrumb(trail){
   return `<nav class="wk-crumb" aria-label="Breadcrumb">${trail.map((step, i) =>
@@ -451,7 +469,7 @@ function wikiPageView(){
   const page = wikiData.byId.get(String(wikiRoute.id));
   if(!page) return wikiMissing(`No page called “${wikiRoute.id}”. It may be one of the help links the game's own files leave dangling.`);
   const cat = wikiData.catById.get(String(page.categoryId));
-  if(wikiIsSample(page)) return wikiSamplePage(page, cat);
+  if(wikiActive) return wikiGuidePage(wikiActive, page, cat);
   const ctx = {id: String(page.id)};
   return `
 ${wikiCrumb([{label: "Wiki", href: "#wiki"},
@@ -476,7 +494,7 @@ function wikiMissing(line){
 /* Where a page's words come from, and what the extraction could not close.
    Keys and file names live behind this disclosure, never in the reading. */
 function wikiSource(page){
-  const sources = (wikiData.sample || {}).SOURCES || {};
+  const sources = (wikiActive || wikiData.sample || {}).SOURCES || {};
   const files = Array.isArray((wikiData.provenance || {}).files) ? wikiData.provenance.files
     : Array.isArray(sources.files) ? sources.files : [];
   const build = Array.isArray(sources.build) ? sources.build : [];
@@ -578,21 +596,105 @@ function wikiYours(page, extra){
 </section>`;
 }
 
-/* --- the authored page --------------------------------------------------- */
-/* One business was extracted end to end, so it is drawn as the design draws it:
-   glance tiles, what to buy in which order, the range, how the pieces fit, the
-   recipes, the addresses. Every other page is the reader above.
+/* --- the guides ---------------------------------------------------------- */
+/* A guide is one business drawn the way the design draws it: glance tiles, what
+   to buy in which order, everything it sells or charges for, how the pieces fit,
+   the recipes, the addresses. Every business the extraction could describe end
+   to end gets one; every other page is the reader above.
+
+   A guide carries only its own business's records — its products, its fixtures,
+   its recipes, and the suppliers those name — so nothing from the business that
+   was extracted first can leak onto another's page. The first one is still
+   carried as `sample`, and is the fallback for a build that has only it.
 
    Every claim here is the game's help unless the extraction carried other
    evidence with it, and the page says which is which rather than wearing one
    badge over the lot. */
-function wikiIsSample(page){
-  const s = wikiData.sample;
-  return !!(s && s.BUSINESS && String(s.BUSINESS.slug) === String(page.id));
+function wikiGuideFor(id){
+  const key = String(id ?? "");
+  const guide = ((wikiData && wikiData.guides) || {})[key];
+  if(guide && guide.BUSINESS) return guide;
+  const s = wikiData && wikiData.sample;
+  return s && s.BUSINESS && String(s.BUSINESS.slug) === key ? s : null;
 }
-const wikiSup = key => ((wikiData.sample || {}).SUPPLIERS || {})[key] || null;
-const wikiFix = key => ((wikiData.sample || {}).FIXTURES || {})[key] || null;
-const wikiProd = key => ((wikiData.sample || {}).PRODUCTS || {})[key] || null;
+/* The guide whose page is on screen, for the pieces that run after the draw. */
+const wikiG = () => wikiActive || (wikiData && wikiData.sample) || {};
+const wikiSup = (key, g) => ((g || wikiG()).SUPPLIERS || {})[key] || null;
+const wikiFix = (key, g) => ((g || wikiG()).FIXTURES || {})[key] || null;
+const wikiProd = (key, g) => ((g || wikiG()).PRODUCTS || {})[key] || null;
+
+/* The short labels and hints the page wears. The words are authored beside the
+   payload and travel with it; what stands in below is the label this page has
+   always used, never a new sentence invented here. A guide may carry its own
+   COPY; otherwise the payload's shared block answers for every guide. */
+const WIKI_COPY = {
+  primaryTitle: "Sells",
+  secondaryTitle: "Also sells",
+  servicesTitle: "Services",
+  primaryRecipesTitle: "Make it",
+  secondaryRecipesTitle: "Also make",
+  dependenciesTitle: "Needs",
+  suppliersTitle: "Where to go",
+  staffTitle: "People",
+  fixturesTitle: "Fixtures",
+  stockTitle: "Stock",
+  setupTitle: "To open",
+  graphTitle: "Fits together",
+  sourceTitle: "Source",
+  roomTitle: "The room",
+  automaticFee: "Automatic",
+  automaticFeeTip: "Its own help page says this fee is charged automatically.",
+  noRecipe: "No recipe",
+  missingRecipe: "Recipe page missing",
+  missingRecipeTip: "A product's page names this recipe, but the recipe's own page is not in this build, "
+    + "so nothing about it can be read here.",
+  noRequirements: "None stated",
+  chooseProduct: "Choose a product",
+  /* Where a claim would be, and the payload has none. */
+  noEquipment: "no fixture named",
+  noOtherSellers: "nobody else",
+  noListedSuppliers: "no vendor listed",
+  missingProduct: "Product details unavailable",
+  /* The three kinds of line the opening list holds: what this business's own
+     page requires, what another page requires of what it requires, and what the
+     board suggests from the equipment's own pages. */
+  listedRequirements: "Listed requirements",
+  linkedRequirements: "Equipment and service requirements",
+  suggestedEquipment: "Additional equipment",
+  recruitmentTitle: "Recruitment",
+  recruitmentHint: "",
+  /* A line one of the offerings asks for, which the business page does not.
+     Falls back to the caption for the requirements another page states. */
+  conditionalRequirements: "",
+  sharedRecipe: "Primary and secondary range",
+  recipeLink: "Read the recipe",
+  originalHelp: "The game's own words",
+  plannerLabel: "Plan this range",
+  /* The rank the payload gives an offering, as a label and as the sentence
+     behind it. Both are copy: the page states the rank, it does not judge it. */
+  alsoCarried: "also carried",
+  alsoCarriedTip: "Not part of this type's own range: the help lists it among what the business also carries.",
+  alsoOffered: "also offered",
+  alsoOfferedTip: "Not part of this type's own range: the help lists it among what the business also offers.",
+  primaryHint: "Shelf numbers show storage capacity. A red dashed label means no supplier is listed in the help.",
+  recipeHint: "Rates are per workstation at full speed. Daily output assumes 24 hours without stopping.",
+  setupHint: "Green squares mark listed requirements; hollow squares are suggestions. Tick items as you go; checkmarks reset on reload.",
+  graphHint: "Select an item to highlight its shelves and suppliers. Select it again or press Escape to clear.",
+  placesHint: "Select a map pin to locate a supplier or recruitment agency.",
+  sourceHint: "Red dots mark missing information. Expand the sections below to read the original help and sources.",
+  fullDayHint: "Big Copilot's own reading: the page's maximum hourly rate times 24. That assumes the line runs all day, "
+    + "uninterrupted and at full rate — the help does not say what one achieves in practice, or what happens when "
+    + "an input runs out mid-hour.",
+  /* Hints a section only wears once the words for it are authored. */
+  servicesHint: "", roomHint: "", equipmentHint: "", capacityHint: "", peopleHint: "", rangeHint: "",
+};
+function wikiCopy(key, fallback){
+  const own = (wikiG().COPY || {})[key];
+  const shared = (((wikiData && wikiData.raw) || {}).COPY || {})[key];
+  const value = own ?? shared ?? WIKI_COPY[key];
+  return value === undefined || value === null ? (fallback ?? "") : String(value);
+}
+
 /* Three states, not two: the help says you can, the help says nowhere that you
    can (which is an absence, not a rule), or the extraction did not read either
    way. Only the first is a claim. */
@@ -610,30 +712,119 @@ function wikiFixTip(f){
 }
 /* The first capacity a fixture's page states, for the meta line under a name. */
 const wikiFixHolds = f => ((f.capacity || []).find(c => c && Number.isFinite(c.value)) || {}).value;
+/* What one product may hold on one fixture. The extraction answers where the
+   answer is unambiguous; where a fixture's page counts two kinds of goods and
+   nothing says which line is this product's, every labelled row is shown. The
+   largest is never picked: that would be a number the help does not give. */
+function wikiCaps(p, key, f){
+  const given = ((p || {}).fixtureCapacities || {})[key];
+  if(Array.isArray(given) && given.length) return given.filter(c => c && Number.isFinite(c.value));
+  const caps = (f.capacity || []).filter(c => c && Number.isFinite(c.value));
+  if(caps.length < 2) return caps;
+  /* The product's own first word may name its line ("Gifts 300, flowers 100").
+     Its name is data, so it is escaped before it becomes a pattern. */
+  const family = String(p && p.name || "").split(" ")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const hit = family ? caps.filter(c => new RegExp(family, "i").test(c.label || "")) : [];
+  return hit.length === 1 ? hit : caps;
+}
+const wikiCapText = caps => caps.length === 1
+  ? wikiNum(caps[0].value)
+  : caps.map(c => `${c.label} ${wikiNum(c.value)}`).join(" · ");
 /* What the shipped shops actually contain, where the extraction counted them.
-   That is the only evidence on this page that is not the help text. */
-function wikiPlaced(){
-  const fixtures = Object.values((wikiData.sample || {}).FIXTURES || {});
-  const counted = fixtures.filter(f => f && f.observed);
+   That is the only evidence on a guide that is not the help text. */
+function wikiPlaced(g){
+  const counted = Object.values((g || wikiG()).FIXTURES || {}).filter(f => f && f.observed);
   return counted.length ? counted : null;
 }
 
-function wikiSamplePage(page, cat){
-  const s = wikiData.sample;
-  const b = s.BUSINESS;
-  const primary = (b.primary || []).map(k => ({key: k, ...(wikiProd(k) || {})})).filter(p => p.name);
+/* --- what a guide offers -------------------------------------------------- */
+/* Everything the business's page puts its name to, in the order the page lists
+   it: its own range first, then whatever it also carries. Both are drawn in
+   full — a product carried on the side is still a product this shop sells, and
+   the page says so rather than pointing somewhere else.
+
+   A fee is not a thing on a shelf. The extraction says which is which from the
+   help's own wording, and this page never hangs a shelf, a wholesaler or a
+   recipe on one. */
+function wikiOffers(g){
+  const b = g.BUSINESS || {};
+  const seen = new Set();
+  const out = [];
+  const take = (keys, group) => (keys || []).forEach(key => {
+    const k = String(key);
+    if(seen.has(k)) return;
+    const p = wikiProd(k, g);
+    if(!p) return;
+    seen.add(k);
+    /* A product the business page names whose own page this build has lost: it
+       is still part of the range, so it keeps its card and says what it is. */
+    out.push({...p, key: k, group, kind: p.kind === "fee" ? "fee" : "product",
+      name: p.name || "", gone: !p.name});
+  });
+  take(b.primary, "primary");
+  take(b.secondary, "additional");
+  /* A guide whose business page names no range of its own: the products it
+     carries say which rank they hold, and that is the order they are drawn in. */
+  if(!out.length){
+    const all = Object.keys(g.PRODUCTS || {});
+    take(all.filter(k => (g.PRODUCTS[k] || {}).rank === "primary"), "primary");
+    take(all.filter(k => (g.PRODUCTS[k] || {}).rank !== "primary"), "additional");
+  }
+  return out;
+}
+/* The recipes one offering names, the legacy single key included. */
+function wikiRecipeKeys(p){
+  const keys = (Array.isArray(p.recipes) ? p.recipes : []).map(String).filter(Boolean);
+  if(p.recipe && !keys.includes(String(p.recipe))) keys.unshift(String(p.recipe));
+  return keys;
+}
+/* One row per recipe, however many of the shop's products it makes, with the
+   products it belongs to kept beside it so a shared one can say so. A key the
+   payload names but carries no record for is a row too: it is a gap, and a gap
+   that disappeared would be worse than one that is drawn. */
+function wikiRecipeRows(offers, g){
+  const rows = new Map();
+  offers.forEach(p => {
+    if(p.kind === "fee") return;
+    wikiRecipeKeys(p).forEach(key => {
+      const row = rows.get(key)
+        || {key, recipe: (g.RECIPES || {})[key] || null, users: []};
+      row.users.push({name: p.name, group: p.group});
+      rows.set(key, row);
+    });
+  });
+  return [...rows.values()];
+}
+/* Which workstation a recipe runs on: its own, by key, then by the name its
+   page prints, and last the single station a one-station build carries. */
+function wikiStation(r, g){
+  const stations = (g || wikiG()).WORKSTATIONS || {};
+  const byKey = r && r.workstationKey ? stations[r.workstationKey] : null;
+  if(byKey) return byKey;
+  const named = r && r.workstation
+    ? Object.values(stations).find(s => s && s.name === r.workstation) : null;
+  if(named) return named;
+  const legacy = (g || wikiG()).WORKSTATION || {};
+  return legacy && legacy.name ? legacy : {};
+}
+/* The recruiters a business's skills send you to: one key or several. */
+const wikiHiring = b => [].concat(b.hiring || []).filter(Boolean);
+
+function wikiGuidePage(g, page, cat){
+  const b = g.BUSINESS || {};
   const ctx = {id: String(page.id)};
-  const yes = primary.filter(p => wikiWholesale(p) === "yes");
-  const none = primary.filter(p => wikiWholesale(p) === "none");
-  const unknown = primary.filter(p => wikiWholesale(p) === "unknown");
-  /* The one sentence at the top is only written when the range is known either
-     way; a product the extraction could not read is said out loud instead. */
-  const lede = !primary.length ? ""
-    : unknown.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products are named on a wholesaler's `
-      + `list; ${wikiNum(unknown.length)} the help does not say either way.`
-    : none.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`
-    : `Every one of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`;
-  const placed = wikiPlaced();
+  const offers = wikiOffers(g);
+  const goods = offers.filter(o => o.kind !== "fee");
+  const fees = offers.filter(o => o.kind === "fee");
+  const primary = goods.filter(o => o.group === "primary");
+  const other = goods.filter(o => o.group !== "primary");
+  const rows = wikiRecipeRows(offers, g);
+  const ours = rows.filter(r => r.users.some(u => u.group === "primary"));
+  const rest = rows.filter(r => !r.users.some(u => u.group === "primary"));
+  /* The planner takes a business's own range, so its control sits with that
+     range: never over a section of things the shop only carries on the side. */
+  const plan = ours.length ? "recipes" : primary.length ? "primary" : fees.length ? "services" : "";
+  const placed = wikiPlaced(g);
   return `
 ${wikiCrumb([{label: "Wiki", href: "#wiki"},
   ...(cat ? [{label: wikiCatLabel(cat), href: wikiHref({kind: "category", id: cat.id})}] : []),
@@ -646,24 +837,64 @@ ${wikiCrumb([{label: "Wiki", href: "#wiki"},
       "Where the page says how many of a fixture a shipped shop holds, that count was read from the shop layouts the game "
       + "installs — not from the help text. It says what those shops do, not what the game requires.") : ""}</span>
 </div>
-<p class="wk-lede rv">${wikiText(lede)}${none.length === 1
-  ? ` <b>${wikiText(none[0].name)} is on no wholesaler's list.</b>` : ""}</p>
-${wikiSampleTiles(b, primary)}
-${wikiSampleSetup(b, page)}
-${wikiSampleProducts(primary)}
-${wikiSampleGraph(primary)}
-${wikiSampleRecipes(primary)}
-${wikiSamplePlaces()}
-${wikiYours(page, wikiSampleOwn(b, primary))}
-${wikiSampleSource(page, ctx)}`;
+${wikiGuideLede(g, primary, ctx)}
+${wikiGuideTiles(g, offers)}
+${wikiGuideSetup(g, page, offers, ctx)}
+${wikiGuideCards(g, primary, "primary", plan === "primary", ctx)}
+${wikiGuideServices(g, fees, plan === "services", ctx)}
+${wikiGuideCards(g, other, "secondary", false, ctx)}
+${wikiGuideGraph(g, goods)}
+${wikiGuideRecipes(g, ours, "primary", plan === "recipes")}
+${wikiGuideRecipes(g, rest, "secondary", false)}
+${wikiGuidePlaces(g)}
+${wikiYours(page, wikiGuideOwn(g, goods))}
+${wikiGuideSource(g, page, ctx)}`;
 }
 
-function wikiSampleTiles(b, primary){
-  const s = wikiData.sample;
-  const sizes = (s.RETAIL_SIZES || []).map(r => r.code);
-  const extras = (b.extras || []).length;
+/* The opening line, and the notes authored beside the payload. A note is only
+   in the file while the help it was written against still reads that way, so
+   what is here is shown as it arrived, and nothing is written in its place. */
+function wikiGuideLede(g, primary, ctx){
+  const b = g.BUSINESS || {};
+  const authored = typeof b.lede === "string" ? b.lede
+    : b.lede && typeof b.lede.text === "string" ? b.lede.text : "";
+  const notes = (Array.isArray(b.notes) ? b.notes : [])
+    .map(n => typeof n === "string" ? n : n && n.text).filter(Boolean);
+  const yes = primary.filter(p => wikiWholesale(p) === "yes");
+  const none = primary.filter(p => wikiWholesale(p) === "none");
+  const unknown = primary.filter(p => wikiWholesale(p) === "unknown");
+  /* The counted sentence is only written when the range is known either way; a
+     product the extraction could not read is said out loud instead. */
+  const counted = !primary.length ? ""
+    : unknown.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products are named on a wholesaler's `
+      + `list; ${wikiNum(unknown.length)} the help does not say either way.`
+    : none.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`
+    : `Every one of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`;
+  const tail = !authored && none.length === 1
+    ? ` <b>${wikiText(none[0].name)} is on no wholesaler's list.</b>` : "";
+  return `<p class="wk-lede rv">${authored ? wikiInline(authored, ctx) : wikiText(counted)}${tail}</p>`
+    + (notes.length ? `<ul class="wk-notes rv">${notes.map(n =>
+        `<li>${wikiInline(n, ctx)}</li>`).join("")}</ul>` : "");
+}
+
+function wikiGuideTiles(g, offers){
+  const b = g.BUSINESS || {};
+  const sizes = (g.RETAIL_SIZES || []).map(r => r.code);
+  const primary = offers.filter(o => o.group === "primary");
+  const other = offers.filter(o => o.group !== "primary");
+  /* An older payload names what a shop carries on the side without carrying the
+     records, so those stay a count and a list of names, as they always were. */
+  const extras = (b.extras || []);
+  const side = other.length || extras.length;
   const skills = b.skills || [];
-  const hiring = wikiSup(b.hiring);
+  const hiring = wikiHiring(b).map(k => wikiSup(k, g)).filter(Boolean);
+  const said = wikiCopy("rangeHint");
+  const range = (said ? `${said} ` : "") + (primary.length
+    ? `Its own range: ${primary.map(p => p.name).join(", ")}.`
+      + (other.length ? ` Also carried, and drawn in full below: ${other.map(p => p.name).join(", ")}.`
+        : extras.length ? ` ${extras.length} more may be carried on the side; each belongs to another type's page.` : "")
+    : other.length ? `Carried here: ${other.map(p => p.name).join(", ")}.`
+    : "The help page names no range for this type.");
   return `<div class="kpis wk-tiles">
   <div class="kpi rv" data-tip="${attr(sizes.length
     ? `Any retail size code the help lists: ${sizes.join(", ")}. The door limit rises with the code.`
@@ -672,123 +903,351 @@ function wikiSampleTiles(b, primary){
     ${sizes.length ? `<span class="sub">${wikiText(sizes[0])} – ${wikiText(sizes[sizes.length - 1])}</span>` : ""}</div>
   <div class="kpi rv" data-tip="How customers are served, from the help page's own wording.">
     <span class="lab">Customers</span><span class="v t">${wikiText(b.serving || "—")}</span></div>
-  <div class="kpi rv" data-tip="${attr(`Its own range: ${primary.map(p => p.name).join(", ")}.`
-    + (extras ? ` ${extras} more may be carried on the side; each belongs to another type's page.` : ""))}">
+  <div class="kpi rv" data-tip="${attr(range)}">
     <span class="lab">Core range</span><span class="v">${primary.length}</span>
-    ${extras ? `<span class="sub">+${extras} on the side</span>` : ""}</div>
+    ${side ? `<span class="sub">${other.length
+      ? `+${wikiNum(other.length)} also carried` : `+${wikiNum(extras.length)} on the side`}</span>` : ""}</div>
   <div class="kpi rv" data-tip="${attr(skills.length
-    ? `${skills.join(" and ")}.${hiring ? ` Hired at ${hiring.name}, ${hiring.street}.` : ""}`
+    /* The agencies are named, not assigned: the payload's list is the business's,
+       gathered across its skills, and this tile says no more than that. */
+    ? `${skills.join(" and ")}.${hiring.length
+      ? ` ${wikiCopy("recruitmentTitle")}: ${hiring.map(s => `${s.name}, ${s.street}`).join("; ")}.` : ""}`
     : "The help page names no staff skills for this type.")}">
     <span class="lab">Staff skills</span><span class="v">${skills.length}</span>
     ${skills.length ? `<span class="sub">${wikiText(skills.join(" · ").toLowerCase())}</span>` : ""}</div>
 </div>`;
 }
 
-/* What to buy, in the order you buy it, with the one requirement the business
-   page forgets marked as such. Ticking is a scratch pad: nothing is stored. */
-function wikiSampleSetup(b, page){
-  const s = wikiData.sample;
-  const sizes = (s.RETAIL_SIZES || []);
-  /* What this business page itself calls required, in its own words. A filled
-     square means the page said so; everything else is the board grouping the
-     help's other pages, and stays hollow. If the game rewrites the page, the
-     filled squares follow it. */
-  const stated = Array.isArray(b.requirements) ? b.requirements : Array.isArray(b.required) ? b.required : null;
-  const required = (stated ? stated.map(r => typeof r === "string" ? r : r && (r.name || r.label))
-    : wikiRequired(page.body)).filter(Boolean);
+/* What to buy, in the order you buy it, with anything the business page forgets
+   marked as such. The squares are keyed to the business as well as to the item,
+   so two guides never tick each other's lines. Ticking is a scratch pad:
+   nothing is stored. */
+function wikiGuideSetup(g, page, offers, ctx){
+  const b = g.BUSINESS || {};
+  const sizes = (g.RETAIL_SIZES || []);
+  const fixtures = g.FIXTURES || {};
+  const slug = String(b.slug || page.id || "");
+  /* What this business page itself calls required, in its own words — the
+     extraction's own reading of its bullets where it has one, links and all.
+     A filled square means the page said so; everything else is the board
+     grouping the help's other pages, and stays hollow. */
+  const stated = Array.isArray(b.requirements) ? b.requirements
+    : b.requirements && Array.isArray(b.requirements.raw) ? b.requirements.raw
+    : Array.isArray(b.required) ? b.required : null;
+  const required = (stated ? stated.map(r => typeof r === "string" ? r : r && (r.name || r.label || r.text))
+    : wikiRequired(page.body)).map(wikiBullet).filter(Boolean);
   const mentions = (haystack, needle) => {
-    const a = wikiKey(haystack), c = wikiKey(needle);
+    const a = wikiKey(wikiPlain(haystack)), c = wikiKey(needle);
     return !!a && !!c && (a.includes(c) || c.includes(a));
   };
   const isRequired = name => required.some(r => mentions(r, name));
-  /* A till is any fixture the help gives a work station; what a till consumes
-     is a list on its own page, and only some of the tills carry it. */
-  const tills = Object.keys(s.FIXTURES || {}).filter(k => s.FIXTURES[k].station);
-  const sellers = Object.keys(s.FIXTURES || {}).filter(k => (s.FIXTURES[k].sells || []).length);
-  const store = Object.keys(s.FIXTURES || {}).filter(k =>
-    (s.FIXTURES[k].capacity || []).some(c => /box/i.test(c.unit || "")) && !(s.FIXTURES[k].sells || []).length);
-  const consumer = tills.find(k => [].concat(s.FIXTURES[k].needs || []).length);
-  const need = consumer ? String([].concat(s.FIXTURES[consumer].needs)[0]) : "";
-  /* The catch only exists while the business page really is silent about it. */
-  const bagCatch = !!need && !mentions(page.body || "", need) && !isRequired(need);
-  const vendorLine = keys => (keys || []).map(k => (wikiSup(k) || {}).name).filter(Boolean).join(", ");
-  const vendorCount = keys => `${wikiNum((keys || []).length)} vendor${(keys || []).length === 1 ? "" : "s"}`;
+  const keys = Object.keys(fixtures);
+  const vendorLine = list => (list || []).map(k => (wikiSup(k, g) || {}).name).filter(Boolean).join(", ");
+  const vendorCount = list => (list || []).length
+    ? `${wikiNum(list.length)} vendor${list.length === 1 ? "" : "s"}` : wikiCopy("noListedSuppliers");
 
-  const item = (o) => `<button type="button" class="wk-item${o.req ? " req" : ""}" role="checkbox"
-    aria-checked="${wikiTicked.has(o.id) ? "true" : "false"}" data-tick="${attr(o.id)}"
-    ${o.tip ? `data-tip="${attr(o.tip)}"` : ""}>
-    <span class="wk-tick"></span><span><strong>${wikiText(o.name)}${o.catch
-      ? `<i class="wk-catch" aria-label="named by the till's page, not by this one"></i>` : ""}</strong>
-    <span class="wk-m">${o.meta || ""}</span></span></button>`;
-  const group = (title, items) => `<div class="wk-group rv"><h3>${wikiText(title)}</h3>${items.join("")}
-    <div class="wk-ph"><span class="wk-track"><i></i></span><b>0/${items.length}</b></div></div>`;
+  /* A row is a square and a line, and the square is the only control on it: a
+     requirement the help writes with links keeps them, and a link inside a
+     checkbox would be a control inside a control. The square carries the line's
+     own words as its label instead. */
+  const item = (o) => {
+    const id = `${slug}:${o.id}`;
+    const done = wikiTicked.has(id);
+    return `<div class="wk-item${o.req ? " req" : ""}${done ? " done" : ""}"${
+      o.tip ? ` data-tip="${attr(o.tip)}"` : ""}>
+    <button type="button" class="wk-tick" role="checkbox" aria-checked="${done ? "true" : "false"}"
+      data-tick="${attr(id)}"${o.mark ? " data-wiki-more" : ""} aria-label="${attr(o.name)}"></button>
+    <span><strong>${o.html || wikiText(o.name)}${o.catch
+      ? `<i class="wk-catch" aria-label="named by another page, not by this one"></i>` : ""}</strong>
+    <span class="wk-m">${o.meta || ""}</span></span></div>`;
+  };
+  /* A caption over a run of rows, where the rows in one card come from more
+     than one kind of page. With no words for it, the rows simply run on. */
+  const caption = (title, tip) => title
+    ? `<p class="wk-sub"${tip ? ` data-tip="${attr(tip)}" tabindex="0"` : ""}>${wikiText(title)}</p>` : "";
+  /* A line in a card that is not a thing to tick: a place named, not a job. */
+  const said = (name, meta) => `<div class="wk-item said"><span aria-hidden="true"></span>
+    <span><strong>${wikiText(name)}</strong><span class="wk-m">${wikiText(meta || "")}</span></span></div>`;
+  const conditional = () => caption(wikiCopy("conditionalRequirements", wikiCopy("linkedRequirements")));
+  const group = (title, items, hint) => items.filter(Boolean).length
+    ? `<div class="wk-group rv"><h3${hint ? ` data-tip="${attr(hint)}" tabindex="0"` : ""}>${wikiText(title)}</h3>${
+      items.filter(Boolean).join("")}
+      <div class="wk-ph"><span class="wk-track"><i></i></span><b>0/${
+        (items.join("").match(/data-tick=/g) || []).length}</b></div></div>`
+    : "";
 
-  /* The required lines the page gives that name neither a fixture this sample
+  /* The required lines the page gives that name neither a fixture this guide
      carries nor a product: kept in the page's own words. */
-  const fixtureNamed = line => Object.keys(s.FIXTURES || {}).find(k => mentions(line, s.FIXTURES[k].name));
-  const productLine = line => /product|sell/i.test(line) && !fixtureNamed(line) && !/point of sale/i.test(line);
+  const fixtureNamed = line => keys.find(k => mentions(line, fixtures[k].name));
+  /* Which card a line belongs on. Where the help links its requirement, the
+     link says what kind of thing it is — furniture, a skill, a product — and
+     that is better evidence than the words around it. A line with no link at
+     all is read the way this page has always read it. */
+  const productLine = line => wikiLineKind(line) === "stock"
+    || (wikiLineKind(line) === null && /product|sell/i.test(wikiPlain(line)) && !fixtureNamed(line)
+      && !/point of sale/i.test(wikiPlain(line)));
 
-  const room = group("The room", [item({
-    id: "room", req: !!b.building, name: `${b.building || "A"} building`,
+  /* The size codes belong to the retail table; a business the table says
+     nothing about is not given its sentence. */
+  const room = group(wikiCopy("roomTitle"), b.building ? [item({
+    id: "room", req: !!b.building, name: `${b.building} building`,
     meta: sizes.length ? `${wikiText(sizes[0].code)} – ${wikiText(sizes[sizes.length - 1].code)}` : "",
-    tip: `The page's own opening line: this business operates out of ${String(b.building || "these").toLowerCase()} buildings. `
-      + "Rented before anything else; the traffic index belongs to the address and the door limit rises with the size code.",
-  })]);
+    tip: wikiCopy("roomHint", `The page's own opening line: this business operates out of `
+      + `${String(b.building).toLowerCase()} buildings. Rented before anything else.`)
+      + (sizes.length ? " The traffic index belongs to the address and the door limit rises with the size code." : ""),
+  })] : [], wikiCopy("roomHint"));
 
+  /* Each kind of thing named once, with what its own page says about it. */
+  const eachNamed = list => [...new Map(list.map(k => [fixtures[k].name.split(" (")[0],
+    `${wikiText(fixtures[k].name.split(" (")[0])}${Number.isFinite(fixtures[k].customers)
+      ? ` <b>${wikiNum(fixtures[k].customers)}</b>/h` : ""}`])).values()].join(" · ");
+  /* Which pieces a requirement names. Where the help links its requirement, the
+     link is the help's own answer and is taken exactly: the fixture whose key,
+     whose help page or whose whole name is that target, or — where the target
+     is one of the game's own groups, like "Point of Sales" — the pieces the
+     payload puts in that group.
+
+     Nothing is matched by one name containing another. A Law Firm requires a
+     Computer Workstation; a Computer is a different page, and the workstation's
+     requirement is not a requirement for it. Only a line the help gives no link
+     for falls back to its words, which is all there is to go on. */
+  const groupsOf = f => [].concat(f.group || [], f.groups || []).filter(Boolean).map(wikiTargetKey);
+  const linkedTo = line => {
+    const targets = wikiTargets(line);
+    if(!targets.length) return null;
+    const out = [];
+    targets.forEach(target => {
+      const tail = wikiTargetKey(target);
+      keys.forEach(k => {
+        const f = fixtures[k];
+        if(out.includes(k)) return;
+        if(wikiKey(k) === tail || wikiKey(f.name) === tail
+          || (f.pageId && wikiKey(f.pageId) === wikiKey(target))
+          || groupsOf(f).includes(tail)) out.push(k);
+      });
+    });
+    return out;
+  };
+  const covered = new Set();
   const requiredFixtures = required.filter(line => !productLine(line)).map((line, i) => {
-    const key = fixtureNamed(line);
-    const f = key ? s.FIXTURES[key] : null;
-    const till = !f && /point of sale/i.test(line);
+    const linked = linkedTo(line);
+    const members = linked === null ? keys.filter(k => mentions(line, fixtures[k].name)) : linked;
+    members.forEach(k => covered.add(k));
+    const one = members.length === 1 ? fixtures[members[0]] : null;
+    /* A line that is nothing but the fixture's name is drawn as that fixture.
+       Anything the page says around the name — an alternative, a minimum — is
+       the requirement too, so that line is kept as the help wrote it, links
+       and all, and the fixtures it names only fill in the meta below it. */
+    const plain = wikiPlain(line);
+    const exact = one && wikiKey(plain) === wikiKey(one.name);
     return item({
-      id: `req-${key || i}`, req: true, name: f ? f.name : line,
-      meta: f
-        ? `${Number.isFinite(f.customers) ? `serves <b>${wikiNum(f.customers)}</b>/h · ` : ""}${vendorCount(f.vendors)}`
+      id: `req-${members.length ? members.join("+") : i}`, req: true, name: exact ? one.name : plain,
+      html: exact ? null : wikiInline(line, ctx),
+      meta: one
+        ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
         /* Left and right of the same counter serve the same number, so each
            kind of till is named once. */
-        : till ? [...new Map(tills.map(k => [s.FIXTURES[k].name.split(" (")[0],
-            `${wikiText(s.FIXTURES[k].name.split(" (")[0])}${Number.isFinite(s.FIXTURES[k].customers)
-              ? ` <b>${wikiNum(s.FIXTURES[k].customers)}</b>/h` : ""}`])).values()].join(" · ")
-          : "",
-      tip: f ? `${wikiFixTip(f)} Sold by ${vendorLine(f.vendors)}.`
-        : till && tills.length ? `${tills.map(k => s.FIXTURES[k].name).join(", ")}. `
-            + `${s.FIXTURES[tills[0]].mount ? `The register stands on ${s.FIXTURES[tills[0]].mount}. ` : ""}`
-            + `${need ? `${s.FIXTURES[consumer].name} also needs ${need}s of its own.` : ""}`
-          : "Listed on this business's own page under what it requires to function.",
+        : members.length ? eachNamed(members) : "",
+      tip: one ? `${wikiFixTip(one)}${one.vendors && one.vendors.length ? ` Sold by ${vendorLine(one.vendors)}.` : ""}`
+        : members.length ? members.map(k => `${fixtures[k].name}: ${wikiFixTip(fixtures[k])}`).join(" ")
+        : "Listed on this business's own page under what it requires to function.",
     });
   });
-  const optionalFixtures = [...sellers, ...store].filter(k => !isRequired(s.FIXTURES[k].name)).map(k => item({
-    id: `fix-${k}`, req: false, name: s.FIXTURES[k].name,
-    meta: `${Number.isFinite(wikiFixHolds(s.FIXTURES[k])) ? `holds <b>${wikiNum(wikiFixHolds(s.FIXTURES[k]))}</b> · ` : ""}${vendorCount(s.FIXTURES[k].vendors)}`,
-    tip: `${wikiFixTip(s.FIXTURES[k])} Sold by ${vendorLine(s.FIXTURES[k].vendors)}. `
-      + "Its own help page, not this business's: the shop can open without it.",
-  }));
-  const fixtures = group("Fixtures", [...requiredFixtures, ...optionalFixtures]);
+  /* What the pieces on this page require in turn. A Computer Workstation's own
+     help page says it takes a desk and a chair and a computer, and points each
+     at one of the game's own furniture groups; the business page never repeats
+     it. Each part of that sentence is a requirement of its own with its own
+     alternatives, so each is a row, and none of its answers is a suggestion —
+     an office with no computer is not an office that merely skipped a nicety.
 
-  const stock = group("Stock", [
-    ...required.filter(productLine).map((line, i) => item({
-      id: `stock-${i}`, req: true, name: line, meta: "",
-      tip: "In the business page's own words, under what it requires to function.",
+     A requirement whose pieces the business page has already named is not
+     repeated: the Bathrooms group is one line there and stays one line. The
+     page credited is the piece the business itself requires where there is one,
+     because that is the requirement the reader arrived by. */
+  const linkedFixtures = [];
+  const linkedClaims = new Set();
+  const seenLinked = new Set();
+  const sources = keys.slice().sort((a, b) => (covered.has(a) ? 0 : 1) - (covered.has(b) ? 0 : 1));
+  sources.forEach(k => [].concat(fixtures[k].requirementsRaw || []).filter(Boolean).forEach(raw => {
+    const line = wikiBullet(raw);
+    wikiClauses(line).forEach(clause => {
+      /* Only what the link calls furniture: a skill or a product on the same
+         page belongs to the cards that hold those, not to the equipment. */
+      if(wikiLineKind(clause) !== "fixture") return;
+      const members = linkedTo(clause) || [];
+      if(!members.length || members.every(m => covered.has(m))) return;
+      const sign = members.join("+");
+      if(seenLinked.has(sign)) return;
+      seenLinked.add(sign);
+      const links = wikiLinks(clause);
+      /* Where the clause is one link, the help's own word for the group is the
+         row — "Desk", still pointing at the group's own page, with the desks the
+         payload puts in that group named under it. The words around it belong to
+         the sentence, not to the requirement, and the sentence is in the note.
+         Where the clause offers a choice, it is kept as the help wrote it. */
+      const only = links.length === 1 ? clause.slice(links[0].at, links[0].end) : null;
+      const one = members.length === 1 ? fixtures[members[0]] : null;
+      linkedFixtures.push(item({
+        id: `fix-need-${sign}`, req: true,
+        name: only ? links[0].text : wikiPlain(clause),
+        html: wikiInline(only || clause, ctx),
+        meta: one
+          ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
+          : eachNamed(members),
+        tip: `${fixtures[k].name} requires this on its own help page: “${wikiPlain(line)}”. `
+          + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
+      }));
+      members.forEach(m => covered.add(m));
+      wikiTargets(clause).forEach(t => linkedClaims.add(wikiTargetKey(t)));
+    });
+  }));
+
+  /* Everything else the guide's own fixtures hold, as suggestions. A piece a
+     requirement already named — itself, or as one of a group — is not listed
+     twice; a piece it only resembles is still a suggestion, because nothing
+     asked for it. A long tail of alternatives waits behind one control rather
+     than burying the list. */
+  const spare = keys.filter(k => !covered.has(k));
+  const shownSpare = wikiShowFix ? spare : spare.slice(0, WIKI_SPARE);
+  const optionalFixtures = shownSpare.map((k, i) => {
+    const caps = (fixtures[k].capacity || []).filter(c => c && Number.isFinite(c.value));
+    return item({
+      id: `fix-${k}`, req: false, name: fixtures[k].name,
+      /* The first piece the control revealed, so the reader who pressed it is
+         put down on what it produced rather than at the top of the page. */
+      mark: wikiShowFix && i === WIKI_SPARE,
+      /* A number with no label over it would read as this fixture's one
+         capacity; where its page gives several, each is named. */
+      meta: `${caps.length ? `holds <b>${wikiText(wikiCapText(caps))}</b> · ` : ""}${vendorCount(fixtures[k].vendors)}`,
+      tip: `${wikiFixTip(fixtures[k])}${fixtures[k].vendors && fixtures[k].vendors.length
+        ? ` Sold by ${vendorLine(fixtures[k].vendors)}.` : ""} `
+        + wikiCopy("equipmentSourceHint", "Listed by the equipment help; needed when using this equipment."),
+    });
+  }).concat(spare.length > shownSpare.length
+    ? [`<p class="quiet wk-more"><button type="button" class="link" data-wiki-fix>Show all ${
+        wikiNum(spare.length)}</button></p>`]
+    : []);
+
+  /* What a fixture consumes is a list on the fixture's own page. Where the
+     business page does not carry it too, the square says whose page it is. */
+  const needs = [];
+  keys.forEach(k => [].concat(fixtures[k].needs || []).filter(Boolean).forEach(need => {
+    if(needs.some(n => wikiKey(n.need) === wikiKey(need))) return;
+    const missed = !mentions(page.body || "", need) && !isRequired(need);
+    needs.push({need: String(need), from: fixtures[k].name, missed});
+  }));
+  /* A service's own requirements. The card for the service shows all of them,
+     always; this list only adds what the shop would otherwise not know it has
+     to buy. What the business page already requires, what its equipment card
+     already holds and what its skills already name are not repeated here — the
+     help says the same thing twice, and a checklist that did too would read as
+     two jobs. A line that reaches further than the one already shown (a second
+     chair the business page does not offer) is not the same thing, and stays. */
+  const claimed = new Set();
+  required.forEach(line => wikiTargets(line).forEach(t => claimed.add(wikiTargetKey(t))));
+  keys.forEach(k => claimed.add(wikiKey(k)));
+  keys.forEach(k => claimed.add(wikiKey(fixtures[k].name)));
+  (b.skills || []).forEach(skill => claimed.add(wikiKey(skill)));
+  /* A group the equipment card now carries as a requirement of its own is
+     answered on this page, whichever page asked for it. */
+  linkedClaims.forEach(t => claimed.add(t));
+  const feeNeeds = [];
+  offers.filter(o => o.kind === "fee").forEach(o => (o.requirementsRaw || []).forEach(raw => {
+    const line = wikiBullet(raw);
+    const plain = wikiPlain(line);
+    if(!plain) return;
+    const to = wikiTargets(line);
+    /* Answered already: every page this line points at is on this page under
+       its own square. With no links to go by, the words have to answer. */
+    if(to.length ? to.every(t => claimed.has(wikiTargetKey(t)))
+      : (fixtureNamed(line) || required.some(r => mentions(r, plain))
+        || (b.skills || []).some(skill => mentions(plain, skill)))) return;
+    if(feeNeeds.some(n => wikiKey(n.line) === wikiKey(plain))) return;
+    /* Where the line belongs is what its links point at: furniture is equipment
+       however little the payload knows about the piece itself. */
+    const kind = wikiLineKind(line)
+      || ((b.skills || []).some(skill => mentions(plain, skill)) ? "skill" : "stock");
+    feeNeeds.push({line: plain, html: wikiInline(line, ctx), from: o.name, kind});
+  }));
+  const feeItem = (n, i) => item({
+    id: `need-${i}`, req: false, name: n.line, html: n.html, meta: wikiText(n.from.toLowerCase()),
+    tip: wikiCopy("equipmentSourceHint", `${n.from} lists this on its own help page under what it `
+      + "requires. Its own page, not this business's."),
+  });
+  const feeRows = kind => feeNeeds.map((n, i) => n.kind === kind ? feeItem(n, i) : "").filter(Boolean);
+
+  const own = required.filter(productLine).map((line, i) => item({
+    id: `stock-${i}`, req: true, name: wikiPlain(line), html: wikiInline(line, ctx), meta: "",
+    tip: "In the business page's own words, under what it requires to function.",
+  }));
+  const linked = [
+    ...needs.map((n, i) => item({
+      id: `stock-need-${i}`, req: true, name: n.need, meta: "the fixture's own page", catch: n.missed,
+      tip: `${n.from} requires ${n.need}, according to its help page. `
+        + (n.missed ? "The business page does not mention this requirement. " : "")
+        + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
     })),
-    ...(need ? [item({
-      id: "stock-need", req: true, name: `${need}s`, meta: "the till's own page", catch: bagCatch,
-      tip: `${s.FIXTURES[consumer].name} lists ${need}s on its own help page under what it requires to function`
-        + `${bagCatch ? ", and this business's page does not mention them at all" : ""}. `
-        + `A shop with a till and no ${need.toLowerCase()}s has nothing to ring a sale into.`,
-    })] : []),
+  ];
+  const stockFees = feeRows("stock");
+  /* Three kinds of line can share this card: what this page requires, what the
+     pages of the things it requires require in turn, and what one of the
+     services asks for before it can be collected. Each says which it is. */
+  const stock = group(wikiCopy("stockTitle"), [
+    ...(own.length && (linked.length || stockFees.length) ? [caption(wikiCopy("listedRequirements"))] : []), ...own,
+    ...(linked.length && (own.length || stockFees.length) ? [caption(wikiCopy("linkedRequirements"))] : []), ...linked,
+    ...(stockFees.length && (own.length || linked.length) ? [conditional()] : []),
+    ...stockFees,
   ]);
 
-  const people = group("People", (b.skills || []).map(skill => item({
-    id: `skill-${skill}`, req: isRequired(skill), name: skill,
-    meta: wikiSup(b.hiring) ? wikiText(wikiSup(b.hiring).name) : "",
-    tip: (wikiSup(b.hiring) ? `Hired at ${wikiSup(b.hiring).name}, ${wikiSup(b.hiring).street}. ` : "")
-      + "The page says these skills can be assigned, not that the shop cannot open without them.",
-  })));
+  /* The recruiters the payload names for this business are gathered from the
+     help pages of all its skills at once. Which agency takes which skill is not
+     something that list answers, so no skill is given one: the names are shown
+     once, for the business, and a mapping the extraction has actually verified
+     is used instead when the payload carries one. */
+  const hiring = wikiHiring(b).map(k => wikiSup(k, g)).filter(Boolean);
+  const bySkill = b.hiringBySkill && typeof b.hiringBySkill === "object" ? b.hiringBySkill : null;
+  const forSkill = skill => !bySkill ? []
+    : [].concat(bySkill[skill] || []).map(k => wikiSup(k, g)).filter(Boolean);
+  const people = group(wikiCopy("staffTitle"), [
+    ...(b.skills || []).map(skill => {
+      const own = forSkill(skill);
+      return item({
+        id: `skill-${skill}`, req: isRequired(skill), name: skill,
+        meta: own.length ? wikiText(own.map(s => s.name).join(" · ")) : "",
+        tip: "The page says these skills can be assigned, not that the shop cannot open without them.",
+      });
+    }),
+    ...feeRows("skill"),
+    ...(hiring.length && !bySkill
+      ? [caption(wikiCopy("recruitmentTitle"), wikiCopy("recruitmentHint")),
+        ...hiring.map(s => said(s.name, s.street))]
+      : []),
+  ], wikiCopy("peopleHint"));
+  /* A service that needs a piece of equipment needs equipment, whatever the
+     payload knows about the piece: the line belongs on this card, never among
+     the stock. */
+  const kitFees = feeRows("fixture");
+  /* The same three kinds of line as the stock card, in the same order: what the
+     business page requires, what the pages of those things require in turn, and
+     what a service asks for before it can be collected. The suggestions come
+     last, after everything anyone asked for. */
+  const kitKinds = [requiredFixtures, linkedFixtures, kitFees, optionalFixtures].filter(l => l.length).length;
+  const kit = group(wikiCopy("fixturesTitle"), [
+    ...(requiredFixtures.length && kitKinds > 1 ? [caption(wikiCopy("listedRequirements"))] : []),
+    ...requiredFixtures,
+    ...(linkedFixtures.length && kitKinds > 1 ? [caption(wikiCopy("linkedRequirements"))] : []),
+    ...linkedFixtures,
+    ...(kitFees.length && kitKinds > 1 ? [conditional()] : []),
+    ...kitFees,
+    ...(optionalFixtures.length && kitKinds > 1 ? [caption(wikiCopy("suggestedEquipment"))] : []),
+    ...optionalFixtures,
+  ], wikiCopy("equipmentHint"));
   return `
 <section class="sec">
-  <div class="sechead"><h2>To open</h2>
-    ${wikiWhy("Green squares mark listed requirements; hollow squares are suggestions. Tick items as you go; checkmarks reset on reload.")}
+  <div class="sechead"><h2>${wikiText(wikiCopy("setupTitle"))}</h2>
+    ${wikiWhy(wikiCopy("setupHint"))}
     <span class="aside">${wikiChip("help")}</span></div>
-  <div class="wk-groups">${room}${fixtures}${stock}${people}</div>
+  <div class="wk-groups">${room}${kit}${stock}${people}</div>
 </section>`;
 }
 /* A name reduced to its letters and digits, for comparing what two help pages
@@ -811,70 +1270,165 @@ function wikiRequired(body){
 /* Markdown down to the words a reader sees. */
 const wikiPlain = line => String(line ?? "")
   .replace(/\[([^\]\n]+)\]\([^)\n]*\)/g, "$1").replace(/\*\*/g, "").trim();
+/* A bullet as the help file writes it, with only its own marker taken off: the
+   square in front of the line is that marker here. Everything inside the line —
+   an "or", a minimum, the links — is the requirement and stays. */
+const wikiBullet = line => typeof line === "string" ? line.replace(/^\s*[*•‣-]\s+/, "") : line;
+/* Where a line's links point, as the help writes them: "furniture-cashregister",
+   "skill-hairstylist", "products-haircareproduct". A page this build does not
+   carry still names the thing the line is about, so the target is read whether
+   or not it resolves. */
+const wikiTargets = line => [...String(line ?? "").matchAll(/\]\(([^)\n]*)\)/g)]
+  .map(m => m[1].trim()).filter(Boolean);
+/* The same links, with the words the help wrote over each and where each sits
+   in the line: what a sentence naming several things has to be read by. */
+const wikiLinks = line => [...String(line ?? "").matchAll(/\[([^\]\n]+)\]\(([^)\n]*)\)/g)]
+  .map(m => ({text: m[1].replace(/\*\*/g, "").trim(), target: m[2].trim(),
+    at: m.index, end: m.index + m[0].length}));
+/* One line of help can hold more than one requirement. A workstation's page
+   writes its needs as a sentence — "a [Desk] and a [Chair] and a [Computer]" —
+   where "and" separates three things to buy while "or" offers two answers to
+   one of them. The line is cut where it says "and" and never where it says
+   "or", and only ever between one link and the next: an "and" inside a page's
+   own name is part of that name and is left alone. A line with fewer than two
+   links says one thing, whatever words it uses, and is returned as it came. */
+function wikiClauses(line){
+  const text = String(line ?? "");
+  const links = wikiLinks(text);
+  if(links.length < 2) return [text];
+  const out = [];
+  let start = 0;
+  for(let i = 1; i < links.length; i++){
+    const gap = text.slice(links[i - 1].end, links[i].at);
+    if(/\bor\b|\bnor\b|\//i.test(gap)) continue;
+    const cut = /\band\b|\bplus\b|[,;]/i.exec(gap);
+    if(!cut) continue;
+    out.push(text.slice(start, links[i - 1].end + cut.index));
+    start = links[i - 1].end + cut.index + cut[0].length;
+  }
+  out.push(text.slice(start));
+  return out.map(s => s.trim()).filter(Boolean);
+}
+/* What a line is about, from where its links point rather than from its words.
+   A line with no link at all answers null, and the reading falls back to what
+   the words say. */
+function wikiLineKind(line){
+  const to = wikiTargets(line);
+  if(to.some(t => /^furniture-/i.test(t))) return "fixture";
+  if(to.some(t => /^skill-/i.test(t))) return "skill";
+  if(to.some(t => /^(products|fees)-/i.test(t))) return "stock";
+  return null;
+}
+/* The thing a link names, whatever kind of page it is on: the tail the help's
+   own slugs share with the payload's own keys. */
+const wikiTargetKey = target => wikiKey(String(target).replace(/^(furniture|skill|products|fees)-/i, ""));
 /* The extraction names the help page it read by its key. Under Source that is
    the evidence; anywhere else it is a file name in the middle of a sentence, so
    it goes back to being words. */
 const wikiUnkey = s => String(s ?? "")
   .replace(/\bhelp_[a-z0-9_:]+\b/gi, "the help's own page").replace(/\s+/g, " ").trim();
 
-function wikiSampleProducts(primary){
-  const s = wikiData.sample;
-  const wholesalers = (s.WHOLESALERS || []).map(w => w.name);
-  const pill = (text, n, cls, tip) => `<span class="wk-pill${cls ? ` ${cls}` : ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}>`
-    + `${wikiText(text)}${n ? `<b>${wikiText(n)}</b>` : ""}</span>`;
-  const cards = primary.map(p => {
-    const goes = (p.fixtures || []).map(k => {
-      const f = wikiFix(k);
-      if(!f) return "";
-      /* A fixture lists a capacity per kind of goods ("Gifts 300, flowers 100");
-         the product's own first word picks its line, and its own name is data,
-         so it is escaped before it becomes a pattern. A fixture whose page gives
-         no capacity carries no number rather than an empty one. */
-      const family = p.name.split(" ")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const cap = (f.capacity || []).find(c => new RegExp(family, "i").test(c.label || "")) || (f.capacity || [])[0];
-      return pill(f.name, cap && Number.isFinite(cap.value) ? wikiNum(cap.value) : "", "", wikiFixTip(f));
-    }).join("");
-    const state = wikiWholesale(p);
-    const from = [
-      state === "yes"
-        ? pill("Any wholesaler", wholesalers.length, "on",
-            `${wholesalers.join(", ")}. Its own help page names the wholesalers, and it is on their product list.`)
-        : state === "none"
-        ? pill("No wholesaler listed", "", "no",
-            "No wholesaler's page lists it and its own page names none. That is the help being silent, not a rule in the "
-            + "game: import it or make it, and check in-game before you count on it.")
-        : pill("Wholesale not stated", "", "unknown",
-            "The help does not say either way for this one, so neither does this page."),
-      ...(p.importers || []).map(k => {
-        const sup = wikiSup(k);
-        /* The address is the point of the pill: 4 Pier and 9 Pier are different
-           buildings, so the number stays on. */
-        return sup ? pill(sup.name, sup.street, "", `${sup.kind}. ${sup.street}, ${sup.hood}.`) : "";
-      }),
-      p.recipe ? pill("Your factory", "", "", "Made in a factory; the recipe is below.") : "",
-    ].join("");
-    const also = (p.alsoSoldBy || []).map(n => pill(n)).join("") || `<span class="quiet">nobody else</span>`;
-    return `<div class="wk-card rv"><div class="wk-cardtop"><h3>${wikiText(p.name)}</h3></div>
-      <dl><dt>Goes on</dt><dd>${goes || `<span class="quiet">no fixture named</span>`}</dd>
-      <dt>Comes from</dt><dd>${from}</dd>
-      <dt>Also sold by</dt><dd>${also}</dd></dl></div>`;
+/* --- what it sells -------------------------------------------------------- */
+const wikiPill = (text, n, cls, tip) => `<span class="wk-pill${cls ? ` ${cls}` : ""}"`
+  + `${tip ? ` data-tip="${attr(tip)}"` : ""}>${wikiText(text)}${n ? `<b>${wikiText(n)}</b>` : ""}</span>`;
+/* A card's own title, and a link to the item's own help page where this build
+   carries one. */
+function wikiCardTitle(p){
+  const name = wikiText(p.name);
+  return p.pageId && wikiData.has(p.pageId)
+    ? `<a class="wk-link" href="${attr(wikiHref({kind: "page", id: p.pageId}))}">${name}</a>`
+    : name;
+}
+function wikiGoodsCard(p, g){
+  if(p.gone) return `<div class="wk-card gone rv"><div class="wk-cardtop">
+    <h3>${wikiText(wikiCopy("missingProduct"))}</h3>${wikiChip("gap")}</div>
+    <dl><dt>Goes on</dt><dd><span class="quiet">${wikiText(wikiCopy("noEquipment"))}</span></dd></dl></div>`;
+  const wholesalers = (g.WHOLESALERS || []).map(w => w.name);
+  const goes = (p.fixtures || []).map(k => {
+    const f = wikiFix(k, g);
+    if(!f) return "";
+    const caps = wikiCaps(p, k, f);
+    return wikiPill(f.name, caps.length ? wikiCapText(caps) : "", "", wikiFixTip(f));
   }).join("");
-  const extras = (s.BUSINESS.extras || []);
+  const state = wikiWholesale(p);
+  const from = [
+    state === "yes"
+      ? wikiPill("Any wholesaler", wholesalers.length, "on",
+          `${wholesalers.join(", ")}. Its own help page names the wholesalers, and it is on their product list.`)
+      : state === "none"
+      ? wikiPill("No wholesaler listed", "", "no",
+          "No wholesaler's page lists it and its own page names none. That is the help being silent, not a rule in the "
+          + "game: import it or make it, and check in-game before you count on it.")
+      : wikiPill("Wholesale not stated", "", "unknown",
+          "The help does not say either way for this one, so neither does this page."),
+    ...(p.importers || []).map(k => {
+      const sup = wikiSup(k, g);
+      /* The address is the point of the pill: 4 Pier and 9 Pier are different
+         buildings, so the number stays on. */
+      return sup ? wikiPill(sup.name, sup.street, "", `${sup.kind}. ${sup.street}, ${sup.hood}.`) : "";
+    }),
+    wikiRecipeKeys(p).length ? wikiPill("Your factory", "", "", "Made in a factory; the recipe is below.") : "",
+  ].join("");
+  const also = (p.alsoSoldBy || []).map(n => wikiPill(n)).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
+  return `<div class="wk-card rv"><div class="wk-cardtop"><h3>${wikiCardTitle(p)}</h3>${
+    p.group === "additional" ? wikiChip("dim", wikiCopy("alsoCarried"), wikiCopy("alsoCarriedTip")) : ""}</div>
+    <dl><dt${wikiCopy("capacityHint") ? ` data-tip="${attr(wikiCopy("capacityHint"))}" tabindex="0"` : ""}>Goes on</dt>
+    <dd>${goes || `<span class="quiet">${wikiText(wikiCopy("noEquipment"))}</span>`}</dd>
+    <dt>Comes from</dt><dd>${from}</dd>
+    <dt>Also sold by</dt><dd>${also}</dd></dl></div>`;
+}
+/* One section of cards. The range a business calls its own and the range it
+   also carries are drawn the same way, in their own sections, because a shop
+   that stocks both has to buy, shelve and supply both. */
+function wikiGuideCards(g, list, which, plan, ctx){
+  if(!list.length) return "";
+  const title = wikiCopy(which === "primary" ? "primaryTitle" : "secondaryTitle");
+  const hint = wikiCopy(which === "primary" ? "primaryHint" : "secondaryHint", wikiCopy("primaryHint"));
   return `
 <section class="sec">
-  <div class="sechead"><h2>Sells</h2>
-    ${wikiWhy("Shelf numbers show storage capacity. A red dashed label means that supply option isn't listed in the help.")}
-    ${extras.length ? `<span class="aside">${wikiChip("dim", `+${extras.length} on the side`,
-      `${extras.join(", ")}. Each belongs to another type's main range and is documented there.`)}</span>` : ""}</div>
+  <div class="sechead"><h2>${wikiText(title)}</h2>
+    ${wikiWhy(hint)}
+    ${plan ? `<span class="aside" id="wikiPlanSlot"></span>` : ""}</div>
+  <div class="wk-cards">${list.map(p => wikiGoodsCard(p, g)).join("")}</div>
+</section>`;
+}
+/* A fee is collected, not stocked. Its card carries what the help says it
+   depends on, in the help's own linked words, and never a shelf, a wholesaler
+   or a recipe. */
+function wikiGuideServices(g, fees, plan, ctx){
+  if(!fees.length) return "";
+  const cards = fees.map(p => {
+    /* The help writes these as its own bulleted list; the card sets them as a
+       list of its own, so the file's marker comes off and nothing inside the
+       line does. */
+    const lines = (p.requirementsRaw || []).map(line =>
+      `<div class="wk-need">${wikiInline(wikiBullet(line), ctx)}</div>`).join("");
+    const also = (p.alsoSoldBy || []).map(n => wikiPill(n)).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
+    return `<div class="wk-card svc rv"><div class="wk-cardtop"><h3>${wikiCardTitle(p)}</h3>${
+      p.automatic === true ? wikiChip("help", wikiCopy("automaticFee"), wikiCopy("automaticFeeTip")) : ""}${
+      p.group === "additional" ? wikiChip("dim", wikiCopy("alsoOffered"), wikiCopy("alsoOfferedTip")) : ""}</div>
+      <dl><dt>${wikiText(wikiCopy("dependenciesTitle"))}</dt>
+      <dd class="wk-lines">${lines || `<span class="quiet">${wikiText(wikiCopy("noRequirements"))}</span>`}</dd>
+      <dt>Also offered by</dt><dd>${also}</dd></dl></div>`;
+  }).join("");
+  return `
+<section class="sec">
+  <div class="sechead"><h2>${wikiText(wikiCopy("servicesTitle"))}</h2>
+    ${/* No hint of its own yet: the section says nothing rather than saying it
+          in words this page had no business writing. */
+      wikiWhy(wikiCopy("servicesHint", ""))}
+    ${plan ? `<span class="aside" id="wikiPlanSlot"></span>` : ""}</div>
   <div class="wk-cards">${cards}</div>
 </section>`;
 }
 
+/* --- how it fits together -------------------------------------------------- */
 /* Product, the fixture it goes on, where it comes from. Click a node and only
    its lines stay lit. The wires are drawn from the nodes' own boxes, so they
    survive a resize, and are dropped entirely on a narrow screen where the lanes
    stack: the picked state still reads from the dimming alone. */
-function wikiGraphModel(primary){
+function wikiGraphModel(primary, g){
+  const guide = g || wikiG();
   const nodes = {product: [], fixture: [], source: []};
   const edges = [];
   const seen = new Set();
@@ -888,11 +1442,11 @@ function wikiGraphModel(primary){
   primary.forEach(p => {
     add("product", `p:${p.key}`, p.name, "");
     (p.fixtures || []).forEach(k => {
-      const f = wikiFix(k);
+      const f = wikiFix(k, guide);
       if(!f) return;
-      const holds = wikiFixHolds(f);
+      const caps = wikiCaps(p, k, f);
       add("fixture", `f:${k}`, f.name, [
-        Number.isFinite(holds) ? `holds ${wikiNum(holds)}` : "",
+        caps.length ? `holds ${wikiCapText(caps)}` : "",
         Number.isFinite(f.customers) ? `${wikiNum(f.customers)}/h` : "",
       ].filter(Boolean).join(" · "));
       /* Supply reaches a product; a product goes on a fixture. The lines are
@@ -901,19 +1455,23 @@ function wikiGraphModel(primary){
     });
     if(wikiWholesale(p) === "yes") anyWholesale = true;
     (p.importers || []).forEach(k => {
-      const sup = wikiSup(k);
+      const sup = wikiSup(k, guide);
       if(!sup) return;
       add("source", `s:${k}`, sup.name, `${sup.street} · import`);
       edges.push([`p:${p.key}`, `s:${k}`, "hop"]);
     });
-    const station = (wikiData.sample || {}).WORKSTATION || {};
-    if(p.recipe && station.name){
-      add("source", "s:station", station.name, "your factory");
-      edges.push([`p:${p.key}`, "s:station", "hop"]);
-    }
+    /* A shop's products may be made on more than one workstation, so each
+       recipe brings its own rather than the page assuming a single line. */
+    wikiRecipeKeys(p).forEach(key => {
+      const station = wikiStation((guide.RECIPES || {})[key], guide);
+      if(!station.name) return;
+      const id = `s:ws:${wikiKey(station.name)}`;
+      add("source", id, station.name, "your factory");
+      edges.push([`p:${p.key}`, id, "hop"]);
+    });
   });
   if(anyWholesale){
-    const n = ((wikiData.sample || {}).WHOLESALERS || []).length;
+    const n = (guide.WHOLESALERS || []).length;
     nodes.source.unshift({id: "s:wholesale", name: "Any wholesaler", sub: `${wikiNum(n)} named`});
     primary.forEach(p => { if(wikiWholesale(p) === "yes") edges.push([`p:${p.key}`, "s:wholesale", "hop"]); });
   }
@@ -929,16 +1487,31 @@ function wikiCrosscheckChip(primary){
   return wikiChip("help", "read both ways",
     `${notes.join(" ")} Both directions are the same help file agreeing with itself, not a second source.`);
 }
-function wikiSampleGraph(primary){
-  const model = wikiGraphModel(primary);
+/* Above this many products the lanes stop being a picture, so the graph is
+   drawn one product at a time and the cards above keep every relationship. */
+const WIKI_GRAPH_MAX = 6;
+/* How many pieces of equipment the setup list suggests before it offers the
+   rest behind a control. An office can reach dozens of desks and chairs. */
+const WIKI_SPARE = 6;
+function wikiGuideGraph(g, goods){
+  if(!goods.length) return "";
+  const broad = goods.length > WIKI_GRAPH_MAX;
+  const held = broad ? (goods.find(p => p.key === wikiFocus) || goods[0]) : null;
+  const shown = broad ? [held] : goods;
+  const model = wikiGraphModel(shown, g);
   const lane = (title, list) => `<div class="wk-lane"><h3>${wikiText(title)}</h3><div class="wk-stack">${
     list.map(n => `<button type="button" class="wk-node" data-node="${attr(n.id)}" aria-pressed="false">`
       + `<span>${wikiText(n.name)}</span>${n.sub ? `<small>${wikiText(n.sub)}</small>` : ""}</button>`).join("")}</div></div>`;
+  const picker = broad ? `<div class="wk-picker" role="group" aria-label="${attr(wikiCopy("chooseProduct"))}">
+    <span class="wk-pickerlab">${wikiText(wikiCopy("chooseProduct"))}</span>${goods.map(p =>
+      `<button type="button" class="wk-tab${p === held ? " on" : ""}" data-focus="${attr(p.key)}"
+        aria-pressed="${p === held ? "true" : "false"}">${wikiText(p.name)}</button>`).join("")}</div>` : "";
   return `
 <section class="sec">
-  <div class="sechead"><h2>Fits together</h2>
-    ${wikiWhy("Select an item to highlight its connections. Select it again or press Escape to clear.")}
-    <span class="aside">${wikiCrosscheckChip(primary)}</span></div>
+  <div class="sechead"><h2>${wikiText(wikiCopy("graphTitle"))}</h2>
+    ${wikiWhy(wikiCopy("graphHint"))}
+    <span class="aside">${wikiCrosscheckChip(shown)}</span></div>
+  ${picker}
   <div class="wk-graph" id="wikiGraph" data-edges="${attr(JSON.stringify(model.edges))}">
     <svg class="wk-wires" aria-hidden="true"></svg>
     <div class="wk-shadow" aria-hidden="true"></div>
@@ -958,70 +1531,91 @@ function wikiSampleGraph(primary){
 </section>`;
 }
 
-function wikiSampleRecipes(primary){
-  const s = wikiData.sample;
-  const station = s.WORKSTATION || {};
-  const rows = primary.map(p => s.RECIPES && s.RECIPES[p.recipe]).filter(Boolean);
-  if(!rows.length) return "";
-  const flows = rows.map(r => {
-    const ings = (r.inputs || []).map(i => {
-      const froms = (i.from || []).map(k => (wikiSup(k) || {}).name).filter(Boolean).join(" · ");
-      /* A rate the recipe page does not give stays a dash: a zero would read as
-         a measurement. */
-      const rate = Number.isFinite(i.per) ? `${wikiNum(i.per)}/h` : "—";
-      return `<div class="wk-ing"><span>${wikiText(i.item)}${froms ? `<span class="wk-from">${wikiText(froms)}</span>` : ""}</span>`
-        + `<span class="wk-r"${Number.isFinite(i.per) ? "" : ' data-tip="The recipe page gives no hourly rate for this input."'}>${rate}</span></div>`;
-    }).join("");
-    const per = (r.out || {}).per;
-    const rated = Number.isFinite(per);
-    return `<div class="wk-flow rv">
-      <div class="wk-box">${ings}</div>
-      <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
-      <div class="wk-box mid" data-tip="${attr(`${station.assembly || "An assembly machine"}`
-        + `${(station.production || []).length ? ` with ${station.production.join(", ")}` : ""}`
-        + `${(station.runs || []).length ? `. The same workstation runs ${station.runs.length} recipes.` : ""}`)}">
-        <b>${wikiText(r.workstation || station.name || "Workstation")}</b>
-        ${(station.runs || []).length ? `<small>${wikiNum(station.runs.length)} recipes</small>` : ""}</div>
-      <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
-      <div class="wk-out">${rated
-        ? `<b>${wikiNum(per)}<small>/h</small></b>` : `<b class="none">—</b>`}
-        <span>${wikiText((r.out || {}).item || "")}</span>
-        ${rated
-          ? wikiChip("model", `${wikiNum(per * 24)}/day`,
-              "Big Copilot's own reading: the page's maximum hourly rate times 24. That assumes the line runs all day, "
-              + "uninterrupted and at full rate — the help does not say what one achieves in practice, or what happens when "
-              + "an input runs out mid-hour.")
-          : wikiChip("gap", "rate not stated", "This recipe page gives no maximum hourly rate, so there is no day figure to take from it.")}</div>
-    </div>`;
+/* --- the recipes ----------------------------------------------------------- */
+/* One flow per recipe, on the workstation that recipe's own page names. A
+   recipe that makes more than one of the shop's products is drawn once, and
+   says which of them it is for. */
+function wikiRecipeFlow(row, g){
+  const r = row.recipe;
+  /* A recipe shared across the two ranges says so, and every product it makes
+     for this shop is named: the flow is drawn once, not once per product. */
+  const shared = row.users.some(u => u.group === "primary") && row.users.some(u => u.group !== "primary");
+  const link = r && r.pageId && wikiData.has(r.pageId)
+    ? `<a class="wk-link" href="${attr(wikiHref({kind: "page", id: r.pageId}))}">${wikiText(wikiCopy("recipeLink"))}</a>`
+    : "";
+  const roles = row.users.length > 1 || shared || link
+    ? `<div class="wk-for">${row.users.length > 1 ? row.users.map(u => wikiPill(u.name, u.group)).join("") : ""}${
+      shared ? wikiChip("help", wikiCopy("sharedRecipe")) : ""}${link}</div>` : "";
+  if(!r) return `<div class="wk-flow miss rv">
+    <div class="wk-box"><b>${wikiText(wikiCopy("missingRecipe"))}</b></div>
+    <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="wk-box mid"><b>—</b></div>
+    <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="wk-out"><b class="none">—</b>
+      <span>${wikiText(row.users.map(u => u.name).join(", "))}</span>
+      ${wikiChip("gap", wikiCopy("noRecipe"), wikiCopy("missingRecipeTip"))}</div>
+  </div>`;
+  const station = wikiStation(r, g);
+  const ings = (r.inputs || []).map(i => {
+    const froms = (i.from || []).map(k => (wikiSup(k, g) || {}).name).filter(Boolean).join(" · ");
+    /* A rate the recipe page does not give stays a dash: a zero would read as
+       a measurement. */
+    const rate = Number.isFinite(i.per) ? `${wikiNum(i.per)}/h` : "—";
+    return `<div class="wk-ing"><span>${wikiText(i.item)}${froms ? `<span class="wk-from">${wikiText(froms)}</span>` : ""}</span>`
+      + `<span class="wk-r"${Number.isFinite(i.per) ? "" : ' data-tip="The recipe page gives no hourly rate for this input."'}>${rate}</span></div>`;
   }).join("");
+  const per = (r.out || {}).per;
+  const rated = Number.isFinite(per);
+  return `<div class="wk-recipe rv">${roles}<div class="wk-flow">
+    <div class="wk-box">${ings || `<span class="quiet">no ingredient stated</span>`}</div>
+    <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="wk-box mid" data-tip="${attr(`${station.assembly || "An assembly machine"}`
+      + `${(station.production || []).length ? ` with ${station.production.join(", ")}` : ""}`
+      + `${(station.runs || []).length ? `. The same workstation runs ${station.runs.length} recipes.` : ""}`)}">
+      <b>${wikiText(r.workstation || station.name || "Workstation")}</b>
+      ${(station.runs || []).length
+        ? `<small>${wikiNum(station.runs.length)} ${wikiCount(station.runs.length, "recipe")}</small>` : ""}</div>
+    <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="wk-out">${rated
+      ? `<b>${wikiNum(per)}<small>/h</small></b>` : `<b class="none">—</b>`}
+      <span>${wikiText((r.out || {}).item || "")}</span>
+      ${rated
+        ? wikiChip("model", `${wikiNum(per * 24)}/day`, wikiCopy("fullDayHint"))
+        : wikiChip("gap", "rate not stated", "This recipe page gives no maximum hourly rate, so there is no day figure to take from it.")}</div>
+  </div></div>`;
+}
+function wikiGuideRecipes(g, rows, which, plan){
+  if(!rows.length) return "";
+  const first = which === "primary";
+  const title = wikiCopy(first ? "primaryRecipesTitle" : "secondaryRecipesTitle");
   return `
 <section class="sec">
-  <div class="sechead"><h2>Make it</h2>
-    ${wikiWhy("Rates are per workstation at full speed. Daily output assumes 24 hours without stopping.")}
-    <span class="aside" id="wikiPlanSlot"></span></div>
-  <div class="wk-flows">${flows}</div>
+  <div class="sechead"><h2>${wikiText(title)}</h2>
+    ${wikiWhy(first ? wikiCopy("recipeHint") : wikiCopy("secondaryRecipeHint", wikiCopy("recipeHint")))}
+    ${plan ? `<span class="aside" id="wikiPlanSlot"></span>` : ""}</div>
+  <div class="wk-flows">${rows.map(row => wikiRecipeFlow(row, g)).join("")}</div>
 </section>`;
 }
 
-function wikiSamplePlaces(){
-  const s = wikiData.sample;
+/* --- where to go ----------------------------------------------------------- */
+function wikiGuidePlaces(g){
   const roles = {};
-  Object.entries(s.FIXTURES || {}).forEach(([, f]) => (f.vendors || []).forEach(v => {
-    roles[v] = roles[v] || new Set();
-    roles[v].add("fixtures");
-  }));
-  Object.entries(s.PRODUCTS || {}).forEach(([, p]) => (p.importers || []).forEach(v => {
-    roles[v] = roles[v] || new Set();
-    roles[v].add("products");
-  }));
-  Object.entries(s.RECIPES || {}).forEach(([, r]) => (r.inputs || []).forEach(i => (i.from || []).forEach(v => {
-    roles[v] = roles[v] || new Set();
-    roles[v].add("ingredients");
-  })));
-  if(s.BUSINESS && s.BUSINESS.hiring){ roles[s.BUSINESS.hiring] = roles[s.BUSINESS.hiring] || new Set(); roles[s.BUSINESS.hiring].add("people"); }
-  if((s.WORKSTATION || {}).vendor){ roles[s.WORKSTATION.vendor] = roles[s.WORKSTATION.vendor] || new Set(); roles[s.WORKSTATION.vendor].add("machines"); }
+  const role = (key, what) => {
+    if(!key) return;
+    roles[key] = roles[key] || new Set();
+    roles[key].add(what);
+  };
+  Object.values(g.FIXTURES || {}).forEach(f => (f.vendors || []).forEach(v => role(v, "fixtures")));
+  Object.values(g.PRODUCTS || {}).forEach(p => (p.importers || []).forEach(v => role(v, "products")));
+  Object.values(g.RECIPES || {}).forEach(r => (r.inputs || []).forEach(i => (i.from || []).forEach(v => role(v, "ingredients"))));
+  wikiHiring(g.BUSINESS || {}).forEach(v => role(v, "people"));
+  Object.values(g.WORKSTATIONS || {}).forEach(s => {
+    [].concat(s.vendors || [], s.vendor || []).forEach(v => role(v, "machines"));
+  });
+  const legacy = g.WORKSTATION || {};
+  if(legacy.vendor) role(legacy.vendor, "machines");
   const rows = Object.keys(roles).map(key => {
-    const sup = wikiSup(key);
+    const sup = wikiSup(key, g);
     if(!sup) return "";
     const facts = [sup.size ? `size ${sup.size}` : "", sup.area ? `${wikiNum(sup.area)} m²` : "",
       Number.isFinite(sup.traffic) ? `traffic ${sup.traffic}` : ""].filter(Boolean).join(" · ");
@@ -1035,12 +1629,14 @@ function wikiSamplePlaces(){
         <small class="wk-addr" data-addr="${attr(sup.street)}"${mapId} data-tip="${attr(`${sup.hood}${facts ? ` · ${facts}` : ""}`)}">${wikiText(sup.street)}</small></span>
       <span class="wk-role">${wikiText([...roles[key]].join(" · "))}</span></div>`;
   }).join("");
-  const wholesalers = (s.WHOLESALERS || []);
+  if(!rows) return "";
+  const wholesalers = (g.WHOLESALERS || []);
   return `
 <section class="sec">
-  <div class="sechead"><h2>Where to go</h2>
-    ${wikiWhy("Select a map pin to locate a supplier or recruitment agency.")}
-    ${wholesalers.length ? `<span class="aside">${wikiChip("dim", `${wikiNum(wholesalers.length)} wholesalers`,
+  <div class="sechead"><h2>${wikiText(wikiCopy("suppliersTitle"))}</h2>
+    ${wikiWhy(wikiCopy("placesHint"))}
+    ${wholesalers.length ? `<span class="aside">${wikiChip("dim",
+      `${wikiNum(wholesalers.length)} ${wikiCount(wholesalers.length, "wholesaler")}`,
       `${wholesalers.map(w => w.name).join(", ")}. Named on the help's own wholesale page.`)}</span>` : ""}</div>
   <div class="wk-places">${rows}</div>
 </section>`;
@@ -1050,7 +1646,7 @@ function wikiSamplePlaces(){
    catalogue the link really does select it; without one it says what it needs
    instead of pretending to work. */
 function wikiPlanKey(){
-  const b = (wikiData.sample || {}).BUSINESS || {};
+  const b = wikiG().BUSINESS || {};
   return b.nameSrc || "";
 }
 function wikiCanPlan(){
@@ -1069,11 +1665,13 @@ function wikiPlanChain(){
 function wikiPlanControl(){
   const slot = $("wikiPlanSlot");
   if(!slot) return;
-  const name = ((wikiData.sample || {}).BUSINESS || {}).name || "this range";
+  const name = (wikiG().BUSINESS || {}).name || "this range";
   if(wikiCanPlan())
+    /* The planner works from the business's own range; the recipes for what it
+       also carries stay here. The words for that distinction are authored. */
     slot.innerHTML = `<button type="button" class="btn2" data-wiki-plan
-      data-tip="${attr(`Open the Growth planner with ${name} selected.`)}"
-      >Plan this range ${icon("chev")}</button>`;
+      data-tip="${attr(wikiCopy("plannerHint", `Open the Growth planner with ${name} selected.`))}"
+      >${wikiText(wikiCopy("plannerLabel"))} ${icon("chev")}</button>`;
   else
     slot.innerHTML = `<span class="quiet" data-tip="${attr(hasData()
       ? "This business type is missing from your save's planner catalogue."
@@ -1081,30 +1679,31 @@ function wikiPlanControl(){
       >${hasData() ? "Not in this save's catalogue" : "Open a save to plan this range"}</span>`;
 }
 
-function wikiSampleOwn(b, primary){
+function wikiGuideOwn(g, goods){
   if(!hasData()) return [];
+  const b = g.BUSINESS || {};
   const mine = (D.businesses || []).filter(x => String(x.type || "").toLowerCase() === String(b.name || "").toLowerCase());
   const slots = [];
   if(mine.length) slots.push(wikiSlot("Your shops", `${mine.length}`,
     `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));
-  const sold = (D.products || []).filter(p => primary.some(x => x.name === p.item));
-  if(sold.length) slots.push(wikiSlot("Its range, sold", `${sold.length} of ${primary.length}`,
+  const sold = (D.products || []).filter(p => goods.some(x => x.name === p.item));
+  if(sold.length && goods.length) slots.push(wikiSlot("Its range, sold", `${sold.length} of ${goods.length}`,
     `${sold.map(p => p.item).join(", ")} moved in your shops yesterday.`));
   return slots;
 }
 
-function wikiSampleSource(page, ctx){
-  const s = wikiData.sample;
-  const gaps = (s.GAPS || []).map(g =>
-    `<div class="wk-gap" data-tip="${attr(wikiUnkey(g.detail))}" tabindex="0"><i></i><span>${wikiText(g.what)}</span></div>`).join("");
+function wikiGuideSource(g, page, ctx){
+  const gaps = (g.GAPS || []).map(gap =>
+    `<div class="wk-gap" data-tip="${attr(wikiUnkey(gap.detail))}" tabindex="0"><i></i><span>${wikiText(gap.what)}</span></div>`).join("");
   return `
 <section class="sec">
-  <div class="sechead"><h2>Source</h2>
-    ${wikiWhy("Red dots mark missing information. Expand the sections below to read the original help and sources.")}
-    <span class="aside">${(s.GAPS || []).length ? wikiChip("gap", `${s.GAPS.length} gaps`) : ""}</span></div>
+  <div class="sechead"><h2>${wikiText(wikiCopy("sourceTitle"))}</h2>
+    ${wikiWhy(wikiCopy("sourceHint"))}
+    <span class="aside">${(g.GAPS || []).length
+      ? wikiChip("gap", `${g.GAPS.length} ${wikiCount(g.GAPS.length, "gap")}`) : ""}</span></div>
   <div class="wk-gaps">${gaps}</div>
   <details class="wk-src">
-    <summary>The game's own words</summary>
+    <summary>${wikiText(wikiCopy("originalHelp"))}</summary>
     <div class="wk-read">${wikiBody(page.body, ctx)}</div>
   </details>
   ${wikiSource(page)}
@@ -1120,7 +1719,40 @@ function wikiDropTip(){ if(typeof hideTip === "function") hideTip(); }
 function wikiFrame(body){
   return `<div class="wk-wrap">${body}</div>`;
 }
-function drawWiki(){
+/* What the reader was holding when a control redrew the page under them. The
+   node itself goes out with the rest of the guide, so it is remembered by what
+   it is — a selector the new page answers with the same control — and by where
+   on the screen it was, which is the place it has to be left in. */
+function wikiHold(el, sel, then){
+  if(!el || typeof el.getBoundingClientRect !== "function" || !sel) return null;
+  return {sel, then: then || null, top: el.getBoundingClientRect().top};
+}
+/* An attribute value as a selector can quote it. */
+const wikiSelValue = v => `"${String(v ?? "").replace(/["\\]/g, "\\$&")}"`;
+/* The redraw hands the reader back what they pressed: the same control on the
+   new page, or — where pressing it was the end of that control, as "Show all"
+   is — the first thing it revealed. Focus goes back to it and the page is
+   scrolled so it sits where it sat, rather than leaving the caret on the
+   document and the reader at the top of the navigation again. */
+function wikiRestore(hold){
+  if(!hold) return;
+  const host = wikiRoot();
+  if(!host || !host.querySelector) return;
+  const found = host.querySelector(hold.sel) || (hold.then ? host.querySelector(hold.then) : null);
+  if(!found) return;
+  const settle = () => {
+    if(found.isConnected === false || typeof found.getBoundingClientRect !== "function") return;
+    const by = found.getBoundingClientRect().top - hold.top;
+    if(Math.abs(by) > 1 && typeof window.scrollBy === "function") window.scrollBy(0, by);
+  };
+  settle();
+  /* Focus must not undo the scroll it was just given. */
+  try{ found.focus({preventScroll: true}); }catch(e){ try{ found.focus(); }catch(err){} }
+  /* A section the browser has not painted yet is measured from its estimate,
+     so the same correction is made once more when the new layout has settled. */
+  if(typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+}
+function drawWiki(hold){
   const host = wikiRoot();
   if(!host) return;
   if(wikiStatus === "loading" || wikiStatus === "idle"){
@@ -1147,6 +1779,9 @@ function drawWiki(){
   const was = $("wikiSearch");
   const held = !!was && typeof document !== "undefined" && document.activeElement === was;
   const caret = held ? [was.selectionStart, was.selectionEnd] : null;
+  /* Which business is being read, worked out once per draw and left where the
+     pieces that run after it can ask. */
+  wikiActive = wikiRoute.kind === "page" ? wikiGuideFor(wikiRoute.id) : null;
   const body = wikiRoute.kind === "category" ? wikiCategoryView()
     : wikiRoute.kind === "page" ? wikiPageView()
     : wikiHome();
@@ -1164,7 +1799,9 @@ function drawWiki(){
     /* An empty box still keeps the caret: clearing the last letter must not
        feel like the control died. */
     try{ search.setSelectionRange(caret[0] ?? search.value.length, caret[1] ?? search.value.length); }catch(e){}
+    return;
   }
+  wikiRestore(hold);
 }
 
 /* --- what the reader can do --------------------------------------------- */
@@ -1185,8 +1822,24 @@ function wireWiki(){
   host.addEventListener("click", e => {
     if(e.target.closest("[data-wiki-retry]")){ wikiStatus = "idle"; loadWikiData(); return; }
     if(e.target.closest("[data-wiki-all]")){ wikiShowAll = true; drawWiki(); return; }
+    /* The control has done its one job and is gone from the redrawn page, so
+       the reader is put on the first piece it uncovered, where it stood. */
+    const more = e.target.closest("[data-wiki-fix]");
+    if(more){ wikiShowFix = true; drawWiki(wikiHold(more, "[data-wiki-more]")); return; }
     if(e.target.closest("[data-wiki-plan]")){ wikiPlanChain(); return; }
     if(e.target.closest("[data-wiki-letgo]")){ wikiPick(null); return; }
+    /* A wide range is drawn one product at a time, so choosing another product
+       redraws the lanes — and lets go of whatever the old ones were holding. */
+    const focus = e.target.closest("[data-focus]");
+    if(focus){
+      wikiFocus = wikiFocus === focus.dataset.focus ? wikiFocus : focus.dataset.focus;
+      wikiPicked = null;
+      /* The chosen product is still the chooser's own tab on the new page, and
+         the graph it redrew is the thing the reader is waiting to look at: both
+         have to be left where they were on the screen. */
+      drawWiki(wikiHold(focus, `[data-focus=${wikiSelValue(focus.dataset.focus)}]`));
+      return;
+    }
     const tick = e.target.closest("[data-tick]");
     if(tick){ wikiTick(tick); return; }
     const node = e.target.closest("[data-node]");
@@ -1243,7 +1896,9 @@ function wikiTick(el){
   const id = el.dataset.tick;
   if(wikiTicked.has(id)) wikiTicked.delete(id); else wikiTicked.add(id);
   el.setAttribute("aria-checked", wikiTicked.has(id) ? "true" : "false");
-  el.classList.toggle("done", wikiTicked.has(id));
+  /* The square is the control; the row is what wears the line through it. */
+  const row = (el.closest && el.closest(".wk-item")) || el;
+  row.classList.toggle("done", wikiTicked.has(id));
   wikiScores();
 }
 /* Each card keeps its own score. */

@@ -633,47 +633,57 @@ test('the page claims help, and claims a second file only for what was read in o
   assert.doesNotMatch(plain, /class="chip ok"/, 'and no green badge anywhere on it');
 });
 
+/* The row a square belongs to: the kind is on the row, the id on the square,
+   because a requirement the help writes with links keeps them and a link may
+   not sit inside a checkbox. */
+function row(html, id) {
+  const at = html.indexOf(`data-tick="${id}"`);
+  if (at < 0) return '';
+  const from = html.lastIndexOf('<div class="wk-item', at);
+  return from < 0 ? '' : html.slice(from, html.indexOf('</div>', at) + 6);
+}
+
 test('the checklist fills a square only where the business page itself requires it', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
-  // Its own words, from its own requirements list.
-  assert.match(html, /class="wk-item req"[^>]*data-tick="req-stackofshoppingbaskets"/s);
+  // Its own words, from its own requirements list. Every square is keyed to the
+  // business as well as the item, so two guides never tick each other's lines.
+  assert.match(row(html, 'businesstypes-giftshop:req-stackofshoppingbaskets'), /^<div class="wk-item req"/);
   assert.match(html, /Point of Sales/, 'in the page\'s own wording, not ours');
   assert.match(html, /At least one product to sell/);
   // A shelf the business page never mentions is a suggestion, not a rule.
-  assert.match(html, /class="wk-item" [^>]*data-tick="fix-roundedshelf"/s);
-  assert.doesNotMatch(html, /class="wk-item req"[^>]*data-tick="fix-roundedshelf"/s);
+  assert.match(row(html, 'businesstypes-giftshop:fix-roundedshelf'), /^<div class="wk-item"/);
 
   const quiet = wiki({data: {...DATA, pages: DATA.pages.map(p => p.id === 'businesstypes-giftshop'
     ? {...p, body: '**Gift Shop** businesses operate out of retail buildings.'} : p)}});
   const html2 = await quiet.load('wiki/businesstypes-giftshop');
-  assert.doesNotMatch(html2, /data-tick="req-/, 'a page that requires nothing fills no squares');
-  assert.match(html2, /data-tick="fix-roundedshelf"/, 'the suggestions are still there');
+  assert.doesNotMatch(html2, /data-tick="[^"]*:req-/, 'a page that requires nothing fills no squares');
+  assert.match(html2, /data-tick="businesstypes-giftshop:fix-roundedshelf"/, 'the suggestions are still there');
 
   // Where the extraction states the requirements itself, that list wins over
   // the page text this reader would otherwise parse.
   const told = wiki({data: {...DATA, sample: {...SAMPLE, BUSINESS: {...SAMPLE.BUSINESS,
     requirements: ['A Cash Register', {name: 'Rounded Shelf'}]}}}});
   const html3 = await told.load('wiki/businesstypes-giftshop');
-  assert.match(html3, /class="wk-item req"[^>]*data-tick="req-cashregister"/s);
-  assert.match(html3, /class="wk-item req"[^>]*data-tick="req-roundedshelf"/s);
-  assert.doesNotMatch(html3, /data-tick="req-stackofshoppingbaskets"/,
+  assert.match(row(html3, 'businesstypes-giftshop:req-cashregister'), /^<div class="wk-item req"/);
+  assert.match(row(html3, 'businesstypes-giftshop:req-roundedshelf'), /^<div class="wk-item req"/);
+  assert.doesNotMatch(html3, /data-tick="[^"]*:req-stackofshoppingbaskets"/,
     'the page text is not consulted once the extraction has answered');
 });
 
 test('the Paper Bags catch is marked only while the business page really omits it', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
-  assert.match(html, /Paper Bags/, 'the till\'s own page names them');
+  assert.match(html, /Paper Bag/, 'the till\'s own page names them');
   assert.match(html, /wk-catch/, 'and this page does not, so it is marked');
-  assert.match(html, /does not mention them at all/);
+  assert.match(html, /does not mention this requirement/);
 
   const told = wiki({data: {...DATA, pages: DATA.pages.map(p => p.id === 'businesstypes-giftshop'
     ? {...p, body: p.body.replace('* At least one product to sell (see below)',
         '* At least one product to sell (see below)\n* [Paper Bag](products-paperbag)')} : p)}});
   const html2 = await told.load('wiki/businesstypes-giftshop');
   assert.doesNotMatch(html2, /wk-catch/, 'a page that does name them is not accused of leaving them out');
-  assert.doesNotMatch(html2, /does not mention them at all/);
+  assert.doesNotMatch(html2, /does not mention this requirement/);
 });
 
 test('wholesale is three states, and only one of them is a claim', async () => {
@@ -712,7 +722,7 @@ test('a fixture with no stated capacity shows none, rather than an empty number'
   const w = wiki({data: {...DATA, sample: {...SAMPLE, FIXTURES: {...SAMPLE.FIXTURES,
     roundedshelf: {...SAMPLE.FIXTURES.roundedshelf, capacity: [], customers: null}}}}});
   const html = await w.load('wiki/businesstypes-giftshop');
-  const shelf = html.slice(html.indexOf('data-tick="fix-roundedshelf"'), html.indexOf('data-tick="fix-storageshelf"'));
+  const shelf = row(html, 'businesstypes-giftshop:fix-roundedshelf');
   assert.match(shelf, /Rounded Shelf/);
   assert.doesNotMatch(shelf, /holds <b>/, 'no capacity stated, none shown');
   assert.doesNotMatch(html, /<b><\/b>/);
@@ -820,7 +830,9 @@ test('the relation graph wires products to fixtures and to their supply', async 
   assert.ok(!edges.includes('p:expensivegift|s:wholesale|hop'),
     'the product with no wholesaler has no line to one');
   assert.equal(model.nodes.product.length, 2);
-  assert.ok(model.nodes.source.some(n => n.id === 's:station'), 'and the factory is a source like any other');
+  // Each recipe brings its own workstation, so the node is that station's.
+  assert.ok(model.nodes.source.some(n => n.name === 'Consumer Goods Workstation'),
+    'and the factory is a source like any other');
 });
 
 /* A graph the module can drive: three lanes of nodes, the paths a redraw would

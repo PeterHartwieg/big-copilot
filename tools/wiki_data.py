@@ -398,6 +398,50 @@ def address_refs(bullets: list[str]) -> list[dict]:
 # --- record extractors --------------------------------------------------
 
 
+def business_requirement_lines(text: str) -> list[str]:
+    """Listed requirements plus explicit, linked conditions stated in prose."""
+    _, section_list = sections(text)
+    lines = list(bullets_of(section_list, "requires the following furniture"))
+    for line in text.splitlines():
+        if re.search(r"\b(?:is|are) required to\b", line, re.I) and any(
+            match.group(2) == "furniture" for match in _LINK_RE.finditer(line)
+        ) and line.strip() not in lines:
+            lines.append(line.strip())
+    return lines
+
+
+def furniture_by_business(text: str) -> dict[str, list[dict]]:
+    """Store-typed furniture lists, retaining the business links as scope.
+
+    The introductory sentence ends in a full stop, so it deliberately is not
+    a generic section heading. Read only this block, stopping at the next
+    non-bullet/non-business heading rather than swallowing supplier lists.
+    """
+    out: dict[str, list[dict]] = {}
+    active, businesses = False, []
+    for line in text.splitlines():
+        line = line.strip()
+        if "placed in the following furniture" in line.lower():
+            active = True
+            continue
+        if not active or not line:
+            continue
+        links = list(_LINK_RE.finditer(line))
+        scopes = ["ba:businesstype_" + m.group(3) for m in links
+                  if m.group(2) == "businesstypes"]
+        if scopes and not line.startswith("* "):
+            businesses = scopes
+            for business in businesses:
+                out.setdefault(business, [])
+        elif line.startswith("* "):
+            for business in businesses:
+                out[business].extend(ref(m.group(1), _slug_for("furniture", m.group(3)), "furniture")
+                                     for m in links if m.group(2) == "furniture")
+        else:
+            break
+    return {business: _dedupe(fixtures) for business, fixtures in out.items()}
+
+
 def extract_business(slug: str, text: str, names: dict[str, str], page_slugs: list[str]) -> dict:
     """One business type: its range, its fittings, its skills, its suppliers."""
     prose, sections_ = sections(text)
@@ -410,7 +454,7 @@ def extract_business(slug: str, text: str, names: dict[str, str], page_slugs: li
         bullets_of(sections_, "additionally sell"), ("products", "fees")
     )
     furniture, furniture_loose = parse_bullets(
-        bullets_of(sections_, "requires the following furniture"), ("furniture",)
+        business_requirement_lines(text), ("furniture",)
     )
     skills, skills_loose = parse_bullets(
         bullets_of(sections_, "skills can be assigned"), ("skill",)
@@ -468,6 +512,9 @@ def extract_item(slug: str, text: str, names: dict[str, str], page_slugs: list[s
     furniture, loose = parse_bullets(
         bullets_of(sections_, "placed in the following furniture"), ("furniture",)
     )
+    scoped_furniture = furniture_by_business(text)
+    for fixtures in scoped_furniture.values():
+        furniture.extend(fixtures)
     _report_loose(unparsed, "furniture", loose)
     makes, loose = parse_bullets(
         bullets_of(sections_, "manufactured using the following recipes"), ("recipes",)
@@ -516,7 +563,7 @@ def extract_item(slug: str, text: str, names: dict[str, str], page_slugs: list[s
         "slug": slug,
         "name": names.get(slug),
         "sources": [slug, "help_%s_content" % slug] + ["helpstructure:" + s for s in page_slugs],
-        "kind": _item_kind(prose),
+        "kind": _item_kind(prose, sections_),
         "soldFrom": {
             "primaryBusinesses": _dedupe(primary_sold),
             "otherBusinesses": _dedupe(other),
@@ -535,6 +582,8 @@ def extract_item(slug: str, text: str, names: dict[str, str], page_slugs: list[s
         },
         "unparsed": unparsed,
     }
+    if scoped_furniture:
+        record["furnitureByBusiness"] = scoped_furniture
     for field, value in (("sells", sells), ("holds", holds), ("feeRequirements", fee_needs), ("createsWorkstations", creates)):
         if value:
             record[field] = _dedupe(value)
@@ -648,14 +697,18 @@ def extract_workstation(
     }
 
 
-def _item_kind(prose: list[str]) -> str | None:
+def _item_kind(prose: list[str], sections_: list[dict] | None = None) -> str | None:
     """The kind of item, taken from the page's own first sentence.
 
     A kind is only claimed when the page says so in words it uses for that kind
     alone; anything else stays unknown rather than being guessed from the slug.
+    A page that states how to collect the fee is a fee whatever its opening
+    line does - the cinema and theater tickets are worded that way.
     """
     blob = prose_text(prose)
     if " is collected from customers" in blob or " is a fee collected" in blob:
+        return "fee"
+    if sections_ is not None and bullets_of(sections_, "to collect this fee"):
         return "fee"
     if re.search(r" is a Factory (Assembly|Production) Machine\.", blob):
         return "machine"
@@ -685,7 +738,10 @@ def _other_businesses(sections_: list[dict], blob: str, unparsed: list[dict]) ->
     )
     for line in loose:
         unparsed.append({"field": "soldFrom.otherBusinesses", "reason": "bullet without a link", "text": line})
-    for sentence in blob.split("\n"):
+    # Missing terminal punctuation makes an inline sentence a section label.
+    # Read its links too, without treating unrelated section bullets as sellers.
+    sentences = blob.split("\n") + [section["label"] + " " + section["inline"] for section in sections_]
+    for sentence in sentences:
         if "can be sold from" not in sentence:
             continue
         for m in _LINK_RE.finditer(sentence):

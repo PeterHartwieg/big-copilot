@@ -442,9 +442,10 @@ class ContractTests(FixtureCase):
         }))
         sample = self.sample()
         self.assertIsNone(sample["PRODUCTS"]["bouquet"]["name"])
+        label = build.wording()["gaps"]["missingProducts"]["what"]
         gaps = {gap["what"]: gap["detail"] for gap in sample["GAPS"]}
-        self.assertIn("Primary products the sample cannot describe", gaps)
-        self.assertIn("bouquet", gaps["Primary products the sample cannot describe"])
+        self.assertIn(label, gaps)
+        self.assertIn("bouquet", gaps[label])
 
     def test_the_business_requirements_come_from_its_own_page(self):
         requirements = self.sample()["BUSINESS"]["requirements"]
@@ -639,6 +640,10 @@ class GapTests(FixtureCase):
     def gaps(self):
         return {gap["what"] for gap in self.sample()["GAPS"]}
 
+    def gap_label(self, key):
+        # the labels are authored wording; the tests follow the file, not a copy
+        return build.wording()["gaps"][key]["what"]
+
     def test_a_stated_limit_without_a_number_is_a_gap(self):
         self.assertIn("Weekly delivery limits", self.gaps())
 
@@ -667,23 +672,22 @@ class GapTests(FixtureCase):
 
     def test_the_price_gap_is_about_the_sample_not_the_whole_locale(self):
         details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
-        detail = details["Sample prices"]
-        self.assertIn("None of the", detail)
-        self.assertIn("the sample reads carries a money figure", detail)
-        self.assertNotIn("no furniture, product, business or recipe page", detail)
+        detail = details[self.gap_label("prices")]
+        self.assertIn("contain no prices", detail)
+        self.assertIn("No other help page contains a money figure either.", detail)
 
     def test_a_price_on_a_sample_page_removes_the_price_gap(self):
         self.write_locale(dict(LOCALE, **{
             "help_ba:itemname_roundedshelf_content":
                 ROUNDED_SHELF_HELP + "\nStore price: $2,400.\n"}))
-        self.assertNotIn("Sample prices", self.gaps())
+        self.assertNotIn(self.gap_label("prices"), self.gaps())
 
     def test_the_word_price_alone_does_not_remove_the_price_gap(self):
         # A page saying there is no price is not a page carrying one.
         self.write_locale(dict(LOCALE, **{
             "help_ba:itemname_roundedshelf_content":
                 ROUNDED_SHELF_HELP + "\nNo price is listed for this furniture.\n"}))
-        self.assertIn("Sample prices", self.gaps())
+        self.assertIn(self.gap_label("prices"), self.gaps())
 
     def test_a_price_outside_the_sample_is_reported_not_claimed(self):
         # A vehicle spec sheet carries a figure; the sample neither reads that
@@ -692,11 +696,12 @@ class GapTests(FixtureCase):
             "ba:itemname_van": "Van",
             "help_ba:itemname_van_content": "**Van** Total Price: $72,500\n"}))
         details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
-        self.assertIn("Sample prices", details)
-        self.assertIn("on 1 help page this sample does not read", details["Sample prices"])
+        detail = details[self.gap_label("prices")]
+        self.assertIn("A money figure appears on 1 other help page.", detail)
+        self.assertNotIn("No other help page contains a money figure either.", detail)
 
     def test_the_sample_says_what_it_covers(self):
-        self.assertIn("The sample is one business, the pages are all of them", self.gaps())
+        self.assertIn(self.gap_label("sampleCoverage"), self.gaps())
 
     def test_the_rate_gap_is_about_help_and_names_the_assumption(self):
         details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
