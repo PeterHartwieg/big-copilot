@@ -5,10 +5,9 @@
 
 /* The count lives in the masthead's .live status, taking over its em beside
    the green dot, so it wears the board's own typography and this file adds
-   only the unavailable state: the dot greys and stops pulsing. Voting stays
+   only the unavailable state: the dot greys. Voting stays
    a control in the footer. */
 .live.community-unavailable{color:var(--ink-3)}
-.live.community-unavailable b{animation:none}
 
 /* The dialog: the changelog's shape, a little narrower. A closed dialog stays
    display:none through the user-agent default; nothing here re-enables it. */

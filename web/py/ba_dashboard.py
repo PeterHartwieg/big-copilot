@@ -4760,16 +4760,13 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    text, so the glow behind it is too. */
 .clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
-/* The live dot for a --watch board sits in the clock's small line. */
+/* Steady status dots let the compositor sleep while the board is idle. */
 .live{display:inline-flex;align-items:center;gap:6px;color:var(--accent);transition:color .3s}
-.live b{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2.4s infinite}
+.live b{width:6px;height:6px;border-radius:50%;background:currentColor}
 .live em{font-style:normal}
 .live.just{color:var(--info)}
 .live.off{color:var(--ink-3)}
-.live.off b{animation:none}
 .live.stale{color:var(--warn)}
-.live.stale b{animation:none}
-@keyframes pulse{0%,100%{opacity:1} 50%{opacity:.2}}
 
 /* tooltips: the sentence lives here now, not on the page --------------------
    One body-level element, positioned from the hovered [data-tip]'s rect, so a
@@ -8836,7 +8833,7 @@ function wireSphere(){
     const t0 = performance.now() + 180, dur = 1300, lift = 26;
     const step = (t) => { const p = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - p, 3);
       b.px = b.sx * (1 - e); b.py = b.sy * (1 - e) - Math.sin(p * Math.PI) * lift; b.sc = b.s0 + (1 - b.s0) * e; paint(b);
-      if (p < 1) requestAnimationFrame(step); else b.busy = false; };
+      if (p < 1) requestAnimationFrame(step); else { b.busy = false; wake(); } };
     requestAnimationFrame(step);
   }, delay);
   const spawn = () => {
@@ -8864,6 +8861,7 @@ function wireSphere(){
       if (p < 1) requestAnimationFrame(step); else {
         meal.el.remove(); balls.splice(1, 1);
         balls.forEach((b, k) => { const old = b.rest; b.rest = restX(k); b.el.style.left = b.rest + 'px'; b.px += old - b.rest; b.busy = false; });
+        wake();
         setTimeout(spawn, 220);
       } };
     requestAnimationFrame(step);
@@ -8894,20 +8892,41 @@ function wireSphere(){
   const wordmark = q('.wordmark');
   if (wordmark) wordmark.addEventListener('click', spawn);
   document.addEventListener('mousemove', (e) => balls.forEach(b => {
-    if (b.busy) return;
+    if (REDUCED || b.busy || !b.el.offsetParent) return;
     const r = b.el.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     const d = Math.hypot(dx, dy) || 1, k = Math.min(10, d * .1);
     b.tx = dx / d * k; b.ty = Math.min(0, dy / d * k);
     b.el.style.setProperty('--hx', (34 + dx / d * 20) + '%'); b.el.style.setProperty('--hy', (32 + dy / d * 20) + '%');
+    wake();
   }));
-  const loop = () => {
-    balls.forEach(b => { if (!b.busy) { b.px += (b.tx - b.px) * .06; b.py += (b.ty - b.py) * .06; } });
-    balls.forEach(paint);
-    requestAnimationFrame(loop);
+  // Decorative motion sleeps once settled; a visible second monitor must not
+  // keep this tab scheduling frames for hours while the player watches video.
+  let frame = null;
+  const wake = () => {
+    if(frame === null && !REDUCED && !document.hidden && balls.some(b => b.el.offsetParent))
+      frame = requestAnimationFrame(loop);
   };
-  loop();
+  const loop = () => {
+    frame = null;
+    if(document.hidden || !balls.some(b => b.el.offsetParent)) return;
+    let moving = false;
+    balls.forEach(b => {
+      if(b.busy) return;
+      const drift = Math.abs(b.tx - b.px) > .01 || Math.abs(b.ty - b.py) > .01;
+      b.px = drift ? b.px + (b.tx - b.px) * .06 : b.tx;
+      b.py = drift ? b.py + (b.ty - b.py) * .06 : b.ty;
+      moving = moving || drift;
+    });
+    balls.forEach(paint);
+    if(moving) wake();
+  };
+  window.addEventListener('scroll', wake, {passive:true});
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){ cancelAnimationFrame(frame); frame = null; }
+    else wake();
+  });
   /* The shelf moves when the window or the fonts do. */
-  const relayout = () => { measure(); balls.forEach((b, k) => { b.rest = restX(k); b.el.style.left = b.rest + 'px'; paint(b); }); };
+  const relayout = () => { measure(); balls.forEach((b, k) => { b.rest = restX(k); b.el.style.left = b.rest + 'px'; paint(b); }); wake(); };
   window.addEventListener('resize', relayout);
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
 }
@@ -9348,7 +9367,7 @@ window.BigCopilotBoard = {
 /* The save on disk only changes when the game writes one, so this polls a
    cheap stamp and pulls fresh numbers only when that stamp moves. */
 function startWatching(){
-  /* A failing rebuild otherwise reads as "nothing has changed" -- a pulsing
+  /* A failing rebuild otherwise reads as "nothing has changed" -- a green
      Live dot over an hour-old board -- so the source says why it is stuck and
      the dot shows it. The last good board stays on screen. */
   const markStale = (why) => {
