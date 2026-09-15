@@ -61,6 +61,7 @@
 /* the filter block: the panel's own head, above its results */
 .places .filters{flex:none;padding:10px 11px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:6px}
 .frow{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.frow[hidden]{display:none}
 .frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
 .fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}

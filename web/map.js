@@ -207,6 +207,14 @@ class CityMapView {
         openSite(this.selected);
       }
     });
+    // The column headers carry a button role, so they answer to a button's keys.
+    this.root.addEventListener('keydown', e => {
+      if(e.key !== 'Enter' && e.key !== ' ') return;
+      const sorter = e.target.closest?.('.fhead [data-s]');
+      if(!sorter) return;
+      e.preventDefault();
+      this.sortBy(sorter.dataset.s);
+    });
     root.innerHTML = `<p class="map-status" role="status">Loading map…</p>`;
     mapViews.add(this);
     this.ready = this.load();
@@ -312,14 +320,14 @@ class CityMapView {
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
   finderPanel(){
     const P = premises(); if(!P) return "";
-    const row = (label, body) => `<div class="frow"><span class="lab">${label}</span>${body}</div>`;
+    const row = (label, body, cls = "") => `<div class="frow${cls}"><span class="lab">${label}</span>${body}</div>`;
     const kinds = FINDER_CATS.map(([c, label]) =>
       `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false">${label}</button>`).join('');
     const hoods = this.hoodList().map(h =>
       `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(h)}">${mapText(hoodTag(h))}</button>`).join('');
     return `<div class="filters fonly">
       ${row('Kind', kinds)}
-      ${row('Type', `<label class="fsel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select><i class="fchev">${ICON.chev}</i></label>`)}
+      ${row('Type', `<label class="fsel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype')}
       ${row('Show', FINDER_SHOWS.map(([key, label, tip]) =>
         `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(tip)}">${label}<b>0</b></button>`).join('')
         + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
@@ -483,10 +491,20 @@ class CityMapView {
   /* The rows carry their geometry like every other row, so a listing lights its
      own footprint and a click on either one selects it. */
   saleRows(){
-    const P = premises(); if(!P) return [];
-    return P.forSale.filter(s => this.hoodOn(s.hood)).sort((a, b) => a.price - b.price)
+    const P = premises(), fs = this.fs; if(!P) return [];
+    // A listing is an address; the kind, the traffic and the door cap come from
+    // the building behind it, so the controls still on screen all apply.
+    return P.forSale.filter(s => {
+      if(!this.hoodOn(s.hood) || !this.saleKind(s)) return false;
+      const b = this.sites?.get(s.key), cap = capMin(b?.cap);
+      if(fs.minTraffic && (b?.traffic == null || b.traffic < fs.minTraffic)) return false;
+      if(fs.minCap && (cap == null || cap < fs.minCap)) return false;
+      if(fs.maxCap && (cap == null || cap > fs.maxCap)) return false;
+      return true;
+    }).sort((a, b) => a.price - b.price)
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
+  saleKind(s){ return (this.sites?.get(s.key)?.type ?? s.type) === this.fs.cat; }
   finderList(rows){
     const fs = this.fs, wh = fs.cat === 'warehouse';
     const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["cap","Cap"],["deposit","Upfront"]]
@@ -559,11 +577,16 @@ class CityMapView {
       : b.owner === 'city' ? 'The city' : '—';
   }
   renterOf(b){
-    const who = b.occupant, name = mapText(who?.name || 'unnamed'), kind = mapText(who?.type || 'business');
-    return b.status === 'mine' ? `${mapText(who?.name || 'Yours')} (you)`
-      : b.status === 'rival' ? `${name} · ${kind} (${rivalTag(b.occupantRival, 'rival company')})`
+    const who = b.occupant;
+    // A place you rent is yours whether or not a business trades from it.
+    if(b.status === 'mine') return who?.name ? `${mapText(who.name)} (you)` : 'You';
+    if(!who) return 'Nobody';
+    // A hospital or a casino is occupied while still being unavailable, so the
+    // occupant is named whatever the status says about taking the place.
+    const name = mapText(who.name || 'unnamed'), kind = mapText(who.type || 'business');
+    return b.status === 'rival' ? `${name} · ${kind} (${rivalTag(b.occupantRival, 'rival company')})`
       : b.status === 'service' ? `${name} · ${kind} (game service)`
-      : b.status === 'vacant' || b.status === 'unavailable' ? 'Nobody' : '—';
+      : `${name} · ${kind}`;
   }
   /* Why this row sits where it does, in sentences: what the neighbourhood wants
      most of this category, what else it wants, and the arithmetic of the score. */
@@ -606,6 +629,7 @@ class CityMapView {
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
     select.disabled = !options.length;
     select.closest('.fsel').classList.toggle('on', !!this.fs.type);
+    this.root.querySelector('.frow.ftype').hidden = this.saleView();
     // A game service is occupied but never on offer, so it counts for nothing.
     const counts = {rent:0, takeover:0};
     P.buildings.forEach(b => { if(b.type !== this.fs.cat) return;
@@ -618,7 +642,8 @@ class CityMapView {
     });
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
-      chip.querySelector('b').textContent = key === 'sale' ? P.forSale.length : counts[key];
+      chip.querySelector('b').textContent = key === 'sale'
+        ? P.forSale.filter(s => this.saleKind(s)).length : counts[key];
       mark(chip, this.fs.show === key);
     });
   }
