@@ -96,9 +96,10 @@ and never attach one to an issue.
   `tests/save_location.test.cjs`, `tests/performance.test.cjs`.
 - The Pyodide worker fetches four files from `web/py/` — `ba_save.py`, `ba_dashboard.py`,
   `gametext.json`, `ba_buildings.json` — and at runtime writes the save, the player's
-  optional `en.json`, the history and a `.character` sidecar itself. Nothing else is on the
-  virtual filesystem when `ba_dashboard` is imported, so it must not open any other file at
-  import time. Read it lazily, inside a function, as `load_buildings()` and `render()` do.
+  optional `en.json` and the history; `browser_build()` writes the `.character` sidecar from
+  the Python side. Nothing else is on the virtual filesystem when `ba_dashboard` is imported,
+  so it must not open any other file at import time. Read it lazily, inside a function, as
+  `load_buildings()` and `render()` do.
 
 ## Where to read more
 

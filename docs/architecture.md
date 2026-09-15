@@ -187,10 +187,13 @@ data that follows, and `watch(h)` keeps the callbacks `changed(data)`, `stale(wh
 
 What that does and does not change. On the hosted site the save itself never leaves the
 tab: `LEDGER_SOURCE` replaces the three watch-server routes, so nothing about the save is
-fetched or posted. The page still uses the network for its own assets — `web/map.js` fetches
-`maps/locations.json` and the background image, `web/wiki.js` fetches `wiki-data.json`,
-`web/update.js` polls `version.json`, `web/community.js` calls `/api/community/*`, all
-same-origin and stamped, and `TEMPLATE` links Google Fonts.
+fetched or posted. The page still uses the network for its own assets, all same-origin.
+The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
+`maps/locations.json` with the build stamp and the background image with its own content
+hash, and `web/wiki.js` fetches `wiki-data.json` with the build stamp. The dynamic ones
+carry no version, because the whole point is to see the current state: `web/update.js`
+polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
+`/api/community/*`. Outside the page's own origin, `TEMPLATE` links Google Fonts.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back
 to fetching `data.json` from a site that has no such route.
@@ -296,10 +299,12 @@ table of contents, `ba_buildings.json` and the shipped business layouts — and 
 
 Its page records are one per **unique help-page slug that has content**, in menu order, not
 one per help-menu entry. `build_pages()` drops two kinds of entry and reports both rather
-than swallowing them: a slug listed a second time (the shipped file has one such double
-entry, whose second prefix is unreachable through that slug), and a page whose body the
-locale does not carry, since a record with no body would be an empty page rather than a
-fact. Alongside the pages the payload carries the worked example and a guide per
+than swallowing them: a duplicate of an already emitted slug (the shipped file has one such
+double entry, whose second prefix is unreachable through that slug), and a page whose body
+the locale does not carry, since a record with no body would be an empty page rather than a
+fact. The order of those two tests matters: a slug is only recorded as seen once it has been
+emitted, so a later entry for a slug whose earlier one had no content is kept, not counted a
+duplicate. Alongside the pages the payload carries the worked example and a guide per
 customer-facing business type.
 
 No number is invented; what the game does not state stays `null`. The authored wording lives
