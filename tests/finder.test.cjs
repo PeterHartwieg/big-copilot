@@ -18,6 +18,7 @@ const CLOTHES = 'ba:businesstype_clothingstore', COFFEE = 'ba:businesstype_coffe
 const CINEMA = 'ba:businesstype_cinema';
 /* A business name is the player's or a rival's own text, so one of them is markup. */
 const HOSTILE = '<img src=x onerror=window.__x=1>';
+const HK_NAME = "Hell's Kitchen";
 
 const site = (key, over) => ({key, address: at(key).address, hood: at(key).hood, type: 'retail',
   size: 'C', m2: 225, traffic: 50, cap: 30, rent: 100, status: 'vacant', occupant: null, ...over});
@@ -103,7 +104,7 @@ async function openMap(page){
   await page.locator('#cityMapPage .map-canvas').waitFor();
   await page.waitForFunction(() => document.querySelector('#cityMapPage .map-canvas')?.getAttribute('viewBox'));
 }
-const chip = '#cityMapPage .sev.fc.tog';
+const chip = '#cityMapPage .fchip.tog';
 async function turnOn(page){
   await page.locator(chip).click();
   await page.locator('#cityMapPage .place.fr').first().waitFor();
@@ -137,26 +138,52 @@ test('any address carries its facts: what it is, what it costs and whether it is
   } finally { await page.close(); }
 });
 
-test('the chip swaps the layer chips and search for the finder filters', async () => {
+test('the chip is the whole header; every filter lives in the panel', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page);
     assert.equal(await page.locator('#cityMapPage .layers.moff').isVisible(), true);
-    assert.equal(await page.locator('#cityMapPage .seg.cat').isVisible(), false);
-    assert.equal(await page.locator('#cityMapPage .frow').isVisible(), false);
+    assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);
     await turnOn(page);
     assert.equal(await page.locator('#cityMapPage .layers.moff').isVisible(), false);
     assert.equal(await page.locator('#cityMapPage [data-control="search"]').isVisible(), false);
-    assert.equal(await page.locator('#cityMapPage .seg.cat').isVisible(), true);
-    assert.equal(await page.locator('#cityMapPage .frow').isVisible(), true);
-    assert.match(await page.locator('#cityMapPage .fnote').textContent(), /not by profit/);
+    // The head carries the switch and nothing else; the filters sit in the
+    // panel, above its own results.
+    assert.deepEqual(await page.$$eval('#cityMapPage .map-head > *',
+      els => els.filter(e => e.offsetParent !== null).map(e => e.className)), ['fchip tog on']);
+    assert.equal(await page.locator('#cityMapPage .places .filters').isVisible(), true);
+    assert.equal(await page.locator('#cityMapPage .places .filters').evaluate(
+      f => f.nextElementSibling.classList.contains('list')), true);
+    assert.deepEqual(await page.$$eval('#cityMapPage .filters .lab', l => l.map(x => x.textContent)),
+      ['Kind', 'Type', 'Show', 'Where', 'Min']);
+    // The "ranked by…" line is gone; the formula lives in the ? alone.
+    assert.equal(await page.locator('#cityMapPage .fnote').count(), 0);
+    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), /÷ 100/);
     // Seven neighbourhoods are on the map; only the two with premises get chips.
-    assert.equal(await page.locator('#cityMapPage .sev.fc.hd').count(), 2);
+    assert.equal(await page.locator('#cityMapPage .fchip.hd').count(), 2);
     // Candidates are the only highlighted footprints.
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 3);
     await page.locator(chip).click();
     assert.equal(await page.locator('#cityMapPage .layers.moff').isVisible(), true);
+    assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the defaults are visibly chosen on first open, and nothing is ever dimmed', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    const state = await page.$$eval('#cityMapPage .filters .fchip, #cityMapPage .fchip.tog', chips =>
+      chips.map(c => ({what: c.dataset.cat || c.dataset.av || c.dataset.h || c.dataset.f || (c.querySelector('input')?.dataset.f) || 'sel',
+        on: c.classList.contains('on'), opacity: getComputedStyle(c).opacity})));
+    const on = state.filter(s => s.on).map(s => s.what).sort();
+    assert.deepEqual(on, ["Hell's Kitchen", 'Midtown', 'retail', 'tog', 'vac'].sort());
+    // Outlined is "not chosen", filled is "chosen"; no control is ever faded.
+    assert.deepEqual([...new Set(state.map(s => s.opacity))], ['1']);
+    assert.deepEqual([...new Set(await page.$$eval('#cityMapPage .filters .fchip',
+      c => c.map(x => getComputedStyle(x).borderTopWidth)))], ['1px']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -192,6 +219,37 @@ test('rows rank by score, and a header click re-sorts them', async () => {
   } finally { await page.close(); }
 });
 
+test('the table shades its numbers and the rank says what taking the place means', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    // The score column carries the shading; more score, more accent behind it.
+    const shades = await page.$$eval('#cityMapPage .place.fr .v.sc',
+      v => v.map(x => getComputedStyle(x).backgroundColor));
+    assert.equal(shades.length, 3);
+    assert.equal(new Set(shades).size, 3, `scores share a shade: ${shades}`);
+    const alpha = await page.$$eval('#cityMapPage .place.fr .v.sh', v => v.map(x => !!x.style.background));
+    assert.equal(alpha.filter(Boolean).length, 9);   // score, traffic and demand on all three rows
+    assert.equal(await page.$$eval('#cityMapPage .place.fr > :last-child',
+      v => v.filter(x => x.style.background).length), 0);  // rent is never shaded
+    // A dot per row: green for a vacant floor, amber for a rival to buy out.
+    assert.equal(await page.locator('#cityMapPage .place.fr .rk i').count(), 3);
+    assert.equal(await page.locator('#cityMapPage .place.fr.buy').count(), 0);
+    await page.locator('#cityMapPage .fchip.av[data-av="buy"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 5);
+    assert.equal(await page.locator('#cityMapPage .place.fr.buy .rk i').count(), 2);
+    const [vacant, rival] = await page.evaluate(() => [
+      getComputedStyle(document.querySelector('.place.fr:not(.buy) .rk i')).backgroundColor,
+      getComputedStyle(document.querySelector('.place.fr.buy .rk i')).backgroundColor]);
+    assert.notEqual(vacant, rival);
+    // For-sale rows are not candidates and carry no dot.
+    await page.locator('#cityMapPage [data-f="sale"]').click();
+    await page.locator('#cityMapPage .place.fr.sale').first().waitFor();
+    assert.equal(await page.locator('#cityMapPage .place.fr .rk').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 test('a type filter re-scores every row, and a neighbourhood chip drops one', async () => {
   const {page, errors} = await fixture();
   try{
@@ -200,10 +258,10 @@ test('a type filter re-scores every row, and a neighbourhood chip drops one', as
     // Hell's Kitchen wants coffee far less than clothes, so Midtown leads.
     assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .v.sc', v => v.map(x => x.textContent)), ['45', '24', '18']);
-    await page.locator('#cityMapPage .sev.fc.hd[data-h="Midtown"]').click();
+    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     // A minimum on traffic empties it entirely.
-    await page.locator('#cityMapPage .srch.mini input[data-f="minTraffic"]').fill('70');
+    await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').fill('70');
     assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -213,7 +271,7 @@ test('buy-out rows join the list in their own colour and name the occupant', asy
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .sev.fc.av[data-av="buy"]').click();
+    await page.locator('#cityMapPage .fchip.av[data-av="buy"]').click();
     await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 5);
     assert.deepEqual((await rowKeys(page)).slice(0, 2), [HK[1], HK[0]]);
     assert.match(await page.locator(`#cityMapPage .place[data-pick="${HK[1]}"]`).textContent(), /Bean There · Coffee Shop/);
@@ -231,7 +289,7 @@ test('an office category ranks office buildings on the office band', async () =>
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .seg.cat a[data-cat="office"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .v.sc', v => v.map(x => x.textContent)), ['27']);
     assert.deepEqual(errors, []);
@@ -254,7 +312,7 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     assert.equal(await page.locator('#cityMapPage .location.fp.buy').count(), 0);
     await pick(page, MT[2]);
     assert.equal(await page.locator('#cityMapPage .site h3').textContent(), at(MT[2]).address);
-    await page.locator('#cityMapPage .sev.fc.hd[data-h="Midtown"]').click();
+    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 1);
     assert.deepEqual(errors, []);
@@ -266,19 +324,22 @@ test('the chip and the filters come back with the character', async () => {
   const {page} = await fixture(context);
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .seg.cat a[data-cat="office"]').click();
-    await page.locator('#cityMapPage .srch.mini input[data-f="minCap"]').fill('5');
-    await page.locator('#cityMapPage .sev.fc.hd[data-h="Midtown"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
+    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
     const {page: again} = await fixture(context);
     try{
       await openMap(again);
-      assert.equal(await again.locator('#cityMapPage .seg.cat').isVisible(), true);
-      assert.equal(await again.locator('#cityMapPage .seg.cat a.on').textContent(), 'Office');
-      assert.equal(await again.locator('#cityMapPage .srch.mini input[data-f="minCap"]').inputValue(), '5');
-      assert.equal(await again.locator('#cityMapPage .sev.fc.hd[data-h="Midtown"]').evaluate(c => c.classList.contains('off')), true);
+      assert.equal(await again.locator('#cityMapPage .filters').isVisible(), true);
+      assert.equal(await again.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
+      assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '5');
+      // A minimum that is set shows as set, like any other chosen control.
+      assert.equal(await again.locator('#cityMapPage .fchip.num.on input[data-f="minCap"]').count(), 1);
+      assert.equal(await again.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').evaluate(c => c.classList.contains('on')), false);
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_NAME}"]`).evaluate(c => c.classList.contains('on')), true);
       // A different character starts from the defaults, never another company's.
       await again.evaluate(() => { D.meta.character = 'finder-b'; refreshCityMaps(); });
-      assert.equal(await again.locator('#cityMapPage .seg.cat').isVisible(), false);
+      assert.equal(await again.locator('#cityMapPage .filters').isVisible(), false);
       assert.equal(await again.locator('#cityMapPage .layers.moff').isVisible(), true);
     } finally { await again.close(); }
   } finally { await page.close(); await context.close(); }
@@ -294,7 +355,7 @@ test('the Today card counts the vacant retail units and names the best-trafficke
     await page.locator('#findLocationCard').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     assert.equal(await page.evaluate(() => page), 'map');
-    assert.equal(await page.locator('#cityMapPage .seg.cat a.on').textContent(), 'Retail');
+    assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
     assert.equal(await page.locator('#cityMapPage [data-f="type"]').inputValue(), '');
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
@@ -318,12 +379,12 @@ test('a minimum door cap judges a range by its smallest variant', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .seg.cat a[data-cat="cinema"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
     // 100 to 150 seats clears a minimum of 100 and fails one of 125.
-    await page.locator('#cityMapPage .srch.mini input[data-f="minCap"]').fill('100');
+    await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('100');
     assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
-    await page.locator('#cityMapPage .srch.mini input[data-f="minCap"]').fill('125');
+    await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('125');
     assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -333,7 +394,7 @@ test('a row with nothing to sort on stays at the bottom whichever way the column
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .seg.cat a[data-cat="cinema"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     // Midtown has no cinema demand and no rent estimate: unscored, unpriced.
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
     await page.locator('#cityMapPage .fhead [data-s="score"]').click();   // flip to ascending
@@ -354,18 +415,18 @@ test('a preset lands on the column its category ranks by, not on the last sort',
     assert.equal(await page.locator('#cityMapPage .fhead span.on').textContent(), 'Est. rent');
     // A stale buy-out-only view with a minimum on it would contradict the count
     // the card advertises, so the preset clears both.
-    await page.locator('#cityMapPage .sev.fc.av[data-av="vac"]').click();
-    await page.locator('#cityMapPage .sev.fc.av[data-av="buy"]').click();
-    await page.locator('#cityMapPage .srch.mini input[data-f="minTraffic"]').fill('75');
+    await page.locator('#cityMapPage .fchip.av[data-av="vac"]').click();
+    await page.locator('#cityMapPage .fchip.av[data-av="buy"]').click();
+    await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').fill('75');
     await page.evaluate(() => { cityMapPage.showAll = true; showPage('today'); drawFindLocation(); wireCards(); });
     await page.locator('#findLocationCard').click();
     await page.waitForFunction(() => document.querySelector('#cityMapPage .fhead span.on')?.textContent === 'Score');
     assert.equal(await page.evaluate(() => cityMapPage.showAll), false);  // the +N expansion does not survive a preset
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.equal(await page.locator('#cityMapPage .fhead span.on.up').count(), 0);  // highest first
-    assert.equal(await page.locator('#cityMapPage .sev.fc.av[data-av="vac"]').evaluate(c => c.classList.contains('off')), false);
-    assert.equal(await page.locator('#cityMapPage .sev.fc.av[data-av="buy"]').evaluate(c => c.classList.contains('off')), true);
-    assert.equal(await page.locator('#cityMapPage .srch.mini input[data-f="minTraffic"]').inputValue(), '0');
+    assert.equal(await page.locator('#cityMapPage .fchip.av[data-av="vac"]').evaluate(c => c.classList.contains('on')), true);
+    assert.equal(await page.locator('#cityMapPage .fchip.av[data-av="buy"]').evaluate(c => c.classList.contains('on')), false);
+    assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').inputValue(), '0');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -374,7 +435,7 @@ test("a rival's own text is text, in the list and on the card", async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .sev.fc.av[data-av="buy"]').click();
+    await page.locator('#cityMapPage .fchip.av[data-av="buy"]').click();
     await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 5);
     const row = page.locator(`#cityMapPage .place[data-pick="${HK[2]}"]`);
     assert.match(await row.textContent(), /<img src=x onerror=window\.__x=1> · Clothing Store/);
@@ -392,11 +453,11 @@ test('the rent tooltip reports how the estimate did against your own leases', as
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    assert.match(await page.locator('#cityMapPage .why.fonly').getAttribute('data-tip'),
+    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'),
       /matches your 3 current leases within 0\.3%/);
     // No lease of your own, nothing to check it against.
     await page.evaluate(() => { D.premises.rent.check = {leases: 0, worst: 0}; refreshCityMaps(); });
-    assert.match(await page.locator('#cityMapPage .why.fonly').getAttribute('data-tip'),
+    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'),
       /no current lease to check against/);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -429,7 +490,7 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
     assert.match(await page.locator('#cellDetail').textContent(), /find premises/);
     await page.locator('#cellDetail .link.pin').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
-    assert.equal(await page.locator('#cityMapPage .seg.cat a.on').textContent(), 'Retail');
+    assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
     assert.equal(await page.locator('#cityMapPage [data-f="type"]').inputValue(), CLOTHES);
     assert.deepEqual(await rowKeys(page), [HK[0]]);   // Midtown is switched off
     // An office row asks for office buildings instead.
@@ -437,7 +498,7 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
     await page.locator(`#market .cell[data-slug="${LAW}"]`).click();
     await page.locator('#cellDetail .link.pin').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
-    assert.equal(await page.locator('#cityMapPage .seg.cat a.on').textContent(), 'Office');
+    assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

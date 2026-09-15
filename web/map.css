@@ -23,33 +23,38 @@
    search (.moff) or the finder's filters (.fonly). */
 .city-map:not(.finder) .fonly{display:none}
 .city-map.finder .moff{display:none}
-.sev.fc i{background:var(--accent)}
-.sev.fc.off{opacity:.35}.sev.fc.off:hover{opacity:.6}
-.sev.fc.tog{border-color:var(--rule);gap:7px;background:none;appearance:none;-webkit-appearance:none;font:500 12.5px/1 "IBM Plex Mono",monospace}
-.sev.fc.tog svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.sev.fc.tog.on{background:var(--accent-soft);color:var(--ink);border-color:var(--accent-soft)}
-.sev.fc{border:1px solid transparent;background:none;appearance:none;-webkit-appearance:none;font:500 12.5px/1 "IBM Plex Mono",monospace}
-.sev.fc .n{margin-left:2px;color:var(--ink-3);font-weight:400}
-.sev.fc.buy i{background:var(--warn)}
-.sev.fc.hd{padding:5px 8px;letter-spacing:.08em}.sev.fc.hd i{display:none}
-.sev.fc.sale.on{background:var(--accent-soft);color:var(--ink)}
-.frow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:-2px 0 10px}
-.frow .sp{flex:1}
-.frow .lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-right:4px}
-.srch.mini{width:auto;gap:6px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;font-size:11px;height:30px}
-.srch.mini:focus-within{width:auto}
-.srch.mini input{width:38px;text-align:right;font-family:"IBM Plex Mono",monospace;font-size:12px;-moz-appearance:textfield}
-.srch.mini input::-webkit-outer-spin-button,.srch.mini input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.srch.sel{width:auto;padding-right:6px}.srch.sel:focus-within{width:auto}
-.srch.sel select{border:0;background:none;color:var(--ink);font:inherit;font-size:13px;outline:none;cursor:pointer;max-width:200px}
-.srch.sel select option{color:var(--ink);background:var(--surface)}
-.fnote{margin:0 0 10px;font-size:12px;color:var(--ink-3)}
-.fnote b{color:var(--ink-2);font-weight:500}
+/* One control, one look. Outlined is "not chosen", filled is "chosen"; nothing
+   is ever dimmed, because a dim control reads as one you cannot have. */
+.fchip{display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;padding:0 9px;
+  border:1px solid var(--rule);border-radius:6px;background:none;color:var(--ink-2);
+  font:500 11.5px/1 "IBM Plex Mono",monospace;cursor:pointer;white-space:nowrap;
+  appearance:none;-webkit-appearance:none;transition:background .15s,border-color .15s,color .15s}
+.fchip:hover{color:var(--ink);border-color:var(--ink-3)}
+.fchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.fchip b{font-weight:400;color:var(--ink-3)}
+.fchip.on b{color:var(--ink-2)}
+.fchip.tog{height:30px;padding:0 11px;gap:7px;font-size:12.5px}
+.fchip.tog svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fchip.hd{padding:0 8px;letter-spacing:.08em}
+.fchip.sel{padding-right:22px;position:relative}
+.fchip.sel::after{content:"";position:absolute;right:9px;top:50%;margin-top:-1px;border:3.5px solid transparent;border-top-color:currentColor;pointer-events:none}
+.fchip.sel select{border:0;background:none;color:inherit;font:inherit;outline:none;cursor:pointer;max-width:190px;
+  appearance:none;-webkit-appearance:none;padding:0}
+.fchip.sel select option{color:var(--ink);background:var(--surface)}
+.fchip.num{color:var(--ink-3);cursor:text}
+.fchip.num input{width:34px;border:0;background:none;color:var(--ink);font:inherit;text-align:right;outline:none;padding:0;-moz-appearance:textfield}
+.fchip.num input::-webkit-outer-spin-button,.fchip.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.fchip.num.on{color:var(--ink-2)}
+/* the filter block: the panel's own head, above its results */
+.places .filters{flex:none;padding:10px 11px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:6px}
+.frow{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.frow .lab{flex:none;width:40px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.frow .why{margin-left:auto}
 .citymap.finder .places{width:440px}
 .stage.panel.finder .zoomer{right:472px}
 .citymap.narrow .stage.panel.finder .zoomer{right:16px}
 .citymap.finder:fullscreen .stage.panel .zoomer{right:488px}
-.fhead{display:grid;grid-template-columns:22px 26px 1fr 46px 46px 46px 62px;gap:0 8px;padding:10px 12px 8px 8px;border-bottom:1px solid var(--rule-soft);font:500 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.fhead{display:grid;grid-template-columns:30px 26px 1fr 44px 44px 44px 58px;gap:0 6px;padding:10px 12px 8px 8px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
 .fhead span[data-s]:hover{color:var(--ink-2)}
@@ -57,15 +62,21 @@
 .fhead span.on{color:var(--ink)}
 .fhead span.on::after{content:" ↓";color:var(--accent)}
 .fhead span.on.up::after{content:" ↑"}
-.fhead.sale{grid-template-columns:26px 1fr 70px 52px 80px}
-.place.fr{grid-template-columns:22px 26px 1fr 46px 46px 46px 62px}
-.place.fr .rk{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:right}
+.fhead.sale{grid-template-columns:26px 1fr 66px 48px 76px}
+.place.fr{grid-template-columns:30px 26px 1fr 44px 44px 44px 58px;gap:0 6px}
+.place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:4px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+/* Green is an empty floor to rent, amber a rival to buy out. */
+.place.fr .rk i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.place.fr.buy .rk i{background:var(--warn)}
 /* A ranked row's second line is why it is where it is, so it never waits for a
    hover the way a plain map row's address does. */
 .place.fr .nm small{max-height:none;opacity:1;margin-top:1px;white-space:nowrap}
 .place.fr .v{font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right;color:var(--ink-2);white-space:nowrap}
 .place.fr .v.sc{color:var(--ink);font-weight:500}
-.place.fr.sale{grid-template-columns:26px 1fr 70px 52px 80px}
+/* The shaded columns read like the market grid: the stronger the number, the
+   more of the accent behind it. Rent is left plain — dear is not good. */
+.place.fr .v.sh{border-radius:4px;padding:4px 6px;margin:-4px 0;align-self:center}
+.place.fr.sale{grid-template-columns:26px 1fr 66px 48px 76px}
 .place.fr.sale .v.t{text-align:left;font-family:inherit;font-size:11.5px;color:var(--ink-3)}
 .map-canvas .fp.cand{fill:#43c07a;fill-opacity:.2;stroke:#65e99b;stroke-width:1.2;vector-effect:non-scaling-stroke}
 .map-canvas .fp.cand.buy{fill:#e0b84a;fill-opacity:.18;stroke:#f2cf6b}
@@ -212,9 +223,11 @@ body.map-modal-open{overflow:hidden}
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
  .citymap.narrow .places,.citymap.narrow.finder .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
- .fhead,.place.fr{grid-template-columns:20px 24px 1fr 42px 42px 42px 56px}
- .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 60px 44px 70px}
- .srch.sel select{font-size:16px}
+ .fhead,.place.fr{grid-template-columns:28px 24px 1fr 40px 40px 40px 52px}
+ .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
+ /* A text field under 16px makes a phone browser zoom the page in on focus. */
+ .fchip{height:32px}
+ .fchip.num input,.fchip.sel select{font-size:16px}
  .map-head .aside{flex-basis:100%}
  .srch,.srch:focus-within{width:100%}
  .srch input{font-size:16px}
@@ -225,7 +238,7 @@ body.map-modal-open{overflow:hidden}
    demand step aside — they are still on the card, and the score they make is
    the reason the row is where it is. */
 @media(max-width:600px){
- .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:20px 24px 1fr 42px 56px}
+ .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px 56px}
  .fhead:not(.sale) span:nth-child(5),.fhead:not(.sale) span:nth-child(6),
  .place.fr:not(.sale) > :nth-child(5),.place.fr:not(.sale) > :nth-child(6){display:none}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 44px 70px}
