@@ -202,3 +202,13 @@ should-fix findings are closed; Peter has the QA render and the canvas link.
 - The for-sale list carries the neighbourhood as the two-letter code column plus the
   full name under the address, not as a separate sortable column.
 
+## Floor area, from player feedback after launch (15 September 2026)
+
+- Floor area in m² is now a sortable column between demand and door cap, and a Size row
+  (min and max m²) filters both the ranked list and the for-sale list. Together with the
+  door-cap and upfront columns that shipped, this replaces the first deviation above.
+- The panel is 45 px wider (485 px) so the address keeps its width. The warehouse list
+  already ranks by m², so it keeps its narrower grid with no second m² column.
+- When a row has no occupant and no best-fit type to show, its second line gives the full
+  neighbourhood name, where it used to repeat the m² and cap figures the columns now show.
+
