@@ -690,6 +690,29 @@ test('a state saved when availability was two switches opens the list it was rea
   } finally { await page.close(); await context.close(); }
 });
 
+test('a sort saved before picks were recorded counts as picked unless it is the default', async () => {
+  const context = await browser.newContext();
+  const {page} = await fixture(context);
+  const save = state => page.evaluate(s => localStorage.setItem('ba_finder_v1:finder-a', JSON.stringify(s)), state);
+  try{
+    for(const [sort, back] of [['m2', 'm²'], ['score', 'Score']]){
+      await save({cat: 'retail', type: '', show: 'rent', hoods: null, sort});
+      const {page: again, errors} = await fixture(context);
+      const sorted = () => again.locator('#cityMapPage .fhead span.on').textContent();
+      try{
+        await openMap(again); await turnOn(again);
+        // Through the warehouses and back: a picked m² survives it, the
+        // shops' own score comes back as itself.
+        await again.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+        assert.equal(await sorted(), 'm²');
+        await again.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+        assert.equal(await sorted(), back);
+        assert.deepEqual(errors, []);
+      } finally { await again.close(); }
+    }
+  } finally { await page.close(); await context.close(); }
+});
+
 test("a game service is occupied by the game: never to rent, never to take over", async () => {
   const {page, errors} = await fixture();
   try{

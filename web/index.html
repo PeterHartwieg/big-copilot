@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=03846bcb5f">
+<link rel="stylesheet" href="community.css?v=6097496efe">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1930,8 +1930,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "03846bcb5f";</script>
-<script>window.LEDGER_RELEASE = {"version":"03846bcb5f","latest":{"pr":28,"date":"2026-09-15","title":"Find a location on the map","summary":"The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building's card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works."}};</script>
+<script>window.LEDGER_BUILD = "6097496efe";</script>
+<script>window.LEDGER_RELEASE = {"version":"6097496efe","latest":{"pr":28,"date":"2026-09-15","title":"Find a location on the map","summary":"The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building's card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2000,8 +2000,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=03846bcb5f"></script>
-<script src="community.js?v=03846bcb5f"></script>
+<script src="app.js?v=6097496efe"></script>
+<script src="community.js?v=6097496efe"></script>
 
 <script>
 
@@ -4897,7 +4897,7 @@ const FINDER_SHOWS = [
   ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
+  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
@@ -5122,11 +5122,9 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
       // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order
-      // never becomes the shops'. A state saved before sortPicked existed
-      // counts any sort other than the default as picked.
-      const picked = this.fs.sortPicked ?? this.fs.sort !== this.sortKeys()[0];
+      // never becomes the shops'.
       this.fs.cat = chip.dataset.cat; this.fs.type = "";
-      if(!picked) this.fs.sort = this.sortKeys()[0];
+      if(!this.fs.sortPicked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
     });
@@ -5180,6 +5178,9 @@ class CityMapView {
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
       delete this.fs.vac; delete this.fs.buy; delete this.fs.sale; delete this.fs.dir;
+      // A sort saved before picks were recorded counts as picked unless it is
+      // the category's own order.
+      if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
     this.fs.on = false;   // the switch is never restored, only the filters
   }

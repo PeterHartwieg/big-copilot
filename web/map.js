@@ -126,7 +126,7 @@ const FINDER_SHOWS = [
   ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
+  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
@@ -351,11 +351,9 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
       // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order
-      // never becomes the shops'. A state saved before sortPicked existed
-      // counts any sort other than the default as picked.
-      const picked = this.fs.sortPicked ?? this.fs.sort !== this.sortKeys()[0];
+      // never becomes the shops'.
       this.fs.cat = chip.dataset.cat; this.fs.type = "";
-      if(!picked) this.fs.sort = this.sortKeys()[0];
+      if(!this.fs.sortPicked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
     });
@@ -409,6 +407,9 @@ class CityMapView {
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
       delete this.fs.vac; delete this.fs.buy; delete this.fs.sale; delete this.fs.dir;
+      // A sort saved before picks were recorded counts as picked unless it is
+      // the category's own order.
+      if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
     this.fs.on = false;   // the switch is never restored, only the filters
   }
