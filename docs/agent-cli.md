@@ -82,11 +82,17 @@ network and no secrets:
 python -m unittest discover -s tests
 ```
 
-The tests repeat every case under each installed shell. **Only Windows PowerShell
-5.1 exists on Peter's machine, so the PowerShell 7.3+ path — where the launcher
-does no escaping at all because the shell passes arguments verbatim — is currently
-unexercised.** Installing PowerShell 7 would cover it without any change to the
-tests.
+The tests repeat every case under each installed shell, and the fake `claude`
+forwards through whichever shell is running that case, so no step is pinned to one
+version. **Only Windows PowerShell 5.1 exists on Peter's machine, so the PowerShell
+7.3+ path — where the launcher does no escaping at all because the shell passes
+arguments verbatim — has never been run.** Installing PowerShell 7 would make the
+tests exercise it; whether they pass there is unconfirmed.
+
+Note also that the launcher applies 5.1's wrapping rule to every legacy host.
+PowerShell 7.0–7.2, and 7.3+ forced to `PSNativeCommandArgumentPassing=Legacy`,
+ignore an escaped `\"` when deciding to wrap, so the launcher refuses a few values
+those hosts could have passed. It errs towards refusing, never towards corrupting.
 
 The launcher obtains the key using `op read`. The nonsecret reference is resolved
 from `-SecretReference`, then `ZAI_API_KEY_REF`, then the `secretReference` property

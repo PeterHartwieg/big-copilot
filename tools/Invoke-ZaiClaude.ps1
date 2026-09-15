@@ -41,9 +41,15 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
     $argumentPassing = Get-Variable -Name PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue
     $legacyArgumentPassing = (!$argumentPassing -or $argumentPassing -eq 'Legacy')
 }
-# Whether the legacy encoder wraps a value in quotes. Measured against 5.1 rather
-# than assumed: it counts every " as a delimiter, including the \" that escaping
-# produces, and wraps only when it finds whitespace outside such a run.
+# Whether the legacy encoder wraps a value in quotes. This is Windows PowerShell
+# 5.1's rule, measured against 5.1 rather than assumed: it counts every " as a
+# delimiter, including the \" that escaping produces, and wraps only when it finds
+# whitespace outside such a run.
+#
+# PowerShell 7.0-7.2, and 7.3+ set to PSNativeCommandArgumentPassing=Legacy, do not
+# count an escaped \", so they wrap some values this returns $false for. The
+# launcher then refuses a value those hosts could in fact have passed. That is the
+# safe direction to be wrong in: it over-refuses, and never corrupts.
 function Test-NativeQuoteWrapping {
     param([string]$Value)
     $quotes = 0
@@ -128,6 +134,29 @@ if (!$NoInstructions) {
     }
 }
 
+# Built and encoded before the credential is fetched, so a prompt this shell cannot
+# pass refuses the run without touching 1Password. Nothing here needs the credential.
+$claudeArguments = @(
+    '-p', $Prompt, '--model', $Model,
+    '--permission-mode', 'acceptEdits', '--no-chrome',
+    '--setting-sources=',
+    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
+    '--output-format', $OutputFormat
+)
+$claudeArguments += $instructionsArguments
+if ($NoTools) {
+    $claudeArguments += '--tools='
+} else {
+    $claudeArguments += @('--tools', 'Read,Write,Edit,Glob,Grep,Bash,PowerShell')
+    $claudeArguments += @('--allowedTools', 'Read,Write,Edit,Glob,Grep,Bash(python *),Bash(node *),Bash(npm test*),Bash(rg *),Bash(ls *),Bash(git status *),Bash(git diff *),PowerShell(Get-Content *),PowerShell(Get-ChildItem *)')
+}
+if ($OutputFormat -eq 'stream-json') { $claudeArguments += '--verbose' }
+if ($Resume) { $claudeArguments += @('--resume', $Resume) }
+foreach ($directory in $AddDirectory) {
+    $claudeArguments += @('--add-dir', (Resolve-Path -LiteralPath $directory).Path)
+}
+$claudeArguments = @($claudeArguments | ForEach-Object { ConvertTo-NativeArgument $_ })
+
 # Fixed official endpoint: an arbitrary URL must never receive this credential.
 $providerEnvironment = @{
     ANTHROPIC_BASE_URL = 'https://api.z.ai/api/anthropic'
@@ -157,26 +186,6 @@ try {
     foreach ($entry in $providerEnvironment.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
     }
-    $claudeArguments = @(
-        '-p', $Prompt, '--model', $Model,
-        '--permission-mode', 'acceptEdits', '--no-chrome',
-        '--setting-sources=',
-        '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
-        '--output-format', $OutputFormat
-    )
-    $claudeArguments += $instructionsArguments
-    if ($NoTools) {
-        $claudeArguments += '--tools='
-    } else {
-        $claudeArguments += @('--tools', 'Read,Write,Edit,Glob,Grep,Bash,PowerShell')
-        $claudeArguments += @('--allowedTools', 'Read,Write,Edit,Glob,Grep,Bash(python *),Bash(node *),Bash(npm test*),Bash(rg *),Bash(ls *),Bash(git status *),Bash(git diff *),PowerShell(Get-Content *),PowerShell(Get-ChildItem *)')
-    }
-    if ($OutputFormat -eq 'stream-json') { $claudeArguments += '--verbose' }
-    if ($Resume) { $claudeArguments += @('--resume', $Resume) }
-    foreach ($directory in $AddDirectory) {
-        $claudeArguments += @('--add-dir', (Resolve-Path -LiteralPath $directory).Path)
-    }
-    $claudeArguments = @($claudeArguments | ForEach-Object { ConvertTo-NativeArgument $_ })
     Push-Location -LiteralPath $resolvedWork
     try {
         if ($LogPath) {

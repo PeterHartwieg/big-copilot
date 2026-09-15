@@ -23,9 +23,16 @@ LAUNCHER = Path(__file__).resolve().parents[1] / 'tools' / 'Invoke-ZaiClaude.ps1
 
 OP_SUCCEEDS = "Write-Output 'fixture-only-token'\nexit 0\n"
 OP_FAILS = 'exit 1\n'
+# Leaves a marker, so a test can show 1Password was never consulted.
+OP_RECORDS = ("Set-Content -LiteralPath (Join-Path $PSScriptRoot 'op-was-called') -Value 'yes'\n"
+              + OP_SUCCEEDS)
 
+# npm's claude.ps1 runs in the launcher's own process and calls claude.exe from
+# there, so the encoder under test is always the launcher's host. @SHELL@ is the
+# shell running that subtest, which keeps the receiving end matched to it too
+# rather than pinning every run to 5.1.
 CLAUDE_SHIM = '''
-& "powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/claude-impl.ps1" $args
+& "@SHELL@" -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/claude-impl.ps1" $args
 exit $LASTEXITCODE
 '''
 
@@ -75,10 +82,10 @@ class LauncherTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory(prefix='wiki-agent-cli-') as folder:
                     body(shell, Path(folder))
 
-    def fixtures(self, root, op=OP_SUCCEEDS, impl=CLAUDE_IMPL):
+    def fixtures(self, shell, root, op=OP_SUCCEEDS, impl=CLAUDE_IMPL):
         """Put fake op and claude commands on a PATH that shadows the real ones."""
         (root / 'op.ps1').write_text(op, encoding='utf-8')
-        (root / 'claude.ps1').write_text(CLAUDE_SHIM, encoding='utf-8')
+        (root / 'claude.ps1').write_text(CLAUDE_SHIM.replace('@SHELL@', shell), encoding='utf-8')
         (root / 'claude-impl.ps1').write_text(impl, encoding='utf-8')
         return dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'])
 
@@ -97,7 +104,7 @@ class LauncherTests(unittest.TestCase):
         """Send value as the prompt and return what claude.exe received."""
         prompt_file = root / 'task.md'
         prompt_file.write_text(value, encoding='utf-8', newline='')
-        result = self.launch(shell, self.fixtures(root), '-PromptFile', str(prompt_file),
+        result = self.launch(shell, self.fixtures(shell, root), '-PromptFile', str(prompt_file),
                              '-WorkingDirectory', str(root), '-NoTools', '-OutputFormat', 'json')
         self.assertEqual(result.returncode, 0, result.stderr)
         arguments = self.reported(root)['args']
@@ -105,7 +112,7 @@ class LauncherTests(unittest.TestCase):
 
     def test_process_credentials_and_restoration(self):
         def body(shell, root):
-            env = self.fixtures(root)
+            env = self.fixtures(shell, root)
             env['ANTHROPIC_AUTH_TOKEN'] = 'original-fixture-token'
             env['ANTHROPIC_BASE_URL'] = 'https://original.invalid'
             env['ANTHROPIC_API_KEY'] = 'original-fixture-api-key'
@@ -136,7 +143,7 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
 
     def test_empty_valued_flags_keep_their_empty_value(self):
         def body(shell, root):
-            env = self.fixtures(root)
+            env = self.fixtures(shell, root)
             result = self.launch(shell, env, '-Prompt', 'fixture', '-WorkingDirectory', str(root),
                                  '-NoTools', '-OutputFormat', 'json')
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -181,19 +188,30 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
         def body(shell, root):
             prompt_file = root / 'task.md'
             prompt_file.write_text('"hello world"', encoding='utf-8', newline='')
-            result = self.launch(shell, self.fixtures(root), '-PromptFile', str(prompt_file),
+            env = self.fixtures(shell, root, op=OP_RECORDS)
+            result = self.launch(shell, env, '-PromptFile', str(prompt_file),
                                  '-WorkingDirectory', str(root), '-NoTools', '-OutputFormat', 'json')
-            if result.returncode == 0:
+            if Path(shell).stem.lower() == 'powershell':
+                # 5.1 provably cannot encode this, so refusing is the only right answer.
+                self.assertNotEqual(result.returncode, 0, 'Windows PowerShell 5.1 must refuse')
+                self.assertIn('cannot pass this value', result.stderr)
+                self.assertFalse((root / 'claude-args.json').exists())
+                # The arguments are encoded before the credential block, so a run that
+                # cannot start never prompts 1Password.
+                self.assertFalse((root / 'op-was-called').exists(), '1Password was consulted')
+            elif result.returncode == 0:
+                # 7.3+ passes it verbatim.
                 arguments = self.reported(root)['args']
                 self.assertEqual(arguments[arguments.index('-p') + 1], '"hello world"')
             else:
+                # 7.0-7.2, or 7.3+ forced to Legacy, over-refuse: safe, not corrupting.
                 self.assertIn('cannot pass this value', result.stderr)
                 self.assertFalse((root / 'claude-args.json').exists())
         self.for_each_shell(body)
 
     def test_working_directory_agents_file_is_appended(self):
         def body(shell, root):
-            env = self.fixtures(root)
+            env = self.fixtures(shell, root)
             work = root / 'work'
             work.mkdir()
             instructions = work / 'AGENTS.md'
@@ -210,7 +228,7 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
 
     def test_inline_fallback_sends_the_file_text(self):
         def body(shell, root):
-            env = self.fixtures(root, impl=CLAUDE_IMPL_NO_FILE_FLAG)
+            env = self.fixtures(shell, root, impl=CLAUDE_IMPL_NO_FILE_FLAG)
             work = root / 'work'
             work.mkdir()
             text = '# Project agent instructions\n\nQuote "carefully" under C:\\my repo\\docs.\n'
@@ -225,7 +243,7 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
 
     def test_no_instructions_switch_skips_injection(self):
         def body(shell, root):
-            env = self.fixtures(root)
+            env = self.fixtures(shell, root)
             work = root / 'work'
             work.mkdir()
             (work / 'AGENTS.md').write_text('# Project agent instructions\n', encoding='utf-8')
@@ -238,7 +256,7 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
 
     def test_missing_explicit_instructions_file_stops_before_claude(self):
         def body(shell, root):
-            env = self.fixtures(root, impl=CLAUDE_REFUSES)
+            env = self.fixtures(shell, root, impl=CLAUDE_REFUSES)
             missing = root / 'absent-instructions.md'
             result = self.launch(shell, env, '-Prompt', 'fixture', '-WorkingDirectory', str(root),
                                  '-InstructionsFile', str(missing), '-NoTools', '-OutputFormat', 'json')
@@ -250,7 +268,7 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
 
     def test_secret_failure_does_not_start_claude_or_replace_log(self):
         def body(shell, root):
-            env = self.fixtures(root, op=OP_FAILS, impl=CLAUDE_REFUSES)
+            env = self.fixtures(shell, root, op=OP_FAILS, impl=CLAUDE_REFUSES)
             log = root / 'run.json'
             result = self.launch(shell, env, '-Prompt', 'fixture', '-WorkingDirectory', str(root),
                                  '-NoInstructions', '-LogPath', str(log))
