@@ -670,17 +670,25 @@ dropped rather than guessed at, so a save can carry 883 rows where another carri
 ### What each status means
 
 - **mine** — you rent it, whatever kind of building it is. Your flat is `mine` too.
-- **rival** — somebody else's business is in it (`businessTypeName` is set and is not
-  `ba:businesstype_empty`).
+- **rival** — a business somebody runs is in it: `businessTypeName` is set and is not
+  `ba:businesstype_empty`, and `businessOwnerRivalId` names the rival who owns it. These
+  are the buy-out candidates.
+- **service** — a business is in it but nobody owns it (`businessOwnerRivalId` is empty).
+  These belong to the city itself and cannot be bought out at any price: the banks,
+  wholesalers, import/export offices, gas stations, car dealerships, furniture and
+  appliance stores, recruitment agencies, the IRS, the hospital, the clinic, the school,
+  the casino, the moving service and the truck garage. Most sit in special buildings, but
+  a dozen of them occupy ordinary retail and office floors, which is why the owner field,
+  not the building type, is what separates them.
 - **vacant** — empty and `AvailableForRent`. Vacancy is exact: every empty retail,
   office, cinema and theater building says so itself, so nothing is ever inferred.
-- **unavailable** — everything else. That covers residential and special buildings,
-  which you can never take unless you already rent one, and the empty warehouses the
-  game keeps off the market.
+- **unavailable** — everything else: residential buildings, which you can never take
+  unless you already rent one, empty special buildings, and the empty warehouses the game
+  keeps off the market.
 
 Status says whether you could take the place; `occupant` says who is in it. Any building
 with a business in it carries the occupant's business name and type, whatever its status,
-so the card for a hospital or a casino names it while still reading "unavailable".
+so the card for somebody else's flat still names the tenant while reading "unavailable".
 
 ### Estimated rent
 

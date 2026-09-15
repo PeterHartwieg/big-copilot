@@ -101,6 +101,9 @@ def reg(addr, **kw):
         "RentPerDay": 0.0,
         "BusinessName": None,
         "businessTypeName": EMPTY,
+        # The game writes an empty owner for its own services and a rival's id
+        # for a company somebody runs.
+        "businessOwnerRivalId": "",
     }
     row.update(kw)
     return row
@@ -264,21 +267,39 @@ class StatusTests(unittest.TestCase):
         rows = self.rows([
             reg(HK_SHOP, RentedByPlayer=True, RentPerDay=264.0,
                 BusinessName="[HK] Costy Co", businessTypeName=SHOP),
-            reg(MT_SHOP, BusinessName="Bodega Rival", businessTypeName=SHOP),
+            reg(MT_SHOP, BusinessName="Bodega Rival", businessTypeName=SHOP,
+                businessOwnerRivalId="rival-7"),
             reg(LM_OFFICE, AvailableForRent=True),
             # Empty but not on the market: nothing infers vacancy for it.
             reg(CLOSED_SHOP),
             reg(FLAT, AvailableForRent=True, BusinessName="Tenant",
-                businessTypeName=SHOP),
-            reg(PIER, AvailableForRent=True, BusinessName="City Hall",
+                businessTypeName=SHOP, businessOwnerRivalId="rival-9"),
+            # The city's own hospital: a business, but nobody owns it.
+            reg(PIER, AvailableForRent=True, BusinessName="City Hospital",
                 businessTypeName=SHOP),
         ])
         self.assertEqual(rows["ba:street_secondavenue#2"]["status"], "mine")
         self.assertEqual(rows["ba:street_fifthavenue#8"]["status"], "rival")
         self.assertEqual(rows["ba:street_fifthavenue#12"]["status"], "vacant")
         self.assertEqual(rows["ba:street_fifthavenue#14"]["status"], "unavailable")
-        # Residential and special never become candidates, whatever they say.
+        # Somebody else's flat never becomes a candidate, whatever it says.
         self.assertEqual(rows["ba:street_fifthavenue#72"]["status"], "unavailable")
+        self.assertEqual(rows["ba:street_fifthavenue#99"]["status"], "service")
+
+    def test_a_business_with_no_owner_is_the_citys_own_service(self):
+        rows = self.rows([
+            # Same building, same business type: only the owner separates a
+            # wholesaler nobody can buy from a shop somebody runs.
+            reg(HK_SHOP, BusinessName="Big Wholesale", businessTypeName=SHOP),
+            reg(MT_SHOP, BusinessName="Bodega Rival", businessTypeName=SHOP,
+                businessOwnerRivalId="rival-7"),
+            # An empty special building is still just unavailable.
+            reg(PIER, AvailableForRent=True),
+        ])
+        self.assertEqual(rows["ba:street_secondavenue#2"]["status"], "service")
+        self.assertEqual(rows["ba:street_secondavenue#2"]["occupant"],
+                         {"name": "Big Wholesale", "type": "Supermarket", "typeSlug": SHOP})
+        self.assertEqual(rows["ba:street_fifthavenue#8"]["status"], "rival")
         self.assertEqual(rows["ba:street_fifthavenue#99"]["status"], "unavailable")
 
     def test_the_players_own_home_is_still_mine(self):
@@ -289,17 +310,19 @@ class StatusTests(unittest.TestCase):
 
     def test_an_occupied_building_names_who_is_in_it(self):
         rows = self.rows([
-            reg(MT_SHOP, BusinessName="Bodega Rival", businessTypeName=SHOP),
+            reg(MT_SHOP, BusinessName="Bodega Rival", businessTypeName=SHOP,
+                businessOwnerRivalId="rival-7"),
             reg(LM_OFFICE, AvailableForRent=True),
-            # A hospital is never a candidate, but the card still names it.
-            reg(PIER, BusinessName="City Hospital", businessTypeName=LAW),
+            # Somebody else's flat is never a candidate, but the card names it.
+            reg(FLAT, BusinessName="Tenant", businessTypeName=LAW,
+                businessOwnerRivalId="rival-9"),
         ])
         self.assertEqual(rows["ba:street_fifthavenue#8"]["occupant"],
                          {"name": "Bodega Rival", "type": "Supermarket", "typeSlug": SHOP})
         self.assertIsNone(rows["ba:street_fifthavenue#12"]["occupant"])
-        self.assertEqual(rows["ba:street_fifthavenue#99"]["status"], "unavailable")
-        self.assertEqual(rows["ba:street_fifthavenue#99"]["occupant"],
-                         {"name": "City Hospital", "type": "Law Firm", "typeSlug": LAW})
+        self.assertEqual(rows["ba:street_fifthavenue#72"]["status"], "unavailable")
+        self.assertEqual(rows["ba:street_fifthavenue#72"]["occupant"],
+                         {"name": "Tenant", "type": "Law Firm", "typeSlug": LAW})
 
     def test_a_row_carries_the_static_table_and_sorts_by_key(self):
         payload = premises([reg(MT_SHOP, AvailableForRent=True),

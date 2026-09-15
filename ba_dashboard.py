@@ -707,11 +707,15 @@ def _premises_status(reg: dict, row: dict) -> str:
     """Whether the player could take this building today."""
     if reg.get("RentedByPlayer"):
         return "mine"
+    kind = reg.get("businessTypeName")
+    # A bank, a wholesaler, the hospital or the IRS belongs to the city itself:
+    # the registration names a business but no rival owns it, so there is
+    # nobody to buy out. Only a business with an owner is a takeover target.
+    # Somebody else's flat is nobody's business either way.
+    if kind and kind != EMPTY_TYPE and row.get("t") != "residential":
+        return "rival" if reg.get("businessOwnerRivalId") else "service"
     if row.get("t") in UNRENTABLE_BUILDINGS:
         return "unavailable"
-    kind = reg.get("businessTypeName")
-    if kind and kind != EMPTY_TYPE:
-        return "rival"
     # Vacancy is exact: every empty retail, office, cinema and theater building
     # says so itself. Nothing else is ever read as vacant.
     return "vacant" if reg.get("AvailableForRent") else "unavailable"
@@ -768,8 +772,8 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
         status = _premises_status(reg, row)
         kind = reg.get("businessTypeName")
         occupant = None
-        # A hospital or a casino stays "unavailable", but the card still says
-        # who is in there, so every occupied building names its occupant.
+        # Somebody else's flat is still "unavailable", but the card says who is
+        # in there, so every occupied building names its occupant.
         if kind and kind != EMPTY_TYPE:
             occupant = {
                 "name": reg.get("BusinessName") or "",

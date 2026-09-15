@@ -113,10 +113,19 @@ const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` 
    100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
 const hoodTag = hood => (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood]) || hoodCode(null, hood);
-const finderDefaults = () => ({on:false, cat:"retail", type:"", vac:true, buy:false,
-  hoods:null, minCap:0, maxCap:0, minTraffic:0, sale:false, sort:"score", dir:-1});
+/* What the list is a list of. One of the three is always chosen: premises to
+   rent, rival businesses to take over, or whole buildings on sale. */
+const FINDER_SHOWS = [
+  ["rent", "To rent", "Buildings the save marks as available for rent."],
+  ["takeover", "To take over", "Rival businesses you can make an offer to in-game; the price is not in the save. Game services like banks and wholesalers are not for sale."],
+  ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
+];
+const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
+  hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score", dir:-1});
 const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
+  // A bank or a wholesaler is the game's own: occupied, but never for sale.
+  : b.status === "service" ? `Game service · ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   : b.status === "mine" ? "Yours"
   : b.type === "residential" ? "Residential" : "Not for rent";
 const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
@@ -288,10 +297,9 @@ class CityMapView {
     return `<div class="filters fonly">
       ${row('Kind', kinds)}
       ${row('Type', `<label class="fsel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select><i class="fchev">${ICON.chev}</i></label>`)}
-      ${row('Show', `<button type="button" class="fchip av" data-av="vac" aria-pressed="true" data-tip="Buildings the save marks as available for rent.">vacant<b>0</b></button>
-        <button type="button" class="fchip av" data-av="buy" aria-pressed="false" data-tip="Buildings a rival business occupies. You can make a takeover offer in-game; the price is not in the save.">buy-out<b>0</b></button>
-        <button type="button" class="fchip" data-f="sale" aria-pressed="false" data-tip="Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.">for sale<b>${P.forSale.length}</b></button>
-        <span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
+      ${row('Show', FINDER_SHOWS.map(([key, label, tip]) =>
+        `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(tip)}">${label}<b>0</b></button>`).join('')
+        + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('Where', hoods)}
       ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
@@ -310,8 +318,10 @@ class CityMapView {
       changed();
     });
     this.root.querySelector('[data-f="type"]').onchange = e => { this.fs.type = e.target.value; changed(); };
-    this.root.querySelectorAll('.fchip.av').forEach(chip => chip.onclick = () => {
-      const key = chip.dataset.av; this.fs[key] = !this.fs[key]; changed();
+    // One of the three is always chosen, so a click picks rather than toggles.
+    this.root.querySelectorAll('.fchip.show').forEach(chip => chip.onclick = () => {
+      if(this.fs.show === chip.dataset.show) return;
+      this.fs.show = chip.dataset.show; this.deselect(); changed();
     });
     this.root.querySelectorAll('.fchip.hd').forEach(chip => chip.onclick = () => {
       const all = this.hoodList(), h = chip.dataset.h;
@@ -323,12 +333,11 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
       this.fs[input.dataset.f] = Math.max(0, +input.value || 0); changed();
     });
-    this.root.querySelector('[data-f="sale"]').onclick = () => { this.fs.sale = !this.fs.sale; this.deselect(); changed(); };
   }
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'deposit'] : ['score', 'traffic', 'demand', 'deposit']; }
+  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'cap', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
     if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.dir = -1; }
@@ -348,7 +357,11 @@ class CityMapView {
     try{
       const saved = JSON.parse(localStorage.getItem(store));
       if(saved && typeof saved === "object") this.fs = {...this.fs, ...saved,
-        hoods: Array.isArray(saved.hoods) ? saved.hoods : null};
+        hoods: Array.isArray(saved.hoods) ? saved.hoods : null,
+        // Availability used to be two switches; a state saved then opens on
+        // whichever list it was reading.
+        show: saved.show || (saved.buy ? "takeover" : "rent")};
+      delete this.fs.vac; delete this.fs.buy; delete this.fs.sale;
     }catch(e){}
     this.fs.on = false;   // the switch is never restored, only the filters
   }
@@ -370,7 +383,7 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, sale:false, vac:true, buy:false, minCap:0, maxCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, show:'rent', minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
     this.fs.dir = -1;
@@ -401,13 +414,21 @@ class CityMapView {
     const keys = this.counts.get(key);
     return keys.length - (keys.includes(self) ? 1 : 0);
   }
+  saleView(){ return this.fs.show === 'sale'; }
+  /* A place you could actually take: an empty floor when the list is premises
+     to rent, a rival business when it is businesses to take over. A game
+     service is occupied by the game itself and is neither. */
+  candidate(b){
+    return this.fs.show === 'rent' ? b.status === 'vacant'
+      : this.fs.show === 'takeover' ? b.status === 'rival' : false;
+  }
   finderRows(){
     const P = premises(), fs = this.fs;
     if(!P) return [];
     const out = [];
     for(const b of P.buildings){
       if(b.type !== fs.cat) continue;
-      if(!((fs.vac && b.status === 'vacant') || (fs.buy && b.status === 'rival'))) continue;
+      if(!this.candidate(b)) continue;
       if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
       // Both ends judge a range by its smallest variant: a cinema seating 100
       // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
@@ -418,8 +439,10 @@ class CityMapView {
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
+    // A range sorts on the cap it can promise, the same bound the filter reads.
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
-      : fs.sort === 'deposit' ? r.bld.deposit : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
+      : fs.sort === 'cap' ? capMin(r.bld.cap) : fs.sort === 'deposit' ? r.bld.deposit
+      : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
     out.sort((a, b) => {
@@ -438,8 +461,8 @@ class CityMapView {
   }
   finderList(rows){
     const fs = this.fs, wh = fs.cat === 'warehouse';
-    const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["deposit","Upfront"]]
-                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["deposit","Upfront"]];
+    const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["cap","Cap"],["deposit","Upfront"]]
+                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["cap","Cap"],["deposit","Upfront"]];
     const head = `<div class="fhead">${cols.map(([key, label]) => key
       ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? (fs.dir > 0 ? 'on up' : 'on') : ''}">${label}</span>`
       : `<span>${label}</span>`).join('')}</div>`;
@@ -461,7 +484,7 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
@@ -476,7 +499,7 @@ class CityMapView {
     st.hidden = facts.hidden = fit.hidden = true;
     if(!b) return;
     st.hidden = facts.hidden = false;
-    st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'unavailable' ? 'na' : b.status}`;
+    st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'mine' ? 'mine' : b.status === 'vacant' ? 'vacant' : 'na'}`;
     st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
     facts.innerHTML = `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
@@ -484,8 +507,7 @@ class CityMapView {
       + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
       + `<span>Deposit<b>${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</b></span>`;
     // Only a candidate reads as one: your own shop keeps its business numbers.
-    const candidate = (this.fs.vac && b.status === 'vacant') || (this.fs.buy && b.status === 'rival');
-    if(!this.finderOn() || this.fs.sale || b.type !== this.fs.cat || !candidate) return;
+    if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);
     fit.hidden = false;
     fit.innerHTML = f.fit
@@ -525,22 +547,21 @@ class CityMapView {
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
     select.disabled = !options.length;
     select.closest('.fsel').classList.toggle('on', !!this.fs.type);
-    const counts = {vac:0, buy:0};
+    // A game service is occupied but never on offer, so it counts for nothing.
+    const counts = {rent:0, takeover:0};
     P.buildings.forEach(b => { if(b.type !== this.fs.cat) return;
-      if(b.status === 'vacant') counts.vac++; else if(b.status === 'rival') counts.buy++; });
-    this.root.querySelectorAll('.fchip.av').forEach(chip => {
-      chip.querySelector('b').textContent = counts[chip.dataset.av];
-      mark(chip, this.fs[chip.dataset.av]);
-    });
+      if(b.status === 'vacant') counts.rent++; else if(b.status === 'rival') counts.takeover++; });
     this.root.querySelectorAll('.fchip.hd').forEach(chip => mark(chip, this.hoodOn(chip.dataset.h)));
     this.root.querySelectorAll('.fchip.num').forEach(box => {
       const input = box.querySelector('input'), v = String(this.fs[input.dataset.f] || 0);
       if(input.value !== v && document.activeElement !== input) input.value = v;
       box.classList.toggle('on', +v > 0);
     });
-    const sale = this.root.querySelector('[data-f="sale"]');
-    mark(sale, this.fs.sale);
-    sale.querySelector('b').textContent = P.forSale.length;
+    this.root.querySelectorAll('.fchip.show').forEach(chip => {
+      const key = chip.dataset.show;
+      chip.querySelector('b').textContent = key === 'sale' ? P.forSale.length : counts[key];
+      mark(chip, this.fs.show === key);
+    });
   }
   /* Full screen takes the whole map box (stage and panel); the camera refits
      when the size changes, keeping the selection. */
@@ -753,7 +774,7 @@ class CityMapView {
   }
   /* The rows: whatever layers are on, added up and deduped, then searched. */
   rows(){
-    if(this.finderOn()) return this.fs.sale ? this.saleRows() : this.finderRows();
+    if(this.finderOn()) return this.saleView() ? this.saleRows() : this.finderRows();
     const seen = new Set(), rows = [];
     const add = r => { if(!seen.has(r.key)){ seen.add(r.key); rows.push(r); } };
     const site = b => ({key:b.key, address:b.address, hood:b.neighbourhood, business:b, region:this.assets.byKey.get(b.key)?.region, bounds:this.assets.byKey.get(b.key)?.bounds});
@@ -793,7 +814,7 @@ class CityMapView {
       // In finder mode the candidates are the only highlighted footprints.
       path.classList.toggle('cand', this.finderOn() && keys.has(key));
       // Amber marks a buy-out candidate; a building for sale is not one.
-      path.classList.toggle('buy', this.finderOn() && !this.fs.sale && keys.has(key) && this.sites.get(key)?.status === 'rival');
+      path.classList.toggle('buy', this.finderOn() && !this.saleView() && keys.has(key) && this.sites.get(key)?.status === 'rival');
       path.classList.toggle('dim', !keys.has(key) && key!==this.selected);
       path.classList.toggle('sel', key===this.selected);
       path.querySelector('title').textContent=[this.businesses.get(key)?.name,this.assets.byKey.get(key).address].filter(Boolean).join(' · ');
@@ -808,7 +829,7 @@ class CityMapView {
       if(this.finderOn()){
         const all = this.matches;
         const some = this.showAll ? all : all.slice(0, 80);
-        this.list.innerHTML = (this.fs.sale ? this.saleList(some) : this.finderList(some))
+        this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
           + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${all.length - some.length}</button>` : '')
           + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
         if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});

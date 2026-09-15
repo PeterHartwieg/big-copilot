@@ -67,7 +67,7 @@
 .stage.panel.finder .zoomer{right:472px}
 .citymap.narrow .stage.panel.finder .zoomer{right:16px}
 .citymap.finder:fullscreen .stage.panel .zoomer{right:488px}
-.fhead{display:grid;grid-template-columns:30px 26px 1fr 44px 44px 44px 58px;gap:0 6px;padding:10px 12px 8px 8px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
 .fhead span[data-s]:hover{color:var(--ink-2)}
@@ -76,10 +76,10 @@
 .fhead span.on::after{content:" ↓";color:var(--accent)}
 .fhead span.on.up::after{content:" ↑"}
 .fhead.sale{grid-template-columns:26px 1fr 66px 48px 76px}
-.place.fr{grid-template-columns:30px 26px 1fr 44px 44px 44px 58px;gap:0 6px}
-.place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:4px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
+.place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:3px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 /* Green is an empty floor to rent, amber a rival to buy out. */
-.place.fr .rk i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.place.fr .rk i{flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent)}
 .place.fr.buy .rk i{background:var(--warn)}
 /* A ranked row's second line is why it is where it is, so it never waits for a
    hover the way a plain map row's address does. */
@@ -99,7 +99,7 @@
 .site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
 .site .st[hidden],.site .facts[hidden],.site .fit[hidden]{display:none}
 .site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.site .st.rival i{background:var(--warn)}.site .st.na i{background:var(--rule)}
+.site .st.rival i{background:var(--warn)}.site .st.na i{background:var(--ink-3)}
 .site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
 .site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
 .site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
@@ -237,7 +237,7 @@ body.map-modal-open{overflow:hidden}
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
  .citymap.narrow .places,.citymap.narrow.finder .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
- .fhead,.place.fr{grid-template-columns:28px 24px 1fr 40px 40px 40px 52px}
+ .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip{height:32px}
@@ -254,8 +254,8 @@ body.map-modal-open{overflow:hidden}
    the reason the row is where it is. */
 @media(max-width:600px){
  .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px 56px}
- .fhead:not(.sale) span:nth-child(5),.fhead:not(.sale) span:nth-child(6),
- .place.fr:not(.sale) > :nth-child(5),.place.fr:not(.sale) > :nth-child(6){display:none}
+ .fhead:not(.sale) span:nth-child(n+5):nth-child(-n+7),
+ .place.fr:not(.sale) > :nth-child(n+5):nth-child(-n+7){display:none}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 44px 70px}
  .fhead.sale span:nth-child(3),.place.fr.sale > :nth-child(3){display:none}
 }
