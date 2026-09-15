@@ -388,11 +388,16 @@ details.help[open] summary::after{content:"\2013"}
     " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.",
 )
 
-# Everything the page fetches, in the order stamp() hashes it. Appending to
+# Everything the page fetches, in the order stamp() hashes it, followed by the
+# build inputs that decide what it fetches: build_web.py itself, and the wiki
+# generator that writes web/wiki-data.json. Those generators are hashed because
+# a change to one leaves the committed payload stale while every fetched file
+# still looks untouched, and --check would call the folder fresh. Appending to
 # this list changes the stamp, which is the point: a deploy busts caches.
 STAMP_INPUTS = (
     "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json",
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
+    "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
 )
 
 
@@ -445,10 +450,20 @@ def release_json(release: dict) -> str:
 
 
 def page_html(release: dict, root: str = HERE) -> str:
-    """web/index.html for one release: the same string the build writes."""
-    # The template carries the doctype, its own charset tag and the inline SVG
-    # favicon (so this door never asks for /favicon.ico either); a viewport tag
-    # is all the page adds, placed after them by render().
+    """web/index.html for one release: the same string the build writes.
+
+    root redirects the one file read here, web/update.js. It does not reach
+    render(): the board template, the footer changelog and the embedded
+    map.js, map.css, wiki.js and wiki.css all come from the web/ folder beside
+    the imported ba_dashboard.py, whatever root says. So a page built for
+    another root mixes that root's update.js and stamp with this checkout's
+    board. For check() that is the intent -- the shared board is the one under
+    review -- but it makes page_html unfit for rendering a foreign checkout.
+    """
+    # render() writes the doctype and the charset tag itself and places head
+    # straight after them. The template carries the inline SVG favicon, so this
+    # door never asks for /favicon.ico either; a viewport tag is all this page
+    # adds.
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
     if ANALYTICS_TOKEN:
         head += (
@@ -473,6 +488,16 @@ def check(root: str = HERE) -> list[str]:
     Writes nothing and never reads the installed game: the committed
     gametext.json and wiki-data.json feed the stamp as they stand. Line endings
     are ignored on both sides, so a CRLF checkout is not stale by itself.
+
+    root redirects everything read directly here: the three source files and
+    their copies under web/py/, every STAMP_INPUTS entry, web/changelog.json,
+    web/update.js, web/version.json and web/index.html. It does not redirect
+    what render() reads through the imported ba_dashboard -- the board
+    template, the footer changelog and the embedded map.js, map.css, wiki.js
+    and wiki.css come from this checkout's web/ folder. A check against another
+    root therefore compares that root's index.html with a page built from this
+    checkout's board, which is only meaningful when the two share it, as the
+    tests' temporary copies do.
     """
     stale = []
 
