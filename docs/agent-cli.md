@@ -61,12 +61,32 @@ The launcher therefore passes empty values as `--setting-sources=` and `--tools=
 and escapes every other value so the prompt and `--mcp-config` arrive intact. Keep
 that handling if you edit the argument list.
 
+That old encoder wraps a value in quotes only when it finds whitespace outside a
+quoted run, and it counts every `"` as a delimiter, including the `\"` that
+escaping produces. The launcher reproduces that rule, because a trailing backslash
+needs doubling inside the wrapping and must be left alone outside it: doubling
+unconditionally turns a prompt of `C:\repo\` into `C:\repo\\`. The rule was
+measured against 5.1, not assumed.
+
+One class of value cannot be encoded at all: if every space in it follows an odd
+number of double quotes, such as a prompt of exactly `"hello world"`, the encoder
+leaves the value unwrapped and the space splits it. No escaping repairs that,
+since the only way to change the encoder's quote tally is to emit another literal
+quote. The launcher stops with an explanatory error instead of passing a corrupted
+prompt. PowerShell 7.3 or later encodes these values correctly.
+
 Run the regression tests, which use fake `op` and `claude` commands and need no
 network and no secrets:
 
 ```powershell
 python -m unittest discover -s tests
 ```
+
+The tests repeat every case under each installed shell. **Only Windows PowerShell
+5.1 exists on Peter's machine, so the PowerShell 7.3+ path — where the launcher
+does no escaping at all because the shell passes arguments verbatim — is currently
+unexercised.** Installing PowerShell 7 would cover it without any change to the
+tests.
 
 The launcher obtains the key using `op read`. The nonsecret reference is resolved
 from `-SecretReference`, then `ZAI_API_KEY_REF`, then the `secretReference` property

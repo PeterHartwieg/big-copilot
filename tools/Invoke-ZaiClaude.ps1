@@ -41,11 +41,38 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
     $argumentPassing = Get-Variable -Name PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue
     $legacyArgumentPassing = (!$argumentPassing -or $argumentPassing -eq 'Legacy')
 }
+# Whether the legacy encoder wraps a value in quotes. Measured against 5.1 rather
+# than assumed: it counts every " as a delimiter, including the \" that escaping
+# produces, and wraps only when it finds whitespace outside such a run.
+function Test-NativeQuoteWrapping {
+    param([string]$Value)
+    $quotes = 0
+    foreach ($character in $Value.ToCharArray()) {
+        if ($character -eq '"') { $quotes++ }
+        elseif ([char]::IsWhiteSpace($character) -and ($quotes % 2) -eq 0) { return $true }
+    }
+    return $false
+}
 function ConvertTo-NativeArgument {
     param([string]$Value)
     if (!$legacyArgumentPassing -or !$Value) { return $Value }
     $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
-    return [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    if (Test-NativeQuoteWrapping $escaped) {
+        # Trailing backslashes only need doubling inside the wrapping, where they
+        # would otherwise escape the closing quote. Doubling them unconditionally
+        # would append a stray backslash to an unwrapped value such as C:\repo\.
+        return [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    }
+    if ($Value -match '\s') {
+        # Every space sits behind an odd number of quotes, so the encoder leaves the
+        # value unwrapped and the space splits it. No escaping can repair that: the
+        # only way to flip the encoder's quote tally is to emit another literal
+        # quote, which changes the value. Refuse rather than corrupt it silently.
+        throw ("PowerShell $($PSVersionTable.PSVersion) cannot pass this value: every space in " +
+            'it follows an odd number of double quotes, so the value would be split. ' +
+            'Rebalance or remove the quotes, or run the launcher under PowerShell 7.3 or later.')
+    }
+    return $escaped
 }
 
 $claudeCommand = Get-Command claude -ErrorAction Stop
