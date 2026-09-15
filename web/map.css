@@ -97,13 +97,23 @@
 .stage.finder .map-canvas .fp.mine{fill-opacity:.1;stroke-opacity:.45}
 .stage.finder .map-canvas .fp.dim.mine{fill-opacity:.06}
 .site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
-.site .st[hidden],.site .facts[hidden],.site .fit[hidden]{display:none}
+.site .st[hidden],.site .facts[hidden],.site .fit[hidden],.site .why[hidden]{display:none}
 .site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
 .site .st.rival i{background:var(--warn)}.site .st.na i{background:var(--ink-3)}
 .site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
 .site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
+/* Who owns the place and who trades from it are names, not figures: they take
+   the card's own type and the full width. */
+.site .facts .wide{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+.site .facts .wide b{float:none;font-family:inherit;text-align:right;min-width:0}
+.site .facts [data-tip]{cursor:help;border-bottom:1px dotted var(--rule)}
 .site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
 .site .fit b{color:var(--ink);font-weight:500}
+/* The board's ? badge is a circle; inside the card the same class is the
+   paragraph that explains the ranking. */
+.site .why{width:auto;height:auto;display:block;border:0;border-radius:0;cursor:default;overflow:visible;
+  margin:6px 0 0;padding-right:28px;font:400 11.5px/1.45 Archivo,"Helvetica Neue",Arial,sans-serif;
+  color:var(--ink-3);text-align:left}
 .site .nums .num b.sc{color:var(--accent)}
 /* Growth: the pin beside a cell's story opens the finder on that cell. */
 .celldetail .link.pin{display:inline-flex;align-items:center;gap:5px;margin-left:10px}

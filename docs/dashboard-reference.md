@@ -690,6 +690,25 @@ Status says whether you could take the place; `occupant` says who is in it. Any 
 with a business in it carries the occupant's business name and type, whatever its status,
 so the card for somebody else's flat still names the tenant while reading "unavailable".
 
+Each row also says who the landlord is: `owner` is "you" once you have bought the building
+outright, "rival" where a rival company owns it, and "city" otherwise. Rival companies have
+no names in the save — they appear only in event text, and buildings change hands — so they
+are numbered instead, in the order the save lists them, which holds for a character:
+`ownerRival` numbers the landlord, `occupantRival` the company running the business inside,
+and `premises.rivals` says how many there are, so a card can read "rival 3 of 19".
+
+`premises.rivalNames` puts a name to the numbers it can. The four story rivals — Huang Guo,
+Ingrid Schneider, Jessica Johnson and Thierry Laurent Moreau — keep the same ids in every
+save and are read from the message keys they have sent, with the four pairs also shipped
+for a save where none has written yet. Everybody else is named by their own opening
+announcement: a market event of type 0 carries the rival's name, the business's name and
+its address, and where the registration still standing there was created on that same day
+under that same name, its owner id is that rival. So an ordinary rival is named once it has
+opened a business since the save began, and not before; a name is kept only where every
+announcement for that id agrees, so a shop that has since closed and been replaced cannot
+rename its owner. The rest keep just their number. On a day-20 character that is typically
+eleven of nineteen.
+
 ### Estimated rent
 
 The save stores rent only for a building somebody already occupies, so a vacant one has

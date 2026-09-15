@@ -104,6 +104,8 @@ def reg(addr, **kw):
         # The game writes an empty owner for its own services and a rival's id
         # for a company somebody runs.
         "businessOwnerRivalId": "",
+        # The city owns every building no rival landlord has bought.
+        "buildingOwnerRivalId": "",
     }
     row.update(kw)
     return row
@@ -128,11 +130,28 @@ def paid(addr, amount, kind="ba:transaction_deposit"):
             "timestamp": {"Day": 3, "Hour": 8, "Minute": 30.0}}
 
 
+def opened(addr, day, business, rival, kind=0):
+    return {"type": kind, "startDay": day, "businessName": business,
+            "rivalName": rival,
+            "address": {"streetName": addr[0], "streetNumber": addr[1]}}
+
+
+def special(rival, *keys):
+    return {"rivalId": rival, "sentMessageKeys": {"$items": list(keys)}}
+
+
 def premises(registrations=(), for_sale=(), market=None, names=NAMES,
-             buildings=BUILDINGS, transactions=()):
+             buildings=BUILDINGS, transactions=(), rivals=(), owned=(),
+             specials=(), events=()):
     save = Save({"BuildingRegistrations": {"$items": list(registrations)},
                  "buildingsForSale": {"$items": list(for_sale)},
-                 "Transactions": {"$items": list(transactions)}}, {}, "")
+                 "Transactions": {"$items": list(transactions)},
+                 "rivalStates": {"$items": [{"rivalId": r} for r in rivals]},
+                 "specialRivalStates": {"$items": list(specials)},
+                 "marketEvents": {"$items": list(events)},
+                 "realEstate": {"$items": [
+                     {"address": {"streetName": a[0], "streetNumber": a[1]}}
+                     for a in owned]}}, {}, "")
     with patch("ba_dashboard.load_buildings", return_value=buildings):
         return _premises(save, names, market or {})
 
@@ -333,7 +352,8 @@ class StatusTests(unittest.TestCase):
             "key": "ba:street_secondavenue#2", "address": "2 Second Avenue",
             "hood": "Hell's Kitchen", "type": "retail", "size": "C", "m2": 225,
             "traffic": 50, "cap": 30, "rent": 264, "deposit": 16590,
-            "status": "vacant", "occupant": None,
+            "status": "vacant", "occupant": None, "owner": "city",
+            "ownerRival": None, "occupantRival": None,
         })
 
     def test_a_registration_the_table_does_not_place_is_dropped(self):
@@ -341,6 +361,139 @@ class StatusTests(unittest.TestCase):
                             reg(HK_SHOP, AvailableForRent=True)])
         self.assertEqual([b["key"] for b in payload["buildings"]],
                          ["ba:street_secondavenue#2"])
+
+
+class OwnerTests(unittest.TestCase):
+    RIVALS = ("rival-a", "rival-b", "rival-c")
+
+    def rows(self, registrations, owned=()):
+        payload = premises(registrations, rivals=self.RIVALS, owned=owned)
+        return payload, {b["key"]: b for b in payload["buildings"]}
+
+    def test_who_owns_the_building(self):
+        payload, rows = self.rows([
+            # Bought: the rent goes nowhere any more.
+            reg(HK_SHOP, RentedByPlayer=True, RentPerDay=264.0,
+                BusinessName="[HK] Costy", businessTypeName=SHOP),
+            # A rival landlord.
+            reg(MT_SHOP, AvailableForRent=True, buildingOwnerRivalId="rival-b"),
+            # Nobody has bought it, so the city still has it.
+            reg(LM_OFFICE, AvailableForRent=True),
+        ], owned=[HK_SHOP])
+        self.assertEqual(rows["ba:street_secondavenue#2"]["owner"], "you")
+        self.assertEqual(rows["ba:street_fifthavenue#8"]["owner"], "rival")
+        self.assertEqual(rows["ba:street_fifthavenue#12"]["owner"], "city")
+        self.assertEqual(payload["rivals"], 3)
+
+    def test_a_rival_keeps_the_same_number_on_every_row(self):
+        _, rows = self.rows([
+            reg(MT_SHOP, AvailableForRent=True, buildingOwnerRivalId="rival-c"),
+            reg(LM_OFFICE, AvailableForRent=True, buildingOwnerRivalId="rival-c"),
+            reg(CLOSED_SHOP, AvailableForRent=True, buildingOwnerRivalId="rival-a"),
+            # The landlord and the tenant are different companies here.
+            reg(HK_SHOP, BusinessName="Bodega", businessTypeName=SHOP,
+                buildingOwnerRivalId="rival-a", businessOwnerRivalId="rival-b"),
+        ])
+        self.assertEqual(rows["ba:street_fifthavenue#8"]["ownerRival"], 3)
+        self.assertEqual(rows["ba:street_fifthavenue#12"]["ownerRival"], 3)
+        self.assertEqual(rows["ba:street_fifthavenue#14"]["ownerRival"], 1)
+        self.assertEqual(rows["ba:street_secondavenue#2"]["ownerRival"], 1)
+        self.assertEqual(rows["ba:street_secondavenue#2"]["occupantRival"], 2)
+
+    def test_a_building_nobody_owns_is_numbered_nowhere(self):
+        _, rows = self.rows([
+            # The city's own service: no landlord and no company behind it.
+            reg(MT_SHOP, BusinessName="Big Wholesale", businessTypeName=SHOP),
+            # Bought by the player, so the landlord's number goes with it.
+            reg(HK_SHOP, AvailableForRent=True, buildingOwnerRivalId="rival-a"),
+        ], owned=[HK_SHOP])
+        self.assertEqual(rows["ba:street_fifthavenue#8"]["owner"], "city")
+        self.assertIsNone(rows["ba:street_fifthavenue#8"]["ownerRival"])
+        self.assertIsNone(rows["ba:street_fifthavenue#8"]["occupantRival"])
+        self.assertEqual(rows["ba:street_secondavenue#2"]["owner"], "you")
+        self.assertIsNone(rows["ba:street_secondavenue#2"]["ownerRival"])
+
+    def test_a_character_with_no_rivals_counts_none(self):
+        payload = premises([reg(HK_SHOP, AvailableForRent=True)])
+        self.assertEqual(payload["rivals"], 0)
+        self.assertIsNone(payload["buildings"][0]["ownerRival"])
+
+
+class RivalNameTests(unittest.TestCase):
+    HUANG = "yXNH9hTIv0KhI5OI8be0A=="
+    INGRID = "jTnQhoNwhkuGDTnL6K0Sxw=="
+    RIVALS = (HUANG, INGRID, "rival-c", "rival-d")
+
+    def names(self, **kw):
+        return premises(rivals=self.RIVALS, **kw)["rivalNames"]
+
+    def test_a_story_rival_is_named_by_the_messages_it_has_sent(self):
+        found = self.names(specials=[
+            special(self.HUANG, "rivals_huang_guo_entrance",
+                    "rivals_huang_guo_pricereduction"),
+            special(self.INGRID, "rivals_ingrid_schneider_activation"),
+        ])
+        self.assertEqual(found, {1: "Huang Guo", 2: "Ingrid Schneider"})
+
+    def test_a_story_rival_who_has_not_written_yet_is_still_named(self):
+        # The shipped pairs cover a save where no key has been sent.
+        self.assertEqual(self.names(specials=[special(self.HUANG)]), {1: "Huang Guo"})
+        # A three-part name survives the same parsing.
+        self.assertEqual(
+            premises(rivals=("ju1yVbREcE2B5ymg6q5tyA==",),
+                     specials=[special("ju1yVbREcE2B5ymg6q5tyA==",
+                                       "rivals_thierry_laurent_moreau_entrance")])["rivalNames"],
+            {1: "Thierry Laurent Moreau"})
+
+    def test_a_rival_is_named_by_its_own_opening_announcement(self):
+        found = self.names(
+            registrations=[reg(MT_SHOP, BusinessName="Bodega Rival",
+                               businessTypeName=SHOP, businessOwnerRivalId="rival-c",
+                               creationDay=6)],
+            events=[opened(MT_SHOP, 6, "Bodega Rival", "Amanda Mason")])
+        self.assertEqual(found, {3: "Amanda Mason"})
+
+    def test_an_announcement_for_a_business_that_has_since_gone_names_nobody(self):
+        # Same address and name, but the registration standing there today was
+        # created on another day, so it is not the business that opened.
+        self.assertEqual(self.names(
+            registrations=[reg(MT_SHOP, BusinessName="Bodega Rival",
+                               businessTypeName=SHOP, businessOwnerRivalId="rival-c",
+                               creationDay=9)],
+            events=[opened(MT_SHOP, 6, "Bodega Rival", "Amanda Mason")]), {})
+        # Nor does a different business name at the right address on the right day.
+        self.assertEqual(self.names(
+            registrations=[reg(MT_SHOP, BusinessName="Something Else",
+                               businessTypeName=SHOP, businessOwnerRivalId="rival-c",
+                               creationDay=6)],
+            events=[opened(MT_SHOP, 6, "Bodega Rival", "Amanda Mason")]), {})
+        # Nor does an event of another kind that happens to carry a name.
+        self.assertEqual(self.names(
+            registrations=[reg(MT_SHOP, BusinessName="Bodega Rival",
+                               businessTypeName=SHOP, businessOwnerRivalId="rival-c",
+                               creationDay=6)],
+            events=[opened(MT_SHOP, 6, "Bodega Rival", "Amanda Mason", kind=2)]), {})
+
+    def test_two_names_for_one_id_name_it_neither(self):
+        found = self.names(
+            registrations=[
+                reg(MT_SHOP, BusinessName="Bodega Rival", businessTypeName=SHOP,
+                    businessOwnerRivalId="rival-c", creationDay=6),
+                reg(LM_OFFICE, BusinessName="Second Office", businessTypeName=LAW,
+                    businessOwnerRivalId="rival-c", creationDay=8),
+                reg(CLOSED_SHOP, BusinessName="Third Shop", businessTypeName=SHOP,
+                    businessOwnerRivalId="rival-d", creationDay=9),
+            ],
+            events=[opened(MT_SHOP, 6, "Bodega Rival", "Amanda Mason"),
+                    opened(LM_OFFICE, 8, "Second Office", "Gerald Hall"),
+                    opened(CLOSED_SHOP, 9, "Third Shop", "Clint Bryant")])
+        # rival-c is claimed by two different names and so goes unnamed; the
+        # rival next to it is unaffected.
+        self.assertEqual(found, {4: "Clint Bryant"})
+
+    def test_a_rival_the_numbering_does_not_know_is_left_out(self):
+        self.assertEqual(premises(rivals=(), specials=[special(self.HUANG)])["rivalNames"], {})
+        self.assertEqual(premises()["rivalNames"], {})
 
 
 class ForSaleTests(unittest.TestCase):

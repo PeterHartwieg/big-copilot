@@ -703,6 +703,87 @@ def _deposit_check(save: Save, table: dict) -> dict:
     return {"deposits": paid_count, "worst": round(worst, 4)}
 
 
+def _rival_numbers(save: Save) -> dict:
+    """Each rival company's id as a stable 1-based number.
+
+    The save never writes a rival's name against a building. The names appear
+    only in event text, and addresses change hands, so there is no id-to-name
+    map to be had and the board does not invent one: it numbers the companies
+    in the order ``rivalStates`` lists them, which holds for a character, so
+    "rival 3" is the same company on every card and after every reload.
+    """
+    return {
+        state["rivalId"]: number
+        for number, state in enumerate(save.items(save.root.get("rivalStates")), 1)
+        if state.get("rivalId")
+    }
+
+
+# The four story rivals carry the same ids in every save. Their names are in
+# the message keys the game has sent, but a rival who has not written yet has
+# no key, so the pairs are kept here too.
+SPECIAL_RIVAL_NAMES = {
+    "yXNH9hTIv0KhI5OI8be0A==": "Huang Guo",
+    "jTnQhoNwhkuGDTnL6K0Sxw==": "Ingrid Schneider",
+    "HJFtA8Jq+kOZ6KHWfS8PQ==": "Jessica Johnson",
+    "ju1yVbREcE2B5ymg6q5tyA==": "Thierry Laurent Moreau",
+}
+# rivals_thierry_laurent_moreau_entrance -> thierry laurent moreau
+_RIVAL_MESSAGE_RE = re.compile(r"^rivals_(.+)_[a-z0-9]+$")
+OPENING_EVENT = 0  # "{rival} opened {business} at {address}"
+
+
+def _rival_names(save: Save, numbers: dict) -> dict:
+    """{rival number: name} for every rival company the save lets us name.
+
+    Two sources. The four story rivals are named by the message keys they have
+    sent. Everybody else is named by their own opening announcement: a market
+    event of type 0 carries the rival's name, the business's name and its
+    address, and the registration still standing at that address, opened on the
+    same day and under the same name, carries the owner's id. A name is kept
+    only where every announcement for that id agrees, so a business that has
+    since closed and been replaced cannot rename its owner.
+    """
+    found = {}
+    for state in save.items(save.root.get("specialRivalStates")):
+        rival = state.get("rivalId")
+        if not rival:
+            continue
+        for key in save.items(state.get("sentMessageKeys")):
+            match = _RIVAL_MESSAGE_RE.match(key or "")
+            if match:
+                found[rival] = match.group(1).replace("_", " ").title()
+                break
+        else:
+            found[rival] = SPECIAL_RIVAL_NAMES.get(rival)
+
+    registrations = {
+        (reg.get("StreetName"), reg.get("StreetNumber")): reg
+        for reg in save.items(save.root.get("BuildingRegistrations"))
+    }
+    claimed = collections.defaultdict(set)
+    for event in save.items(save.root.get("marketEvents")):
+        if event.get("type") != OPENING_EVENT or not event.get("rivalName"):
+            continue
+        reg = registrations.get(save.address(event.get("address")))
+        if not reg or not reg.get("businessOwnerRivalId"):
+            continue
+        if reg.get("creationDay") != event.get("startDay"):
+            continue
+        if reg.get("BusinessName") != event.get("businessName"):
+            continue
+        claimed[reg["businessOwnerRivalId"]].add(event["rivalName"])
+    for rival, names_seen in claimed.items():
+        if len(names_seen) == 1:
+            found.setdefault(rival, next(iter(names_seen)))
+
+    return {
+        numbers[rival]: name
+        for rival, name in found.items()
+        if name and rival in numbers
+    }
+
+
 def _premises_status(reg: dict, row: dict) -> str:
     """Whether the player could take this building today."""
     if reg.get("RentedByPlayer"):
@@ -762,6 +843,12 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
     """
     table = load_buildings()
     caps = _door_caps(names)
+    rivals = _rival_numbers(save)
+    bought = {
+        addr
+        for addr in (save.address(e.get("address")) for e in save.items(save.root.get("realEstate")))
+        if addr
+    }
     buildings, deviations = [], []
     for reg in save.items(save.root.get("BuildingRegistrations")):
         addr = (reg.get("StreetName"), reg.get("StreetNumber"))
@@ -780,6 +867,10 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "type": names.label(kind, ""),
                 "typeSlug": kind,
             }
+        # Who the rent goes to: you once you have bought the building, a rival
+        # landlord, or the city, which owns everything nobody else does.
+        landlord = reg.get("buildingOwnerRivalId")
+        owner = "you" if addr in bought else ("rival" if landlord else "city")
         buildings.append(
             {
                 "key": site_key(addr),
@@ -794,6 +885,9 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "deposit": _deposit_estimate(row, rent),
                 "status": status,
                 "occupant": occupant,
+                "owner": owner,
+                "ownerRival": rivals.get(landlord) if owner == "rival" else None,
+                "occupantRival": rivals.get(reg.get("businessOwnerRivalId")),
             }
         )
         # How far the formula is from what the player is actually billed today.
@@ -823,6 +917,10 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
 
     return {
         "buildings": buildings,
+        # How many companies the numbering runs over, so the page can say which
+        # of how many a card means, and the ones it can put a name to.
+        "rivals": len(rivals),
+        "rivalNames": _rival_names(save, rivals),
         "forSale": for_sale,
         "demand": _premises_demand(market),
         "rent": {

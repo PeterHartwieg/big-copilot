@@ -13,7 +13,7 @@ const geometry = JSON.parse(fs.readFileSync(path.join(root, 'web/maps/locations.
 const at = key => geometry.buildings.find(b => b.key === key);
 /* Two neighbourhoods with geometry, so a pick has a footprint to glide to. */
 const HK = ['ba:street_broadwaystreet#1', 'ba:street_broadwaystreet#2', 'ba:street_firstavenue#1', 'ba:street_firstavenue#10', 'ba:street_firstavenue#11', 'ba:street_firstavenue#12'];
-const MT = ['ba:street_broadwaystreet#10', 'ba:street_broadwaystreet#11', 'ba:street_broadwaystreet#13', 'ba:street_broadwaystreet#3', 'ba:street_broadwaystreet#4'];
+const MT = ['ba:street_broadwaystreet#10', 'ba:street_broadwaystreet#11', 'ba:street_broadwaystreet#13', 'ba:street_broadwaystreet#3', 'ba:street_broadwaystreet#4', 'ba:street_broadwaystreet#5'];
 const CLOTHES = 'ba:businesstype_clothingstore', COFFEE = 'ba:businesstype_coffeeshop', LAW = 'ba:businesstype_lawfirm';
 const CINEMA = 'ba:businesstype_cinema';
 /* A business name is the player's or a rival's own text, so one of them is markup. */
@@ -31,21 +31,26 @@ const site = (key, over) => {
    rival clothing store that only exists to be counted, a flat and an office. */
 const PREMISES = {
   buildings: [
-    site(HK[0], {traffic: 60, rent: 140}),                                    // score 46 on clothing 77
+    site(HK[0], {traffic: 60, rent: 140, owner: 'city'}),                                    // score 46 on clothing 77
     site(MT[0], {traffic: 50, m2: 285, cap: 40, rent: 300}),                  // score 45 on coffee 90
     site(MT[1], {traffic: 20, m2: 120, cap: 15, rent: 60}),                   // score 18
-    site(HK[1], {traffic: 80, rent: 180, status: 'rival',
+    site(HK[1], {traffic: 80, rent: 180, status: 'rival', owner: 'rival', ownerRival: 7, occupantRival: 3,
       occupant: {name: 'Bean There', type: 'Coffee Shop', typeSlug: COFFEE}}), // score 62 on clothing 77
-    site(HK[2], {status: 'rival', occupant: {name: HOSTILE, type: 'Clothing Store', typeSlug: CLOTHES}}),
+    // Company 9 has opened a business, so the save knows what it is called.
+    site(HK[2], {status: 'rival', owner: 'rival', ownerRival: 9, occupantRival: 9,
+      occupant: {name: HOSTILE, type: 'Clothing Store', typeSlug: CLOTHES}}),
     site(HK[3], {type: 'residential', size: 'B', m2: 90, cap: null, rent: null, status: 'unavailable'}),
     // A bank is occupied by the game itself: never to rent, never to take over.
-    site(MT[4], {traffic: 95, status: 'service',
+    site(MT[4], {traffic: 95, status: 'service', owner: 'city',
       occupant: {name: 'First City Bank', type: 'Bank', typeSlug: 'ba:businesstype_bank'}}),
     site(HK[4], {type: 'office', size: 'J', m2: 180, cap: 10, rent: 90, traffic: 45}), // score 27 on law 60
     // Two cinemas: a size letter whose auditoriums differ carries a range, and
     // Midtown has no cinema reading at all, so that row can never be scored.
     site(HK[5], {type: 'cinema', size: 'S', m2: 1200, cap: [100, 150], rent: 900, traffic: 64}),
     site(MT[3], {type: 'cinema', size: 'S', m2: 1200, cap: [100, 150], rent: null, traffic: 70}),
+    // One of yours, in a building you bought.
+    site(MT[5], {status: 'mine', owner: 'you',
+      occupant: {name: 'HART. Gym', type: 'Gym', typeSlug: 'ba:businesstype_gym'}}),
   ],
   forSale: [
     {key: MT[2], address: at(MT[2]).address, hood: 'Midtown', type: 'retail', size: 'M', m2: 1000, price: 4200000},
@@ -65,6 +70,8 @@ const PREMISES = {
       {slug: COFFEE, type: 'Coffee Shop', demand: 90, providers: 1, mine: false, category: 'retail'},
     ],
   },
+  rivals: 12,
+  rivalNames: {9: 'Amanda Mason'},
   rent: {constant: 30, rates: {}, officeFactor: 1.033, check: {leases: 3, worst: 0.003},
     deposit: {factors: {lease: 62.84, warehouse: 93.61}, check: {deposits: 6, worst: 0.004}}},
   caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S: [100, 150]}, theater: {R: [150, 200]}},
@@ -136,7 +143,8 @@ test('any address carries its facts: what it is, what it costs and whether it is
     await page.locator('#cityMapPage .site.in').waitFor();
     assert.equal(await page.locator('#cityMapPage .site .st').textContent(), 'Vacant · for rent');
     assert.deepEqual(await facts(page),
-      ['Retail C225 m²', 'Foot traffic60', 'Door cap30', 'Est. rent / day$140', 'Deposit$840']);
+      ['OwnerThe city', 'RenterNobody', 'Retail C225 m²', 'Foot traffic60', 'Door cap30',
+       'Est. rent / day$140', 'Deposit$840']);
     assert.equal(await page.locator('#cityMapPage .site .fit').isVisible(), false);
     // A rival's building names the business and its type.
     await page.evaluate(key => cityMapPage.select(key), HK[1]);
@@ -146,7 +154,8 @@ test('any address carries its facts: what it is, what it costs and whether it is
     await page.evaluate(key => cityMapPage.select(key), HK[3]);
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site .st').textContent === 'Residential');
     assert.deepEqual(await facts(page),
-      ['Residential B90 m²', 'Foot traffic50', 'Door cap—', 'Est. rent / day—', 'Deposit—']);
+      ['Owner—', 'RenterNobody', 'Residential B90 m²', 'Foot traffic50', 'Door cap—',
+       'Est. rent / day—', 'Deposit—']);
     // The card takes its two letters from the board's own table, not from the
     // neighbourhood's initials, so it reads the same as the list's rows.
     await page.evaluate(key => cityMapPage.select(key), MT[0]);
@@ -255,8 +264,12 @@ test('rows rank by score, and a header click re-sorts them', async () => {
     // The card in finder mode reads score, traffic and demand, and the rivals line.
     await pick(page, HK[0]);
     assert.deepEqual(await page.$$eval('#cityMapPage .site .num b', b => b.map(x => x.textContent)), ['46', '60', '77']);
-    assert.equal(await page.locator('#cityMapPage .site .fit').textContent(),
-      "Clothing Store · demand 77 · 1 rival in Hell's Kitchen");
+    assert.equal(await page.locator('#cityMapPage .site .fit').textContent(), "Clothing Store in Hell's Kitchen");
+    // Two sentences, both built from the payload: what the neighbourhood wants
+    // most of this category, what else it wants, and the arithmetic.
+    assert.equal(await page.locator('#cityMapPage .site .why').textContent(),
+      "Clothing Store is the strongest retail demand in Hell's Kitchen at 77, with 1 rival Clothing Store there;"
+      + " next: Coffee Shop 40. Score 46 = traffic 60 × demand 77 ÷ 100.");
     // With the panel open the card keeps clear of it.
     assert.equal(await page.evaluate(() => {
       const c = document.querySelector('#cityMapPage .site').getBoundingClientRect();
@@ -328,7 +341,7 @@ test('the take-over list is rival businesses, named by their occupant', async ()
     assert.match(await page.locator(`#cityMapPage .place[data-pick="${HK[1]}"]`).textContent(), /· 1 rival/);
     assert.match(await page.locator(`#cityMapPage .place[data-pick="${HK[2]}"]`).textContent(), /· 0 rivals/);
     await pick(page, HK[2]);
-    assert.match(await page.locator('#cityMapPage .site .fit').textContent(), /· 0 rivals in Hell's Kitchen/);
+    assert.match(await page.locator('#cityMapPage .site .why').textContent(), /with 0 rival Clothing Stores there/);
     assert.equal(await page.locator(`#cityMapPage .location.fp[data-location="${HK[1]}"]`).evaluate(p => p.classList.contains('buy')), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -697,6 +710,71 @@ test('the Cap column sits between Demand and Upfront and sorts on what it can pr
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
       ['100–150', '100–150']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the card says who owns the place and who trades from it', async () => {
+  const {page, errors} = await fixture();
+  const row = label => page.locator(`#cityMapPage .site .facts .wide`).filter({hasText: label});
+  try{
+    await openMap(page);
+    // A rival company the save has not named yet: the number, and why it is a number.
+    await page.evaluate(key => cityMapPage.select(key), HK[1]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts').textContent.includes('Owner'));
+    assert.equal(await row('Owner').textContent(), 'OwnerRival company 7');
+    assert.equal(await row('Renter').textContent(), 'RenterBean There · Coffee Shop (rival company 3)');
+    assert.match(await page.locator('#cityMapPage .site .facts [data-tip]').first().getAttribute('data-tip'),
+      /names a rival company once it has opened a business/);
+    // One it has named: the name, and no number to explain.
+    await page.evaluate(key => cityMapPage.select(key), HK[2]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts').textContent.includes('Amanda Mason'));
+    assert.equal(await row('Owner').textContent(), 'OwnerAmanda Mason');
+    assert.equal(await row('Renter').textContent(),
+      'Renter<img src=x onerror=window.__x=1> · Clothing Store (Amanda Mason)');
+    assert.equal(await page.locator('#cityMapPage .site .facts [data-tip]').count(), 0);
+    assert.equal(await page.locator('#cityMapPage .site img').count(), 0);
+    assert.equal(await page.evaluate(() => window.__x), undefined);
+    // The game's own, and your own.
+    await page.evaluate(key => cityMapPage.select(key), MT[4]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts').textContent.includes('First City Bank'));
+    assert.equal(await row('Owner').textContent(), 'OwnerThe city');
+    assert.equal(await row('Renter').textContent(), 'RenterFirst City Bank · Bank (game service)');
+    await page.evaluate(key => cityMapPage.select(key), MT[5]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts').textContent.includes('HART. Gym'));
+    assert.equal(await row('Owner').textContent(), 'OwnerYou');
+    assert.equal(await row('Renter').textContent(), 'RenterHART. Gym (you)');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a take-over row names the company behind the business when the save knows it', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage .fchip.show[data-show="takeover"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 2);
+    assert.match(await page.locator(`#cityMapPage .place[data-pick="${HK[2]}"] small`).textContent(),
+      /· Clothing Store · Amanda Mason ·/);
+    // The unnamed one keeps its business and type alone, with no number to read.
+    const unnamed = await page.locator(`#cityMapPage .place[data-pick="${HK[1]}"] small`).textContent();
+    assert.match(unnamed, /^Bean There · Coffee Shop ·/);
+    assert.doesNotMatch(unnamed, /rival company/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('choosing a type says where that type ranks in the neighbourhood', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-f="type"]').selectOption(COFFEE);
+    await pick(page, HK[0]);
+    assert.equal(await page.locator('#cityMapPage .site .fit').textContent(), "Coffee Shop in Hell's Kitchen");
+    // Coffee is the weaker of the two retail readings Hell's Kitchen carries.
+    assert.equal(await page.locator('#cityMapPage .site .why').textContent(),
+      "Coffee Shop demand in Hell's Kitchen is 40 (2 of 2 retail types here), with 1 rival Coffee Shop"
+      + " in the neighbourhood. Score 24 = traffic 60 × demand 40 ÷ 100.");
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

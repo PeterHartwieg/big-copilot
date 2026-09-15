@@ -134,6 +134,16 @@ const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "service" ? `Game service · ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   : b.status === "mine" ? "Yours"
   : b.type === "residential" ? "Residential" : "Not for rent";
+/* The save numbers rival companies and names only the ones that have opened a
+   business, so a card shows the name when it has one and the number when it
+   does not. The number is stable either way. */
+const RIVAL_TIP = "The save names a rival company once it has opened a business; until then only its number is stable.";
+const rivalName = n => n == null ? null : (premises()?.rivalNames || {})[n] || null;
+const rivalTag = (n, lead) => {
+  if(n == null) return lead;
+  const name = rivalName(n);
+  return name ? mapText(name) : `<span data-tip="${attr(RIVAL_TIP)}">${lead} ${n}</span>`;
+};
 const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
 /* The rent estimate is a fitted formula, so it says how it did against the
    leases the player is billed for today. */
@@ -238,7 +248,7 @@ class CityMapView {
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
       </div>
       ${this.panel ? this.finderControls() : ""}
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
@@ -409,14 +419,17 @@ class CityMapView {
   /* The type demand this row is scored on: the chosen type, or the strongest
      type of the category in that neighbourhood when "any type" is picked. */
   fitFor(b){
-    const none = {demand:null, fit:null, slug:null, score:null, rivals:null, mine:null};
+    const none = {demand:null, fit:null, slug:null, score:null, rivals:null, mine:null, list:[], rank:null};
     const P = premises(); if(!P || this.fs.cat === 'warehouse') return none;
-    const list = (P.demand[b.hood] || []).filter(d => d.category === this.fs.cat);
-    const d = this.fs.type ? list.find(x => x.slug === this.fs.type)
-      : list.reduce((best, x) => !best || x.demand > best.demand ? x : best, null);
+    // Strongest first. The sort is stable, so among equal readings the payload's
+    // own order still decides, exactly as picking the first maximum did.
+    const list = (P.demand[b.hood] || []).filter(d => d.category === this.fs.cat)
+      .slice().sort((x, y) => y.demand - x.demand);
+    const d = this.fs.type ? list.find(x => x.slug === this.fs.type) : list[0];
     if(!d) return none;
     return {demand:d.demand, fit:d.type, slug:d.slug, score:Math.round(b.traffic * d.demand / 100),
-      rivals:this.countHere(b.hood, d.slug, 'rival', b.key), mine:this.countHere(b.hood, d.slug, 'mine', b.key)};
+      rivals:this.countHere(b.hood, d.slug, 'rival', b.key), mine:this.countHere(b.hood, d.slug, 'mine', b.key),
+      list, rank:list.indexOf(d) + 1};
   }
   /* Rivals of a type in a neighbourhood. A buy-out row is one of them itself,
      and a building is not its own competition, so it never counts itself. */
@@ -491,7 +504,8 @@ class CityMapView {
     const lead = scale(r => wh ? r.bld.m2 : r.f.score), byTraffic = scale(r => r.bld.traffic), byDemand = scale(r => r.f.demand);
     return head + rows.map((r, i) => {
       const b = r.bld, f = r.f;
-      const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}`
+      const company = b.status === 'rival' ? rivalName(b.occupantRival) : null;
+      const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}${company ? ` · ${company}` : ''}`
         : f.fit && !fs.type ? `best fit: ${f.fit}` : `${b.m2.toLocaleString('en-US')} m² · cap ${capText(b.cap)}`;
       const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
       const numbers = wh
@@ -511,12 +525,14 @@ class CityMapView {
   paintFacts(key){
     const card = this.card, st = card.querySelector('.st'), facts = card.querySelector('.facts'), fit = card.querySelector('.fit');
     const b = this.sites?.get(key);
-    st.hidden = facts.hidden = fit.hidden = true;
+    st.hidden = facts.hidden = fit.hidden = card.querySelector('.why').hidden = true;
     if(!b) return;
     st.hidden = facts.hidden = false;
     st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'mine' ? 'mine' : b.status === 'vacant' ? 'vacant' : 'na'}`;
     st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
-    facts.innerHTML = `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
+    facts.innerHTML = `<span class="wide">Owner<b>${this.ownerOf(b)}</b></span>`
+      + `<span class="wide">Renter<b>${this.renterOf(b)}</b></span>`
+      + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
       + `<span>Door cap<b>${mapText(capText(b.cap))}</b></span>`
       + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
@@ -525,13 +541,40 @@ class CityMapView {
     if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);
     fit.hidden = false;
-    fit.innerHTML = f.fit
-      ? `<b>${mapText(f.fit)}</b> · demand ${f.demand} · ${plural(f.rivals, 'rival')}${f.mine ? ` · ${f.mine} of yours` : ''} in ${mapText(b.hood)}`
+    fit.innerHTML = f.fit ? `<b>${mapText(f.fit)}</b> in ${mapText(b.hood)}`
       : 'No demand reading for this category here.';
+    const why = card.querySelector('.why');
+    why.hidden = !f.fit;
+    if(f.fit) why.textContent = this.whyRanked(b, f);
     const num = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
     card.querySelector('.nums').innerHTML = f.score != null
       ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + num(f.demand, 'demand')
       : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
+  }
+  /* Who the building belongs to, and who trades from it. Both name the rival
+     company where the save knows its name. */
+  ownerOf(b){
+    return b.owner === 'you' ? 'You'
+      : b.owner === 'rival' ? rivalTag(b.ownerRival, 'Rival company')
+      : b.owner === 'city' ? 'The city' : '—';
+  }
+  renterOf(b){
+    const who = b.occupant, name = mapText(who?.name || 'unnamed'), kind = mapText(who?.type || 'business');
+    return b.status === 'mine' ? `${mapText(who?.name || 'Yours')} (you)`
+      : b.status === 'rival' ? `${name} · ${kind} (${rivalTag(b.occupantRival, 'rival company')})`
+      : b.status === 'service' ? `${name} · ${kind} (game service)`
+      : b.status === 'vacant' || b.status === 'unavailable' ? 'Nobody' : '—';
+  }
+  /* Why this row sits where it does, in sentences: what the neighbourhood wants
+     most of this category, what else it wants, and the arithmetic of the score. */
+  whyRanked(b, f){
+    const shops = n => plural(n, `rival ${f.fit}`, `rival ${f.fit}s`);
+    const mine = f.mine ? ` and ${f.mine} of your own` : '';
+    const first = this.fs.type
+      ? `${f.fit} demand in ${b.hood} is ${f.demand} (${f.rank} of ${plural(f.list.length, `${this.fs.cat} type`)} here), with ${shops(f.rivals)}${mine} in the neighbourhood.`
+      : `${f.fit} is the strongest ${this.fs.cat} demand in ${b.hood} at ${f.demand}, with ${shops(f.rivals)}${mine} there${
+          f.list.length > 1 ? `; next: ${f.list.slice(1, 3).map(d => `${d.type} ${d.demand}`).join(', ')}` : ''}.`;
+    return `${first} Score ${f.score} = traffic ${b.traffic} × demand ${f.demand} ÷ 100.`;
   }
   finderOn(){ return !!(this.panel && premises() && this.fs.on); }
   /* Chips, select and inputs read back from the state, so a preset from Today
