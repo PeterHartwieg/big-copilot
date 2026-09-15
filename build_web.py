@@ -1,15 +1,20 @@
 """Assemble the in-browser board under web/.
 
     python build_web.py
+    python build_web.py --check
 
 Writes web/index.html from the same template the local server uses, with the
 landing screen above the board and the worker data source wired in ahead of
 the board's script, and copies the two Python files into web/py/ for the
 worker to fetch. web/app.js and web/worker.js are kept by hand. Nothing else
 is needed: the folder is a static site.
+
+--check writes nothing and needs no installed game: it reports the files under
+web/ that no longer match the sources, so a review catches a forgotten rebuild.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -383,18 +388,37 @@ details.help[open] summary::after{content:"\2013"}
     " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.",
 )
 
-def stamp() -> str:
-    """A short hash of everything the page fetches, so a deploy busts caches."""
+# Everything the page fetches, in the order stamp() hashes it. Appending to
+# this list changes the stamp, which is the point: a deploy busts caches.
+STAMP_INPUTS = (
+    "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json",
+    "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
+)
+
+
+def stamp(root: str = HERE) -> str:
+    """A short hash of everything the page fetches, so a deploy busts caches.
+
+    Text is hashed with LF line endings, so a CRLF checkout on Windows and an
+    LF one on Linux stamp the same commit alike. The map background is marked
+    -text in .gitattributes and travels byte for byte, so it is hashed raw.
+    """
     import hashlib
 
     h = hashlib.md5()
-    for name in ("build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json"):
-        with open(os.path.join(HERE, name), "rb") as fh:
-            h.update(fh.read())
-    for name in ("web/wiki.js", "web/wiki.css", "web/wiki-data.json"):
-        with open(os.path.join(HERE, name), "rb") as fh:
-            h.update(fh.read())
+    for name in STAMP_INPUTS:
+        with open(os.path.join(root, name), "rb") as fh:
+            data = fh.read()
+        if not name.endswith(".svg"):
+            data = data.replace(b"\r\n", b"\n")
+        h.update(data)
     return h.hexdigest()[:10]
+
+
+def read_text(path: str) -> str:
+    """One file's text with \\r\\n turned into \\n, so line endings never differ."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        return fh.read().replace("\r\n", "\n")
 
 
 # app.js is fetched with the build stamp, and hands the same stamp to the
@@ -406,6 +430,68 @@ BEFORE_SCRIPT = (
     + '<script src="app.js?v=__STAMP__"></script>' + chr(10)
     + '<script src="community.js?v=__STAMP__"></script>' + chr(10)
 )
+
+
+def release_info(root: str = HERE) -> dict:
+    """The build stamp and the newest changelog entry the page ships with."""
+    with open(os.path.join(root, "web", "changelog.json"), encoding="utf-8") as fh:
+        changes = json.load(fh)
+    return {"version": stamp(root), "latest": max(changes, key=lambda entry: (entry["date"], entry["pr"]), default=None)}
+
+
+def release_json(release: dict) -> str:
+    """One release as the page and web/version.json both carry it."""
+    return json.dumps(release, ensure_ascii=False, separators=(",", ":"))
+
+
+def page_html(release: dict, root: str = HERE) -> str:
+    """web/index.html for one release: the same string the build writes."""
+    # The template carries the doctype, its own charset tag and the inline SVG
+    # favicon (so this door never asks for /favicon.ico either); a viewport tag
+    # is all the page adds, placed after them by render().
+    head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
+    if ANALYTICS_TOKEN:
+        head += (
+            "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
+            + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
+        )
+    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
+    with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
+        update_script = fh.read()
+    scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
+        "__RELEASE__", release_json(release).replace("<", "\\u003c")
+    ).replace("__UPDATE_SCRIPT__", update_script)
+    return render(
+        None, live=True, banner=BANNER, before_script=scripts,
+        head=head,
+    )
+
+
+def check(root: str = HERE) -> list[str]:
+    """The paths under web/ that no longer match the sources, forward-slashed.
+
+    Writes nothing and never reads the installed game: the committed
+    gametext.json and wiki-data.json feed the stamp as they stand. Line endings
+    are ignored on both sides, so a CRLF checkout is not stale by itself.
+    """
+    stale = []
+
+    def differs(path: str, expected: str) -> bool:
+        try:
+            return read_text(os.path.join(root, path)) != expected.replace("\r\n", "\n")
+        except FileNotFoundError:
+            return True
+
+    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json"):
+        copied = "web/py/" + name
+        if differs(copied, read_text(os.path.join(root, name))):
+            stale.append(copied)
+    release = release_info(root)
+    if differs("web/version.json", release_json(release) + "\n"):
+        stale.append("web/version.json")
+    if differs("web/index.html", page_html(release, root)):
+        stale.append("web/index.html")
+    return stale
 
 
 def main() -> None:
@@ -427,36 +513,30 @@ def main() -> None:
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     print(f"gametext.json: {len(text)} entries")
-    # The template carries the doctype, its own charset tag and the inline SVG
-    # favicon (so this door never asks for /favicon.ico either); a viewport tag
-    # is all the page adds, placed after them by render().
-    head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
-    if ANALYTICS_TOKEN:
-        head += (
-            "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
-            + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
-        )
-    with open(os.path.join(WEB, "changelog.json"), encoding="utf-8") as fh:
-        changes = json.load(fh)
-    release = {"version": stamp(), "latest": max(changes, key=lambda entry: (entry["date"], entry["pr"]), default=None)}
-    release_json = json.dumps(release, ensure_ascii=False, separators=(",", ":"))
-    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
-    with open(os.path.join(WEB, "update.js"), encoding="utf-8") as fh:
-        update_script = fh.read()
-    scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
-        "__RELEASE__", release_json.replace("<", "\\u003c")
-    ).replace("__UPDATE_SCRIPT__", update_script)
-    page = render(
-        None, live=True, banner=BANNER, before_script=scripts,
-        head=head,
-    )
+    # Everything the stamp reads is now in place, so the page and version.json
+    # describe the folder as it stands.
+    release = release_info()
+    page = page_html(release)
     out = os.path.join(WEB, "index.html")
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
     with open(os.path.join(WEB, "version.json"), "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(release_json + "\n")
+        fh.write(release_json(release) + "\n")
     print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Assemble the in-browser board under web/.")
+    parser.add_argument(
+        "--check", action="store_true",
+        help="report the files under web/ that no longer match the sources; write nothing",
+    )
+    if parser.parse_args().check:
+        stale = check()
+        for path in stale:
+            print(f"stale: {path} (run python build_web.py)")
+        if stale:
+            raise SystemExit(1)
+        print("web/ is up to date")
+    else:
+        main()
