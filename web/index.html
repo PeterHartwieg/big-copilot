@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c8ac3b14fd">
+<link rel="stylesheet" href="community.css?v=3716f76a7a">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1914,8 +1914,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c8ac3b14fd";</script>
-<script>window.LEDGER_RELEASE = {"version":"c8ac3b14fd","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
+<script>window.LEDGER_BUILD = "3716f76a7a";</script>
+<script>window.LEDGER_RELEASE = {"version":"3716f76a7a","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1984,8 +1984,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=c8ac3b14fd"></script>
-<script src="community.js?v=c8ac3b14fd"></script>
+<script src="app.js?v=3716f76a7a"></script>
+<script src="community.js?v=3716f76a7a"></script>
 
 <script>
 
@@ -4879,16 +4879,10 @@ const FINDER_SHOWS = [
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
   hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
-/* Buildings run past a billion on a mature save, where the board's compact form
-   would say "$5584.2M". An asking price gets its own scale. */
-const askingPrice = n => n == null ? "—"
-  : n >= 1e9 ? `$${(n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}bn` : money(n);
-const finderStatus = (b, price) => b.status === "vacant" ? "Vacant · for rent"
+const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   // A bank or a wholesaler is the game's own: occupied, but never for sale.
   : b.status === "service" ? `Game service · ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
-  // An empty building nobody owns is sold, not let: the price is what it costs.
-  : b.status === "forsale" ? `For sale${price != null ? ` · ${askingPrice(price)}` : ""}`
   : b.status === "mine" ? "Yours"
   : b.type === "residential" ? "Residential" : "Not for rent";
 const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
@@ -5261,7 +5255,7 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${mapText(s.hood)}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${mapText(s.hood)}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(money(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -5272,7 +5266,7 @@ class CityMapView {
     if(!b) return;
     st.hidden = facts.hidden = false;
     st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'mine' ? 'mine' : b.status === 'vacant' ? 'vacant' : 'na'}`;
-    st.innerHTML = `<i></i>${mapText(finderStatus(b, this.prices?.get(key)))}`;
+    st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
     facts.innerHTML = `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
       + `<span>Door cap<b>${mapText(capText(b.cap))}</b></span>`
@@ -5573,7 +5567,6 @@ class CityMapView {
     this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
     this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
     this.sites = new Map((premises()?.buildings || []).map(b => [b.key, b]));
-    this.prices = new Map((premises()?.forSale || []).map(s => [s.key, s.price]));
     this.counts = null;
     this.loadFinder(); this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};

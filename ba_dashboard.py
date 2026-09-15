@@ -703,18 +703,8 @@ def _deposit_check(save: Save, table: dict) -> dict:
     return {"deposits": paid_count, "worst": round(worst, 4)}
 
 
-def _premises_status(reg: dict, row: dict, for_sale: set) -> str:
-    """Whether the player could take this building today.
-
-    ``AvailableForRent`` on an empty building means listed, not rentable. Who
-    owns the building decides which list it is on, and across every readable
-    save an empty retail or office building is one of exactly two cases: a
-    landlord owns it and it is not for sale, so it can be rented; or nobody
-    owns it and it is in ``buildingsForSale``, so it can only be bought. The
-    two agree everywhere, ownership being the reason and the for-sale listing
-    the consequence, so the owner is read first and the listing decides only
-    the leftovers. That is how The Hamptons has empty units and none to rent.
-    """
+def _premises_status(reg: dict, row: dict) -> str:
+    """Whether the player could take this building today."""
     if reg.get("RentedByPlayer"):
         return "mine"
     kind = reg.get("businessTypeName")
@@ -724,13 +714,11 @@ def _premises_status(reg: dict, row: dict, for_sale: set) -> str:
     # Somebody else's flat is nobody's business either way.
     if kind and kind != EMPTY_TYPE and row.get("t") != "residential":
         return "rival" if reg.get("businessOwnerRivalId") else "service"
-    if row.get("t") in UNRENTABLE_BUILDINGS or not reg.get("AvailableForRent"):
+    if row.get("t") in UNRENTABLE_BUILDINGS:
         return "unavailable"
-    if reg.get("buildingOwnerRivalId"):
-        return "vacant"  # a landlord to sign with
-    # Nobody owns it, so there is no lease to be had. One warehouse across the
-    # saves is listed, unowned and not for sale either; it is neither.
-    return "forsale" if (reg["StreetName"], reg["StreetNumber"]) in for_sale else "unavailable"
+    # Vacancy is exact: every empty retail, office, cinema and theater building
+    # says so itself. Nothing else is ever read as vacant.
+    return "vacant" if reg.get("AvailableForRent") else "unavailable"
 
 
 def _premises_demand(market: dict) -> dict:
@@ -774,27 +762,6 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
     """
     table = load_buildings()
     caps = _door_caps(names)
-
-    for_sale, listed = [], set()
-    for entry in save.items(save.root.get("buildingsForSale")):
-        addr = save.address(entry.get("address"))
-        row = table.get(addr) if addr else None
-        if not row:
-            continue
-        listed.add(addr)
-        for_sale.append(
-            {
-                "key": site_key(addr),
-                "address": f"{addr[1]} {names.street(addr[0])}",
-                "hood": row["h"],
-                "type": row["t"],
-                "size": row["z"],
-                "m2": row["m"],
-                "price": int(round(entry.get("buildingPrice") or 0)),
-            }
-        )
-    for_sale.sort(key=lambda b: b["key"])
-
     buildings, deviations = [], []
     for reg in save.items(save.root.get("BuildingRegistrations")):
         addr = (reg.get("StreetName"), reg.get("StreetNumber"))
@@ -802,7 +769,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
         if not row:
             continue
         rent = _rent_estimate(row)
-        status = _premises_status(reg, row, listed)
+        status = _premises_status(reg, row)
         kind = reg.get("businessTypeName")
         occupant = None
         # Somebody else's flat is still "unavailable", but the card says who is
@@ -834,6 +801,25 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
         if reg.get("RentedByPlayer") and rent and paid > 0:
             deviations.append(abs(rent - paid) / paid)
     buildings.sort(key=lambda b: b["key"])
+
+    for_sale = []
+    for entry in save.items(save.root.get("buildingsForSale")):
+        addr = save.address(entry.get("address"))
+        row = table.get(addr) if addr else None
+        if not row:
+            continue
+        for_sale.append(
+            {
+                "key": site_key(addr),
+                "address": f"{addr[1]} {names.street(addr[0])}",
+                "hood": row["h"],
+                "type": row["t"],
+                "size": row["z"],
+                "m2": row["m"],
+                "price": int(round(entry.get("buildingPrice") or 0)),
+            }
+        )
+    for_sale.sort(key=lambda b: b["key"])
 
     return {
         "buildings": buildings,

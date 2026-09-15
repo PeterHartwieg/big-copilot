@@ -104,9 +104,6 @@ def reg(addr, **kw):
         # The game writes an empty owner for its own services and a rival's id
         # for a company somebody runs.
         "businessOwnerRivalId": "",
-        # A landlord owns a building you can rent; nobody owns one that is only
-        # for sale.
-        "buildingOwnerRivalId": "landlord-1",
     }
     row.update(kw)
     return row
@@ -288,37 +285,6 @@ class StatusTests(unittest.TestCase):
         # Somebody else's flat never becomes a candidate, whatever it says.
         self.assertEqual(rows["ba:street_fifthavenue#72"]["status"], "unavailable")
         self.assertEqual(rows["ba:street_fifthavenue#99"]["status"], "service")
-
-    def test_a_listed_building_is_to_rent_or_to_buy_by_who_owns_it(self):
-        # Both are empty and both say AvailableForRent. The landlord's building
-        # can be signed for; the unowned one is only on the market.
-        payload = premises(
-            [reg(HK_SHOP, AvailableForRent=True),
-             reg(MT_SHOP, AvailableForRent=True, buildingOwnerRivalId=""),
-             # Listed, unowned, and not for sale either: neither, as one
-             # warehouse across the saves really is.
-             reg(CLOSED_SHOP, AvailableForRent=True, buildingOwnerRivalId="")],
-            for_sale=[sale(MT_SHOP, 4_250_000.0, 1000)],
-        )
-        rows = {b["key"]: b for b in payload["buildings"]}
-        self.assertEqual(rows["ba:street_secondavenue#2"]["status"], "vacant")
-        self.assertEqual(rows["ba:street_fifthavenue#8"]["status"], "forsale")
-        self.assertIsNone(rows["ba:street_fifthavenue#8"]["occupant"])
-        self.assertEqual(rows["ba:street_fifthavenue#14"]["status"], "unavailable")
-        # The row stays lean: the asking price lives in forSale, joined by key.
-        self.assertNotIn("price", rows["ba:street_fifthavenue#8"])
-        self.assertEqual([r["key"] for r in payload["forSale"]], ["ba:street_fifthavenue#8"])
-
-    def test_a_flat_on_the_market_is_still_not_a_candidate(self):
-        payload = premises(
-            [reg(FLAT, AvailableForRent=True, buildingOwnerRivalId=""),
-             # Even with a landlord, a home is never a candidate.
-             reg(PIER, AvailableForRent=True)],
-            for_sale=[sale(FLAT, 79_850_000.0, 54)],
-        )
-        rows = {b["key"]: b for b in payload["buildings"]}
-        self.assertEqual(rows["ba:street_fifthavenue#72"]["status"], "unavailable")
-        self.assertEqual(rows["ba:street_fifthavenue#99"]["status"], "unavailable")
 
     def test_a_business_with_no_owner_is_the_citys_own_service(self):
         rows = self.rows([

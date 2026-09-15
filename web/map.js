@@ -124,16 +124,10 @@ const FINDER_SHOWS = [
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
   hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
-/* Buildings run past a billion on a mature save, where the board's compact form
-   would say "$5584.2M". An asking price gets its own scale. */
-const askingPrice = n => n == null ? "—"
-  : n >= 1e9 ? `$${(n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}bn` : money(n);
-const finderStatus = (b, price) => b.status === "vacant" ? "Vacant · for rent"
+const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   // A bank or a wholesaler is the game's own: occupied, but never for sale.
   : b.status === "service" ? `Game service · ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
-  // An empty building nobody owns is sold, not let: the price is what it costs.
-  : b.status === "forsale" ? `For sale${price != null ? ` · ${askingPrice(price)}` : ""}`
   : b.status === "mine" ? "Yours"
   : b.type === "residential" ? "Residential" : "Not for rent";
 const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
@@ -506,7 +500,7 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${mapText(s.hood)}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${mapText(s.hood)}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(money(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -517,7 +511,7 @@ class CityMapView {
     if(!b) return;
     st.hidden = facts.hidden = false;
     st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'mine' ? 'mine' : b.status === 'vacant' ? 'vacant' : 'na'}`;
-    st.innerHTML = `<i></i>${mapText(finderStatus(b, this.prices?.get(key)))}`;
+    st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
     facts.innerHTML = `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
       + `<span>Door cap<b>${mapText(capText(b.cap))}</b></span>`
@@ -818,7 +812,6 @@ class CityMapView {
     this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
     this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
     this.sites = new Map((premises()?.buildings || []).map(b => [b.key, b]));
-    this.prices = new Map((premises()?.forSale || []).map(s => [s.key, s.price]));
     this.counts = null;
     this.loadFinder(); this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};

@@ -46,13 +46,9 @@ const PREMISES = {
     // Midtown has no cinema reading at all, so that row can never be scored.
     site(HK[5], {type: 'cinema', size: 'S', m2: 1200, cap: [100, 150], rent: 900, traffic: 64}),
     site(MT[3], {type: 'cinema', size: 'S', m2: 1200, cap: [100, 150], rent: null, traffic: 70}),
-    // Empty, but nobody owns it: the game sells this one rather than letting it.
-    site(MT[2], {traffic: 85, m2: 1000, cap: 75, rent: 400, status: 'forsale'}),
   ],
   forSale: [
     {key: MT[2], address: at(MT[2]).address, hood: 'Midtown', type: 'retail', size: 'M', m2: 1000, price: 4200000},
-    // A tower on a mature save runs past a billion.
-    {key: MT[3], address: at(MT[3]).address, hood: 'Midtown', type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
     {key: HK[0], address: at(HK[0]).address, hood: "Hell's Kitchen", type: 'retail', size: 'C', m2: 225, price: 750000},
   ],
   demand: {
@@ -353,16 +349,13 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     await openMap(page); await turnOn(page);
     await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
     await page.locator('#cityMapPage .place.fr.sale').first().waitFor();
-    assert.deepEqual(await rowKeys(page), [HK[0], MT[2], MT[3]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[2]]);
     assert.equal(await page.locator('#cityMapPage .fhead.sale').count(), 1);
     assert.equal(await page.locator('#cityMapPage .place.fr.sale .v.sc').count(), 0);  // never scored
     assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').count(), 0);   // one order, no sort arrow
-    // A price past a billion says so rather than counting in thousands of millions.
-    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :last-child', v => v.map(x => x.textContent)),
-      ['$750k', '$4.20M', '$5.58bn']);
     // A listing lights its own footprint, green rather than buy-out amber, and
     // clicking either one opens its card.
-    assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 3);
+    assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 2);
     assert.equal(await page.locator('#cityMapPage .location.fp.buy').count(), 0);
     await pick(page, MT[2]);
     assert.equal(await page.locator('#cityMapPage .site h3').textContent(), at(MT[2]).address);
@@ -625,7 +618,7 @@ test('the Show row is one choice, and picking one drops the others', async () =>
   try{
     await openMap(page); await turnOn(page);
     assert.deepEqual(await page.$$eval('#cityMapPage .fchip.show', c => c.map(x => x.textContent)),
-      ['To rent3', 'To take over2', 'For sale3']);
+      ['To rent3', 'To take over2', 'For sale2']);
     assert.equal(await chosen().count(), 1);
     assert.match(await chosen().textContent(), /^To rent/);
     await page.locator('#cityMapPage .fchip.show[data-show="takeover"]').click();
@@ -699,41 +692,6 @@ test('the Cap column sits between Demand and Upfront and sorts on what it can pr
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
       ['100–150', '100–150']);
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
-});
-
-test('an empty building nobody owns is sold, not let', async () => {
-  const {page, errors} = await fixture();
-  try{
-    await openMap(page); await turnOn(page);
-    // It out-traffics every vacancy and still never joins the list to rent.
-    assert.equal((await rowKeys(page)).includes(MT[2]), false);
-    assert.equal(await page.locator('#cityMapPage .fchip.show[data-show="rent"] b').textContent(), '3');
-    assert.equal(await page.locator(`#cityMapPage .location.fp[data-location="${MT[2]}"]`)
-      .evaluate(p => p.classList.contains('cand')), false);
-    // It is on the for-sale list, where it belongs.
-    await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
-    await page.locator('#cityMapPage .place.fr.sale').first().waitFor();
-    assert.equal((await rowKeys(page)).includes(MT[2]), true);
-    // Its card says what it would cost to buy, in the grey of a place you
-    // cannot simply rent.
-    await page.evaluate(key => cityMapPage.select(key), MT[2]);
-    await page.locator('#cityMapPage .site.in').waitFor();
-    assert.equal(await page.locator('#cityMapPage .site .st').textContent(), 'For sale · $4.20M');
-    assert.equal(await page.locator('#cityMapPage .site .st').evaluate(s => s.className), 'st na');
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
-});
-
-test('a for-sale building the sale list cannot price still says what it is', async () => {
-  const bare = {...PREMISES, forSale: PREMISES.forSale.filter(s => s.key !== MT[2])};
-  const {page, errors} = await fixture(null, {premises: bare});
-  try{
-    await openMap(page);
-    await page.evaluate(key => cityMapPage.select(key), MT[2]);
-    await page.locator('#cityMapPage .site.in').waitFor();
-    assert.equal(await page.locator('#cityMapPage .site .st').textContent(), 'For sale');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
