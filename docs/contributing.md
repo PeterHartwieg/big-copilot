@@ -40,6 +40,8 @@ Before sending a change, run `python check_saves.py` over your own save folder. 
 and extracts every save it finds and prints a table, which catches a parse that succeeds
 while producing plausible wrong figures. If you touched `ba_save.py` or `ba_dashboard.py`,
 run `python build_web.py` so the browser copies match.
+`python build_web.py --check` confirms that `web/` matches the sources without needing
+the installed game; `tests/test_web_fresh.py` runs the same check.
 
 Run `python -m unittest discover -s tests` for the portable planner regressions.
 These require Node.js for the embedded JavaScript checks and do not need a save file.
@@ -68,12 +70,15 @@ why both the shared layout and the displayed content need regression coverage.
 
 ## Changelog
 
-For every merged PR, add one entry to `web/changelog.json` with its PR number,
-merge date (`YYYY-MM-DD`), a short title and a plain-language summary of what
-changed for the player. Include fixes and documentation changes; omit review
-process details. Run `python build_web.py` to include the entry in the footer
-changelog on both the landing screen and the dashboard. Entries appear newest
-first and link to their PR; reading them does not require GitHub access.
+Add an entry to `web/changelog.json` only for a new feature or a new
+user-facing capability. A change that adds neither gets no entry and is not
+announced to players: refactors, tooling, tests, documentation, build changes
+and internal fixes all stay out of the changelog. An entry carries its PR
+number, merge date (`YYYY-MM-DD`), a short title and a plain-language summary
+of what changed for the player. Run `python build_web.py` afterwards to include
+the entry in the footer changelog on both the landing screen and the dashboard.
+Entries appear newest first and link to their PR; reading them does not require
+GitHub access.
 
 ## Deployment baseline
 
