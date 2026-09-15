@@ -1,8 +1,7 @@
-# Project instructions
+@AGENTS.md
 
-Read [AGENTS.md](AGENTS.md) for shared project instructions and
-[docs/agent-cli.md](docs/agent-cli.md) when the user requests CLI delegation.
+## Claude Code
 
-Follow the exact model and file ownership assigned by the coordinator. Never
-access API keys directly: GLM's launcher handles 1Password credentials. Do not
-launch additional agents unless explicitly authorized in your task.
+- Use the exact model and file ownership the coordinator assigns.
+- The GLM launcher handles 1Password credentials; keep API keys out of prompts, files and logs.
+- Launch additional agents only when your task explicitly authorizes it.
