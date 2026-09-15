@@ -89,8 +89,11 @@ function mapAddressKey(label){
   return `ba:street_${street.replace(/^(21st|22nd|23rd|24th|25th|26th)/, s => normalized[s])}#${+found[1]}`;
 }
 function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || mapAddressKey(label),label)}`; }
-/* A place with no business still gets a tag: the neighbourhood's initials. */
-const hoodCode = (b, hood) => b?.code || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+/* One source for a neighbourhood's two letters: a business carries its own,
+   anything else takes the board's table, and only a place the table does not
+   name falls back to initials. The card and the list read the same tag. */
+const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood])
+  || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 const PANEL_W = 316;   // the floating places panel plus its margin
 const FINDER_PANEL_W = 456; // the ranked table needs the wider panel
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
@@ -112,7 +115,7 @@ const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` 
    both ends of the filter read a range by its lower bound: a cinema seating
    100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
-const hoodTag = hood => (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood]) || hoodCode(null, hood);
+const hoodTag = hood => hoodCode(null, hood);
 /* What the list is a list of. One of the three is always chosen: premises to
    rent, rival businesses to take over, or whole buildings on sale. */
 const FINDER_SHOWS = [

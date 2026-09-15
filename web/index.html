@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=299a0a3b8e">
+<link rel="stylesheet" href="community.css?v=4edd51fbfd">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1914,8 +1914,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "299a0a3b8e";</script>
-<script>window.LEDGER_RELEASE = {"version":"299a0a3b8e","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
+<script>window.LEDGER_BUILD = "4edd51fbfd";</script>
+<script>window.LEDGER_RELEASE = {"version":"4edd51fbfd","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1984,8 +1984,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=299a0a3b8e"></script>
-<script src="community.js?v=299a0a3b8e"></script>
+<script src="app.js?v=4edd51fbfd"></script>
+<script src="community.js?v=4edd51fbfd"></script>
 
 <script>
 
@@ -4844,8 +4844,11 @@ function mapAddressKey(label){
   return `ba:street_${street.replace(/^(21st|22nd|23rd|24th|25th|26th)/, s => normalized[s])}#${+found[1]}`;
 }
 function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || mapAddressKey(label),label)}`; }
-/* A place with no business still gets a tag: the neighbourhood's initials. */
-const hoodCode = (b, hood) => b?.code || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+/* One source for a neighbourhood's two letters: a business carries its own,
+   anything else takes the board's table, and only a place the table does not
+   name falls back to initials. The card and the list read the same tag. */
+const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood])
+  || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 const PANEL_W = 316;   // the floating places panel plus its margin
 const FINDER_PANEL_W = 456; // the ranked table needs the wider panel
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
@@ -4867,7 +4870,7 @@ const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` 
    both ends of the filter read a range by its lower bound: a cinema seating
    100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
-const hoodTag = hood => (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood]) || hoodCode(null, hood);
+const hoodTag = hood => hoodCode(null, hood);
 /* What the list is a list of. One of the three is always chosen: premises to
    rent, rival businesses to take over, or whole buildings on sale. */
 const FINDER_SHOWS = [

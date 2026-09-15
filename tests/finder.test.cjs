@@ -145,6 +145,13 @@ test('any address carries its facts: what it is, what it costs and whether it is
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site .st').textContent === 'Residential');
     assert.deepEqual(await facts(page),
       ['Residential B90 m²', 'Foot traffic50', 'Door cap—', 'Est. rent / day—', 'Deposit—']);
+    // The card takes its two letters from the board's own table, not from the
+    // neighbourhood's initials, so it reads the same as the list's rows.
+    await page.evaluate(key => cityMapPage.select(key), MT[0]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .sub .hood').textContent === 'MT');
+    await turnOn(page);
+    assert.equal(await page.locator('#cityMapPage .site .sub .hood').textContent(),
+      await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"] .hood`).textContent());
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
