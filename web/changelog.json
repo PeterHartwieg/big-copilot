@@ -1,5 +1,11 @@
 [
   {
+    "pr": 32,
+    "date": "2026-09-15",
+    "title": "Sort and filter premises by size",
+    "summary": "The location finder shows each building's floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m²."
+  },
+  {
     "pr": 28,
     "date": "2026-09-15",
     "title": "Find a location on the map",
