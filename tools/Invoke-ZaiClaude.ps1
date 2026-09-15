@@ -3,9 +3,14 @@
 Run Claude Code against Z.ai with a key fetched from 1Password for this process.
 .DESCRIPTION
 No credentials are written to settings or logs by this launcher. It leaves the
-normal Claude provider unchanged. Requires PowerShell 7, Claude Code and op.
-The secret reference comes from -SecretReference, ZAI_API_KEY_REF, or the local
-~/.config/agent-cli/zai.json file. The config contains a reference, never a key.
+normal Claude provider unchanged. Runs on Windows PowerShell 5.1 and PowerShell 7,
+and requires Claude Code and op. The secret reference comes from -SecretReference,
+ZAI_API_KEY_REF, or the local ~/.config/agent-cli/zai.json file. The config
+contains a reference, never a key.
+
+Saved settings sources are excluded, so the project's CLAUDE.md never reaches the
+worker. The working directory's AGENTS.md is appended to the system prompt
+instead; -InstructionsFile selects another file and -NoInstructions skips it.
 #>
 [CmdletBinding(DefaultParameterSetName = 'File')]
 param(
@@ -17,11 +22,32 @@ param(
     [string[]]$AddDirectory = @(),
     [string]$Resume,
     [string]$LogPath,
+    [string]$InstructionsFile,
+    [switch]$NoInstructions,
     [ValidateSet('text', 'json', 'stream-json')][string]$OutputFormat = 'stream-json',
     [switch]$NoTools
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Windows PowerShell 5.1, and PowerShell 7 before 7.3, rebuild the native command
+# line themselves: they drop empty arguments and strip embedded double quotes.
+# Empty values therefore travel as --flag=, and every other value is pre-escaped
+# so that CommandLineToArgvW reproduces it exactly. Claude Code is reached through
+# npm's claude.ps1 shim, which forwards to claude.exe, so this one native boundary
+# applies whichever shell started the launcher.
+$legacyArgumentPassing = $true
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    $argumentPassing = Get-Variable -Name PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue
+    $legacyArgumentPassing = (!$argumentPassing -or $argumentPassing -eq 'Legacy')
+}
+function ConvertTo-NativeArgument {
+    param([string]$Value)
+    if (!$legacyArgumentPassing -or !$Value) { return $Value }
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    return [regex]::Replace($escaped, '(\\+)$', '$1$1')
+}
+
 $claudeCommand = Get-Command claude -ErrorAction Stop
 $opCommand = Get-Command op -ErrorAction Stop
 $resolvedWork = (Resolve-Path -LiteralPath $WorkingDirectory).Path
@@ -43,6 +69,36 @@ if ($LogPath) {
     $LogPath = [IO.Path]::GetFullPath($LogPath)
     if (Test-Path -LiteralPath $LogPath) { throw 'LogPath already exists; choose a new file.' }
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($LogPath)) | Out-Null
+}
+
+# Excluding the saved settings sources also excludes CLAUDE.md, so the project's
+# own instructions are appended explicitly. A missing default is not an error;
+# a missing explicit choice is.
+$explicitInstructions = $PSCmdlet.MyInvocation.BoundParameters.ContainsKey('InstructionsFile')
+if ($NoInstructions -and $explicitInstructions) {
+    throw 'Pass either -InstructionsFile or -NoInstructions, not both.'
+}
+$instructionsArguments = @()
+if (!$NoInstructions) {
+    $candidate = if ($explicitInstructions) { $InstructionsFile } else { Join-Path $resolvedWork 'AGENTS.md' }
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        $instructionsPath = (Resolve-Path -LiteralPath $candidate).Path
+        # --append-system-prompt-file is accepted but undocumented outside the
+        # --bare summary; it keeps a long file out of the command line, which
+        # Windows caps at 32767 characters and the prompt already draws on.
+        $helpText = ''
+        try { $helpText = (& $claudeCommand.Source --help | Out-String) } catch { $helpText = '' }
+        if ($helpText -match 'append-system-prompt-file' -or $helpText -match 'append-system-prompt\[-file\]') {
+            $instructionsArguments = @('--append-system-prompt-file', $instructionsPath)
+        } else {
+            $instructionsArguments = @('--append-system-prompt', (Get-Content -LiteralPath $instructionsPath -Raw -Encoding utf8))
+        }
+        $instructionsLines = @(Get-Content -LiteralPath $instructionsPath -Encoding utf8).Count
+        Write-Host "Instructions: $instructionsPath ($instructionsLines lines)"
+    } elseif ($explicitInstructions) {
+        $reported = if ([IO.Path]::IsPathRooted($candidate)) { $candidate } else { Join-Path (Get-Location).Path $candidate }
+        throw "Instructions file not found: $reported"
+    }
 }
 
 # Fixed official endpoint: an arbitrary URL must never receive this credential.
@@ -77,12 +133,13 @@ try {
     $claudeArguments = @(
         '-p', $Prompt, '--model', $Model,
         '--permission-mode', 'acceptEdits', '--no-chrome',
-        '--setting-sources', '',
+        '--setting-sources=',
         '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
         '--output-format', $OutputFormat
     )
+    $claudeArguments += $instructionsArguments
     if ($NoTools) {
-        $claudeArguments += @('--tools', '')
+        $claudeArguments += '--tools='
     } else {
         $claudeArguments += @('--tools', 'Read,Write,Edit,Glob,Grep,Bash,PowerShell')
         $claudeArguments += @('--allowedTools', 'Read,Write,Edit,Glob,Grep,Bash(python *),Bash(node *),Bash(npm test*),Bash(rg *),Bash(ls *),Bash(git status *),Bash(git diff *),PowerShell(Get-Content *),PowerShell(Get-ChildItem *)')
@@ -92,6 +149,7 @@ try {
     foreach ($directory in $AddDirectory) {
         $claudeArguments += @('--add-dir', (Resolve-Path -LiteralPath $directory).Path)
     }
+    $claudeArguments = @($claudeArguments | ForEach-Object { ConvertTo-NativeArgument $_ })
     Push-Location -LiteralPath $resolvedWork
     try {
         if ($LogPath) {
