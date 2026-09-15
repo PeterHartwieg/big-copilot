@@ -25,7 +25,10 @@ flowchart TD
 
   subgraph web["Browser — bigcopilot.com"]
     direction TB
-    bw["build_web.py main()"] --> renderW["render(None, live=True, banner=BANNER, before_script=BEFORE_SCRIPT, head=head)"]
+    bw["build_web.py main()"] --> ri["release_info() · build stamp + newest changelog entry"]
+    ri --> ph["page_html(release) · builds the head, fills BEFORE_SCRIPT"]
+    chk["build_web.py --check · check()"] -.->|"reuses both"| ri
+    ph --> renderW["render(None, live=True, banner=BANNER, before_script=…, head=…)"]
     renderW --> index(["web/index.html + web/py/ + web/version.json"])
     index --> app["web/app.js — landing screen, save picking, owns the worker"]
     app -->|"postMessage build / name"| wk["web/worker.js — Pyodide"]
@@ -45,41 +48,65 @@ JSON.
 
 ## The payload contract
 
-Every top-level key of the dict `extract()` returns, what produces it, and where the board
-script reads it. A "no reader" row is dead weight in the payload — do not rely on it, and
-say so if you remove it.
+Every top-level key of the dict `extract()` returns, what produces it, and which functions
+read it.
+
+**Reader convention.** A reader is a function whose *own body* references `D.<key>` —
+`D?.<key>` and `D["<key>"]` included, as is destructuring off `D`. A reference inside an
+anonymous callback is credited to the nearest enclosing named function; a nested named
+helper is written `outer/inner`, and a callback stored on an object literal is written by
+its property path. Functions that only receive the data from a caller are not listed, so
+this column is where to look when you change a key's shape — not a complete call graph.
 
 | Key | Produced by | Read by |
 | --- | --- | --- |
-| `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawSite`, `drawOrderChecklist`, `drawLogistics`, `drawGoals`, `drawFooter`; `web/map.js`, `web/wiki.js` |
+| `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawSite`, `drawOrderChecklist`, `drawLogistics`, `drawGoals`, `drawFooter`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
 | `kpi` | `extract()` inline, with `_net_worth()` | `drawMast`, `drawKpis` |
-| `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawKpis`, `drawChart` |
-| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `drawSite`, `drawRhythm`, `drawLogistics`, `drawOrderChecklist`, and the helpers `stockUnplanned`, `supplyLocation`, `factoryView`, `alertSite`, `nameUses`, `openSite`; `web/map.js`, `web/wiki.js` |
-| `ownedBuildings` | `_owned_buildings()` | `web/map.js` only |
-| `homes` | `_homes()` | `web/map.js` only |
-| `products` | `_products()`, with `peak`/`swing` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` |
+| `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
+| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `drawSite`, `drawRhythm`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
+| `homes` | `_homes()` | `web/map.js` only: `CityMapView.update` |
+| `products` | `_products()`, with `peak`/`swing` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
-| `supply` | `_supply()` | `drawLogistics`, `drawOrderChecklist`, `drawFlow`, `drawFlowDetail`, `drawSite`, and the helpers `flowLayout`, `stockUnplanned`, `supplyLocation`, `factoryView`; `web/map.js` |
+| `supply` | `_supply()` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps` |
 | `rhythm` | `_chain_rhythm()` | `drawRhythm`, `drawSite` |
-| `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` |
+| `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `chains` | `_chains()` | `drawPortfolio` |
 | `trends` | `_site_trends()` | `indexTrends` |
-| `hypeExposure` | `_hype_exposure()` | no reader |
+| `hypeExposure` | `_hype_exposure()` | no reader — but see below |
 | `hours` | `_hourly()` | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
-| `plan` | `_plan()` | `drawPlan`, and the helpers `indexPlan`, `factoryView`, `itemName`, `planTypes`, `defaultRate`, `factoryCounts`; `web/wiki.js` |
+| `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
-| `ledgerDays` | `extract()` inline, `len(ledger)` | no reader |
-| `alerts` | `_alerts()`, its `lines` | `drawAlerts`, `kindCounts`; `web/map.js` |
-| `minor` | `_alerts()`, its `minor` | `drawAlerts`, `kindCounts`; `web/map.js` |
+| `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
+| `alerts` | `_alerts()`, its `lines` | `drawAlerts`, `kindCounts`; `web/map.js` `mapFindings` |
+| `minor` | `_alerts()`, its `minor` | `drawAlerts`, `kindCounts`; `web/map.js` `mapFindings` |
 | `goals` | `_goals()` | `drawGoals` |
 | `weekly` | `_weekly()` | no reader |
 
-The payload also crosses the worker boundary as a JSON string: `browser_build()` returns
-`json.dumps(data)` and `web/app.js` hands the parsed object to the board. A key that is not
-JSON-serialisable breaks the browser door while the local door keeps working.
+Two indirect routes an agent would otherwise miss:
+
+- `drawStock` references no key of its own. The Checks view gets its rows through the
+  `SUPPLY_VIEWS` entry selected by `stockView`, and those callbacks do the reading. Change a
+  shape in `supply` or `businesses` and it is `SUPPLY_VIEWS` you have to follow, not
+  `drawStock`.
+- `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
+  they do not appear above.
+
+Three keys have no reader, but only one of them is dead end to end:
+
+- `weekly` is genuinely unread. `_weekly()` feeds nothing else.
+- `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
+  binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
+  from. Delete the payload key if you like; do not delete the function.
+- `ledgerDays` — likewise the *key* is unread, but the `ledger` it counts is what
+  `_cash_flow()` reads. The history write and `history.ledger()` both have to stay.
+
+The payload crosses the worker boundary as a JSON string: `browser_build()` returns
+`json.dumps(data)`. `render(data)` calls `json.dumps` too, so a value that is not
+JSON-serialisable breaks **both** doors, not just the browser.
 
 ## Template placeholders
 
@@ -88,11 +115,11 @@ text for two of them is supplied by the caller.
 
 | Token | Filled with |
 | --- | --- |
-| `__TITLE__` | `render()`: the escaped save name, or `Big Copilot` when there is no data |
-| `/*__DATA__*/null` | `render()`: the `extract()` payload as JSON, or `null` for the browser build |
+| `__TITLE__` | `render()`: `<save name> · Big Copilot`, HTML-escaped because the save name is the player's own text; plain `Big Copilot` when there is no data |
+| `/*__DATA__*/null` | `render()`: the `extract()` payload as JSON with `</` escaped, or `null` for the browser build |
 | `/*__LIVE__*/false` | `render()`: `true` when called with `live=True` |
 | `<!--__BANNER__-->` | `render()`'s `banner=` argument. `build_web.py` passes its `BANNER` (the landing screen); the local page passes nothing |
-| `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `build_web.py` passes its `BEFORE_SCRIPT`; the local page passes nothing |
+| `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `page_html()` passes a filled-in `BEFORE_SCRIPT`; the local page passes nothing |
 | `<!--__CHANGELOG__-->` | `render()`, from `web/changelog.json`, newest first |
 | `/*__MAP_CSS__*/` | `render()`, from `web/map.css` |
 | `/*__MAP_SCRIPT__*/` | `render()`, from `web/map.js` |
@@ -102,8 +129,10 @@ text for two of them is supplied by the caller.
 | `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki |
 
-The wiki and map assets are optional: a checkout without `web/wiki.js` still renders a whole
-board, and the Wiki tab is left out of the navigation (`PAGES` tests for `showWikiRoute`).
+Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
+checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of
+the navigation (`PAGES` tests for `showWikiRoute`). `web/map.js` and `web/map.css` are
+opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
 `__UPDATE_SCRIPT__`, `__BUILD__`, `__REPO__`, `__ISSUES__`, `__DONATE__`, `__ICON_FOLDER__`,
@@ -112,24 +141,36 @@ board, and the Wiki tab is left out of the navigation (`PAGES` tests for `showWi
 
 ## Assembly order of `web/index.html`
 
-From `build_web.py`'s `main()`, top of the file down:
+`main()` prepares `web/`, then hands off: `release_info()` returns the build stamp and the
+newest changelog entry, and `page_html(release)` returns the whole page. `main()` itself
+never touches the head or `BEFORE_SCRIPT`.
+
+What `page_html()` produces, top of the file down:
 
 1. `<!doctype html>` then `<meta charset="utf-8">`, both emitted by `render()` before the
    template, so the page runs in standards mode.
-2. The head that `main()` builds, in this order: the viewport tag, the Cloudflare Web
-   Analytics beacon if `ANALYTICS_TOKEN` is set, and the `community.css` link stamped with
-   the build version (`web/community.css`).
+2. The head `page_html()` builds, in this order: the viewport tag, the Cloudflare Web
+   Analytics beacon if `ANALYTICS_TOKEN` is set, and the `web/community.css` link stamped
+   with the release version.
 3. `TEMPLATE`, with the landing screen (`BANNER`) substituted into its `<!--__BANNER__-->`
    slot: the release banner, the drop zone, the save-location help and the footer.
-4. `BEFORE_SCRIPT`, in its slot just ahead of the board's own script:
-   `window.LEDGER_BUILD`, `window.LEDGER_RELEASE`, `web/update.js` inlined,
-   `app.js?v=<stamp>`, `community.js?v=<stamp>`.
+4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
+   inlined `web/update.js`, in its slot just ahead of the board's own script:
+   `window.LEDGER_BUILD`, `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`,
+   `community.js?v=<stamp>`.
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
-Before writing the page, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py` and `ba_buildings.json` into `web/py/`, writes `web/py/gametext.json` from
-the installed locale, and computes `stamp()` — an MD5 over everything the page fetches, so
-one deploy is one version. It also writes `web/version.json`, which the update banner polls.
+Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
+`ba_dashboard.py` and `ba_buildings.json` into `web/py/`, and writes `web/py/gametext.json`
+from the installed locale — everything `stamp()` hashes has to be in place before
+`release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
+
+`python build_web.py --check` calls `check()`, which reuses the same `release_info()` and
+`page_html()` and compares their output against what is committed under `web/`. That is why
+it needs no installed game: it re-derives the page from the sources and the committed
+`gametext.json` and `wiki-data.json` rather than rebuilding them. `stamp()` normalises CRLF
+to LF for everything except the `.svg` background, so a Windows checkout is not stale by
+itself.
 
 ### The seam: `window.LEDGER_SOURCE`
 
@@ -138,11 +179,18 @@ The board script does not know which door it is behind. It reads
 server: `data()` fetches the `data.json` route, `name()` POSTs to `name`, and `watch()`
 polls `stamp` every 15 seconds and pulls fresh numbers only when the stamp moves.
 
-`web/app.js` sets `window.LEDGER_SOURCE` before the board script runs, so on the hosted site the
-board never touches the network. Its three members satisfy the same contract: `data()`
-resolves to a fresh data object (by posting a `build` message to the worker), `name(rid,
-slug)` records a factory-line name and resolves to the data that follows, and `watch(h)`
-keeps the callbacks `changed(data)`, `stale(why)` and `lost()`.
+`web/app.js` sets `window.LEDGER_SOURCE` before the board script runs. Its three members
+satisfy the same contract: `data()` resolves to a fresh data object (by posting a `build`
+message to the worker), `name(rid, slug)` records a factory-line name and resolves to the
+data that follows, and `watch(h)` keeps the callbacks `changed(data)`, `stale(why)` and
+`lost()`.
+
+What that does and does not change. On the hosted site the save itself never leaves the
+tab: `LEDGER_SOURCE` replaces the three watch-server routes, so nothing about the save is
+fetched or posted. The page still uses the network for its own assets — `web/map.js` fetches
+`maps/locations.json` and the background image, `web/wiki.js` fetches `wiki-data.json`,
+`web/update.js` polls `version.json`, `web/community.js` calls `/api/community/*`, all
+same-origin and stamped, and `TEMPLATE` links Google Fonts.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back
 to fetching `data.json` from a site that has no such route.
@@ -197,14 +245,20 @@ from `renderAll()`.
 
 `web/worker.js` is a **module worker** — some embedders refuse a cross-origin
 `importScripts` but allow a dynamic `import`. Pyodide is pinned to **314.0.6** and fetched
-from jsDelivr; that one download is the only network call the worker makes.
+from jsDelivr; that is the only third-party download the worker makes.
 
-It writes exactly four files into Pyodide's filesystem, all fetched from `web/py/` with the
-page's build stamp: `web/py/ba_save.py`, `web/py/ba_dashboard.py`, `web/py/gametext.json`
-and `web/py/ba_buildings.json`. Anything else the Python wants must be read lazily, inside a
-function, or it will not exist — that is why `load_buildings()` falls back to the worker's
-`/data/ba_buildings.json` and `render()` opens `web/changelog.json` and the map assets from
-inside the function body.
+Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp:
+
+- `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
+  ready.
+- `gametext.json` and `ba_buildings.json` — written into the virtual filesystem only when
+  the fetch succeeds, so a build missing either still boots and degrades instead.
+
+On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
+optional `en.json` and the history JSON under `/data`, and Python itself writes a
+`<history>.character` sidecar. Nothing else exists on that filesystem — which is why
+`ba_dashboard` must not open a file at import time. See the trap in
+[AGENTS.md](../AGENTS.md).
 
 Two entry points, both called through `py.runPython` with paths interpolated as JSON:
 
@@ -238,9 +292,18 @@ only the browser build includes. Setup, secrets and the release steps:
 
 `tools/build_wiki_data.py` reads the installed game — the shipped locale, the help menu's
 table of contents, `ba_buildings.json` and the shipped business layouts — and writes
-`web/wiki-data.json`: a record per help page, the worked example, and a guide per
-customer-facing business type. No number is invented; what the game does not state stays
-`null`. The authored wording lives in `tools/wiki_sample.json`, and any sentence whose facts
-cannot be filled is left out rather than guessed. `build_web.py` calls `write_public_wiki`
-before stamping, so the site always ships the payload its pages were built against. Details:
+`web/wiki-data.json`.
+
+Its page records are one per **unique help-page slug that has content**, in menu order, not
+one per help-menu entry. `build_pages()` drops two kinds of entry and reports both rather
+than swallowing them: a slug listed a second time (the shipped file has one such double
+entry, whose second prefix is unreachable through that slug), and a page whose body the
+locale does not carry, since a record with no body would be an empty page rather than a
+fact. Alongside the pages the payload carries the worked example and a guide per
+customer-facing business type.
+
+No number is invented; what the game does not state stays `null`. The authored wording lives
+in `tools/wiki_sample.json`, and any sentence whose facts cannot be filled is left out
+rather than guessed. `build_web.py` calls `write_public_wiki` before stamping, so the site
+always ships the payload its pages were built against. Details:
 [wiki-data-pipeline.md](wiki-data-pipeline.md).

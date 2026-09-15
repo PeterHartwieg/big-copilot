@@ -7,7 +7,7 @@ Cloudflare Worker API adds the community features.
 
 ## Where changes go
 
-`ba_dashboard.py` is three programs in one file. Find each part by its anchor, never by
+`ba_dashboard.py` holds four separable parts in one file. Find each by its anchor, never by
 line number — the file is long and the numbers drift.
 
 | Part | Anchor |
@@ -25,7 +25,9 @@ Everything else:
 - Pyodide worker: `web/worker.js`
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
-- wiki pipeline: `tools/`, with the authored wording in `tools/wiki_sample.json`
+- wiki pipeline: the `.py` files in `tools/`, with the authored wording in
+  `tools/wiki_sample.json`. `tools/` also holds the GLM launcher,
+  `tools/Invoke-ZaiClaude.ps1`, which is nothing to do with the wiki
 - community API: `server/`, `migrations/`, `web/community.js`
 - changelog: `web/changelog.json`
 
@@ -40,7 +42,7 @@ side and rebuild — the rebuild is the resolution.
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py` |
-| `mockup/**/*.html` | the generators in `mockup/*/`, such as `mockup/revamp/build_canvas.py` |
+| `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py`. Every other file under `mockup/` is hand-made, `mockup/ui-mockup.html` included |
 | `dashboard.html`, `market_history.json` | local runs; gitignored |
 
 ## Finishing a change
@@ -51,8 +53,10 @@ side and rebuild — the rebuild is the resolution.
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py` |
-| `tools/`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
-| `server/`, `migrations/`, `web/community.js` | `npm run test:community` and `npm run check:worker` |
+| `tools/*.py`, `tools/wiki_sample.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
+| `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
+| `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
+| `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
 
 `python build_web.py --check` verifies that `web/` matches the sources without needing the
 installed game; run it when you cannot rebuild.
@@ -79,17 +83,22 @@ and never attach one to an issue.
 - `web/map.js` and `web/wiki.js` are spliced into the board script and run in its global
   scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`). A new top-level
   name must be unique across all three files.
-- `section{content-visibility:auto}` clips absolutely positioned children. A dropdown or
-  popover inside a section needs `content-visibility:visible; contain:none`.
+- `section{content-visibility:auto}` clips absolutely positioned children, so a popover
+  rendered inside a section is cut off. Hang it off `<body>` with `position:fixed` and
+  place it against its anchor, the way `#tip` and `#alertPop` do. The
+  `section.measured{content-visibility:visible}` escape hatch is for the Playwright tests,
+  which add `measured` to measure a section that is off screen; it is not the fix.
 - Several tests find code by slicing the source between comment or declaration strings, so
   when you change a comment near such an anchor, update the test to match. In
   `ba_dashboard.py`: `tests/navigation.test.cjs`, `tests/order_checklist.test.cjs`,
   `tests/test_import_routes.py`, `tests/test_plan_orders.py`,
   `tests/test_recipe_identity.py`. In `web/app.js`: `tests/resume.test.cjs`,
   `tests/save_location.test.cjs`, `tests/performance.test.cjs`.
-- The Pyodide worker loads only four files — `ba_save.py`, `ba_dashboard.py`,
-  `web/py/gametext.json` and `web/py/ba_buildings.json` — so the Python must read any other
-  file lazily, inside a function.
+- The Pyodide worker fetches four files from `web/py/` — `ba_save.py`, `ba_dashboard.py`,
+  `gametext.json`, `ba_buildings.json` — and at runtime writes the save, the player's
+  optional `en.json`, the history and a `.character` sidecar itself. Nothing else is on the
+  virtual filesystem when `ba_dashboard` is imported, so it must not open any other file at
+  import time. Read it lazily, inside a function, as `load_buildings()` and `render()` do.
 
 ## Where to read more
 
@@ -112,8 +121,8 @@ Preserve pre-existing changes in any working directory you are given; they may b
 worker's.
 
 Each task gets its own git worktree, branched from `origin/main`, plus explicit
-non-overlapping file ownership. The worktree is removed after the merge (decision D5); the
-main folder stays on `main`. Edit only the files your task names.
+non-overlapping file ownership. The worktree is removed after the merge; the main folder
+stays on `main`. Edit only the files your task names.
 
 Do not set execution timeouts or time limits for CLI commands or subagents. Let them
 finish; non-terminating polling or output-yield intervals are fine.
