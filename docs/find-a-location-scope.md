@@ -19,10 +19,14 @@ regardless of demand, and the feature does not try to model that.
   player's. Per building: `AvailableForRent`, `RentedByPlayer`, `RentPerDay`,
   `businessTypeName`, `BusinessName`, `customerCapacity`, `buildingOwnerRivalId`,
   `businessOwnerRivalId`, `takeoverOfferAcceptRate`, `creationDay`.
-- **Vacancy is exact.** Every empty retail and office building carries
-  `AvailableForRent = true` (checked on day 16 and day 20 of HART. YT, where the
-  vacant count went from 19 to 176 as rivals closed). The only empty-but-unavailable buildings are residential
-  and warehouses. Never infer vacancy from anything else.
+- **Vacancy: the flag plus an owner.** `AvailableForRent` marks an empty building as
+  listed, but two listings exist. An empty commercial building with a non-empty
+  `buildingOwnerRivalId` (a landlord) is for rent; an empty one with no owner is in
+  `buildingsForSale` and can only be bought. Checked across every readable save: no
+  other combination occurs. On HART. YT day 20 that is 71 for rent and 160 for sale,
+  and none of the Hamptons units are rentable, which is what the game shows (Peter's
+  QA, 15 September). The earlier claim that every empty retail building is rentable
+  was wrong. Never infer vacancy from anything else.
 - **Rent is not stored for a vacant building** (`RentPerDay` is 0). It is computed
   by the game and matches this formula for every non-residential lease across three
   characters (48 leases, worst residual 0.6%, integer rounding):

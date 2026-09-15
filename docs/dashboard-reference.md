@@ -680,11 +680,26 @@ dropped rather than guessed at, so a save can carry 883 rows where another carri
   the casino, the moving service and the truck garage. Most sit in special buildings, but
   a dozen of them occupy ordinary retail and office floors, which is why the owner field,
   not the building type, is what separates them.
-- **vacant** — empty and `AvailableForRent`. Vacancy is exact: every empty retail,
-  office, cinema and theater building says so itself, so nothing is ever inferred.
+- **vacant** — empty, `AvailableForRent`, and a landlord owns it
+  (`buildingOwnerRivalId`), so there is somebody to sign a lease with. These are the
+  units to rent.
+- **forsale** — empty and `AvailableForRent`, but nobody owns the building, so there is
+  no landlord and no lease: it can only be bought. The asking price is not repeated on
+  the row; the page joins `forSale` by `key`.
 - **unavailable** — everything else: residential buildings, which you can never take
   unless you already rent one, empty special buildings, and the empty warehouses the game
   keeps off the market.
+
+`AvailableForRent` on an empty building means listed, not rentable — an earlier reading of
+this board had that wrong. Ownership is what decides which list it is on, and across every
+readable save an empty retail or office building is one of exactly two cases: owned by a
+landlord and absent from `buildingsForSale`, so it can be rented; or unowned and present
+in `buildingsForSale`, so it can only be bought. No third combination occurs among them,
+which is why The Hamptons shows empty units and nothing to rent — every empty Hamptons
+shop and office is for sale. Ownership is read first, since it is the reason and the
+listing only the consequence; the for-sale list decides the leftovers, of which there is
+exactly one across the saves, a warehouse that is listed, unowned and not for sale, and
+which reads "unavailable".
 
 Status says whether you could take the place; `occupant` says who is in it. Any building
 with a business in it carries the occupant's business name and type, whatever its status,
