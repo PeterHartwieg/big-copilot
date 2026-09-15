@@ -33,6 +33,12 @@ const WIKI_ORDINALS = ["", "first", "second", "third", "fourth", "fifth", "sixth
    table spells them. Every address the help links to in this build is either
    one of these or a numbered avenue or street. */
 const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike"};
+/* The hand-authored articles: written beside the payload rather than read from
+   the game's help, so they sit under their own label and route under their own
+   prefix, where they can never be mistaken for a help page. */
+const WIKI_TOPIC_CAT = "bigcopilot_topics";
+const WIKI_TOPIC_LABEL = "Big Copilot topics";
+const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
 const WIKI_SHOWN = 60;   // rows before a category asks whether you want them all
 const WIKI_HITS = 10;    // search rows before the same question
 
@@ -140,15 +146,26 @@ function wikiIndex(raw){
   const rank = id => { const at = WIKI_CAT_ORDER.indexOf(String(id)); return at < 0 ? WIKI_CAT_ORDER.length : at; };
   categories.sort((a, b) => rank(a.id) - rank(b.id)
     || raw.categories.indexOf(a) - raw.categories.indexOf(b));
+  /* The hand-authored articles. They are not the game's help, so they carry no
+     help category; they are routed and searched exactly as a page is, under
+     their own label. */
+  const topics = Array.isArray(raw.topics) ? raw.topics.filter(t => t && t.slug) : [];
+  const topicById = new Map(topics.map(t => [wikiTopicId(t.slug), t]));
   const search = pages.map(p => ({
     id: String(p.id),
     title: String(p.title || p.id),
     lower: String(p.title || p.id).toLowerCase(),
     categoryId: String(p.categoryId || ""),
     category: catById.has(String(p.categoryId)) ? wikiCatLabel(catById.get(String(p.categoryId))) : "",
-  })).sort((a, b) => a.title.localeCompare(b.title));
+  })).concat(topics.map(t => ({
+    id: wikiTopicId(t.slug),
+    title: String(t.title || t.slug),
+    lower: String(t.title || t.slug).toLowerCase(),
+    categoryId: WIKI_TOPIC_CAT,
+    category: WIKI_TOPIC_LABEL,
+  }))).sort((a, b) => a.title.localeCompare(b.title));
   return {
-    raw, pages, categories, byId, catById, search,
+    raw, pages, categories, byId, catById, search, topics, topicById,
     /* The shelf counts what the help menu holds; the reader can only open what
        this build carries, so both numbers are kept and the difference is said
        out loud rather than papered over. */
@@ -435,10 +452,28 @@ ${q ? `<div class="wk-hits">${
     : ""}` : ""}
 ${shelf ? `<div class="wk-shelf">${shelf}</div>`
   : `<p class="wk-none">This build carries the pages but not the help menu's own shelf of categories. Search still finds every one of them.</p>`}
+${q ? "" : wikiTopicShelf()}
 <div class="wk-legend">
   ${legend}${wikiWhy("Badges show where a fact comes from. Hover or focus a badge for its meaning.")}
 </div>
 ${listed > held ? `<p class="quiet wk-foot">${wikiNum(held)} of the help menu's ${wikiNum(listed)} pages are in this build.</p>` : ""}`;
+}
+
+/* The articles Big Copilot writes itself, listed under the game's own shelf.
+   This is the way to them without knowing they are there; while a search is
+   running they are in the results like any other page, so the shelf stands
+   down and the reader is left with one list. */
+function wikiTopicShelf(){
+  const topics = (wikiData && wikiData.topics) || [];
+  if(!topics.length) return "";
+  const rows = topics.map(t => wikiRow({id: wikiTopicId(t.slug), title: t.title || t.slug,
+    category: WIKI_TOPIC_LABEL}, "", false)).join("");
+  return `
+<section class="sec wk-topics">
+  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}</h2>
+    ${wikiWhy("Written by Big Copilot, not taken from the game's help. Each one says what it was checked against.")}</div>
+  <div class="wk-hits">${rows}</div>
+</section>`;
 }
 
 function wikiCategoryView(){
@@ -466,6 +501,8 @@ ${entries.length > shown.length
 /* The reader: one help page, its own words, with the links it carries resolved
    against the pages this build has. */
 function wikiPageView(){
+  const topic = wikiData.topicById.get(String(wikiRoute.id));
+  if(topic) return wikiTopicPage(topic);
   const page = wikiData.byId.get(String(wikiRoute.id));
   if(!page) return wikiMissing(`No page called “${wikiRoute.id}”. It may be one of the help links the game's own files leave dangling.`);
   const cat = wikiData.catById.get(String(page.categoryId));
@@ -482,6 +519,44 @@ ${wikiCrumb([{label: "Wiki", href: "#wiki"},
 <div class="wk-read rv">${wikiBody(page.body, ctx)}</div>
 ${wikiYours(page)}
 ${wikiSource(page)}`;
+}
+
+/* A hand-authored article. It is written beside the payload, not read from the
+   game's help, so it wears the Big Copilot badge and closes with the line its
+   author wrote about where its numbers came from. The furniture is the guides':
+   the same lede, the same sections, the same tables. */
+function wikiTopicPage(topic){
+  const ctx = {id: wikiTopicId(topic.slug)};
+  const sections = (Array.isArray(topic.sections) ? topic.sections : []).map(section => `
+<section class="sec">
+  <div class="sechead"><h2>${wikiText(section.heading || "")}</h2></div>
+  <div class="wk-read rv">${(Array.isArray(section.paragraphs) ? section.paragraphs : [])
+    .map(line => `<p>${wikiInline(line, ctx)}</p>`).join("")}</div>
+  ${wikiTopicTable(section.table)}
+</section>`).join("");
+  return `
+${wikiCrumb([{label: "Wiki", href: "#wiki"}, {label: WIKI_TOPIC_LABEL},
+  {label: topic.title || topic.slug}])}
+<div class="wk-titlerow">
+  <h1>${wikiText(topic.title || topic.slug)}</h1>
+  <span class="chips">${wikiChip("model")}</span>
+</div>
+<p class="wk-lede rv">${wikiInline(topic.lede || "", ctx)}</p>
+${sections}
+${topic.provenance ? `<p class="quiet wk-foot wk-topicsrc">${wikiInline(topic.provenance, ctx)}</p>` : ""}`;
+}
+/* A small table, in the shape the price table already uses: the column header
+   travels with each cell so the narrow layout can read it out. */
+function wikiTopicTable(table){
+  if(!table || !Array.isArray(table.columns) || !Array.isArray(table.rows) || !table.rows.length) return "";
+  const columns = table.columns.map(c => String(c ?? ""));
+  return `<div class="wk-tblwrap"><table class="wk-tbl"${table.caption
+      ? ` aria-label="${attr(table.caption)}"` : ""}>
+  <thead><tr>${columns.map(c => `<th scope="col">${wikiText(c)}</th>`).join("")}</tr></thead>
+  <tbody>${table.rows.map(row => `<tr>${row.map((cell, i) => i === 0
+    ? `<th scope="row">${wikiText(cell)}</th>`
+    : `<td data-label="${attr(columns[i] || "")}">${wikiText(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+</table></div>`;
 }
 
 function wikiMissing(line){

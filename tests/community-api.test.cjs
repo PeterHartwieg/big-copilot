@@ -516,7 +516,8 @@ test('features: curated listing starts at zero votes with nothing voted', async 
     `per-IP features response must not be publicly cacheable, got "${cc}"`,
   );
 
-  assert.equal(body.features.length, 3, 'exactly the three curated voting options');
+  const curated = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'server', 'features.json'), 'utf8'));
+  assert.equal(body.features.length, curated.length, 'exactly the curated voting options');
   const ids = new Set();
   for (const feature of body.features) {
     assert.equal(typeof feature.id, 'string', 'feature id');

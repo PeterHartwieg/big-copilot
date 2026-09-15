@@ -5,11 +5,6 @@
     "description": "Shifts from the hour grid: registers, door caps and who is off today."
   },
   {
-    "id": "find-a-location",
-    "title": "Find a location",
-    "description": "Free buildings ranked by demand, rivals and the door cap you would get."
-  },
-  {
     "id": "time-to-break-even",
     "title": "Time to break even",
     "description": "Estimate how many in-game days each business needs to earn back its setup costs, based on its net profit."

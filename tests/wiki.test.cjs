@@ -110,6 +110,26 @@ const SAMPLE = {
          {what: 'Weekly delivery limits', detail: 'The help says every wholesaler caps each item per week and resets Monday 08:00, but never gives a number.'}],
 };
 
+const TOPIC = {
+  slug: 'how-rent-works',
+  title: 'How rent works',
+  lede: 'Rent on a commercial building follows the floor area, the traffic and the district.',
+  sections: [
+    {heading: 'What a listing charges',
+      paragraphs: ['A listing states a rent per day and a deposit.',
+        'A residential listing adds a charge for appliances.']},
+    {heading: 'The formula',
+      paragraphs: ['**rent per day = floor area × (30 + traffic index) × district rate**',
+        'In an office building the result is multiplied by **1.033**.'],
+      table: {caption: 'District rates', columns: ['District', 'Rate'],
+        rows: [['Midtown', '0.02482'], ["Hell's Kitchen", '0.01468'], ['Murray Hill', '0.01020'],
+          ['Garment District', '0.00734'], ['Lower Manhattan', '0.00621'],
+          ['The Hamptons', '0.00568'], ['Industry City', '0.00566']]}},
+  ],
+  provenance: "Big Copilot's own fit, 15 September 2026: 48 non-residential leases on game build 3675, "
+    + 'worst residual 0.6%. Not stated anywhere in the game\'s help.',
+};
+
 const DATA = {
   schemaVersion: 1,
   // The game's own category keys, stored in the help menu's order, which is not
@@ -134,6 +154,10 @@ const DATA = {
       body: 'Sold by [Gift Shops](businesstypes-giftshop) and <b>nobody</b> else.\n\nSee [Exercise](common_exercise).'},
   ],
   sample: SAMPLE,
+  // The hand-authored articles, in the shape tools/wiki_topics.json writes:
+  // written beside the payload rather than read from the game's help, so each
+  // one closes with the line saying what it was checked against.
+  topics: [TOPIC],
   // The date is the newest source modification time, and the save build is not
   // knowable from an installation, so the extraction states it as null.
   provenance: {extracted: '2026-09-03', saveBuildNumber: null,
@@ -300,6 +324,41 @@ test('a page the catalogue does not have is a said-so, not a dead link', async (
   assert.match(html, /Not here/);
   assert.match(html, /No page called/);
   assert.match(html, /href="#wiki"/);
+});
+
+test('a hand-authored topic reads as a page, and says where its numbers came from', async () => {
+  const w = wiki();
+  // The front page is the way to it without knowing it is there.
+  const home = await w.load('wiki');
+  assert.match(home, /Big Copilot topics/);
+  assert.match(home, /topic%2Fhow-rent-works/);
+  // And the search finds it exactly as it finds a help page.
+  assert.deepEqual([...w.call(`wikiFind("rent")`)].map(h => h.id), ['topic/how-rent-works']);
+
+  const html = await w.go('wiki/topic%2Fhow-rent-works');
+  assert.match(html, /<h1>How rent works<\/h1>/);
+  // Our reading, not the game's help, so it wears the Big Copilot badge.
+  assert.match(html, /Big Copilot's guidance or calculation/);
+  assert.match(html, /rent per day = floor area × \(30 \+ traffic index\) × district rate/);
+  assert.match(html, /<b>1\.033<\/b>/);
+  // Seven districts, one row each, under the two column headers.
+  const body = html.split('<tbody>')[1].split('</tbody>')[0];
+  assert.equal((body.match(/<tr>/g) || []).length, 7);
+  assert.match(html, /<th scope="row">Midtown<\/th><td data-label="Rate">0\.02482<\/td>/);
+  assert.match(html, /wk-topicsrc/);
+  assert.match(html, /15 September 2026/);
+  assert.match(html, /game build 3675/);
+  assert.doesNotMatch(html, /undefined/);
+});
+
+test('a build that carries no topics simply has none of them', async () => {
+  const bare = {...DATA};
+  delete bare.topics;
+  const w = wiki({data: bare});
+  const home = await w.load('wiki');
+  assert.doesNotMatch(home, /Big Copilot topics/);
+  assert.deepEqual([...w.call(`wikiFind("rent")`)].map(h => h.id), []);
+  assert.match(await w.go('wiki/topic%2Fhow-rent-works'), /Not here/);
 });
 
 /* --- search -------------------------------------------------------------- */

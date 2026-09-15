@@ -13,6 +13,7 @@ ICON.search = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="1
 ICON.x = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>';
 ICON.full = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>';
 ICON.home = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"></path></svg>';
+ICON.pin = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg>';
 function mapButton(key, label = "this building"){
   if(!key) return "";
   return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(`Show ${label} on map`)}" title="Show on map">${MAP_ICON}</button>`;
@@ -91,8 +92,42 @@ function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || map
 /* A place with no business still gets a tag: the neighbourhood's initials. */
 const hoodCode = (b, hood) => b?.code || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 const PANEL_W = 316;   // the floating places panel plus its margin
+const FINDER_PANEL_W = 456; // the ranked table needs the wider panel
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
 const GLIDE_MS = 700;
+
+/* find a location: a mode of the map page -------------------------------------
+   The finder ranks premises the player could take by the neighbourhood's demand
+   for a business type and the building's foot traffic. It is not a profit
+   ranking and the panel says so. Everything it needs is in D.premises, which a
+   board built before the feature does not carry: without it the chip is absent
+   and the map is exactly what it was. */
+const FINDER_CATS = [["retail","Retail"],["office","Office"],["warehouse","Warehouse"],["cinema","Cinema"],["theater","Theater"]];
+const FINDER_KEY = "ba_finder_v1";
+const premises = () => D?.premises || null;
+const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
+/* A size letter whose layouts disagree carries [min, max] rather than a number. */
+const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
+/* A minimum is a guarantee, so a range only clears it if its smallest variant
+   does: a cinema seating 100 to 150 is not a building that seats 125. */
+const capMin = c => Array.isArray(c) ? c[0] : c;
+const hoodTag = hood => (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood]) || hoodCode(null, hood);
+const finderDefaults = () => ({on:false, cat:"retail", type:"", vac:true, buy:false,
+  hoods:null, minCap:0, minTraffic:0, sale:false, sort:"score", dir:-1});
+const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
+  : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
+  : b.status === "mine" ? "Yours"
+  : b.type === "residential" ? "Residential" : "Not for rent";
+const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
+/* The rent estimate is a fitted formula, so it says how it did against the
+   leases the player is billed for today. */
+function rentNote(){
+  const check = premises()?.rent?.check;
+  if(!check || !check.leases) return "Est. rent is fitted to observed leases; the save stores no rent for a vacant building, and you have no current lease to check against.";
+  return `Est. rent is fitted to observed leases; the save stores no rent for a vacant building. It matches your ${
+    plural(check.leases, "current lease")} within ${(check.worst * 100).toFixed(1)}%.`;
+}
+const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -101,6 +136,7 @@ class CityMapView {
     this.root = root; this.selected = null; this.box = null; this.hot = null;
     this.panel = options.panel !== false;
     this.layers = {mine:true, own:true, home:true, fnd:true, all:false}; this.query = "";
+    this.fs = finderDefaults();
     this.root.classList.add("city-map");
     this.buildToken = 0;
     // One breakpoint for CSS and script alike: the panel floats over the map
@@ -113,6 +149,8 @@ class CityMapView {
       if(!this.svg) return;
       const pick = e.target.closest('[data-pick]');
       if(pick){ this.select(pick.dataset.pick); return; }
+      const sorter = e.target.closest('.fhead [data-s]');
+      if(sorter){ this.sortBy(sorter.dataset.s); return; }
       if(e.target.closest('[data-more]')){ this.showAll = true; this.update(); return; }
       const action = e.target.closest('[data-action]')?.dataset.action;
       if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
@@ -146,17 +184,17 @@ class CityMapView {
   build(){
     const a = this.assets, id = this.root.id;
     const clipId = `${id}-clip`;
-    const head = this.panel ? `<div class="sechead map-head">
-      <span class="layers" role="group" aria-label="Layers">
+    const head = this.panel ? `<div class="sechead map-head">${this.finderControls()}
+      <span class="layers moff" role="group" aria-label="Layers">
         <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
-      <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
-    </div>` : "";
+      <span class="why moff" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
+      <span class="aside moff"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
+    </div>${this.finderRow()}` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage${this.panel ? " panel" : ""}" data-stage>
       <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="City map. Select a building or use the places list.">
       <defs><clipPath id="${clipId}"><rect class="map-region-clip" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
@@ -164,7 +202,7 @@ class CityMapView {
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
       </div>
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
     </div>${this.panel ? `<aside class="places" aria-label="Matching places"><div class="list"></div></aside>` : ""}</div>`;
@@ -185,6 +223,7 @@ class CityMapView {
       this.update();
     });
     this.card.querySelector('.x').dataset.action = 'close';
+    this.wireFinder();
     if(this.list){
       this.list.addEventListener('mouseover', e => { const p = e.target.closest('[data-pick]'); if(p) this.light(p.dataset.pick); });
       this.list.addEventListener('mouseout', e => { const p = e.target.closest('[data-pick]'); if(p) this.light(null); });
@@ -199,6 +238,261 @@ class CityMapView {
     this.reset();
     if(typeof wireTips === "function") wireTips();
   }
+  /* --- find a location ------------------------------------------------------
+     The chip and its filters live in the map head; while the finder is on the
+     layer chips and the search step aside (class moff) and the filters take
+     their place (class fonly), both switched by CSS off .city-map.finder. */
+  hoodList(){
+    const P = premises(); if(!P) return [];
+    return [...new Set(P.buildings.map(b => b.hood).filter(Boolean))].sort();
+  }
+  hoodOn(hood){ return !this.fs.hoods || this.fs.hoods.includes(hood); }
+  finderControls(){
+    const P = premises(); if(!P) return "";
+    return `<button type="button" class="sev fc tog" data-f="tog" aria-pressed="false" data-tip="Find a location: rank premises you could take by the neighbourhood's demand and the building's foot traffic. Click to switch it on.">${ICON.pin}Find a location</button>
+      <span class="seg cat fonly" role="group" aria-label="Business category">${FINDER_CATS.map(([c, label]) =>
+        `<a href="#" data-cat="${c}">${label}</a>`).join('')}</span>
+      <label class="srch sel fonly"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select></label>
+      <span class="layers fonly" role="group" aria-label="Availability">
+        <button type="button" class="sev fc av" data-av="vac" aria-pressed="true" data-tip="Buildings the save marks as available for rent."><i></i>vacant<b class="n">0</b></button>
+        <button type="button" class="sev fc av buy off" data-av="buy" aria-pressed="false" data-tip="Buildings a rival business occupies. You can make a takeover offer in-game; the price is not in the save."><i></i>buy-out<b class="n">0</b></button>
+      </span>
+      <span class="why fonly" tabindex="0" data-tip=""><i>?</i></span>`;
+  }
+  finderRow(){
+    const P = premises(); if(!P) return "";
+    const chips = this.hoodList().map(h =>
+      `<button type="button" class="sev fc hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(h)}"><i></i>${mapText(hoodTag(h))}</button>`).join('');
+    return `<div class="frow fonly"><span class="lab">Where</span>${chips}
+      <span class="lab" style="margin-left:10px">Min</span>
+      <label class="srch mini">cap<input type="number" min="0" data-f="minCap" value="0" aria-label="Minimum door cap"></label>
+      <label class="srch mini">traffic<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Minimum foot traffic"></label>
+      <span class="sp"></span>
+      <button type="button" class="sev fc sale off" data-f="sale" aria-pressed="false" data-tip="Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.">for sale<b class="n">${P.forSale.length}</b></button></div>
+      <p class="fnote fonly">Ranked by <b>neighbourhood demand</b> and <b>foot traffic</b>, not by profit. Score = traffic × type demand ÷ 100.</p>`;
+  }
+  wireFinder(){
+    if(!premises() || !this.panel) return;
+    const changed = () => { this.showAll = false; this.saveFinder(); this.update(); };
+    this.root.querySelector('[data-f="tog"]').onclick = () => {
+      this.fs.on = !this.fs.on; this.deselect(); changed();
+    };
+    this.root.querySelectorAll('.seg.cat a').forEach(a => a.onclick = e => {
+      e.preventDefault();
+      this.fs.cat = a.dataset.cat; this.fs.type = "";
+      this.clampSort();
+      changed();
+    });
+    this.root.querySelector('[data-f="type"]').onchange = e => { this.fs.type = e.target.value; changed(); };
+    this.root.querySelectorAll('.sev.fc.av').forEach(chip => chip.onclick = () => {
+      this.fs[chip.dataset.av === 'vac' ? 'vac' : 'buy'] = !this.fs[chip.dataset.av === 'vac' ? 'vac' : 'buy']; changed();
+    });
+    this.root.querySelectorAll('.sev.fc.hd').forEach(chip => chip.onclick = () => {
+      const all = this.hoodList(), h = chip.dataset.h;
+      let picked = this.fs.hoods ? this.fs.hoods.slice() : all.slice();
+      picked = picked.includes(h) ? picked.filter(x => x !== h) : [...picked, h];
+      this.fs.hoods = picked.length === all.length ? null : picked;
+      changed();
+    });
+    this.root.querySelectorAll('.srch.mini input').forEach(input => input.oninput = () => {
+      this.fs[input.dataset.f] = Math.max(0, +input.value || 0); changed();
+    });
+    this.root.querySelector('[data-f="sale"]').onclick = () => { this.fs.sale = !this.fs.sale; this.deselect(); changed(); };
+  }
+  /* A warehouse has no score and no demand; every other category has both. A
+     sort the new category cannot show falls back to the one it ranks by, so a
+     header is always lit. */
+  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'rent'] : ['score', 'traffic', 'demand', 'rent']; }
+  clampSort(){
+    const keys = this.sortKeys();
+    if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.dir = -1; }
+  }
+  sortBy(key){
+    if(this.fs.sort === key) this.fs.dir = -this.fs.dir; else { this.fs.sort = key; this.fs.dir = -1; }
+    this.showAll = false; this.saveFinder(); this.update();
+  }
+  /* The filters and the chip travel with the character, like the import marks. */
+  finderStore(){ const who = mapCharacter(); return who ? `${FINDER_KEY}:${who}` : null; }
+  loadFinder(){
+    const who = mapCharacter();
+    if(this.fsCharacter === who) return;
+    this.fsCharacter = who;
+    this.fs = finderDefaults();
+    const store = this.finderStore(); if(!store) return;
+    try{
+      const saved = JSON.parse(localStorage.getItem(store));
+      if(saved && typeof saved === "object") this.fs = {...this.fs, ...saved,
+        hoods: Array.isArray(saved.hoods) ? saved.hoods : null};
+    }catch(e){}
+  }
+  saveFinder(){
+    const store = this.finderStore(); if(!store) return;
+    try{ localStorage.setItem(store, JSON.stringify(this.fs)); }catch(e){}
+  }
+  /* Opened from Today or a Growth cell: the finder comes on with a preset. */
+  setFinder(preset = {}){
+    this.loadFinder();
+    // A preset is a fresh question, and Today's card advertises the vacant
+    // count: it opens on vacant premises with no minimum in the way, whatever
+    // the last visit left behind. Only the neighbourhoods come from the caller.
+    this.fs = {...this.fs, on:true, sale:false, vac:true, buy:false, minCap:0, minTraffic:0, ...preset};
+    // It also lands on the column the category ranks by, never on a stale sort.
+    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
+    this.fs.dir = -1;
+    this.saveFinder();
+    this.selected = null; this.showAll = false;  // back to the 80-row cap
+    this.ready.then(ok => { if(ok) this.update(); });
+  }
+  /* The type demand this row is scored on: the chosen type, or the strongest
+     type of the category in that neighbourhood when "any type" is picked. */
+  fitFor(b){
+    const none = {demand:null, fit:null, slug:null, score:null, rivals:null, mine:null};
+    const P = premises(); if(!P || this.fs.cat === 'warehouse') return none;
+    const list = (P.demand[b.hood] || []).filter(d => d.category === this.fs.cat);
+    const d = this.fs.type ? list.find(x => x.slug === this.fs.type)
+      : list.reduce((best, x) => !best || x.demand > best.demand ? x : best, null);
+    if(!d) return none;
+    return {demand:d.demand, fit:d.type, slug:d.slug, score:Math.round(b.traffic * d.demand / 100),
+      rivals:this.countHere(b.hood, d.slug, 'rival', b.key), mine:this.countHere(b.hood, d.slug, 'mine', b.key)};
+  }
+  /* Rivals of a type in a neighbourhood. A buy-out row is one of them itself,
+     and a building is not its own competition, so it never counts itself. */
+  countHere(hood, slug, status, self){
+    const P = premises(); if(!P) return 0;
+    if(!this.counts) this.counts = new Map();
+    const key = `${status}|${hood}|${slug}`;
+    if(!this.counts.has(key)) this.counts.set(key, P.buildings.filter(b =>
+      b.hood === hood && b.status === status && b.occupant?.typeSlug === slug).map(b => b.key));
+    const keys = this.counts.get(key);
+    return keys.length - (keys.includes(self) ? 1 : 0);
+  }
+  finderRows(){
+    const P = premises(), fs = this.fs;
+    if(!P) return [];
+    const out = [];
+    for(const b of P.buildings){
+      if(b.type !== fs.cat) continue;
+      if(!((fs.vac && b.status === 'vacant') || (fs.buy && b.status === 'rival'))) continue;
+      if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
+      const cap = capMin(b.cap);
+      if(fs.minCap && (cap == null || cap < fs.minCap)) continue;
+      const loc = this.assets.byKey.get(b.key);
+      out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
+    }
+    const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
+      : fs.sort === 'rent' ? r.bld.rent : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
+    // A row with nothing to sort on stays at the bottom whichever way the
+    // column points; it is not the smallest value, it is no value at all.
+    out.sort((a, b) => {
+      const x = value(a), y = value(b);
+      if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
+      return (y - x) * -fs.dir || b.bld.traffic - a.bld.traffic;
+    });
+    return out;
+  }
+  /* The rows carry their geometry like every other row, so a listing lights its
+     own footprint and a click on either one selects it. */
+  saleRows(){
+    const P = premises(); if(!P) return [];
+    return P.forSale.filter(s => this.hoodOn(s.hood)).sort((a, b) => a.price - b.price)
+      .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
+  }
+  finderList(rows){
+    const fs = this.fs, wh = fs.cat === 'warehouse';
+    const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["rent","Est. rent"]]
+                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["rent","Est. rent"]];
+    const head = `<div class="fhead">${cols.map(([key, label]) => key
+      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? (fs.dir > 0 ? 'on up' : 'on') : ''}">${label}</span>`
+      : `<span>${label}</span>`).join('')}</div>`;
+    return head + rows.map((r, i) => {
+      const b = r.bld, f = r.f;
+      const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}`
+        : f.fit && !fs.type ? `best fit: ${f.fit}` : `${b.m2.toLocaleString('en-US')} m² · cap ${capText(b.cap)}`;
+      const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
+      const numbers = wh ? `<span class="v">${b.m2.toLocaleString('en-US')}</span><span class="v">${b.traffic}</span><span class="v"></span>`
+        : `<span class="v sc">${f.score ?? '—'}</span><span class="v">${b.traffic}</span><span class="v">${f.demand ?? '—'}</span>`;
+      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk">${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v">${b.rent != null ? mapText(fmt(b.rent)) : '—'}</span></button>`;
+    }).join('');
+  }
+  saleList(rows){
+    return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${mapText(s.hood)}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(money(s.price))}</span></button>`).join('');
+  }
+  /* The facts every address carries, finder on or off: what the place is, what
+     it would cost and whether it is free. */
+  paintFacts(key){
+    const card = this.card, st = card.querySelector('.st'), facts = card.querySelector('.facts'), fit = card.querySelector('.fit');
+    const b = this.sites?.get(key);
+    st.hidden = facts.hidden = fit.hidden = true;
+    if(!b) return;
+    st.hidden = facts.hidden = false;
+    st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'unavailable' ? 'na' : b.status}`;
+    st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
+    facts.innerHTML = `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
+      + `<span>Foot traffic<b>${b.traffic}</b></span>`
+      + `<span>Door cap<b>${mapText(capText(b.cap))}</b></span>`
+      + `<span>Est. rent<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`;
+    // Only a candidate reads as one: your own shop keeps its business numbers.
+    const candidate = (this.fs.vac && b.status === 'vacant') || (this.fs.buy && b.status === 'rival');
+    if(!this.finderOn() || this.fs.sale || b.type !== this.fs.cat || !candidate) return;
+    const f = this.fitFor(b);
+    fit.hidden = false;
+    fit.innerHTML = f.fit
+      ? `<b>${mapText(f.fit)}</b> · demand ${f.demand} · ${plural(f.rivals, 'rival')}${f.mine ? ` · ${f.mine} of yours` : ''} in ${mapText(b.hood)}`
+      : 'No demand reading for this category here.';
+    const num = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
+    card.querySelector('.nums').innerHTML = f.score != null
+      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + num(f.demand, 'demand')
+      : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
+  }
+  finderOn(){ return !!(this.panel && premises() && this.fs.on); }
+  /* Chips, select and inputs read back from the state, so a preset from Today
+     or from a Growth cell shows in the controls it set. */
+  paintControls(){
+    const P = premises(); if(!P || !this.panel) return;
+    this.clampSort();
+    const on = this.finderOn();
+    this.root.classList.toggle('finder', on);
+    this.citymap.classList.toggle('finder', on);
+    this.stage.classList.toggle('finder', on);
+    const tog = this.root.querySelector('[data-f="tog"]');
+    tog.classList.toggle('on', on); tog.classList.toggle('off', !on);
+    tog.setAttribute('aria-pressed', String(on));
+    tog.dataset.tip = on ? "Find a location is on: the list ranks premises you could take. Click to go back to the plain map."
+      : "Find a location: rank premises you could take by the neighbourhood's demand and the building's foot traffic. Click to switch it on.";
+    // The rent check comes from the payload, so it is written on every update.
+    this.root.querySelector('.why.fonly').dataset.tip = `${FINDER_WHY} ${rentNote()}`;
+    this.root.querySelectorAll('.seg.cat a').forEach(a => a.classList.toggle('on', a.dataset.cat === this.fs.cat));
+    const select = this.root.querySelector('[data-f="type"]');
+    const types = new Map();
+    Object.values(P.demand).forEach(list => list.forEach(d => { if(d.category === this.fs.cat) types.set(d.slug, d.type); }));
+    const options = [...types].sort((a, b) => a[1].localeCompare(b[1]));
+    if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
+    select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
+      `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
+    select.disabled = !options.length;
+    const counts = {vac:0, buy:0};
+    P.buildings.forEach(b => { if(b.type !== this.fs.cat) return;
+      if(b.status === 'vacant') counts.vac++; else if(b.status === 'rival') counts.buy++; });
+    this.root.querySelectorAll('.sev.fc.av').forEach(chip => {
+      const key = chip.dataset.av;
+      chip.querySelector('.n').textContent = counts[key];
+      chip.classList.toggle('off', !this.fs[key]);
+      chip.setAttribute('aria-pressed', String(!!this.fs[key]));
+    });
+    this.root.querySelectorAll('.sev.fc.hd').forEach(chip => {
+      const picked = this.hoodOn(chip.dataset.h);
+      chip.classList.toggle('off', !picked); chip.setAttribute('aria-pressed', String(picked));
+    });
+    this.root.querySelectorAll('.srch.mini input').forEach(input => {
+      const v = String(this.fs[input.dataset.f] || 0);
+      if(input.value !== v && document.activeElement !== input) input.value = v;
+    });
+    const sale = this.root.querySelector('[data-f="sale"]');
+    sale.classList.toggle('on', this.fs.sale); sale.classList.toggle('off', !this.fs.sale);
+    sale.setAttribute('aria-pressed', String(this.fs.sale));
+    sale.querySelector('.n').textContent = P.forSale.length;
+  }
   /* Full screen takes the whole map box (stage and panel); the camera refits
      when the size changes, keeping the selection. */
   toggleFullscreen(){
@@ -209,7 +503,8 @@ class CityMapView {
   /* The camera: a viewBox with the stage's aspect, so nothing letterboxes. */
   stageRect(){ return this.rect || (this.rect=this.svg.getBoundingClientRect()); }
   hasPanel(){ return this.panel && !this.narrow; }
-  freeWidth(){ const r = this.stageRect(); return Math.max(120, r.width - (this.hasPanel() ? PANEL_W : 0)); }
+  panelW(){ return this.finderOn() ? FINDER_PANEL_W : PANEL_W; }
+  freeWidth(){ const r = this.stageRect(); return Math.max(120, r.width - (this.hasPanel() ? this.panelW() : 0)); }
   fitBox(bounds){
     const r = this.stageRect(); if(!r.width || !r.height) return [...this.assets.viewBox];
     const free = this.freeWidth(), [bx, by, bw, bh] = bounds;
@@ -409,6 +704,7 @@ class CityMapView {
   }
   /* The rows: whatever layers are on, added up and deduped, then searched. */
   rows(){
+    if(this.finderOn()) return this.fs.sale ? this.saleRows() : this.finderRows();
     const seen = new Set(), rows = [];
     const add = r => { if(!seen.has(r.key)){ seen.add(r.key); rows.push(r); } };
     const site = b => ({key:b.key, address:b.address, hood:b.neighbourhood, business:b, region:this.assets.byKey.get(b.key)?.region, bounds:this.assets.byKey.get(b.key)?.bounds});
@@ -426,9 +722,15 @@ class CityMapView {
   }
   update(){
     if(!this.svg) return;
+    // A view built before a save was open has no finder controls; the first
+    // payload that carries premises brings them in.
+    if(this.panel && premises() && !this.root.querySelector('[data-f="tog"]')) this.build();
     this.businesses = mapBusinesses(); this.findings = mapFindings();
     this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
     this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
+    this.sites = new Map((premises()?.buildings || []).map(b => [b.key, b]));
+    this.counts = null;
+    this.loadFinder(); this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });
     this.matches = this.rows();
@@ -439,6 +741,10 @@ class CityMapView {
       path.classList.toggle('mine', business);
       path.classList.toggle('owned', !business && owned);
       path.classList.toggle('home', !business && this.homes.has(key));
+      // In finder mode the candidates are the only highlighted footprints.
+      path.classList.toggle('cand', this.finderOn() && keys.has(key));
+      // Amber marks a buy-out candidate; a building for sale is not one.
+      path.classList.toggle('buy', this.finderOn() && !this.fs.sale && keys.has(key) && this.sites.get(key)?.status === 'rival');
       path.classList.toggle('dim', !keys.has(key) && key!==this.selected);
       path.classList.toggle('sel', key===this.selected);
       path.querySelector('title').textContent=[this.businesses.get(key)?.name,this.assets.byKey.get(key).address].filter(Boolean).join(' · ');
@@ -450,6 +756,17 @@ class CityMapView {
     }).join('') : '';
     if(this.list){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
+      if(this.finderOn()){
+        const all = this.matches;
+        const some = this.showAll ? all : all.slice(0, 80);
+        this.list.innerHTML = (this.fs.sale ? this.saleList(some) : this.finderList(some))
+          + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${all.length - some.length}</button>` : '')
+          + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
+        if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
+        this.list.scrollTop=listScroll;
+        this.fillCard(); this.paintView();
+        return;
+      }
       const shown = this.showAll ? this.matches : this.matches.slice(0, 80);
       this.list.innerHTML = shown.map(r => {
         const b = r.business, trading = b && b.status !== 'vacant', kind = mapKind(this.findings.get(r.key));
@@ -469,13 +786,15 @@ class CityMapView {
   fillCard(){
     const card = this.card; if(!card) return;
     const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key), home = this.homes.get(key);
-    if(!key){ card.hidden = true; card.classList.remove('in'); return; }
+    if(!key){ card.hidden = true; card.classList.remove('in'); this.paintFacts(null); return; }
     // Filled now, shown by showCard() once the camera has settled: until then
     // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
     card.querySelector('h3').textContent = title.replace(/^\[\w+\]\s*/, '');
-    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}` : mapText([loc?.address, loc?.hood].filter(Boolean).join(' · '));
+    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}`
+      // The title is already the address; a bare location adds its neighbourhood.
+      : mapText(loc?.hood || loc?.address || '');
     card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ' · no map position' : ''}</span>`;
     const num = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
     card.querySelector('.nums').innerHTML = trading
@@ -488,6 +807,7 @@ class CityMapView {
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
     card.querySelector('.go2').hidden = !b;
+    this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }
   showCard(){
@@ -501,7 +821,7 @@ class CityMapView {
       card.classList.remove('flip'); card.style.transform = 'translate(16px,16px)'; return;
     }
     const [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2);
-    const limit = r.width - (this.hasPanel() ? PANEL_W + 14 : 16);
+    const limit = r.width - (this.hasPanel() ? this.panelW() + 14 : 16);
     const flip = p.x + 40 + card.offsetWidth > limit;
     card.classList.toggle('flip', flip);
     const cw = card.offsetWidth, ch = card.offsetHeight;
@@ -557,6 +877,7 @@ class CityMapView {
   }
   resetCharacter(){
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
+    this.fsCharacter = undefined; this.fs = finderDefaults(); this.showAll = false;
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
       this.root.querySelectorAll('.lay').forEach(c => { c.classList.toggle('off', !this.layers[c.dataset.l]); c.setAttribute('aria-pressed', String(this.layers[c.dataset.l])); });
@@ -565,6 +886,14 @@ class CityMapView {
 }
 function showCityMap(){
   if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage')); else cityMapPage.paintView();
+}
+/* Today's card and a Growth cell both open the map with the finder on and a
+   category, a type and a neighbourhood already chosen. */
+function openFinder(preset = {}){
+  if(!premises()) return;
+  showPage("map");
+  showCityMap();
+  cityMapPage.setFinder(preset);
 }
 function refreshCityMaps(){
   const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;

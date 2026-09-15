@@ -147,6 +147,18 @@ The contract (`schemaVersion: 1`):
   its primary and secondary products, equipment, suppliers and recipes.
   `BUSINESS.primary` and `BUSINESS.secondary` contain short product IDs;
   `extras` retains the secondary product names for older consumers.
+- `topics` — hand-authored articles, sorted by slug, carried through from
+  `tools/wiki_topics.json` exactly as written. This is the one part of the
+  payload the game does not write: an article covers something the help never
+  states, so each carries `slug`, `title`, `lede`, `sections` (a `heading`, its
+  `paragraphs`, and at most one `table` of `columns` and `rows`) and a
+  `provenance` line naming what it was checked against and when.
+  `validate_topics` refuses a missing provenance line, a duplicate slug, a
+  section with no paragraphs, and a table row that does not fit its columns;
+  nothing here is derived, filled in or dropped. `provenance.counts.topics`
+  counts them, and the wiki renders them under the Big Copilot badge. Nothing
+  rebuilds an article when the game patches, so each is reviewed by hand — see
+  [wiki-content-design.md](wiki-content-design.md#hand-authored-topics).
 - `sample` — the Gift Shop compatibility entry. Older payloads containing only
   this entry still work with the reader.
 

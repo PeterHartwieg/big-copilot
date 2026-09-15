@@ -559,6 +559,230 @@ def _configured_price(value):
             and math.isfinite(value) and value >= 0 else None)
 
 
+# ------------------------------------------------------------------ premises
+# Every building in the city, so the map can answer "which available premises
+# are best right now?". The save only carries rent and door capacity for a
+# building somebody already occupies, so both are reconstructed here: rent from
+# a formula fitted to observed leases, capacity from the game's own help page.
+
+EMPTY_TYPE = "ba:businesstype_empty"
+# Buildings the player can never take: the game's fixtures and other people's
+# flats. They read "unavailable" whatever else the registration says.
+UNRENTABLE_BUILDINGS = ("residential", "special")
+
+# rent_per_day = m2 x (30 + traffic) x district rate x (1.033 in an office)
+#
+# Fitted 15 September 2026 against 48 non-residential leases across three
+# characters on build 3675, worst residual 0.6%. Residential leases do not
+# follow it and are never estimated. A game patch can rebalance rents, so the
+# payload carries a live check against the player's own current leases and the
+# page can say how far the estimate is off today.
+RENT_TRAFFIC_OFFSET = 30
+RENT_RATES = {
+    "Midtown": 0.02482,
+    "Hell's Kitchen": 0.01468,
+    "Murray Hill": 0.01020,
+    "Garment District": 0.00734,
+    "Lower Manhattan": 0.00621,
+    "The Hamptons": 0.00568,
+    "Industry City": 0.00566,
+}
+RENT_OFFICE_FACTOR = 1.033
+
+# The door capacity each size letter buys, per building type. Read from the
+# game's help page when the player's own en.json is at hand; this is the same
+# table as build 3675 ships, for when it is not (the page does not travel with
+# the web build). A letter whose variants disagree carries [min, max].
+CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
+FALLBACK_CAPS = {
+    "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
+    "office": {"A": 4, "C": 8, "D": 10, "J": 10, "K": 50},
+    "cinema": {"S": [100, 150]},
+    "theater": {"R": [150, 200]},
+}
+_CAP_SECTION_RE = re.compile(r"^\*\*([A-Za-z][A-Za-z /]*)\*\*$")
+_CAP_SIZE_RE = re.compile(
+    r"^\*\s*\*\*([A-Z]+)\d+\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I
+)
+# Types whose own building class is neither a shop floor nor an office.
+VENUE_TYPES = {
+    "ba:businesstype_cinema": "cinema",
+    "ba:businesstype_theater": "theater",
+}
+
+
+def _door_caps(names: Names) -> dict:
+    """{building type: {size letter: capacity}} from help_building_types_content.
+
+    The page lists a code per layout — C1 and C2 are both 225 m2 retail floors —
+    so the codes collapse to their letter, which is what ba_buildings.json
+    records. A cinema's three auditorium layouts really do seat different
+    crowds, so a letter whose variants disagree keeps [min, max] rather than
+    pretending to a single number.
+    """
+    found: dict[str, dict[str, list]] = {}
+    section = None
+    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
+        line = line.strip()
+        head = _CAP_SECTION_RE.match(line)
+        if head:
+            section = head.group(1).strip().lower()
+            continue
+        size = _CAP_SIZE_RE.match(line)
+        if size and section in CAP_CATEGORIES:
+            found.setdefault(section, {}).setdefault(size.group(1), []).append(
+                int(size.group(2).replace(",", ""))
+            )
+    caps = {kind: dict(letters) for kind, letters in FALLBACK_CAPS.items()}
+    for kind, letters in found.items():
+        caps[kind] = {
+            letter: (min(seen) if min(seen) == max(seen) else [min(seen), max(seen)])
+            for letter, seen in sorted(letters.items())
+        }
+    return caps
+
+
+def _rent_estimate(row: dict) -> int | None:
+    """Estimated rent per day for one building, from the static table's row."""
+    rate = RENT_RATES.get(row.get("h"))
+    if rate is None or row.get("t") == "residential":
+        return None
+    rent = row["m"] * (RENT_TRAFFIC_OFFSET + row["x"]) * rate
+    if row.get("t") == "office":
+        rent *= RENT_OFFICE_FACTOR
+    return int(round(rent))
+
+
+def _premises_status(reg: dict, row: dict) -> str:
+    """Whether the player could take this building today."""
+    if reg.get("RentedByPlayer"):
+        return "mine"
+    if row.get("t") in UNRENTABLE_BUILDINGS:
+        return "unavailable"
+    kind = reg.get("businessTypeName")
+    if kind and kind != EMPTY_TYPE:
+        return "rival"
+    # Vacancy is exact: every empty retail, office, cinema and theater building
+    # says so itself. Nothing else is ever read as vacant.
+    return "vacant" if reg.get("AvailableForRent") else "unavailable"
+
+
+def _premises_demand(market: dict) -> dict:
+    """The Market grid's by-type rows, turned inside out into one list per hood.
+
+    The page ranks a building on its neighbourhood's demand for a type, so it
+    wants the grid by neighbourhood; the grid itself is by type. Same numbers,
+    no second reading.
+    """
+    hoods = market.get("hoods") or []
+    out: dict[str, list] = {hood: [] for hood in hoods}
+    for band in (market.get("types") or [], market.get("offices") or []):
+        for row in band:
+            slug = row["slug"]
+            category = (
+                "office" if slug in OFFICE_TYPES else VENUE_TYPES.get(slug, "retail")
+            )
+            for hood, cell in zip(hoods, row["cells"]):
+                if not cell:
+                    continue
+                out[hood].append(
+                    {
+                        "slug": slug,
+                        "type": row["type"],
+                        "demand": cell["demand"],
+                        "providers": cell["providers"],
+                        # Whether one of those providers is the player's own.
+                        "mine": bool(cell.get("here")),
+                        "category": category,
+                    }
+                )
+    return {hood: rows for hood, rows in out.items() if rows}
+
+
+def _premises(save: Save, names: Names, market: dict) -> dict:
+    """Every building in the city, with what it would cost and what it holds.
+
+    One row per registration the static table places. A couple of addresses in
+    some saves are registered but missing from the table; they are dropped
+    rather than guessed at.
+    """
+    table = load_buildings()
+    caps = _door_caps(names)
+    buildings, deviations = [], []
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        addr = (reg.get("StreetName"), reg.get("StreetNumber"))
+        row = table.get(addr)
+        if not row:
+            continue
+        rent = _rent_estimate(row)
+        status = _premises_status(reg, row)
+        kind = reg.get("businessTypeName")
+        occupant = None
+        # A hospital or a casino stays "unavailable", but the card still says
+        # who is in there, so every occupied building names its occupant.
+        if kind and kind != EMPTY_TYPE:
+            occupant = {
+                "name": reg.get("BusinessName") or "",
+                "type": names.label(kind, ""),
+                "typeSlug": kind,
+            }
+        buildings.append(
+            {
+                "key": site_key(addr),
+                "address": f"{addr[1]} {names.street(addr[0])}",
+                "hood": row["h"],
+                "type": row["t"],
+                "size": row["z"],
+                "m2": row["m"],
+                "traffic": row["x"],
+                "cap": caps.get(row["t"], {}).get(row["z"]),
+                "rent": rent,
+                "status": status,
+                "occupant": occupant,
+            }
+        )
+        # How far the formula is from what the player is actually billed today.
+        paid = reg.get("RentPerDay") or 0
+        if reg.get("RentedByPlayer") and rent and paid > 0:
+            deviations.append(abs(rent - paid) / paid)
+    buildings.sort(key=lambda b: b["key"])
+
+    for_sale = []
+    for entry in save.items(save.root.get("buildingsForSale")):
+        addr = save.address(entry.get("address"))
+        row = table.get(addr) if addr else None
+        if not row:
+            continue
+        for_sale.append(
+            {
+                "key": site_key(addr),
+                "address": f"{addr[1]} {names.street(addr[0])}",
+                "hood": row["h"],
+                "type": row["t"],
+                "size": row["z"],
+                "m2": row["m"],
+                "price": int(round(entry.get("buildingPrice") or 0)),
+            }
+        )
+    for_sale.sort(key=lambda b: b["key"])
+
+    return {
+        "buildings": buildings,
+        "forSale": for_sale,
+        "demand": _premises_demand(market),
+        "rent": {
+            "constant": RENT_TRAFFIC_OFFSET,
+            "rates": dict(RENT_RATES),
+            "officeFactor": RENT_OFFICE_FACTOR,
+            "check": {
+                "leases": len(deviations),
+                "worst": round(max(deviations), 4) if deviations else 0,
+            },
+        },
+        "caps": caps,
+    }
+
+
 # ---------------------------------------------------------------- extraction
 def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     root = save.root
@@ -704,6 +928,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "supply": supply,
         "rhythm": rhythm,
         "market": market,
+        "premises": _premises(save, names, market),
         "chains": chains,
         "trends": trends,
         "hypeExposure": hype,
@@ -5393,7 +5618,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
       <div class="moves">
         <a class="move rv" href="#secLogistics" id="planImportsCard"><span class="soon">CHECKLIST</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Plan weekly orders and get a checklist of settings to enter in-game.</span></a>
         <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
-        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
+        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
       </div>
     </section>
   </div>
@@ -7855,7 +8080,8 @@ function typeRow(r, i, hoods){
     const sellers = `${plural(c.providers, "seller")}${c.count > 1 ? " on average" : ""}${
       c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
     const tip = `${r.type} in ${c.hood}: ${range}, ${sellers}`;
-    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-slug="${attr(r.slug)}" data-hood="${
+      attr(c.hood)}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
@@ -7874,7 +8100,8 @@ function officeRow(r, i, hoods, trendDays, noOffices){
     const tip = `${r.type} in ${c.hood}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
-    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+    h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office data-slug="${
+      attr(r.slug)}" data-hood="${attr(c.hood)}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
@@ -8289,6 +8516,27 @@ function drawGoals(){
       : "");
 }
 
+/* Next moves: the Find a location card carries the live count. A board built
+   before the feature has no premises payload; the card stays where it is and
+   says nothing it cannot know. */
+function drawFindLocation(){
+  const card = $("findLocationCard"); if(!card) return;
+  const badge = card.querySelector(".soon"), text = card.lastElementChild;
+  const vacant = (D.premises?.buildings || []).filter(b => b.type === "retail" && b.status === "vacant");
+  if(!vacant.length){
+    badge.className = "soon";
+    badge.textContent = D.premises ? "NONE FREE" : "SOON";
+    text.textContent = D.premises ? "No vacant retail unit in the city right now."
+      : "Free buildings ranked by demand, rivals and the door cap you would get.";
+    return;
+  }
+  const best = vacant.reduce((a, b) => b.traffic > a.traffic ? b : a);
+  badge.className = "soon live";
+  badge.textContent = `${vacant.length} VACANT`;
+  text.textContent = `${plural(vacant.length, "vacant retail unit")} right now. Best foot traffic: ${
+    best.address}, ${best.hood} (${best.traffic}).`;
+}
+
 function drawFooter(){
   const m = D.meta;
   const f = $("footFile");
@@ -8307,7 +8555,7 @@ function renderAll(){
   drawChart(); drawRhythm(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
-  drawProducts(); drawPayroll(); drawGoals(); drawFooter();
+  drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawFooter();
   wireAll();
   refreshCityMaps();
   /* The wiki is the game's own text and does not move with a save, but the one
@@ -9056,6 +9304,12 @@ const wireCards = once(() => {
     $("orderChecklist").open = true;
     $("orderChecklistTitle").focus();
   });
+  $("findLocationCard").addEventListener("click", e => {
+    e.preventDefault();
+    /* Retail, any type: the count on the card is the retail one. */
+    if(D.premises) openFinder({cat:"retail", type:"", hoods:null});
+    else showPage("map");
+  });
   document.addEventListener("mousemove", e => {
     const c = closest(e, ".move, .drop"); if(!c || REDUCED) return;
     const r = c.getBoundingClientRect();
@@ -9200,9 +9454,26 @@ const wireHeat = once(() => {
     const i = tip.indexOf(":");
     // An office has no line to plan; its fee is served, not made.
     detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
+      + findPremisesLink(c)
       + (c.hasAttribute("data-office") ? "" : ` <a class="link" href="#secPlan">open in Plan a chain</a>`);
   });
+  /* The pin opens the map with the finder on, this type chosen and only this
+     neighbourhood left standing. */
+  on("click", "#cellDetail .link.pin", (a, e) => {
+    e.preventDefault();
+    openFinder({cat:a.dataset.cat, type:a.dataset.slug, hoods:[a.dataset.hood]});
+  });
 });
+/* A cell with no demand reading has no type to look for, and a board built
+   before the premises payload has nowhere to send the click. */
+function findPremisesLink(cell){
+  const slug = cell.dataset.slug, hood = cell.dataset.hood;
+  if(!slug || !hood || !D.premises) return "";
+  const cat = (D.premises.demand[hood] || []).find(d => d.slug === slug)?.category;
+  if(!cat) return "";
+  return ` <a class="link pin" href="#map" data-cat="${attr(cat)}" data-slug="${attr(slug)}" data-hood="${
+    attr(hood)}">${icon("pin")}find premises</a>`;
+}
 
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */
 function planDraw(){

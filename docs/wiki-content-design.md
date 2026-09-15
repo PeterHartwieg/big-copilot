@@ -300,6 +300,42 @@ prices. Other help pages do contain money figures, including vehicle prices.
 Profit and margins in the Yours panel must come from the opened save; recipe
 daily totals are a clearly labelled calculation from the help's hourly ceiling.
 
+### Hand-authored topics
+
+Every page kind above is derived from the game's own help text. A topic is the
+exception: a whole article written by hand, about something the help never
+states. It exists for facts Big Copilot established itself — how rent is
+computed, for instance — which belong beside the game's own reference rather
+than buried in a scope document.
+
+- **Where they live.** `tools/wiki_topics.json`, beside `wiki_sample.json`.
+  One object per article: `slug`, `title`, `lede`, `sections` (each a `heading`,
+  its `paragraphs`, and optionally one `table` of `columns` and `rows`), and a
+  `provenance` line. Paragraphs take the same `**bold**` and `[label](target)`
+  markdown the game's help uses, rendered by the same reader.
+- **How they ship.** `tools/build_wiki_data.py` carries the file through as the
+  payload's `topics`, sorted by slug, and counts them in provenance.
+  `validate_topics` refuses an article with no provenance line, a duplicate
+  slug, a section with no paragraphs, or a table row that does not fit its
+  columns. Nothing is derived: the builder adds no facts to an article and
+  removes none.
+- **How they read.** `web/wiki.js` draws a topic in the guides' vocabulary —
+  the same `wk-lede`, the same `section.sec` with a `sechead`, the same
+  `wk-read` prose — under the amber **Big Copilot** badge, because a topic is
+  our reading and not the game's help. The provenance line closes the page.
+  Topics are routed as `#wiki/topic%2F<slug>`, are found by the wiki's search
+  exactly as a help page is, and are listed under "Big Copilot topics" on the
+  wiki's front page.
+- **Keeping them honest.** A topic states the date and game build its numbers
+  were checked against, in the article and again in the provenance line, so a
+  patch that rebalances something dates the article rather than silently
+  contradicting it. Review every topic when the game updates: unlike an
+  extracted page, nothing rebuilds it.
+
+The first topic is "How rent works" (`how-rent-works`): the rent formula, the
+seven district rates and the office factor from
+[find-a-location-scope.md](find-a-location-scope.md).
+
 ## 6. Keeping it honest across patches
 
 A wiki that quietly shows last patch's numbers is worse than no wiki. Four
