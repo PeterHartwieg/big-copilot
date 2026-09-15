@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=4edd51fbfd">
+<link rel="stylesheet" href="community.css?v=5c994f9b5e">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -73,10 +73,6 @@
 .frow{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
 .frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
-.citymap.finder .places{width:440px}
-.stage.panel.finder .zoomer{right:472px}
-.citymap.narrow .stage.panel.finder .zoomer{right:16px}
-.citymap.finder:fullscreen .stage.panel .zoomer{right:488px}
 .fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
@@ -84,7 +80,11 @@
 .fhead span:nth-child(-n+3){text-align:left}
 .fhead span.on{color:var(--ink)}
 .fhead span.on::after{content:" ↓";color:var(--accent)}
-.fhead span.on.up::after{content:" ↑"}
+/* A header is a span with a button role: the browser's own focus ring lands on
+   it after a click and reads as a change to the column. Keyboard focus keeps a
+   ring, in the board's own accent. */
+.fhead span[data-s]:focus:not(:focus-visible){outline:none}
+.fhead span[data-s]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fhead.sale{grid-template-columns:26px 1fr 66px 48px 76px}
 .place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
 .place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:3px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -150,14 +150,14 @@
 .dlabel{position:absolute;left:0;top:0;font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.16em;color:#bdcbbf;text-shadow:0 0 6px #0d100f,0 0 2px #0d100f;white-space:nowrap;transition:opacity .25s}
 .stage.zoomed .dlabel{opacity:0}
 .zoomer{position:absolute;right:16px;bottom:16px;z-index:5;display:flex;flex-direction:column;gap:4px}
-.stage.panel .zoomer{right:332px}
+.stage.panel .zoomer{right:472px}
 .citymap.narrow .stage.panel .zoomer{right:16px}
 .zoomer .ibtn{font:500 18px/1 "IBM Plex Mono",monospace;box-shadow:0 2px 8px #0003}
 /* full screen: the map box takes the screen, the stage the height */
 .citymap:fullscreen{background:var(--ground);padding:16px;margin:0;box-sizing:border-box}
 .citymap:fullscreen .stage{height:calc(100vh - 32px);border-radius:8px}
 .citymap:fullscreen .places{top:32px;right:32px;bottom:32px}
-.citymap:fullscreen .stage.panel .zoomer{right:348px}
+.citymap:fullscreen .stage.panel .zoomer{right:488px}
 
 /* the ball lives in Central Park ------------------------------------------------ */
 .ball{position:absolute;left:0;top:0;width:60px;height:60px;z-index:4;cursor:pointer;will-change:transform;transform-origin:50% 100%;pointer-events:auto}
@@ -171,7 +171,7 @@
 .shadow{position:absolute;left:0;top:0;width:88px;height:14px;border-radius:50%;background:#000;opacity:.5;filter:blur(5px);z-index:3;pointer-events:none;transform-origin:50% 50%}
 
 /* places: a floating panel over the map ------------------------------------------ */
-.places{position:absolute;top:16px;right:16px;bottom:16px;width:300px;box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
+.places{position:absolute;top:16px;right:16px;bottom:16px;width:440px;box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
 .places .list{overflow:auto;overscroll-behavior:contain;flex:1;padding:4px 0;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
 .places .list::-webkit-scrollbar{width:6px}.places .list::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}.places .list::-webkit-scrollbar-track{background:transparent}
 .place{display:grid;width:100%;grid-template-columns:18px 30px 1fr auto;gap:0 8px;align-items:center;padding:9px 12px 9px 8px;border:0;background:none;text-align:left;font:inherit;cursor:pointer;color:var(--ink-2);transition:background .15s,color .15s;position:relative}
@@ -246,7 +246,7 @@ body.map-modal-open{overflow:hidden}
 /* narrow: the panel drops under the stage; the card and chrome keep their places */
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
- .citymap.narrow .places,.citymap.narrow.finder .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
+ .citymap.narrow .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
  .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
@@ -1914,8 +1914,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "4edd51fbfd";</script>
-<script>window.LEDGER_RELEASE = {"version":"4edd51fbfd","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
+<script>window.LEDGER_BUILD = "5c994f9b5e";</script>
+<script>window.LEDGER_RELEASE = {"version":"5c994f9b5e","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1984,8 +1984,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=4edd51fbfd"></script>
-<script src="community.js?v=4edd51fbfd"></script>
+<script src="app.js?v=5c994f9b5e"></script>
+<script src="community.js?v=5c994f9b5e"></script>
 
 <script>
 
@@ -4849,8 +4849,7 @@ function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || map
    name falls back to initials. The card and the list read the same tag. */
 const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood])
   || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-const PANEL_W = 316;   // the floating places panel plus its margin
-const FINDER_PANEL_W = 456; // the ranked table needs the wider panel
+const PANEL_W = 456;   // the finder's panel plus its margin
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
 const GLIDE_MS = 700;
 
@@ -4879,7 +4878,7 @@ const FINDER_SHOWS = [
   ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score", dir:-1});
+  hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
 const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   // A bank or a wholesaler is the game's own: occupied, but never for sale.
@@ -4983,7 +4982,7 @@ class CityMapView {
       <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
-    this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage${this.panel ? " panel" : ""}" data-stage>
+    this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
       <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="City map. Select a building or use the places list.">
       <defs><clipPath id="${clipId}"><rect class="map-region-clip" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
       <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${mapText(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${mapText(b.address)}</title></path>`).join('')}</g>
@@ -4994,7 +4993,7 @@ class CityMapView {
       </div>
       ${this.panel ? this.finderControls() : ""}
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
-    </div>${this.panel ? `<aside class="places" aria-label="Matching places">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
+    </div>${this.panel ? `<aside class="places fonly" aria-label="Premises found">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
     this.stage = this.root.querySelector('[data-stage]');
     this.citymap = this.root.querySelector('.citymap');
@@ -5005,7 +5004,14 @@ class CityMapView {
     this.paths = new Map([...this.root.querySelectorAll('[data-location]')].map(p => [p.dataset.location,p]));
     this.pips = this.root.querySelector('.map-pips');
     this.districts = [...this.root.querySelectorAll('.dlabel')];
-    if(this.search) this.search.oninput = () => { this.query = this.search.value; this.showAll = false; this.update(); };
+    if(this.search){
+      this.search.oninput = () => { this.query = this.search.value; this.showAll = false; this.update(); };
+      // Without a list to click, Enter takes the first match.
+      this.search.onkeydown = e => {
+        if(e.key !== 'Enter' || !this.matches?.length) return;
+        e.preventDefault(); this.select(this.matches[0].key);
+      };
+    }
     this.root.querySelectorAll('.lay').forEach(chip => chip.onclick = () => {
       const l = chip.dataset.l; this.layers[l] = !this.layers[l]; this.showAll = false;
       chip.classList.toggle('off', !this.layers[l]); chip.setAttribute('aria-pressed', String(this.layers[l]));
@@ -5098,10 +5104,13 @@ class CityMapView {
   sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'cap', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
-    if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.dir = -1; }
+    if(!keys.includes(this.fs.sort)) this.fs.sort = keys[0];
   }
+  /* Every column reads best-first, so there is no ascending state to flip into:
+     a second click on the column you are already sorted by puts the list back
+     in the order the category ranks by. */
   sortBy(key){
-    if(this.fs.sort === key) this.fs.dir = -this.fs.dir; else { this.fs.sort = key; this.fs.dir = -1; }
+    this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
     this.showAll = false; this.saveFinder(); this.update();
   }
   /* The filters and the chip travel with the character, like the import marks. */
@@ -5119,7 +5128,7 @@ class CityMapView {
         // Availability used to be two switches; a state saved then opens on
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
-      delete this.fs.vac; delete this.fs.buy; delete this.fs.sale;
+      delete this.fs.vac; delete this.fs.buy; delete this.fs.sale; delete this.fs.dir;
     }catch(e){}
     this.fs.on = false;   // the switch is never restored, only the filters
   }
@@ -5144,7 +5153,6 @@ class CityMapView {
     this.fs = {...this.fs, on:true, show:'rent', minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
-    this.fs.dir = -1;
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
@@ -5206,7 +5214,7 @@ class CityMapView {
     out.sort((a, b) => {
       const x = value(a), y = value(b);
       if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
-      return (y - x) * -fs.dir || b.bld.traffic - a.bld.traffic;
+      return (y - x) || b.bld.traffic - a.bld.traffic;
     });
     return out;
   }
@@ -5222,7 +5230,7 @@ class CityMapView {
     const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["cap","Cap"],["deposit","Upfront"]]
                     : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["cap","Cap"],["deposit","Upfront"]];
     const head = `<div class="fhead">${cols.map(([key, label]) => key
-      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? (fs.dir > 0 ? 'on up' : 'on') : ''}">${label}</span>`
+      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${label}</span>`
       : `<span>${label}</span>`).join('')}</div>`;
     // Each shaded column is stretched over the values actually on screen, so a
     // field of close scores still reads. Rent is never shaded: high is not good.
@@ -5286,6 +5294,7 @@ class CityMapView {
     this.root.classList.toggle('finder', on);
     this.citymap.classList.toggle('finder', on);
     this.stage.classList.toggle('finder', on);
+    this.stage.classList.toggle('panel', on);
     // A chip is filled when it is chosen and outlined when it is not; nothing
     // is ever dimmed, which would read as unavailable rather than unchosen.
     const mark = (el, chosen) => { if(!el) return; el.classList.toggle('on', !!chosen); el.setAttribute('aria-pressed', String(!!chosen)); };
@@ -5330,9 +5339,10 @@ class CityMapView {
   }
   /* The camera: a viewBox with the stage's aspect, so nothing letterboxes. */
   stageRect(){ return this.rect || (this.rect=this.svg.getBoundingClientRect()); }
-  hasPanel(){ return this.panel && !this.narrow; }
-  panelW(){ return this.finderOn() ? FINDER_PANEL_W : PANEL_W; }
-  freeWidth(){ const r = this.stageRect(); return Math.max(120, r.width - (this.hasPanel() ? this.panelW() : 0)); }
+  /* The panel is the finder's. Off, the map has the whole stage: no list, no
+     room reserved for one, and the zoom buttons back at the right edge. */
+  hasPanel(){ return this.finderOn() && !this.narrow; }
+  freeWidth(){ const r = this.stageRect(); return Math.max(120, r.width - (this.hasPanel() ? PANEL_W : 0)); }
   fitBox(bounds){
     const r = this.stageRect(); if(!r.width || !r.height) return [...this.assets.viewBox];
     const free = this.freeWidth(), [bx, by, bw, bh] = bounds;
@@ -5563,14 +5573,17 @@ class CityMapView {
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });
     this.matches = this.rows();
     const keys = new Set(this.matches.map(b=>b.key));
+    const searching = !this.finderOn() && !!this.query.trim();
     this.stage.classList.toggle('all', this.layers.all);
     this.paths.forEach((path,key) => {
       const business = this.businesses.has(key), owned = this.owned.has(key);
       path.classList.toggle('mine', business);
       path.classList.toggle('owned', !business && owned);
       path.classList.toggle('home', !business && this.homes.has(key));
-      // In finder mode the candidates are the only highlighted footprints.
+      // In finder mode the candidates are the only highlighted footprints;
+      // on the plain map a search lights what it found.
       path.classList.toggle('cand', this.finderOn() && keys.has(key));
+      path.classList.toggle('hot', searching && keys.has(key));
       // Amber marks a buy-out candidate; a building for sale is not one.
       path.classList.toggle('buy', this.finderOn() && !this.saleView() && keys.has(key) && this.sites.get(key)?.status === 'rival');
       path.classList.toggle('dim', !keys.has(key) && key!==this.selected);
@@ -5582,30 +5595,16 @@ class CityMapView {
       const [x,y,w,h] = this.assets.byKey.get(k).bounds;
       return `<circle class="pip ${mapKind(this.findings.get(k))}" cx="${(x+w/2).toFixed(1)}" cy="${(y+h/2).toFixed(1)}" r="4"></circle>`;
     }).join('') : '';
-    if(this.list){
+    const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
+    if(this.list && this.finderOn()){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
-      if(this.finderOn()){
-        const all = this.matches;
-        const some = this.showAll ? all : all.slice(0, 80);
-        this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
-          + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${all.length - some.length}</button>` : '')
-          + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
-        if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
-        this.list.scrollTop=listScroll;
-        this.fillCard(); this.paintView();
-        return;
-      }
-      const shown = this.showAll ? this.matches : this.matches.slice(0, 80);
-      this.list.innerHTML = shown.map(r => {
-        const b = r.business, trading = b && b.status !== 'vacant', kind = mapKind(this.findings.get(r.key));
-        const name = b ? b.name.replace(/^\[\w+\]\s*/, '') : r.address;
-        const small = b ? `${r.address} · ${b.type}${this.owned.has(r.key) ? ' · owned' : ''}` : r.owned ? `${r.hood || ''} · owned` : r.home ? `${r.hood || ''} · home` : r.hood || '';
-        const amt = trading ? `<span class="amt ${b.profit >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>` : '<span class="amt"></span>';
-        return `<button type="button" class="place ${kind}${r.key===this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key===this.selected}"><i class="mark"></i><span class="hood">${mapText(hoodCode(b, r.hood))}</span><span class="nm">${mapText(name)}<small>${mapText(small)}${!r.region ? ' · no map position' : ''}</small></span>${amt}</button>`;
-      }).join('') + (this.matches.length > shown.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${this.matches.length - shown.length}</button>` : '') + (this.matches.length ? '' : '<div class="empty">Nothing here.</div>');
+      const all = this.matches;
+      const some = this.showAll ? all : all.slice(0, 80);
+      this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
+        + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${all.length - some.length}</button>` : '')
+        + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
-      const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
     }
     this.fillCard(); this.paintView();
   }
@@ -5649,7 +5648,7 @@ class CityMapView {
       card.classList.remove('flip'); card.style.transform = 'translate(16px,16px)'; return;
     }
     const [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2);
-    const limit = r.width - (this.hasPanel() ? this.panelW() + 14 : 16);
+    const limit = r.width - (this.hasPanel() ? PANEL_W + 14 : 16);
     const flip = p.x + 40 + card.offsetWidth > limit;
     card.classList.toggle('flip', flip);
     const cw = card.offsetWidth, ch = card.offsetHeight;

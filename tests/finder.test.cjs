@@ -167,8 +167,10 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'false');
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), true);
     assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(), false);
     await turnOn(page);
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(), true);
     // The plain map's whole header steps aside; the filters sit in the panel,
     // above its own results.
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), false);
@@ -188,6 +190,9 @@ test('the switch is in the map window; every filter lives in the panel', async (
     await page.locator(chip).click();
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), true);
     assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);
+    // The whole panel goes with it: the map has the stage to itself.
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(), false);
+    assert.equal(await page.locator('#cityMapPage [data-stage].panel').count(), 0);
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 0);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -236,14 +241,26 @@ test('rows rank by score, and a header click re-sorts them', async () => {
     assert.ok(line.height > 8, `subtitle collapsed at ${line.height}px`);
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
     assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
-    await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();  // a second click flips it
-    assert.deepEqual(await rowKeys(page), [MT[1], HK[0], MT[0]]);
+    // Every column reads best-first; a second click on the same one goes back
+    // to the order the category ranks by rather than turning it upside down.
+    await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.equal(await page.locator('#cityMapPage .fhead span.on').textContent(), 'Score');
+    assert.equal(await page.locator('#cityMapPage .fhead span.up').count(), 0);
+    // A click leaves no focus ring behind on the header it landed on.
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="traffic"]').evaluate(h => {
+      h.focus(); return getComputedStyle(h).outlineStyle; }), 'none');
     // The card in finder mode reads score, traffic and demand, and the rivals line.
-    await page.locator('#cityMapPage .fhead [data-s="score"]').click();
     await pick(page, HK[0]);
     assert.deepEqual(await page.$$eval('#cityMapPage .site .num b', b => b.map(x => x.textContent)), ['46', '60', '77']);
     assert.equal(await page.locator('#cityMapPage .site .fit').textContent(),
       "Clothing Store · demand 77 · 1 rival in Hell's Kitchen");
+    // With the panel open the card keeps clear of it.
+    assert.equal(await page.evaluate(() => {
+      const c = document.querySelector('#cityMapPage .site').getBoundingClientRect();
+      const p = document.querySelector('#cityMapPage .places').getBoundingClientRect();
+      return c.right <= p.left + 1;
+    }), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -479,11 +496,9 @@ test('a row with nothing to sort on stays at the bottom whichever way the column
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     // Midtown has no cinema demand and no rent estimate: unscored, unpriced.
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
-    await page.locator('#cityMapPage .fhead [data-s="score"]').click();   // flip to ascending
-    assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
-    await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
+    await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();   // back to the default
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -588,6 +603,8 @@ test('on a phone the address keeps its room and the numbers stay on the card', a
     const nm = await page.locator(`#cityMapPage .place.fr .nm`).first().boundingBox();
     assert.ok(nm.width > 120, `address column starved at ${nm.width}px`);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false);
+    // The panel flows under the map rather than floating over it.
+    assert.equal(await page.locator('#cityMapPage .places').evaluate(e => getComputedStyle(e).position), 'static');
     // The card is still the place every number lives.
     await pick(page, HK[0]);
     assert.deepEqual(await page.$$eval('#cityMapPage .site .num b', b => b.map(x => x.textContent)), ['46', '60', '77']);
@@ -670,7 +687,7 @@ test('the Cap column sits between Demand and Upfront and sorts on what it can pr
     await page.locator('#cityMapPage .fhead [data-s="cap"]').click();
     assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);   // 40, 30, 15
     await page.locator('#cityMapPage .fhead [data-s="cap"]').click();
-    assert.deepEqual(await rowKeys(page), [MT[1], HK[0], MT[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);   // back to score
     // A range shows both ends and sorts on the lower one.
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),

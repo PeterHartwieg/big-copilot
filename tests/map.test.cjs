@@ -46,10 +46,12 @@ async function ready(page,selector='#cityMapPage'){
   await page.waitForFunction(selector=>document.querySelector(selector+' .map-canvas')?.getAttribute('viewBox'),selector);
 }
 async function openPage(page){ await page.evaluate(()=>showPage('map')); await ready(page); }
+/* The plain map has no list, so a pick is the map's own select(). */
 async function pickRow(page,key,view='#cityMapPage'){
-  await page.locator(`${view} .place[data-pick="${key}"]`).click();
+  await page.evaluate(({key,view})=>(view==='#cityMapPage'?cityMapPage:cityMapOverlay).select(key),{key,view});
   await page.locator(`${view} .site.in`).waitFor();
 }
+const matchKeys=page=>page.evaluate(()=>cityMapPage.matches.map(m=>m.key));
 const viewBox = async (page,view='#cityMapPage') =>
   (await page.locator(`${view} .map-canvas`).getAttribute('viewBox')).split(' ').map(Number);
 /* A screen point over bare map: no footprint, no chrome, no ball, no card. */
@@ -94,10 +96,9 @@ test('lazy map retains geometry through searches and shares the load with the lo
     await page.locator('#cityMapPage [data-control="search"]').fill('does not exist');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'0');
     await page.locator('#cityMapPage [data-control="search"]').fill('Test');
-    // The footprints survive the re-list; only the rows are redrawn.
+    // The footprints survive a search; only their classes are redrawn.
     assert.equal(await page.evaluate(()=>firstMapPath===document.querySelector('#cityMapPage .location')),true);
-    await page.locator(`#cityMapPage .place[data-pick="${place.key}"]`).click();
-    assert.equal(await page.locator('#cityMapPage .place').evaluate(b=>document.activeElement===b),true);
+    await pickRow(page,place.key);
     assert.equal(await page.locator('#cityMapPage .location.fp.sel').getAttribute('data-location'),place.key);
     await page.evaluate(key=>openLocationMap(key),other.key);await ready(page,'#cityMapOverlay');
     assert.equal(await page.locator('#cityMapOverlay .location.fp.sel').getAttribute('data-location'),other.key);
@@ -159,7 +160,7 @@ test('refresh changes the card, missing addresses stay escaped, and a character 
       D={...D,alerts:[],businesses:[...D.businesses,{key:'modded#99',name:'New <img src=x onerror=alert(1)>',address:'99 New Street',type:'Shop'}]};refreshCityMaps();
     });
     assert.doesNotMatch(await page.locator('#cityMapPage .site').innerText(),/Check staffing/);
-    await page.locator('#cityMapPage [data-pick="modded#99"]').click();
+    await pickRow(page,'modded#99');
     assert.match(await page.locator('#cityMapPage .site').innerText(),/no map position/);
     assert.equal(await page.locator('#cityMapPage .site img').count(),0);
     await page.evaluate(()=>{D={...D,meta:{character:'map-b',day:1},businesses:[]};refreshCityMaps();});
@@ -258,9 +259,10 @@ test('layers add up and dim rather than remove',async()=>{
     assert.equal(await page.locator('#cityMapPage .lay[data-l="mine"].off').count(),1);
     assert.equal(await page.locator('#cityMapPage .lay[data-l="mine"]').getAttribute('aria-pressed'),'false');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'2');
-    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${place.key}"]`).count(),1);
-    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${property.key}"]`).count(),1);
-    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${other.key}"]`).count(),0);
+    const kept=await matchKeys(page);
+    assert.equal(kept.includes(place.key),true);
+    assert.equal(kept.includes(property.key),true);
+    assert.equal(kept.includes(other.key),false);
     // ...and dims the orphaned footprint instead of deleting it.
     assert.equal(await page.locator('#cityMapPage .location.fp.mine').count(),2);
     assert.equal(await page.locator('#cityMapPage .location.fp.mine.dim').count(),1);
@@ -273,29 +275,34 @@ test('layers add up and dim rather than remove',async()=>{
     assert.equal(await page.locator('#cityMapPage [data-stage].all').count(),1);
     assert.equal(await page.locator('#cityMapPage .location.fp.dim').count(),0);
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'883');
-    assert.equal(await page.locator('#cityMapPage .places .list .place').count(),80);
-    assert.equal(await page.locator('#cityMapPage .places .more').textContent(),'+803');
+    // No list to fill: the plain map is the map, and the panel belongs to the finder.
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(),false);
+    assert.equal(await page.locator('#cityMapPage [data-stage].panel').count(),0);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
 
-test('search narrows the list and the count; an empty result says Nothing here.',async()=>{
+test('search lights what it finds on the map itself, and Enter takes the first',async()=>{
   const {page,errors}=await fixture();
+  const search=()=>page.locator('#cityMapPage [data-control="search"]');
   try{
     await openPage(page);
-    await page.locator('#cityMapPage [data-control="search"]').fill('Test');
+    await search().fill('Test');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'1');
-    assert.equal(await page.locator('#cityMapPage .places .list .place').count(),1);
-    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${place.key}"]`).count(),1);
-    await page.locator('#cityMapPage [data-control="search"]').fill('does not exist');
+    // No list: the match is lit on the map and everything else is dimmed.
+    assert.equal(await page.locator('#cityMapPage .location.fp.hot').count(),1);
+    assert.equal(await page.locator('#cityMapPage .location.fp.hot').getAttribute('data-location'),place.key);
+    assert.equal(await page.locator('#cityMapPage .location.fp.dim').count(),882);
+    await search().press('Enter');
+    await page.locator('#cityMapPage .site.in').waitFor();
+    assert.equal(await page.locator('#cityMapPage .location.fp.sel').getAttribute('data-location'),place.key);
+    await search().fill('does not exist');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'0');
-    assert.equal(await page.locator('#cityMapPage .places .list .place').count(),0);
-    assert.equal(await page.locator('#cityMapPage .places .empty').textContent(),'Nothing here.');
-    assert.equal(await page.locator('#cityMapPage .places .empty').isVisible(),true);
-    assert.equal(await page.locator('#cityMapPage .location.fp.dim').count(),883);
-    await page.locator('#cityMapPage [data-control="search"]').fill('');
+    assert.equal(await page.locator('#cityMapPage .location.fp.hot').count(),0);
+    assert.equal(await page.locator('#cityMapPage .location.fp.dim').count(),882);  // the pick stays lit
+    await search().fill('');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'2');
-    assert.equal(await page.locator('#cityMapPage .places .empty').count(),0);
+    assert.equal(await page.locator('#cityMapPage .location.fp.hot').count(),0);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 });
@@ -322,7 +329,7 @@ test('finding dots appear only when zoomed and the fnd switch clears them',async
   }finally{await page.close();}
 });
 
-test('the card opens beside the picked footprint, clear of the panel, and closes from the map',async()=>{
+test('the card opens beside the picked footprint, inside the stage, and closes from the map',async()=>{
   const {page,errors}=await fixture();
   try{
     await openPage(page);
@@ -341,21 +348,21 @@ test('the card opens beside the picked footprint, clear of the panel, and closes
     assert.match(await card.locator('.finds2').innerText(),/Check staffing/);
     const clear=await page.evaluate(()=>{
       const c=document.querySelector('#cityMapPage .site').getBoundingClientRect();
-      const p=document.querySelector('#cityMapPage .places').getBoundingClientRect();
-      return c.right<=p.left+1||document.querySelector('#cityMapPage .site').classList.contains('flip');
+      const p=document.querySelector('#cityMapPage [data-stage]').getBoundingClientRect();
+      return c.right<=p.right-11||document.querySelector('#cityMapPage .site').classList.contains('flip');
     });
     assert.equal(clear,true);
-    // A second pick moves the card; it stays clear of the panel.
+    // A second pick moves the card; it stays inside the stage.
     await pickRow(page,other.key);
     assert.equal(await card.locator('h3').innerText(),'Industrial shop');
     assert.equal(await card.evaluate(c=>c.classList.contains('flip')),false);
     const clear2=await page.evaluate(()=>{
       const c=document.querySelector('#cityMapPage .site').getBoundingClientRect();
-      const p=document.querySelector('#cityMapPage .places').getBoundingClientRect();
-      return c.right<=p.left+1;
+      const p=document.querySelector('#cityMapPage [data-stage]').getBoundingClientRect();
+      return c.right<=p.right-11;
     });
     assert.equal(clear2,true);
-    // A footprint picked on the map at the city view glides in like a list pick; the card stays clear of the panel.
+    // A footprint picked at the city view glides in like a shortcut; the card stays inside the stage.
     await page.locator('#cityMapPage .zoomer [data-action="reset"]').click();
     await page.waitForFunction(()=>{const s=document.querySelector('#cityMapPage [data-stage]');
       return !s.classList.contains('zoomed')&&!s.classList.contains('interacting')&&cityMapPage.goal===null;},null,{timeout:3000});
@@ -367,8 +374,8 @@ test('the card opens beside the picked footprint, clear of the panel, and closes
     assert.equal(await page.evaluate(()=>document.querySelector('#cityMapPage [data-stage]').classList.contains('zoomed')),true);
     const clear3=await page.evaluate(()=>{
       const c=document.querySelector('#cityMapPage .site').getBoundingClientRect();
-      const p=document.querySelector('#cityMapPage .places').getBoundingClientRect();
-      return c.right<=p.left+1;
+      const p=document.querySelector('#cityMapPage [data-stage]').getBoundingClientRect();
+      return c.right<=p.right-11;
     });
     assert.equal(clear3,true);
     assert.equal(await card.locator('h3').innerText(),'Edge shop');
@@ -394,7 +401,7 @@ test('the card opens beside the picked footprint, clear of the panel, and closes
   }finally{await page.close();}
 });
 
-test('selecting results and resetting the camera keep the list and the selection',async()=>{
+test('selecting results and resetting the camera keep the count and the selection',async()=>{
   const {page,errors}=await fixture();
   try{
     await openPage(page);
@@ -511,7 +518,7 @@ test('the shortcut dialog shows no head or panel, titles the place, and closes c
   }finally{await page.close();}
 });
 
-test('chips, panel and card stay readable in the light scheme',async()=>{
+test('chips, search and card stay readable in the light scheme',async()=>{
   const styles=async media=>{
     const {page,errors}=await fixture(1280,media);
     try{
@@ -519,11 +526,11 @@ test('chips, panel and card stay readable in the light scheme',async()=>{
       await pickRow(page,place.key);
       const read=await page.evaluate(()=>{
         const cs=e=>getComputedStyle(e);
-        const panel=document.querySelector('#cityMapPage .places'),card=document.querySelector('#cityMapPage .site'),
-          chip=document.querySelector('#cityMapPage .sev.lay.mine'),row=document.querySelector('#cityMapPage .place');
-        return {panel:cs(panel).backgroundColor,card:cs(card).backgroundColor,chip:cs(chip).color,
-          rowInk:cs(row).color,headInk:cs(card.querySelector('h3')).color,
-          ok:cs(panel).backgroundColor!==cs(row).color&&cs(card).backgroundColor!==cs(card.querySelector('h3')).color};
+        const stage=document.querySelector('#cityMapPage [data-stage]'),card=document.querySelector('#cityMapPage .site'),
+          chip=document.querySelector('#cityMapPage .sev.lay.mine'),search=document.querySelector('#cityMapPage .srch');
+        return {stage:cs(stage).borderColor,card:cs(card).backgroundColor,chip:cs(chip).color,
+          searchInk:cs(search).color,headInk:cs(card.querySelector('h3')).color,
+          ok:cs(card).backgroundColor!==cs(card.querySelector('h3')).color};
       });
       assert.deepEqual(errors,[]);
       return read;
@@ -531,7 +538,7 @@ test('chips, panel and card stay readable in the light scheme',async()=>{
   };
   const dark=await styles({colorScheme:'dark'});
   const light=await styles({colorScheme:'light'});
-  for(const k of ['panel','card','chip','rowInk','headInk'])assert.notEqual(dark[k],light[k],k);
+  for(const k of ['stage','card','chip','searchInk','headInk'])assert.notEqual(dark[k],light[k],k);
   assert.equal(dark.ok,true,'dark unreadable');
   assert.equal(light.ok,true,'light unreadable');
 });
@@ -540,7 +547,7 @@ test('under reduced motion the pick lands without waiting',async()=>{
   const {page,errors}=await fixture(1280,{reducedMotion:'reduce'});
   try{
     await openPage(page);
-    await page.locator(`#cityMapPage .place[data-pick="${place.key}"]`).click();
+    await page.evaluate(key=>cityMapPage.select(key),place.key);
     // No glide: the card and the camera are in place by the next frame.
     await page.locator('#cityMapPage .site.in').waitFor({timeout:500});
     await page.waitForFunction(()=>document.querySelector('#cityMapPage [data-stage]').classList.contains('zoomed'),null,{timeout:1000});
@@ -550,11 +557,11 @@ test('under reduced motion the pick lands without waiting',async()=>{
   }finally{await page.close();}
 });
 
-test('on a narrow screen the panel flows, the zoomer and the card stay inside the stage',async()=>{
+test('on a narrow screen the zoomer and the card stay inside the stage',async()=>{
   const {page,errors}=await fixture(375);
   try{
     await openPage(page);
-    assert.equal(await page.locator('#cityMapPage .places').evaluate(e=>getComputedStyle(e).position),'static');
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(),false);
     const inside=await page.evaluate(()=>{
       const rect=(el,host)=>{const a=el.getBoundingClientRect(),b=host.getBoundingClientRect();
         return a.left>=b.left-1&&a.right<=b.right+1&&a.top>=b.top-1&&a.bottom<=b.bottom+1;};
@@ -615,7 +622,7 @@ test('weekly rhythm tooltip keeps off-peak business references as plain text',as
   }finally{await page.close();}
 });
 
-test('owned vacant property is listed under its address rather than Vacant lease',async()=>{
+test('owned vacant property is carded under its address rather than Vacant lease',async()=>{
   const {page,errors}=await fixture();
   try{
     await page.evaluate(()=>{
@@ -626,10 +633,8 @@ test('owned vacant property is listed under its address rather than Vacant lease
     });await ready(page);
     // Both owned rows are listed; the one without a business wears the owned tag.
     assert.equal(await page.locator('#cityMapPage .location.fp.owned').count(),1);
-    const row=page.locator(`#cityMapPage .place[data-pick="${property.key}"]`);
-    assert.equal(await row.count(),1);
-    assert.match(await row.locator('.nm small').innerText(),/owned/);
-    await row.click();await page.locator('#cityMapPage .site.in').waitFor();
+    assert.equal((await matchKeys(page)).includes(property.key),true);
+    await pickRow(page,property.key);
     assert.equal(await page.locator('#cityMapPage .site h3').innerText(),property.address);
     assert.match(await page.locator('#cityMapPage .site .sub').innerText(),/Owned building · bought day 156/);
     assert.equal(await page.locator('#cityMapPage .site .go2').evaluate(g=>g.hidden),true);
@@ -642,7 +647,7 @@ test('owned vacant property is listed under its address rather than Vacant lease
   }finally{await page.close();}
 });
 
-test('a rented home is its own layer: white footprint, a row, and a card with the rent',async()=>{
+test('a rented home is its own layer: white footprint, counted, and a card with the rent',async()=>{
   const {page,errors}=await fixture();
   try{
     const home=geometry.buildings.find(b=>b.key==='ba:street_tenthstreet#2' && b.path) || geometry.buildings.find(b=>b.region==='mainland' && b.path && b.key!==place.key);
@@ -650,9 +655,7 @@ test('a rented home is its own layer: white footprint, a row, and a card with th
     await page.evaluate(h=>{ D.homes=[{key:h.key,address:h.address,rent:34}]; refreshCityMaps(); },home);
     assert.equal(await page.locator('#cityMapPage .sev.lay.home .n').innerText(),'1');
     assert.equal(await page.locator(`#cityMapPage .fp.home[data-location="${home.key}"]`).count(),1);
-    const row=page.locator(`#cityMapPage .place[data-pick="${home.key}"]`);
-    assert.equal(await row.count(),1);
-    assert.match(await row.locator('small').innerText(),/home/);
+    assert.equal((await matchKeys(page)).includes(home.key),true);
     await pickRow(page,home.key);
     const card=page.locator('#cityMapPage .site');
     assert.equal(await card.locator('h3').innerText(),home.address);
@@ -661,7 +664,7 @@ test('a rented home is its own layer: white footprint, a row, and a card with th
     assert.match(await card.locator('.nums').innerText(),/\$34/);
     assert.equal(await card.locator('.go2').isHidden(),true);
     await page.locator('#cityMapPage .sev.lay.home').click();
-    assert.equal(await row.count(),0);
+    assert.equal((await matchKeys(page)).includes(home.key),false);
     assert.equal(await page.locator('#cityMapPage .sev.lay.home').getAttribute('aria-pressed'),'false');
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }

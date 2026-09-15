@@ -41,7 +41,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     await page.evaluate(() => cityMapPage.ready);
     assert.equal(await page.locator('#cityMapPage .lay').count(),5);
     assert.equal(await page.locator('#cityMapPage .lay[data-l="home"]').count(),1);
+    // The plain map has no side panel: the list belongs to Find a location.
     assert.equal(await page.locator('#cityMapPage .places').count(),1);
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(),false);
     assert.equal(await page.locator('#cityMapPage .layer .ball').count(),1);
     assert.equal(await page.locator('[data-new-feature="map"]:not([hidden])').count(),0);
     await page.locator('#cityMapPage .layer .ball').click();
