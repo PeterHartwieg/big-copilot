@@ -349,12 +349,13 @@ class CityMapView {
       this.fs.on = !this.fs.on; this.deselect(); changed();
     };
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
-      // A sort the player chose travels to the new category when it can; the
+      // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order
-      // never becomes the shops'.
-      const chosen = this.fs.sort !== this.sortKeys()[0];
+      // never becomes the shops'. A state saved before sortPicked existed
+      // counts any sort other than the default as picked.
+      const picked = this.fs.sortPicked ?? this.fs.sort !== this.sortKeys()[0];
       this.fs.cat = chip.dataset.cat; this.fs.type = "";
-      if(!chosen) this.fs.sort = this.sortKeys()[0];
+      if(!picked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
     });
@@ -381,13 +382,15 @@ class CityMapView {
   sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
-    if(!keys.includes(this.fs.sort)) this.fs.sort = keys[0];
+    if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.sortPicked = false; }
   }
   /* Every column reads best-first, so there is no ascending state to flip into:
      a second click on the column you are already sorted by puts the list back
      in the order the category ranks by. */
   sortBy(key){
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
+    // The category's own order is nobody's choice; any other column is.
+    this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     this.showAll = false; this.saveFinder(); this.update();
   }
   /* The filters and the chip travel with the character, like the import marks. */
@@ -429,7 +432,7 @@ class CityMapView {
     // the last visit left behind. Only the neighbourhoods come from the caller.
     this.fs = {...this.fs, on:true, show:'rent', minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
-    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
+    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });

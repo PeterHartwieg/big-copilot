@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=d5fd0b53a0">
+<link rel="stylesheet" href="community.css?v=03846bcb5f">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1930,8 +1930,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "d5fd0b53a0";</script>
-<script>window.LEDGER_RELEASE = {"version":"d5fd0b53a0","latest":{"pr":28,"date":"2026-09-15","title":"Find a location on the map","summary":"The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building's card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works."}};</script>
+<script>window.LEDGER_BUILD = "03846bcb5f";</script>
+<script>window.LEDGER_RELEASE = {"version":"03846bcb5f","latest":{"pr":28,"date":"2026-09-15","title":"Find a location on the map","summary":"The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building's card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2000,8 +2000,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=d5fd0b53a0"></script>
-<script src="community.js?v=d5fd0b53a0"></script>
+<script src="app.js?v=03846bcb5f"></script>
+<script src="community.js?v=03846bcb5f"></script>
 
 <script>
 
@@ -5120,12 +5120,13 @@ class CityMapView {
       this.fs.on = !this.fs.on; this.deselect(); changed();
     };
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
-      // A sort the player chose travels to the new category when it can; the
+      // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order
-      // never becomes the shops'.
-      const chosen = this.fs.sort !== this.sortKeys()[0];
+      // never becomes the shops'. A state saved before sortPicked existed
+      // counts any sort other than the default as picked.
+      const picked = this.fs.sortPicked ?? this.fs.sort !== this.sortKeys()[0];
       this.fs.cat = chip.dataset.cat; this.fs.type = "";
-      if(!chosen) this.fs.sort = this.sortKeys()[0];
+      if(!picked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
     });
@@ -5152,13 +5153,15 @@ class CityMapView {
   sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
-    if(!keys.includes(this.fs.sort)) this.fs.sort = keys[0];
+    if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.sortPicked = false; }
   }
   /* Every column reads best-first, so there is no ascending state to flip into:
      a second click on the column you are already sorted by puts the list back
      in the order the category ranks by. */
   sortBy(key){
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
+    // The category's own order is nobody's choice; any other column is.
+    this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     this.showAll = false; this.saveFinder(); this.update();
   }
   /* The filters and the chip travel with the character, like the import marks. */
@@ -5200,7 +5203,7 @@ class CityMapView {
     // the last visit left behind. Only the neighbourhoods come from the caller.
     this.fs = {...this.fs, on:true, show:'rent', minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
-    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
+    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });

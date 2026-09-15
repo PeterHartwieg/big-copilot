@@ -795,6 +795,22 @@ test('a warehouse ranks by floor area and has no second m² column', async () =>
     await page.locator('#cityMapPage .fhead [data-s="traffic"]').click();
     await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
     assert.equal(await sorted(), 'Traffic');
+    // Even m², which is the warehouse's own default: chosen in the shops, it
+    // survives a pass through the warehouses and back.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await sorted(), 'm²');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.equal(await sorted(), 'm²');
+    // A second click hands the order back to the category, and then it is the
+    // category's again wherever the player goes.
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    assert.equal(await sorted(), 'Score');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await sorted(), 'm²');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.equal(await sorted(), 'Score');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
