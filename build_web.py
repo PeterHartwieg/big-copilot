@@ -388,12 +388,13 @@ details.help[open] summary::after{content:"\2013"}
     " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.",
 )
 
-# Everything the page fetches, in the order stamp() hashes it, followed by the
-# build inputs that decide what it fetches: build_web.py itself, and the wiki
-# generator that writes web/wiki-data.json. Those generators are hashed because
-# a change to one leaves the committed payload stale while every fetched file
-# still looks untouched, and --check would call the folder fresh. Appending to
-# this list changes the stamp, which is the point: a deploy busts caches.
+# Everything the page fetches, together with the build inputs that shape it:
+# build_web.py itself, and the wiki generator that writes web/wiki-data.json.
+# Those generators are hashed because a change to one leaves the committed
+# payload stale while every fetched file still looks untouched, and --check
+# would call the folder fresh. stamp() hashes the entries in the order below;
+# changing that order, or appending to the list, changes the stamp, which is
+# the point for an append: a deploy busts caches.
 STAMP_INPUTS = (
     "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json",
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
