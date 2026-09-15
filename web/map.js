@@ -94,7 +94,7 @@ function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || map
    name falls back to initials. The card and the list read the same tag. */
 const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood])
   || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-const PANEL_W = 456;   // the finder's panel plus its margin
+const PANEL_W = 501;   // the finder's panel plus its margin
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
 const GLIDE_MS = 700;
 
@@ -114,6 +114,9 @@ const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` 
    both ends of the filter read a range by its lower bound: a cinema seating
    100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
+/* A number filter left at 0 is no limit; one that is set turns away a building
+   with no reading, since nothing is known about it either way. */
+const finderFits = (v, lo, hi) => !(lo && (v == null || v < lo)) && !(hi && (v == null || v > hi));
 const hoodTag = hood => hoodCode(null, hood);
 /* What the list is a list of. One of the three is always chosen: premises to
    rent, rival businesses to take over, or whole buildings on sale. */
@@ -123,7 +126,7 @@ const FINDER_SHOWS = [
   ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
+  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
@@ -171,7 +174,7 @@ function depositNote(b){
 const SHADE_LEAD = 46, SHADE_SIDE = 18;
 const shadeScore = (t, top) =>
   `color-mix(in oklab, var(--accent) ${Math.round(4 + Math.max(0, Math.min(1, t)) * (top - 4))}%, var(--surface))`;
-const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
+const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals, size and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -332,6 +335,8 @@ class CityMapView {
         `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(tip)}">${label}<b>0</b></button>`).join('')
         + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('Where', hoods)}
+      ${row('Size', `<label class="fchip num">min<input type="number" min="0" data-f="minM2" value="0" aria-label="Smallest floor area in square metres"><b>m²</b></label>
+        <label class="fchip num">max<input type="number" min="0" data-f="maxM2" value="0" aria-label="Largest floor area in square metres"><b>m²</b></label>`)}
       ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
       ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
@@ -344,7 +349,11 @@ class CityMapView {
       this.fs.on = !this.fs.on; this.deselect(); changed();
     };
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
+      // A sort the player picked travels to the new category when it can; the
+      // old category's own default does not, so a warehouse's floor-area order
+      // never becomes the shops'.
       this.fs.cat = chip.dataset.cat; this.fs.type = "";
+      if(!this.fs.sortPicked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
     });
@@ -368,16 +377,18 @@ class CityMapView {
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'cap', 'deposit']; }
+  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
-    if(!keys.includes(this.fs.sort)) this.fs.sort = keys[0];
+    if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.sortPicked = false; }
   }
   /* Every column reads best-first, so there is no ascending state to flip into:
      a second click on the column you are already sorted by puts the list back
      in the order the category ranks by. */
   sortBy(key){
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
+    // The category's own order is nobody's choice; any other column is.
+    this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     this.showAll = false; this.saveFinder(); this.update();
   }
   /* The filters and the chip travel with the character, like the import marks. */
@@ -396,6 +407,9 @@ class CityMapView {
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
       delete this.fs.vac; delete this.fs.buy; delete this.fs.sale; delete this.fs.dir;
+      // A sort saved before picks were recorded counts as picked unless it is
+      // the category's own order.
+      if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
     this.fs.on = false;   // the switch is never restored, only the filters
   }
@@ -417,9 +431,9 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, show:'rent', minCap:0, maxCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, show:'rent', minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
-    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
+    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
@@ -466,12 +480,11 @@ class CityMapView {
       if(b.type !== fs.cat) continue;
       if(!this.candidate(b)) continue;
       if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
+      if(!finderFits(b.m2, fs.minM2, fs.maxM2)) continue;
       // Both ends judge a range by its smallest variant: a cinema seating 100
       // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
       // building with no door cap at all can promise neither.
-      const cap = capMin(b.cap);
-      if(fs.minCap && (cap == null || cap < fs.minCap)) continue;
-      if(fs.maxCap && (cap == null || cap > fs.maxCap)) continue;
+      if(!finderFits(capMin(b.cap), fs.minCap, fs.maxCap)) continue;
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
@@ -492,24 +505,25 @@ class CityMapView {
      own footprint and a click on either one selects it. */
   saleRows(){
     const P = premises(), fs = this.fs; if(!P) return [];
-    // A listing is an address; the kind, the traffic and the door cap come from
-    // the building behind it, so the controls still on screen all apply.
+    // A listing is an address with its own floor area; the kind, the traffic
+    // and the door cap come from the building behind it, so the controls still
+    // on screen all apply.
     return P.forSale.filter(s => {
       if(!this.hoodOn(s.hood) || !this.saleKind(s)) return false;
-      const b = this.sites?.get(s.key), cap = capMin(b?.cap);
-      if(fs.minTraffic && (b?.traffic == null || b.traffic < fs.minTraffic)) return false;
-      if(fs.minCap && (cap == null || cap < fs.minCap)) return false;
-      if(fs.maxCap && (cap == null || cap > fs.maxCap)) return false;
-      return true;
+      const b = this.sites?.get(s.key);
+      return finderFits(b?.traffic, fs.minTraffic, 0) && finderFits(s.m2, fs.minM2, fs.maxM2)
+        && finderFits(capMin(b?.cap), fs.minCap, fs.maxCap);
     }).sort((a, b) => a.price - b.price)
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
   saleKind(s){ return (this.sites?.get(s.key)?.type ?? s.type) === this.fs.cat; }
   finderList(rows){
-    const fs = this.fs, wh = fs.cat === 'warehouse';
+    // A warehouse ranks by floor area already, so its list has no second m²
+    // column and keeps the narrower grid (class wh).
+    const fs = this.fs, wh = fs.cat === 'warehouse', grid = wh ? ' wh' : '';
     const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["cap","Cap"],["deposit","Upfront"]]
-                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["cap","Cap"],["deposit","Upfront"]];
-    const head = `<div class="fhead">${cols.map(([key, label]) => key
+                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["m2","m²"],["cap","Cap"],["deposit","Upfront"]];
+    const head = `<div class="fhead${grid}">${cols.map(([key, label]) => key
       ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${label}</span>`
       : `<span>${label}</span>`).join('')}</div>`;
     // Each shaded column is stretched over the values actually on screen, so a
@@ -523,15 +537,18 @@ class CityMapView {
     return head + rows.map((r, i) => {
       const b = r.bld, f = r.f;
       const company = b.status === 'rival' ? rivalName(b.occupantRival) : null;
+      // Floor area and cap have columns of their own, so a row with nothing
+      // else to say names its neighbourhood in full, as a for-sale row does.
       const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}${company ? ` · ${company}` : ''}`
-        : f.fit && !fs.type ? `best fit: ${f.fit}` : `${b.m2.toLocaleString('en-US')} m² · cap ${capText(b.cap)}`;
+        : f.fit && !fs.type ? `best fit: ${f.fit}` : b.hood;
       const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
+      // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = wh
         ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${b.m2.toLocaleString('en-US')}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
-        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span>`;
+        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${b.m2.toLocaleString('en-US')}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){

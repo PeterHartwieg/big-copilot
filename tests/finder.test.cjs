@@ -194,7 +194,7 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .places .filters').evaluate(
       f => f.nextElementSibling.classList.contains('list')), true);
     assert.deepEqual(await page.$$eval('#cityMapPage .filters .lab', l => l.map(x => x.textContent)),
-      ['Kind', 'Type', 'Show', 'Where', 'Cap', 'Traffic']);
+      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Cap', 'Traffic']);
     // The "ranked by…" line is gone; the formula lives in the ? alone.
     assert.equal(await page.locator('#cityMapPage .fnote').count(), 0);
     assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), /÷ 100/);
@@ -403,6 +403,7 @@ test('the filters come back with the character; the switch never does', async ()
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
     await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
     await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').fill('60');
+    await page.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').fill('300');
     await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
     const {page: again} = await fixture(context);
     try{
@@ -418,6 +419,7 @@ test('the filters come back with the character; the switch never does', async ()
       assert.equal(await again.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '5');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '60');
+      assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').inputValue(), '300');
       // A minimum that is set shows as set, like any other chosen control.
       assert.equal(await again.locator('#cityMapPage .fchip.num.on input[data-f="minCap"]').count(), 1);
       assert.equal(await again.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').evaluate(c => c.classList.contains('on')), false);
@@ -431,6 +433,7 @@ test('the filters come back with the character; the switch never does', async ()
       assert.equal(await again.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '0');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '0');
+      assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').inputValue(), '0');
     } finally { await again.close(); }
   } finally { await page.close(); await context.close(); }
 });
@@ -544,6 +547,7 @@ test('a preset lands on the column its category ranks by, not on the last sort',
     await page.locator('#cityMapPage .fchip.show[data-show="takeover"]').click();
     await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').fill('75');
     await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').fill('12');
+    await page.locator('#cityMapPage .fchip.num input[data-f="minM2"]').fill('250');
     await page.evaluate(() => { cityMapPage.showAll = true; showPage('today'); drawFindLocation(); wireCards(); });
     await page.locator('#findLocationCard').click();
     await page.waitForFunction(() => document.querySelector('#cityMapPage .fhead span.on')?.textContent === 'Score');
@@ -553,6 +557,7 @@ test('a preset lands on the column its category ranks by, not on the last sort',
     assert.equal(await page.locator('#cityMapPage .fchip.show.on').textContent(), 'To rent3');
     assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').inputValue(), '0');
     assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '0');
+    assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="minM2"]').inputValue(), '0');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -685,6 +690,29 @@ test('a state saved when availability was two switches opens the list it was rea
   } finally { await page.close(); await context.close(); }
 });
 
+test('a sort saved before picks were recorded counts as picked unless it is the default', async () => {
+  const context = await browser.newContext();
+  const {page} = await fixture(context);
+  const save = state => page.evaluate(s => localStorage.setItem('ba_finder_v1:finder-a', JSON.stringify(s)), state);
+  try{
+    for(const [sort, back] of [['m2', 'm²'], ['score', 'Score']]){
+      await save({cat: 'retail', type: '', show: 'rent', hoods: null, sort});
+      const {page: again, errors} = await fixture(context);
+      const sorted = () => again.locator('#cityMapPage .fhead span.on').textContent();
+      try{
+        await openMap(again); await turnOn(again);
+        // Through the warehouses and back: a picked m² survives it, the
+        // shops' own score comes back as itself.
+        await again.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+        assert.equal(await sorted(), 'm²');
+        await again.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+        assert.equal(await sorted(), back);
+        assert.deepEqual(errors, []);
+      } finally { await again.close(); }
+    }
+  } finally { await page.close(); await context.close(); }
+});
+
 test("a game service is occupied by the game: never to rent, never to take over", async () => {
   const {page, errors} = await fixture();
   try{
@@ -705,12 +733,12 @@ test("a game service is occupied by the game: never to rent, never to take over"
   } finally { await page.close(); }
 });
 
-test('the Cap column sits between Demand and Upfront and sorts on what it can promise', async () => {
+test('the Cap column sits between m² and Upfront and sorts on what it can promise', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
     assert.deepEqual(await page.$$eval('#cityMapPage .fhead span', h => h.map(x => x.textContent)),
-      ['#', '', 'Address', 'Score', 'Traffic', 'Demand', 'Cap', 'Upfront']);
+      ['#', '', 'Address', 'Score', 'Traffic', 'Demand', 'm²', 'Cap', 'Upfront']);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
       ['30', '40', '15']);
     await page.locator('#cityMapPage .fhead [data-s="cap"]').click();
@@ -721,6 +749,91 @@ test('the Cap column sits between Demand and Upfront and sorts on what it can pr
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
       ['100–150', '100–150']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('floor area is a column that sorts, and a filter on every list', async () => {
+  const {page, errors} = await fixture();
+  const m2 = end => page.locator(`#cityMapPage .fchip.num input[data-f="${end}M2"]`);
+  try{
+    await openMap(page); await turnOn(page);
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .m2', v => v.map(x => x.textContent)),
+      ['225', '285', '120']);
+    // Shown plain, like the cap: a bigger floor is not a better one for every business.
+    assert.equal(await page.$$eval('#cityMapPage .place.fr .m2', v => v.filter(x => x.style.background).length), 0);
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);   // 285, 225, 120
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);   // back to score
+    // Either end alone, or both bracketing a size; empty is no limit.
+    await m2('min').fill('200');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
+    await m2('max').fill('250');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.equal(await page.locator('#cityMapPage .fchip.num.on input[data-f="maxM2"]').count(), 1);
+    await m2('min').fill('');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[1]]);
+    await m2('max').fill('0');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    // With a type chosen the columns already carry the area and the cap, so
+    // the second line names the neighbourhood instead of repeating them.
+    await page.locator('#cityMapPage [data-f="type"]').selectOption(COFFEE);
+    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${HK[0]}"] small`).textContent(), `${HK_NAME} · 1 rival`);
+    // A listing is judged on its own floor area.
+    await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
+    await page.locator('#cityMapPage .place.fr.sale').first().waitFor();
+    await m2('min').fill('500');
+    assert.deepEqual(await rowKeys(page), [MT[2]]);   // 1,000 m²; the 225 m² shop is out
+    await m2('min').fill('0');
+    await m2('max').fill('500');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a warehouse ranks by floor area and has no second m² column', async () => {
+  const WH = geometry.buildings.find(b => b.hood === 'Midtown' && ![...HK, ...MT].includes(b.key)).key;
+  const premises = {...PREMISES, buildings: [...PREMISES.buildings,
+    site(WH, {type: 'warehouse', size: 'E', m2: 1887, cap: null, traffic: 30})]};
+  const {page, errors} = await fixture(null, {premises});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.deepEqual(await rowKeys(page), [WH]);
+    assert.deepEqual(await page.$$eval('#cityMapPage .fhead.wh span', h => h.map(x => x.textContent)),
+      ['#', '', 'Address', 'm²', 'Traffic', '', 'Cap', 'Upfront']);
+    assert.equal(await page.locator('#cityMapPage .place.fr.wh').count(), 1);
+    assert.equal(await page.locator('#cityMapPage .place.fr .m2').count(), 0);
+    assert.equal(await page.locator('#cityMapPage .place.fr small').textContent(), 'Midtown');
+    await page.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').fill('1000');
+    assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
+    await page.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').fill('0');
+    // Its floor-area order is its own default: the shops go back to their score.
+    const sorted = () => page.locator('#cityMapPage .fhead span.on').textContent();
+    assert.equal(await sorted(), 'm²');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.equal(await sorted(), 'Score');
+    // A column the player chose, though, travels between categories.
+    await page.locator('#cityMapPage .fhead [data-s="traffic"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await sorted(), 'Traffic');
+    // Even m², which is the warehouse's own default: chosen in the shops, it
+    // survives a pass through the warehouses and back.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await sorted(), 'm²');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.equal(await sorted(), 'm²');
+    // A second click hands the order back to the category, and then it is the
+    // category's again wherever the player goes.
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    assert.equal(await sorted(), 'Score');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await sorted(), 'm²');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.equal(await sorted(), 'Score');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

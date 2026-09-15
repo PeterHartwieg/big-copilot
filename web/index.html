@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=13229c785f">
+<link rel="stylesheet" href="community.css?v=04883cd174">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -74,7 +74,7 @@
 .frow[hidden]{display:none}
 .frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
-.fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
 .fhead span[data-s]:hover{color:var(--ink-2)}
@@ -87,7 +87,9 @@
 .fhead span[data-s]:focus:not(:focus-visible){outline:none}
 .fhead span[data-s]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fhead.sale{grid-template-columns:26px 1fr 66px 48px 76px}
-.place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
+.place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
+/* A warehouse leads with its floor area, so it has one number column fewer. */
+.fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px}
 .place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:3px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 /* Green is an empty floor to rent, amber a rival to buy out. */
 .place.fr .rk i{flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent)}
@@ -161,14 +163,14 @@
 .dlabel{position:absolute;left:0;top:0;font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.16em;color:#bdcbbf;text-shadow:0 0 6px #0d100f,0 0 2px #0d100f;white-space:nowrap;transition:opacity .25s}
 .stage.zoomed .dlabel{opacity:0}
 .zoomer{position:absolute;right:16px;bottom:16px;z-index:5;display:flex;flex-direction:column;gap:4px}
-.stage.panel .zoomer{right:472px}
+.stage.panel .zoomer{right:517px}
 .citymap.narrow .stage.panel .zoomer{right:16px}
 .zoomer .ibtn{font:500 18px/1 "IBM Plex Mono",monospace;box-shadow:0 2px 8px #0003}
 /* full screen: the map box takes the screen, the stage the height */
 .citymap:fullscreen{background:var(--ground);padding:16px;margin:0;box-sizing:border-box}
 .citymap:fullscreen .stage{height:calc(100vh - 32px);border-radius:8px}
 .citymap:fullscreen .places{top:32px;right:32px;bottom:32px}
-.citymap:fullscreen .stage.panel .zoomer{right:488px}
+.citymap:fullscreen .stage.panel .zoomer{right:533px}
 
 /* the ball lives in Central Park ------------------------------------------------ */
 .ball{position:absolute;left:0;top:0;width:60px;height:60px;z-index:4;cursor:pointer;will-change:transform;transform-origin:50% 100%;pointer-events:auto}
@@ -182,7 +184,7 @@
 .shadow{position:absolute;left:0;top:0;width:88px;height:14px;border-radius:50%;background:#000;opacity:.5;filter:blur(5px);z-index:3;pointer-events:none;transform-origin:50% 50%}
 
 /* places: a floating panel over the map ------------------------------------------ */
-.places{position:absolute;top:16px;right:16px;bottom:16px;width:440px;box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
+.places{position:absolute;top:16px;right:16px;bottom:16px;width:485px;box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
 .places .list{overflow:auto;overscroll-behavior:contain;flex:1;padding:4px 0;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
 .places .list::-webkit-scrollbar{width:6px}.places .list::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}.places .list::-webkit-scrollbar-track{background:transparent}
 .place{display:grid;width:100%;grid-template-columns:18px 30px 1fr auto;gap:0 8px;align-items:center;padding:9px 12px 9px 8px;border:0;background:none;text-align:left;font:inherit;cursor:pointer;color:var(--ink-2);transition:background .15s,color .15s;position:relative}
@@ -258,7 +260,8 @@ body.map-modal-open{overflow:hidden}
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
  .citymap.narrow .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
- .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
+ .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px 50px}
+ .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip{height:32px}
@@ -270,13 +273,15 @@ body.map-modal-open{overflow:hidden}
  .map-dialog{width:calc(100vw - 12px);max-height:calc(100dvh - 12px);padding:12px}
  .map-dialog .stage{height:60dvh}
 }
-/* On a phone the fixed columns would leave the address nothing. Traffic and
-   demand step aside — they are still on the card, and the score they make is
-   the reason the row is where it is. */
+/* On a phone the fixed columns would leave the address nothing. Traffic,
+   demand, floor area and cap step aside — they are still on the card, and the
+   score is the reason the row is where it is. */
 @media(max-width:600px){
  .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px 56px}
- .fhead:not(.sale) span:nth-child(n+5):nth-child(-n+7),
- .place.fr:not(.sale) > :nth-child(n+5):nth-child(-n+7){display:none}
+ .fhead:not(.sale):not(.wh) span:nth-child(n+5):nth-child(-n+8),
+ .place.fr:not(.sale):not(.wh) > :nth-child(n+5):nth-child(-n+8),
+ .fhead.wh span:nth-child(n+5):nth-child(-n+7),
+ .place.fr.wh > :nth-child(n+5):nth-child(-n+7){display:none}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 44px 70px}
  .fhead.sale span:nth-child(3),.place.fr.sale > :nth-child(3){display:none}
 }
@@ -1881,7 +1886,7 @@ details.help[open] summary::after{content:"\2013"}
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
-  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves. */
@@ -1925,8 +1930,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "13229c785f";</script>
-<script>window.LEDGER_RELEASE = {"version":"13229c785f","latest":{"pr":28,"date":"2026-09-15","title":"Find a location on the map","summary":"The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building's card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works."}};</script>
+<script>window.LEDGER_BUILD = "04883cd174";</script>
+<script>window.LEDGER_RELEASE = {"version":"04883cd174","latest":{"pr":32,"date":"2026-09-15","title":"Sort and filter premises by size","summary":"The location finder shows each building's floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m²."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1995,8 +2000,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=13229c785f"></script>
-<script src="community.js?v=13229c785f"></script>
+<script src="app.js?v=04883cd174"></script>
+<script src="community.js?v=04883cd174"></script>
 
 <script>
 
@@ -4860,7 +4865,7 @@ function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || map
    name falls back to initials. The card and the list read the same tag. */
 const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood])
   || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-const PANEL_W = 456;   // the finder's panel plus its margin
+const PANEL_W = 501;   // the finder's panel plus its margin
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
 const GLIDE_MS = 700;
 
@@ -4880,6 +4885,9 @@ const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` 
    both ends of the filter read a range by its lower bound: a cinema seating
    100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
+/* A number filter left at 0 is no limit; one that is set turns away a building
+   with no reading, since nothing is known about it either way. */
+const finderFits = (v, lo, hi) => !(lo && (v == null || v < lo)) && !(hi && (v == null || v > hi));
 const hoodTag = hood => hoodCode(null, hood);
 /* What the list is a list of. One of the three is always chosen: premises to
    rent, rival businesses to take over, or whole buildings on sale. */
@@ -4889,7 +4897,7 @@ const FINDER_SHOWS = [
   ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, minCap:0, maxCap:0, minTraffic:0, sort:"score"});
+  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
@@ -4937,7 +4945,7 @@ function depositNote(b){
 const SHADE_LEAD = 46, SHADE_SIDE = 18;
 const shadeScore = (t, top) =>
   `color-mix(in oklab, var(--accent) ${Math.round(4 + Math.max(0, Math.min(1, t)) * (top - 4))}%, var(--surface))`;
-const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
+const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals, size and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -5098,6 +5106,8 @@ class CityMapView {
         `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(tip)}">${label}<b>0</b></button>`).join('')
         + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('Where', hoods)}
+      ${row('Size', `<label class="fchip num">min<input type="number" min="0" data-f="minM2" value="0" aria-label="Smallest floor area in square metres"><b>m²</b></label>
+        <label class="fchip num">max<input type="number" min="0" data-f="maxM2" value="0" aria-label="Largest floor area in square metres"><b>m²</b></label>`)}
       ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
       ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
@@ -5110,7 +5120,11 @@ class CityMapView {
       this.fs.on = !this.fs.on; this.deselect(); changed();
     };
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
+      // A sort the player picked travels to the new category when it can; the
+      // old category's own default does not, so a warehouse's floor-area order
+      // never becomes the shops'.
       this.fs.cat = chip.dataset.cat; this.fs.type = "";
+      if(!this.fs.sortPicked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
     });
@@ -5134,16 +5148,18 @@ class CityMapView {
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'cap', 'deposit']; }
+  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
-    if(!keys.includes(this.fs.sort)) this.fs.sort = keys[0];
+    if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.sortPicked = false; }
   }
   /* Every column reads best-first, so there is no ascending state to flip into:
      a second click on the column you are already sorted by puts the list back
      in the order the category ranks by. */
   sortBy(key){
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
+    // The category's own order is nobody's choice; any other column is.
+    this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     this.showAll = false; this.saveFinder(); this.update();
   }
   /* The filters and the chip travel with the character, like the import marks. */
@@ -5162,6 +5178,9 @@ class CityMapView {
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
       delete this.fs.vac; delete this.fs.buy; delete this.fs.sale; delete this.fs.dir;
+      // A sort saved before picks were recorded counts as picked unless it is
+      // the category's own order.
+      if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
     this.fs.on = false;   // the switch is never restored, only the filters
   }
@@ -5183,9 +5202,9 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, show:'rent', minCap:0, maxCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, show:'rent', minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
-    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
+    this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
@@ -5232,12 +5251,11 @@ class CityMapView {
       if(b.type !== fs.cat) continue;
       if(!this.candidate(b)) continue;
       if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
+      if(!finderFits(b.m2, fs.minM2, fs.maxM2)) continue;
       // Both ends judge a range by its smallest variant: a cinema seating 100
       // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
       // building with no door cap at all can promise neither.
-      const cap = capMin(b.cap);
-      if(fs.minCap && (cap == null || cap < fs.minCap)) continue;
-      if(fs.maxCap && (cap == null || cap > fs.maxCap)) continue;
+      if(!finderFits(capMin(b.cap), fs.minCap, fs.maxCap)) continue;
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
@@ -5258,24 +5276,25 @@ class CityMapView {
      own footprint and a click on either one selects it. */
   saleRows(){
     const P = premises(), fs = this.fs; if(!P) return [];
-    // A listing is an address; the kind, the traffic and the door cap come from
-    // the building behind it, so the controls still on screen all apply.
+    // A listing is an address with its own floor area; the kind, the traffic
+    // and the door cap come from the building behind it, so the controls still
+    // on screen all apply.
     return P.forSale.filter(s => {
       if(!this.hoodOn(s.hood) || !this.saleKind(s)) return false;
-      const b = this.sites?.get(s.key), cap = capMin(b?.cap);
-      if(fs.minTraffic && (b?.traffic == null || b.traffic < fs.minTraffic)) return false;
-      if(fs.minCap && (cap == null || cap < fs.minCap)) return false;
-      if(fs.maxCap && (cap == null || cap > fs.maxCap)) return false;
-      return true;
+      const b = this.sites?.get(s.key);
+      return finderFits(b?.traffic, fs.minTraffic, 0) && finderFits(s.m2, fs.minM2, fs.maxM2)
+        && finderFits(capMin(b?.cap), fs.minCap, fs.maxCap);
     }).sort((a, b) => a.price - b.price)
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
   saleKind(s){ return (this.sites?.get(s.key)?.type ?? s.type) === this.fs.cat; }
   finderList(rows){
-    const fs = this.fs, wh = fs.cat === 'warehouse';
+    // A warehouse ranks by floor area already, so its list has no second m²
+    // column and keeps the narrower grid (class wh).
+    const fs = this.fs, wh = fs.cat === 'warehouse', grid = wh ? ' wh' : '';
     const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["cap","Cap"],["deposit","Upfront"]]
-                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["cap","Cap"],["deposit","Upfront"]];
-    const head = `<div class="fhead">${cols.map(([key, label]) => key
+                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["m2","m²"],["cap","Cap"],["deposit","Upfront"]];
+    const head = `<div class="fhead${grid}">${cols.map(([key, label]) => key
       ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${label}</span>`
       : `<span>${label}</span>`).join('')}</div>`;
     // Each shaded column is stretched over the values actually on screen, so a
@@ -5289,15 +5308,18 @@ class CityMapView {
     return head + rows.map((r, i) => {
       const b = r.bld, f = r.f;
       const company = b.status === 'rival' ? rivalName(b.occupantRival) : null;
+      // Floor area and cap have columns of their own, so a row with nothing
+      // else to say names its neighbourhood in full, as a for-sale row does.
       const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}${company ? ` · ${company}` : ''}`
-        : f.fit && !fs.type ? `best fit: ${f.fit}` : `${b.m2.toLocaleString('en-US')} m² · cap ${capText(b.cap)}`;
+        : f.fit && !fs.type ? `best fit: ${f.fit}` : b.hood;
       const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
+      // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = wh
         ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${b.m2.toLocaleString('en-US')}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
-        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span>`;
+        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${b.m2.toLocaleString('en-US')}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
