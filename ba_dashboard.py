@@ -559,6 +559,12 @@ def _configured_price(value):
             and math.isfinite(value) and value >= 0 else None)
 
 
+def _in_order(keys) -> list:
+    """Keys in one order on every run: set order follows the per-process hash
+    seed. Saves hold some items with no name, so None sorts last, not first."""
+    return sorted(keys, key=lambda k: (k is None, str(k)))
+
+
 # ------------------------------------------------------------------ premises
 # Every building in the city, so the map can answer "which available premises
 # are best right now?". The save only carries rent and door capacity for a
@@ -1292,7 +1298,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     }
 
     lines = []
-    for item in set(stock) | set(units_sold) | set(prices):
+    # Rows that tie on cover would otherwise reshuffle between runs and page loads.
+    for item in _in_order(set(stock) | set(units_sold) | set(prices)):
         rate = units_sold[item] / span
         lines.append(
             {
@@ -2498,7 +2505,7 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
     pairs = set(flow["imports"]) | {
         (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
     }
-    for depot, slug in pairs:
+    for depot, slug in _in_order(pairs):
         if depot not in index:
             continue
         days = flow["roundDays"](depot)
@@ -2785,7 +2792,7 @@ def _factories(
                 "needs": list(needs.values()),
                 "targets": into,
                 "known": flow["received"](key, "") is not None,
-                "arrivals": {slug: round(arrives(key, slug)) for slug in watched},
+                "arrivals": {slug: round(arrives(key, slug)) for slug in _in_order(watched)},
             }
         )
 
