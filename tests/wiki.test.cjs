@@ -355,21 +355,40 @@ test('a hand-authored topic reads as a page, and says where its numbers came fro
   assert.doesNotMatch(html, /undefined/);
 });
 
-test("what is new in the Wiki wears the nav's own badge, and goes when it goes", async () => {
-  // Nothing seen: the nav badge would be standing, so the shelf that gained
-  // something and the entry that is new both say so, in the board's own markup.
-  const fresh = wiki();
-  const home = await fresh.load('wiki');
-  const badges = home.match(/<span class="feature-new" data-new-feature="wiki">New<\/span>/g) || [];
-  assert.equal(badges.length, 2, 'the shelf and the one new entry, and nothing else');
-  assert.match(home, /Big Copilot topics<span class="feature-new"/);
-  assert.match(home, /How rent works<span class="feature-new"/);
+test('what is new in the Wiki is badged until the reader reaches it', async () => {
+  // Nothing seen: the shelf that gained something and the entry that is new
+  // both say so, in the board's own markup and each under its own feature id.
+  const seen = {};
+  const w = wiki({seen});
+  const home = await w.load('wiki');
+  assert.equal((home.match(/class="feature-new"/g) || []).length, 2,
+    'the shelf and the one new entry, and nothing else');
+  assert.match(home, /Big Copilot topics<span class="feature-new" data-new-feature="wiki-topics">New</);
+  assert.match(home, /How rent works<span class="feature-new" data-new-feature="wiki-topic-how-rent-works">New</);
+  // Never the nav's own id: sharing it would clear these the moment the tab opened.
+  assert.doesNotMatch(home, /data-new-feature="wiki"/);
 
-  // Seen: the nav badge is gone, and these go with it, under the same key.
-  const old = wiki({seen: {'ba_dash_feature_seen:wiki': '1'}});
-  const quiet = await old.load('wiki');
-  assert.doesNotMatch(quiet, /feature-new/);
-  assert.match(quiet, /Big Copilot topics/, 'the shelf itself stays; only the badge goes');
+  // Reaching the article puts both marks down, through the board's own store.
+  await w.go('wiki/topic%2Fhow-rent-works');
+  assert.equal(seen['ba_dash_feature_seen:wiki-topic-how-rent-works'], '1');
+  assert.equal(seen['ba_dash_feature_seen:wiki-topics'], '1');
+  assert.equal(seen['ba_dash_feature_seen:wiki'], undefined, "the nav's own badge is left alone");
+  assert.doesNotMatch(await w.go('wiki'), /feature-new/);
+  assert.match(w.root.innerHTML, /Big Copilot topics/, 'the shelf itself stays; only the badge goes');
+
+  // A reader who has already met it is not told again.
+  const quiet = wiki({seen: {'ba_dash_feature_seen:wiki-topics': '1',
+    'ba_dash_feature_seen:wiki-topic-how-rent-works': '1'}});
+  assert.doesNotMatch(await quiet.load('wiki'), /feature-new/);
+});
+
+test('the board puts the marks down for the wiki when it is there to do it', async () => {
+  const visited = [];
+  const w = wiki();
+  w.context.featureDiscovery = {visit: id => visited.push(id), refresh(){}};
+  await w.load('wiki');
+  await w.go('wiki/topic%2Fhow-rent-works');
+  assert.deepEqual(visited, ['wiki-topic-how-rent-works', 'wiki-topics']);
 });
 
 test('a build that carries no topics simply has none of them', async () => {

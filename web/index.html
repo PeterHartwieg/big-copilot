@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c6e97cf632">
+<link rel="stylesheet" href="community.css?v=7640fd77f2">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -71,7 +71,7 @@
 /* the filter block: the panel's own head, above its results */
 .places .filters{flex:none;padding:10px 11px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:6px}
 .frow{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
-.frow .lab{flex:none;width:40px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
 .citymap.finder .places{width:440px}
 .stage.panel.finder .zoomer{right:472px}
@@ -1914,8 +1914,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c6e97cf632";</script>
-<script>window.LEDGER_RELEASE = {"version":"c6e97cf632","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
+<script>window.LEDGER_BUILD = "7640fd77f2";</script>
+<script>window.LEDGER_RELEASE = {"version":"7640fd77f2","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1984,8 +1984,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=c6e97cf632"></script>
-<script src="community.js?v=c6e97cf632"></script>
+<script src="app.js?v=7640fd77f2"></script>
+<script src="community.js?v=7640fd77f2"></script>
 
 <script>
 
@@ -4863,12 +4863,13 @@ const premises = () => D?.premises || null;
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
 /* A size letter whose layouts disagree carries [min, max] rather than a number. */
 const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
-/* A minimum is a guarantee, so a range only clears it if its smallest variant
-   does: a cinema seating 100 to 150 is not a building that seats 125. */
+/* A cap you can count on is the smallest the size letter's variants give, so
+   both ends of the filter read a range by its lower bound: a cinema seating
+   100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
 const hoodTag = hood => (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood]) || hoodCode(null, hood);
 const finderDefaults = () => ({on:false, cat:"retail", type:"", vac:true, buy:false,
-  hoods:null, minCap:0, minTraffic:0, sale:false, sort:"score", dir:-1});
+  hoods:null, minCap:0, maxCap:0, minTraffic:0, sale:false, sort:"score", dir:-1});
 const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   : b.status === "mine" ? "Yours"
@@ -5047,8 +5048,9 @@ class CityMapView {
         <button type="button" class="fchip" data-f="sale" aria-pressed="false" data-tip="Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.">for sale<b>${P.forSale.length}</b></button>
         <span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('Where', hoods)}
-      ${row('Min', `<label class="fchip num">cap<input type="number" min="0" data-f="minCap" value="0" aria-label="Minimum door cap"></label>
-        <label class="fchip num">traffic<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Minimum foot traffic"></label>`)}
+      ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
+        <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
+      ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
     </div>`;
   }
   wireFinder(){
@@ -5123,7 +5125,7 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, sale:false, vac:true, buy:false, minCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, sale:false, vac:true, buy:false, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
     this.fs.dir = -1;
@@ -5162,8 +5164,12 @@ class CityMapView {
       if(b.type !== fs.cat) continue;
       if(!((fs.vac && b.status === 'vacant') || (fs.buy && b.status === 'rival'))) continue;
       if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
+      // Both ends judge a range by its smallest variant: a cinema seating 100
+      // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
+      // building with no door cap at all can promise neither.
       const cap = capMin(b.cap);
       if(fs.minCap && (cap == null || cap < fs.minCap)) continue;
+      if(fs.maxCap && (cap == null || cap > fs.maxCap)) continue;
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
@@ -5777,32 +5783,48 @@ const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike
 const WIKI_TOPIC_CAT = "bigcopilot_topics";
 const WIKI_TOPIC_LABEL = "Big Copilot topics";
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
-/* What this release added inside the Wiki, under the same feature id the nav's
-   own NEW badge carries. The nav says the Wiki changed; these say what in it
-   changed, so the reader is not left to hunt. A future topic or guide is marked
-   by listing its slug or page id here and nowhere else.
+/* What this release added inside the Wiki. The nav says the Wiki changed; these
+   say what in it changed, so the reader is not left to hunt. A future topic is
+   marked by listing its slug here and nowhere else.
 
-   The badge is the board's: the same markup, the same feature id, the same
-   localStorage key, so it clears when the nav's does and never on its own.
-   Whether it was still standing is read once, when the module loads — the board
-   marks the Wiki seen the moment the page opens, and these marks are about the
-   visit that opened it. */
-const WIKI_NEW_FEATURE = "wiki";
-const WIKI_SEEN_KEY = `ba_dash_feature_seen:${WIKI_NEW_FEATURE}`;
+   The badge is the board's — the same markup and the same feature discovery —
+   but each mark carries its own id, never the nav's. Sharing the nav's id would
+   clear these the instant the tab opened, which is the one moment they are for.
+   They are marked seen when the reader reaches the topic they point at; the
+   nav's own `wiki` id is left exactly as it is. */
 const WIKI_NEW = {
   shelf: ["topics"],            // the shelf that gained something
   topics: ["how-rent-works"],   // the entries that are new in it
 };
-const wikiNewArmed = (() => {
-  let armed = false;
-  try{ armed = localStorage.getItem(WIKI_SEEN_KEY) !== "1"; }catch(e){ armed = false; }
-  return () => armed;
-})();
+const WIKI_NEW_ID = {
+  shelf: key => `wiki-${key}`,
+  topics: slug => `wiki-topic-${slug}`,
+};
+const wikiSeenKey = id => `ba_dash_feature_seen:${id}`;
+const wikiSeen = id => {
+  try{ return localStorage.getItem(wikiSeenKey(id)) === "1"; }catch(e){ return false; }
+};
 /* The board's badge, or nothing at all. `what` is a list from WIKI_NEW; `key`
-   the thing being marked. */
+   the thing being marked. An id the reader has already met draws nothing, so a
+   redraw after the visit is as quiet as the visit made it. */
 function wikiNewBadge(what, key){
-  if(!wikiNewArmed() || !(WIKI_NEW[what] || []).includes(String(key))) return "";
-  return `<span class="feature-new" data-new-feature="${attr(WIKI_NEW_FEATURE)}">New</span>`;
+  if(!(WIKI_NEW[what] || []).includes(String(key))) return "";
+  const id = WIKI_NEW_ID[what](String(key));
+  if(wikiSeen(id)) return "";
+  return `<span class="feature-new" data-new-feature="${attr(id)}">New</span>`;
+}
+/* Reaching a marked topic is meeting it: the entry's own mark and the shelf that
+   carried it are both put down, through the board's own store so the badges
+   already on screen go with them. Without the board around (a test, a static
+   export) the store is written directly, and nothing else happens. */
+function wikiNewMet(slug){
+  if(!WIKI_NEW.topics.includes(String(slug))) return;
+  const ids = [WIKI_NEW_ID.topics(String(slug)), ...WIKI_NEW.shelf.map(WIKI_NEW_ID.shelf)];
+  ids.forEach(id => {
+    if(typeof featureDiscovery !== "undefined" && featureDiscovery
+      && typeof featureDiscovery.visit === "function"){ featureDiscovery.visit(id); return; }
+    try{ localStorage.setItem(wikiSeenKey(id), "1"); }catch(e){}
+  });
 }
 const WIKI_SHOWN = 60;   // rows before a category asks whether you want them all
 const WIKI_HITS = 10;    // search rows before the same question
@@ -6292,6 +6314,9 @@ ${wikiSource(page)}`;
    the same lede, the same sections, the same tables. */
 function wikiTopicPage(topic){
   const ctx = {id: wikiTopicId(topic.slug)};
+  /* Reaching the article is meeting it: its mark, and the shelf's, are put down
+     here rather than on a click, so a bookmark or a search hit counts too. */
+  wikiNewMet(topic.slug);
   const sections = (Array.isArray(topic.sections) ? topic.sections : []).map(section => `
 <section class="sec">
   <div class="sechead"><h2>${wikiText(section.heading || "")}</h2></div>

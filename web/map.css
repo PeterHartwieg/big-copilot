@@ -61,7 +61,7 @@
 /* the filter block: the panel's own head, above its results */
 .places .filters{flex:none;padding:10px 11px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:6px}
 .frow{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
-.frow .lab{flex:none;width:40px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
 .citymap.finder .places{width:440px}
 .stage.panel.finder .zoomer{right:472px}

@@ -167,7 +167,7 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .places .filters').evaluate(
       f => f.nextElementSibling.classList.contains('list')), true);
     assert.deepEqual(await page.$$eval('#cityMapPage .filters .lab', l => l.map(x => x.textContent)),
-      ['Kind', 'Type', 'Show', 'Where', 'Min']);
+      ['Kind', 'Type', 'Show', 'Where', 'Cap', 'Traffic']);
     // The "ranked by…" line is gone; the formula lives in the ? alone.
     assert.equal(await page.locator('#cityMapPage .fnote').count(), 0);
     assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), /÷ 100/);
@@ -345,6 +345,7 @@ test('the filters come back with the character; the switch never does', async ()
     await openMap(page); await turnOn(page);
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
     await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
+    await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').fill('60');
     await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
     const {page: again} = await fixture(context);
     try{
@@ -359,6 +360,7 @@ test('the filters come back with the character; the switch never does', async ()
       assert.equal(await again.locator('#cityMapPage .filters').isVisible(), true);
       assert.equal(await again.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '5');
+      assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '60');
       // A minimum that is set shows as set, like any other chosen control.
       assert.equal(await again.locator('#cityMapPage .fchip.num.on input[data-f="minCap"]').count(), 1);
       assert.equal(await again.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').evaluate(c => c.classList.contains('on')), false);
@@ -371,6 +373,7 @@ test('the filters come back with the character; the switch never does', async ()
       await again.locator('#cityMapPage .place.fr').first().waitFor();
       assert.equal(await again.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '0');
+      assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '0');
     } finally { await again.close(); }
   } finally { await page.close(); await context.close(); }
 });
@@ -424,17 +427,36 @@ test('a board built before premises keeps the card and the plain map', async () 
   } finally { await page.close(); }
 });
 
-test('a minimum door cap judges a range by its smallest variant', async () => {
+test('both ends of the door cap judge a range by its smallest variant', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
+    const cap = end => page.locator(`#cityMapPage .fchip.num input[data-f="${end}Cap"]`);
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
     // 100 to 150 seats clears a minimum of 100 and fails one of 125.
-    await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('100');
+    await cap('min').fill('100');
     assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
-    await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('125');
+    await cap('min').fill('125');
     assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
+    // The maximum mirrors it: 100 to 150 fits under 120, not under 90.
+    await cap('min').fill('0');
+    await cap('max').fill('120');
+    assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
+    await cap('max').fill('90');
+    assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
+    // A plain cap is judged as itself: the 40-seat shop is out above 30.
+    await cap('max').fill('0');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    await cap('max').fill('30');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[1]]);   // MT[0] seats 40
+    // Empty is no limit, and both ends can bracket a size at once.
+    await cap('max').fill('');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    await cap('min').fill('20');
+    await cap('max').fill('35');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);          // 30, between 20 and 35
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -467,6 +489,7 @@ test('a preset lands on the column its category ranks by, not on the last sort',
     await page.locator('#cityMapPage .fchip.av[data-av="vac"]').click();
     await page.locator('#cityMapPage .fchip.av[data-av="buy"]').click();
     await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').fill('75');
+    await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').fill('12');
     await page.evaluate(() => { cityMapPage.showAll = true; showPage('today'); drawFindLocation(); wireCards(); });
     await page.locator('#findLocationCard').click();
     await page.waitForFunction(() => document.querySelector('#cityMapPage .fhead span.on')?.textContent === 'Score');
@@ -476,6 +499,7 @@ test('a preset lands on the column its category ranks by, not on the last sort',
     assert.equal(await page.locator('#cityMapPage .fchip.av[data-av="vac"]').evaluate(c => c.classList.contains('on')), true);
     assert.equal(await page.locator('#cityMapPage .fchip.av[data-av="buy"]').evaluate(c => c.classList.contains('on')), false);
     assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').inputValue(), '0');
+    assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '0');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

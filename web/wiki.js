@@ -39,32 +39,48 @@ const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike
 const WIKI_TOPIC_CAT = "bigcopilot_topics";
 const WIKI_TOPIC_LABEL = "Big Copilot topics";
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
-/* What this release added inside the Wiki, under the same feature id the nav's
-   own NEW badge carries. The nav says the Wiki changed; these say what in it
-   changed, so the reader is not left to hunt. A future topic or guide is marked
-   by listing its slug or page id here and nowhere else.
+/* What this release added inside the Wiki. The nav says the Wiki changed; these
+   say what in it changed, so the reader is not left to hunt. A future topic is
+   marked by listing its slug here and nowhere else.
 
-   The badge is the board's: the same markup, the same feature id, the same
-   localStorage key, so it clears when the nav's does and never on its own.
-   Whether it was still standing is read once, when the module loads — the board
-   marks the Wiki seen the moment the page opens, and these marks are about the
-   visit that opened it. */
-const WIKI_NEW_FEATURE = "wiki";
-const WIKI_SEEN_KEY = `ba_dash_feature_seen:${WIKI_NEW_FEATURE}`;
+   The badge is the board's — the same markup and the same feature discovery —
+   but each mark carries its own id, never the nav's. Sharing the nav's id would
+   clear these the instant the tab opened, which is the one moment they are for.
+   They are marked seen when the reader reaches the topic they point at; the
+   nav's own `wiki` id is left exactly as it is. */
 const WIKI_NEW = {
   shelf: ["topics"],            // the shelf that gained something
   topics: ["how-rent-works"],   // the entries that are new in it
 };
-const wikiNewArmed = (() => {
-  let armed = false;
-  try{ armed = localStorage.getItem(WIKI_SEEN_KEY) !== "1"; }catch(e){ armed = false; }
-  return () => armed;
-})();
+const WIKI_NEW_ID = {
+  shelf: key => `wiki-${key}`,
+  topics: slug => `wiki-topic-${slug}`,
+};
+const wikiSeenKey = id => `ba_dash_feature_seen:${id}`;
+const wikiSeen = id => {
+  try{ return localStorage.getItem(wikiSeenKey(id)) === "1"; }catch(e){ return false; }
+};
 /* The board's badge, or nothing at all. `what` is a list from WIKI_NEW; `key`
-   the thing being marked. */
+   the thing being marked. An id the reader has already met draws nothing, so a
+   redraw after the visit is as quiet as the visit made it. */
 function wikiNewBadge(what, key){
-  if(!wikiNewArmed() || !(WIKI_NEW[what] || []).includes(String(key))) return "";
-  return `<span class="feature-new" data-new-feature="${attr(WIKI_NEW_FEATURE)}">New</span>`;
+  if(!(WIKI_NEW[what] || []).includes(String(key))) return "";
+  const id = WIKI_NEW_ID[what](String(key));
+  if(wikiSeen(id)) return "";
+  return `<span class="feature-new" data-new-feature="${attr(id)}">New</span>`;
+}
+/* Reaching a marked topic is meeting it: the entry's own mark and the shelf that
+   carried it are both put down, through the board's own store so the badges
+   already on screen go with them. Without the board around (a test, a static
+   export) the store is written directly, and nothing else happens. */
+function wikiNewMet(slug){
+  if(!WIKI_NEW.topics.includes(String(slug))) return;
+  const ids = [WIKI_NEW_ID.topics(String(slug)), ...WIKI_NEW.shelf.map(WIKI_NEW_ID.shelf)];
+  ids.forEach(id => {
+    if(typeof featureDiscovery !== "undefined" && featureDiscovery
+      && typeof featureDiscovery.visit === "function"){ featureDiscovery.visit(id); return; }
+    try{ localStorage.setItem(wikiSeenKey(id), "1"); }catch(e){}
+  });
 }
 const WIKI_SHOWN = 60;   // rows before a category asks whether you want them all
 const WIKI_HITS = 10;    // search rows before the same question
@@ -554,6 +570,9 @@ ${wikiSource(page)}`;
    the same lede, the same sections, the same tables. */
 function wikiTopicPage(topic){
   const ctx = {id: wikiTopicId(topic.slug)};
+  /* Reaching the article is meeting it: its mark, and the shelf's, are put down
+     here rather than on a click, so a bookmark or a search hit counts too. */
+  wikiNewMet(topic.slug);
   const sections = (Array.isArray(topic.sections) ? topic.sections : []).map(section => `
 <section class="sec">
   <div class="sechead"><h2>${wikiText(section.heading || "")}</h2></div>

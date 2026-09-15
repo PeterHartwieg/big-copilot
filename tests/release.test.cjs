@@ -59,6 +59,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     const prices = await page.locator('.wk-prices').first().textContent();
     assert.match(prices, /Release Gifts: \$30\.27/);
     assert.match(prices, /\$25\.63/);
+    // The new topic carries its own badges; meeting it dismisses them like the rest.
+    await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
+    await page.getByRole('heading', {name:'How rent works'}).waitFor();
     await page.reload();
     assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),0);
     assert.deepEqual(errors,[]);

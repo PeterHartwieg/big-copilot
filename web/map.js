@@ -108,12 +108,13 @@ const premises = () => D?.premises || null;
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
 /* A size letter whose layouts disagree carries [min, max] rather than a number. */
 const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
-/* A minimum is a guarantee, so a range only clears it if its smallest variant
-   does: a cinema seating 100 to 150 is not a building that seats 125. */
+/* A cap you can count on is the smallest the size letter's variants give, so
+   both ends of the filter read a range by its lower bound: a cinema seating
+   100 to 150 is not a building that seats 125. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
 const hoodTag = hood => (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood]) || hoodCode(null, hood);
 const finderDefaults = () => ({on:false, cat:"retail", type:"", vac:true, buy:false,
-  hoods:null, minCap:0, minTraffic:0, sale:false, sort:"score", dir:-1});
+  hoods:null, minCap:0, maxCap:0, minTraffic:0, sale:false, sort:"score", dir:-1});
 const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
   : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
   : b.status === "mine" ? "Yours"
@@ -292,8 +293,9 @@ class CityMapView {
         <button type="button" class="fchip" data-f="sale" aria-pressed="false" data-tip="Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.">for sale<b>${P.forSale.length}</b></button>
         <span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('Where', hoods)}
-      ${row('Min', `<label class="fchip num">cap<input type="number" min="0" data-f="minCap" value="0" aria-label="Minimum door cap"></label>
-        <label class="fchip num">traffic<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Minimum foot traffic"></label>`)}
+      ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
+        <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
+      ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
     </div>`;
   }
   wireFinder(){
@@ -368,7 +370,7 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, sale:false, vac:true, buy:false, minCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, sale:false, vac:true, buy:false, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score';
     this.fs.dir = -1;
@@ -407,8 +409,12 @@ class CityMapView {
       if(b.type !== fs.cat) continue;
       if(!((fs.vac && b.status === 'vacant') || (fs.buy && b.status === 'rival'))) continue;
       if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
+      // Both ends judge a range by its smallest variant: a cinema seating 100
+      // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
+      // building with no door cap at all can promise neither.
       const cap = capMin(b.cap);
       if(fs.minCap && (cap == null || cap < fs.minCap)) continue;
+      if(fs.maxCap && (cap == null || cap > fs.maxCap)) continue;
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
