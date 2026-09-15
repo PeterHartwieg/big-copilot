@@ -26,8 +26,11 @@ Everything else:
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
 - wiki pipeline: the `.py` files in `tools/`, with the authored wording in
-  `tools/wiki_sample.json`. `tools/` also holds the GLM launcher,
-  `tools/Invoke-ZaiClaude.ps1`, which is nothing to do with the wiki
+  `tools/wiki_sample.json` and the hand-written articles in `tools/wiki_topics.json`.
+  `tools/` also holds the GLM launcher, `tools/Invoke-ZaiClaude.ps1`, which is nothing to do
+  with the wiki
+- location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
+  payload key from `_premises()` in `ba_dashboard.py`
 - community API: `server/`, `migrations/`, `web/community.js`
 - changelog: `web/changelog.json`
 
@@ -42,18 +45,19 @@ side and rebuild — the rebuild is the resolution.
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py` |
-| `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py`. Every other file under `mockup/` is hand-made, `mockup/ui-mockup.html` included |
+| `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py` |
+| `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save at a hard-coded path; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
 | `dashboard.html`, `market_history.json` | local runs; gitignored |
 
 ## Finishing a change
 
 | You changed | Run |
 | --- | --- |
-| `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py` |
+| `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py` |
-| `tools/*.py`, `tools/wiki_sample.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`, so `tests/finder.test.cjs` also covers `drawFindLocation` and `findPremisesLink` in `ba_dashboard.py` |
+| `tools/*.py`, `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
@@ -94,6 +98,9 @@ and never attach one to an issue.
   `tests/test_import_routes.py`, `tests/test_plan_orders.py`,
   `tests/test_recipe_identity.py`. In `web/app.js`: `tests/resume.test.cjs`,
   `tests/save_location.test.cjs`, `tests/performance.test.cjs`.
+- Set iteration order follows Python's per-process hash seed, so when a set decides the
+  order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
+  `None` last because real saves hold items with no name.
 - The Pyodide worker fetches four files from `web/py/` — `ba_save.py`, `ba_dashboard.py`,
   `gametext.json`, `ba_buildings.json` — and at runtime writes the save, the player's
   optional `en.json` and the history; `browser_build()` writes the `.character` sidecar from

@@ -72,6 +72,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `supply` | `_supply()` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps` |
 | `rhythm` | `_chain_rhythm()` | `drawRhythm`, `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
+| `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
@@ -86,12 +87,16 @@ this column is where to look when you change a key's shape — not a complete ca
 | `goals` | `_goals()` | `drawGoals` |
 | `weekly` | `_weekly()` | no reader |
 
-Two indirect routes an agent would otherwise miss:
+Three indirect routes an agent would otherwise miss:
 
 - `drawStock` references no key of its own. The Checks view gets its rows through the
   `SUPPLY_VIEWS` entry selected by `stockView`, and those callbacks do the reading. Change a
   shape in `supply` or `businesses` and it is `SUPPLY_VIEWS` you have to follow, not
   `drawStock`.
+- The whole location finder reads `premises` through one accessor,
+  `const premises = () => D?.premises || null` in `web/map.js`. Every `CityMapView` method
+  that ranks, filters or describes a building goes through it, so that one line is the seam
+  to follow when the key's shape changes.
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 
@@ -107,6 +112,12 @@ Three keys have no reader, but only one of them is dead end to end:
 The payload crosses the worker boundary as a JSON string: `browser_build()` returns
 `json.dumps(data)`. `render(data)` calls `json.dumps` too, so a value that is not
 JSON-serialisable breaks **both** doors, not just the browser.
+
+The payload is also meant to be identical across runs of the same save. Set iteration order
+follows Python's per-process hash seed, so anywhere a set decides the order of something
+that reaches the payload, sort it through `_in_order()` — which puts `None` last, because
+real saves hold items with no name. Business lines, factory `arrivals` and `depotOther`
+already go through it.
 
 ## Template placeholders
 
@@ -165,6 +176,14 @@ Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`
 from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
+`ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
+keeps the display names (`NAME_PREFIXES`: items, business types, neighbourhoods,
+workstations, skills), the recipe keys, the workstation help pages, the business-type help
+pages, the item pages that state a station's customer capacity, and
+`help_building_types_content`, which is where the premises table gets its size-code-to-door-cap
+mapping. A page the analysis needs but `ships()` does not keep is simply absent in the
+browser, with no error — so adding a lookup means adding its key here and rebuilding.
+
 `python build_web.py --check` calls `check()`, which reuses the same `release_info()` and
 `page_html()` and compares their output against what is committed under `web/`. That is why
 it needs no installed game: it re-derives the page from the sources and the committed
@@ -205,11 +224,11 @@ three of them. Each page is a `div.page` that `showPage()` unhides.
 
 | Page (`id`) | Host element | Drawn by |
 | --- | --- | --- |
-| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`); the "Next moves" cards are static markup |
+| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` (the "Find a location" card's live count); the other "Next moves" cards are static markup |
 | Company (`company`) | `pageCompany` | one view at a time — see below |
 | Supply (`supply`) | `pageSupply` | one view at a time — see below |
 | Growth (`growth`) | `pageGrowth` | one view at a time — see below |
-| Map (`map`) | `pageMap` | `showCityMap` / `refreshCityMaps` in `web/map.js` |
+| Map (`map`) | `pageMap` | `showCityMap` / `refreshCityMaps` in `web/map.js`, which also hosts the location finder as a mode of the page — `openFinder()` switches it on, and `CityMapView` ranks the `premises` rows beside the map |
 | Wiki (`wiki`) | `pageWiki` | `wikiVisit` → `showWikiRoute` in `web/wiki.js`; the entry is omitted when `showWikiRoute` is undefined |
 
 Company's views:
@@ -294,21 +313,28 @@ only the browser build includes. Setup, secrets and the release steps:
 ## Wiki pipeline
 
 `tools/build_wiki_data.py` reads the installed game — the shipped locale, the help menu's
-table of contents, `ba_buildings.json` and the shipped business layouts — and writes
-`web/wiki-data.json`.
+table of contents, `ba_buildings.json` and the shipped business layouts — plus two
+hand-authored files beside it, and writes `web/wiki-data.json`.
 
-Its page records are one per **unique help-page slug that has content**, in menu order, not
-one per help-menu entry. `build_pages()` drops two kinds of entry and reports both rather
+The two authored inputs do different jobs. `tools/wiki_sample.json` holds wording the
+builder fills with facts (labels, notes, the gap sentences). `tools/wiki_topics.json` holds
+whole articles — "How rent works" is the first — which travel through as the payload's
+`topics`: they are the one part of the file the game does not write, so each carries its own
+provenance line saying what it was checked against. Both are stamp inputs, so editing either
+changes the build stamp.
+
+The game-read page records are one per **unique help-page slug that has content**, in menu
+order, not one per help-menu entry. `build_pages()` drops two kinds of entry and reports both rather
 than swallowing them: a duplicate of an already emitted slug (the shipped file has one such
 double entry, whose second prefix is unreachable through that slug), and a page whose body
 the locale does not carry, since a record with no body would be an empty page rather than a
 fact. The order of those two tests matters: a slug is only recorded as seen once it has been
 emitted, so a later entry for a slug whose earlier one had no content is kept, not counted a
-duplicate. Alongside the pages the payload carries the worked example and a guide per
-customer-facing business type.
+duplicate. Alongside the pages the payload carries the worked example, a guide per
+customer-facing business type, and the `topics`.
 
-No number is invented; what the game does not state stays `null`. The authored wording lives
-in `tools/wiki_sample.json`, and any sentence whose facts cannot be filled is left out
-rather than guessed. `build_web.py` calls `write_public_wiki` before stamping, so the site
-always ships the payload its pages were built against. Details:
+No number is invented; what the game does not state stays `null`, and any sentence whose
+facts cannot be filled is left out rather than guessed. `build_web.py` calls
+`write_public_wiki` before stamping, so the site always ships the payload its pages were
+built against. Details:
 [wiki-data-pipeline.md](wiki-data-pipeline.md).
