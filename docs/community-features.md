@@ -1,7 +1,8 @@
 # Community features
 
 The hosted dashboard shows an approximate online count and lets visitors vote for
-the **Optimize staffing**, **Find a location**, and **Time to break even** ideas.
+the **Optimize staffing** and **Time to break even** ideas (Find a location shipped on
+15 September 2026 and left the ballot).
 Time to break even would estimate how many in-game days each business needs to
 earn back its setup costs, based on its net profit. The count means
 dashboard browsers seen in the last ten minutes, not verified people or players

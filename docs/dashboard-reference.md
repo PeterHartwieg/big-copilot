@@ -653,6 +653,151 @@ the ones you do not. The old flat *Openings* ranking was dropped. It answered th
 per-product question that *Not yet* already covers in grid form, and the by-type view
 answers where to open a business.
 
+## Premises
+
+Every building in the city travels with the board, not just the ones you rent, so the map
+can answer "which available premises are best right now?" and any address's card can say
+what the place is. The payload is `premises`: one row per building registration the fixed
+building table places, plus the buildings on sale, the demand grid turned inside out by
+neighbourhood, and the two reconstructed tables below. A row carries the address, its
+neighbourhood, building type, size letter, square metres, foot traffic, door cap,
+estimated rent, estimated deposit, status and occupant. Python does no ranking; the page
+scores and sorts.
+
+Two addresses in some saves are registered but missing from the building table. They are
+dropped rather than guessed at, so a save can carry 883 rows where another carries 885.
+
+### What each status means
+
+- **mine** — you rent it, whatever kind of building it is. Your flat is `mine` too.
+- **rival** — a business somebody runs is in it: `businessTypeName` is set and is not
+  `ba:businesstype_empty`, and `businessOwnerRivalId` names the rival who owns it. These
+  are the buy-out candidates.
+- **service** — a business is in it but nobody owns it (`businessOwnerRivalId` is empty).
+  These belong to the city itself and cannot be bought out at any price: the banks,
+  wholesalers, import/export offices, gas stations, car dealerships, furniture and
+  appliance stores, recruitment agencies, the IRS, the hospital, the clinic, the school,
+  the casino, the moving service and the truck garage. Most sit in special buildings, but
+  a dozen of them occupy ordinary retail and office floors, which is why the owner field,
+  not the building type, is what separates them.
+- **vacant** — empty and `AvailableForRent`. Vacancy is exact: every empty retail,
+  office, cinema and theater building says so itself, so nothing is ever inferred.
+- **unavailable** — everything else: residential buildings, which you can never take
+  unless you already rent one, empty special buildings, and the empty warehouses the game
+  keeps off the market.
+
+Status says whether you could take the place; `occupant` says who is in it. Any building
+with a business in it carries the occupant's business name and type, whatever its status,
+so the card for somebody else's flat still names the tenant while reading "unavailable".
+
+Each row also says who the landlord is: `owner` is "you" once you have bought the building
+outright, "rival" where a rival company owns it, and "city" otherwise. Rival companies have
+no names in the save — they appear only in event text, and buildings change hands — so they
+are numbered instead, in the order the save lists them, which holds for a character:
+`ownerRival` numbers the landlord, `occupantRival` the company running the business inside,
+and `premises.rivals` says how many there are, so a card can read "rival 3 of 19".
+
+`premises.rivalNames` puts a name to the numbers it can. The four story rivals — Huang Guo,
+Ingrid Schneider, Jessica Johnson and Thierry Laurent Moreau — keep the same ids in every
+save and are read from the message keys they have sent, with the four pairs also shipped
+for a save where none has written yet. Everybody else is named by their own opening
+announcement: a market event of type 0 carries the rival's name, the business's name and
+its address, and where the registration still standing there was created on that same day
+under that same name, its owner id is that rival. So an ordinary rival is named once it has
+opened a business since the save began, and not before; a name is kept only where every
+announcement for that id agrees, so a shop that has since closed and been replaced cannot
+rename its owner. The rest keep just their number. On a day-20 character that is typically
+eleven of nineteen.
+
+### Estimated rent
+
+The save stores rent only for a building somebody already occupies, so a vacant one has
+to be estimated:
+
+    rent per day = m² × (30 + traffic index) × district rate × (1.033 in an office building)
+
+| District | Rate |
+| --- | --- |
+| Midtown | 0.02482 |
+| Hell's Kitchen | 0.01468 |
+| Murray Hill | 0.01020 |
+| Garment District | 0.00734 |
+| Lower Manhattan | 0.00621 |
+| The Hamptons | 0.00568 |
+| Industry City | 0.00566 |
+
+Fitted on 15 September 2026 against 48 non-residential leases across three characters in
+the HART. YT save's build, 3675, worst residual 0.6% on integer rounding. Residential
+leases do not follow it, so a home is shown with no estimate rather than a wrong one. A
+patch can rebalance rents, so the payload also carries a live check: every lease you are
+currently billed for that is not residential is measured against the formula, and
+`rent.check` reports how many leases that was and the worst relative deviation among
+them. On HART. YT at day 20 that is eight leases, worst deviation 0.0027.
+
+### Deposit
+
+Signing a lease costs a deposit upfront, and early on that, not the daily rent, is what
+decides whether you can take a place at all. The game bills it as a transaction and never
+stores it against the building, so it is estimated as a multiple of the estimated daily
+rent: **62.84×** for a shop, office, cinema or theater, **93.61×** for a warehouse or
+factory, rounded to the nearest ten dollars. Fitted on 15 September 2026 across 21 lease
+deposits from three characters on build 3675; worst relative deviation 4.0% on leases and
+2.5% on warehouses. Two buildings with identical size, traffic and type have been seen to
+ask different deposits, so a few per cent is as close as this gets. A home has no rent
+estimate and so no deposit estimate.
+
+`ba:transaction_deposit` covers more than leases: a building purchase is billed the same
+way at roughly a thousand times the rent, and the game takes small deposits for other
+things too. Only transactions between 30× and 300× the estimated rent are read as lease
+deposits, in the payload's live check and in the fit behind it. `rent.deposit.check`
+reports how many of your own deposits were measured and the worst relative deviation, 0
+and 0 for a character who has paid none.
+
+### Door cap
+
+`customerCapacity` is also stored only for an occupied building. The cap a size buys
+comes instead from the game's own help page `help_building_types_content`, which lists a
+customer capacity per layout code. A code is a letter and a digit — C1 and C2 are both
+225 m² retail floors — and the building table records only the letter, so the codes
+collapse to their letter. The same letter is a different floor in a different kind of
+building: a C is 30 customers as a shop and 8 as an office. Where a letter's layouts
+genuinely differ the cap is a `[min, max]` range, which today is only the cinema (S, 100
+to 150) and the theater (R, 150 to 200). Warehouses have a vehicle capacity, not a door
+cap, and carry none; neither do residential or special buildings.
+
+The help page is not in the game text that ships with the web build, so the table is also
+hardcoded as it stands on build 3675 and the page's text is preferred whenever the player
+has supplied their own `en.json`:
+
+| | A | C | D | J | K | M | S | R |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Retail | 15 | 30 | 40 | | | 75 | | |
+| Office | 4 | 8 | 10 | 10 | 50 | | | |
+| Cinema | | | | | | | 100–150 | |
+| Theater | | | | | | | | 150–200 |
+
+One discrepancy is known and left alone: the page says an office K seats 50, while the
+law firm in the office K building at 10 Second Avenue reads `customerCapacity` 20 in the
+save. The published table is what the board shows, since a rival's or a half-furnished
+business's own reading is routinely below it.
+
+### Demand by neighbourhood
+
+`premises.demand` is the Market view's by-type grid and offices band, per neighbourhood
+instead of per type: for each neighbourhood, every type with a reading there, its demand,
+how many providers the game counts, whether one of them is yours, and its category
+(`retail`, `office`, `cinema` or `theater`). The numbers are the same averages the grid
+shows; there is no second reading of demand anywhere on the board. Neighbourhood keys are
+the display names the building table uses, so the page joins them straight onto a
+building's `hood`.
+
+### For sale
+
+`premises.forSale` is the game's `buildingsForSale` list joined to the building table by
+address: address, neighbourhood, building type, size letter, square metres and asking
+price. Listings the table cannot place are skipped. Buildings for sale are not scored —
+buying is a different decision from renting a shop floor.
+
 ## What the save does not remember
 
 The save stores only today: today's demand, today's cash, today's net worth. Anything

@@ -33999,6 +33999,86 @@
       }
     }
   },
+  "topics": [
+    {
+      "slug": "how-rent-works",
+      "title": "How rent works",
+      "lede": "Rent on a commercial building is not a number the game picks at random. It follows the floor area, the foot traffic at the door, and the district the building stands in.",
+      "sections": [
+        {
+          "heading": "What a listing charges",
+          "paragraphs": [
+            "A rental listing states a rent per day and a deposit. The rent is billed daily for as long as you hold the lease. The deposit is paid once, when you sign.",
+            "The deposit is the larger number, and it is due the day you sign. For a shop or an office it comes to about two months of rent; for a warehouse, about three. Big Copilot estimates it from the rent and shows it in the location finder as **Upfront**, so a cheap-looking building that you cannot afford to open is visible before you take it.",
+            "A residential listing adds a charge for appliances on top of those two.",
+            "Those numbers are the game's own. Big Copilot reads them; it does not set them."
+          ]
+        },
+        {
+          "heading": "The formula",
+          "paragraphs": [
+            "For a commercial building the daily rent is:",
+            "**rent per day = floor area × (30 + traffic index) × district rate**",
+            "Floor area is the building's square metres and the traffic index is the foot traffic the game shows for that address. In an office building the result is multiplied by **1.033**.",
+            "The district rate is the part the game never shows. These seven are what the leases give:"
+          ],
+          "table": {
+            "caption": "District rates",
+            "columns": [
+              "District",
+              "Rate"
+            ],
+            "rows": [
+              [
+                "Midtown",
+                "0.02482"
+              ],
+              [
+                "Hell's Kitchen",
+                "0.01468"
+              ],
+              [
+                "Murray Hill",
+                "0.01020"
+              ],
+              [
+                "Garment District",
+                "0.00734"
+              ],
+              [
+                "Lower Manhattan",
+                "0.00621"
+              ],
+              [
+                "The Hamptons",
+                "0.00568"
+              ],
+              [
+                "Industry City",
+                "0.00566"
+              ]
+            ]
+          }
+        },
+        {
+          "heading": "How well it holds",
+          "paragraphs": [
+            "The rates were fitted on 15 September 2026 against 48 player leases across three characters, on game build 3675. Every one of those leases matches the formula to within 0.6%, which is integer rounding.",
+            "Residential leases do not follow it. A home is shown with no estimate rather than a wrong one.",
+            "A game patch can rebalance rents. That is why the date is stated: if the numbers stop matching what a lease charges, the fit is what went stale, not the lease."
+          ]
+        },
+        {
+          "heading": "Where Big Copilot uses it",
+          "paragraphs": [
+            "The map shows this estimate on every building's card, so a vacant building can be compared with an occupied one before you sign anything.",
+            "The location finder ranks buildings by demand and traffic, not by rent. Rent is shown beside each candidate as a cost to weigh, and it does not move a building up or down the list."
+          ]
+        }
+      ],
+      "provenance": "Big Copilot's own fit, 15 September 2026: 48 non-residential leases across three characters on game build 3675, worst residual 0.6%. Not stated anywhere in the game's help."
+    }
+  ],
   "provenance": {
     "schema": "ba-wiki-public",
     "builtBy": "tools/build_wiki_data.py",
@@ -34068,7 +34148,8 @@
       "suppliers": 54,
       "buildingRows": 885,
       "unparsed": 24,
-      "guides": 21
+      "guides": 21,
+      "topics": 1
     },
     "helpStructure": {
       "pageEntries": 852,

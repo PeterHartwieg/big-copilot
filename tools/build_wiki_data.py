@@ -13,7 +13,10 @@ carried over from the last build.
 
 Authored wording lives in `tools/wiki_sample.json` (labels, notes, the gap
 sentences); this module fills it with facts and leaves out any sentence its
-check cannot support. Output is deterministic apart from real source changes:
+check cannot support. Hand-authored articles live in `tools/wiki_topics.json`
+and travel as the payload's `topics`: they are the one part of the file the
+game does not write, and each carries its own provenance line.
+Output is deterministic apart from real source changes:
 there is no run timestamp, so an unchanged install builds byte-identical
 output. `build_web.py` calls `write_public_wiki` before stamping, so a rebuilt
 site always ships the payload its pages were built against.
@@ -37,6 +40,9 @@ SCHEMA = "ba-wiki-public"
 SCHEMA_VERSION = 1
 # Where the authored wording lives, beside this file.
 WORDING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiki_sample.json")
+# Hand-authored articles, beside this file. Everything else in the payload is
+# read from the game; these are written by hand and say so on the page.
+TOPICS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiki_topics.json")
 DEFAULT_OUT = os.path.join("web", "wiki-data.json")
 
 # The worked example the wiki page renders. The selection is authored - this is
@@ -173,6 +179,26 @@ def wording() -> dict:
     """The authored sentences, read per build."""
     with open(WORDING_PATH, encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def topics(path: str | None = None) -> list[dict]:
+    """The hand-authored articles, read per build and sorted by slug.
+
+    These are the one part of the payload the game does not write. Nothing is
+    derived here: the file is carried through as it stands, and every article
+    keeps the provenance line its author wrote for it.
+    """
+    with open(path or TOPICS_PATH, encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise wiki_data.SourceError("wiki_topics.json is not an object")
+    rows = data.get("topics")
+    if not isinstance(rows, list):
+        raise wiki_data.SourceError("wiki_topics.json lists no topics")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise wiki_data.SourceError("wiki_topics.json: every topic must be an object")
+    return sorted(rows, key=lambda row: str(row.get("slug", "")))
 
 
 # --- sources -------------------------------------------------------------
@@ -2177,6 +2203,50 @@ def validate_public(payload: dict) -> None:
             if field not in guide["COPY"]:
                 raise wiki_data.SourceError("guide %s COPY has no %s" % (key, field))
 
+    validate_topics(payload.get("topics"))
+
+
+def validate_topics(rows) -> None:
+    """The hand-authored articles, checked the way the authored wording is.
+
+    An article is prose, so the check is about shape and honesty rather than
+    facts: it must be readable, it must say where it came from, and a table
+    must be square.
+    """
+    if not isinstance(rows, list):
+        raise wiki_data.SourceError("payload has no topics")
+    slugs = set()
+    for topic in rows:
+        if not isinstance(topic, dict):
+            raise wiki_data.SourceError("a topic is not an object")
+        for field in ("slug", "title", "lede", "sections", "provenance"):
+            if not topic.get(field):
+                raise wiki_data.SourceError("topic %r has no %s" % (topic.get("slug"), field))
+        slug = topic["slug"]
+        if slug in slugs:
+            raise wiki_data.SourceError("topic %s is listed twice" % slug)
+        slugs.add(slug)
+        if not isinstance(topic["sections"], list):
+            raise wiki_data.SourceError("topic %s sections is not a list" % slug)
+        for section in topic["sections"]:
+            if not isinstance(section, dict) or not section.get("heading"):
+                raise wiki_data.SourceError("topic %s has a section with no heading" % slug)
+            paragraphs = section.get("paragraphs")
+            if not isinstance(paragraphs, list) or not paragraphs:
+                raise wiki_data.SourceError("topic %s section %s has no paragraphs"
+                                            % (slug, section["heading"]))
+            table = section.get("table")
+            if table is None:
+                continue
+            columns, table_rows = table.get("columns"), table.get("rows")
+            if not isinstance(columns, list) or not columns:
+                raise wiki_data.SourceError("topic %s table has no columns" % slug)
+            if not isinstance(table_rows, list) or not table_rows:
+                raise wiki_data.SourceError("topic %s table has no rows" % slug)
+            for row in table_rows:
+                if not isinstance(row, list) or len(row) != len(columns):
+                    raise wiki_data.SourceError("topic %s table row does not fit its columns" % slug)
+
 
 # --- build and write ----------------------------------------------------
 
@@ -2274,8 +2344,10 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
         "pages": pages,
         "sample": sample,
         "guides": guides,
+        "topics": topics(),
         "provenance": provenance,
     }
+    provenance["counts"]["topics"] = len(payload["topics"])
     check_privacy(payload, [paths["locale"], paths["help_structure"]])
     validate_public(payload)
     return payload

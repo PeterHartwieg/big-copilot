@@ -1,0 +1,128 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Map \u00b7 Find a location on",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1100,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "FinderPicked.dc.html",
+      "title": "A candidate picked",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1100,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "FinderBuyout.dc.html",
+      "title": "Coffee shop \u00b7 buy-out rows on",
+      "x": 0,
+      "y": 1300,
+      "w": 1440,
+      "h": 1100,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "FinderOff.dc.html",
+      "title": "Finder off \u00b7 any building's card",
+      "x": 1560,
+      "y": 1300,
+      "w": 1440,
+      "h": 1100,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "ForSale.dc.html",
+      "title": "For sale list",
+      "x": 0,
+      "y": 2600,
+      "w": 1440,
+      "h": 1100,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "TodayCard.dc.html",
+      "title": "Today \u00b7 the card goes live",
+      "x": 1560,
+      "y": 2600,
+      "w": 1440,
+      "h": 1100,
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    {
+      "file": "GrowthCell.dc.html",
+      "title": "Growth \u00b7 a cell links to premises",
+      "x": 0,
+      "y": 3900,
+      "w": 1440,
+      "h": 1000,
+      "is_interactive": true,
+      "expand": "fill"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "n-main",
+      "x": 0,
+      "y": -170,
+      "w": 600,
+      "text": "Find a location is a chip on the map page, off by default. On: the layer chips and search give way to category, type, availability and neighbourhood filters; the side list becomes a ranked table (score, traffic, demand, est. rent; click a header to sort). Score = traffic \u00d7 type demand \u00f7 100, said plainly under the filters with the not-a-profit-ranking line. Any type: each row names the neighbourhood's best fit. Data is your HART. YT save on day 20: 176 vacant retail units."
+    },
+    {
+      "id": "n-picked",
+      "x": 1560,
+      "y": -130,
+      "w": 520,
+      "text": "A picked candidate: the card shows score, traffic and demand as three mono numbers, then the building facts (size, traffic, door cap, est. rent) and the type line (best fit, demand, rivals in the neighbourhood). Candidates are green footprints; your own shops stay faint."
+    },
+    {
+      "id": "n-buyout",
+      "x": 0,
+      "y": 1180,
+      "w": 520,
+      "text": "Coffee shop chosen and buy-out switched on: rival-occupied retail buildings join the list in amber, occupant named on the row. No takeover price: the save does not carry it, and the ? says so."
+    },
+    {
+      "id": "n-off",
+      "x": 1560,
+      "y": 1180,
+      "w": 520,
+      "text": "Finder off: the map is exactly today's map, plus one chip. What changes for everyone: any building's card now shows availability, occupant, size, door cap, traffic and est. rent."
+    },
+    {
+      "id": "n-sale",
+      "x": 0,
+      "y": 2480,
+      "w": 520,
+      "text": "For sale: a plain list behind the chip on the filter row, cheapest first, neighbourhood chips still apply. Not scored."
+    },
+    {
+      "id": "n-today",
+      "x": 1560,
+      "y": 2480,
+      "w": 520,
+      "text": "The Today card drops SOON: a live count where the badge was and one line naming the best-traffic vacant unit. Clicking opens the map with the finder on."
+    },
+    {
+      "id": "n-growth",
+      "x": 0,
+      "y": 3780,
+      "w": 520,
+      "text": "Growth: clicking a type \u00d7 neighbourhood cell keeps today's detail line and adds 'find premises', which opens the map with that type and neighbourhood preset."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

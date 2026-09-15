@@ -110,6 +110,26 @@ const SAMPLE = {
          {what: 'Weekly delivery limits', detail: 'The help says every wholesaler caps each item per week and resets Monday 08:00, but never gives a number.'}],
 };
 
+const TOPIC = {
+  slug: 'how-rent-works',
+  title: 'How rent works',
+  lede: 'Rent on a commercial building follows the floor area, the traffic and the district.',
+  sections: [
+    {heading: 'What a listing charges',
+      paragraphs: ['A listing states a rent per day and a deposit.',
+        'A residential listing adds a charge for appliances.']},
+    {heading: 'The formula',
+      paragraphs: ['**rent per day = floor area × (30 + traffic index) × district rate**',
+        'In an office building the result is multiplied by **1.033**.'],
+      table: {caption: 'District rates', columns: ['District', 'Rate'],
+        rows: [['Midtown', '0.02482'], ["Hell's Kitchen", '0.01468'], ['Murray Hill', '0.01020'],
+          ['Garment District', '0.00734'], ['Lower Manhattan', '0.00621'],
+          ['The Hamptons', '0.00568'], ['Industry City', '0.00566']]}},
+  ],
+  provenance: "Big Copilot's own fit, 15 September 2026: 48 non-residential leases on game build 3675, "
+    + 'worst residual 0.6%. Not stated anywhere in the game\'s help.',
+};
+
 const DATA = {
   schemaVersion: 1,
   // The game's own category keys, stored in the help menu's order, which is not
@@ -134,6 +154,10 @@ const DATA = {
       body: 'Sold by [Gift Shops](businesstypes-giftshop) and <b>nobody</b> else.\n\nSee [Exercise](common_exercise).'},
   ],
   sample: SAMPLE,
+  // The hand-authored articles, in the shape tools/wiki_topics.json writes:
+  // written beside the payload rather than read from the game's help, so each
+  // one closes with the line saying what it was checked against.
+  topics: [TOPIC],
   // The date is the newest source modification time, and the save build is not
   // knowable from an installation, so the extraction states it as null.
   provenance: {extracted: '2026-09-03', saveBuildNumber: null,
@@ -161,7 +185,10 @@ function element(id) {
   return node;
 }
 
-function wiki({data = DATA, fetchImpl, save = null} = {}) {
+/* `seen` is the board's feature-discovery store, the one thing the module reads
+   before it draws anything: the nav's NEW badge and the Wiki's own marks share
+   its keys. */
+function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
   const root = element('wikiRoot');
   const nodes = new Map([['wikiRoot', root]]);
   const drawn = [];
@@ -192,6 +219,7 @@ function wiki({data = DATA, fetchImpl, save = null} = {}) {
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),
     CSS: {escape: s => s},
+    localStorage: {getItem: key => (key in seen ? seen[key] : null), setItem(key, value){ seen[key] = value; }},
     document: {addEventListener(){}, body: {classList: {add(){}, remove(){}}}, activeElement: null},
     window: {LEDGER_BUILD: 'stamp1', addEventListener(){}, scrollY: 0, scrollTo(x, y){ scrolled.push([x, y]); }},
     fetch: fetchImpl || (async (url) => {
@@ -300,6 +328,77 @@ test('a page the catalogue does not have is a said-so, not a dead link', async (
   assert.match(html, /Not here/);
   assert.match(html, /No page called/);
   assert.match(html, /href="#wiki"/);
+});
+
+test('a hand-authored topic reads as a page, and says where its numbers came from', async () => {
+  const w = wiki();
+  // The front page is the way to it without knowing it is there.
+  const home = await w.load('wiki');
+  assert.match(home, /Big Copilot topics/);
+  assert.match(home, /topic%2Fhow-rent-works/);
+  // And the search finds it exactly as it finds a help page.
+  assert.deepEqual([...w.call(`wikiFind("rent")`)].map(h => h.id), ['topic/how-rent-works']);
+
+  const html = await w.go('wiki/topic%2Fhow-rent-works');
+  assert.match(html, /<h1>How rent works<\/h1>/);
+  // Our reading, not the game's help, so it wears the Big Copilot badge.
+  assert.match(html, /Big Copilot's guidance or calculation/);
+  assert.match(html, /rent per day = floor area × \(30 \+ traffic index\) × district rate/);
+  assert.match(html, /<b>1\.033<\/b>/);
+  // Seven districts, one row each, under the two column headers.
+  const body = html.split('<tbody>')[1].split('</tbody>')[0];
+  assert.equal((body.match(/<tr>/g) || []).length, 7);
+  assert.match(html, /<th scope="row">Midtown<\/th><td data-label="Rate">0\.02482<\/td>/);
+  assert.match(html, /wk-topicsrc/);
+  assert.match(html, /15 September 2026/);
+  assert.match(html, /game build 3675/);
+  assert.doesNotMatch(html, /undefined/);
+});
+
+test('what is new in the Wiki is badged until the reader reaches it', async () => {
+  // Nothing seen: the shelf that gained something and the entry that is new
+  // both say so, in the board's own markup and each under its own feature id.
+  const seen = {};
+  const w = wiki({seen});
+  const home = await w.load('wiki');
+  assert.equal((home.match(/class="feature-new"/g) || []).length, 2,
+    'the shelf and the one new entry, and nothing else');
+  assert.match(home, /Big Copilot topics<span class="feature-new" data-new-feature="wiki-topics">New</);
+  assert.match(home, /How rent works<span class="feature-new" data-new-feature="wiki-topic-how-rent-works">New</);
+  // Never the nav's own id: sharing it would clear these the moment the tab opened.
+  assert.doesNotMatch(home, /data-new-feature="wiki"/);
+
+  // Reaching the article puts both marks down, through the board's own store.
+  await w.go('wiki/topic%2Fhow-rent-works');
+  assert.equal(seen['ba_dash_feature_seen:wiki-topic-how-rent-works'], '1');
+  assert.equal(seen['ba_dash_feature_seen:wiki-topics'], '1');
+  assert.equal(seen['ba_dash_feature_seen:wiki'], undefined, "the nav's own badge is left alone");
+  assert.doesNotMatch(await w.go('wiki'), /feature-new/);
+  assert.match(w.root.innerHTML, /Big Copilot topics/, 'the shelf itself stays; only the badge goes');
+
+  // A reader who has already met it is not told again.
+  const quiet = wiki({seen: {'ba_dash_feature_seen:wiki-topics': '1',
+    'ba_dash_feature_seen:wiki-topic-how-rent-works': '1'}});
+  assert.doesNotMatch(await quiet.load('wiki'), /feature-new/);
+});
+
+test('the board puts the marks down for the wiki when it is there to do it', async () => {
+  const visited = [];
+  const w = wiki();
+  w.context.featureDiscovery = {visit: id => visited.push(id), refresh(){}};
+  await w.load('wiki');
+  await w.go('wiki/topic%2Fhow-rent-works');
+  assert.deepEqual(visited, ['wiki-topic-how-rent-works', 'wiki-topics']);
+});
+
+test('a build that carries no topics simply has none of them', async () => {
+  const bare = {...DATA};
+  delete bare.topics;
+  const w = wiki({data: bare});
+  const home = await w.load('wiki');
+  assert.doesNotMatch(home, /Big Copilot topics/);
+  assert.deepEqual([...w.call(`wikiFind("rent")`)].map(h => h.id), []);
+  assert.match(await w.go('wiki/topic%2Fhow-rent-works'), /Not here/);
 });
 
 /* --- search -------------------------------------------------------------- */

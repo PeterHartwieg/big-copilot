@@ -18,6 +18,109 @@
 .srch input::-webkit-search-cancel-button{display:none}
 .srch .cnt{font-size:11px;color:var(--ink-3);flex:none}
 
+/* find a location: a mode of the map page --------------------------------------
+   One switch decides what is on screen. Off, the page is the plain map and its
+   header (.moff). On, the header steps aside and the panel grows a block of
+   filters (.fonly) above its results. */
+.city-map:not(.finder) .fonly{display:none}
+.city-map.finder .moff{display:none}
+/* One control, one look. Outlined is "not chosen", filled is "chosen"; nothing
+   is ever dimmed, because a dim control reads as one you cannot have. */
+.fchip{display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;padding:0 9px;
+  border:1px solid var(--rule);border-radius:6px;background:none;color:var(--ink-2);
+  font:500 11.5px/1 "IBM Plex Mono",monospace;cursor:pointer;white-space:nowrap;
+  appearance:none;-webkit-appearance:none;transition:background .15s,border-color .15s,color .15s}
+.fchip:hover{color:var(--ink);border-color:var(--ink-3)}
+.fchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.fchip b{font-weight:400;color:var(--ink-3)}
+.fchip.on b{color:var(--ink-2)}
+.fchip.hd{padding:0 8px;letter-spacing:.08em}
+/* The switch sits in the map window, in the same button the zoom controls use;
+   the accent marks it pressed, the way a layer chip marks itself on. */
+.fswitch{position:absolute;left:16px;top:16px;z-index:5}
+.fswitch .ibtn{box-shadow:0 2px 8px #0003}
+.fswitch .ibtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* The stage keeps its dark artwork in either theme, so the pressed state tints
+   the button's own surface rather than replacing it with a translucent wash. */
+.fswitch .ibtn[aria-pressed="true"]{background:color-mix(in oklab,var(--accent) 24%,var(--surface));border-color:var(--accent);color:var(--accent)}
+/* The type picker is the page's own select: its own border, the native caret
+   replaced by the chevron the rest of the board draws. */
+.fsel{position:relative;display:inline-flex;align-items:center}
+.fsel select{appearance:none;-webkit-appearance:none;box-sizing:border-box;height:26px;padding:0 26px 0 9px;
+  border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink);
+  font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;max-width:210px;outline:none;
+  transition:background .15s,border-color .15s}
+.fsel select:hover{border-color:var(--ink-3)}
+.fsel select option{color:var(--ink);background:var(--surface)}
+.fsel.on select{background:var(--accent-soft);border-color:var(--accent)}
+.fsel .fchev{position:absolute;right:8px;display:grid;place-items:center;color:var(--ink-3);transform:rotate(90deg);pointer-events:none}
+.fchip.num{color:var(--ink-3);cursor:text}
+.fchip.num input{width:34px;border:0;background:none;color:var(--ink);font:inherit;text-align:right;outline:none;padding:0;-moz-appearance:textfield}
+.fchip.num input::-webkit-outer-spin-button,.fchip.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.fchip.num.on{color:var(--ink-2)}
+/* the filter block: the panel's own head, above its results */
+.places .filters{flex:none;padding:10px 11px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:6px}
+.frow{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.frow[hidden]{display:none}
+.frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.frow .why{margin-left:auto}
+.fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.fhead span{text-align:right;white-space:nowrap}
+.fhead span[data-s]{cursor:pointer}
+.fhead span[data-s]:hover{color:var(--ink-2)}
+.fhead span:nth-child(-n+3){text-align:left}
+.fhead span.on{color:var(--ink)}
+.fhead span.on::after{content:" ↓";color:var(--accent)}
+/* A header is a span with a button role: the browser's own focus ring lands on
+   it after a click and reads as a change to the column. Keyboard focus keeps a
+   ring, in the board's own accent. */
+.fhead span[data-s]:focus:not(:focus-visible){outline:none}
+.fhead span[data-s]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fhead.sale{grid-template-columns:26px 1fr 66px 48px 76px}
+.place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
+.place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:3px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+/* Green is an empty floor to rent, amber a rival to buy out. */
+.place.fr .rk i{flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.place.fr.buy .rk i{background:var(--warn)}
+/* A ranked row's second line is why it is where it is, so it never waits for a
+   hover the way a plain map row's address does. */
+.place.fr .nm small{max-height:none;opacity:1;margin-top:1px;white-space:nowrap}
+.place.fr .v{font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right;color:var(--ink-2);white-space:nowrap}
+.place.fr .v.sc{color:var(--ink);font-weight:500}
+/* The shaded columns read like the market grid: the stronger the number, the
+   more of the accent behind it. What signing costs is left plain — a big
+   deposit is not a good one. */
+.place.fr .v.sh{border-radius:4px;padding:4px 6px;margin:-4px 0;align-self:center}
+.place.fr.sale{grid-template-columns:26px 1fr 66px 48px 76px}
+.place.fr.sale .v.t{text-align:left;font-family:inherit;font-size:11.5px;color:var(--ink-3)}
+.map-canvas .fp.cand{fill:#43c07a;fill-opacity:.2;stroke:#65e99b;stroke-width:1.2;vector-effect:non-scaling-stroke}
+.map-canvas .fp.cand.buy{fill:#e0b84a;fill-opacity:.18;stroke:#f2cf6b}
+.stage.finder .map-canvas .fp.mine{fill-opacity:.1;stroke-opacity:.45}
+.stage.finder .map-canvas .fp.dim.mine{fill-opacity:.06}
+.site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
+.site .st[hidden],.site .facts[hidden],.site .fit[hidden],.site .why[hidden]{display:none}
+.site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.site .st.rival i{background:var(--warn)}.site .st.na i{background:var(--ink-3)}
+.site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
+/* Who owns the place and who trades from it are names, not figures: they take
+   the card's own type and the full width. */
+.site .facts .wide{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+.site .facts .wide b{float:none;font-family:inherit;text-align:right;min-width:0}
+.site .facts [data-tip]{cursor:help;border-bottom:1px dotted var(--rule)}
+.site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
+.site .fit b{color:var(--ink);font-weight:500}
+/* The board's ? badge is a circle; inside the card the same class is the
+   paragraph that explains the ranking. */
+.site .why{width:auto;height:auto;display:block;border:0;border-radius:0;cursor:default;overflow:visible;
+  margin:6px 0 0;padding-right:28px;font:400 11.5px/1.45 Archivo,"Helvetica Neue",Arial,sans-serif;
+  color:var(--ink-3);text-align:left}
+.site .nums .num b.sc{color:var(--accent)}
+/* Growth: the pin beside a cell's story opens the finder on that cell. */
+.celldetail .link.pin{display:inline-flex;align-items:center;gap:5px;margin-left:10px}
+.celldetail .link.pin svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.move .soon.live{border-style:solid;color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft)}
+
 /* the stage --------------------------------------------------------------------- */
 .citymap{position:relative;margin-top:16px;z-index:1} /* its own stacking context: the panel never rides over the sticky masthead */
 .citymap.narrow{display:flex;flex-direction:column;gap:12px}
@@ -48,14 +151,14 @@
 .dlabel{position:absolute;left:0;top:0;font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.16em;color:#bdcbbf;text-shadow:0 0 6px #0d100f,0 0 2px #0d100f;white-space:nowrap;transition:opacity .25s}
 .stage.zoomed .dlabel{opacity:0}
 .zoomer{position:absolute;right:16px;bottom:16px;z-index:5;display:flex;flex-direction:column;gap:4px}
-.stage.panel .zoomer{right:332px}
+.stage.panel .zoomer{right:472px}
 .citymap.narrow .stage.panel .zoomer{right:16px}
 .zoomer .ibtn{font:500 18px/1 "IBM Plex Mono",monospace;box-shadow:0 2px 8px #0003}
 /* full screen: the map box takes the screen, the stage the height */
 .citymap:fullscreen{background:var(--ground);padding:16px;margin:0;box-sizing:border-box}
 .citymap:fullscreen .stage{height:calc(100vh - 32px);border-radius:8px}
 .citymap:fullscreen .places{top:32px;right:32px;bottom:32px}
-.citymap:fullscreen .stage.panel .zoomer{right:348px}
+.citymap:fullscreen .stage.panel .zoomer{right:488px}
 
 /* the ball lives in Central Park ------------------------------------------------ */
 .ball{position:absolute;left:0;top:0;width:60px;height:60px;z-index:4;cursor:pointer;will-change:transform;transform-origin:50% 100%;pointer-events:auto}
@@ -69,7 +172,7 @@
 .shadow{position:absolute;left:0;top:0;width:88px;height:14px;border-radius:50%;background:#000;opacity:.5;filter:blur(5px);z-index:3;pointer-events:none;transform-origin:50% 50%}
 
 /* places: a floating panel over the map ------------------------------------------ */
-.places{position:absolute;top:16px;right:16px;bottom:16px;width:300px;box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
+.places{position:absolute;top:16px;right:16px;bottom:16px;width:440px;box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
 .places .list{overflow:auto;overscroll-behavior:contain;flex:1;padding:4px 0;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
 .places .list::-webkit-scrollbar{width:6px}.places .list::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}.places .list::-webkit-scrollbar-track{background:transparent}
 .place{display:grid;width:100%;grid-template-columns:18px 30px 1fr auto;gap:0 8px;align-items:center;padding:9px 12px 9px 8px;border:0;background:none;text-align:left;font:inherit;cursor:pointer;color:var(--ink-2);transition:background .15s,color .15s;position:relative}
@@ -145,10 +248,26 @@ body.map-modal-open{overflow:hidden}
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
  .citymap.narrow .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
+ .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
+ .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
+ /* A text field under 16px makes a phone browser zoom the page in on focus. */
+ .fchip{height:32px}
+ .fchip.num input{font-size:16px}
+ .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
  .srch,.srch:focus-within{width:100%}
  .srch input{font-size:16px}
  .map-dialog{width:calc(100vw - 12px);max-height:calc(100dvh - 12px);padding:12px}
  .map-dialog .stage{height:60dvh}
+}
+/* On a phone the fixed columns would leave the address nothing. Traffic and
+   demand step aside — they are still on the card, and the score they make is
+   the reason the row is where it is. */
+@media(max-width:600px){
+ .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px 56px}
+ .fhead:not(.sale) span:nth-child(n+5):nth-child(-n+7),
+ .place.fr:not(.sale) > :nth-child(n+5):nth-child(-n+7){display:none}
+ .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 44px 70px}
+ .fhead.sale span:nth-child(3),.place.fr.sale > :nth-child(3){display:none}
 }
 @media(pointer:coarse){.map-shortcut{min-width:32px;min-height:32px}.city-map .ibtn,.place{min-height:44px}}

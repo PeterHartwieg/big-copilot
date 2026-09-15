@@ -927,5 +927,86 @@ class WriteTests(FixtureCase):
         self.assertFalse(os.path.exists(out))
 
 
+class TopicTests(FixtureCase):
+    """The hand-authored articles: written beside the payload, not extracted.
+
+    The facts in an article are checked by a human, not by this suite. What is
+    checked here is that the article reaches the payload whole, in the shape the
+    renderer reads, and that it says where its numbers came from.
+    """
+
+    def topic(self, slug="how-rent-works"):
+        return next(row for row in self.payload()["topics"] if row["slug"] == slug)
+
+    def test_the_payload_carries_the_topics_and_counts_them(self):
+        payload = self.payload()
+        self.assertIsInstance(payload["topics"], list)
+        self.assertIn("how-rent-works", [row["slug"] for row in payload["topics"]])
+        self.assertEqual(payload["provenance"]["counts"]["topics"], len(payload["topics"]))
+
+    def test_a_topic_carries_what_the_renderer_reads(self):
+        topic = self.topic()
+        for field in ("slug", "title", "lede", "sections", "provenance"):
+            self.assertTrue(topic.get(field), field)
+        self.assertEqual(topic["title"], "How rent works")
+        for section in topic["sections"]:
+            self.assertTrue(section["heading"])
+            self.assertTrue(section["paragraphs"])
+            self.assertTrue(all(isinstance(line, str) for line in section["paragraphs"]))
+
+    def test_the_rent_topic_states_the_formula_and_the_seven_district_rates(self):
+        topic = self.topic()
+        prose = " ".join(line for section in topic["sections"] for line in section["paragraphs"])
+        self.assertIn("floor area × (30 + traffic index) × district rate", prose)
+        self.assertIn("1.033", prose)
+        tables = [section["table"] for section in topic["sections"] if section.get("table")]
+        self.assertEqual(len(tables), 1)
+        table = tables[0]
+        self.assertEqual(table["columns"], ["District", "Rate"])
+        self.assertEqual(len(table["rows"]), 7)
+        self.assertEqual({row[0] for row in table["rows"]},
+                         {"Midtown", "Hell's Kitchen", "Murray Hill", "Garment District",
+                          "Lower Manhattan", "The Hamptons", "Industry City"})
+        self.assertEqual(dict(table["rows"])["Midtown"], "0.02482")
+
+    def test_the_rent_topic_dates_its_fit_and_says_residential_is_not_covered(self):
+        topic = self.topic()
+        prose = " ".join([topic["lede"], topic["provenance"]]
+                         + [line for section in topic["sections"] for line in section["paragraphs"]])
+        self.assertIn("15 September 2026", topic["provenance"])
+        self.assertIn("3675", topic["provenance"])
+        self.assertIn("48", topic["provenance"])
+        self.assertIn("0.6%", topic["provenance"])
+        self.assertIn("Residential leases do not follow it", prose)
+        self.assertIn("patch", prose)
+
+    def test_a_topic_without_provenance_is_refused(self):
+        rows = [dict(self.topic(), provenance="")]
+        with self.assertRaises(wiki_data.SourceError):
+            build.validate_topics(rows)
+
+    def test_a_table_row_that_does_not_fit_its_columns_is_refused(self):
+        topic = self.topic()
+        broken = json.loads(json.dumps(topic))
+        table = next(s["table"] for s in broken["sections"] if s.get("table"))
+        table["rows"].append(["Queens"])
+        with self.assertRaises(wiki_data.SourceError):
+            build.validate_topics([broken])
+
+    def test_two_topics_with_the_same_slug_are_refused(self):
+        topic = self.topic()
+        with self.assertRaises(wiki_data.SourceError):
+            build.validate_topics([topic, dict(topic)])
+
+    def test_a_topics_file_that_lists_nothing_is_a_clear_failure(self):
+        path = self.write("wiki_topics.json", json.dumps({"schemaVersion": 1}))
+        with self.assertRaises(wiki_data.SourceError):
+            build.topics(path)
+
+    def test_no_machine_path_reaches_a_topic(self):
+        for string in build._strings(self.payload()["topics"]):
+            self.assertIsNone(build._PRIVATE_PATH_RE.search(string), string)
+
+
 if __name__ == "__main__":
     unittest.main()

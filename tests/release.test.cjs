@@ -41,7 +41,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     await page.evaluate(() => cityMapPage.ready);
     assert.equal(await page.locator('#cityMapPage .lay').count(),5);
     assert.equal(await page.locator('#cityMapPage .lay[data-l="home"]').count(),1);
+    // The plain map has no side panel: the list belongs to Find a location.
     assert.equal(await page.locator('#cityMapPage .places').count(),1);
+    assert.equal(await page.locator('#cityMapPage .places').isVisible(),false);
     assert.equal(await page.locator('#cityMapPage .layer .ball').count(),1);
     assert.equal(await page.locator('[data-new-feature="map"]:not([hidden])').count(),0);
     await page.locator('#cityMapPage .layer .ball').click();
@@ -59,6 +61,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     const prices = await page.locator('.wk-prices').first().textContent();
     assert.match(prices, /Release Gifts: \$30\.27/);
     assert.match(prices, /\$25\.63/);
+    // The new topic carries its own badges; meeting it dismisses them like the rest.
+    await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
+    await page.getByRole('heading', {name:'How rent works'}).waitFor();
     await page.reload();
     assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),0);
     assert.deepEqual(errors,[]);

@@ -33,6 +33,55 @@ const WIKI_ORDINALS = ["", "first", "second", "third", "fourth", "fifth", "sixth
    table spells them. Every address the help links to in this build is either
    one of these or a numbered avenue or street. */
 const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike"};
+/* The hand-authored articles: written beside the payload rather than read from
+   the game's help, so they sit under their own label and route under their own
+   prefix, where they can never be mistaken for a help page. */
+const WIKI_TOPIC_CAT = "bigcopilot_topics";
+const WIKI_TOPIC_LABEL = "Big Copilot topics";
+const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
+/* What this release added inside the Wiki. The nav says the Wiki changed; these
+   say what in it changed, so the reader is not left to hunt. A future topic is
+   marked by listing its slug here and nowhere else.
+
+   The badge is the board's — the same markup and the same feature discovery —
+   but each mark carries its own id, never the nav's. Sharing the nav's id would
+   clear these the instant the tab opened, which is the one moment they are for.
+   They are marked seen when the reader reaches the topic they point at; the
+   nav's own `wiki` id is left exactly as it is. */
+const WIKI_NEW = {
+  shelf: ["topics"],            // the shelf that gained something
+  topics: ["how-rent-works"],   // the entries that are new in it
+};
+const WIKI_NEW_ID = {
+  shelf: key => `wiki-${key}`,
+  topics: slug => `wiki-topic-${slug}`,
+};
+const wikiSeenKey = id => `ba_dash_feature_seen:${id}`;
+const wikiSeen = id => {
+  try{ return localStorage.getItem(wikiSeenKey(id)) === "1"; }catch(e){ return false; }
+};
+/* The board's badge, or nothing at all. `what` is a list from WIKI_NEW; `key`
+   the thing being marked. An id the reader has already met draws nothing, so a
+   redraw after the visit is as quiet as the visit made it. */
+function wikiNewBadge(what, key){
+  if(!(WIKI_NEW[what] || []).includes(String(key))) return "";
+  const id = WIKI_NEW_ID[what](String(key));
+  if(wikiSeen(id)) return "";
+  return `<span class="feature-new" data-new-feature="${attr(id)}">New</span>`;
+}
+/* Reaching a marked topic is meeting it: the entry's own mark and the shelf that
+   carried it are both put down, through the board's own store so the badges
+   already on screen go with them. Without the board around (a test, a static
+   export) the store is written directly, and nothing else happens. */
+function wikiNewMet(slug){
+  if(!WIKI_NEW.topics.includes(String(slug))) return;
+  const ids = [WIKI_NEW_ID.topics(String(slug)), ...WIKI_NEW.shelf.map(WIKI_NEW_ID.shelf)];
+  ids.forEach(id => {
+    if(typeof featureDiscovery !== "undefined" && featureDiscovery
+      && typeof featureDiscovery.visit === "function"){ featureDiscovery.visit(id); return; }
+    try{ localStorage.setItem(wikiSeenKey(id), "1"); }catch(e){}
+  });
+}
 const WIKI_SHOWN = 60;   // rows before a category asks whether you want them all
 const WIKI_HITS = 10;    // search rows before the same question
 
@@ -140,15 +189,26 @@ function wikiIndex(raw){
   const rank = id => { const at = WIKI_CAT_ORDER.indexOf(String(id)); return at < 0 ? WIKI_CAT_ORDER.length : at; };
   categories.sort((a, b) => rank(a.id) - rank(b.id)
     || raw.categories.indexOf(a) - raw.categories.indexOf(b));
+  /* The hand-authored articles. They are not the game's help, so they carry no
+     help category; they are routed and searched exactly as a page is, under
+     their own label. */
+  const topics = Array.isArray(raw.topics) ? raw.topics.filter(t => t && t.slug) : [];
+  const topicById = new Map(topics.map(t => [wikiTopicId(t.slug), t]));
   const search = pages.map(p => ({
     id: String(p.id),
     title: String(p.title || p.id),
     lower: String(p.title || p.id).toLowerCase(),
     categoryId: String(p.categoryId || ""),
     category: catById.has(String(p.categoryId)) ? wikiCatLabel(catById.get(String(p.categoryId))) : "",
-  })).sort((a, b) => a.title.localeCompare(b.title));
+  })).concat(topics.map(t => ({
+    id: wikiTopicId(t.slug),
+    title: String(t.title || t.slug),
+    lower: String(t.title || t.slug).toLowerCase(),
+    categoryId: WIKI_TOPIC_CAT,
+    category: WIKI_TOPIC_LABEL,
+  }))).sort((a, b) => a.title.localeCompare(b.title));
   return {
-    raw, pages, categories, byId, catById, search,
+    raw, pages, categories, byId, catById, search, topics, topicById,
     /* The shelf counts what the help menu holds; the reader can only open what
        this build carries, so both numbers are kept and the difference is said
        out loud rather than papered over. */
@@ -370,10 +430,10 @@ function wikiCrumb(trail){
 }
 /* A findings-style row: the shape the board already uses for a list of things
    you can open. */
-function wikiRow(entry, mark, withCategory = true){
+function wikiRow(entry, mark, withCategory = true, badge = ""){
   const title = mark ? wikiMark(entry.title, mark) : wikiText(entry.title);
   return `<a class="wk-hit" href="${attr(wikiHref({kind: "page", id: entry.id}))}">`
-    + `<i class="wk-mark"></i><span class="wk-what">${title}</span>`
+    + `<i class="wk-mark"></i><span class="wk-what">${title}${badge}</span>`
     + `<span class="wk-cat2">${withCategory ? wikiText(entry.category || "") : ""}</span>`
     + `<span class="wk-go">${icon("go")}</span></a>`;
 }
@@ -435,10 +495,28 @@ ${q ? `<div class="wk-hits">${
     : ""}` : ""}
 ${shelf ? `<div class="wk-shelf">${shelf}</div>`
   : `<p class="wk-none">This build carries the pages but not the help menu's own shelf of categories. Search still finds every one of them.</p>`}
+${q ? "" : wikiTopicShelf()}
 <div class="wk-legend">
   ${legend}${wikiWhy("Badges show where a fact comes from. Hover or focus a badge for its meaning.")}
 </div>
 ${listed > held ? `<p class="quiet wk-foot">${wikiNum(held)} of the help menu's ${wikiNum(listed)} pages are in this build.</p>` : ""}`;
+}
+
+/* The articles Big Copilot writes itself, listed under the game's own shelf.
+   This is the way to them without knowing they are there; while a search is
+   running they are in the results like any other page, so the shelf stands
+   down and the reader is left with one list. */
+function wikiTopicShelf(){
+  const topics = (wikiData && wikiData.topics) || [];
+  if(!topics.length) return "";
+  const rows = topics.map(t => wikiRow({id: wikiTopicId(t.slug), title: t.title || t.slug,
+    category: WIKI_TOPIC_LABEL}, "", false, wikiNewBadge("topics", t.slug))).join("");
+  return `
+<section class="sec wk-topics">
+  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}${wikiNewBadge("shelf", "topics")}</h2>
+    ${wikiWhy("Written by Big Copilot, not taken from the game's help. Each one says what it was checked against.")}</div>
+  <div class="wk-hits">${rows}</div>
+</section>`;
 }
 
 function wikiCategoryView(){
@@ -466,6 +544,8 @@ ${entries.length > shown.length
 /* The reader: one help page, its own words, with the links it carries resolved
    against the pages this build has. */
 function wikiPageView(){
+  const topic = wikiData.topicById.get(String(wikiRoute.id));
+  if(topic) return wikiTopicPage(topic);
   const page = wikiData.byId.get(String(wikiRoute.id));
   if(!page) return wikiMissing(`No page called “${wikiRoute.id}”. It may be one of the help links the game's own files leave dangling.`);
   const cat = wikiData.catById.get(String(page.categoryId));
@@ -482,6 +562,47 @@ ${wikiCrumb([{label: "Wiki", href: "#wiki"},
 <div class="wk-read rv">${wikiBody(page.body, ctx)}</div>
 ${wikiYours(page)}
 ${wikiSource(page)}`;
+}
+
+/* A hand-authored article. It is written beside the payload, not read from the
+   game's help, so it wears the Big Copilot badge and closes with the line its
+   author wrote about where its numbers came from. The furniture is the guides':
+   the same lede, the same sections, the same tables. */
+function wikiTopicPage(topic){
+  const ctx = {id: wikiTopicId(topic.slug)};
+  /* Reaching the article is meeting it: its mark, and the shelf's, are put down
+     here rather than on a click, so a bookmark or a search hit counts too. */
+  wikiNewMet(topic.slug);
+  const sections = (Array.isArray(topic.sections) ? topic.sections : []).map(section => `
+<section class="sec">
+  <div class="sechead"><h2>${wikiText(section.heading || "")}</h2></div>
+  <div class="wk-read rv">${(Array.isArray(section.paragraphs) ? section.paragraphs : [])
+    .map(line => `<p>${wikiInline(line, ctx)}</p>`).join("")}</div>
+  ${wikiTopicTable(section.table)}
+</section>`).join("");
+  return `
+${wikiCrumb([{label: "Wiki", href: "#wiki"}, {label: WIKI_TOPIC_LABEL},
+  {label: topic.title || topic.slug}])}
+<div class="wk-titlerow">
+  <h1>${wikiText(topic.title || topic.slug)}</h1>
+  <span class="chips">${wikiChip("model")}</span>
+</div>
+<p class="wk-lede rv">${wikiInline(topic.lede || "", ctx)}</p>
+${sections}
+${topic.provenance ? `<p class="quiet wk-foot wk-topicsrc">${wikiInline(topic.provenance, ctx)}</p>` : ""}`;
+}
+/* A small table, in the shape the price table already uses: the column header
+   travels with each cell so the narrow layout can read it out. */
+function wikiTopicTable(table){
+  if(!table || !Array.isArray(table.columns) || !Array.isArray(table.rows) || !table.rows.length) return "";
+  const columns = table.columns.map(c => String(c ?? ""));
+  return `<div class="wk-tblwrap"><table class="wk-tbl"${table.caption
+      ? ` aria-label="${attr(table.caption)}"` : ""}>
+  <thead><tr>${columns.map(c => `<th scope="col">${wikiText(c)}</th>`).join("")}</tr></thead>
+  <tbody>${table.rows.map(row => `<tr>${row.map((cell, i) => i === 0
+    ? `<th scope="row">${wikiText(cell)}</th>`
+    : `<td data-label="${attr(columns[i] || "")}">${wikiText(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+</table></div>`;
 }
 
 function wikiMissing(line){
