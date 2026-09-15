@@ -3791,7 +3791,9 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
             key = b["typeSlug"]
         else:
             reach = downstream(b["key"], frozenset())
-            key = reach.most_common(1)[0][0] if reach else "\0support"
+            # A tie goes to the kind of shop named first; most_common() would hand
+            # it to whichever the edge set happened to yield first this run.
+            key = min(reach, key=lambda k: (-reach[k], str(k))) if reach else "\0support"
         groups.setdefault(key, []).append(b)
 
     by_trend = {t["key"]: t for t in trends}

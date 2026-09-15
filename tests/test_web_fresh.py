@@ -79,11 +79,12 @@ class WebFresh(unittest.TestCase):
     def test_stale_wiki_generator_is_reported(self):
         # Nothing the page fetches changes when the generator does, so only the
         # stamp can tell that web/wiki-data.json needs rebuilding.
-        with tempfile.TemporaryDirectory() as tmp:
-            copy_inputs(tmp, CHECK_INPUTS)
-            sample = Path(tmp, "tools/wiki_sample.json")
-            sample.write_bytes(sample.read_bytes() + b"\n")
-            self.assertIn("web/version.json", build_web.check(tmp))
+        for authored in ("tools/wiki_sample.json", "tools/wiki_topics.json"):
+            with self.subTest(authored=authored), tempfile.TemporaryDirectory() as tmp:
+                copy_inputs(tmp, CHECK_INPUTS)
+                edited = Path(tmp, authored)
+                edited.write_bytes(edited.read_bytes() + b"\n")
+                self.assertIn("web/version.json", build_web.check(tmp))
 
     def test_stamp_ignores_line_endings(self):
         with tempfile.TemporaryDirectory() as lf, tempfile.TemporaryDirectory() as crlf, \
