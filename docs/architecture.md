@@ -178,8 +178,10 @@ from the installed locale — everything `stamp()` hashes has to be in place bef
 
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
 keeps the display names (`NAME_PREFIXES`: items, business types, neighbourhoods,
-workstations, skills), the recipe keys, the workstation help pages, the business-type help
-pages, the item pages that state a station's customer capacity, and
+workstations, skills), the `recipes_*` keys and the `help_recipes_*_content` pages, the
+workstation help pages, the business-type help pages, the item help pages whose body contains
+`Customer Capacity` or `employee station` (which is how cleaning, computer and security
+stations travel), and
 `help_building_types_content`, which is where the premises table gets its size-code-to-door-cap
 mapping. A page the analysis needs but `ships()` does not keep is simply absent in the
 browser, with no error — so adding a lookup means adding its key here and rebuilding.
@@ -333,8 +335,10 @@ emitted, so a later entry for a slug whose earlier one had no content is kept, n
 duplicate. Alongside the pages the payload carries the worked example, a guide per
 customer-facing business type, and the `topics`.
 
-No number is invented; what the game does not state stays `null`, and any sentence whose
-facts cannot be filled is left out rather than guessed. `build_web.py` calls
+For the game-read pages and the `wiki_sample.json` fill, no number is invented: what the game
+does not state stays `null`, and any sentence whose facts cannot be filled is left out rather
+than guessed. The hand-written `topics` are the exception by design (the rent article carries
+fitted district rates) and say so in their own provenance lines. `build_web.py` calls
 `write_public_wiki` before stamping, so the site always ships the payload its pages were
 built against. Details:
 [wiki-data-pipeline.md](wiki-data-pipeline.md).

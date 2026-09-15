@@ -46,7 +46,7 @@ side and rebuild — the rebuild is the resolution.
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py` |
 | `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py` |
-| `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save at a hard-coded path; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
+| `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save and a session-scratchpad `hart.json` at hard-coded paths, so it does not run as committed; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
 | `dashboard.html`, `market_history.json` | local runs; gitignored |
 
 ## Finishing a change
@@ -56,7 +56,7 @@ side and rebuild — the rebuild is the resolution.
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`, so `tests/finder.test.cjs` also covers `drawFindLocation` and `findPremisesLink` in `ba_dashboard.py` |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `findPremisesLink` indirectly, through the rendered "find premises" link |
 | `tools/*.py`, `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
@@ -100,7 +100,8 @@ and never attach one to an issue.
   `tests/save_location.test.cjs`, `tests/performance.test.cjs`.
 - Set iteration order follows Python's per-process hash seed, so when a set decides the
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
-  `None` last because real saves hold items with no name.
+  `None` last because real saves hold items with no name. When a set decides a winner
+  (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
 - The Pyodide worker fetches four files from `web/py/` — `ba_save.py`, `ba_dashboard.py`,
   `gametext.json`, `ba_buildings.json` — and at runtime writes the save, the player's
   optional `en.json` and the history; `browser_build()` writes the `.character` sidecar from
