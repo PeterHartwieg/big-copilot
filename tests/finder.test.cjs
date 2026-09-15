@@ -49,6 +49,8 @@ const PREMISES = {
   ],
   forSale: [
     {key: MT[2], address: at(MT[2]).address, hood: 'Midtown', type: 'retail', size: 'M', m2: 1000, price: 4200000},
+    // A tower on a mature save runs past a billion.
+    {key: MT[3], address: at(MT[3]).address, hood: 'Midtown', type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
     {key: HK[0], address: at(HK[0]).address, hood: "Hell's Kitchen", type: 'retail', size: 'C', m2: 225, price: 750000},
   ],
   demand: {
@@ -349,13 +351,16 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     await openMap(page); await turnOn(page);
     await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
     await page.locator('#cityMapPage .place.fr.sale').first().waitFor();
-    assert.deepEqual(await rowKeys(page), [HK[0], MT[2]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[2], MT[3]]);
     assert.equal(await page.locator('#cityMapPage .fhead.sale').count(), 1);
     assert.equal(await page.locator('#cityMapPage .place.fr.sale .v.sc').count(), 0);  // never scored
     assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').count(), 0);   // one order, no sort arrow
+    // A price past a billion says so rather than counting in thousands of millions.
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :last-child', v => v.map(x => x.textContent)),
+      ['$750k', '$4.20M', '$5.58bn']);
     // A listing lights its own footprint, green rather than buy-out amber, and
     // clicking either one opens its card.
-    assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 2);
+    assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 3);
     assert.equal(await page.locator('#cityMapPage .location.fp.buy').count(), 0);
     await pick(page, MT[2]);
     assert.equal(await page.locator('#cityMapPage .site h3').textContent(), at(MT[2]).address);
@@ -618,7 +623,7 @@ test('the Show row is one choice, and picking one drops the others', async () =>
   try{
     await openMap(page); await turnOn(page);
     assert.deepEqual(await page.$$eval('#cityMapPage .fchip.show', c => c.map(x => x.textContent)),
-      ['To rent3', 'To take over2', 'For sale2']);
+      ['To rent3', 'To take over2', 'For sale3']);
     assert.equal(await chosen().count(), 1);
     assert.match(await chosen().textContent(), /^To rent/);
     await page.locator('#cityMapPage .fchip.show[data-show="takeover"]').click();
