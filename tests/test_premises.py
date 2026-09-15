@@ -3,7 +3,9 @@ import unittest
 from unittest.mock import patch
 
 from ba_dashboard import (
+    DEPOSIT_FACTORS,
     FALLBACK_CAPS,
+    _deposit_estimate,
     _door_caps,
     _premises,
     _premises_demand,
@@ -117,10 +119,17 @@ def cell(demand, providers, here=False):
     return {"demand": demand, "providers": providers, "here": here}
 
 
+def paid(addr, amount, kind="ba:transaction_deposit"):
+    return {"transactionType": kind, "amount": -amount,
+            "address": {"streetName": addr[0], "streetNumber": addr[1]},
+            "timestamp": {"Day": 3, "Hour": 8, "Minute": 30.0}}
+
+
 def premises(registrations=(), for_sale=(), market=None, names=NAMES,
-             buildings=BUILDINGS):
+             buildings=BUILDINGS, transactions=()):
     save = Save({"BuildingRegistrations": {"$items": list(registrations)},
-                 "buildingsForSale": {"$items": list(for_sale)}}, {}, "")
+                 "buildingsForSale": {"$items": list(for_sale)},
+                 "Transactions": {"$items": list(transactions)}}, {}, "")
     with patch("ba_dashboard.load_buildings", return_value=buildings):
         return _premises(save, names, market or {})
 
@@ -158,6 +167,56 @@ class RentTests(unittest.TestCase):
     def test_no_leases_is_a_zero_check_not_a_missing_one(self):
         self.assertEqual(premises([reg(HK_SHOP, AvailableForRent=True)])["rent"]["check"],
                          {"leases": 0, "worst": 0})
+
+
+class DepositTests(unittest.TestCase):
+    def test_the_multiplier_is_the_one_for_the_buildings_class(self):
+        # A shop, an office, a cinema and a theater share the lease multiplier;
+        # a warehouse asks for half as much again.
+        self.assertEqual(DEPOSIT_FACTORS["lease"], 62.84)
+        self.assertEqual(DEPOSIT_FACTORS["warehouse"], 93.61)
+        self.assertEqual(_deposit_estimate(BUILDINGS[HK_SHOP], 264), 16590)
+        self.assertEqual(_deposit_estimate(BUILDINGS[LM_OFFICE], 284), 17850)
+        self.assertEqual(_deposit_estimate(BUILDINGS[DEPOT], 172), 16100)
+
+    def test_the_estimate_lands_on_a_round_ten(self):
+        for rent in range(80, 130):
+            self.assertEqual(_deposit_estimate(BUILDINGS[HK_SHOP], rent) % 10, 0)
+        # 101 x 62.84 is 6346.84, which rounds to 6350, not down to 6340.
+        self.assertEqual(_deposit_estimate(BUILDINGS[HK_SHOP], 101), 6350)
+
+    def test_a_home_has_no_deposit_because_it_has_no_rent(self):
+        self.assertIsNone(_deposit_estimate(BUILDINGS[FLAT], None))
+        rows = {b["key"]: b for b in premises([
+            reg(FLAT, RentedByPlayer=True, RentPerDay=37.0),
+            reg(HK_SHOP, AvailableForRent=True),
+        ])["buildings"]}
+        self.assertIsNone(rows["ba:street_fifthavenue#72"]["deposit"])
+        self.assertEqual(rows["ba:street_secondavenue#2"]["deposit"], 16590)
+
+    def test_the_check_reads_the_deposits_this_character_has_paid(self):
+        payload = premises(transactions=[
+            paid(HK_SHOP, 16590.0),
+            # 4.3% over the estimate, and the worst of the two.
+            paid(HK_SHOP, 17340.0),
+            # About 1600x the rent: a building purchase, not a lease.
+            paid(MT_SHOP, 4_250_000.0),
+            # A small deposit for something that is not a lease at all.
+            paid(DEPOT, 975.0),
+            # A home's deposit has nothing to be measured against.
+            paid(FLAT, 1200.0),
+            # And a transaction that is not a deposit is not one.
+            paid(HK_SHOP, 264.0, kind="ba:transaction_rent"),
+            # Nor is one at an address the building table cannot place.
+            paid(("ba:street_nowhere", 1), 16590.0),
+        ])
+        self.assertEqual(payload["rent"]["deposit"]["check"],
+                         {"deposits": 2, "worst": round(750 / 17340, 4)})
+        self.assertEqual(payload["rent"]["deposit"]["factors"], DEPOSIT_FACTORS)
+
+    def test_a_character_who_has_paid_none_reports_zero(self):
+        self.assertEqual(premises()["rent"]["deposit"]["check"],
+                         {"deposits": 0, "worst": 0})
 
 
 class CapTests(unittest.TestCase):
@@ -250,8 +309,8 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(payload["buildings"][1], {
             "key": "ba:street_secondavenue#2", "address": "2 Second Avenue",
             "hood": "Hell's Kitchen", "type": "retail", "size": "C", "m2": 225,
-            "traffic": 50, "cap": 30, "rent": 264, "status": "vacant",
-            "occupant": None,
+            "traffic": 50, "cap": 30, "rent": 264, "deposit": 16590,
+            "status": "vacant", "occupant": None,
         })
 
     def test_a_registration_the_table_does_not_place_is_dropped(self):

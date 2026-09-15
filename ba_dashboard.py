@@ -589,6 +589,19 @@ RENT_RATES = {
 }
 RENT_OFFICE_FACTOR = 1.033
 
+# Taking a lease costs a deposit upfront, which is what actually stops an early
+# character signing. The game bills it as a transaction and never stores it
+# against the building, so it too is a multiple of the daily rent, fitted on
+# 15 September 2026 across 21 lease deposits from three characters (build 3675).
+# A deposit transaction can also be a building purchase (about 1000x the rent
+# and more) or one of the small deposits the game takes for something that is
+# not a lease, so only the band between these two factors is read as a lease.
+DEPOSIT_FACTORS = {"lease": 62.84, "warehouse": 93.61}
+DEPOSIT_ROUNDING = 10
+DEPOSIT_MIN_FACTOR = 30
+DEPOSIT_MAX_FACTOR = 300
+DEPOSIT_TRANSACTION = "ba:transaction_deposit"
+
 # The door capacity each size letter buys, per building type. Read from the
 # game's help page when the player's own en.json is at hand; this is the same
 # table as build 3675 ships, for when it is not (the page does not travel with
@@ -645,12 +658,49 @@ def _door_caps(names: Names) -> dict:
 def _rent_estimate(row: dict) -> int | None:
     """Estimated rent per day for one building, from the static table's row."""
     rate = RENT_RATES.get(row.get("h"))
-    if rate is None or row.get("t") == "residential":
+    # The casino boat is the one row with no floor area: the table does not
+    # know how big it is, so there is nothing to price.
+    if rate is None or not row.get("m") or row.get("t") == "residential":
         return None
     rent = row["m"] * (RENT_TRAFFIC_OFFSET + row["x"]) * rate
     if row.get("t") == "office":
         rent *= RENT_OFFICE_FACTOR
     return int(round(rent))
+
+
+def _deposit_estimate(row: dict, rent: int | None) -> int | None:
+    """The upfront deposit a lease asks for, to the nearest ten dollars."""
+    if not rent:
+        return None
+    factor = DEPOSIT_FACTORS["warehouse" if row.get("t") == "warehouse" else "lease"]
+    return int(round(rent * factor / DEPOSIT_ROUNDING)) * DEPOSIT_ROUNDING
+
+
+def _deposit_check(save: Save, table: dict) -> dict:
+    """The estimate against every lease deposit this character has actually paid.
+
+    A deposit transaction can also be a building purchase, or one of the small
+    deposits the game takes for something other than a lease, so only the band
+    the leases sit in counts.
+    """
+    worst, paid_count = 0.0, 0
+    for tx in save.items(save.root.get("Transactions")):
+        if tx.get("transactionType") != DEPOSIT_TRANSACTION:
+            continue
+        addr = save.address(tx.get("address"))
+        row = table.get(addr) if addr else None
+        if not row:
+            continue
+        rent = _rent_estimate(row)
+        estimate = _deposit_estimate(row, rent)
+        paid = abs(tx.get("amount") or 0)
+        if not estimate or not paid:
+            continue
+        if not DEPOSIT_MIN_FACTOR <= paid / rent <= DEPOSIT_MAX_FACTOR:
+            continue
+        paid_count += 1
+        worst = max(worst, abs(estimate - paid) / paid)
+    return {"deposits": paid_count, "worst": round(worst, 4)}
 
 
 def _premises_status(reg: dict, row: dict) -> str:
@@ -737,6 +787,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "traffic": row["x"],
                 "cap": caps.get(row["t"], {}).get(row["z"]),
                 "rent": rent,
+                "deposit": _deposit_estimate(row, rent),
                 "status": status,
                 "occupant": occupant,
             }
@@ -777,6 +828,10 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
             "check": {
                 "leases": len(deviations),
                 "worst": round(max(deviations), 4) if deviations else 0,
+            },
+            "deposit": {
+                "factors": dict(DEPOSIT_FACTORS),
+                "check": _deposit_check(save, table),
             },
         },
         "caps": caps,

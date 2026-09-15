@@ -185,7 +185,10 @@ function element(id) {
   return node;
 }
 
-function wiki({data = DATA, fetchImpl, save = null} = {}) {
+/* `seen` is the board's feature-discovery store, the one thing the module reads
+   before it draws anything: the nav's NEW badge and the Wiki's own marks share
+   its keys. */
+function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
   const root = element('wikiRoot');
   const nodes = new Map([['wikiRoot', root]]);
   const drawn = [];
@@ -216,6 +219,7 @@ function wiki({data = DATA, fetchImpl, save = null} = {}) {
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),
     CSS: {escape: s => s},
+    localStorage: {getItem: key => (key in seen ? seen[key] : null), setItem(key, value){ seen[key] = value; }},
     document: {addEventListener(){}, body: {classList: {add(){}, remove(){}}}, activeElement: null},
     window: {LEDGER_BUILD: 'stamp1', addEventListener(){}, scrollY: 0, scrollTo(x, y){ scrolled.push([x, y]); }},
     fetch: fetchImpl || (async (url) => {
@@ -349,6 +353,23 @@ test('a hand-authored topic reads as a page, and says where its numbers came fro
   assert.match(html, /15 September 2026/);
   assert.match(html, /game build 3675/);
   assert.doesNotMatch(html, /undefined/);
+});
+
+test("what is new in the Wiki wears the nav's own badge, and goes when it goes", async () => {
+  // Nothing seen: the nav badge would be standing, so the shelf that gained
+  // something and the entry that is new both say so, in the board's own markup.
+  const fresh = wiki();
+  const home = await fresh.load('wiki');
+  const badges = home.match(/<span class="feature-new" data-new-feature="wiki">New<\/span>/g) || [];
+  assert.equal(badges.length, 2, 'the shelf and the one new entry, and nothing else');
+  assert.match(home, /Big Copilot topics<span class="feature-new"/);
+  assert.match(home, /How rent works<span class="feature-new"/);
+
+  // Seen: the nav badge is gone, and these go with it, under the same key.
+  const old = wiki({seen: {'ba_dash_feature_seen:wiki': '1'}});
+  const quiet = await old.load('wiki');
+  assert.doesNotMatch(quiet, /feature-new/);
+  assert.match(quiet, /Big Copilot topics/, 'the shelf itself stays; only the badge goes');
 });
 
 test('a build that carries no topics simply has none of them', async () => {

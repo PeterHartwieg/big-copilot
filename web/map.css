@@ -19,8 +19,9 @@
 .srch .cnt{font-size:11px;color:var(--ink-3);flex:none}
 
 /* find a location: a mode of the map page --------------------------------------
-   One switch decides which half of the head is on screen: the layer chips and
-   search (.moff) or the finder's filters (.fonly). */
+   One switch decides what is on screen. Off, the page is the plain map and its
+   header (.moff). On, the header steps aside and the panel grows a block of
+   filters (.fonly) above its results. */
 .city-map:not(.finder) .fonly{display:none}
 .city-map.finder .moff{display:none}
 /* One control, one look. Outlined is "not chosen", filled is "chosen"; nothing
@@ -33,14 +34,26 @@
 .fchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 .fchip b{font-weight:400;color:var(--ink-3)}
 .fchip.on b{color:var(--ink-2)}
-.fchip.tog{height:30px;padding:0 11px;gap:7px;font-size:12.5px}
-.fchip.tog svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .fchip.hd{padding:0 8px;letter-spacing:.08em}
-.fchip.sel{padding-right:22px;position:relative}
-.fchip.sel::after{content:"";position:absolute;right:9px;top:50%;margin-top:-1px;border:3.5px solid transparent;border-top-color:currentColor;pointer-events:none}
-.fchip.sel select{border:0;background:none;color:inherit;font:inherit;outline:none;cursor:pointer;max-width:190px;
-  appearance:none;-webkit-appearance:none;padding:0}
-.fchip.sel select option{color:var(--ink);background:var(--surface)}
+/* The switch sits in the map window, in the same button the zoom controls use;
+   the accent marks it pressed, the way a layer chip marks itself on. */
+.fswitch{position:absolute;left:16px;top:16px;z-index:5}
+.fswitch .ibtn{box-shadow:0 2px 8px #0003}
+.fswitch .ibtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* The stage keeps its dark artwork in either theme, so the pressed state tints
+   the button's own surface rather than replacing it with a translucent wash. */
+.fswitch .ibtn[aria-pressed="true"]{background:color-mix(in oklab,var(--accent) 24%,var(--surface));border-color:var(--accent);color:var(--accent)}
+/* The type picker is the page's own select: its own border, the native caret
+   replaced by the chevron the rest of the board draws. */
+.fsel{position:relative;display:inline-flex;align-items:center}
+.fsel select{appearance:none;-webkit-appearance:none;box-sizing:border-box;height:26px;padding:0 26px 0 9px;
+  border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink);
+  font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;max-width:210px;outline:none;
+  transition:background .15s,border-color .15s}
+.fsel select:hover{border-color:var(--ink-3)}
+.fsel select option{color:var(--ink);background:var(--surface)}
+.fsel.on select{background:var(--accent-soft);border-color:var(--accent)}
+.fsel .fchev{position:absolute;right:8px;display:grid;place-items:center;color:var(--ink-3);transform:rotate(90deg);pointer-events:none}
 .fchip.num{color:var(--ink-3);cursor:text}
 .fchip.num input{width:34px;border:0;background:none;color:var(--ink);font:inherit;text-align:right;outline:none;padding:0;-moz-appearance:textfield}
 .fchip.num input::-webkit-outer-spin-button,.fchip.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -74,7 +87,8 @@
 .place.fr .v{font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right;color:var(--ink-2);white-space:nowrap}
 .place.fr .v.sc{color:var(--ink);font-weight:500}
 /* The shaded columns read like the market grid: the stronger the number, the
-   more of the accent behind it. Rent is left plain — dear is not good. */
+   more of the accent behind it. What signing costs is left plain — a big
+   deposit is not a good one. */
 .place.fr .v.sh{border-radius:4px;padding:4px 6px;margin:-4px 0;align-self:center}
 .place.fr.sale{grid-template-columns:26px 1fr 66px 48px 76px}
 .place.fr.sale .v.t{text-align:left;font-family:inherit;font-size:11.5px;color:var(--ink-3)}
@@ -227,7 +241,8 @@ body.map-modal-open{overflow:hidden}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip{height:32px}
- .fchip.num input,.fchip.sel select{font-size:16px}
+ .fchip.num input{font-size:16px}
+ .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
  .srch,.srch:focus-within{width:100%}
  .srch input{font-size:16px}

@@ -661,7 +661,8 @@ what the place is. The payload is `premises`: one row per building registration 
 building table places, plus the buildings on sale, the demand grid turned inside out by
 neighbourhood, and the two reconstructed tables below. A row carries the address, its
 neighbourhood, building type, size letter, square metres, foot traffic, door cap,
-estimated rent, status and occupant. Python does no ranking; the page scores and sorts.
+estimated rent, estimated deposit, status and occupant. Python does no ranking; the page
+scores and sorts.
 
 Two addresses in some saves are registered but missing from the building table. They are
 dropped rather than guessed at, so a save can carry 883 rows where another carries 885.
@@ -705,6 +706,25 @@ patch can rebalance rents, so the payload also carries a live check: every lease
 currently billed for that is not residential is measured against the formula, and
 `rent.check` reports how many leases that was and the worst relative deviation among
 them. On HART. YT at day 20 that is eight leases, worst deviation 0.0027.
+
+### Deposit
+
+Signing a lease costs a deposit upfront, and early on that, not the daily rent, is what
+decides whether you can take a place at all. The game bills it as a transaction and never
+stores it against the building, so it is estimated as a multiple of the estimated daily
+rent: **62.84×** for a shop, office, cinema or theater, **93.61×** for a warehouse or
+factory, rounded to the nearest ten dollars. Fitted on 15 September 2026 across 21 lease
+deposits from three characters on build 3675; worst relative deviation 4.0% on leases and
+2.5% on warehouses. Two buildings with identical size, traffic and type have been seen to
+ask different deposits, so a few per cent is as close as this gets. A home has no rent
+estimate and so no deposit estimate.
+
+`ba:transaction_deposit` covers more than leases: a building purchase is billed the same
+way at roughly a thousand times the rent, and the game takes small deposits for other
+things too. Only transactions between 30× and 300× the estimated rent are read as lease
+deposits, in the payload's live check and in the fit behind it. `rent.deposit.check`
+reports how many of your own deposits were measured and the worst relative deviation, 0
+and 0 for a character who has paid none.
 
 ### Door cap
 

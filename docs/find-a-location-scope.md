@@ -44,6 +44,13 @@ regardless of demand, and the feature does not try to model that.
   Residential leases do not follow the formula; residential rent is not estimated.
   The Companion project's `estimated_daily_rent` is wrong by orders of magnitude and
   must not be used.
+- **Deposit** ("Kaution", added after QA on 15 September): the transaction log's
+  `ba:transaction_deposit` entries show the signing deposit is about 62.8 × the daily
+  rent for retail, office, cinema and theater buildings and 93.6 × for warehouses
+  (fitted on 21 lease deposits, worst deviation 4%; identical buildings have asked
+  slightly different deposits, so a few per cent is the floor). Entries above 300 × the
+  rent are building purchases and below 30 × are not lease deposits. The finder shows
+  the estimate as "Upfront"; the card shows both rent per day and deposit.
 - **Door cap is not stored for a vacant building** (`customerCapacity` is 0). The
   game's help page `help_building_types_content` gives customer capacity per size
   code; the player's shops match it (225 m² retail = 30, 285 m² = 40, 1000 m² = 75,

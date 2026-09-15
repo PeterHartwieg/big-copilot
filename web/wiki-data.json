@@ -34009,6 +34009,7 @@
           "heading": "What a listing charges",
           "paragraphs": [
             "A rental listing states a rent per day and a deposit. The rent is billed daily for as long as you hold the lease. The deposit is paid once, when you sign.",
+            "The deposit is the larger number, and it is due the day you sign. For a shop or an office it comes to about two months of rent; for a warehouse, about three. Big Copilot estimates it from the rent and shows it in the location finder as **Upfront**, so a cheap-looking building that you cannot afford to open is visible before you take it.",
             "A residential listing adds a charge for appliances on top of those two.",
             "Those numbers are the game's own. Big Copilot reads them; it does not set them."
           ]

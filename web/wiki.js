@@ -39,6 +39,33 @@ const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike
 const WIKI_TOPIC_CAT = "bigcopilot_topics";
 const WIKI_TOPIC_LABEL = "Big Copilot topics";
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
+/* What this release added inside the Wiki, under the same feature id the nav's
+   own NEW badge carries. The nav says the Wiki changed; these say what in it
+   changed, so the reader is not left to hunt. A future topic or guide is marked
+   by listing its slug or page id here and nowhere else.
+
+   The badge is the board's: the same markup, the same feature id, the same
+   localStorage key, so it clears when the nav's does and never on its own.
+   Whether it was still standing is read once, when the module loads — the board
+   marks the Wiki seen the moment the page opens, and these marks are about the
+   visit that opened it. */
+const WIKI_NEW_FEATURE = "wiki";
+const WIKI_SEEN_KEY = `ba_dash_feature_seen:${WIKI_NEW_FEATURE}`;
+const WIKI_NEW = {
+  shelf: ["topics"],            // the shelf that gained something
+  topics: ["how-rent-works"],   // the entries that are new in it
+};
+const wikiNewArmed = (() => {
+  let armed = false;
+  try{ armed = localStorage.getItem(WIKI_SEEN_KEY) !== "1"; }catch(e){ armed = false; }
+  return () => armed;
+})();
+/* The board's badge, or nothing at all. `what` is a list from WIKI_NEW; `key`
+   the thing being marked. */
+function wikiNewBadge(what, key){
+  if(!wikiNewArmed() || !(WIKI_NEW[what] || []).includes(String(key))) return "";
+  return `<span class="feature-new" data-new-feature="${attr(WIKI_NEW_FEATURE)}">New</span>`;
+}
 const WIKI_SHOWN = 60;   // rows before a category asks whether you want them all
 const WIKI_HITS = 10;    // search rows before the same question
 
@@ -387,10 +414,10 @@ function wikiCrumb(trail){
 }
 /* A findings-style row: the shape the board already uses for a list of things
    you can open. */
-function wikiRow(entry, mark, withCategory = true){
+function wikiRow(entry, mark, withCategory = true, badge = ""){
   const title = mark ? wikiMark(entry.title, mark) : wikiText(entry.title);
   return `<a class="wk-hit" href="${attr(wikiHref({kind: "page", id: entry.id}))}">`
-    + `<i class="wk-mark"></i><span class="wk-what">${title}</span>`
+    + `<i class="wk-mark"></i><span class="wk-what">${title}${badge}</span>`
     + `<span class="wk-cat2">${withCategory ? wikiText(entry.category || "") : ""}</span>`
     + `<span class="wk-go">${icon("go")}</span></a>`;
 }
@@ -467,10 +494,10 @@ function wikiTopicShelf(){
   const topics = (wikiData && wikiData.topics) || [];
   if(!topics.length) return "";
   const rows = topics.map(t => wikiRow({id: wikiTopicId(t.slug), title: t.title || t.slug,
-    category: WIKI_TOPIC_LABEL}, "", false)).join("");
+    category: WIKI_TOPIC_LABEL}, "", false, wikiNewBadge("topics", t.slug))).join("");
   return `
 <section class="sec wk-topics">
-  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}</h2>
+  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}${wikiNewBadge("shelf", "topics")}</h2>
     ${wikiWhy("Written by Big Copilot, not taken from the game's help. Each one says what it was checked against.")}</div>
   <div class="wk-hits">${rows}</div>
 </section>`;

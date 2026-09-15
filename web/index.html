@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=01fc3a77e5">
+<link rel="stylesheet" href="community.css?v=c6e97cf632">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,8 +29,9 @@
 .srch .cnt{font-size:11px;color:var(--ink-3);flex:none}
 
 /* find a location: a mode of the map page --------------------------------------
-   One switch decides which half of the head is on screen: the layer chips and
-   search (.moff) or the finder's filters (.fonly). */
+   One switch decides what is on screen. Off, the page is the plain map and its
+   header (.moff). On, the header steps aside and the panel grows a block of
+   filters (.fonly) above its results. */
 .city-map:not(.finder) .fonly{display:none}
 .city-map.finder .moff{display:none}
 /* One control, one look. Outlined is "not chosen", filled is "chosen"; nothing
@@ -43,14 +44,26 @@
 .fchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 .fchip b{font-weight:400;color:var(--ink-3)}
 .fchip.on b{color:var(--ink-2)}
-.fchip.tog{height:30px;padding:0 11px;gap:7px;font-size:12.5px}
-.fchip.tog svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .fchip.hd{padding:0 8px;letter-spacing:.08em}
-.fchip.sel{padding-right:22px;position:relative}
-.fchip.sel::after{content:"";position:absolute;right:9px;top:50%;margin-top:-1px;border:3.5px solid transparent;border-top-color:currentColor;pointer-events:none}
-.fchip.sel select{border:0;background:none;color:inherit;font:inherit;outline:none;cursor:pointer;max-width:190px;
-  appearance:none;-webkit-appearance:none;padding:0}
-.fchip.sel select option{color:var(--ink);background:var(--surface)}
+/* The switch sits in the map window, in the same button the zoom controls use;
+   the accent marks it pressed, the way a layer chip marks itself on. */
+.fswitch{position:absolute;left:16px;top:16px;z-index:5}
+.fswitch .ibtn{box-shadow:0 2px 8px #0003}
+.fswitch .ibtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* The stage keeps its dark artwork in either theme, so the pressed state tints
+   the button's own surface rather than replacing it with a translucent wash. */
+.fswitch .ibtn[aria-pressed="true"]{background:color-mix(in oklab,var(--accent) 24%,var(--surface));border-color:var(--accent);color:var(--accent)}
+/* The type picker is the page's own select: its own border, the native caret
+   replaced by the chevron the rest of the board draws. */
+.fsel{position:relative;display:inline-flex;align-items:center}
+.fsel select{appearance:none;-webkit-appearance:none;box-sizing:border-box;height:26px;padding:0 26px 0 9px;
+  border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink);
+  font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;max-width:210px;outline:none;
+  transition:background .15s,border-color .15s}
+.fsel select:hover{border-color:var(--ink-3)}
+.fsel select option{color:var(--ink);background:var(--surface)}
+.fsel.on select{background:var(--accent-soft);border-color:var(--accent)}
+.fsel .fchev{position:absolute;right:8px;display:grid;place-items:center;color:var(--ink-3);transform:rotate(90deg);pointer-events:none}
 .fchip.num{color:var(--ink-3);cursor:text}
 .fchip.num input{width:34px;border:0;background:none;color:var(--ink);font:inherit;text-align:right;outline:none;padding:0;-moz-appearance:textfield}
 .fchip.num input::-webkit-outer-spin-button,.fchip.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -84,7 +97,8 @@
 .place.fr .v{font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right;color:var(--ink-2);white-space:nowrap}
 .place.fr .v.sc{color:var(--ink);font-weight:500}
 /* The shaded columns read like the market grid: the stronger the number, the
-   more of the accent behind it. Rent is left plain — dear is not good. */
+   more of the accent behind it. What signing costs is left plain — a big
+   deposit is not a good one. */
 .place.fr .v.sh{border-radius:4px;padding:4px 6px;margin:-4px 0;align-self:center}
 .place.fr.sale{grid-template-columns:26px 1fr 66px 48px 76px}
 .place.fr.sale .v.t{text-align:left;font-family:inherit;font-size:11.5px;color:var(--ink-3)}
@@ -237,7 +251,8 @@ body.map-modal-open{overflow:hidden}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip{height:32px}
- .fchip.num input,.fchip.sel select{font-size:16px}
+ .fchip.num input{font-size:16px}
+ .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
  .srch,.srch:focus-within{width:100%}
  .srch input{font-size:16px}
@@ -1899,8 +1914,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "01fc3a77e5";</script>
-<script>window.LEDGER_RELEASE = {"version":"01fc3a77e5","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
+<script>window.LEDGER_BUILD = "c6e97cf632";</script>
+<script>window.LEDGER_RELEASE = {"version":"c6e97cf632","latest":{"pr":27,"date":"2026-09-14","title":"Offices and fairer rankings in Market demand","summary":"The By type grid now shows each business's average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -1969,8 +1984,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=01fc3a77e5"></script>
-<script src="community.js?v=01fc3a77e5"></script>
+<script src="app.js?v=c6e97cf632"></script>
+<script src="community.js?v=c6e97cf632"></script>
 
 <script>
 
@@ -4862,10 +4877,22 @@ const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || 
 /* The rent estimate is a fitted formula, so it says how it did against the
    leases the player is billed for today. */
 function rentNote(){
-  const check = premises()?.rent?.check;
-  if(!check || !check.leases) return "Est. rent is fitted to observed leases; the save stores no rent for a vacant building, and you have no current lease to check against.";
+  const rent = premises()?.rent, check = rent?.check, deposit = rent?.deposit?.check;
+  const tail = deposit && deposit.deposits
+    ? ` Deposits matched your ${deposit.deposits} within ${(deposit.worst * 100).toFixed(1)}%.` : "";
+  if(!check || !check.leases) return "Est. rent is fitted to observed leases; the save stores no rent for a vacant building, and you have no current lease to check against." + tail;
   return `Est. rent is fitted to observed leases; the save stores no rent for a vacant building. It matches your ${
-    plural(check.leases, "current lease")} within ${(check.worst * 100).toFixed(1)}%.`;
+    plural(check.leases, "current lease")} within ${(check.worst * 100).toFixed(1)}%.${tail}`;
+}
+/* What signing costs on the day. The game asks the same multiple of the rent
+   every time, so the note names the multiple rather than this building's sum;
+   a warehouse is its own, steeper, one. */
+function depositNote(b){
+  if(b.deposit == null) return "No deposit estimate for this building.";
+  const factors = premises()?.rent?.deposit?.factors || {};
+  const days = b.type === "warehouse" ? factors.warehouse : factors.lease;
+  return `Estimated deposit${days ? `, about ${plural(Math.round(days), "day")} of rent` : ""}${
+    b.rent != null ? `; est. rent ${fmt(b.rent)}/day` : ""}.`;
 }
 /* The ranked columns shade the way the market grid does: the board's accent
    mixed into the surface. The leading column carries most of it, the supporting
@@ -4930,16 +4957,18 @@ class CityMapView {
   build(){
     const a = this.assets, id = this.root.id;
     const clipId = `${id}-clip`;
-    const head = this.panel ? `<div class="sechead map-head">${this.finderControls()}
-      <span class="layers moff" role="group" aria-label="Layers">
+    // The whole header belongs to the plain map: the finder's own switch lives
+    // in the map window and its filters in the panel.
+    const head = this.panel ? `<div class="sechead map-head moff">
+      <span class="layers" role="group" aria-label="Layers">
         <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
         <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why moff" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
-      <span class="aside moff"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
+      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
+      <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage${this.panel ? " panel" : ""}" data-stage>
       <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="City map. Select a building or use the places list.">
@@ -4950,6 +4979,7 @@ class CityMapView {
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
         <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
       </div>
+      ${this.panel ? this.finderControls() : ""}
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
     </div>${this.panel ? `<aside class="places" aria-label="Matching places">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
@@ -4998,7 +5028,7 @@ class CityMapView {
      thing rather than as chrome scattered over the map. */
   finderControls(){
     if(!premises()) return "";
-    return `<button type="button" class="fchip tog" data-f="tog" aria-pressed="false" data-tip="Find a location: rank premises you could take by the neighbourhood's demand and the building's foot traffic. Click to switch it on.">${ICON.pin}Find a location</button>`;
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" aria-label="Find a location" data-tip="Find a location">${ICON.pin}</button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
@@ -5011,7 +5041,7 @@ class CityMapView {
       `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(h)}">${mapText(hoodTag(h))}</button>`).join('');
     return `<div class="filters fonly">
       ${row('Kind', kinds)}
-      ${row('Type', `<label class="fchip sel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select></label>`)}
+      ${row('Type', `<label class="fsel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select><i class="fchev">${ICON.chev}</i></label>`)}
       ${row('Show', `<button type="button" class="fchip av" data-av="vac" aria-pressed="true" data-tip="Buildings the save marks as available for rent.">vacant<b>0</b></button>
         <button type="button" class="fchip av" data-av="buy" aria-pressed="false" data-tip="Buildings a rival business occupies. You can make a takeover offer in-game; the price is not in the save.">buy-out<b>0</b></button>
         <button type="button" class="fchip" data-f="sale" aria-pressed="false" data-tip="Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.">for sale<b>${P.forSale.length}</b></button>
@@ -5051,7 +5081,7 @@ class CityMapView {
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'rent'] : ['score', 'traffic', 'demand', 'rent']; }
+  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'deposit'] : ['score', 'traffic', 'demand', 'deposit']; }
   clampSort(){
     const keys = this.sortKeys();
     if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.dir = -1; }
@@ -5073,10 +5103,19 @@ class CityMapView {
       if(saved && typeof saved === "object") this.fs = {...this.fs, ...saved,
         hoods: Array.isArray(saved.hoods) ? saved.hoods : null};
     }catch(e){}
+    this.fs.on = false;   // the switch is never restored, only the filters
   }
   saveFinder(){
     const store = this.finderStore(); if(!store) return;
-    try{ localStorage.setItem(store, JSON.stringify(this.fs)); }catch(e){}
+    // Opening the Map is opening the map: the finder is something you ask for,
+    // so its switch is not remembered even though its filters are.
+    const {on, ...filters} = this.fs;
+    try{ localStorage.setItem(store, JSON.stringify(filters)); }catch(e){}
+  }
+  /* The plain map, whatever the last visit left on. */
+  hideFinder(){
+    if(!this.fs.on) return;
+    this.fs.on = false; this.showAll = false; this.deselect(); this.update();
   }
   /* Opened from Today or a Growth cell: the finder comes on with a preset. */
   setFinder(preset = {}){
@@ -5129,7 +5168,7 @@ class CityMapView {
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
-      : fs.sort === 'rent' ? r.bld.rent : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
+      : fs.sort === 'deposit' ? r.bld.deposit : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
     out.sort((a, b) => {
@@ -5148,8 +5187,8 @@ class CityMapView {
   }
   finderList(rows){
     const fs = this.fs, wh = fs.cat === 'warehouse';
-    const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["rent","Est. rent"]]
-                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["rent","Est. rent"]];
+    const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["deposit","Upfront"]]
+                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["deposit","Upfront"]];
     const head = `<div class="fhead">${cols.map(([key, label]) => key
       ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? (fs.dir > 0 ? 'on up' : 'on') : ''}">${label}</span>`
       : `<span>${label}</span>`).join('')}</div>`;
@@ -5171,7 +5210,7 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v">${b.rent != null ? mapText(fmt(b.rent)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${mapText(sub)}</small></span>${numbers}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
@@ -5191,7 +5230,8 @@ class CityMapView {
     facts.innerHTML = `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
       + `<span>Door cap<b>${mapText(capText(b.cap))}</b></span>`
-      + `<span>Est. rent<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`;
+      + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
+      + `<span>Deposit<b>${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</b></span>`;
     // Only a candidate reads as one: your own shop keeps its business numbers.
     const candidate = (this.fs.vac && b.status === 'vacant') || (this.fs.buy && b.status === 'rival');
     if(!this.finderOn() || this.fs.sale || b.type !== this.fs.cat || !candidate) return;
@@ -5233,7 +5273,7 @@ class CityMapView {
     select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
     select.disabled = !options.length;
-    mark(select.closest('.fchip'), !!this.fs.type);
+    select.closest('.fsel').classList.toggle('on', !!this.fs.type);
     const counts = {vac:0, buy:0};
     P.buildings.forEach(b => { if(b.type !== this.fs.cat) return;
       if(b.status === 'vacant') counts.vac++; else if(b.status === 'rival') counts.buy++; });
@@ -5643,7 +5683,10 @@ class CityMapView {
   }
 }
 function showCityMap(){
-  if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage')); else cityMapPage.paintView();
+  // A fresh view starts plain; one that is already here is put back to plain,
+  // because the Map tab is the map. openFinder() switches it on afterwards.
+  if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage'));
+  else { cityMapPage.hideFinder(); cityMapPage.paintView(); }
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
    category, a type and a neighbourhood already chosen. */
@@ -5734,6 +5777,33 @@ const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike
 const WIKI_TOPIC_CAT = "bigcopilot_topics";
 const WIKI_TOPIC_LABEL = "Big Copilot topics";
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
+/* What this release added inside the Wiki, under the same feature id the nav's
+   own NEW badge carries. The nav says the Wiki changed; these say what in it
+   changed, so the reader is not left to hunt. A future topic or guide is marked
+   by listing its slug or page id here and nowhere else.
+
+   The badge is the board's: the same markup, the same feature id, the same
+   localStorage key, so it clears when the nav's does and never on its own.
+   Whether it was still standing is read once, when the module loads — the board
+   marks the Wiki seen the moment the page opens, and these marks are about the
+   visit that opened it. */
+const WIKI_NEW_FEATURE = "wiki";
+const WIKI_SEEN_KEY = `ba_dash_feature_seen:${WIKI_NEW_FEATURE}`;
+const WIKI_NEW = {
+  shelf: ["topics"],            // the shelf that gained something
+  topics: ["how-rent-works"],   // the entries that are new in it
+};
+const wikiNewArmed = (() => {
+  let armed = false;
+  try{ armed = localStorage.getItem(WIKI_SEEN_KEY) !== "1"; }catch(e){ armed = false; }
+  return () => armed;
+})();
+/* The board's badge, or nothing at all. `what` is a list from WIKI_NEW; `key`
+   the thing being marked. */
+function wikiNewBadge(what, key){
+  if(!wikiNewArmed() || !(WIKI_NEW[what] || []).includes(String(key))) return "";
+  return `<span class="feature-new" data-new-feature="${attr(WIKI_NEW_FEATURE)}">New</span>`;
+}
 const WIKI_SHOWN = 60;   // rows before a category asks whether you want them all
 const WIKI_HITS = 10;    // search rows before the same question
 
@@ -6082,10 +6152,10 @@ function wikiCrumb(trail){
 }
 /* A findings-style row: the shape the board already uses for a list of things
    you can open. */
-function wikiRow(entry, mark, withCategory = true){
+function wikiRow(entry, mark, withCategory = true, badge = ""){
   const title = mark ? wikiMark(entry.title, mark) : wikiText(entry.title);
   return `<a class="wk-hit" href="${attr(wikiHref({kind: "page", id: entry.id}))}">`
-    + `<i class="wk-mark"></i><span class="wk-what">${title}</span>`
+    + `<i class="wk-mark"></i><span class="wk-what">${title}${badge}</span>`
     + `<span class="wk-cat2">${withCategory ? wikiText(entry.category || "") : ""}</span>`
     + `<span class="wk-go">${icon("go")}</span></a>`;
 }
@@ -6162,10 +6232,10 @@ function wikiTopicShelf(){
   const topics = (wikiData && wikiData.topics) || [];
   if(!topics.length) return "";
   const rows = topics.map(t => wikiRow({id: wikiTopicId(t.slug), title: t.title || t.slug,
-    category: WIKI_TOPIC_LABEL}, "", false)).join("");
+    category: WIKI_TOPIC_LABEL}, "", false, wikiNewBadge("topics", t.slug))).join("");
   return `
 <section class="sec wk-topics">
-  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}</h2>
+  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}${wikiNewBadge("shelf", "topics")}</h2>
     ${wikiWhy("Written by Big Copilot, not taken from the game's help. Each one says what it was checked against.")}</div>
   <div class="wk-hits">${rows}</div>
 </section>`;
