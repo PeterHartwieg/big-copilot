@@ -142,6 +142,15 @@ test('loading is prominent until data arrives, including runtime ready; remember
   assert.equal(await page.locator('#pageSupply').isVisible(), true);
 });
 
+test('the Impressum stays reachable once the board replaces the landing', async t => {
+  const page = await setup(t);
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  assert.equal(await page.locator('#menuFootSlot a[href="/impressum"]').count(), 1);
+  assert.equal(await page.locator('#footerLinks a[href="/impressum"]').innerText(), 'Impressum');
+});
+
 test('URL destination wins over remembered page without adding a visit', async t => {
   const page = await setup(t, {hash:'#company'});
   await messages(page);

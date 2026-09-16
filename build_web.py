@@ -337,7 +337,8 @@ details.help[open] summary::after{content:"\2013"}
     <span class="lg-foot" id="footSlot">
       <a class="link" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
-      <a class="link" id="sourceLink" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source</a>
+      <a class="link" id="sourceLink" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source</a><span>&middot;</span>
+      <a class="link" id="impressumLink" href="/impressum" target="_blank" rel="noopener">Impressum</a>
     </span>
     <span>&middot;</span><span>GAME BUILD __BUILD__</span>
   </footer>
