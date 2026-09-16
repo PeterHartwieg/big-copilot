@@ -58,9 +58,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 REPO = "https://github.com/PeterHartwieg/big-copilot"
 ISSUES_URL = REPO + "/issues/new"
-# Where "Support the project" goes. GitHub Sponsors for now; swap in a Ko-fi
-# or PayPal address here and rebuild if you prefer one.
-DONATE_URL = "https://github.com/sponsors/PeterHartwieg"
+# Where "Support the project" goes: Big Copilot's own PayPal donation page,
+# which returns supporters to bigcopilot.com. The same PayPal account has a
+# RentenWiki page whose purpose text names RentenWiki; never link that one here.
+DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
 # Cloudflare Web Analytics: cookieless visit counts, nothing about the save.
 # Paste the site token from the dashboard (Analytics & Logs > Web Analytics)
 # here and rebuild; empty means no beacon on the page. The token is public,
