@@ -46,6 +46,8 @@ def ships(key: str, text: str) -> bool:
         return True
     if key == "help_building_types_content":  # size code -> door cap, for the premises table
         return True
+    if key == "help_ba:itemname_computergroup_content":  # the computers an office posts staff to
+        return True
     if not key.endswith("_content"):
         return False
     if key.startswith(("help_recipes_", "help_ba:businesstype_")):

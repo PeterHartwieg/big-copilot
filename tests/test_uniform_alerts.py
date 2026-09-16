@@ -61,7 +61,7 @@ class UniformAlertTests(unittest.TestCase):
         self.assertEqual(len(self.warnings(btype="giftshop")), 1)
 
     def test_support_vacant_and_new_nontrading_sites_are_not_flagged(self):
-        for options in ({"btype": "warehouse"}, {"btype": "factory"},
+        for options in ({"btype": "warehouse"}, {"btype": "factory"}, {"btype": "lawfirm"},
                         {"name": ""}, {"trading": False}):
             with self.subTest(options=options):
                 self.assertEqual(self.warnings(**options), [])

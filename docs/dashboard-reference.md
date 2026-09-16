@@ -196,8 +196,8 @@ What is on the list is what moves the number:
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
   its next import, an order too small for the week it has to cover, a paused import.
-- **Shops at their ceiling, and counters standing idle.** Both come out of the hourly grid
-  described below, and both carry the money they are worth.
+- **Shops and offices at their ceiling, and counters or workstations standing idle.** Both
+  come out of the hourly grid described below, and both carry the money they are worth.
 - **Promotion left on the table.** A shop's promotion is the foot traffic its address
   comes with plus what its marketing campaigns add, held at 100%. The address cannot be
   changed, so any shop selling something is either at the 100% cap or at 100% marketing.
@@ -280,6 +280,15 @@ concessions stand registers and ticket booths at 50. Fridges, freezers and shelv
 Customer Capacity figure too and are deliberately not summed. They hold products, they do
 not serve a queue.
 
+**Offices** get the same grid, because they keep the same hour reports. Their customers
+are digital, and each one is an hour billed by one professional, so an office's registers
+are its computers: every computer listed on the game's *Computer Options* page (Computer,
+ZanaMan Computer, Laptop, Basic Gaming PC Setup) with someone other than a cleaner posted
+at it counts one customer an hour. No help page states that rate. It was measured on a law
+firm at build 3680, whose hour reports matched the lawyers on shift one for one at every
+level the roster reached (1, 2, 33 and 50), with the fee's demand reading 66 at the time,
+so it should be checked again after a game update. The door cap is the office building's.
+
 ### What the roster actually says
 
 Two fields needed working out, and both were settled against data rather than assumed.
@@ -301,24 +310,30 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 ### The two findings
 
-**At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. If
-the door cap is at or below the staffed register capacity the building is the limit, and
-the answer is a bigger site or a second shop nearby. If staffed capacity is below the
-counters installed, staffing is the limit. Otherwise it is the counters themselves.
+**At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
+hour is judged on its own roster. Where the door cap is at or below the staffed register
+capacity the building is the limit, and the answer is a bigger site or a second shop
+nearby (for an office, a bigger office or a second one). Where staffed capacity is below
+the counters installed, staffing is the limit. Otherwise it is the counters themselves (an
+office's workstations). A site that runs one
+person at night and a full floor by day can be short of staff at night and at the door by
+day, and then it gets one line for each, rather than a verdict for the whole week that is
+wrong about one of them. Where the hours on one line ran at different ceilings, the line
+gives the range, such as 1-33/h.
 
-The money on this line is what is measurably flowing *through* those hours: hours at the
-ceiling, times the cap, times revenue per customer. **What is being turned away above the
-ceiling is not in the save at all.** The game records the customers who came in, not the
-ones who did not. The board gives the throughput and stops there rather than inventing a
-lost-sales figure.
+The money on this line is what is measurably flowing *through* those hours: the customers
+measured in each of them, times revenue per customer. **What is being turned away above
+the ceiling is not in the save at all.** The game records the customers who came in, not
+the ones who did not. The board gives the throughput and stops there rather than inventing
+a lost-sales figure.
 
 **Capacity standing idle.** Three or more hours in a row where staffed register capacity
 is more than twice the customers and at least two people are on. Here the money *is*
-measurable: the surplus staff-hours at that site's service wage, which is what
-rescheduling them would save.
+measurable: the surplus staff-hours at that site's service wage (in an office, its
+professionals' wage), which is what rescheduling them would save.
 
 Both are grouped before they are shown. Six shops hitting the same 30/h ceiling in the
-same hours is one line about six shops.
+same hours is one line about six shops. Offices group only with offices.
 
 A hype wave arriving at a shop already within 10% of its ceiling is added to that wave's
 line rather than raised separately, because it is the same event. Where pricing is
@@ -414,7 +429,9 @@ by the kind of shop at the end of it, and each warehouse and factory joins the k
 shop it mostly feeds: follow its plans downstream, count where the goods actually end up,
 and let the majority decide. That is why a food factory sits with the supermarkets even
 though it also sends soda to the electronics depot, and why a cinema is its own chain
-rather than a supermarket that happens to share a warehouse.
+rather than a supermarket that happens to share a warehouse. An office agency is a chain of
+its own kind in the same way: law firms together, travel agencies together. Head office
+and the sites that feed nothing make up *Head office and support*.
 
 Where a chain's total includes money taken from outside the company, such as a factory
 shipping to a pier, the chain line says so and names the amount, because that is not what
@@ -434,7 +451,9 @@ shop that opened yesterday, sits in a *Support sites* group below them, because 
 warehouse has no customers, no basket and no shelves worth reading. The detail shows that
 site alone: the eight headline numbers, a 30-day profit chart, its own weekly rhythm,
 yesterday's costs line by line, who works there by role and what they cost, and every
-shelf with its price, sales rate, stock, delivery target and pressure.
+shelf with its price, sales rate, stock, delivery target and pressure. An office has no
+shelves: its detail lists its fee instead, with the price, the hours billed a day and the
+revenue, and the same hour-by-hour grid as a shop.
 
 Neighbourhood demand lives in the Market demand view rather than being repeated per
 site, and customer scores stay in the Portfolio's Operations view.
