@@ -609,9 +609,10 @@ DEPOSIT_MAX_FACTOR = 300
 DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 
 # The door capacity each size letter buys, per building type. Read from the
-# game's help page when the player's own en.json is at hand; this is the same
-# table as build 3675 ships, for when it is not (the page does not travel with
-# the web build). A letter whose variants disagree carries [min, max].
+# game's help page, which travels with the web build's game text (a player's own
+# en.json wins over it); this is the same table as builds 3675 and 3680 ship, for
+# a run with no game text at all, such as the CLI when the game is not installed
+# where DEFAULT_LOCALE points. A letter whose variants disagree carries [min, max].
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
@@ -1154,7 +1155,7 @@ HOUSE_RULES = [
     ("exportMultiplier", "Export price", "×", 0.65, "down",
      "what exporters pay for factory-made goods"),
     ("sellingMultiplier", "Resale value", "×", 0.75, "down",
-     "share of an item's or vehicle's value you get back when selling it"),
+     "share of an item's or vehicle's value received when selling it"),
     ("wholesaleUrgentFeeMultiplier", "Wholesale urgent fee", "×", 0.2, "up",
      "surcharge for rushing a wholesale order"),
     ("importerUrgentFeeMultiplier", "Importer urgent fee", "×", 0.75, "up",

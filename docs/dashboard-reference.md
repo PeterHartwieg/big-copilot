@@ -772,9 +772,10 @@ genuinely differ the cap is a `[min, max]` range, which today is only the cinema
 to 150) and the theater (R, 150 to 200). Warehouses have a vehicle capacity, not a door
 cap, and carry none; neither do residential or special buildings.
 
-The help page is not in the game text that ships with the web build, so the table is also
-hardcoded as it stands on build 3675 and the page's text is preferred whenever the player
-has supplied their own `en.json`:
+The help page travels with the game text the web build ships, and a player's own `en.json`
+wins over it. The table is also hardcoded as it stands on builds 3675 and 3680, for a run
+with no game text at all, such as the CLI when the game is not installed where
+`DEFAULT_LOCALE` points:
 
 | | A | C | D | J | K | M | S | R |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
