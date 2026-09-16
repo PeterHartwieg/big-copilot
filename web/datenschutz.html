@@ -31,8 +31,9 @@ a{color:var(--accent);overflow-wrap:anywhere}
   <!-- Every promise here is backed by the code: fonts and Pyodide are served
        from this site (build_web.py, web/worker.js), the online count keeps its
        id in memory (web/community.js), the daily cleanup deletes presence rows
-       and ended polls (server/worker.mjs), and Worker invocation logs are off
-       (wrangler.jsonc). Change the text when any of those change. -->
+       and ended polls (server/worker.mjs), Worker invocation logs and traces are off
+       (wrangler.jsonc), and Cloudflare's automatic Web Analytics injection is
+       switched off for the domain in the dashboard. Change the text when any of those change. -->
 
   <h2>1. Verantwortlicher</h2>
   <address>
@@ -41,18 +42,18 @@ a{color:var(--accent);overflow-wrap:anywhere}
   </address>
 
   <h2>2. Das Wichtigste</h2>
-  <p>Big Copilot setzt selbst keine Cookies ein und nutzt weder Tracking noch Webanalyse. Ihre Spielstände werden ausschließlich in Ihrem Browser ausgewertet und nie an uns übertragen.</p>
+  <p>Big Copilot setzt selbst keine Cookies ein und bindet keine Tracking- oder Analyse-Skripte ein. Ihre Spielstände werden ausschließlich in Ihrem Browser ausgewertet und nie an uns übertragen.</p>
 
   <h2>3. Hosting</h2>
-  <p>Die Website wird bei Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA, betrieben. Beim Aufruf verarbeitet Cloudflare Ihre IP-Adresse, Datum und Uhrzeit, die aufgerufene Adresse und Angaben zu Ihrem Browser, um die Seite auszuliefern und vor Missbrauch zu schützen. Zur Abwehr von Angriffen kann Cloudflare ein technisch notwendiges Cookie setzen (§ 25 Abs. 2 Nr. 2 TDDDG). Cloudflare handelt in unserem Auftrag, speichert diese Daten nur so lange, wie es für diese Zwecke nötig ist, und ist nach dem EU-US Data Privacy Framework zertifiziert. Wir selbst führen keine Zugriffsprotokolle.</p>
-  <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse ist ein sicherer und stabiler Betrieb der Website.</p>
+  <p>Die Website wird bei Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA, betrieben. Beim Aufruf verarbeitet Cloudflare Ihre IP-Adresse, Datum und Uhrzeit, die aufgerufene Adresse und Angaben zu Ihrem Browser, um die Seite auszuliefern und vor Missbrauch zu schützen. Wir werten davon nur zusammengefasste Statistiken aus, etwa die Zahl der Aufrufe und die Herkunftsländer. Zur Abwehr von Angriffen kann Cloudflare ein technisch notwendiges Cookie setzen (§ 25 Abs. 2 Nr. 2 TDDDG). Cloudflare handelt in unserem Auftrag, speichert diese Daten nur so lange, wie es für diese Zwecke nötig ist, und ist nach dem EU-US Data Privacy Framework zertifiziert. Wir selbst führen keine Zugriffsprotokolle.</p>
+  <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse ist ein sicherer und stabiler Betrieb der Website und ein Überblick über ihre Nutzung.</p>
 
   <h2>4. Daten in Ihrem Browser</h2>
   <p>Einstellungen, der gewählte Spielstand-Ordner, gespeicherte Suchen und der Markt- und Kassenverlauf werden im Speicher Ihres Browsers abgelegt (localStorage, sessionStorage, IndexedDB). Sie verlassen Ihr Gerät nicht. Diese Speicherung ist für die von Ihnen genutzten Funktionen erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG). Sie können die Daten jederzeit in Ihren Browsereinstellungen löschen, den Verlauf auch über „Forget history“.</p>
 
   <h2>5. Online-Anzeige und Abstimmungen</h2>
-  <p>Online-Anzeige: Nach dem Laden eines Spielstands sendet Ihr Browser etwa alle fünf Minuten eine zufällige Kennung an unseren Server, damit wir zählen können, wie viele Dashboards gerade geöffnet sind. Die Kennung wird bei jedem Laden der Seite neu erzeugt und nicht in Ihrem Browser gespeichert. Auf dem Server liegen nur diese Kennung und der Zeitpunkt; beides wird innerhalb von zwei Tagen gelöscht.</p>
-  <p>Abstimmungen: Wenn Sie für eine Funktion abstimmen, speichern wir nicht Ihre IP-Adresse, sondern einen mit einem geheimen Schlüssel daraus gebildeten Hashwert, damit je Anschluss nur eine Stimme zählt. Er wird innerhalb eines Tages gelöscht, nachdem wir die Abstimmung beendet haben.</p>
+  <p>Online-Anzeige: Solange Sie das Dashboard oder das Wiki geöffnet haben, sendet Ihr Browser etwa alle fünf Minuten eine zufällige Kennung an unseren Server, damit wir zählen können, wie viele Dashboards gerade geöffnet sind. Die Kennung wird bei jedem Laden der Seite neu erzeugt und nicht in Ihrem Browser gespeichert. Auf dem Server liegen nur diese Kennung und der Zeitpunkt; beides wird innerhalb von zwei Tagen gelöscht.</p>
+  <p>Abstimmungen: Wenn Sie für eine Funktion abstimmen, speichern wir nicht Ihre IP-Adresse, sondern einen mit einem geheimen Schlüssel daraus gebildeten Hashwert und den Zeitpunkt der Stimme, damit je Anschluss nur eine Stimme zählt. Beides wird innerhalb eines Tages gelöscht, nachdem wir die Abstimmung beendet haben.</p>
   <p>Zum Schutz vor Missbrauch begrenzen wir die Anfragen an diese Funktionen je Anschluss; auch dafür wird nur kurzzeitig ein Hashwert der IP-Adresse verwendet.</p>
   <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse ist der Betrieb dieser Funktionen und der Schutz vor Missbrauch.</p>
 

@@ -13,7 +13,7 @@ available); voting remains a control in the footer.
 
 ## Browser behavior
 
-Presence starts after a save loads. Each tab sends a heartbeat about every five
+Presence starts once the board is up, after a save loads or the wiki opens. Each tab sends a heartbeat about every five
 minutes and receives the public count in the same response. The random ID, the next
 due time and the latest count live only in that tab's memory; nothing is written to
 browser storage, because the privacy notice promises that and a stored ID for a

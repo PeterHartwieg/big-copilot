@@ -147,7 +147,7 @@ opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
 `__UPDATE_SCRIPT__`, `__BUILD__`, `__REPO__`, `__ISSUES__`, `__DONATE__`, `__ICON_FOLDER__`,
-`__ICON_MORE__`, `__ANALYTICS_NOTE__`. Those are substituted inside `BANNER` and
+`__ICON_MORE__`. Those are substituted inside `BANNER` and
 `BEFORE_SCRIPT` before either string reaches `render()`, so they never appear in `TEMPLATE`.
 
 ## Assembly order of `web/index.html`
@@ -160,9 +160,11 @@ What `page_html()` produces, top of the file down:
 
 1. `<!doctype html>` then `<meta charset="utf-8">`, both emitted by `render()` before the
    template, so the page runs in standards mode.
-2. The head `page_html()` builds, in this order: the viewport tag, the Cloudflare Web
-   Analytics beacon if `ANALYTICS_TOKEN` is set, and the `web/community.css` link stamped
-   with the release version.
+2. The head `page_html()` builds, in this order: the viewport tag and the
+   `web/community.css` link stamped with the release version. There is no analytics
+   script, and Cloudflare's automatic Web Analytics injection is switched off for the
+   domain, because the privacy notice says the site runs none. `page_html()` then swaps the
+   template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
 3. `TEMPLATE`, with the landing screen (`BANNER`) substituted into its `<!--__BANNER__-->`
    slot: the release banner, the drop zone, the save-location help and the footer.
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the

@@ -45,15 +45,18 @@
       "simple": { "limit": 120, "period": 60 }
     }
   ],
-  // Daily cleanup of presence rows older than 24 hours.
+  // Daily cleanup of presence rows older than 24 hours and of votes for polls
+  // no longer in server/features.json.
   "triggers": {
     "crons": ["17 3 * * *"]
   },
-  // No per-request invocation logs (URL, method, country): the privacy notice
-  // promises none. Errors and console output from the Worker are still kept.
+  // No per-request invocation logs or traces (URL, method, country): the
+  // privacy notice promises none. Errors and console output from the Worker
+  // are still kept.
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1,
-    "logs": { "invocation_logs": false }
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": false }
   }
 }

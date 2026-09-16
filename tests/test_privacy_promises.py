@@ -61,9 +61,17 @@ class PrivacyPromises(unittest.TestCase):
         self.assertNotIn("localStorage.setItem", community)
         self.assertNotIn("sessionStorage", community)
 
-    def test_worker_keeps_no_invocation_logs(self):
+    def test_no_analytics_script(self):
+        for path in (ROOT / "build_web.py", WEB / "index.html"):
+            with self.subTest(name=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertNotIn("cloudflareinsights", text)
+                self.assertNotIn("ANALYTICS", text)
+
+    def test_worker_keeps_no_request_logs_or_traces(self):
         config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
         self.assertRegex(config, r'"invocation_logs"\s*:\s*false')
+        self.assertRegex(config, r'"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}')
 
 
 if __name__ == "__main__":

@@ -498,12 +498,13 @@ test('scheduled cleanup removes old presence and ended polls while retaining rec
   await db.batch([90000,3600,0].map(age=>db.prepare(
     'INSERT INTO community_presence(browser_id,last_seen) VALUES (?,?)'
   ).bind(crypto.randomUUID(),nowSec()-age)));
-  await db.prepare('INSERT INTO community_votes VALUES (?,?,?)').bind('optimize-staffing','test-hash',nowSec()-90000).run();
+  const openPoll = JSON.parse(fs.readFileSync(path.join(ROOT,'server','features.json'),'utf8'))[0].id;
+  await db.prepare('INSERT INTO community_votes VALUES (?,?,?)').bind(openPoll,'test-hash',nowSec()-90000).run();
   await db.prepare('INSERT INTO community_votes VALUES (?,?,?)').bind('retired-poll','test-hash',nowSec()).run();
   assert.equal((await mf.dispatchFetch('https://cleanup.test/__test/scheduled')).status,200);
   assert.equal(await tableRowCount(SCHEMA.presenceTable),2);
   const votes = (await db.prepare(`SELECT feature_id FROM "${SCHEMA.votesTable}"`).all()).results;
-  assert.deepEqual(votes.map(v=>v.feature_id),['optimize-staffing']);
+  assert.deepEqual(votes.map(v=>v.feature_id),[openPoll]);
 });
 
 test('features: curated listing starts at zero votes with nothing voted', async () => {

@@ -64,7 +64,7 @@
     if (!started || inFlight) return;
     const wait = presence.nextDue - Date.now();
     if (wait > 0) { arm(wait); return; }
-    sendPresence();
+    sendPresence().catch(() => { inFlight = false; arm(RETRY_MIN_MS); });
   }
 
   async function sendPresence() {

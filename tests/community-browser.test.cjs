@@ -131,23 +131,26 @@ test('landing is network quiet; actual save loading starts presence and preserve
 test('each tab keeps its own id and schedule in memory, and nothing reaches browser storage', async t => {
   const {page,newPage,state,loadSave} = await setup(t,{legacyState:true});
   const other = await newPage();
+  const keysBefore = await page.evaluate(() => Object.keys(localStorage).filter(k => k !== 'ba_community_state').sort());
   await Promise.all([loadSave(page),loadSave(other)]);
   await Promise.all([online(page).waitFor(),online(other).waitFor()]);
   assert.equal(state.heartbeats.length,2,'each tab sends its own first heartbeat');
   const ids = state.heartbeats.map(h => h.browserId);
   assert.notEqual(ids[0],ids[1]);
   assert.ok(!ids.includes('00000000-0000-4000-8000-000000000000'),'a stored legacy id is never reused');
-  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(k => /community/.test(k)).length),0,'the legacy id is removed and none is written');
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_community_state')),null,'the legacy id is removed');
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); });
   assert.equal(state.heartbeats.length,2,'focus and connectivity events do not send before the due time');
   // The clock belongs to the browser context, so both tabs reach their due time.
+  // Wait on the requests themselves: the count already reads "40 online" from
+  // the first heartbeats, and in-page timers run on the fake clock.
   await page.clock.fastForward(306000);
-  await page.waitForFunction(() => document.querySelector('#live').textContent.includes('40 online'));
-  await other.waitForFunction(() => document.querySelector('#live').textContent.includes('40 online'));
-  // Wait for the actual request/response state instead of relying on timer ordering.
-  await Promise.all([page,other].map(p => p.evaluate(() => new Promise(resolve => setTimeout(resolve,0)))));
+  for (let i = 0; i < 200 && state.heartbeats.length < 4; i++) await new Promise(resolve => setTimeout(resolve,25));
   assert.equal(state.heartbeats.length,4);
   assert.deepEqual(state.heartbeats.slice(2).map(h => h.browserId).sort(),[...ids].sort(),'each tab keeps its id between heartbeats');
+  // Presence adds nothing to browser storage; the board's own keys are not its business.
+  const keysAfter = await page.evaluate(() => Object.keys(localStorage).sort());
+  assert.deepEqual(keysAfter.filter(k => !keysBefore.includes(k) && !/^(ba_dash_|ledger_|ba_finder)/.test(k)),[],'presence writes no storage key');
 });
 
 test('save changes keep the schedule; a reload starts over with a new id', async t => {
@@ -168,12 +171,24 @@ test('a sleeping browser skips missed intervals and a failed heartbeat backs off
   const {page,state,loadSave} = await setup(t);
   await loadSave(page); await online(page).waitFor();
   state.failPresence = true;
+  // "Online count unavailable" also shows once the old count goes stale, so
+  // wait for the failed response itself, then let the page settle it before
+  // the clock moves again.
+  const failed = page.waitForResponse('**/api/community/presence');
   await page.clock.fastForward(3600000);
+  await failed;
   await page.getByText('Online count unavailable',{exact:true}).waitFor();
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
   assert.equal(state.heartbeats.length,2,'no replay of twelve missed heartbeats');
   await page.clock.fastForward(30000);
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')); });
   assert.equal(state.heartbeats.length,2,'a failure waits at least a minute before retrying');
+  state.failPresence = false;
+  // A response, not the request: the route records a heartbeat before fulfilling it.
+  const retry = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(100000);
+  await retry;
+  assert.equal(state.heartbeats.length,3,'the backoff re-arms and retries once');
   assert.equal(await page.locator('#nav').isVisible(),true);
 });
 

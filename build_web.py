@@ -68,11 +68,6 @@ GOOGLE_FONTS = (
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">'
 )
-# Cloudflare Web Analytics: cookieless visit counts, nothing about the save.
-# Paste the site token from the dashboard (Analytics & Logs > Web Analytics)
-# here and rebuild; empty means no beacon on the page. The token is public,
-# it sits in the HTML every visitor gets.
-ANALYTICS_TOKEN = ""
 
 # One set of controls, two homes.
 #
@@ -353,7 +348,7 @@ details.help[open] summary::after{content:"\2013"}
     <summary>Where is my save?</summary>
     <div class="help-content">
       <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
-      <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.__ANALYTICS_NOTE__</p>
+      <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
@@ -390,12 +385,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL).replace(
-    # Cloudflare injects its cookieless beacon at the edge for this domain, so
-    # the note is true whether or not a token is set here.
-    "__ANALYTICS_NOTE__",
-    " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.",
-)
+""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL)
 
 # Everything the page fetches, together with the build inputs that shape it:
 # build_web.py itself, and the wiki generator (code, authored wording and
@@ -409,7 +399,7 @@ STAMP_INPUTS = (
     "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json",
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
-    "tools/wiki_topics.json",
+    "tools/wiki_topics.json", "web/fonts/fonts.css",
 )
 
 
@@ -476,12 +466,9 @@ def page_html(release: dict, root: str = HERE) -> str:
     # straight after them. The template carries the inline SVG favicon, so this
     # door never asks for /favicon.ico either; a viewport tag is all this page
     # adds.
+    # No analytics script: the privacy notice says the site runs none, and
+    # Cloudflare's automatic Web Analytics injection is off for this domain.
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
-    if ANALYTICS_TOKEN:
-        head += (
-            "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
-            + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
-        )
     head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
@@ -497,7 +484,7 @@ def page_html(release: dict, root: str = HERE) -> str:
     # visitor's IP address reaches Google; the privacy notice relies on that.
     if GOOGLE_FONTS not in page:
         raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
-    return page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css">')
+    return page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
 
 
 def check(root: str = HERE) -> list[str]:
