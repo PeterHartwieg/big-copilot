@@ -1134,61 +1134,74 @@ def _city_date(save: Save, day: int) -> str:
     return f"Year {year}, day {(day - 1) % per_year + 1} of {per_year}"
 
 
-# The custom-game sliders, with the direction that makes the game harder. Names
-# and effects are the game's own, from main_menu_custom_game_* in the locale.
+# The custom-game sliders: the unit each is shown in, its value on the game's
+# Normal preset, and the direction that makes the game harder. Names are the
+# main_menu_custom_* titles in the locale, shortened; "Tax rate" and "Resale value"
+# are the board's own (the game has no name for the selling multiplier), and the
+# effects paraphrase the game's tooltips. Normal's values come from the game's
+# DifficultySetting assets at VERIFIED_BUILD, and Normal is not ×1 across the
+# board: its urgent wholesale fee is ×0.2 and its tax rate 5%.
 HOUSE_RULES = [
-    ("marketPriceMultiplier", "Public prices", 1.0, "up",
+    ("marketPriceMultiplier", "Public prices", "×", 0.7, "up",
      "cost of wholesale and imported goods, hospital fees and the like"),
-    ("employeeHourlySalaryMultiplier", "Salary demands", 1.0, "up", "what staff cost an hour"),
-    ("bankInterestMultiplier", "Bank interest", 1.0, "up", "interest on loans and investments"),
-    ("rivalsDifficultyMultiplier", "Rival attacks", 1.0, "up",
+    ("employeeHourlySalaryMultiplier", "Employee hourly salary", "×", 0.7, "up",
+     "what staff cost an hour"),
+    ("bankInterestMultiplier", "Bank interest", "×", 0.7, "up",
+     "interest on loans and investments"),
+    ("rivalsDifficultyMultiplier", "Rival attacks", "×", 1.0, "up",
      "severity of rival attacks; 0 switches them off entirely"),
-    ("baseCustomerPromotionMultiplier", "Base customers", 1.0, "down",
-     "customers you get before any traffic or marketing"),
-    ("exportMultiplier", "Export income", 1.0, "down", "what exporting pays"),
-    ("sellingMultiplier", "Resale value", 1.0, "down", "what selling something back returns"),
-    ("wholesaleUrgentFeeMultiplier", "Urgent wholesale fee", 1.0, "up",
+    ("baseCustomerPromotionMultiplier", "Base customer promotion", "×", 0.55, "down",
+     "base level of customers without traffic or marketing"),
+    ("exportMultiplier", "Export price", "×", 0.65, "down",
+     "what exporters pay for factory-made goods"),
+    ("sellingMultiplier", "Resale value", "×", 0.75, "down",
+     "what selling something back returns"),
+    ("wholesaleUrgentFeeMultiplier", "Wholesale urgent fee", "×", 0.2, "up",
      "surcharge for rushing a wholesale order"),
-    ("importerUrgentFeeMultiplier", "Urgent import fee", 1.0, "up",
+    ("importerUrgentFeeMultiplier", "Importer urgent fee", "×", 0.75, "up",
      "surcharge for rushing an import"),
-    ("taxPercentage", "Tax rate", 30, "up", "annual rate from the IRS"),
+    ("taxPercentage", "Tax rate", "%", 5, "up", "annual rate from the IRS"),
 ]
+
+# The game's Difficulty enum, which is what the save's ``difficulty`` holds.
+DIFFICULTY_SLOTS = {0: "Custom", 1: "Easy", 2: "Normal", 3: "Hard"}
 
 
 def _difficulty(save: Save) -> dict:
-    """The house rules, read off the save rather than guessed from a preset id.
+    """The difficulty the game is played on, and how its settings compare with Normal.
 
-    The stored ``difficulty`` is only a slot number, and a custom game keeps its
-    own multipliers regardless of what that slot says — so the settings
-    themselves are the honest answer to "how hard is this game".
+    The stored ``difficulty`` slot is trustworthy: in game, a preset game can
+    only switch to another preset, and the sliders can only be moved on a custom
+    game (slot 0). The settings are still read off the save, because a preset's
+    values can change between builds and an older game keeps the ones it got.
+    A slot the enum does not know, such as a preset added by a later build, is
+    "Unknown" rather than a guess.
     """
     gv = save.deref(save.root.get("gameVariables")) or {}
     rules = []
-    for key, name, neutral, harder, what in HOUSE_RULES:
+    for key, name, unit, normal, harder, what in HOUSE_RULES:
         value = gv.get(key)
         if value is None:
             continue
         value = round(value, 3)
         # An unset multiplier reads as 0 in older saves; that is absence, not a
-        # setting, except for rival attacks where 0 genuinely means "off".
-        if not value and key != "rivalsDifficultyMultiplier":
+        # setting. Rival attacks at 0 are switched off, and a 0% tax rate is real.
+        if not value and key not in ("rivalsDifficultyMultiplier", "taxPercentage"):
             continue
-        if value == neutral:
+        if value == normal:
             lean = "level"
         else:
-            up = value > neutral
+            up = value > normal
             lean = "harder" if (up == (harder == "up")) else "easier"
-        rules.append({"name": name, "value": value, "neutral": neutral,
+        rules.append({"name": name, "value": value, "normal": normal, "unit": unit,
                       "lean": lean, "what": what})
 
-    tougher = sum(1 for r in rules if r["lean"] == "harder")
-    softer = sum(1 for r in rules if r["lean"] == "easier")
-    custom = bool(tougher or softer)
+    slot = gv.get("difficulty")
     return {
-        "label": "Custom" if custom else "Stock settings",
-        "slot": gv.get("difficulty"),
-        "harder": tougher,
-        "easier": softer,
+        "label": DIFFICULTY_SLOTS.get(slot, "Unknown"),
+        "slot": slot,
+        "harder": sum(1 for r in rules if r["lean"] == "harder"),
+        "easier": sum(1 for r in rules if r["lean"] == "easier"),
         "startingMoney": gv.get("startingMoney"),
         "rules": rules,
     }
@@ -8642,14 +8655,19 @@ function drawPayroll(){
         : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">No staff hired yet.</p>`);
 }
 
-/* The career totals as a checklist, then the house rules. The stored difficulty
-   is only a slot number, and a custom game keeps its own multipliers whatever
-   that slot says, so the settings themselves are what answers "how hard is
-   this game" — and they are worth stating, because several of them are doing
-   real work here. */
+/* The career totals as a checklist, then the house rules: the difficulty, and
+   every setting that differs from the game's Normal preset. They are worth
+   stating, because several of them are doing real work here. Normal is the
+   yardstick rather than ×1, because the presets are not ×1: Normal's urgent
+   wholesale fee is ×0.2. */
 function drawGoals(){
   const g = D.goals, h = D.meta.houseRules;
   const moved = (h?.rules || []).filter(r => r.lean !== "level");
+  const setting = (unit, v) => unit === "%" ? `${v}%` : `×${v}`;
+  /* "10 settings harder", "1 setting harder and 2 easier": the noun goes on the first count. */
+  const vsNormal = h ? [[h.harder, "harder"], [h.easier, "easier"]].filter(([n]) => n)
+    .map(([n, way], i) => `${i ? n : plural(n, "setting")} ${way}`).join(" and ") : "";
+  const playing = h && ({Custom: "custom settings", Unknown: "an unrecognised difficulty"}[h.label] || h.label);
   /* The checklist is the design's: every business type run, every building
      owned, the story rivals taken over, the personal goals, the diplomas —
      each "n / total", the box filled only when complete. Personal goals have
@@ -8666,19 +8684,20 @@ function drawGoals(){
     ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
   ];
   $("secGoals").innerHTML = sechead("Milestones", {
-    why: "The stored difficulty is only a slot number, and a custom game keeps its own"
-      + " multipliers whatever that slot says, so the house rules below are the honest"
-      + " answer to how hard this game is. Only the rules that moved off stock are listed.",
-    quiet: h ? `career totals · playing on ${h.label.toLowerCase()}, ${h.harder} harder${
-        h.easier ? `, ${h.easier} easier` : ""}, started on ${fmt(h.startingMoney)}`
+    why: h ? "Easy, Normal and Hard are the game's presets, and a custom game sets each slider"
+      + " itself. The house rules below are the settings that differ from Normal; hover one"
+      + " for Normal's value." : "",
+    quiet: h ? `career totals · playing on ${playing}${
+        vsNormal ? `, ${vsNormal} than Normal` : ""}, started on ${fmt(h.startingMoney)}`
       : `career totals · playing on ${D.meta.difficulty}`,
   }) + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
     + `<p class="quiet">${num(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid</p>`
     + (moved.length ? `<div class="rules">${moved.map(r =>
-        `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Stock is ×${
-          r.neutral}, so this game is ${r.lean}.`)}">${r.name}<b>×${r.value}</b></span>`).join("")}</div>`
+        `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Normal is ${
+          setting(r.unit, r.normal)}, so this game is ${r.lean}.`)}">${r.name}<b>${
+          setting(r.unit, r.value)}</b></span>`).join("")}</div>`
       : "");
 }
 
