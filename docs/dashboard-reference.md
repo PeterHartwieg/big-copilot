@@ -98,7 +98,9 @@ the map.
     the game. Factory quantities use the existing full-rate model. Storage,
     transport limits and a custom buffer are not modelled in this first increment.
   - *Orders to set*: the weekly import order per depot and the daily top-up per factory,
-    opening on the ones that need a change.
+    opening on the ones that need a change. A column header sorts the rows inside every
+    depot or factory at once; the depots keep their own order, and *usual order* puts
+    the rows back.
     Current active contracts are added by destination and material, even before
     the first delivery; paused contracts do not count toward weekly supply.
     A factory supplied directly by an importer is checked against its weekly
@@ -117,7 +119,12 @@ the map.
     Estimates based only on past orders
     do not trigger stockout warnings; measured shipments or sales are required.
   - *Stock checks*: the five questions your logistics actually raise. Each view opens
-    with a one-line verdict and then lists only the rows that break it.
+    with a one-line verdict and then lists only the rows that break it. A column header
+    sorts the rows on screen: figures high to low first, names A to Z, and a second
+    click turns it round. A blank cell stays at the bottom either way, except an idle
+    holding with nothing flowing out, which sorts as the deepest cover. Each view keeps
+    its own order until *usual order*. A column that holds an action rather than a
+    figure, such as *Change*, does not sort.
   - *Goods flow*: the chain drawn as a flow diagram, with importers, factories,
     depots and shops, and line width for daily volume. Click a site for what it holds
     against what it has to cover.

@@ -175,6 +175,44 @@ const SHADE_LEAD = 46, SHADE_SIDE = 18;
 const shadeScore = (t, top) =>
   `color-mix(in oklab, var(--accent) ${Math.round(4 + Math.max(0, Math.min(1, t)) * (top - 4))}%, var(--surface))`;
 const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals, size and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
+/* Saved searches: named sets of filters, shared by every character because the
+   city and its neighbourhoods are the same in every save. A search carries the
+   filters and the sort, never the switch. Eight fit the panel. */
+const FINDER_SAVED_KEY = "ba_finder_saved_v1";
+const FINDER_SAVED_MAX = 8;
+const finderPick = fs => Object.fromEntries(Object.keys(finderDefaults()).filter(k => k !== "on").map(k => [k, fs[k]]));
+/* The list lives in memory, read from storage once and written back on every
+   change, so a browser that refuses to store still keeps this session's
+   searches. Another tab's changes arrive through the storage event. */
+let finderSavedList = null;
+function finderReadSaved(raw){
+  let list = null;
+  try{ list = JSON.parse(raw); }catch(e){}
+  return (Array.isArray(list) ? list : [])
+    .filter(s => s && typeof s.name === "string" && s.name.trim() && s.filters && typeof s.filters === "object")
+    .slice(0, FINDER_SAVED_MAX);
+}
+function finderSaved(){
+  if(!finderSavedList){
+    let raw = null;
+    try{ raw = localStorage.getItem(FINDER_SAVED_KEY); }catch(e){}
+    finderSavedList = finderReadSaved(raw);
+  }
+  return finderSavedList;
+}
+function finderKeepSaved(list){
+  finderSavedList = list;
+  try{ localStorage.setItem(FINDER_SAVED_KEY, JSON.stringify(list)); }catch(e){}
+}
+window.addEventListener("storage", e => {
+  if(e.key !== FINDER_SAVED_KEY) return;
+  finderSavedList = finderReadSaved(e.newValue);
+  cityMapPage?.update();
+});
+/* The column a search is sorted by, for its tooltip: two searches that differ
+   only in their sort should not read the same. */
+const FINDER_SORT_NAMES = {score:"score", traffic:"traffic", demand:"demand", m2:"m²", cap:"cap", deposit:"upfront"};
+const finderRange = (label, lo, hi) => lo && hi ? `${label} ${lo}–${hi}` : lo ? `${label} ≥ ${lo}` : hi ? `${label} ≤ ${hi}` : "";
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -340,6 +378,10 @@ class CityMapView {
       ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
       ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
+      ${row('Saved', `<span class="fsaved" role="group" aria-label="Saved searches"><span class="fsaved-list"></span><span class="fsaved-new">
+        <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="Name for this search"></label>
+        <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="Save these filters and the sort under a name. Every character shares the saved searches; a name already taken is replaced.">${ICON.plus}Save</button><button type="button" class="fdel" data-f="cancel" aria-label="Cancel saving" hidden>${ICON.x}</button></span>
+      </span></span>`, ' fsaves')}
     </div>`;
   }
   wireFinder(){
@@ -373,11 +415,43 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
       this.fs[input.dataset.f] = Math.max(0, +input.value || 0); changed();
     });
+    // The chips are drawn again whenever they change, so the row answers through
+    // handlers on itself rather than on each chip. Naming a search is explicit:
+    // Save or Enter keeps the name, the x or Escape drops it, and pressing
+    // anything else leaves the field as it is.
+    const saved = this.root.querySelector('.fsaved');
+    saved.addEventListener('click', e => {
+      const use = e.target.closest('[data-saved]'), drop = e.target.closest('[data-unsave]');
+      if(use) this.applySaved(use.dataset.saved);
+      else if(drop){
+        // A delete from the keyboard leaves the focus in the row, not on the page.
+        const keys = document.activeElement === drop;
+        this.unsaveSearch(drop.dataset.unsave); this.update();
+        if(keys) saved.querySelector('[data-saved], [data-f="save"]')?.focus();
+      }
+      else if(e.target.closest('[data-f="save"]')) this.naming() ? this.commitNaming(false) : this.openNaming();
+      else if(e.target.closest('[data-f="cancel"]')) this.closeNaming(true);
+    });
+    // The full-row warning depends on the name typed, so each keystroke redraws
+    // it; the chips themselves are only redrawn when one of them changed.
+    saved.addEventListener('input', e => { if(e.target.closest('[data-f="name"]')) this.paintSaved(); });
+    saved.addEventListener('keydown', e => {
+      if(!e.target.closest('[data-f="name"]')) return;
+      if(e.key === 'Enter'){ e.preventDefault(); this.commitNaming(true); }
+      if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); this.closeNaming(true); }
+    });
   }
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
+  sortKeys(cat = this.fs.cat){ return cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
+  /* The business types this save reports demand for in a category, by slug. */
+  catTypes(cat = this.fs.cat){
+    const types = new Map();
+    Object.values(premises()?.demand || {}).forEach(list =>
+      list.forEach(d => { if(d.category === cat) types.set(d.slug, d.type); }));
+    return types;
+  }
   clampSort(){
     const keys = this.sortKeys();
     if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.sortPicked = false; }
@@ -411,19 +485,14 @@ class CityMapView {
       // the category's own order.
       if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
-    this.fs.on = false;   // the switch is never restored, only the filters
+    this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
     const store = this.finderStore(); if(!store) return;
-    // Opening the Map is opening the map: the finder is something you ask for,
-    // so its switch is not remembered even though its filters are.
+    // The switch lasts the session, not the storage: it stays on across pages,
+    // and a new load opens the plain map with the filters where they were left.
     const {on, ...filters} = this.fs;
     try{ localStorage.setItem(store, JSON.stringify(filters)); }catch(e){}
-  }
-  /* The plain map, whatever the last visit left on. */
-  hideFinder(){
-    if(!this.fs.on) return;
-    this.fs.on = false; this.showAll = false; this.deselect(); this.update();
   }
   /* Opened from Today or a Growth cell: the finder comes on with a preset. */
   setFinder(preset = {}){
@@ -437,6 +506,169 @@ class CityMapView {
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
+  }
+  /* --- saved searches ---------------------------------------------------------
+     A saved search read against this save: a neighbourhood the save does not
+     have is dropped, a number that is not one is no limit, and anything else
+     unknown falls back to its default. paintControls settles the type and the
+     sort, as it does for any state. */
+  savedFilters(s){
+    const f = finderPick({...finderDefaults(), ...s.filters}), all = this.hoodList();
+    let hoods = Array.isArray(f.hoods) ? f.hoods.filter(h => all.includes(h)) : null;
+    if(hoods && hoods.length === all.length) hoods = null;
+    // A limit that is not a number, or one with no end to it, is no limit.
+    const num = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
+    const cat = FINDER_CATS.some(([c]) => c === f.cat) ? f.cat : "retail";
+    // The type and the sort fall back here exactly as paintControls makes the
+    // live ones fall back, so a search this save cannot honour in full still
+    // matches the list it opens.
+    const keys = this.sortKeys(cat), sort = keys.includes(f.sort) ? f.sort : keys[0];
+    return {...f, hoods, cat, sort, sortPicked: sort === keys[0] ? false : !!f.sortPicked,
+      type: this.catTypes(cat).has(f.type) ? f.type : "",
+      show: FINDER_SHOWS.some(([k]) => k === f.show) ? f.show : "rent",
+      minM2: num(f.minM2), maxM2: num(f.maxM2), minCap: num(f.minCap), maxCap: num(f.maxCap),
+      minTraffic: num(f.minTraffic)};
+  }
+  /* Two states are the same search when everything the player can see matches,
+     the sort included, since a search is saved with its sort. */
+  savedKey(f){
+    const {sortPicked, ...shown} = finderPick(f);
+    // For sale is always cheapest first: the sort it carries is not on screen,
+    // so two sale searches that read alike are alike.
+    if(shown.show === "sale") shown.sort = null;
+    return JSON.stringify({...shown, hoods: shown.hoods ? shown.hoods.slice().sort() : null});
+  }
+  savedOn(){
+    const now = this.savedKey(this.fs), list = finderSaved();
+    const same = list.map((s, i) => this.savedKey(this.savedFilters(s)) === now ? i : -1).filter(i => i >= 0);
+    // Two searches may hold the same filters under different names; the one the
+    // player reached for is the one that reads as current.
+    const used = list.findIndex(s => s.name === this.savedUsed);
+    return same.includes(used) ? used : same.length ? same[0] : -1;
+  }
+  applySaved(name){
+    const s = finderSaved().find(x => x.name === name); if(!s) return;
+    this.savedUsed = s.name;
+    const f = this.savedFilters(s);
+    // For sale is cheapest first, so a sale search has no sort to give: it is
+    // lit whatever the sort, and applying it leaves the sort as the player left it.
+    if(f.show === "sale"){ f.sort = this.fs.sort; f.sortPicked = this.fs.sortPicked; }
+    this.fs = {...this.fs, ...f, on:true};
+    this.clampSort();
+    this.showAll = false; this.deselect(); this.saveFinder(); this.update();
+  }
+  /* A name already in the list replaces that search in place: the exact name if
+     there is one, else the same name in any case, so names stay unique. */
+  saveSearch(name){
+    name = String(name || "").trim().slice(0, 24);
+    if(!name) return;
+    const list = finderSaved().slice(), exact = list.findIndex(s => s.name === name);
+    const at = exact >= 0 ? exact : list.findIndex(s => s.name.toLowerCase() === name.toLowerCase());
+    const entry = {name, filters: finderPick(this.fs)};
+    if(at >= 0) list[at] = entry;
+    else if(list.length < FINDER_SAVED_MAX) list.push(entry);
+    else return false;
+    this.savedUsed = name;
+    finderKeepSaved(list);
+    return true;
+  }
+  unsaveSearch(name){
+    if(this.savedUsed === name) this.savedUsed = null;
+    finderKeepSaved(finderSaved().filter(s => s.name !== name));
+  }
+  typeName(slug){
+    return slug ? Object.values(premises()?.demand || {}).flat().find(d => d.slug === slug)?.type || "" : "";
+  }
+  /* The name offered for a new search says what it looks for and where; one
+     already taken gets a number, so accepting the offer never replaces a search. */
+  savedName(){
+    const f = this.fs, taken = new Set(finderSaved().map(s => s.name.toLowerCase()));
+    const base = `${this.typeName(f.type) || FINDER_CATS.find(([c]) => c === f.cat)?.[1] || "Search"}${
+      f.hoods && f.hoods.length ? ` · ${f.hoods.map(hoodTag).join(" ")}` : ""}`.slice(0, 20);
+    let name = base;
+    for(let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} ${n}`;
+    return name;
+  }
+  savedTip(s){
+    const f = this.savedFilters(s), type = this.typeName(f.type);
+    return [`${FINDER_CATS.find(([c]) => c === f.cat)?.[1]}${type ? `: ${type}` : ""}`,
+      FINDER_SHOWS.find(([k]) => k === f.show)?.[1],
+      f.hoods ? f.hoods.map(hoodTag).join(" ") || "no neighbourhood" : "every neighbourhood",
+      finderRange("m²", f.minM2, f.maxM2), finderRange("cap", f.minCap, f.maxCap),
+      f.minTraffic ? `traffic ≥ ${f.minTraffic}` : "",
+      // For sale is always cheapest first, so only a ranked list names its sort.
+      f.show === "sale" ? "" : `by ${FINDER_SORT_NAMES[f.sort] || f.sort}`].filter(Boolean).join(" · ");
+  }
+  /* The name field is open while its label is shown; its value is the name. */
+  naming(){ const f = this.root.querySelector('.fsaved .fname'); return !!f && !f.hidden; }
+  openNaming(){
+    const field = this.root.querySelector('.fsaved .fname');
+    if(!field || finderSaved().length >= FINDER_SAVED_MAX) return;
+    const input = field.querySelector('input');
+    field.hidden = false;
+    this.root.querySelector('.fsaved [data-f="cancel"]').hidden = false;
+    this.root.querySelector('.fsaved .fsaved-new').classList.add('naming');
+    input.value = this.savedName();
+    input.focus(); input.select();
+  }
+  closeNaming(focus = false){
+    const field = this.root.querySelector('.fsaved .fname'); if(!field) return;
+    field.hidden = true; field.querySelector('input').value = "";
+    this.root.querySelector('.fsaved [data-f="cancel"]').hidden = true;
+    this.root.querySelector('.fsaved .fsaved-new').classList.remove('naming');
+    this.paintSaved();
+    if(focus) this.root.querySelector('.fsaved [data-f="save"]:not([hidden])')?.focus();
+  }
+  /* A name saves what is on screen now. From the keyboard the focus follows the
+     name to its chip, and so does a click whose save filled the row, since Save
+     then steps aside; otherwise a click on Save leaves the focus on Save. */
+  commitNaming(keys){
+    const input = this.root.querySelector('.fsaved [data-f="name"]'), name = input.value;
+    if(!name.trim()){ this.closeNaming(true); return; }
+    if(!this.saveSearch(name)){
+      // No room: the name stays where it is, and the field's own warning (drawn
+      // by paintSaved from the row as it stands) is shown to the reader now,
+      // since the focus never left the field and no tooltip would open by itself.
+      this.paintSaved();
+      input.focus();
+      if(typeof showTip === "function") showTip(input.closest('.fname'));
+      return;
+    }
+    this.closeNaming();
+    this.update();
+    // Save steps aside when that was the eighth, and a hidden button must not keep
+    // the focus, so the focus goes to the new chip whenever Save is gone.
+    const save = this.root.querySelector('.fsaved [data-f="save"]');
+    if(keys || save.hidden) this.root.querySelector('.fsaved .fsaved-list .fchip.on')?.focus();
+  }
+  /* A chip per search, filled while its filters are the ones on screen, each
+     with its own delete. Only the chips are drawn again, and only when one of
+     them changed; the Save controls beside them are never redrawn. */
+  paintSaved(){
+    const host = this.root.querySelector('.fsaved-list'); if(!host) return;
+    const list = finderSaved(), on = this.savedOn(), full = list.length >= FINDER_SAVED_MAX, naming = this.naming();
+    // Save steps aside at eight, unless a name is already being typed.
+    this.root.querySelector('.fsaved [data-f="save"]').hidden = full && !naming;
+    /* A field open on a full row (another tab took the last place) warns only
+       about a name that would need a new place: a name already saved, in any
+       case, replaces that search and is fine, and an empty one saves nothing.
+       The warning is worked out afresh on every paint, and a tooltip still
+       showing it is put away the moment it stops being true. */
+    const field = this.root.querySelector('.fsaved .fname'), input = field.querySelector('input');
+    const typed = input.value.trim().toLowerCase();
+    const warn = full && naming && !!typed && !list.some(s => s.name.toLowerCase() === typed);
+    field.classList.toggle('full', warn);
+    if(warn){
+      field.dataset.tip = "Eight searches at most. Delete one to save a new name, or reuse a name to replace that search.";
+      input.setAttribute('aria-invalid', 'true');
+    } else {
+      delete field.dataset.tip; input.removeAttribute('aria-invalid');
+      if(typeof hideTip === "function") hideTip(field);
+    }
+    const sig = JSON.stringify([list.map(s => [s.name, this.savedTip(s)]), on]);
+    if(host === this.savedHost && sig === this.savedSig) return;
+    this.savedHost = host; this.savedSig = sig;
+    host.innerHTML = list.map((s, i) => `<span class="fsave"><button type="button" class="fchip${i === on ? ' on' : ''}" data-saved="${attr(s.name)}" aria-pressed="${i === on}" data-tip="${attr(this.savedTip(s))}">${mapText(s.name)}</button><button type="button" class="fdel" data-unsave="${attr(s.name)}" aria-label="${attr(`Delete the saved search ${s.name}`)}">${ICON.x}</button></span>`).join('');
   }
   /* The type demand this row is scored on: the chosen type, or the strongest
      type of the category in that neighbourhood when "any type" is picked. */
@@ -638,8 +870,7 @@ class CityMapView {
     this.root.querySelector('.filters .why').dataset.tip = `${FINDER_WHY} ${rentNote()}`;
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
-    const types = new Map();
-    Object.values(P.demand).forEach(list => list.forEach(d => { if(d.category === this.fs.cat) types.set(d.slug, d.type); }));
+    const types = this.catTypes(this.fs.cat);
     const options = [...types].sort((a, b) => a[1].localeCompare(b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
     select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
@@ -663,6 +894,7 @@ class CityMapView {
         ? P.forSale.filter(s => this.saleKind(s)).length : counts[key];
       mark(chip, this.fs.show === key);
     });
+    this.paintSaved();
   }
   /* Full screen takes the whole map box (stage and panel); the camera refits
      when the size changes, keeping the selection. */
@@ -1039,6 +1271,7 @@ class CityMapView {
   resetCharacter(){
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     this.fsCharacter = undefined; this.fs = finderDefaults(); this.showAll = false;
+    this.savedUsed = null; this.closeNaming();
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
       this.root.querySelectorAll('.lay').forEach(c => { c.classList.toggle('off', !this.layers[c.dataset.l]); c.setAttribute('aria-pressed', String(this.layers[c.dataset.l])); });
@@ -1046,10 +1279,11 @@ class CityMapView {
   }
 }
 function showCityMap(){
-  // A fresh view starts plain; one that is already here is put back to plain,
-  // because the Map tab is the map. openFinder() switches it on afterwards.
+  // A fresh view starts plain. One that is already here keeps the finder as the
+  // player left it, so a trip to another page and back finds the list still up.
+  // openFinder() switches it on afterwards.
   if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage'));
-  else { cityMapPage.hideFinder(); cityMapPage.paintView(); }
+  else cityMapPage.paintView();
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
    category, a type and a neighbourhood already chosen. */

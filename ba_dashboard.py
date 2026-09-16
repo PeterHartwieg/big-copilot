@@ -5079,8 +5079,12 @@ section,.sitehead{scroll-margin-top:116px}
    growth grid's sortable columns and empty cells. ============================ */
 thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
-thead th svg.sort{width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
+thead th svg.sort{display:inline-block; width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
 thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
+/* A Supply header sorts from a button inside it, so the keyboard reaches it
+   and the cell stays a column header. The button takes the header's type. */
+thead th .supply-sort{all:unset;cursor:pointer}
+thead th .supply-sort:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
 tr.kid.on td{background:var(--accent-soft)}
 .seg select.sitepick{appearance:none; -webkit-appearance:none; font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif; color:var(--ground); background:var(--ink); border:0; border-radius:5px; padding:6px 12px; cursor:pointer; max-width:260px}
 .seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
@@ -6130,6 +6134,9 @@ let rhythmView="customers";
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
 let showAllStock = false, showAllShelves = false, showRhythmCards = false;
 let showAllProducts = false;
+/* Each Supply table's own order as {col, dir}: one per Checks view, one for
+   the imports, one for the top-ups. None is the order the view ranks by. */
+let supplySort = {};
 /* Which kinds of "Needs attention" finding to show, set by buildAlertSettingsPanel()
    before the first render. */
 let alertGroupPrefs = {};
@@ -6489,6 +6496,69 @@ function drawFlowDetail(){
 /* --- supply chain ---------------------------------------------------- */
 // Match the missing-plan chips, independently of the days-of-cover grade.
 const stockUnplanned = r => r.pressure === null || r.status === "unplanned";
+/* Sortable Supply tables. A table's columns are [label, key, class, tip]:
+   key reads what the column sorts on, and a column without one does not
+   sort. A left-aligned column is a name and reads A to Z first; a number
+   reads high to low first. A second click turns the column round, and
+   "usual order" puts the rows back the way the view ranks them. */
+const bySite = r => D.businesses[r.s] ? shortName(D.businesses[r.s]) : null;
+function supplySorted(rows, cols, state){
+  const key = state && cols[state.col]?.[1];
+  if(!key) return rows;
+  // A cell with nothing to sort on stays at the bottom whichever way the
+  // column points: it is not the smallest value, it is no value at all. The
+  // sort is stable, so equal rows keep the usual order among themselves.
+  return rows.slice().sort((a, b) => {
+    const x = key(a), y = key(b);
+    if(x == null || y == null) return (x == null) - (y == null);
+    return (typeof x === "string" ? x.localeCompare(y) : (x > y) - (x < y)) * state.dir;
+  });
+}
+function supplyHead(cols, state){
+  return `<thead><tr>${cols.map(([label, key, cls, tip], i) => {
+    const on = !!key && state?.col === i, dir = on && state.dir < 0 ? "desc" : "asc";
+    const sort = key ? ` data-i="${i}" aria-sort="${on ? (dir === "desc" ? "descending" : "ascending") : "none"}"${
+      on ? ` data-dir="${dir}"` : ""}` : "";
+    return `<th class="${cls || ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}${sort}>${key
+      ? `<button type="button" class="supply-sort">${label}${on ? SORT_ICON : ""}</button>` : label}</th>`;
+  }).join("")}</tr></thead>`;
+}
+/* What order the rows are in, and the way back to the usual one. */
+function supplySortNote(cols, state){
+  const col = state && cols[state.col];
+  if(!col || !col[1]) return "";
+  const way = col[2] === "l" ? (state.dir > 0 ? "A to Z" : "Z to A") : (state.dir < 0 ? "high to low" : "low to high");
+  return `<span class="quiet">Sorted by ${col[0]}, ${way} · <a class="link" href="#" data-usual>usual order</a></span>`;
+}
+/* The headers and the note under host share one order, kept in supplySort[id].
+   A table redrawn from the keyboard hands focus back to the header it left. */
+function wireSupplySort(host, id, cols, redraw){
+  host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
+    const i = +th.dataset.i, s = supplySort[id];
+    supplySort[id] = s?.col === i ? {col: i, dir: -s.dir} : {col: i, dir: cols[i][2] === "l" ? 1 : -1};
+    const button = th.querySelector("button.supply-sort");
+    const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
+    redraw();
+    if(at >= 0) host.querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
+  });
+  host.querySelectorAll("[data-usual]").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    // Only a keyboard activation moves the focus: a click reports how many
+    // presses made it, a key reports none, and a reader who clicked the note
+    // has not asked to be carried back up to the table.
+    const at = e.detail === 0 ? supplySort[id]?.col : null;
+    supplySort[id] = null; redraw();
+    if(at == null) return;
+    /* Orders repeats its header once per group, so the copy to focus is the one
+       whose <details> is open (a folded group's contents still report a layout
+       parent, so nothing short of that test finds it). With every group folded
+       the focus goes to the first group's own summary instead of the page. Focus
+       is not held back from scrolling: a header out of view is brought in. */
+    ([...host.querySelectorAll(`thead th[data-i="${at}"] button`)]
+      .find(b => !b.closest("details:not([open])"))
+      || host.querySelector("details.supply-location > summary"))?.focus();
+  });
+}
 const SUPPLY_VIEWS = {
   shops: {
     label: "Before the drop",
@@ -6515,8 +6585,9 @@ const SUPPLY_VIEWS = {
     /* Under an all-clear the tightest shelves still get read out, gauge and
        all, so the verdict has something to stand on. */
     tightest: rows => rows.filter(r => r.pressure !== null).sort((a, b) => b.pressure - a.pressure),
-    head: `<th class="l">Shop</th><th class="l">Product</th><th>Sells / day</th>
-           <th>Busiest day</th><th>Daily top-up</th><th>Pressure</th><th>On hand</th>`,
+    cols: [["Shop", bySite, "l"], ["Product", r => r.item, "l"], ["Sells / day", r => r.sold],
+           ["Busiest day", r => r.peakSold], ["Daily top-up", r => r.target || null],
+           ["Pressure", r => r.pressure], ["On hand", r => r.stock]],
     rows: () => D.supply.shops,
     row: r => `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
@@ -6563,9 +6634,11 @@ const SUPPLY_VIEWS = {
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
     tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => (a.stockCover ?? a.cover) - (b.stockCover ?? b.cover)),
-    head: `<th class="l">Site</th><th class="l">Product</th><th>On hand</th>
-           <th>Uses / day</th><th>Busiest day</th><th>Runs out</th><th>Weekly order</th>
-           <th>A week takes</th>`,
+    // The chip under Runs out names a weekday; the days of cover behind it sort.
+    cols: [["Site", bySite, "l"], ["Product", r => r.item, "l"], ["On hand", r => r.stock],
+           ["Uses / day", r => r.perDay], ["Busiest day", r => r.peakPerDay],
+           ["Runs out", r => r.cover ?? null], ["Weekly order", r => r.weekly],
+           ["A week takes", r => r.basis === "order" ? null : r.weekNeed]],
     rows: () => D.supply.imports,
     row: r => {
       const due = r.due;
@@ -6607,8 +6680,10 @@ const SUPPLY_VIEWS = {
             deepest.weeks} weeks` : ""}.`;
     },
     keep: r => r.dead || r.weeks >= 5,
-    head: `<th class="l">Site</th><th class="l">Product</th><th>Units held</th>
-           <th>Out / week</th><th>Weeks of supply</th><th>Top-up target</th>`,
+    // Nothing flowing out is cover without end: the deepest there is.
+    cols: [["Site", bySite, "l"], ["Product", r => r.item, "l"], ["Units held", r => r.stock],
+           ["Out / week", r => r.perWeek || null], ["Weeks of supply", r => r.weeks ?? Infinity],
+           ["Top-up target", r => r.target || null]],
     rows: () => D.supply.idle,
     row: r => `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
@@ -6640,8 +6715,11 @@ const SUPPLY_VIEWS = {
     },
     keep: r => r.unnamed || r.piling || (r.missing && r.missing.length)
               || (r.fullWeek && r.hoursWeek < r.fullWeek),
-    head: `<th class="l">Factory</th><th class="l">Line</th><th>Machines</th><th>Staffed</th>
-           <th>Makes / day</th><th>Ships / day</th><th>Held</th><th>Top-up out</th>`,
+    // A line with no recipe has only its machines and its roster to go by.
+    cols: [["Factory", bySite, "l"], ["Line", r => r.unnamed ? r.workstation : r.item, "l"],
+           ["Machines", r => r.machines], ["Staffed", r => r.fullWeek ? Math.round(r.hoursWeek / r.fullWeek * 100) : null],
+           ["Makes / day", r => r.unnamed ? null : r.makes], ["Ships / day", r => r.unnamed ? null : r.ships],
+           ["Held", r => r.unnamed ? null : r.stock], ["Top-up out", r => r.unnamed ? null : r.toCity || null]],
     rows: () => factoryView().sites.flatMap(s => [
       ...s.lines.map(l => ({...l, s: s.s})),
       ...s.unnamed.map(u => ({...u, s: s.s, unnamed: true}))]),
@@ -6695,9 +6773,10 @@ const SUPPLY_VIEWS = {
         worst ? `; largest ${worst.item} at ${mapRef(D.businesses[worst.s])}` : ""}.`;
     },
     keep: r => r.level !== "ok",
-    head: `<th class="l">Factory</th><th class="l">Input</th><th>Needs / day</th>
-           <th>Needs / week</th><th>Daily top-up</th><th>Arrives / day</th>
-           <th>Import / week</th><th class="l">Change</th>`,
+    cols: [["Factory", bySite, "l"], ["Input", r => r.item, "l"], ["Needs / day", r => r.perDay],
+           ["Needs / week", r => r.perWeek], ["Daily top-up", r => r.directImport ? null : r.target || null],
+           ["Arrives / day", r => r.known ? r.arrives : null], ["Import / week", r => r.importWeekly],
+           ["Change", null, "l"]],
     rows: () => factoryView().sites.flatMap(s => s.needs.map(n => ({...n, s: s.s}))),
     row: r => {
       const depot = r.from !== null ? mapRef(D.businesses[r.from]) : "a depot";
@@ -7725,7 +7804,10 @@ function drawStock(){
   const tight = !showAllStock && v.tightest && worth.length < TIGHT
     ? v.tightest(all.filter(r => !worth.includes(r))).slice(0, TIGHT - worth.length) : [];
   const shown = worth.concat(tight);
-  const rows = showAllStock ? all : shown;
+  // A sort reorders the rows on screen and runs before the 40-row cap, so
+  // "show all" under a sort is the true top 40 by that column.
+  const sortId = `stock:${stockView}`, order = supplySort[sortId];
+  const rows = supplySorted(showAllStock ? all : shown, v.cols, order);
   const note = v.note();
   $("stockHead").innerHTML = sechead("Stock checks", {why: note || null,
     aside: `<span class="seg" id="stockTools"></span>`});
@@ -7742,18 +7824,22 @@ function drawStock(){
     ? `Nothing here needs reading: ${all.length === 1 ? "the one row is" : `all ${all.length} rows are`} inside their limits.`
     : "";
   $("stock").innerHTML = rows.length
-    ? `<thead><tr>${v.head}</tr></thead>
+    ? `${supplyHead(v.cols, order)}
        <tbody>${rows.slice(0, 40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
     : nothing ? `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>` : "";
   const more = $("stockMore");
-  more.innerHTML = all.length > shown.length
+  const toggle = all.length > shown.length
     ? (showAllStock
         ? `<a class="link" href="#" id="stockToggle">just the ${shown.length} worth reading</a>`
         : `${all.length - shown.length} more &nbsp;<a class="link" href="#" id="stockToggle">show all ${all.length}</a>`)
-      + (rows.length > 40 ? ` &nbsp;first 40 shown` : "")
     : "";
+  // The table paints 40 rows at most, with or without a toggle beside it, so it
+  // says when it is holding some back: every other row here is one to read.
+  const capped = rows.length > 40 ? `first 40 of ${rows.length} shown` : "";
+  more.innerHTML = [rows.length ? supplySortNote(v.cols, order) : "", toggle, capped].filter(Boolean).join(" &nbsp;·&nbsp; ");
   more.hidden = !more.innerHTML;
   if($("stockToggle")) $("stockToggle").onclick = e => { e.preventDefault(); showAllStock = !showAllStock; drawStock(); wireAll(); };
+  wireSupplySort($("secStock"), sortId, v.cols, () => { drawStock(); wireAll(); });
   document.querySelectorAll("#stock select.linepick").forEach(sel => {
     sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
   });
@@ -8087,19 +8173,26 @@ function drawLogistics(){
       <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
       <td>${set(ceil100(r.week))}${up("add")}</td>
       <td>—</td></tr>`;
-  const importHead = `<thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
-      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
+  /* Rows sort inside their depot; the depots keep their own order. A row on no
+     plan has nothing ordered and nothing held, so it shares the columns. What
+     to set an order to is an action, not a figure, and does not sort. */
+  const importCols = [["Material", r => r.item, "l"],
+    ["Used / week", r => (r.total ?? r.week) || null, "", "What leaves the depot in a week, factory lines and shops together; hover a figure for the split"],
+    ["Order now", r => r.paused ? r.pausedWeekly : r.current ?? null], ["Set order to", null],
+    ["At depot", r => r.stock ?? null]];
+  const importOrder = supplySort.imports, importHead = supplyHead(importCols, importOrder);
   const importTable = shown.map((d, i) => supplyLocation("imports", d.s, d.rows.length,
-    `<div class="scrollx"><table>${importHead}<tbody>${d.rows.map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
+    `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(d.rows, importCols, importOrder).map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
     + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
-      `<div class="scrollx"><table>${importHead}<tbody>${looseRows.map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
+      `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(looseRows, importCols, importOrder).map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
     : !short && !tight && !pausedCount && !looseRows.length ? check(importAll, "cover what leaves")
     : {after: (short ? chipHtml("bad", `${short} short`) : "")
       + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
       + (pausedCount ? chipHtml("warn", `${pausedCount} paused`) : "")
       + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
-  $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText}) + importTable;
+  $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText,
+    aside: importTable ? supplySortNote(importCols, importOrder) : ""}) + importTable;
   seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
     () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
 
@@ -8130,19 +8223,22 @@ function drawLogistics(){
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
         : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
   };
-  const topupHead = `<thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
-      <th class="l">From</th><th>Arrives / day</th></tr></thead>`;
+  const topupCols = [["Material", r => r.item, "l"], ["Eats / day", r => r.dailyNeed ?? r.perDay],
+    ["Top-up now", r => r.target || null], ["Set top-up to", null], ["From", null, "l"],
+    ["Arrives / day", r => r.known ? r.arrives : null]];
+  const topupOrder = supplySort.topups, topupHead = supplyHead(topupCols, topupOrder);
   const topupTable = sites.map((x, i) => {
     const site = f.sites.find(s => s.s === x.s);
     return supplyLocation("topups", x.s, x.rows.length,
-      `<div class="scrollx"><table>${topupHead}<tbody>${x.rows.map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
+      `<div class="scrollx"><table>${topupHead}<tbody>${supplySorted(x.rows, topupCols, topupOrder).map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
   }).join("");
   const topupState = !allSites.length ? {quiet: f.sites.length ? "No daily factory top-ups needed" : "No factory line to feed"}
     : !topShort && !topStalled ? check(topAll, "cover their day")
     : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
       + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "")};
   $("topupPlan").innerHTML = sechead("Daily top-ups", {...topupState,
-    aside: allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : ""})
+    aside: (topupTable ? supplySortNote(topupCols, topupOrder) : "")
+      + (allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : "")})
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
@@ -8150,6 +8246,9 @@ function drawLogistics(){
     D.supply.shops || [], D.supply.imports || [], D.businesses), f);
   wireSupplyLocations($("importPlan"));
   wireSupplyLocations($("topupPlan"));
+  const redraw = () => { drawLogistics(); wireAll(); };
+  wireSupplySort($("importPlan"), "imports", importCols, redraw);
+  wireSupplySort($("topupPlan"), "topups", topupCols, redraw);
 }
 
 /* --- market demand ----------------------------------------------------

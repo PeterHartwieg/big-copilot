@@ -1,5 +1,17 @@
 [
   {
+    "pr": 34,
+    "date": "2026-09-16",
+    "title": "Save your location searches",
+    "summary": "The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back."
+  },
+  {
+    "pr": 34,
+    "date": "2026-09-16",
+    "title": "Sort the Supply tables",
+    "summary": "Click a column header in Supply's stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick \"usual order\" to put the rows back. Imports and top-ups sort within each depot or factory."
+  },
+  {
     "pr": 32,
     "date": "2026-09-15",
     "title": "Sort and filter premises by size",

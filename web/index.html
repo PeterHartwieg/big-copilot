@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=692f38c3dc">
+<link rel="stylesheet" href="community.css?v=19d7e30bc6">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -74,6 +74,28 @@
 .frow[hidden]{display:none}
 .frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
+/* Saved searches: each chip carries its own delete, joined to it on the right;
+   Save opens a name field beside it, with an x to drop the name. */
+.fsaved{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}
+/* The row can run to two lines; its label stays level with the first. */
+.frow.fsaves{align-items:flex-start}
+.frow.fsaves .lab{line-height:26px}
+/* The chips and the Save controls sit in one wrapping row; only the chips are
+   drawn again, so each part is its own element laid out as if it were not. */
+.fsaved-list,.fsaved-new{display:contents}
+.fsaved [hidden]{display:none}
+.fsave{display:inline-flex}
+.fsave .fchip{border-radius:6px 0 0 6px}
+.fsaved-new:not(.naming) .fnew{border-radius:6px}
+.fdel{box-sizing:border-box;width:22px;height:26px;padding:0;display:grid;place-items:center;
+  border:1px solid var(--rule);border-left:0;border-radius:0 6px 6px 0;background:none;color:var(--ink-3);
+  cursor:pointer;appearance:none;-webkit-appearance:none;transition:background .15s,border-color .15s,color .15s}
+.fdel:hover{color:var(--ink);border-color:var(--ink-3)}
+.fsave .fchip.on + .fdel{background:var(--accent-soft);border-color:var(--accent)}
+.fdel svg,.fnew svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.fchip.fname{cursor:text;border-color:var(--accent)}
+.fchip.fname.full{border-color:var(--warn)}
+.fchip.fname input{width:150px;border:0;background:none;color:var(--ink);font:inherit;outline:none;padding:0}
 .fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
@@ -260,12 +282,18 @@ body.map-modal-open{overflow:hidden}
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
  .citymap.narrow .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
+ /* The filters alone can outgrow a phone's panel, so there the panel scrolls
+    as one piece and the results follow the filters. */
+ .citymap.narrow .places{overflow-y:auto;overscroll-behavior:contain}
+ .citymap.narrow .places .list{flex:none;overflow:visible}
  .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px 50px}
  .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
- .fchip{height:32px}
- .fchip.num input{font-size:16px}
+ .fchip,.fdel{height:32px}
+ .fdel{width:30px}
+ .frow.fsaves .lab{line-height:32px}
+ .fchip.num input,.fchip.fname input{font-size:16px}
  .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
  .srch,.srch:focus-within{width:100%}
@@ -752,8 +780,12 @@ section,.sitehead{scroll-margin-top:116px}
    growth grid's sortable columns and empty cells. ============================ */
 thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
-thead th svg.sort{width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
+thead th svg.sort{display:inline-block; width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
 thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
+/* A Supply header sorts from a button inside it, so the keyboard reaches it
+   and the cell stays a column header. The button takes the header's type. */
+thead th .supply-sort{all:unset;cursor:pointer}
+thead th .supply-sort:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
 tr.kid.on td{background:var(--accent-soft)}
 .seg select.sitepick{appearance:none; -webkit-appearance:none; font:500 12.5px Archivo,"Helvetica Neue",Arial,sans-serif; color:var(--ground); background:var(--ink); border:0; border-radius:5px; padding:6px 12px; cursor:pointer; max-width:260px}
 .seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
@@ -1886,7 +1918,7 @@ details.help[open] summary::after{content:"\2013"}
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
-  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves. */
@@ -1930,8 +1962,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "692f38c3dc";</script>
-<script>window.LEDGER_RELEASE = {"version":"692f38c3dc","latest":{"pr":32,"date":"2026-09-15","title":"Sort and filter premises by size","summary":"The location finder shows each building's floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m²."}};</script>
+<script>window.LEDGER_BUILD = "19d7e30bc6";</script>
+<script>window.LEDGER_RELEASE = {"version":"19d7e30bc6","latest":{"pr":34,"date":"2026-09-16","title":"Save your location searches","summary":"The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2000,8 +2032,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=692f38c3dc"></script>
-<script src="community.js?v=692f38c3dc"></script>
+<script src="app.js?v=19d7e30bc6"></script>
+<script src="community.js?v=19d7e30bc6"></script>
 
 <script>
 
@@ -2175,6 +2207,9 @@ let rhythmView="customers";
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
 let showAllStock = false, showAllShelves = false, showRhythmCards = false;
 let showAllProducts = false;
+/* Each Supply table's own order as {col, dir}: one per Checks view, one for
+   the imports, one for the top-ups. None is the order the view ranks by. */
+let supplySort = {};
 /* Which kinds of "Needs attention" finding to show, set by buildAlertSettingsPanel()
    before the first render. */
 let alertGroupPrefs = {};
@@ -2534,6 +2569,69 @@ function drawFlowDetail(){
 /* --- supply chain ---------------------------------------------------- */
 // Match the missing-plan chips, independently of the days-of-cover grade.
 const stockUnplanned = r => r.pressure === null || r.status === "unplanned";
+/* Sortable Supply tables. A table's columns are [label, key, class, tip]:
+   key reads what the column sorts on, and a column without one does not
+   sort. A left-aligned column is a name and reads A to Z first; a number
+   reads high to low first. A second click turns the column round, and
+   "usual order" puts the rows back the way the view ranks them. */
+const bySite = r => D.businesses[r.s] ? shortName(D.businesses[r.s]) : null;
+function supplySorted(rows, cols, state){
+  const key = state && cols[state.col]?.[1];
+  if(!key) return rows;
+  // A cell with nothing to sort on stays at the bottom whichever way the
+  // column points: it is not the smallest value, it is no value at all. The
+  // sort is stable, so equal rows keep the usual order among themselves.
+  return rows.slice().sort((a, b) => {
+    const x = key(a), y = key(b);
+    if(x == null || y == null) return (x == null) - (y == null);
+    return (typeof x === "string" ? x.localeCompare(y) : (x > y) - (x < y)) * state.dir;
+  });
+}
+function supplyHead(cols, state){
+  return `<thead><tr>${cols.map(([label, key, cls, tip], i) => {
+    const on = !!key && state?.col === i, dir = on && state.dir < 0 ? "desc" : "asc";
+    const sort = key ? ` data-i="${i}" aria-sort="${on ? (dir === "desc" ? "descending" : "ascending") : "none"}"${
+      on ? ` data-dir="${dir}"` : ""}` : "";
+    return `<th class="${cls || ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}${sort}>${key
+      ? `<button type="button" class="supply-sort">${label}${on ? SORT_ICON : ""}</button>` : label}</th>`;
+  }).join("")}</tr></thead>`;
+}
+/* What order the rows are in, and the way back to the usual one. */
+function supplySortNote(cols, state){
+  const col = state && cols[state.col];
+  if(!col || !col[1]) return "";
+  const way = col[2] === "l" ? (state.dir > 0 ? "A to Z" : "Z to A") : (state.dir < 0 ? "high to low" : "low to high");
+  return `<span class="quiet">Sorted by ${col[0]}, ${way} · <a class="link" href="#" data-usual>usual order</a></span>`;
+}
+/* The headers and the note under host share one order, kept in supplySort[id].
+   A table redrawn from the keyboard hands focus back to the header it left. */
+function wireSupplySort(host, id, cols, redraw){
+  host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
+    const i = +th.dataset.i, s = supplySort[id];
+    supplySort[id] = s?.col === i ? {col: i, dir: -s.dir} : {col: i, dir: cols[i][2] === "l" ? 1 : -1};
+    const button = th.querySelector("button.supply-sort");
+    const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
+    redraw();
+    if(at >= 0) host.querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
+  });
+  host.querySelectorAll("[data-usual]").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    // Only a keyboard activation moves the focus: a click reports how many
+    // presses made it, a key reports none, and a reader who clicked the note
+    // has not asked to be carried back up to the table.
+    const at = e.detail === 0 ? supplySort[id]?.col : null;
+    supplySort[id] = null; redraw();
+    if(at == null) return;
+    /* Orders repeats its header once per group, so the copy to focus is the one
+       whose <details> is open (a folded group's contents still report a layout
+       parent, so nothing short of that test finds it). With every group folded
+       the focus goes to the first group's own summary instead of the page. Focus
+       is not held back from scrolling: a header out of view is brought in. */
+    ([...host.querySelectorAll(`thead th[data-i="${at}"] button`)]
+      .find(b => !b.closest("details:not([open])"))
+      || host.querySelector("details.supply-location > summary"))?.focus();
+  });
+}
 const SUPPLY_VIEWS = {
   shops: {
     label: "Before the drop",
@@ -2560,8 +2658,9 @@ const SUPPLY_VIEWS = {
     /* Under an all-clear the tightest shelves still get read out, gauge and
        all, so the verdict has something to stand on. */
     tightest: rows => rows.filter(r => r.pressure !== null).sort((a, b) => b.pressure - a.pressure),
-    head: `<th class="l">Shop</th><th class="l">Product</th><th>Sells / day</th>
-           <th>Busiest day</th><th>Daily top-up</th><th>Pressure</th><th>On hand</th>`,
+    cols: [["Shop", bySite, "l"], ["Product", r => r.item, "l"], ["Sells / day", r => r.sold],
+           ["Busiest day", r => r.peakSold], ["Daily top-up", r => r.target || null],
+           ["Pressure", r => r.pressure], ["On hand", r => r.stock]],
     rows: () => D.supply.shops,
     row: r => `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
@@ -2608,9 +2707,11 @@ const SUPPLY_VIEWS = {
     },
     keep: r => r.level !== "ok" || r.orderFit !== "ok" || r.coverFit !== "ok",
     tightest: rows => rows.filter(r => r.cover !== null && r.cover !== undefined).sort((a, b) => (a.stockCover ?? a.cover) - (b.stockCover ?? b.cover)),
-    head: `<th class="l">Site</th><th class="l">Product</th><th>On hand</th>
-           <th>Uses / day</th><th>Busiest day</th><th>Runs out</th><th>Weekly order</th>
-           <th>A week takes</th>`,
+    // The chip under Runs out names a weekday; the days of cover behind it sort.
+    cols: [["Site", bySite, "l"], ["Product", r => r.item, "l"], ["On hand", r => r.stock],
+           ["Uses / day", r => r.perDay], ["Busiest day", r => r.peakPerDay],
+           ["Runs out", r => r.cover ?? null], ["Weekly order", r => r.weekly],
+           ["A week takes", r => r.basis === "order" ? null : r.weekNeed]],
     rows: () => D.supply.imports,
     row: r => {
       const due = r.due;
@@ -2652,8 +2753,10 @@ const SUPPLY_VIEWS = {
             deepest.weeks} weeks` : ""}.`;
     },
     keep: r => r.dead || r.weeks >= 5,
-    head: `<th class="l">Site</th><th class="l">Product</th><th>Units held</th>
-           <th>Out / week</th><th>Weeks of supply</th><th>Top-up target</th>`,
+    // Nothing flowing out is cover without end: the deepest there is.
+    cols: [["Site", bySite, "l"], ["Product", r => r.item, "l"], ["Units held", r => r.stock],
+           ["Out / week", r => r.perWeek || null], ["Weeks of supply", r => r.weeks ?? Infinity],
+           ["Top-up target", r => r.target || null]],
     rows: () => D.supply.idle,
     row: r => `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
@@ -2685,8 +2788,11 @@ const SUPPLY_VIEWS = {
     },
     keep: r => r.unnamed || r.piling || (r.missing && r.missing.length)
               || (r.fullWeek && r.hoursWeek < r.fullWeek),
-    head: `<th class="l">Factory</th><th class="l">Line</th><th>Machines</th><th>Staffed</th>
-           <th>Makes / day</th><th>Ships / day</th><th>Held</th><th>Top-up out</th>`,
+    // A line with no recipe has only its machines and its roster to go by.
+    cols: [["Factory", bySite, "l"], ["Line", r => r.unnamed ? r.workstation : r.item, "l"],
+           ["Machines", r => r.machines], ["Staffed", r => r.fullWeek ? Math.round(r.hoursWeek / r.fullWeek * 100) : null],
+           ["Makes / day", r => r.unnamed ? null : r.makes], ["Ships / day", r => r.unnamed ? null : r.ships],
+           ["Held", r => r.unnamed ? null : r.stock], ["Top-up out", r => r.unnamed ? null : r.toCity || null]],
     rows: () => factoryView().sites.flatMap(s => [
       ...s.lines.map(l => ({...l, s: s.s})),
       ...s.unnamed.map(u => ({...u, s: s.s, unnamed: true}))]),
@@ -2740,9 +2846,10 @@ const SUPPLY_VIEWS = {
         worst ? `; largest ${worst.item} at ${mapRef(D.businesses[worst.s])}` : ""}.`;
     },
     keep: r => r.level !== "ok",
-    head: `<th class="l">Factory</th><th class="l">Input</th><th>Needs / day</th>
-           <th>Needs / week</th><th>Daily top-up</th><th>Arrives / day</th>
-           <th>Import / week</th><th class="l">Change</th>`,
+    cols: [["Factory", bySite, "l"], ["Input", r => r.item, "l"], ["Needs / day", r => r.perDay],
+           ["Needs / week", r => r.perWeek], ["Daily top-up", r => r.directImport ? null : r.target || null],
+           ["Arrives / day", r => r.known ? r.arrives : null], ["Import / week", r => r.importWeekly],
+           ["Change", null, "l"]],
     rows: () => factoryView().sites.flatMap(s => s.needs.map(n => ({...n, s: s.s}))),
     row: r => {
       const depot = r.from !== null ? mapRef(D.businesses[r.from]) : "a depot";
@@ -3770,7 +3877,10 @@ function drawStock(){
   const tight = !showAllStock && v.tightest && worth.length < TIGHT
     ? v.tightest(all.filter(r => !worth.includes(r))).slice(0, TIGHT - worth.length) : [];
   const shown = worth.concat(tight);
-  const rows = showAllStock ? all : shown;
+  // A sort reorders the rows on screen and runs before the 40-row cap, so
+  // "show all" under a sort is the true top 40 by that column.
+  const sortId = `stock:${stockView}`, order = supplySort[sortId];
+  const rows = supplySorted(showAllStock ? all : shown, v.cols, order);
   const note = v.note();
   $("stockHead").innerHTML = sechead("Stock checks", {why: note || null,
     aside: `<span class="seg" id="stockTools"></span>`});
@@ -3787,18 +3897,22 @@ function drawStock(){
     ? `Nothing here needs reading: ${all.length === 1 ? "the one row is" : `all ${all.length} rows are`} inside their limits.`
     : "";
   $("stock").innerHTML = rows.length
-    ? `<thead><tr>${v.head}</tr></thead>
+    ? `${supplyHead(v.cols, order)}
        <tbody>${rows.slice(0, 40).map(r => `<tr>${v.row(r)}</tr>`).join("")}</tbody>`
     : nothing ? `<tbody><tr><td class="l quiet">${nothing}</td></tr></tbody>` : "";
   const more = $("stockMore");
-  more.innerHTML = all.length > shown.length
+  const toggle = all.length > shown.length
     ? (showAllStock
         ? `<a class="link" href="#" id="stockToggle">just the ${shown.length} worth reading</a>`
         : `${all.length - shown.length} more &nbsp;<a class="link" href="#" id="stockToggle">show all ${all.length}</a>`)
-      + (rows.length > 40 ? ` &nbsp;first 40 shown` : "")
     : "";
+  // The table paints 40 rows at most, with or without a toggle beside it, so it
+  // says when it is holding some back: every other row here is one to read.
+  const capped = rows.length > 40 ? `first 40 of ${rows.length} shown` : "";
+  more.innerHTML = [rows.length ? supplySortNote(v.cols, order) : "", toggle, capped].filter(Boolean).join(" &nbsp;·&nbsp; ");
   more.hidden = !more.innerHTML;
   if($("stockToggle")) $("stockToggle").onclick = e => { e.preventDefault(); showAllStock = !showAllStock; drawStock(); wireAll(); };
+  wireSupplySort($("secStock"), sortId, v.cols, () => { drawStock(); wireAll(); });
   document.querySelectorAll("#stock select.linepick").forEach(sel => {
     sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
   });
@@ -4132,19 +4246,26 @@ function drawLogistics(){
       <td data-now="0" data-to="${ceil100(r.week)}">${chipHtml("bad", "not imported")}</td>
       <td>${set(ceil100(r.week))}${up("add")}</td>
       <td>—</td></tr>`;
-  const importHead = `<thead><tr><th class="l">Material</th><th data-tip="What leaves the depot in a week, factory lines and shops together; hover a figure for the split">Used / week</th>
-      <th>Order now</th><th>Set order to</th><th>At depot</th></tr></thead>`;
+  /* Rows sort inside their depot; the depots keep their own order. A row on no
+     plan has nothing ordered and nothing held, so it shares the columns. What
+     to set an order to is an action, not a figure, and does not sort. */
+  const importCols = [["Material", r => r.item, "l"],
+    ["Used / week", r => (r.total ?? r.week) || null, "", "What leaves the depot in a week, factory lines and shops together; hover a figure for the split"],
+    ["Order now", r => r.paused ? r.pausedWeekly : r.current ?? null], ["Set order to", null],
+    ["At depot", r => r.stock ?? null]];
+  const importOrder = supplySort.imports, importHead = supplyHead(importCols, importOrder);
   const importTable = shown.map((d, i) => supplyLocation("imports", d.s, d.rows.length,
-    `<div class="scrollx"><table>${importHead}<tbody>${d.rows.map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
+    `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(d.rows, importCols, importOrder).map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
     + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
-      `<div class="scrollx"><table>${importHead}<tbody>${looseRows.map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
+      `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(looseRows, importCols, importOrder).map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
     : !short && !tight && !pausedCount && !looseRows.length ? check(importAll, "cover what leaves")
     : {after: (short ? chipHtml("bad", `${short} short`) : "")
       + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
       + (pausedCount ? chipHtml("warn", `${pausedCount} paused`) : "")
       + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
-  $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText}) + importTable;
+  $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText,
+    aside: importTable ? supplySortNote(importCols, importOrder) : ""}) + importTable;
   seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
     () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
 
@@ -4175,19 +4296,22 @@ function drawLogistics(){
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
         : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
   };
-  const topupHead = `<thead><tr><th class="l">Material</th><th>Eats / day</th><th>Top-up now</th><th>Set top-up to</th>
-      <th class="l">From</th><th>Arrives / day</th></tr></thead>`;
+  const topupCols = [["Material", r => r.item, "l"], ["Eats / day", r => r.dailyNeed ?? r.perDay],
+    ["Top-up now", r => r.target || null], ["Set top-up to", null], ["From", null, "l"],
+    ["Arrives / day", r => r.known ? r.arrives : null]];
+  const topupOrder = supplySort.topups, topupHead = supplyHead(topupCols, topupOrder);
   const topupTable = sites.map((x, i) => {
     const site = f.sites.find(s => s.s === x.s);
     return supplyLocation("topups", x.s, x.rows.length,
-      `<div class="scrollx"><table>${topupHead}<tbody>${x.rows.map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
+      `<div class="scrollx"><table>${topupHead}<tbody>${supplySorted(x.rows, topupCols, topupOrder).map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
   }).join("");
   const topupState = !allSites.length ? {quiet: f.sites.length ? "No daily factory top-ups needed" : "No factory line to feed"}
     : !topShort && !topStalled ? check(topAll, "cover their day")
     : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
       + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "")};
   $("topupPlan").innerHTML = sechead("Daily top-ups", {...topupState,
-    aside: allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : ""})
+    aside: (topupTable ? supplySortNote(topupCols, topupOrder) : "")
+      + (allSites.length ? `<a class="link" href="#" id="topupAll">${changesOnly ? "show all" : "just what needs a change"}</a>` : "")})
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
@@ -4195,6 +4319,9 @@ function drawLogistics(){
     D.supply.shops || [], D.supply.imports || [], D.businesses), f);
   wireSupplyLocations($("importPlan"));
   wireSupplyLocations($("topupPlan"));
+  const redraw = () => { drawLogistics(); wireAll(); };
+  wireSupplySort($("importPlan"), "imports", importCols, redraw);
+  wireSupplySort($("topupPlan"), "topups", topupCols, redraw);
 }
 
 /* --- market demand ----------------------------------------------------
@@ -4952,6 +5079,44 @@ const SHADE_LEAD = 46, SHADE_SIDE = 18;
 const shadeScore = (t, top) =>
   `color-mix(in oklab, var(--accent) ${Math.round(4 + Math.max(0, Math.min(1, t)) * (top - 4))}%, var(--surface))`;
 const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals, size and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
+/* Saved searches: named sets of filters, shared by every character because the
+   city and its neighbourhoods are the same in every save. A search carries the
+   filters and the sort, never the switch. Eight fit the panel. */
+const FINDER_SAVED_KEY = "ba_finder_saved_v1";
+const FINDER_SAVED_MAX = 8;
+const finderPick = fs => Object.fromEntries(Object.keys(finderDefaults()).filter(k => k !== "on").map(k => [k, fs[k]]));
+/* The list lives in memory, read from storage once and written back on every
+   change, so a browser that refuses to store still keeps this session's
+   searches. Another tab's changes arrive through the storage event. */
+let finderSavedList = null;
+function finderReadSaved(raw){
+  let list = null;
+  try{ list = JSON.parse(raw); }catch(e){}
+  return (Array.isArray(list) ? list : [])
+    .filter(s => s && typeof s.name === "string" && s.name.trim() && s.filters && typeof s.filters === "object")
+    .slice(0, FINDER_SAVED_MAX);
+}
+function finderSaved(){
+  if(!finderSavedList){
+    let raw = null;
+    try{ raw = localStorage.getItem(FINDER_SAVED_KEY); }catch(e){}
+    finderSavedList = finderReadSaved(raw);
+  }
+  return finderSavedList;
+}
+function finderKeepSaved(list){
+  finderSavedList = list;
+  try{ localStorage.setItem(FINDER_SAVED_KEY, JSON.stringify(list)); }catch(e){}
+}
+window.addEventListener("storage", e => {
+  if(e.key !== FINDER_SAVED_KEY) return;
+  finderSavedList = finderReadSaved(e.newValue);
+  cityMapPage?.update();
+});
+/* The column a search is sorted by, for its tooltip: two searches that differ
+   only in their sort should not read the same. */
+const FINDER_SORT_NAMES = {score:"score", traffic:"traffic", demand:"demand", m2:"m²", cap:"cap", deposit:"upfront"};
+const finderRange = (label, lo, hi) => lo && hi ? `${label} ${lo}–${hi}` : lo ? `${label} ≥ ${lo}` : hi ? `${label} ≤ ${hi}` : "";
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -5117,6 +5282,10 @@ class CityMapView {
       ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
       ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
+      ${row('Saved', `<span class="fsaved" role="group" aria-label="Saved searches"><span class="fsaved-list"></span><span class="fsaved-new">
+        <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="Name for this search"></label>
+        <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="Save these filters and the sort under a name. Every character shares the saved searches; a name already taken is replaced.">${ICON.plus}Save</button><button type="button" class="fdel" data-f="cancel" aria-label="Cancel saving" hidden>${ICON.x}</button></span>
+      </span></span>`, ' fsaves')}
     </div>`;
   }
   wireFinder(){
@@ -5150,11 +5319,43 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
       this.fs[input.dataset.f] = Math.max(0, +input.value || 0); changed();
     });
+    // The chips are drawn again whenever they change, so the row answers through
+    // handlers on itself rather than on each chip. Naming a search is explicit:
+    // Save or Enter keeps the name, the x or Escape drops it, and pressing
+    // anything else leaves the field as it is.
+    const saved = this.root.querySelector('.fsaved');
+    saved.addEventListener('click', e => {
+      const use = e.target.closest('[data-saved]'), drop = e.target.closest('[data-unsave]');
+      if(use) this.applySaved(use.dataset.saved);
+      else if(drop){
+        // A delete from the keyboard leaves the focus in the row, not on the page.
+        const keys = document.activeElement === drop;
+        this.unsaveSearch(drop.dataset.unsave); this.update();
+        if(keys) saved.querySelector('[data-saved], [data-f="save"]')?.focus();
+      }
+      else if(e.target.closest('[data-f="save"]')) this.naming() ? this.commitNaming(false) : this.openNaming();
+      else if(e.target.closest('[data-f="cancel"]')) this.closeNaming(true);
+    });
+    // The full-row warning depends on the name typed, so each keystroke redraws
+    // it; the chips themselves are only redrawn when one of them changed.
+    saved.addEventListener('input', e => { if(e.target.closest('[data-f="name"]')) this.paintSaved(); });
+    saved.addEventListener('keydown', e => {
+      if(!e.target.closest('[data-f="name"]')) return;
+      if(e.key === 'Enter'){ e.preventDefault(); this.commitNaming(true); }
+      if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); this.closeNaming(true); }
+    });
   }
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(){ return this.fs.cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
+  sortKeys(cat = this.fs.cat){ return cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
+  /* The business types this save reports demand for in a category, by slug. */
+  catTypes(cat = this.fs.cat){
+    const types = new Map();
+    Object.values(premises()?.demand || {}).forEach(list =>
+      list.forEach(d => { if(d.category === cat) types.set(d.slug, d.type); }));
+    return types;
+  }
   clampSort(){
     const keys = this.sortKeys();
     if(!keys.includes(this.fs.sort)){ this.fs.sort = keys[0]; this.fs.sortPicked = false; }
@@ -5188,19 +5389,14 @@ class CityMapView {
       // the category's own order.
       if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
-    this.fs.on = false;   // the switch is never restored, only the filters
+    this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
     const store = this.finderStore(); if(!store) return;
-    // Opening the Map is opening the map: the finder is something you ask for,
-    // so its switch is not remembered even though its filters are.
+    // The switch lasts the session, not the storage: it stays on across pages,
+    // and a new load opens the plain map with the filters where they were left.
     const {on, ...filters} = this.fs;
     try{ localStorage.setItem(store, JSON.stringify(filters)); }catch(e){}
-  }
-  /* The plain map, whatever the last visit left on. */
-  hideFinder(){
-    if(!this.fs.on) return;
-    this.fs.on = false; this.showAll = false; this.deselect(); this.update();
   }
   /* Opened from Today or a Growth cell: the finder comes on with a preset. */
   setFinder(preset = {}){
@@ -5214,6 +5410,169 @@ class CityMapView {
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
+  }
+  /* --- saved searches ---------------------------------------------------------
+     A saved search read against this save: a neighbourhood the save does not
+     have is dropped, a number that is not one is no limit, and anything else
+     unknown falls back to its default. paintControls settles the type and the
+     sort, as it does for any state. */
+  savedFilters(s){
+    const f = finderPick({...finderDefaults(), ...s.filters}), all = this.hoodList();
+    let hoods = Array.isArray(f.hoods) ? f.hoods.filter(h => all.includes(h)) : null;
+    if(hoods && hoods.length === all.length) hoods = null;
+    // A limit that is not a number, or one with no end to it, is no limit.
+    const num = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
+    const cat = FINDER_CATS.some(([c]) => c === f.cat) ? f.cat : "retail";
+    // The type and the sort fall back here exactly as paintControls makes the
+    // live ones fall back, so a search this save cannot honour in full still
+    // matches the list it opens.
+    const keys = this.sortKeys(cat), sort = keys.includes(f.sort) ? f.sort : keys[0];
+    return {...f, hoods, cat, sort, sortPicked: sort === keys[0] ? false : !!f.sortPicked,
+      type: this.catTypes(cat).has(f.type) ? f.type : "",
+      show: FINDER_SHOWS.some(([k]) => k === f.show) ? f.show : "rent",
+      minM2: num(f.minM2), maxM2: num(f.maxM2), minCap: num(f.minCap), maxCap: num(f.maxCap),
+      minTraffic: num(f.minTraffic)};
+  }
+  /* Two states are the same search when everything the player can see matches,
+     the sort included, since a search is saved with its sort. */
+  savedKey(f){
+    const {sortPicked, ...shown} = finderPick(f);
+    // For sale is always cheapest first: the sort it carries is not on screen,
+    // so two sale searches that read alike are alike.
+    if(shown.show === "sale") shown.sort = null;
+    return JSON.stringify({...shown, hoods: shown.hoods ? shown.hoods.slice().sort() : null});
+  }
+  savedOn(){
+    const now = this.savedKey(this.fs), list = finderSaved();
+    const same = list.map((s, i) => this.savedKey(this.savedFilters(s)) === now ? i : -1).filter(i => i >= 0);
+    // Two searches may hold the same filters under different names; the one the
+    // player reached for is the one that reads as current.
+    const used = list.findIndex(s => s.name === this.savedUsed);
+    return same.includes(used) ? used : same.length ? same[0] : -1;
+  }
+  applySaved(name){
+    const s = finderSaved().find(x => x.name === name); if(!s) return;
+    this.savedUsed = s.name;
+    const f = this.savedFilters(s);
+    // For sale is cheapest first, so a sale search has no sort to give: it is
+    // lit whatever the sort, and applying it leaves the sort as the player left it.
+    if(f.show === "sale"){ f.sort = this.fs.sort; f.sortPicked = this.fs.sortPicked; }
+    this.fs = {...this.fs, ...f, on:true};
+    this.clampSort();
+    this.showAll = false; this.deselect(); this.saveFinder(); this.update();
+  }
+  /* A name already in the list replaces that search in place: the exact name if
+     there is one, else the same name in any case, so names stay unique. */
+  saveSearch(name){
+    name = String(name || "").trim().slice(0, 24);
+    if(!name) return;
+    const list = finderSaved().slice(), exact = list.findIndex(s => s.name === name);
+    const at = exact >= 0 ? exact : list.findIndex(s => s.name.toLowerCase() === name.toLowerCase());
+    const entry = {name, filters: finderPick(this.fs)};
+    if(at >= 0) list[at] = entry;
+    else if(list.length < FINDER_SAVED_MAX) list.push(entry);
+    else return false;
+    this.savedUsed = name;
+    finderKeepSaved(list);
+    return true;
+  }
+  unsaveSearch(name){
+    if(this.savedUsed === name) this.savedUsed = null;
+    finderKeepSaved(finderSaved().filter(s => s.name !== name));
+  }
+  typeName(slug){
+    return slug ? Object.values(premises()?.demand || {}).flat().find(d => d.slug === slug)?.type || "" : "";
+  }
+  /* The name offered for a new search says what it looks for and where; one
+     already taken gets a number, so accepting the offer never replaces a search. */
+  savedName(){
+    const f = this.fs, taken = new Set(finderSaved().map(s => s.name.toLowerCase()));
+    const base = `${this.typeName(f.type) || FINDER_CATS.find(([c]) => c === f.cat)?.[1] || "Search"}${
+      f.hoods && f.hoods.length ? ` · ${f.hoods.map(hoodTag).join(" ")}` : ""}`.slice(0, 20);
+    let name = base;
+    for(let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} ${n}`;
+    return name;
+  }
+  savedTip(s){
+    const f = this.savedFilters(s), type = this.typeName(f.type);
+    return [`${FINDER_CATS.find(([c]) => c === f.cat)?.[1]}${type ? `: ${type}` : ""}`,
+      FINDER_SHOWS.find(([k]) => k === f.show)?.[1],
+      f.hoods ? f.hoods.map(hoodTag).join(" ") || "no neighbourhood" : "every neighbourhood",
+      finderRange("m²", f.minM2, f.maxM2), finderRange("cap", f.minCap, f.maxCap),
+      f.minTraffic ? `traffic ≥ ${f.minTraffic}` : "",
+      // For sale is always cheapest first, so only a ranked list names its sort.
+      f.show === "sale" ? "" : `by ${FINDER_SORT_NAMES[f.sort] || f.sort}`].filter(Boolean).join(" · ");
+  }
+  /* The name field is open while its label is shown; its value is the name. */
+  naming(){ const f = this.root.querySelector('.fsaved .fname'); return !!f && !f.hidden; }
+  openNaming(){
+    const field = this.root.querySelector('.fsaved .fname');
+    if(!field || finderSaved().length >= FINDER_SAVED_MAX) return;
+    const input = field.querySelector('input');
+    field.hidden = false;
+    this.root.querySelector('.fsaved [data-f="cancel"]').hidden = false;
+    this.root.querySelector('.fsaved .fsaved-new').classList.add('naming');
+    input.value = this.savedName();
+    input.focus(); input.select();
+  }
+  closeNaming(focus = false){
+    const field = this.root.querySelector('.fsaved .fname'); if(!field) return;
+    field.hidden = true; field.querySelector('input').value = "";
+    this.root.querySelector('.fsaved [data-f="cancel"]').hidden = true;
+    this.root.querySelector('.fsaved .fsaved-new').classList.remove('naming');
+    this.paintSaved();
+    if(focus) this.root.querySelector('.fsaved [data-f="save"]:not([hidden])')?.focus();
+  }
+  /* A name saves what is on screen now. From the keyboard the focus follows the
+     name to its chip, and so does a click whose save filled the row, since Save
+     then steps aside; otherwise a click on Save leaves the focus on Save. */
+  commitNaming(keys){
+    const input = this.root.querySelector('.fsaved [data-f="name"]'), name = input.value;
+    if(!name.trim()){ this.closeNaming(true); return; }
+    if(!this.saveSearch(name)){
+      // No room: the name stays where it is, and the field's own warning (drawn
+      // by paintSaved from the row as it stands) is shown to the reader now,
+      // since the focus never left the field and no tooltip would open by itself.
+      this.paintSaved();
+      input.focus();
+      if(typeof showTip === "function") showTip(input.closest('.fname'));
+      return;
+    }
+    this.closeNaming();
+    this.update();
+    // Save steps aside when that was the eighth, and a hidden button must not keep
+    // the focus, so the focus goes to the new chip whenever Save is gone.
+    const save = this.root.querySelector('.fsaved [data-f="save"]');
+    if(keys || save.hidden) this.root.querySelector('.fsaved .fsaved-list .fchip.on')?.focus();
+  }
+  /* A chip per search, filled while its filters are the ones on screen, each
+     with its own delete. Only the chips are drawn again, and only when one of
+     them changed; the Save controls beside them are never redrawn. */
+  paintSaved(){
+    const host = this.root.querySelector('.fsaved-list'); if(!host) return;
+    const list = finderSaved(), on = this.savedOn(), full = list.length >= FINDER_SAVED_MAX, naming = this.naming();
+    // Save steps aside at eight, unless a name is already being typed.
+    this.root.querySelector('.fsaved [data-f="save"]').hidden = full && !naming;
+    /* A field open on a full row (another tab took the last place) warns only
+       about a name that would need a new place: a name already saved, in any
+       case, replaces that search and is fine, and an empty one saves nothing.
+       The warning is worked out afresh on every paint, and a tooltip still
+       showing it is put away the moment it stops being true. */
+    const field = this.root.querySelector('.fsaved .fname'), input = field.querySelector('input');
+    const typed = input.value.trim().toLowerCase();
+    const warn = full && naming && !!typed && !list.some(s => s.name.toLowerCase() === typed);
+    field.classList.toggle('full', warn);
+    if(warn){
+      field.dataset.tip = "Eight searches at most. Delete one to save a new name, or reuse a name to replace that search.";
+      input.setAttribute('aria-invalid', 'true');
+    } else {
+      delete field.dataset.tip; input.removeAttribute('aria-invalid');
+      if(typeof hideTip === "function") hideTip(field);
+    }
+    const sig = JSON.stringify([list.map(s => [s.name, this.savedTip(s)]), on]);
+    if(host === this.savedHost && sig === this.savedSig) return;
+    this.savedHost = host; this.savedSig = sig;
+    host.innerHTML = list.map((s, i) => `<span class="fsave"><button type="button" class="fchip${i === on ? ' on' : ''}" data-saved="${attr(s.name)}" aria-pressed="${i === on}" data-tip="${attr(this.savedTip(s))}">${mapText(s.name)}</button><button type="button" class="fdel" data-unsave="${attr(s.name)}" aria-label="${attr(`Delete the saved search ${s.name}`)}">${ICON.x}</button></span>`).join('');
   }
   /* The type demand this row is scored on: the chosen type, or the strongest
      type of the category in that neighbourhood when "any type" is picked. */
@@ -5415,8 +5774,7 @@ class CityMapView {
     this.root.querySelector('.filters .why').dataset.tip = `${FINDER_WHY} ${rentNote()}`;
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
-    const types = new Map();
-    Object.values(P.demand).forEach(list => list.forEach(d => { if(d.category === this.fs.cat) types.set(d.slug, d.type); }));
+    const types = this.catTypes(this.fs.cat);
     const options = [...types].sort((a, b) => a[1].localeCompare(b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
     select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
@@ -5440,6 +5798,7 @@ class CityMapView {
         ? P.forSale.filter(s => this.saleKind(s)).length : counts[key];
       mark(chip, this.fs.show === key);
     });
+    this.paintSaved();
   }
   /* Full screen takes the whole map box (stage and panel); the camera refits
      when the size changes, keeping the selection. */
@@ -5816,6 +6175,7 @@ class CityMapView {
   resetCharacter(){
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     this.fsCharacter = undefined; this.fs = finderDefaults(); this.showAll = false;
+    this.savedUsed = null; this.closeNaming();
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
       this.root.querySelectorAll('.lay').forEach(c => { c.classList.toggle('off', !this.layers[c.dataset.l]); c.setAttribute('aria-pressed', String(this.layers[c.dataset.l])); });
@@ -5823,10 +6183,11 @@ class CityMapView {
   }
 }
 function showCityMap(){
-  // A fresh view starts plain; one that is already here is put back to plain,
-  // because the Map tab is the map. openFinder() switches it on afterwards.
+  // A fresh view starts plain. One that is already here keeps the finder as the
+  // player left it, so a trip to another page and back finds the list still up.
+  // openFinder() switches it on afterwards.
   if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage'));
-  else { cityMapPage.hideFinder(); cityMapPage.paintView(); }
+  else cityMapPage.paintView();
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
    category, a type and a neighbourhood already chosen. */
