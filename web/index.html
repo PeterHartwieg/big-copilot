@@ -1,10 +1,10 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=f182bda98f">
+<link rel="stylesheet" href="community.css?v=70d5cf149c">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f182bda98f">
+<link rel="stylesheet" href="fonts/fonts.css?v=70d5cf149c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1962,8 +1962,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "f182bda98f";</script>
-<script>window.LEDGER_RELEASE = {"version":"f182bda98f","latest":{"pr":34,"date":"2026-09-16","title":"Save your location searches","summary":"The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back."}};</script>
+<script>window.LEDGER_BUILD = "70d5cf149c";</script>
+<script>window.LEDGER_RELEASE = {"version":"70d5cf149c","latest":{"pr":34,"date":"2026-09-16","title":"Save your location searches","summary":"The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2032,8 +2032,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=f182bda98f"></script>
-<script src="community.js?v=f182bda98f"></script>
+<script src="app.js?v=70d5cf149c"></script>
+<script src="community.js?v=70d5cf149c"></script>
 
 <script>
 
@@ -2283,7 +2283,8 @@ const VIEWS = {
       ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
       ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
-      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+      // An office's customer is an hour billed, so its spend is per hour.
+      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}${b.status==="office"?"/hour":""}`, "", b=>b.basket??-1],
       ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
       ["Promotion", b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
       ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
@@ -3677,10 +3678,11 @@ function miniChart(series, key, colour){
 /* --- the shop's week, hour by hour ------------------------------------
    Three numbers meet here. Customers are measured an hour at a time over the
    fortnight the save keeps. The registers are whatever service staff were
-   rostered that hour, at the capacity of the counters they were posted to. The
-   door cap is the building's own limit. Shade is how busy against the site's
-   own busiest hour; a red outline is an hour spent at the ceiling that was on.
-   The sentence under the grid says which, and when capacity stood idle. */
+   rostered that hour, at the capacity of the counters they were posted to; an
+   office's are the professionals posted at its computers. The door cap is the
+   building's own limit. Shade is how busy against the site's own busiest hour;
+   a red outline is an hour spent at the ceiling that was on. The sentence under
+   the grid says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -3702,7 +3704,8 @@ function hourGrid(g, todayWd){
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
       const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
       const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
-        g.staffed[wd][h]} of ${g.counters} register capacity on${
+        g.office ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
+          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`}${
         atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
       cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
@@ -3730,13 +3733,16 @@ function drawSite(){
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
   const grid = (D.hours || []).find(h => h.key === b.key);
+  /* An office sells billed hours, not goods: its line is a fee with nothing to
+     stock or top up, and its registers are staffed computers. */
+  const office = b.status === "office";
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
       ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
          the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`
-      : `${f.staff} counters are on ${String(f.from).padStart(2,"0")}:00-${
+      : `${f.staff} ${f.office ? "workstations are staffed" : "counters are on"} ${String(f.from).padStart(2,"0")}:00-${
          String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
          ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
 
@@ -3754,7 +3760,7 @@ function drawSite(){
   const stats = `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}</div></div>
     <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
-      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/visit</small>`}</div></div>
+      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div></div>
     <div class="sstat" data-tip="${attr(costTip)}"><span class="lab">Profit</span><div class="v ${sign(b.profit)}">${fmt(b.profit)}${
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
     <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
@@ -3790,13 +3796,20 @@ function drawSite(){
   const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
-  const shelves = showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
+  const shelves = office || showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
     const p = Math.round(t.pressure);
     return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
   };
-  const products = shelves.length ? `
+  const products = office ? (shelves.length ? `
+    <table>
+      <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
+      <tbody>${shelves.map(l => `<tr>
+          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td>${l.soldPerDay.toLocaleString()}</td>
+          <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
+    : shelves.length ? `
     <table>
       <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
         <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
@@ -3811,7 +3824,7 @@ function drawSite(){
           <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
           <td>${l.units.toLocaleString()}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
-  const shelfMore = sideShelves.length ? `
+  const shelfMore = !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
@@ -3828,8 +3841,11 @@ function drawSite(){
       ${sechead("Customers by hour", {why: `${Math.min(...grid.weeks.filter(w => w))} week${
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
-        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.counters} register capacity across ${
-        grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}${grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
+        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
+          ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
+              grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
+          : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
+        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
         notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`})}
       <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>
     </section>` : ""}
@@ -3839,7 +3855,7 @@ function drawSite(){
         <div class="crew">${crew}</div>
       </section>
       <section class="rv">
-        ${sechead("Shelves", {quiet: "before tomorrow's top-up"})}
+        ${office ? sechead("Fees") : sechead("Shelves", {quiet: "before tomorrow's top-up"})}
         ${products}${shelfMore}
       </section>
     </div>
@@ -8645,10 +8661,10 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no stock or no trading day", on:true},
+  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
-  {id:"staff",        label:"Staffing",               note:"A shop with nobody on, or a machine nobody is posted to", on:true},
+  {id:"staff",        label:"Staffing",               note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
   {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
   {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
   {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
@@ -8658,7 +8674,7 @@ const ALERT_GROUPS = [
   {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
   {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
   {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
-  {id:"trend",        label:"Revenue trend",          note:"A shop's week up or down by more than 15%", on:true},
+  {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
   {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
   {id:"paused",       label:"Import paused",          note:"An import switched off with the depot still drawing", on:true},
@@ -8667,8 +8683,8 @@ const ALERT_GROUPS = [
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import lands", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
-  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff or registers turn people away", on:false},
-  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters staffed through hours that buy nothing", on:false},
+  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:false},
+  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Stock not moving",       note:"Goods sitting in a depot no line draws from", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
