@@ -333,14 +333,15 @@
       $("help").open = false;
       $("menuHelpSlot").appendChild($("help"));
       const links = [...$("footSlot").querySelectorAll("a")];
-      links.forEach((a) => { a.className = a.id === "sourceLink" || a.id === "impressumLink" ? "lg-text" : "lg-btn"; });
+      const quiet = new Set(["sourceLink", "impressumLink", "privacyLink"]);
+      links.forEach((a) => { a.className = quiet.has(a.id) ? "lg-text" : "lg-btn"; });
       $("forgetHistory").className = "lg-text";
       $("menuFootSlot").append(...links, $("forgetHistory"));
-      // The project links and the Impressum, which German law wants reachable
-      // from every view, also live in the board's own footer. Links carry no
-      // handlers, so copies are safe.
+      // The project links, the Impressum and the privacy notice, which German
+      // law wants reachable from every view, also live in the board's own
+      // footer. Links carry no handlers, so copies are safe.
       const foot = $("footerLinks");
-      [$("issueLink"), $("donateLink"), $("impressumLink")].forEach((a) => {
+      [$("issueLink"), $("donateLink"), $("impressumLink"), $("privacyLink")].forEach((a) => {
         const c = a.cloneNode(true); c.removeAttribute("id"); c.className = "lg-footlink"; foot.appendChild(c);
       });
       // The hidden pickers must outlive the landing.

@@ -6,20 +6,17 @@
  * is a footer button on the landing screen, which opens the voting dialog on
  * demand. No request is made until start() or that click.
  *
- * Presence: after a dashboard loads, one heartbeat POSTs a random browser id
- * to /api/community/presence and the response schedules the next one. The
- * schedule, the last count and a short claim lease live in localStorage, so
- * several tabs share one heartbeat: a tab claims a 30-second lease inside a
- * Web Lock, releases it, and does the network call on its own. The lock never
- * spans the fetch — a tab frozen while holding a lock across network I/O
- * would block every other tab on the origin. Without the Locks API the shared
- * localStorage claim is best effort (a small duplicate window remains; the
- * server tolerates duplicate writes). If localStorage itself throws, each tab
- * falls back to its own in-memory state and simply heartbeats independently.
- * Scheduling runs on this tab's clock: the due time is the local receipt of
- * the response plus its nextHeartbeatIn delay, so server clock skew and
- * countedAt snapshot times never move the schedule. Missed intervals after
- * sleep are not replayed; the next due send happens once.
+ * Presence: once the board is up (a save loaded or the wiki opened), one
+ * heartbeat POSTs a random id to /api/community/presence and the response
+ * schedules the next one. The id, the schedule and the last count live only
+ * in this tab's memory: nothing
+ * goes into browser storage (the privacy notice promises that, and a stored
+ * id for a counter would need consent under § 25 TDDDG). So every tab counts
+ * on its own, and a reload starts a new id while the old one ages out of the
+ * ten-minute window. Scheduling runs on this tab's clock: the due time is the
+ * local receipt of the response plus its nextHeartbeatIn delay, so server
+ * clock skew and countedAt snapshot times never move the schedule. Missed
+ * intervals after sleep are not replayed; the next due send happens once.
  *
  * Voting: a native <dialog> fetches the curated feature list only when opened
  * and POSTs one feature id per vote; the reply carries the fresh count, so
@@ -30,14 +27,13 @@
   "use strict";
 
   const API = "/api/community";
-  const STORE_KEY = "ba_community_state";
-  const LOCK = "big-copilot-presence";
-  const LEASE_MS = 30000;                        // a claim stops other tabs sending this long
+  // Where earlier versions kept the presence id; init() removes it.
+  const LEGACY_STORE_KEY = "ba_community_state";
   const MIN_DUE_MS = 1000, MAX_DUE_MS = 300000;  // the server's heartbeat window, respected locally
   const JITTER_MS = 5000;
   const RETRY_MIN_MS = 60000, RETRY_MAX_MS = 900000;  // failed-fetch backoff, Retry-After honoured
   const STALE_MS = 600000;  // a count older than this reads as unavailable
-  const ONLINE_TIP = "Dashboard browsers active in the last 10 minutes. Approximate count; updates every five minutes.";
+  const ONLINE_TIP = "Open dashboard tabs in the last 10 minutes. Approximate count; updates every five minutes.";
 
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -50,26 +46,10 @@
     return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
   }
 
-  /* localStorage may be full or blocked; then `memory` keeps this tab's own
-     copy and heartbeats cannot be deduped across tabs. */
-  let memory = null;
-  let storageAvailable = true;
-  function readState() {
-    if (!storageAvailable) return memory;
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      const state = raw ? JSON.parse(raw) : null;
-      return state && typeof state === 'object' && !Array.isArray(state) ? state : null;
-    } catch (e) { storageAvailable = false; return memory; }
-  }
-  function writeState(state) {
-    memory = state;
-    if (storageAvailable) try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
-    catch (e) { storageAvailable = false; }
-  }
+  /* --- this tab's heartbeat schedule ------------------------------------- */
 
-  /* --- the shared heartbeat schedule ------------------------------------- */
-
+  const browserId = uuid();  // new on every page load, never stored
+  const presence = {count: null, receivedAt: null, nextDue: 0, failures: 0};
   let started = false;
   let timer = null;
   let inFlight = false;
@@ -79,110 +59,61 @@
     timer = setTimeout(tick, clamp(delay, 0, 2147483647));
   }
 
-  /* Wait until the shared due time; while another tab's claim is still live,
-     wait out the lease, so a closed tab's pending fetch can be taken over. */
-  function scheduleFrom(state, now) {
-    const due = typeof state.nextDue === "number" ? state.nextDue : 0;
-    let wait = Math.max(0, due - now);
-    const claim = typeof state.claim === "number" ? state.claim : 0;
-    if (claim > now) wait = Math.max(wait, claim - now + 50);
-    arm(wait || 1000);
-  }
-
-  /* Queue only the brief read/claim/write, never a network request. Without
-     Web Locks the same synchronous storage claim remains best effort. */
-  function withPresenceLock(fn) {
-    if (navigator.locks && typeof navigator.locks.request === "function") {
-      return navigator.locks.request(LOCK, fn);
-    }
-    return Promise.resolve().then(fn);
-  }
-
+  /* Sends when due, otherwise waits for the due time. While a request is out
+     its response re-arms the timer, so a wake event cannot send a second one. */
   function tick() {
-    if (!started) return;
-    withPresenceLock(() => {
-      if (inFlight) { arm(LEASE_MS); return; }  // this tab's own fetch is out
-      const now = Date.now();
-      let state = readState() || {};
-      if (typeof state.browserId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(state.browserId)) {
-        state = {browserId: uuid()};
-      }
-      const due = typeof state.nextDue === "number" ? state.nextDue : 0;
-      const claim = typeof state.claim === "number" ? state.claim : 0;
-      if (now < due) { scheduleFrom(state, now); return; }
-      if (claim > now) { scheduleFrom(state, now); return; }  // another tab is sending
-      state.claim = now + LEASE_MS;
-      state.claimSeq = (typeof state.claimSeq === "number" ? state.claimSeq : 0) + 1;
-      writeState(state);
-      return {browserId: state.browserId, seq: state.claimSeq};
-    }).then(job => job && sendPresence(job)).catch(() => arm(RETRY_MIN_MS));
+    if (!started || inFlight) return;
+    const wait = presence.nextDue - Date.now();
+    if (wait > 0) { arm(wait); return; }
+    sendPresence().catch(() => { inFlight = false; arm(RETRY_MIN_MS); });
   }
 
-  async function sendPresence(job) {
+  async function sendPresence() {
     inFlight = true;
-    let ok = false, count = 0, countedAt = null, nextIn = 300, retryAfterMs = 0;
+    let ok = false, count = 0, nextIn = 300, retryAfterMs = 0;
     try {
       const res = await fetch(API + "/presence", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({browserId: job.browserId}),
+        body: JSON.stringify({browserId}),
       });
       if (res.ok) {
         const parsed = parsePresence(await res.json().catch(() => null));
-        if (parsed) { ok = true; count = parsed.count; countedAt = parsed.countedAt; nextIn = parsed.nextIn; }
+        if (parsed) { ok = true; count = parsed.count; nextIn = parsed.nextIn; }
       } else {
         const after = Number(res.headers.get("retry-after"));
         if (Number.isFinite(after) && after >= 0) retryAfterMs = after * 1000;
       }
     } catch (e) { /* offline or blocked: the backoff below retries */ }
     inFlight = false;
-    await settle(job, ok, count, countedAt, nextIn, retryAfterMs);
+    settle(ok, count, nextIn, retryAfterMs);
   }
 
   function parsePresence(data) {
     if (!data || typeof data !== "object") return null;
     const count = data.count;
     if (!Number.isInteger(count) || count < 0) return null;
-    const at = Number(data.countedAt);
     const nextIn = Number(data.nextHeartbeatIn);
-    return {
-      count,
-      countedAt: Number.isFinite(at) ? Math.floor(at) : null,  // server snapshot metadata only
-      nextIn: Number.isFinite(nextIn) ? clamp(Math.floor(nextIn), 1, 300) : 300,
-    };
+    return {count, nextIn: Number.isFinite(nextIn) ? clamp(Math.floor(nextIn), 1, 300) : 300};
   }
 
-  /* Store the outcome under the same brief lock, unless a newer claim won. */
-  function settle(job, ok, count, countedAt, nextIn, retryAfterMs) {
-    return withPresenceLock(() => {
-      const state = readState();
-      if (!state || state.browserId !== job.browserId || state.claimSeq !== job.seq) {
-        if (state) { scheduleFrom(state, Date.now()); paintOnline(); }
-        else arm(1000);
-        return;
-      }
-      const now = Date.now();
-      delete state.claim;
-      if (ok) {
-        state.count = count;
-        state.countedAt = countedAt;
-        state.receivedAt = now;  // display staleness runs on local receipt time
-        state.failures = 0;
-        // nextHeartbeatIn is a delay, not an epoch: due = receipt + delay.
-        state.nextDue = now + clamp(nextIn * 1000, MIN_DUE_MS, MAX_DUE_MS) + Math.random() * JITTER_MS;
-      } else {
-        state.count = null;      // unavailable on every tab until a send succeeds
-        state.countedAt = null;
-        state.receivedAt = null;
-        const failures = (typeof state.failures === "number" ? state.failures : 0) + 1;
-        state.failures = failures;
-        const backoff = Math.min(RETRY_MIN_MS * Math.pow(2, failures - 1), RETRY_MAX_MS);
-        state.nextDue = now + clamp(retryAfterMs || backoff, RETRY_MIN_MS, RETRY_MAX_MS) + Math.random() * JITTER_MS;
-      }
-      writeState(state);
-      scheduleFrom(state, now);
-      paintOnline();
-    });
+  function settle(ok, count, nextIn, retryAfterMs) {
+    const now = Date.now();
+    if (ok) {
+      presence.count = count;
+      presence.receivedAt = now;  // display staleness runs on local receipt time
+      presence.failures = 0;
+      // nextHeartbeatIn is a delay, not an epoch: due = receipt + delay.
+      presence.nextDue = now + clamp(nextIn * 1000, MIN_DUE_MS, MAX_DUE_MS) + Math.random() * JITTER_MS;
+    } else {
+      presence.count = null;
+      presence.receivedAt = null;
+      presence.failures++;
+      const backoff = Math.min(RETRY_MIN_MS * Math.pow(2, presence.failures - 1), RETRY_MAX_MS);
+      presence.nextDue = now + clamp(retryAfterMs || backoff, RETRY_MIN_MS, RETRY_MAX_MS) + Math.random() * JITTER_MS;
+    }
+    arm(presence.nextDue - now);
+    paintOnline();
   }
 
   /* --- the online indicator (the masthead's live status) ------------------ */
@@ -201,11 +132,10 @@
     const em = live.querySelector("em");
     if (!em) return;
     live.classList.add("community-online");
-    const state = readState() || {};
-    const at = typeof state.receivedAt === "number" ? state.receivedAt : 0;
-    if (typeof state.count === "number" && at && Date.now() - at < STALE_MS) {
+    const at = presence.receivedAt || 0;
+    if (typeof presence.count === "number" && at && Date.now() - at < STALE_MS) {
       live.classList.remove("community-unavailable");
-      em.textContent = state.count + " online";
+      em.textContent = presence.count + " online";
       live.title = ONLINE_TIP;
       // One chained timeout flips the line when the count expires; the next
       // heartbeat normally replaces it long before that.
@@ -218,15 +148,9 @@
   }
 
   /* Focus, a page restore, the network coming back or the tab being seen
-     again all re-read the shared schedule: a due heartbeat sends, anything
-     else just re-arms the timer. No extra write is forced by the event. */
+     again all re-check the schedule: a due heartbeat sends, anything else
+     just re-arms the timer. */
   function onWake() { tick(); }
-  function onStorage(event) {
-    if (event.key !== null && event.key !== STORE_KEY) return;
-    paintOnline();
-    const state = readState();
-    if (state && started) scheduleFrom(state, Date.now());
-  }
 
   /* --- the voting dialog --------------------------------------------------- */
 
@@ -303,7 +227,7 @@
     });
     const privacy = document.createElement("p");
     privacy.className = "community-privacy";
-    privacy.textContent = "Presence sends a random browser ID. Votes use a protected hash of your IP address. Your save and company data stay on your computer.";
+    privacy.textContent = "The online count sends a random ID that is new on every page load. Votes use a protected hash of your IP address. Your save and company data stay on your computer.";
     body.append(statusEl, cardsEl, privacy);
     dialog.append(head, body);
     // Backdrop click, taken the way the changelog dialog takes it.
@@ -460,17 +384,18 @@
     insertBoardControls();
     paintOnline();  // repaints the shared count into whatever masthead is up
     if (typeof featureDiscovery !== "undefined") featureDiscovery.refresh();
-    tick();  // sends only when the shared schedule says one is due
+    tick();  // the first heartbeat of this page load
   }
 
   function init() {
+    // Earlier versions stored the presence id; drop it from returning browsers.
+    try { localStorage.removeItem(LEGACY_STORE_KEY); } catch (e) {}
     insertLandingControls();
     buildDialog();
     document.addEventListener("click", (event) => {
       const button = event.target.closest("[data-community-open]");
       if (button) openDialog(button);
     });
-    window.addEventListener("storage", onStorage);
     window.addEventListener("focus", onWake);
     window.addEventListener("pageshow", onWake);
     window.addEventListener("online", onWake);

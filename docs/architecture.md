@@ -147,7 +147,7 @@ opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
 `__UPDATE_SCRIPT__`, `__BUILD__`, `__REPO__`, `__ISSUES__`, `__DONATE__`, `__ICON_FOLDER__`,
-`__ICON_MORE__`, `__ANALYTICS_NOTE__`. Those are substituted inside `BANNER` and
+`__ICON_MORE__`. Those are substituted inside `BANNER` and
 `BEFORE_SCRIPT` before either string reaches `render()`, so they never appear in `TEMPLATE`.
 
 ## Assembly order of `web/index.html`
@@ -160,9 +160,11 @@ What `page_html()` produces, top of the file down:
 
 1. `<!doctype html>` then `<meta charset="utf-8">`, both emitted by `render()` before the
    template, so the page runs in standards mode.
-2. The head `page_html()` builds, in this order: the viewport tag, the Cloudflare Web
-   Analytics beacon if `ANALYTICS_TOKEN` is set, and the `web/community.css` link stamped
-   with the release version.
+2. The head `page_html()` builds, in this order: the viewport tag and the
+   `web/community.css` link stamped with the release version. There is no analytics
+   script, and Cloudflare's automatic Web Analytics injection is switched off for the
+   domain, because the privacy notice says the site runs none. `page_html()` then swaps the
+   template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
 3. `TEMPLATE`, with the landing screen (`BANNER`) substituted into its `<!--__BANNER__-->`
    slot: the release banner, the drop zone, the save-location help and the footer.
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
@@ -214,7 +216,10 @@ The static ones are versioned, so a deploy busts their caches: `web/map.js` fetc
 hash, and `web/wiki.js` fetches `wiki-data.json` with the build stamp. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
 polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
-`/api/community/*`. Outside the page's own origin, `TEMPLATE` links Google Fonts.
+`/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
+the local `dashboard.html`, but `build_web.py` swaps those links for the site's own copies
+in `web/fonts/`, so the privacy notice (`web/datenschutz.html`) can name Cloudflare as the
+only party that sees a request. `tests/test_privacy_promises.py` holds the site to that.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back
 to fetching `data.json` from a site that has no such route.
@@ -268,8 +273,15 @@ from `renderAll()`.
 ## Pyodide
 
 `web/worker.js` is a **module worker** — some embedders refuse a cross-origin
-`importScripts` but allow a dynamic `import`. Pyodide is pinned to **314.0.6** and fetched
-from jsDelivr; that is the only third-party download the worker makes.
+`importScripts` but allow a dynamic `import`. Pyodide is pinned to **314.0.6** and served
+from this site, out of `web/pyodide/v314.0.6/`, so no visitor's IP address reaches a CDN.
+With no `loadPackage` call, `loadPyodide` needs five files: `pyodide.mjs`,
+`pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip` and `pyodide-lock.json`, plus
+Pyodide's `LICENSE` (MPL-2.0) beside them. They are committed, not fetched at deploy time,
+because a deploy from a checkout that lacks them would remove them from the site.
+`web/_headers` caches the versioned folder as immutable. To upgrade, download the same
+files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
+change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
 Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp:
 

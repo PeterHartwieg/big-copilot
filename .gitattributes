@@ -1,2 +1,5 @@
 # Generated map metadata records exact SVG hashes; preserve bytes across hosts.
 web/maps/*.svg -text
+# Third-party runtime and font files ship byte for byte as released.
+web/pyodide/** -text
+web/fonts/** -text
