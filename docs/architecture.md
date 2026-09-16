@@ -218,7 +218,7 @@ carry no version, because the whole point is to see the current state: `web/upda
 polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
 `/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
 the local `dashboard.html`, but `build_web.py` swaps those links for the site's own copies
-in `web/fonts/`, so the privacy notice (`web/datenschutz.html`) can name Cloudflare as the
+in `web/fonts/`, so the privacy notice (`web/privacy.html`) can name Cloudflare as the
 only party that sees a request. `tests/test_privacy_promises.py` holds the site to that.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back

@@ -1,4 +1,4 @@
-"""The site keeps the promises its privacy notice (web/datenschutz.html) makes.
+"""The site keeps the promises its privacy notice (web/privacy.html) makes.
 
 The notice names Cloudflare as the only party that sees a visitor's request,
 so nothing the site loads may come from another host: the fonts and the
@@ -20,7 +20,7 @@ FETCHED = re.compile(
     r"""|url\(["']?(https?:)?//""",
     re.I,
 )
-PAGES = ("index.html", "impressum.html", "datenschutz.html")
+PAGES = ("index.html", "impressum.html", "privacy.html")
 SCRIPTS = ("app.js", "worker.js", "community.js", "map.js", "wiki.js", "update.js")
 PYODIDE_FILES = ("pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json")
 
