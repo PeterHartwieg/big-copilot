@@ -34,11 +34,18 @@ export default {
     }
   },
   async scheduled(_controller, env) {
-    if (!env.COMMUNITY_DB) return;
-    await env.COMMUNITY_DB
-      .prepare("DELETE FROM community_presence WHERE last_seen <= ?1")
-      .bind(Math.floor(Date.now() / 1000) - 24 * 60 * 60)
-      .run();
+    const db = env.COMMUNITY_DB;
+    if (!db) return;
+    // The privacy notice promises both: presence rows go within two days, and a
+    // poll's vote hashes go once its feature leaves features.json.
+    const ids = FEATURES.map((f) => f.id);
+    await db.batch([
+      db.prepare("DELETE FROM community_presence WHERE last_seen <= ?1")
+        .bind(Math.floor(Date.now() / 1000) - 24 * 60 * 60),
+      ids.length
+        ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${ids.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...ids)
+        : db.prepare("DELETE FROM community_votes"),
+    ]);
   },
 };
 

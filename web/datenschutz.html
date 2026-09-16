@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Legally required to be reachable from every page, not to be found by search engines. -->
+<meta name="robots" content="noindex">
+<title>Datenschutz · Big Copilot</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root{--ground:#0d100f;--ink:#e9ece6;--ink-2:#9aa39d;--rule:#262c28;--accent:#43c07a;color-scheme:dark}
+@media (prefers-color-scheme:light){
+  :root{--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
+}
+body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.6 Archivo,"Helvetica Neue",Arial,sans-serif}
+main{max-width:640px;margin:0 auto;padding:48px 16px}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);margin:32px 0 6px}
+p,address{margin:0 0 10px;font-style:normal}
+.lead{color:var(--ink-2)}
+a{color:var(--accent);overflow-wrap:anywhere}
+.back{display:inline-block;margin-top:30px;padding-top:16px;border-top:1px solid var(--rule)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Datenschutzerklärung</h1>
+  <p class="lead" lang="en">Privacy notice for bigcopilot.com</p>
+
+  <!-- Every promise here is backed by the code: fonts and Pyodide are served
+       from this site (build_web.py, web/worker.js), the online count keeps its
+       id in memory (web/community.js), the daily cleanup deletes presence rows
+       and ended polls (server/worker.mjs), and Worker invocation logs are off
+       (wrangler.jsonc). Change the text when any of those change. -->
+
+  <h2>1. Verantwortlicher</h2>
+  <address>
+    Peter Hartwieg, Tölzer Str. 5a, 81379 München, Deutschland<br>
+    E-Mail: <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a>
+  </address>
+
+  <h2>2. Das Wichtigste</h2>
+  <p>Big Copilot setzt selbst keine Cookies ein und nutzt weder Tracking noch Webanalyse. Ihre Spielstände werden ausschließlich in Ihrem Browser ausgewertet und nie an uns übertragen.</p>
+
+  <h2>3. Hosting</h2>
+  <p>Die Website wird bei Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA, betrieben. Beim Aufruf verarbeitet Cloudflare Ihre IP-Adresse, Datum und Uhrzeit, die aufgerufene Adresse und Angaben zu Ihrem Browser, um die Seite auszuliefern und vor Missbrauch zu schützen. Zur Abwehr von Angriffen kann Cloudflare ein technisch notwendiges Cookie setzen (§ 25 Abs. 2 Nr. 2 TDDDG). Cloudflare handelt in unserem Auftrag, speichert diese Daten nur so lange, wie es für diese Zwecke nötig ist, und ist nach dem EU-US Data Privacy Framework zertifiziert. Wir selbst führen keine Zugriffsprotokolle.</p>
+  <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse ist ein sicherer und stabiler Betrieb der Website.</p>
+
+  <h2>4. Daten in Ihrem Browser</h2>
+  <p>Einstellungen, der gewählte Spielstand-Ordner, gespeicherte Suchen und der Markt- und Kassenverlauf werden im Speicher Ihres Browsers abgelegt (localStorage, sessionStorage, IndexedDB). Sie verlassen Ihr Gerät nicht. Diese Speicherung ist für die von Ihnen genutzten Funktionen erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG). Sie können die Daten jederzeit in Ihren Browsereinstellungen löschen, den Verlauf auch über „Forget history“.</p>
+
+  <h2>5. Online-Anzeige und Abstimmungen</h2>
+  <p>Online-Anzeige: Nach dem Laden eines Spielstands sendet Ihr Browser etwa alle fünf Minuten eine zufällige Kennung an unseren Server, damit wir zählen können, wie viele Dashboards gerade geöffnet sind. Die Kennung wird bei jedem Laden der Seite neu erzeugt und nicht in Ihrem Browser gespeichert. Auf dem Server liegen nur diese Kennung und der Zeitpunkt; beides wird innerhalb von zwei Tagen gelöscht.</p>
+  <p>Abstimmungen: Wenn Sie für eine Funktion abstimmen, speichern wir nicht Ihre IP-Adresse, sondern einen mit einem geheimen Schlüssel daraus gebildeten Hashwert, damit je Anschluss nur eine Stimme zählt. Er wird innerhalb eines Tages gelöscht, nachdem wir die Abstimmung beendet haben.</p>
+  <p>Zum Schutz vor Missbrauch begrenzen wir die Anfragen an diese Funktionen je Anschluss; auch dafür wird nur kurzzeitig ein Hashwert der IP-Adresse verwendet.</p>
+  <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse ist der Betrieb dieser Funktionen und der Schutz vor Missbrauch.</p>
+
+  <h2>6. Kontakt per E-Mail</h2>
+  <p>Wenn Sie uns schreiben, verwenden wir Ihre Angaben nur, um Ihre Anfrage zu beantworten. Unser Postfach stellt Google bereit (Google Workspace); eine Übermittlung an Google LLC in den USA ist durch das EU-US Data Privacy Framework abgesichert. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. Wir löschen die Nachrichten, sobald die Anfrage erledigt ist.</p>
+
+  <h2>7. Externe Links und Spenden</h2>
+  <p>Links zu PayPal und GitHub öffnen die Seiten dieser Anbieter. Erst dann erhalten sie Daten von Ihnen, und es gelten deren Datenschutzerklärungen.</p>
+  <p>Spenden wickelt PayPal (Europe) S.à r.l. et Cie, S.C.A., 22–24 Boulevard Royal, L-2449 Luxemburg, in eigener Verantwortung ab. Bei einer Spende erhalten wir von PayPal Ihren Namen, Ihre E-Mail-Adresse und den Betrag. Wir nutzen diese Angaben nur zur Abwicklung der Spende und bewahren sie auf, solange wir sie zu deren Nachweis benötigen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, bei gesetzlichen Aufbewahrungspflichten lit. c.</p>
+
+  <h2>8. Ihre Rechte</h2>
+  <p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Datenübertragbarkeit (Art. 15 bis 20 DSGVO). Schreiben Sie dazu an <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a>. Außerdem können Sie sich bei einer Datenschutz-Aufsichtsbehörde beschweren, zum Beispiel beim Bayerischen Landesamt für Datenschutzaufsicht (BayLDA).</p>
+
+  <h2>9. Widerspruchsrecht</h2>
+  <p>Sie können der Verarbeitung, die wir auf Art. 6 Abs. 1 lit. f DSGVO stützen, jederzeit aus Gründen, die sich aus Ihrer besonderen Situation ergeben, widersprechen (Art. 21 DSGVO). Schreiben Sie dazu an <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a>.</p>
+
+  <p class="lead">Stand: September 2026</p>
+
+  <p class="back"><a href="/" lang="en">Back to Big Copilot</a> · <a href="/impressum">Impressum</a></p>
+</main>
+</body>
+</html>

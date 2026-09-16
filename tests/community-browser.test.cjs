@@ -25,7 +25,7 @@ async function setup(t, options = {}) {
     };
     if(options.blockStorage) Object.defineProperty(window, 'localStorage', {get(){throw Error('Storage blocked');}});
     if(options.fullStorage) Storage.prototype.setItem = function(){throw Error('Quota exceeded');};
-    if(options.noLocks) Object.defineProperty(navigator, 'locks', {value:undefined});
+    if(options.legacyState && location.hostname === 'community.test') localStorage.setItem('ba_community_state', JSON.stringify({browserId:'00000000-0000-4000-8000-000000000000',nextDue:Date.now()+300000}));
   }, options);
   const errors = [];
   context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
@@ -128,53 +128,56 @@ test('landing is network quiet; actual save loading starts presence and preserve
   assert.equal(state.heartbeats.length,1);
 });
 
-test('concurrent tabs share the browser identity, request schedule and online count', async t => {
-  const {page,newPage,state,loadSave} = await setup(t);
+test('each tab keeps its own id and schedule in memory, and nothing reaches browser storage', async t => {
+  const {page,newPage,state,loadSave} = await setup(t,{legacyState:true});
   const other = await newPage();
   await Promise.all([loadSave(page),loadSave(other)]);
   await Promise.all([online(page).waitFor(),online(other).waitFor()]);
-  assert.equal(state.heartbeats.length,1,'only one tab claims the due heartbeat');
+  assert.equal(state.heartbeats.length,2,'each tab sends its own first heartbeat');
+  const ids = state.heartbeats.map(h => h.browserId);
+  assert.notEqual(ids[0],ids[1]);
+  assert.ok(!ids.includes('00000000-0000-4000-8000-000000000000'),'a stored legacy id is never reused');
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(k => /community/.test(k)).length),0,'the legacy id is removed and none is written');
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); });
-  assert.equal(state.heartbeats.length,1,'focus and connectivity events respect the lease');
+  assert.equal(state.heartbeats.length,2,'focus and connectivity events do not send before the due time');
+  // The clock belongs to the browser context, so both tabs reach their due time.
   await page.clock.fastForward(306000);
   await page.waitForFunction(() => document.querySelector('#live').textContent.includes('40 online'));
+  await other.waitForFunction(() => document.querySelector('#live').textContent.includes('40 online'));
   // Wait for the actual request/response state instead of relying on timer ordering.
-  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,0)));
-  assert.equal(state.heartbeats.length,2);
-  assert.equal(state.heartbeats[0].browserId,state.heartbeats[1].browserId);
+  await Promise.all([page,other].map(p => p.evaluate(() => new Promise(resolve => setTimeout(resolve,0)))));
+  assert.equal(state.heartbeats.length,4);
+  assert.deepEqual(state.heartbeats.slice(2).map(h => h.browserId).sort(),[...ids].sort(),'each tab keeps its id between heartbeats');
 });
 
-test('reload and save changes retain the next heartbeat instead of sending immediately', async t => {
+test('save changes keep the schedule; a reload starts over with a new id', async t => {
   const {page,state,loadSave} = await setup(t);
   await loadSave(page); await online(page).waitFor();
   const id = state.heartbeats[0].browserId;
+  await loadSave(page);
+  assert.equal(state.heartbeats.length,1,'a new save does not send again');
   await page.reload();
   await page.waitForFunction(() => !!window.BigCopilotCommunity);
   await page.evaluate(() => { renderAll = drawMast; });
   await loadSave(page); await online(page).waitFor();
-  assert.equal(state.heartbeats.length,1);
-  await loadSave(page);
-  assert.equal(state.heartbeats.length,1);
-  await page.clock.fastForward(306000);
-  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,0)));
-  assert.equal(state.heartbeats.at(-1).browserId,id);
+  assert.equal(state.heartbeats.length,2);
+  assert.notEqual(state.heartbeats[1].browserId,id);
 });
 
-test('a sleeping browser skips missed intervals and a failed heartbeat backs off across reloads', async t => {
+test('a sleeping browser skips missed intervals and a failed heartbeat backs off', async t => {
   const {page,state,loadSave} = await setup(t);
   await loadSave(page); await online(page).waitFor();
   state.failPresence = true;
   await page.clock.fastForward(3600000);
   await page.getByText('Online count unavailable',{exact:true}).waitFor();
   assert.equal(state.heartbeats.length,2,'no replay of twelve missed heartbeats');
-  await page.reload(); await page.waitForFunction(() => !!window.BigCopilotCommunity);
-  await page.evaluate(() => { renderAll = drawMast; });
-  await loadSave(page);
-  assert.equal(state.heartbeats.length,2,'failure backoff survives reload');
+  await page.clock.fastForward(30000);
+  await page.evaluate(() => { window.dispatchEvent(new Event('focus')); });
+  assert.equal(state.heartbeats.length,2,'a failure waits at least a minute before retrying');
   assert.equal(await page.locator('#nav').isVisible(),true);
 });
 
-for(const options of [{blockStorage:true},{fullStorage:true},{noLocks:true}]) test(`presence tolerates unavailable browser facilities: ${JSON.stringify(options)}`, async t => {
+for(const options of [{blockStorage:true},{fullStorage:true}]) test(`presence tolerates unavailable browser facilities: ${JSON.stringify(options)}`, async t => {
   const {page,loadSave,state} = await setup(t,options);
   await loadSave(page); await online(page).waitFor();
   assert.equal(state.heartbeats.length,1);
@@ -215,25 +218,20 @@ test('voting errors have a user-triggered retry and feature text is rendered as 
   assert.equal(state.reads,2);
 });
 
-test('a second tab recovers an abandoned heartbeat lease and ignores the old result', async t => {
-  const {page,newPage,state,loadSave} = await setup(t);
+test('wake events while a heartbeat is out do not send a second one', async t => {
+  const {page,state,loadSave} = await setup(t);
   let release;
   state.holdPresence = new Promise(resolve => { release = resolve; });
   t.after(() => release());
   const sent = page.waitForRequest('**/api/community/presence');
   await loadSave(page);
   await sent;
-  const other = await newPage();
-  state.holdPresence = null;
-  state.count = 41;
-  await loadSave(other);
-  await other.clock.fastForward(31000);
-  await online(other).waitFor();
-  assert.equal(state.heartbeats.length,2);
-  state.count = 999;
+  await page.clock.fastForward(310000);
+  await page.evaluate(() => { window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); });
+  assert.equal(state.heartbeats.length,1);
   release();
   await online(page).waitFor();
-  assert.equal(await online(page).innerText(),'41 online','late owner cannot overwrite the newer result');
+  assert.equal(state.heartbeats.length,1);
 });
 
 test('reopening the dialog during a vote waits for that mutation before fetching totals', async t => {

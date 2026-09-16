@@ -62,6 +62,12 @@ ISSUES_URL = REPO + "/issues/new"
 # which returns supporters to bigcopilot.com. The same PayPal account has a
 # RentenWiki page whose purpose text names RentenWiki; never link that one here.
 DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
+# The board template's font links, swapped for the site's own copies.
+GOOGLE_FONTS = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">'
+)
 # Cloudflare Web Analytics: cookieless visit counts, nothing about the save.
 # Paste the site token from the dashboard (Analytics & Logs > Web Analytics)
 # here and rebuild; empty means no beacon on the page. The token is public,
@@ -338,7 +344,8 @@ details.help[open] summary::after{content:"\2013"}
       <a class="link" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
       <a class="link" id="sourceLink" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source</a><span>&middot;</span>
-      <a class="link" id="impressumLink" href="/impressum" target="_blank" rel="noopener">Impressum</a>
+      <a class="link" id="impressumLink" href="/impressum" target="_blank" rel="noopener">Impressum</a><span>&middot;</span>
+      <a class="link" id="privacyLink" href="/datenschutz" target="_blank" rel="noopener">Datenschutz</a>
     </span>
     <span>&middot;</span><span>GAME BUILD __BUILD__</span>
   </footer>
@@ -481,10 +488,16 @@ def page_html(release: dict, root: str = HERE) -> str:
     scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
         "__RELEASE__", release_json(release).replace("<", "\\u003c")
     ).replace("__UPDATE_SCRIPT__", update_script)
-    return render(
+    page = render(
         None, live=True, banner=BANNER, before_script=scripts,
         head=head,
     )
+    # The board template loads its fonts from Google, which is fine for a local
+    # dashboard.html. The site serves its own copies instead (web/fonts/), so no
+    # visitor's IP address reaches Google; the privacy notice relies on that.
+    if GOOGLE_FONTS not in page:
+        raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
+    return page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css">')
 
 
 def check(root: str = HERE) -> list[str]:
