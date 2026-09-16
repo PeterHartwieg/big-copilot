@@ -125,7 +125,8 @@ neighbourhood, building type, m², asking price. No score.
   the finder panel's filters replace the map's layer chips and search; candidates are
   the only highlighted footprints; the ranked list is the side list; clicking a row
   or a footprint selects both; the player's own shops stay drawn faintly. Off, the
-  map is exactly what it is today. The toggle state persists with the filters.
+  map is exactly what it is today. The toggle lasts the session: it stays on across
+  pages, and a new load opens the plain map with the filters where they were left.
 - Independently of the finder, the site card for **any** address shows: building
   type, size and m², door cap (when the table has one), traffic, availability
   (vacant / rented by a rival business: name and type / yours / not rentable),
@@ -211,4 +212,28 @@ should-fix findings are closed; Peter has the QA render and the canvas link.
   already ranks by m², so it keeps its narrower grid with no second m² column.
 - When a row has no occupant and no best-fit type to show, its second line gives the full
   neighbourhood name, where it used to repeat the m² and cap figures the columns now show.
+
+## Saved searches and the switch, from player feedback (15 September 2026)
+
+- The switch lasts the session. It stays on across pages and a new load opens the plain
+  map. This reverses the QA-round-three rule that the Map tab always opened plain: a
+  player had to click the switch again after every trip to another page.
+- A Saved row closes the filter block. Each saved search is a chip, filled while its
+  filters and sort are the ones on screen, with its own × to delete it. Save opens a name
+  field beside it that suggests a name no search holds yet. Save again, or Enter, keeps
+  the name for the filters on screen at that moment; the × beside Save, or Escape in the
+  field, drops it; an empty name saves nothing. Anything else pressed while the field is open does its
+  own job and leaves the field as it is: saving on leaving the field was tried in review
+  and dropped, because the departure arrives before the click it belongs to and the
+  redraw swallowed that click. Saving under a name already taken replaces that search.
+  Up to eight searches; at eight, Save steps aside until one is deleted.
+- Saved searches are shared by every character (`ba_finder_saved_v1`), because the city
+  and its neighbourhoods are the same in every save; each character still keeps its own
+  working filters. The list is held in memory and written through to storage, so a browser
+  that refuses storage keeps the session's searches; other tabs' changes arrive through the
+  storage event. A search is read against the save it is applied to: a neighbourhood, type
+  or sort the save cannot honour falls back as the live filters would, and a number that is
+  not a finite one means no limit. A search saved on the for-sale list carries no sort.
+- On a phone the filters alone outgrew the panel's 45 dvh and left the list a few pixels,
+  so there the panel scrolls as one piece, with the results following the filters.
 

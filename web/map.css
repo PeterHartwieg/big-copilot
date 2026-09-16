@@ -64,6 +64,28 @@
 .frow[hidden]{display:none}
 .frow .lab{flex:none;width:46px;font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .frow .why{margin-left:auto}
+/* Saved searches: each chip carries its own delete, joined to it on the right;
+   Save opens a name field beside it, with an x to drop the name. */
+.fsaved{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}
+/* The row can run to two lines; its label stays level with the first. */
+.frow.fsaves{align-items:flex-start}
+.frow.fsaves .lab{line-height:26px}
+/* The chips and the Save controls sit in one wrapping row; only the chips are
+   drawn again, so each part is its own element laid out as if it were not. */
+.fsaved-list,.fsaved-new{display:contents}
+.fsaved [hidden]{display:none}
+.fsave{display:inline-flex}
+.fsave .fchip{border-radius:6px 0 0 6px}
+.fsaved-new:not(.naming) .fnew{border-radius:6px}
+.fdel{box-sizing:border-box;width:22px;height:26px;padding:0;display:grid;place-items:center;
+  border:1px solid var(--rule);border-left:0;border-radius:0 6px 6px 0;background:none;color:var(--ink-3);
+  cursor:pointer;appearance:none;-webkit-appearance:none;transition:background .15s,border-color .15s,color .15s}
+.fdel:hover{color:var(--ink);border-color:var(--ink-3)}
+.fsave .fchip.on + .fdel{background:var(--accent-soft);border-color:var(--accent)}
+.fdel svg,.fnew svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.fchip.fname{cursor:text;border-color:var(--accent)}
+.fchip.fname.full{border-color:var(--warn)}
+.fchip.fname input{width:150px;border:0;background:none;color:var(--ink);font:inherit;outline:none;padding:0}
 .fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
@@ -250,12 +272,18 @@ body.map-modal-open{overflow:hidden}
 @media(max-width:760px){
  .stage{height:52dvh;min-height:300px}
  .citymap.narrow .places{position:static;width:auto;max-height:45dvh;backdrop-filter:none;background:var(--surface)}
+ /* The filters alone can outgrow a phone's panel, so there the panel scrolls
+    as one piece and the results follow the filters. */
+ .citymap.narrow .places{overflow-y:auto;overscroll-behavior:contain}
+ .citymap.narrow .places .list{flex:none;overflow:visible}
  .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px 50px}
  .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
- .fchip{height:32px}
- .fchip.num input{font-size:16px}
+ .fchip,.fdel{height:32px}
+ .fdel{width:30px}
+ .frow.fsaves .lab{line-height:32px}
+ .fchip.num input,.fchip.fname input{font-size:16px}
  .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
  .srch,.srch:focus-within{width:100%}
