@@ -91,7 +91,9 @@ async function setup(t, options = {}) {
   }, options);
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
-    if (url.hostname !== 'restore.test') return route.abort();
+    // Only the page and app.js matter here; the stylesheet link to the site's
+    // fonts would otherwise hold scripts back while the fixture answers it.
+    if (url.hostname !== 'restore.test' || url.pathname.startsWith('/fonts/')) return route.abort();
     return route.fulfill({contentType:url.pathname === '/' ? 'text/html' : 'application/javascript',
       body:url.pathname === '/' ? html : url.pathname === '/app.js' ? app : ''});
   });
