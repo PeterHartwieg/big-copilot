@@ -150,7 +150,7 @@ test('each tab keeps its own id and schedule in memory, and nothing reaches brow
   assert.deepEqual(state.heartbeats.slice(2).map(h => h.browserId).sort(),[...ids].sort(),'each tab keeps its id between heartbeats');
   // Presence adds nothing to browser storage; the board's own keys are not its business.
   const keysAfter = await page.evaluate(() => Object.keys(localStorage).sort());
-  assert.deepEqual(keysAfter.filter(k => !keysBefore.includes(k) && !/^(ba_dash_|ledger_|ba_finder)/.test(k)),[],'presence writes no storage key');
+  assert.deepEqual(keysAfter.filter(k => !keysBefore.includes(k) && !/^(ba_dash_|ba_line_names$|ba_order_marks_|ba_finder|ledger_)/.test(k)),[],'presence writes no storage key');
 });
 
 test('save changes keep the schedule; a reload starts over with a new id', async t => {
@@ -190,6 +190,29 @@ test('a sleeping browser skips missed intervals and a failed heartbeat backs off
   await retry;
   assert.equal(state.heartbeats.length,3,'the backoff re-arms and retries once');
   assert.equal(await page.locator('#nav').isVisible(),true);
+});
+
+test('a heartbeat whose settling throws still leaves the schedule running, without a page error', async t => {
+  const {page,state,loadSave} = await setup(t);
+  await loadSave(page); await online(page).waitFor();
+  // The only throw sendPresence() can pass on comes from settling the reply,
+  // so break the next paint once; the .catch in tick() has to absorb it.
+  await page.evaluate(() => {
+    const original = document.querySelector.bind(document);
+    let broken = true;
+    document.querySelector = selector => {
+      if (selector === '#live' && broken) { broken = false; throw new Error('paint failed'); }
+      return original(selector);
+    };
+  });
+  const second = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(306000);
+  await second;
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  const third = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(306000);
+  await third;
+  assert.equal(state.heartbeats.length,3);
 });
 
 for(const options of [{blockStorage:true},{fullStorage:true}]) test(`presence tolerates unavailable browser facilities: ${JSON.stringify(options)}`, async t => {

@@ -6,9 +6,10 @@
  * is a footer button on the landing screen, which opens the voting dialog on
  * demand. No request is made until start() or that click.
  *
- * Presence: after a dashboard loads, one heartbeat POSTs a random id to
- * /api/community/presence and the response schedules the next one. The id,
- * the schedule and the last count live only in this tab's memory: nothing
+ * Presence: once the board is up (a save loaded or the wiki opened), one
+ * heartbeat POSTs a random id to /api/community/presence and the response
+ * schedules the next one. The id, the schedule and the last count live only
+ * in this tab's memory: nothing
  * goes into browser storage (the privacy notice promises that, and a stored
  * id for a counter would need consent under § 25 TDDDG). So every tab counts
  * on its own, and a reload starts a new id while the old one ages out of the
