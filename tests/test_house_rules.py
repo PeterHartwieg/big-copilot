@@ -5,7 +5,7 @@ import unittest
 from ba_dashboard import _difficulty
 from ba_save import Save
 
-# The game's own presets at build 3675, from its DifficultySetting assets. A save
+# The game's own presets at builds 3675 and 3680, from its DifficultySetting assets. A save
 # stores the multipliers as float32, so they come back as 0.550000011920929.
 PRESETS = {
     1: {"startingMoney": 15000, "taxPercentage": 2, "marketPriceMultiplier": 0.7,

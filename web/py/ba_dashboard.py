@@ -36,7 +36,7 @@ SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
     r"AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions",
 )
-VERIFIED_BUILD = 3675  # the game build every number here was last checked against
+VERIFIED_BUILD = 3680  # the game build every number here was last checked against
 MIN_BUILD = 3540  # saves older than this lack fields the board relies on (checked over 57 saves)
 
 # The player tags each business with its neighbourhood, e.g. "[MT] Costco 38 1stAV".
@@ -609,9 +609,11 @@ DEPOSIT_MAX_FACTOR = 300
 DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 
 # The door capacity each size letter buys, per building type. Read from the
-# game's help page when the player's own en.json is at hand; this is the same
-# table as build 3675 ships, for when it is not (the page does not travel with
-# the web build). A letter whose variants disagree carries [min, max].
+# game's help page, which travels with the web build's game text (a player's own
+# en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
+# it stands for any category the page does not yield, such as on a CLI run when
+# the game is not installed where DEFAULT_LOCALE points. A letter whose variants
+# disagree carries [min, max].
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
@@ -1136,9 +1138,8 @@ def _city_date(save: Save, day: int) -> str:
 
 # The custom-game sliders: the unit each is shown in, its value on the game's
 # Normal preset, and the direction that makes the game harder. Names are the
-# main_menu_custom_* titles in the locale, shortened; "Tax rate" and "Resale value"
-# are the board's own (the game has no name for the selling multiplier), and the
-# effects paraphrase the game's tooltips. Normal's values come from the game's
+# main_menu_custom_* titles in the locale, shortened; "Tax rate" is the board's
+# own, and the effects paraphrase the game's tooltips. Normal's values come from the game's
 # DifficultySetting assets at VERIFIED_BUILD, and Normal is not ×1 across the
 # board: its urgent wholesale fee is ×0.2 and its tax rate 5%.
 HOUSE_RULES = [
@@ -1155,7 +1156,7 @@ HOUSE_RULES = [
     ("exportMultiplier", "Export price", "×", 0.65, "down",
      "what exporters pay for factory-made goods"),
     ("sellingMultiplier", "Resale value", "×", 0.75, "down",
-     "what selling something back returns"),
+     "share of an item's or vehicle's value received when selling it"),
     ("wholesaleUrgentFeeMultiplier", "Wholesale urgent fee", "×", 0.2, "up",
      "surcharge for rushing a wholesale order"),
     ("importerUrgentFeeMultiplier", "Importer urgent fee", "×", 0.75, "up",

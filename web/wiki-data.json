@@ -1148,7 +1148,7 @@
       "id": "businesstypes-giftshop",
       "categoryId": "common_business_types",
       "title": "Gift Shop",
-      "body": "**Gift Shop** businesses operate out of retail buildings.\n\nSome of this store's items can be ordered from [Wholesalers](wholesalers-locations) and the rest can be ordered from [Importers](importers-contract) in your [Headquarters](businesstypes-headquarters).\n\nCustomers are self-serving.\n\nThe business requires the following furniture to function:\n\n* [Stack of Shopping Baskets](furniture-stackofshoppingbaskets)\n* [Point of Sales](furniture-itemgrouppointofsale)\n* At least one product to sell (see below)\n\nBusinesses of this type primarily sell:\n\n* [Gift (Cheap)](products-cheapgift)\n* [Gift (Expensive)](products-expensivegift)\n* [Umbrella](products-umbrella)\n\nAnd can additionally sell:\n\n* [Arty Fish Smartwatch](products-smartwatch2)\n* [Energy Drink](products-energydrink)\n* [Flower (Cheap)](products-cheapflower)\n* [Flower (Expensive)](products-expensiveflower)\n* [Picture Book](products-picturebook)\n* [Rhythm By Tre](products-headphones01)\n* [Soda Can](products-sodacan)\n* [ZanaMan Smartwatch](products-smartwatch1)\n\nEmployees with the following skills can be assigned:\n\n* [Customer Service](skill-customerservice)\n* [Cleaning](skill-cleaning)"
+      "body": "**Gift Shop** businesses operate out of retail buildings.\n\nSome of this store's items can be ordered from [Wholesalers](wholesalers-locations) and the rest can be ordered from [Importers](importers-contract) in your [Headquarters](businesstypes-headquarters).\n\nCustomers are self-serving.\n\nThe business requires the following furniture to function:\n\n* [Stack of Shopping Baskets](furniture-stackofshoppingbaskets)\n* [Point of Sales](furniture-itemgrouppointofsale)\n* At least one product to sell (see below)\n\nBusinesses of this type primarily sell:\n\n* [Gift (Cheap)](products-cheapgift)\n* [Gift (Expensive)](products-expensivegift)\n* [Umbrella](products-umbrella)\n\nAnd can additionally sell:\n\n* [Arty Fish Smartwatch](products-smartwatch2)\n* [Energy Drink](products-energydrink)\n* [Flower (Cheap)](products-cheapflower)\n* [Flower (Expensive)](products-expensiveflower)\n* [Noize Boss Earbuds](products-earbuds01)\n* [Picture Book](products-picturebook)\n* [Rhythm By Tre](products-headphones01)\n* [Soda Can](products-sodacan)\n* [ZanaMan Smartwatch](products-smartwatch1)\n\nEmployees with the following skills can be assigned:\n\n* [Customer Service](skill-customerservice)\n* [Cleaning](skill-cleaning)"
     },
     {
       "id": "businesstypes-graphicdesigner",
@@ -1736,7 +1736,7 @@
       "id": "products-earbuds01",
       "categoryId": "common_sellable_products",
       "title": "Noize Boss Earbuds",
-      "body": "**Noize Boss Earbuds** is a type of product primarily sold from [Electronics Stores](businesstypes-electronicsstore).\n\nAdditionally, it can be sold from [Bookstore](businesstypes-bookstore).\n\nThe product can be placed in the following furniture:\n* [Display Table (Product)](furniture-productdisplaytable)\n\nThe product can be used as a [Character Accessory](common_accessories) to listen to music.\nThe accessory can be stored in an [Earbuds Stand](furniture-earbudsstand)\n\nThe product can be imported from the following locations:\n* [BlueStone Imports](address: 4 pier)\n\nThe product can be manufactured using the following recipes:\n* [Noize Boss Earbuds Recipe](recipes-earbuds01recipe)"
+      "body": "**Noize Boss Earbuds** is a type of product primarily sold from [Electronics Stores](businesstypes-electronicsstore).\n\nAdditionally, it can be sold from [Bookstore](businesstypes-bookstore)\n* [Gift Shops](businesstypes-giftshop).\n\nThe product can be placed in the following furniture:\n* [Display Table (Product)](furniture-productdisplaytable)\n\nThe product can be used as a [Character Accessory](common_accessories) to listen to music.\nThe accessory can be stored in an [Earbuds Stand](furniture-earbudsstand)\n\nThe product can be imported from the following locations:\n* [BlueStone Imports](address: 4 pier)\n\nThe product can be manufactured using the following recipes:\n* [Noize Boss Earbuds Recipe](recipes-earbuds01recipe)"
     },
     {
       "id": "products-novel",
@@ -2174,7 +2174,7 @@
       "id": "furniture-beltbarrier",
       "categoryId": "common_furniture",
       "title": "Belt Barrier",
-      "body": "**Belt Barrier** is a decorative item that can be placed in a home or business.\n\nThe furniture can be purchased from the following locations:\n* [Mr. Scott's Office Supplies](address:39 4a)"
+      "body": "**Belt Barrier** is a decorative item that can be placed in a home or business.\n\nThe furniture can be purchased from the following locations:\n* [Mr. Scott's Office Supplies](address:39 4a)\n* [Red Carpet Decor](address:6 bw)"
     },
     {
       "id": "furniture-bench01",
@@ -3590,7 +3590,7 @@
       "id": "furniture-hotdoggrill",
       "categoryId": "common_furniture",
       "title": "Hotdog Grill",
-      "body": "**Hotdog Grill** can be used to sell:\n\n* [Hotdog](products-hotdog)\n\n**Product Capacity:** 100\n**Customer Capacity:** 30\n\n**Requires:** [Cabinet](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n* [Square Appliances](address:16 4a)"
+      "body": "**Hotdog Grill** can be used to sell:\n\n* [Hotdog](products-hotdog)\n\n**Product Capacity:** 100\n**Customer Capacity:** 30\n\n**Must be placed on one of the following:**\n\n* [Cabinets](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n* [Square Appliances](address:16 4a)"
     },
     {
       "id": "furniture-icecreamcounter",
@@ -3602,7 +3602,7 @@
       "id": "furniture-industrialcoffeemachine",
       "categoryId": "common_furniture",
       "title": "Industrial Coffee Machine",
-      "body": "**Industrial Coffee Machine** can be used to sell:\n\n* [Cup of Coffee](products-cupofcoffee)\n* [Cup of Tea](products-cupoftea)\n\n**Product Capacity:** 300\n**Customer Capacity:** 30\n\n**Requires:** [Cabinet](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n*  [Square Appliances](address:16 4a)"
+      "body": "**Industrial Coffee Machine** can be used to sell:\n\n* [Cup of Coffee](products-cupofcoffee)\n* [Cup of Tea](products-cupoftea)\n\n**Product Capacity:** 300\n**Customer Capacity:** 30\n\n**Must be placed on one of the following:**\n\n* [Cabinets](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n*  [Square Appliances](address:16 4a)"
     },
     {
       "id": "furniture-industrialfreezer",
@@ -3632,7 +3632,7 @@
       "id": "furniture-industrialgrill",
       "categoryId": "common_furniture",
       "title": "Industrial Grill",
-      "body": "**Industrial Grill** can be used to sell:\n\n* [Burger](products-burger)\n* [Chicken Kabob Skewer](products-kabob)\n\n**Product Capacity:** 120\n**Customer Capacity:** 20\n\n**Requires:** [Cabinet](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n* [Square Appliances](address:16 4a)"
+      "body": "**Industrial Grill** can be used to sell:\n\n* [Burger](products-burger)\n* [Chicken Kabob Skewer](products-kabob)\n\n**Product Capacity:** 120\n**Customer Capacity:** 20\n\n**Must be placed on one of the following:**\n\n* [Cabinets](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n* [Square Appliances](address:16 4a)"
     },
     {
       "id": "furniture-irisneon",
@@ -4418,7 +4418,7 @@
       "id": "furniture-slushimachine",
       "categoryId": "common_furniture",
       "title": "Slushie Machine",
-      "body": "**Slushie Machine** can be used to sell:\n\n* [Slushie](products-slushi)\n\n**Product Capacity:** 200\n**Customer Capacity:** 50\n\nThe furniture can be purchased from the following locations:\n*  [Red Carpet Decor](address:6 bw)"
+      "body": "**Slushie Machine** can be used to sell:\n\n* [Slushie](products-slushi)\n\n**Product Capacity:** 200\n**Customer Capacity:** 50\n\n**Must be placed on one of the following:**\n\n* [Cabinets](furniture-cabinet)\n\nThe furniture can be purchased from the following locations:\n*  [Red Carpet Decor](address:6 bw)"
     },
     {
       "id": "furniture-sinksoapwallmounted",
@@ -5804,7 +5804,7 @@
       "id": "products-plastic",
       "categoryId": "common_factory_ingredients",
       "title": "Plastic",
-      "body": "**Plastic** is a raw ingredient used by [Factories](businesstypes-factory).\n\nThe product can be used by the following Factory Workstations:\n\n* [Electronics Workstation](furniture-electronicsworkstation)\n* [Consumer Goods Workstation](furniture-consumergoodsworkstation)\n\nThe product can be used in the following recipes:\n\n* [Arty Fish Phone Recipe](recipes-smartphone1recipe)\n* [Arty Fish Smartwatch Recipe](recipes-smartwatch2recipe)\n* [Gift (Expensive) Recipe](recipes-expensivegiftrecipe)\n* [Noize Boss Earbuds](products-earbuds01)\n* [Rhythm By Tre](products-headphones01)\n* [Umbrella Recipe](recipes-umbrellarecipe)\n* [ZanaMan Phone Recipe](recipes-smartphone2recipe)\n* [ZanaMan Smartwatch Recipe](recipes-smartwatch1recipe)\n\nThe product can be imported from the following locations:\n* [Maritime Freight Line](address: 7 pier)"
+      "body": "**Plastic** is a raw ingredient used by [Factories](businesstypes-factory).\n\nThe product can be used by the following Factory Workstations:\n\n* [Electronics Workstation](furniture-electronicsworkstation)\n* [Consumer Goods Workstation](furniture-consumergoodsworkstation)\n\nThe product can be used in the following recipes:\n\n* [Arty Fish Phone Recipe](recipes-smartphone1recipe)\n* [Arty Fish Smartwatch Recipe](recipes-smartwatch2recipe)\n* [Gift (Expensive) Recipe](recipes-expensivegiftrecipe)\n* [Noize Boss Earbuds](products-earbuds01)\n* [Rhythm By Tre](products-headphones01)\n* [Umbrella Recipe](recipes-umbrellarecipe)\n* [ZanaMan Phone Recipe](recipes-smartphone2recipe)\n* [ZanaMan Smartwatch Recipe](recipes-smartwatch1recipe)\n\nThe product can be imported from the following locations:\n* [Maritime Freight Line](address: 7 pier)\n* [Global Harvest Traders](address: 9 pier)"
     },
     {
       "id": "products-rawsausage",
@@ -5876,7 +5876,7 @@
       "id": "products-speaker",
       "categoryId": "common_factory_ingredients",
       "title": "Speaker",
-      "body": "**Speaker** is a raw ingredient used by [Factories](businesstypes-factory).\n\nThe product can be used by the following Factory Workstations:\n\n* [Food Workstation](furniture-foodworkstation)\n\nThe product can be used in the following recipes:\n\n* [Arty Fish Phone Recipe](recipes-smartphone1recipe)\n* [Arty Fish Smartwatch Recipe](recipes-smartwatch2recipe)\n* [Noize Boss Earbuds](products-earbuds01)\n* [Rhythm By Tre](products-headphones01)\n* [ZanaMan Phone Recipe](recipes-smartphone2recipe)\n* [ZanaMan Smartwatch Recipe](recipes-smartwatch1recipe)\n\nThe product can be imported from the following locations:\n* [Maritime Freight Line](address: 7 pier)"
+      "body": "**Speaker** is a raw ingredient used by [Factories](businesstypes-factory).\n\nThe product can be used by the following Factory Workstations:\n\n* [Electronics Workstation](furniture-electronicsworkstation)\n\nThe product can be used in the following recipes:\n\n* [Arty Fish Phone Recipe](recipes-smartphone1recipe)\n* [Arty Fish Smartwatch Recipe](recipes-smartwatch2recipe)\n* [Noize Boss Earbuds](products-earbuds01)\n* [Rhythm By Tre](products-headphones01)\n* [ZanaMan Phone Recipe](recipes-smartphone2recipe)\n* [ZanaMan Smartwatch Recipe](recipes-smartwatch1recipe)\n\nThe product can be imported from the following locations:\n* [Maritime Freight Line](address: 7 pier)"
     },
     {
       "id": "products-sugar",
@@ -6061,15 +6061,15 @@
   ],
   "sample": {
     "SOURCES": {
-      "extracted": "2026-09-03",
-      "sourceDate": "2026-09-03",
+      "extracted": "2026-09-16",
+      "sourceDate": "2026-09-16",
       "files": [
         {
           "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-          "bytes": 819793,
-          "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-          "mtime": "2026-09-03T05:47:40Z",
-          "note": "6036 locale keys. Guide facts and original help text are read from this file."
+          "bytes": 821768,
+          "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+          "mtime": "2026-09-16T16:10:31Z",
+          "note": "6054 locale keys. Guide facts and original help text are read from this file."
         },
         {
           "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -6122,7 +6122,7 @@
         },
         {
           "label": "Steam app / depot build",
-          "value": "app 1331550, buildid 25231854",
+          "value": "app 1331550, buildid 25343755",
           "where": "steamapps/appmanifest_1331550.acf",
           "certain": true,
           "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -6254,7 +6254,7 @@
         "size": "M",
         "area": 1000,
         "traffic": 24,
-        "mentions": 72
+        "mentions": 73
       },
       "ba:street_eleventhstreet#14": {
         "name": "Freedom Fuel",
@@ -6592,7 +6592,7 @@
         "size": "H",
         "area": 690,
         "traffic": 18,
-        "mentions": 17,
+        "mentions": 18,
         "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
       },
       "ba:street_secondavenue#5": {
@@ -7128,7 +7128,8 @@
             "item": "Plastic",
             "per": 250,
             "from": [
-              "ba:street_pier#7"
+              "ba:street_pier#7",
+              "ba:street_pier#9"
             ]
           },
           {
@@ -7154,7 +7155,8 @@
             "item": "Plastic",
             "per": 50,
             "from": [
-              "ba:street_pier#7"
+              "ba:street_pier#7",
+              "ba:street_pier#9"
             ]
           },
           {
@@ -7216,6 +7218,7 @@
         "Energy Drink",
         "Flower (Cheap)",
         "Flower (Expensive)",
+        "Noize Boss Earbuds",
         "Picture Book",
         "Rhythm By Tre",
         "Soda Can",
@@ -7299,7 +7302,7 @@
       },
       {
         "what": "Three different build numbers",
-        "detail": "Steam's depot build id for this install is app 1331550, buildid 25231854. The shipped layouts counted for placement were authored at builds 3521, 3629. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
+        "detail": "Steam's depot build id for this install is app 1331550, buildid 25343755. The shipped layouts counted for placement were authored at builds 3521, 3629. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
       },
       {
         "what": "A wholesale 'no' is an absence, not a rule",
@@ -7620,7 +7623,8 @@
           "rank": "additional",
           "kind": "product",
           "alsoSoldBy": [
-            "Electronics Stores"
+            "Electronics Stores",
+            "Gift Shops"
           ],
           "fixtures": [
             "productdisplaytable"
@@ -7932,7 +7936,8 @@
               "item": "Plastic",
               "per": 10,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -7973,7 +7978,8 @@
               "item": "Plastic",
               "per": 50,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -8465,7 +8471,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -8654,15 +8660,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -8694,7 +8700,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -8735,7 +8741,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -9353,7 +9359,7 @@
           "observed": null,
           "station": null,
           "needs": null,
-          "mount": null,
+          "mount": "Cabinets",
           "groups": [],
           "requirementsRaw": [],
           "pageId": "furniture-slushimachine"
@@ -9434,7 +9440,7 @@
           "size": "M",
           "area": 1000,
           "traffic": 24,
-          "mentions": 72
+          "mentions": 73
         },
         "ba:street_eleventhstreet#16": {
           "name": "Essentials Appliances",
@@ -9550,7 +9556,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_twentyfifthstreet#2": {
@@ -9663,7 +9669,7 @@
           "key": "common_furniture",
           "name": "Furniture",
           "pages": 521,
-          "sample": 7
+          "sample": 8
         },
         {
           "key": "rivals_title",
@@ -9697,15 +9703,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -9737,7 +9743,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -9754,7 +9760,7 @@
       "GAPS": [
         {
           "what": "Prices",
-          "detail": "The 51 help pages used by this guide contain no prices for its equipment, products or recipes. Money figures appear on 17 other help pages."
+          "detail": "The 52 help pages used by this guide contain no prices for its equipment, products or recipes. Money figures appear on 17 other help pages."
         },
         {
           "what": "Weekly delivery limits",
@@ -9770,7 +9776,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -10983,15 +10989,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -11023,7 +11029,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -11056,7 +11062,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -12051,7 +12057,7 @@
           "observed": null,
           "station": null,
           "needs": null,
-          "mount": null,
+          "mount": "Cabinets",
           "groups": [],
           "requirementsRaw": [],
           "pageId": "furniture-industrialcoffeemachine"
@@ -12409,7 +12415,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -12598,15 +12604,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -12638,7 +12644,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -12675,7 +12681,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -12848,6 +12854,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [
+            "Gift Shops",
             "Bookstore"
           ],
           "fixtures": [
@@ -13110,7 +13117,8 @@
               "item": "Plastic",
               "per": 30,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -13193,7 +13201,8 @@
               "item": "Plastic",
               "per": 5,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -13262,7 +13271,8 @@
               "item": "Plastic",
               "per": 10,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -13331,7 +13341,8 @@
               "item": "Plastic",
               "per": 20,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -13414,7 +13425,8 @@
               "item": "Plastic",
               "per": 30,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -13497,7 +13509,8 @@
               "item": "Plastic",
               "per": 5,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -14007,7 +14020,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -14196,15 +14209,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -14236,7 +14249,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -14277,7 +14290,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -15080,15 +15093,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -15120,7 +15133,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -15141,7 +15154,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -16104,7 +16117,7 @@
           "observed": null,
           "station": null,
           "needs": null,
-          "mount": null,
+          "mount": "Cabinets",
           "groups": [],
           "requirementsRaw": [],
           "pageId": "furniture-industrialgrill"
@@ -16154,7 +16167,7 @@
           "observed": null,
           "station": null,
           "needs": null,
-          "mount": null,
+          "mount": "Cabinets",
           "groups": [],
           "requirementsRaw": [],
           "pageId": "furniture-hotdoggrill"
@@ -16537,7 +16550,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -16726,15 +16739,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -16766,7 +16779,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -16803,7 +16816,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -17302,7 +17315,8 @@
               "item": "Plastic",
               "per": 250,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -17416,7 +17430,8 @@
               "item": "Plastic",
               "per": 50,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -17897,7 +17912,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -18086,15 +18101,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -18126,7 +18141,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -18167,7 +18182,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -19117,7 +19132,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -19306,15 +19321,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -19346,7 +19361,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -19383,7 +19398,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -19474,6 +19489,7 @@
           "energydrink",
           "cheapflower",
           "expensiveflower",
+          "earbuds01",
           "picturebook",
           "headphones01",
           "sodacan",
@@ -19484,6 +19500,7 @@
           "Energy Drink",
           "Flower (Cheap)",
           "Flower (Expensive)",
+          "Noize Boss Earbuds",
           "Picture Book",
           "Rhythm By Tre",
           "Soda Can",
@@ -19766,6 +19783,41 @@
             ]
           }
         },
+        "earbuds01": {
+          "name": "Noize Boss Earbuds",
+          "slug": "ba:itemname_earbuds01",
+          "src": "help_ba:itemname_earbuds01_content",
+          "rank": "additional",
+          "kind": "product",
+          "alsoSoldBy": [
+            "Electronics Stores",
+            "Bookstore"
+          ],
+          "fixtures": [
+            "productdisplaytable"
+          ],
+          "wholesale": false,
+          "importers": [
+            "ba:street_pier#4"
+          ],
+          "recipe": "earbuds01recipe",
+          "recipes": [
+            "earbuds01recipe"
+          ],
+          "crosscheck": "Its own page names it in Display Table (Product). 1 furniture page lists it for sale: Display Table (Product). Absent from the wholesaler product list.",
+          "requirementsRaw": [],
+          "automatic": false,
+          "pageId": "products-earbuds01",
+          "fixtureCapacities": {
+            "productdisplaytable": [
+              {
+                "label": "Headphones / Earbuds",
+                "value": 32,
+                "unit": "units"
+              }
+            ]
+          }
+        },
         "picturebook": {
           "name": "Picture Book",
           "slug": "ba:itemname_picturebook",
@@ -19944,7 +19996,8 @@
               "item": "Plastic",
               "per": 250,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -19972,7 +20025,8 @@
               "item": "Plastic",
               "per": 50,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -20041,7 +20095,8 @@
               "item": "Plastic",
               "per": 5,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -20171,6 +20226,76 @@
           },
           "pageId": "recipes-expensiveflowerrecipe"
         },
+        "earbuds01recipe": {
+          "name": "Noize Boss Earbuds Recipe",
+          "src": "help_recipes_earbuds01recipe_content",
+          "workstation": "Electronics Workstation",
+          "workstationKey": "electronics",
+          "inputs": [
+            {
+              "item": "Capacitors",
+              "per": 60,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            },
+            {
+              "item": "Copper Clad Laminate",
+              "per": 10,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            },
+            {
+              "item": "Integrated Circuits",
+              "per": 60,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            },
+            {
+              "item": "Microphone",
+              "per": 60,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            },
+            {
+              "item": "Plastic",
+              "per": 10,
+              "from": [
+                "ba:street_pier#7",
+                "ba:street_pier#9"
+              ]
+            },
+            {
+              "item": "Resistors",
+              "per": 60,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            },
+            {
+              "item": "Speaker",
+              "per": 120,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            },
+            {
+              "item": "Transistors",
+              "per": 60,
+              "from": [
+                "ba:street_pier#7"
+              ]
+            }
+          ],
+          "out": {
+            "item": "Noize Boss Earbuds",
+            "per": 60
+          },
+          "pageId": "recipes-earbuds01recipe"
+        },
         "picturebookrecipe": {
           "name": "Picture Book Recipe",
           "src": "help_recipes_picturebookrecipe_content",
@@ -20236,7 +20361,8 @@
               "item": "Plastic",
               "per": 20,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -20362,7 +20488,8 @@
               "item": "Plastic",
               "per": 5,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -20985,7 +21112,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -21128,7 +21255,7 @@
           "key": "common_sellable_products",
           "name": "Goods and Services",
           "pages": 76,
-          "sample": 12
+          "sample": 13
         },
         {
           "key": "help_importers",
@@ -21152,7 +21279,7 @@
           "key": "common_factoryrecipes",
           "name": "Factory Recipes",
           "pages": 62,
-          "sample": 11
+          "sample": 12
         },
         {
           "key": "common_factorymachines",
@@ -21174,15 +21301,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -21235,7 +21362,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -21252,7 +21379,7 @@
       "GAPS": [
         {
           "what": "Prices",
-          "detail": "The 95 help pages used by this guide contain no prices for its equipment, products or recipes. Money figures appear on 17 other help pages."
+          "detail": "The 97 help pages used by this guide contain no prices for its equipment, products or recipes. Money figures appear on 17 other help pages."
         },
         {
           "what": "Weekly delivery limits",
@@ -21268,7 +21395,7 @@
         },
         {
           "what": "Help links that point at no page",
-          "detail": "2 links across 1 distinct targets name a page the help menu does not contain, the most often common_accessories (2). The renderer has to degrade those links to plain text, not throw."
+          "detail": "3 links across 1 distinct targets name a page the help menu does not contain, the most often common_accessories (3). The renderer has to degrade those links to plain text, not throw."
         },
         {
           "what": "Malformed markdown and inconsistent names in the source",
@@ -21276,7 +21403,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. Shipped layouts used by this guide were authored at builds 3521, 3629. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. Shipped layouts used by this guide were authored at builds 3521, 3629. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -21284,10 +21411,11 @@
         },
         {
           "what": "A wholesale 'no' is an absence, not a rule",
-          "detail": "Arty Fish Smartwatch, Gift (Expensive), Picture Book, Rhythm By Tre Headphones, ZanaMan Smartwatch state no wholesale purchase and are absent from the wholesaler product list, so the wholesale flag is false. That is two help pages agreeing, not a game rule: the help may simply not mention it.",
+          "detail": "Arty Fish Smartwatch, Gift (Expensive), Noize Boss Earbuds, Picture Book, Rhythm By Tre Headphones, ZanaMan Smartwatch state no wholesale purchase and are absent from the wholesaler product list, so the wholesale flag is false. That is two help pages agreeing, not a game rule: the help may simply not mention it.",
           "items": [
             "Arty Fish Smartwatch",
             "Gift (Expensive)",
+            "Noize Boss Earbuds",
             "Picture Book",
             "Rhythm By Tre Headphones",
             "ZanaMan Smartwatch"
@@ -22078,15 +22206,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -22118,7 +22246,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -22139,7 +22267,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -22973,7 +23101,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_twentyfifthstreet#2": {
@@ -23151,15 +23279,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -23191,7 +23319,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -23232,7 +23360,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -23771,7 +23899,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -23960,15 +24088,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -24000,7 +24128,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -24037,7 +24165,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -24372,7 +24500,8 @@
               "item": "Plastic",
               "per": 5,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -24455,7 +24584,8 @@
               "item": "Plastic",
               "per": 5,
               "from": [
-                "ba:street_pier#7"
+                "ba:street_pier#7",
+                "ba:street_pier#9"
               ]
             },
             {
@@ -24774,6 +24904,18 @@
           "mentions": 16,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
+        "ba:street_pier#9": {
+          "name": "Global Harvest Traders",
+          "raw": "address:9 pier",
+          "street": "9 Pier",
+          "hood": "Lower Manhattan",
+          "kind": "Importer (factory raw goods)",
+          "size": "H",
+          "area": 690,
+          "traffic": 18,
+          "mentions": 18,
+          "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
+        },
         "ba:street_seventhavenue#13": {
           "name": "Hampton Supplies",
           "raw": "address:13 7a",
@@ -24877,7 +25019,7 @@
           "key": "help_importers",
           "name": "Wholesale / Import",
           "pages": 17,
-          "sample": 3
+          "sample": 4
         },
         {
           "key": "common_furniture",
@@ -24917,15 +25059,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -24957,7 +25099,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -24974,7 +25116,7 @@
       "GAPS": [
         {
           "what": "Prices",
-          "detail": "The 48 help pages used by this guide contain no prices for its equipment, products or recipes. Money figures appear on 17 other help pages."
+          "detail": "The 49 help pages used by this guide contain no prices for its equipment, products or recipes. Money figures appear on 17 other help pages."
         },
         {
           "what": "Weekly delivery limits",
@@ -24990,7 +25132,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -25791,15 +25933,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -25831,7 +25973,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -25852,7 +25994,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -27238,7 +27380,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -27427,15 +27569,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -27467,7 +27609,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -27504,7 +27646,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -28856,7 +28998,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -29045,15 +29187,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -29085,7 +29227,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -29122,7 +29264,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -30914,7 +31056,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_seventhavenue#13": {
@@ -31103,15 +31245,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -31143,7 +31285,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -31180,7 +31322,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -31917,7 +32059,7 @@
           "size": "M",
           "area": 1000,
           "traffic": 24,
-          "mentions": 72
+          "mentions": 73
         },
         "ba:street_eleventhstreet#16": {
           "name": "Essentials Appliances",
@@ -31998,7 +32140,7 @@
           "size": "H",
           "area": 690,
           "traffic": 18,
-          "mentions": 17,
+          "mentions": 18,
           "flag": "The bundled building table puts the piers in Garment District, Lower Manhattan, Murray Hill. The help names them all as importers; the neighbourhood a pier belongs to is not settled by either file alone."
         },
         "ba:street_twentyfifthstreet#2": {
@@ -32145,15 +32287,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -32185,7 +32327,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -32218,7 +32360,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -33017,15 +33159,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -33057,7 +33199,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -33078,7 +33220,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -33869,15 +34011,15 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-03",
-        "sourceDate": "2026-09-03",
+        "extracted": "2026-09-16",
+        "sourceDate": "2026-09-16",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 819793,
-            "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-            "mtime": "2026-09-03T05:47:40Z",
-            "note": "6036 locale keys. Guide facts and original help text are read from this file."
+            "bytes": 821768,
+            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+            "mtime": "2026-09-16T16:10:31Z",
+            "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -33909,7 +34051,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25231854",
+            "value": "app 1331550, buildid 25343755",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -33930,7 +34072,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25231854. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -34082,13 +34224,13 @@
   "provenance": {
     "schema": "ba-wiki-public",
     "builtBy": "tools/build_wiki_data.py",
-    "sourceDate": "2026-09-03",
+    "sourceDate": "2026-09-16",
     "sources": {
       "locale": {
         "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-        "bytes": 819793,
-        "sha256": "6a000d35aa4fafc4da0449ddc6596e1da2faeb1eac3fd62f2ef09aa740c28f77",
-        "mtime": "2026-09-03T05:47:40Z"
+        "bytes": 821768,
+        "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
+        "mtime": "2026-09-16T16:10:31Z"
       },
       "helpStructure": {
         "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -34132,13 +34274,13 @@
     },
     "steam": {
       "appId": "1331550",
-      "buildId": "25231854",
-      "steamLabel": "app 1331550, buildid 25231854",
+      "buildId": "25343755",
+      "steamLabel": "app 1331550, buildid 25343755",
       "source": "steamapps/appmanifest_1331550.acf",
       "saveBuildNumber": null,
       "product": "Big Ambitions - Hovgaard Games",
       "unity": "2022.3.62f2",
-      "extracted": "2026-09-03"
+      "extracted": "2026-09-16"
     },
     "saveBuildNumber": null,
     "counts": {
