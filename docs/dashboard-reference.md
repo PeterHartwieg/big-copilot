@@ -773,9 +773,9 @@ to 150) and the theater (R, 150 to 200). Warehouses have a vehicle capacity, not
 cap, and carry none; neither do residential or special buildings.
 
 The help page travels with the game text the web build ships, and a player's own `en.json`
-wins over it. The table is also hardcoded as it stands on builds 3675 and 3680, for a run
-with no game text at all, such as the CLI when the game is not installed where
-`DEFAULT_LOCALE` points:
+wins over it. The table is also hardcoded as it stands on builds 3675 and 3680, and it
+stands for any category the page does not yield, such as on a CLI run when the game is not
+installed where `DEFAULT_LOCALE` points:
 
 | | A | C | D | J | K | M | S | R |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

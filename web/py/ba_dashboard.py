@@ -610,9 +610,10 @@ DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 
 # The door capacity each size letter buys, per building type. Read from the
 # game's help page, which travels with the web build's game text (a player's own
-# en.json wins over it); this is the same table as builds 3675 and 3680 ship, for
-# a run with no game text at all, such as the CLI when the game is not installed
-# where DEFAULT_LOCALE points. A letter whose variants disagree carries [min, max].
+# en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
+# it stands for any category the page does not yield, such as on a CLI run when
+# the game is not installed where DEFAULT_LOCALE points. A letter whose variants
+# disagree carries [min, max].
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
