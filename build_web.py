@@ -20,7 +20,7 @@ import os
 import shutil
 
 from ba_dashboard import VERIFIED_BUILD, render
-from ba_save import DEFAULT_LOCALE, load_locale
+from ba_save import find_game_locale, load_locale
 from tools.build_wiki_data import write_public_wiki
 
 # The game text shipped with the page: the display names of items, business
@@ -534,9 +534,17 @@ def main() -> None:
     shutil.copyfile(
         os.path.join(HERE, "ba_buildings.json"), os.path.join(WEB, "py", "ba_buildings.json")
     )
-    locale = load_locale(DEFAULT_LOCALE)
+    # The real game, never the bundle: building gametext.json from gametext.json
+    # would look successful and change nothing.
+    locale_path = find_game_locale()
+    if not locale_path:
+        raise SystemExit(
+            "no game text found; gametext.json cannot be built. Set BA_LOCALE to "
+            "the full path of your game's en.json."
+        )
+    locale = load_locale(locale_path)
     if not locale:
-        raise SystemExit(f"no game text at {DEFAULT_LOCALE}; gametext.json cannot be built")
+        raise SystemExit(f"no game text at {locale_path}; gametext.json cannot be built")
     text = {k: v for k, v in locale.items() if ships(k, v)}
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)

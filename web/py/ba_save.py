@@ -314,7 +314,8 @@ DEFAULT_LOCALE = (
 # The game keeps en.json in a few well-known places. Detection is best-effort
 # and lazy: the first file that exists wins, and the English text shipped with
 # the board is the fallback, so a run without the game still shows proper
-# labels instead of raw slugs.
+# labels instead of raw slugs. BA_LOCALE, set to a full en.json path, comes
+# first and covers a Steam library somewhere the list does not know.
 _LOCALE_CANDIDATES = (
     DEFAULT_LOCALE,
     # macOS, the Steam install (inside the app bundle)
@@ -325,11 +326,15 @@ _LOCALE_CANDIDATES = (
     "/Big Ambitions_Data/StreamingAssets/locale/en.json",
     "/Applications/Big Ambitions.app/Contents/Resources/Data"
     "/StreamingAssets/locale/en.json",
-    # Linux Steam
+    # Linux Steam, in its usual homes and the Flatpak sandbox
     "~/.steam/steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "~/.steam/root/steamapps/common/Big Ambitions"
     "/Big Ambitions_Data/StreamingAssets/locale/en.json",
     "~/.local/share/Steam/steamapps/common/Big Ambitions"
     "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common"
+    "/Big Ambitions/Big Ambitions_Data/StreamingAssets/locale/en.json",
 )
 # The English text built into the page. It sits beside this module in web/py,
 # or one level down from the checkout root, depending on which copy runs.
@@ -340,6 +345,26 @@ _BUNDLED_LOCALES = (
 )
 
 
+def _locale_paths() -> tuple[str, ...]:
+    """The candidate paths, the BA_LOCALE override first when one is set."""
+    override = os.environ.get("BA_LOCALE")
+    return (override, *_LOCALE_CANDIDATES) if override else _LOCALE_CANDIDATES
+
+
+def find_game_locale() -> str | None:
+    """The game's own en.json, or None when the game is not installed.
+
+    Unlike find_locale this never falls back to the bundled text, so a build
+    that needs the real game (gametext.json, the wiki) can tell the two apart
+    instead of quietly rebuilding the bundle from itself.
+    """
+    for path in _locale_paths():
+        candidate = os.path.expanduser(path)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def find_locale() -> str | None:
     """The best available en.json: the game's own, else the bundled English.
 
@@ -347,10 +372,9 @@ def find_locale() -> str | None:
     the filesystem. That matters in the browser, where only a handful of files
     sit on Pyodide's virtual disk when the board is imported.
     """
-    for path in _LOCALE_CANDIDATES:
-        candidate = os.path.expanduser(path)
-        if os.path.isfile(candidate):
-            return candidate
+    found = find_game_locale()
+    if found:
+        return found
     for path in _BUNDLED_LOCALES:
         if os.path.isfile(path):
             return path

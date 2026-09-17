@@ -95,8 +95,11 @@ exists. When the game is not installed it falls back to the English text bundled
 at `web/py/gametext.json`, so labels still read `Lawyer Fee (Hourly)` rather
 than `Hourlylawyerfee`.
 
-A custom installation is picked up by adding its path to `_LOCALE_CANDIDATES` in
-[ba_save.py](ba_save.py). The Windows default is:
+A custom installation — a Steam library on another drive, say — is picked up by
+setting `BA_LOCALE` to the full path of its `en.json`, which wins over every
+built-in location. You can also add the path to `_LOCALE_CANDIDATES` in
+[ba_save.py](ba_save.py); write it as a raw string (`r"C:\..."`) so `\P` is not
+read as an escape. The Windows default is:
 
 ```text
 C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale\en.json

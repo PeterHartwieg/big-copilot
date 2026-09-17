@@ -39,12 +39,14 @@ RESEARCH_DIR = os.path.join("research", "wiki-data")
 def default_paths(data_dir: str | None) -> dict:
     """Where the sources live: the game install the dashboard already knows."""
     if data_dir is None:
-        from ba_save import DEFAULT_LOCALE
+        from ba_save import DEFAULT_LOCALE, find_game_locale
 
+        # The detected install when there is one, so the wiki builds on every
+        # platform; the old Windows constant is only a last resort.
+        default_locale = find_game_locale() or DEFAULT_LOCALE
         # .../StreamingAssets/locale/en.json -> .../StreamingAssets
-        streaming_dir = os.path.dirname(os.path.dirname(DEFAULT_LOCALE))
+        streaming_dir = os.path.dirname(os.path.dirname(default_locale))
         data_dir = os.path.dirname(streaming_dir)
-        default_locale = DEFAULT_LOCALE
     else:
         data_dir = os.path.abspath(data_dir)
         # Accept direct StreamingAssets paths used by earlier callers too.
