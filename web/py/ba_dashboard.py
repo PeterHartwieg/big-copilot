@@ -36,7 +36,7 @@ SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
     r"AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions",
 )
-VERIFIED_BUILD = 3675  # the game build every number here was last checked against
+VERIFIED_BUILD = 3680  # the game build every number here was last checked against
 MIN_BUILD = 3540  # saves older than this lack fields the board relies on (checked over 57 saves)
 
 # The player tags each business with its neighbourhood, e.g. "[MT] Costco 38 1stAV".
@@ -125,10 +125,12 @@ RESELLER_TYPES = RETAIL_TYPES - {
     "ba:businesstype_theater",
 }
 
-# The office agencies left out of RETAIL_TYPES above. They have no shop floor to
-# alert on, but each sells one hourly fee that the city's demand grid tracks per
-# neighbourhood like any product, so the market view lists them as a band of
-# their own under the shops.
+# The office agencies left out of RETAIL_TYPES above. Their customers are digital,
+# so nothing a shop floor needs (amenities, uniforms, shelves) applies, but they
+# trade like a shop in every other way: each sells one hourly fee that the city's
+# demand grid tracks per neighbourhood like any product, and each keeps the same
+# hour-by-hour customer reports, served by professionals posted at computers
+# rather than by service staff at registers. They get status "office".
 OFFICE_TYPES = {
     "ba:businesstype_eventplanningagency",
     "ba:businesstype_graphicdesigner",
@@ -190,6 +192,67 @@ AMENITY_DEMANDS = {
         "Interior design falls short of what customers expect here",
     ),
 }
+
+# Every demand the game can give an employee (up to three each, in
+# EmployeeInstances[].demands), as (kind, setting, priority). The save keeps no
+# record of which are met, so each kind below repeats the game's own Fulfilled()
+# check (Entities.Employee.JobDemands.Requirements in BigAmbitions.dll). The item
+# lists, hour windows and priorities are not in the help text: they were read
+# from the game's jobdemands Addressables bundle at build 3680. Priority is the
+# game's own: 0 Nice to have, 1 Important, 2 Critical.
+JOB_DEMANDS = {
+    "ba:jobdemand_fulltime": ("hours", (30, 50), 2),
+    "ba:jobdemand_parttime": ("hours", (10, 30), 2),
+    "ba:jobdemand_fourdaysweek": ("days", 4, 1),
+    "ba:jobdemand_fivedaysweek": ("days", 5, 1),
+    "ba:jobdemand_freeweekends": ("daysoff", (6, 7), 1),
+    "ba:jobdemand_nomornings": ("noshift", ((6, 10),), 0),
+    "ba:jobdemand_noafternoons": ("noshift", ((14, 16),), 0),
+    "ba:jobdemand_noevenings": ("noshift", ((18, 22),), 0),
+    "ba:jobdemand_nonights": ("noshift", ((22, 24), (0, 4)), 0),
+    "ba:jobdemand_nocleaning": ("nocleaning", None, 0),
+    "ba:jobdemand_hascalculator": ("desk", ("calculator",), 0),
+    "ba:jobdemand_hascomputermonitor": ("desk", ("computermonitor",), 1),
+    "ba:jobdemand_hasdeskcalendar": ("desk", ("deskcalendar",), 1),
+    "ba:jobdemand_hasdeskglobe": ("desk", ("deskglobe",), 1),
+    "ba:jobdemand_hasgraphictablet": ("desk", ("graphictablet", "graphictabletwithscreen"), 1),
+    "ba:jobdemand_hasgraphictabletwithscreen": ("desk", ("graphictabletwithscreen",), 1),
+    "ba:jobdemand_hasmousepad": ("desk", ("mousepad",), 0),
+    "ba:jobdemand_hasofficephone": ("desk", ("officephone",), 1),
+    "ba:jobdemand_hasphone": ("desk", ("officephone", "classicphone"), 1),
+    "ba:jobdemand_seatedatmultipurposechair": (
+        "desk", ("multipurposechair", "officechair2", "eameschair"), 1),
+    "ba:jobdemand_seatedatofficechair": (
+        "desk", ("officechair", "multipurposechair", "officechair2", "eameschair"), 1),
+    "ba:jobdemand_seatedatofficechair2": ("desk", ("officechair2", "eameschair"), 1),
+    "ba:jobdemand_seatedatofficedesk1": (
+        "desk", ("officedesk1", "officedesk2left", "officedesk2right"), 1),
+    "ba:jobdemand_seatedatofficedesk2": ("desk", ("officedesk2left", "officedesk2right"), 1),
+    "ba:jobdemand_coffeemachine": ("building", ("cheapcoffeemachine", "industrialcoffeemachine"), 1),
+    "ba:jobdemand_hasprinter": ("building", ("printer", "printertable"), 2),
+    "ba:jobdemand_largemeetingtable": ("building", ("largemeetingtable",), 1),
+    "ba:jobdemand_sofa": ("building", (
+        "modularsofa1l", "modularsofa1r", "modularsofa1m", "cornersofa01", "cornersofa02right",
+        "cornersofa02left", "sofaluxury", "sofaluxurymodular", "sofaluxurymodularcornerleft",
+        "sofaluxurymodularcornerleftpillow", "sofaluxurymodularcornerright",
+        "sofaluxurymodularcornerrightpillow", "sofaluxurymodularpillow", "sofawithblanket"), 1),
+    "ba:jobdemand_standardfridge": ("building", ("standardfridge", "luxuryfridge"), 1),
+    "ba:jobdemand_watercooler": ("building", ("watercooler", "waterfountain"), 0),
+    "ba:jobdemand_bronzehealthinsurance": ("insurance", 0, 1),
+    "ba:jobdemand_silverhealthinsurance": ("insurance", 1, 1),
+    "ba:jobdemand_goldhealthinsurance": ("insurance", 2, 1),
+    "ba:jobdemand_peacefulworkenvironment": ("happiness", 50, 0),
+    "ba:jobdemand_cleanworkplace": ("clean", 80, 1),
+}
+# Demands only the owner can settle for everybody at once: health insurance comes
+# through an HR manager's plan, and a happy boss is the player's own happiness.
+COMPANY_DEMAND_KINDS = {"insurance", "happiness"}
+# A demanded item that can display products counts only while it holds some
+# (HasItemInBuilding.CheckIfItemIsInBuildingAndIsFilled). Of the items above, the
+# game's item data gives display slots to the industrial coffee machine alone;
+# fridges keep food as cargo but have none, so an empty fridge still counts.
+DISPLAY_ITEMS = {"ba:itemname_industrialcoffeemachine"}
+JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
 
 # Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
 # against payroll (hours logged this week) and against import delivery days.
@@ -323,8 +386,19 @@ _SELLS_HEADER_RE = re.compile(r"Businesses of this type (?:primarily sell|can se
 _SOLD_ITEM_RE = re.compile(r"\[([^\]]+)\]\((?:products|fees)-([a-z0-9_]+)\)")
 
 SERVICE_SKILL = "ba:skill_customerservice"
+CLEANING_SKILL = "ba:skill_cleaning"
 CLEANING_SHIFT = 0  # a roaming cleaning-station duty
 STATION_SHIFT = 1  # a post at one named station
+
+# An office customer is one billed hour of one professional's time. No help page
+# gives the figure: it was measured, on a law firm at build 3680, whose hour
+# reports matched the lawyers posted at computers one for one (1, 2, 33 and 50
+# alike) while the fee's demand reading stood at 66. Re-check after a game update.
+OFFICE_POST_RATE = 1
+
+# "Options include: * [Laptop](furniture-laptop)" on the Computer Options page:
+# the computers a Computer Workstation is built around, where office shifts post.
+COMPUTER_GROUP_HELP = "help_ba:itemname_computergroup_content"
 
 
 def _int(text: str) -> int:
@@ -343,6 +417,12 @@ def _service_stations(names: Names) -> dict:
         if station and capacity and "Customer Service" in station.group(1):
             out[match.group(1)] = _int(capacity.group(1))
     return out
+
+
+def _office_posts(names: Names) -> set:
+    """The computers an office professional is posted to, from Computer Options."""
+    _head, _, options = names.locale.get(COMPUTER_GROUP_HELP, "").partition("Options include:")
+    return {"ba:itemname_" + slug for _label, slug in _FURNITURE_RE.findall(options)}
 
 
 def _recipes(names: Names) -> dict:
@@ -609,9 +689,11 @@ DEPOSIT_MAX_FACTOR = 300
 DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 
 # The door capacity each size letter buys, per building type. Read from the
-# game's help page when the player's own en.json is at hand; this is the same
-# table as build 3675 ships, for when it is not (the page does not travel with
-# the web build). A letter whose variants disagree carries [min, max].
+# game's help page, which travels with the web build's game text (a player's own
+# en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
+# it stands for any category the page does not yield, such as on a CLI run when
+# the game is not installed where DEFAULT_LOCALE points. A letter whose variants
+# disagree carries [min, max].
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
@@ -975,6 +1057,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
             _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
         )
     businesses.sort(key=lambda x: -x["profit"])
+    _job_demands(save, names, businesses)
 
     daily = _daily_series(save, summaries)
     loans = _loans(save, names)
@@ -1009,13 +1092,13 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     chains = _chains(save, businesses, trends)
     hype = _hype_exposure(businesses, market)
 
-    grids = _hourly(save, buildings, businesses, stations, crew_skill)
+    grids = _hourly(save, buildings, businesses, stations, _office_posts(names), crew_skill)
+    status_of = {b["key"]: b["status"] for b in businesses}
     service_wage = collections.defaultdict(float)
     for person in staff:
-        if person["skill"] == SERVICE_SKILL and person["addr"]:
-            service_wage[site_key(person["addr"])] = max(
-                service_wage[site_key(person["addr"])], person["wage"]
-            )
+        key = site_key(person["addr"])
+        if person["addr"] and _serves(status_of.get(key), person["skill"]):
+            service_wage[key] = max(service_wage[key], person["wage"])
     hour_findings = _hour_findings(grids, businesses, service_wage)
     plan = _plan(
         save,
@@ -1136,9 +1219,8 @@ def _city_date(save: Save, day: int) -> str:
 
 # The custom-game sliders: the unit each is shown in, its value on the game's
 # Normal preset, and the direction that makes the game harder. Names are the
-# main_menu_custom_* titles in the locale, shortened; "Tax rate" and "Resale value"
-# are the board's own (the game has no name for the selling multiplier), and the
-# effects paraphrase the game's tooltips. Normal's values come from the game's
+# main_menu_custom_* titles in the locale, shortened; "Tax rate" is the board's
+# own, and the effects paraphrase the game's tooltips. Normal's values come from the game's
 # DifficultySetting assets at VERIFIED_BUILD, and Normal is not ×1 across the
 # board: its urgent wholesale fee is ×0.2 and its tax rate 5%.
 HOUSE_RULES = [
@@ -1155,7 +1237,7 @@ HOUSE_RULES = [
     ("exportMultiplier", "Export price", "×", 0.65, "down",
      "what exporters pay for factory-made goods"),
     ("sellingMultiplier", "Resale value", "×", 0.75, "down",
-     "what selling something back returns"),
+     "share of an item's or vehicle's value received when selling it"),
     ("wholesaleUrgentFeeMultiplier", "Wholesale urgent fee", "×", 0.2, "up",
      "surcharge for rushing a wholesale order"),
     ("importerUrgentFeeMultiplier", "Importer urgent fee", "×", 0.75, "up",
@@ -1259,6 +1341,147 @@ def _staff(save: Save, names: Names):
     return by_addr, staff
 
 
+def _cleanliness(save: Save, building: dict) -> float:
+    """A building's cleanliness as the game scores it, from its saved dirt spots.
+
+    BuildingCleanliness.GetCleanliness: 100 with no spots, or with no spot dirty
+    enough to see (5 or more); otherwise 100 less the mean of the visible dirt and
+    the mean of all dirt, whole points, never below 0.
+    """
+    dirt = [spot.get("dirtiness") or 0 for spot in save.items(building.get("dirtSpots"))]
+    visible = sum(x for x in dirt if x >= 5)
+    if not dirt or not visible:
+        return 100.0
+    return float(max(0, int(100 - sum(dirt) / len(dirt) - visible / len(dirt))))
+
+
+def _job_demands(save: Save, names: Names, businesses: list) -> None:
+    """Which staff demands go unmet at each site, written onto its business row.
+
+    staffDemands is one row per unmet demand with how many staff there hold it,
+    highest priority first; company rows (health insurance, a happy boss) are
+    marked, since no site can settle them. staffLacking, staffLackingCompany and
+    staffLackingAny count the people behind the site rows, the company rows and
+    either, and quitWarnings the people with anything unmet who have already
+    warned they will quit. A demand
+    the table does not know, from a newer game, is left out rather than guessed at.
+    """
+    root = save.root
+    by_key = {b["key"]: b for b in businesses}
+    regs = {
+        site_key((r["StreetName"], r["StreetNumber"])): r
+        for r in save.items(root["BuildingRegistrations"])
+        if r.get("RentedByPlayer")
+    }
+    employees = save.items(root["EmployeeInstances"])
+    by_id = {e.get("id"): e for e in employees}
+    plans = {p.get("id"): p for p in save.items(root.get("hrManagerPlans"))}
+    happiness = root.get("Happiness") or 0
+    held, clean = {}, {}
+
+    def items_at(key):
+        if key not in held:
+            held[key] = collections.defaultdict(list)
+            for holder in save.items(regs[key].get("itemInstances")):
+                item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+                if item and item.get("itemName"):
+                    held[key][item["itemName"]].append(item)
+        return held[key]
+
+    def shifts(key, employee_id):
+        """The employee's shifts on the days the building opens."""
+        for day in save.items(regs[key].get("scheduleDays")):
+            if day.get("isOpen"):
+                for shift in save.items(day.get("workShifts")):
+                    if shift.get("employeeId") == employee_id:
+                        yield shift
+
+    def met(e, key, kind, setting):
+        if kind == "hours":
+            low, high = setting
+            return (low <= (e.get("assignedWeeklyHours") or 0) <= high
+                    and (e.get("workedHoursThisWeek") or 0) <= high)
+        if kind == "days":
+            return (len(save.items(e.get("assignedWeeklyDays"))) == setting
+                    and (e.get("workedDays") or 0) <= setting)
+        if kind == "daysoff":
+            return not set(save.items(e.get("assignedWeeklyDays"))) & set(setting)
+        if kind == "noshift":
+            return not any(
+                low < (s.get("endingHour") or 0) and (s.get("startingHour") or 0) < high
+                for s in shifts(key, e.get("id")) for low, high in setting
+            )
+        if kind == "nocleaning":
+            return bool(regs[key].get("temporarilyClosed")) or not any(
+                s.get("type") == CLEANING_SHIFT for s in shifts(key, e.get("id"))
+            )
+        if kind == "desk":
+            desk = set(save.items(e.get("assignedWorkStationItems")))
+            return any("ba:itemname_" + slug in desk for slug in setting)
+        if kind == "building":
+            here = items_at(key)
+            for slug in setting:
+                for item in here.get("ba:itemname_" + slug, ()):
+                    if item["itemName"] not in DISPLAY_ITEMS or any(
+                        c.get("itemName") and (c.get("amount") or 0) > 0
+                        for c in save.items(item.get("cargoInstances"))
+                    ):
+                        return True
+            return False
+        if kind == "insurance":
+            plan = plans.get(e.get("assignedHrManagerPlanId")) or {}
+            cover = save.deref(plan.get("healthInsurancePlan")) or {}
+            manager = by_id.get(plan.get("assignedEmployeeId")) or {}
+            return (bool(cover) and (cover.get("planType") or 0) >= setting
+                    and bool(manager) and not manager.get("isBeingReplaced"))
+        if kind == "happiness":
+            return happiness >= setting
+        if kind == "clean":
+            if key not in clean:
+                clean[key] = _cleanliness(save, regs[key])
+            return clean[key] >= setting
+        raise ValueError(kind)
+
+    unmet = collections.defaultdict(collections.Counter)
+    # People, not demands: how many at each site lack something the site can
+    # give, how many lack something only the owner can, and how many of those
+    # with anything unmet have warned they will quit.
+    people = collections.defaultdict(collections.Counter)
+    for e in employees:
+        key = site_key(save.address(e.get("assignedAddress")))
+        if key not in by_key or key not in regs:
+            continue
+        lacks = set()
+        for slug in dict.fromkeys(save.items(e.get("demands"))):  # one person, one count
+            rule = JOB_DEMANDS.get(slug)
+            if rule and not met(e, key, rule[0], rule[1]):
+                unmet[key][slug] += 1
+                lacks.add("company" if rule[0] in COMPANY_DEMAND_KINDS else "site")
+        for scope in lacks:
+            people[key][scope] += 1
+        if lacks:
+            people[key]["any"] += 1
+            if e.get("hasSendQuitWarning"):
+                people[key]["quitting"] += 1
+    for b in businesses:
+        rows = [
+            {
+                "slug": slug,
+                "demand": names.label(slug),
+                "count": count,
+                "priority": JOB_DEMANDS[slug][2],
+                "company": JOB_DEMANDS[slug][0] in COMPANY_DEMAND_KINDS,
+            }
+            for slug, count in unmet[b["key"]].items()
+        ]
+        rows.sort(key=lambda r: (-r["priority"], -r["count"], r["demand"]))
+        b["staffDemands"] = rows
+        b["staffLacking"] = people[b["key"]]["site"]
+        b["staffLackingCompany"] = people[b["key"]]["company"]
+        b["staffLackingAny"] = people[b["key"]]["any"]
+        b["quitWarnings"] = people[b["key"]]["quitting"]
+
+
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
     st = latest.get(addr, {})
     name = b.get("BusinessName")
@@ -1353,6 +1576,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         status = "vacant"
     elif btype in RETAIL_TYPES:
         status = "retail"
+    elif btype in OFFICE_TYPES:
+        status = "office"
     elif btype in OVERHEAD_TYPES:
         status = "overhead"
     else:
@@ -1395,7 +1620,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "profit": profit,
         "margin": round(profit / revenue * 100, 1) if revenue else None,
         "satisfaction": {
-            "overall": sat.get("overall", 0) if status == "retail" else None,
+            "overall": sat.get("overall", 0) if status in ("retail", "office") else None,
             "service": sat.get("customerService", 0),
             "pricing": sat.get("pricing", 0),
             "cleanliness": sat.get("cleanliness", 0),
@@ -1690,7 +1915,7 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
         # bought outright (root realEstate, each with its purchase day) versus
         # every building in the city's table. The goals carry no total: the
         # save stores only the ids of the ones already completed.
-        "typesRun": len({b["typeSlug"] for b in businesses if b["status"] == "retail"}),
+        "typesRun": len({b["typeSlug"] for b in businesses if b["status"] in ("retail", "office")}),
         "typesTotal": len(_openable_types(names)),
         "buildingsOwned": len(save.items(save.root.get("realEstate"))),
         "buildingsTotal": len(load_buildings()),
@@ -2886,22 +3111,39 @@ def _factories(
     }
 
 
-def _hourly(save: Save, buildings: list, businesses: list, stations: dict, crew: dict) -> list:
-    """What each shop-front took per hour, against the capacity that was on.
+def _serves(status: str | None, skill: str | None) -> bool:
+    """Whether someone with this skill serves the customers of this kind of site.
+
+    A shop's queue is served by Customer Service at the registers. An office's
+    customers are served by the professional the agency employs, which is
+    everyone there but the cleaners.
+    """
+    if status == "office":
+        return bool(skill) and skill != CLEANING_SKILL
+    return skill == SERVICE_SKILL
+
+
+def _hourly(
+    save: Save, buildings: list, businesses: list, stations: dict, computers: set, crew: dict
+) -> list:
+    """What each shop-front and office took per hour, against the capacity that was on.
 
     Three numbers meet in one grid. The customers are measured, an hour at a
     time, over the fortnight the save keeps. The registers are whatever service
     staff were rostered on that hour, at the capacity of the exact counters they
-    were posted to. The door cap is the building's own limit. The smallest of
-    them is the one that decides, and the finding is which.
+    were posted to; in an office they are the professionals posted at computers,
+    OFFICE_POST_RATE an hour each. The door cap is the building's own limit. The
+    smallest of them is the one that decides, and the finding is which.
     """
     by_key = {b["key"]: b for b in businesses}
     out = []
     for b in buildings:
         key = site_key((b["StreetName"], b["StreetNumber"]))
         business = by_key.get(key)
-        if not business or business["status"] != "retail":
+        if not business or business["status"] not in ("retail", "office"):
             continue
+        office = business["status"] == "office"
+        posts = {slug: OFFICE_POST_RATE for slug in computers} if office else stations
 
         seen = [[[] for _ in range(24)] for _ in range(7)]
         for entry in save.items(b["orderHistory"]):
@@ -2920,8 +3162,8 @@ def _hourly(save: Save, buildings: list, businesses: list, stations: dict, crew:
         here = {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-            if item and item.get("itemName") in stations:
-                here[item.get("id")] = stations[item["itemName"]]
+            if item and item.get("itemName") in posts:
+                here[item.get("id")] = posts[item["itemName"]]
         counters = sum(here.values())
 
         # The roster, read the same way the game reads it: scheduleDay.day is the
@@ -2934,7 +3176,7 @@ def _hourly(save: Save, buildings: list, businesses: list, stations: dict, crew:
             for shift in save.items(scheduled.get("workShifts")):
                 if shift.get("type") != STATION_SHIFT:
                     continue
-                if crew.get(shift.get("employeeId")) != SERVICE_SKILL:
+                if not _serves(business["status"], crew.get(shift.get("employeeId"))):
                     continue
                 post = shift.get("itemInstanceId")
                 if post not in here:
@@ -2955,6 +3197,9 @@ def _hourly(save: Save, buildings: list, businesses: list, stations: dict, crew:
         entry = {
             "key": key,
             "name": business["name"],
+            "office": office,
+            # Customers an hour per staffed computer, for the page to say.
+            "postRate": OFFICE_POST_RATE if office else None,
             "customers": customers,
             "weeks": weeks,
             "thin": [w < HOUR_WEEKS_THIN for w in weeks],
@@ -3004,36 +3249,51 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         basket = grid["basket"] or 0
         door, counters = grid["door"], grid["counters"]
 
-        capped = collections.defaultdict(set)
+        # Each capped hour is held by its own limit: a roster that runs one
+        # person at night and a full floor by day is short of staff at night and
+        # up against the door by day, and a verdict for the week as a whole
+        # would be wrong about one of them.
+        office = grid.get("office", False)
+        by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
         for wd, hour in _capped_cells(grid):
-            capped[wd].add(hour)
-        hours = sum(len(h) for h in capped.values())
-        if hours:
-            staffed_at = [
-                grid["staffed"][wd][h] for wd, hs in capped.items() for h in hs
-            ]
-            typical = min(staffed_at) if staffed_at else 0
-            if door and door <= typical:
-                limit, fix = "the building", "a bigger site or a second shop nearby"
-            elif typical < counters:
-                limit, fix = "staffing", "more service staff on those hours"
+            staffed = grid["staffed"][wd][hour]
+            if door and door <= staffed:
+                by_limit["the building"][wd].add(hour)
+            elif staffed < counters:
+                by_limit["staffing"][wd].add(hour)
             else:
-                limit, fix = "registers", "another counter"
-            at_cap = min(door or 10**9, typical or 10**9)
+                by_limit["registers"][wd].add(hour)
+        for limit, fix in (
+            ("the building", "a bigger office or a second one nearby" if office
+             else "a bigger site or a second shop nearby"),
+            ("staffing", "more staff at the computers on those hours" if office
+             else "more service staff on those hours"),
+            ("registers", "another computer workstation" if office else "another counter"),
+        ):
+            capped = by_limit.get(limit)
+            if not capped:
+                continue
+            cells = [(wd, h) for wd, hs in capped.items() for h in hs]
+            ceilings = [grid["effective"][wd][h] for wd, h in cells]
             out.append(
                 {
                     "kind": "cap",
                     "key": grid["key"],
                     "site": grid["name"],
-                    "hours": hours,
+                    "office": office,
+                    "hours": len(cells),
                     "when": _hour_phrase(capped),
-                    "limit": limit,
+                    "limit": "workstations" if office and limit == "registers" else limit,
                     "fix": fix,
-                    "cap": at_cap,
+                    "cap": min(ceilings),
+                    "capTop": max(ceilings),
                     "basket": basket,
-                    # What is measurably flowing through the ceiling. What is
-                    # being turned away above it is not in the save at all.
-                    "throughput": money(hours * at_cap * basket / 7),
+                    # What is measurably flowing through the ceiling, hour by
+                    # hour. What is being turned away above it is not in the
+                    # save at all.
+                    "throughput": money(
+                        sum(grid["customers"][wd][h] for wd, h in cells) * basket / 7
+                    ),
                 }
             )
 
@@ -3075,6 +3335,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     "kind": "idle",
                     "key": grid["key"],
                     "site": grid["name"],
+                    "office": office,
                     "day": WEEKDAYS[best["wd"]],
                     "from": best["from"],
                     "to": best["to"],
@@ -3157,8 +3418,7 @@ def _market(
     trading = [
         b
         for b in businesses
-        if b["neighbourhood"]
-        and (b["status"] == "retail" or (b["status"] != "vacant" and b["typeSlug"] in OFFICE_TYPES))
+        if b["neighbourhood"] and b["status"] in ("retail", "office")
     ]
 
     # What we sell, and where. What we make, anywhere.
@@ -3248,7 +3508,7 @@ def _market(
     }
     catalogue = _type_catalogue(save, names, {row["slug"] for row in rows})
     mine_types = {
-        b["typeSlug"] for b in businesses if b["status"] in ("retail", "support")
+        b["typeSlug"] for b in businesses if b["status"] in ("retail", "office")
     }
 
     seen = history.demand(character, day, today_snapshot)
@@ -3800,7 +4060,7 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
     for b in businesses:
         if b["status"] == "vacant":
             key = "\0vacant"
-        elif b["status"] == "retail":
+        elif b["status"] in ("retail", "office"):
             key = b["typeSlug"]
         else:
             reach = downstream(b["key"], frozenset())
@@ -3812,7 +4072,7 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
     by_trend = {t["key"]: t for t in trends}
     chains = []
     for key, members in groups.items():
-        shops = [b for b in members if b["status"] == "retail"]
+        shops = [b for b in members if b["status"] in ("retail", "office")]
         if key == "\0vacant":
             name = "Vacant leases"
         elif key == "\0support":
@@ -3825,7 +4085,12 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
 
 
 def _plural(label: str) -> str:
-    return label if label.endswith("s") else label + "s"
+    if label.endswith("s"):
+        return label
+    # "Travel Agency" chains as "Travel Agencies"; "Gift Shop" just takes an s.
+    if len(label) > 1 and label.endswith("y") and label[-2].lower() not in "aeiou":
+        return label[:-1] + "ies"
+    return label + "s"
 
 
 COST_KEYS = ("cogs", "wages", "rent", "marketing", "theft", "licensing")
@@ -3838,8 +4103,9 @@ def _chain(name: str, members: list, fed_by: dict, by_key: dict, by_trend: dict)
     profit = sum(b["profit"] for b in members)
     # Revenue booked away from the shop counter is a sale to somebody outside the
     # company — a factory shipping to a pier. It is real money, but it is not
-    # what the shops took, so it is named rather than folded in.
-    external = sum(b["revenue"] for b in members if b["status"] != "retail")
+    # what the shops took, so it is named rather than folded in. An office's fees
+    # are its trading, the way a shop's takings are.
+    external = sum(b["revenue"] for b in members if b["status"] not in ("retail", "office"))
     outside = {
         fed_by[b["key"]]
         for b in members
@@ -4259,24 +4525,30 @@ def _alerts(
     # --- a site that has not started trading is one finding, not four
     silent = set()
     for b in businesses:
-        # Only a shop can fail to trade. A warehouse, factory or head office
-        # never books a sale, so silence there is its normal state.
-        if b["status"] != "retail" or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
+        # Only a shop or an office can fail to trade. A warehouse, factory or
+        # head office never books a sale, so silence there is its normal state.
+        if b["status"] not in ("retail", "office") or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
             continue
+        office = b["status"] == "office"
         silent.add(b["key"])
         priced = [l for l in b["lines"] if l["price"] > 0]
         stocked = [l for l in priced if l["units"] > 0]
         reasons = []
         if b["staff"] == 0:
             reasons.append("no staff")
-        if priced and not stocked:
+        if not priced:
+            reasons.append("no prices set")
+        # An office sells hours, not goods: nothing to stock or deliver.
+        elif not office and not stocked:
             reasons.append("no stock")
-        elif priced and len(stocked) * 2 < len(priced):
+        elif not office and len(stocked) * 2 < len(priced):
             reasons.append(f"{len(priced) - len(stocked)} of {len(priced)} shelves bare")
-        if b["key"] not in planned:
+        if not office and b["key"] not in planned:
             reasons.append("no delivery plan")
         if not reasons:
-            reasons.append("staffed and stocked, no trading day booked yet")
+            reasons.append(
+                f"staffed and {'priced' if office else 'stocked'}, no trading day booked yet"
+            )
         note(
             "critical",
             b["name"],
@@ -4311,7 +4583,7 @@ def _alerts(
                 worth=abs(b["profit"]),
                 key=b["key"],
             )
-        if b["status"] == "retail" and b["staff"] == 0:
+        if b["status"] in ("retail", "office") and b["staff"] == 0:
             note("critical", b["name"], "staff", "No staff assigned", always=True, key=b["key"])
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
@@ -4327,6 +4599,60 @@ def _alerts(
             if group == "uniform" and b.get("missingUniformLocker"):
                 continue  # Installing the locker is the first action to take.
             note("warn", b["name"], group, text, always=True, key=b["key"])
+
+    # --- what staff ask for and do not get. A site that has not started trading
+    # still has staff whose satisfaction is moving, so it is not folded away here.
+    for b in businesses:
+        if b["status"] == "vacant":
+            continue
+        demands = b.get("staffDemands", [])
+        wants = [d for d in demands if not d["company"]]
+        quitting = b.get("quitWarnings", 0)
+        # Every demand the site itself can meet, with the game's priority, headed
+        # by how many people lack one. Once somebody with an unmet demand has
+        # warned they will quit, the line is louder and names everything unmet
+        # here, the company-wide demands too, since those may be all they lack.
+        if quitting and demands:
+            count, shown = b.get("staffLackingAny", 0), demands
+        elif wants:
+            count, shown = b.get("staffLacking", 0), wants
+        else:
+            continue
+        text = f"{count} staff with unmet demands: " + ", ".join(
+            f"{d['demand']} for {d['count']} ("
+            + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
+            + ")"
+            for d in shown
+        )
+        if quitting:
+            text += (f"; {quitting} of them {'has' if quitting == 1 else 'have'} "
+                     f"warned they will quit")
+        note(
+            "critical" if quitting else "warn", b["name"], "jobdemand", text,
+            always=True, key=b["key"],
+        )
+
+    # --- the staff demands no single site can settle: health insurance comes
+    # through an HR manager's plan, a happy boss is the owner's own happiness.
+    company, lacking = collections.OrderedDict(), 0
+    for b in businesses:
+        if b["status"] == "vacant":
+            continue
+        lacking += b.get("staffLackingCompany", 0)
+        for d in b.get("staffDemands", []):
+            if d["company"]:
+                row = company.setdefault(d["slug"], dict(d, count=0))
+                row["count"] += d["count"]
+    if company:
+        rows = sorted(company.values(), key=lambda d: (-d["priority"], -d["count"], d["demand"]))
+        insured = any(JOB_DEMANDS[d["slug"]][0] == "insurance" for d in rows)
+        note(
+            "warn", "Company", "companydemand",
+            f"{lacking} staff with demands only you can meet: "
+            + ", ".join(f"{d['demand']} for {d['count']}" for d in rows)
+            + (". Health insurance comes through an HR manager's plan" if insured else ""),
+            always=True,
+        )
 
     # --- the promotion cap, which is reached with campaigns or not at all
     # Promotion is the foot traffic the address comes with plus whatever the
@@ -4447,8 +4773,8 @@ def _alerts(
         b = businesses[row["s"]]
         # A factory's takings are batch exports on the purchase calendar, not
         # trading; and a shop up under its own hype wave is the line above this
-        # one said twice.
-        if b["status"] != "retail":
+        # one said twice. An office's fees are trading like a shop's takings.
+        if b["status"] not in ("retail", "office"):
             continue
         if row["change"] > 0 and b["key"] in riding:
             continue
@@ -4543,23 +4869,31 @@ def _alerts(
 
     # --- what the hour-by-hour grid says that a daily total cannot
     # Five shops hitting the same 30/h ceiling in the same hours is one finding
-    # about five shops, not five findings.
+    # about five shops, not five findings. Offices group only with offices.
     same = collections.OrderedDict()
     for finding in hours:
         if finding["kind"] == "cap" and finding["key"] not in silent:
             same.setdefault(
-                (finding["limit"], finding["cap"], finding["when"], finding["hours"]),
+                (
+                    finding.get("office", False),
+                    finding["limit"],
+                    finding["cap"],
+                    finding.get("capTop", finding["cap"]),
+                    finding["when"],
+                    finding["hours"],
+                ),
                 [],
             ).append(finding)
-    for (limit, cap, when, per_week), group in same.items():
+    for (office, limit, cap, top, when, per_week), group in same.items():
         worth = sum(f["throughput"] for f in group)
         where = (
             group[0]["site"]
             if len(group) == 1
-            else f"{len(group)} shops"
+            else f"{len(group)} {'offices' if office else 'shops'}"
         )
         who = "" if len(group) == 1 else ": " + ", ".join(f["site"] for f in group)
         subject = "is" if len(group) == 1 else "are"
+        ceiling = f"{cap}/h" if cap == top else f"{cap}-{top}/h"
         if limit == "the building":
             text = (
                 f"{where} {subject} at the {cap}/h door cap {when}, {per_week} hours a "
@@ -4568,13 +4902,15 @@ def _alerts(
             )
         else:
             text = (
-                f"{where} fill{'s' if len(group) == 1 else ''} the counters {when}, "
-                f"{per_week} hours a week at {cap}/h and ${worth:,.0f}/day through the "
+                f"{where} fill{'s' if len(group) == 1 else ''} "
+                f"{'the workstations' if office else 'the counters'} {when}, "
+                f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
                 f"ceiling. {limit.capitalize()} is the limit, so the answer is "
                 f"{group[0]['fix']}{who}"
             )
+        # One site can be at more than one ceiling: its limit keeps the ids apart.
         note(
-            "warn", where, "atcap", text, worth=worth,
+            "warn", where, "atcap", text, subject=limit, worth=worth,
             key=group[0]["key"] if len(group) == 1 else None,
         )
 
@@ -4586,7 +4922,8 @@ def _alerts(
             "info",
             site,
             "idlestaff",
-            f"{site} runs {finding['staff']} counters "
+            f"{site} runs {finding['staff']} "
+            f"{'workstations' if finding.get('office') else 'counters'} "
             f"{finding['from']:02d}:00-{finding['to']:02d}:00 on a "
             f"{finding['day']} for {finding['seen']} customers an hour; "
             f"{finding['spare']} staff-hours a week that buy nothing",
@@ -6210,7 +6547,8 @@ const VIEWS = {
       ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
       ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
-      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+      // An office's customer is an hour billed, so its spend is per hour.
+      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}${b.status==="office"?"/hour":""}`, "", b=>b.basket??-1],
       ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
       ["Promotion", b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
       ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
@@ -7146,6 +7484,7 @@ const ALERT_LINKS = {
   uniform: {sec:"secDetail", site:true}, bathroom: {sec:"secDetail", site:true},
   toiletprivacy: {sec:"secDetail", site:true}, sink: {sec:"secDetail", site:true},
   music: {sec:"secDetail", site:true}, interior: {sec:"secDetail", site:true},
+  jobdemand: {sec:"secDetail", site:true}, companydemand: {sec:"secPayroll"},
   hype: {sec:"secMarket"}, vacant: {sec:"secPortfolio"},
   promotion: {sec:"secPortfolio", port:"ops"},
 };
@@ -7283,6 +7622,9 @@ function findingAmount(a){
       break;
     case "satisfaction":
       if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "satisfied");
+      break;
+    case "jobdemand": case "companydemand":
+      if((m = t.match(/^(\d+) staff/))) return amtHtml(m[1], "staff");
       break;
     case "promotion":
       if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "promotion");
@@ -7604,10 +7946,11 @@ function miniChart(series, key, colour){
 /* --- the shop's week, hour by hour ------------------------------------
    Three numbers meet here. Customers are measured an hour at a time over the
    fortnight the save keeps. The registers are whatever service staff were
-   rostered that hour, at the capacity of the counters they were posted to. The
-   door cap is the building's own limit. Shade is how busy against the site's
-   own busiest hour; a red outline is an hour spent at the ceiling that was on.
-   The sentence under the grid says which, and when capacity stood idle. */
+   rostered that hour, at the capacity of the counters they were posted to; an
+   office's are the professionals posted at its computers. The door cap is the
+   building's own limit. Shade is how busy against the site's own busiest hour;
+   a red outline is an hour spent at the ceiling that was on. The sentence under
+   the grid says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -7629,7 +7972,8 @@ function hourGrid(g, todayWd){
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
       const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
       const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
-        g.staffed[wd][h]} of ${g.counters} register capacity on${
+        g.office ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
+          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`}${
         atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
       cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
@@ -7657,13 +8001,16 @@ function drawSite(){
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
   const grid = (D.hours || []).find(h => h.key === b.key);
+  /* An office sells billed hours, not goods: its line is a fee with nothing to
+     stock or top up, and its registers are staffed computers. */
+  const office = b.status === "office";
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
       ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
          the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`
-      : `${f.staff} counters are on ${String(f.from).padStart(2,"0")}:00-${
+      : `${f.staff} ${f.office ? "workstations are staffed" : "counters are on"} ${String(f.from).padStart(2,"0")}:00-${
          String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
          ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
 
@@ -7681,7 +8028,7 @@ function drawSite(){
   const stats = `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}</div></div>
     <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
-      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/visit</small>`}</div></div>
+      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div></div>
     <div class="sstat" data-tip="${attr(costTip)}"><span class="lab">Profit</span><div class="v ${sign(b.profit)}">${fmt(b.profit)}${
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
     <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
@@ -7717,13 +8064,23 @@ function drawSite(){
   const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
-  const shelves = showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
+  /* An office bills fees; the phones and monitors boxed up in its cargo are
+     furniture, not lines. Every fee it prices or bills is listed, idle or not. */
+  const shelves = office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
+    : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
     const p = Math.round(t.pressure);
     return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
   };
-  const products = shelves.length ? `
+  const products = office ? (shelves.length ? `
+    <table>
+      <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
+      <tbody>${shelves.map(l => `<tr>
+          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td>${l.soldPerDay.toLocaleString()}</td>
+          <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
+    : shelves.length ? `
     <table>
       <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
         <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
@@ -7738,9 +8095,16 @@ function drawSite(){
           <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
           <td>${l.units.toLocaleString()}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
-  const shelfMore = sideShelves.length ? `
+  const shelfMore = !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
+
+  /* The staff's own demands the site does not meet, each with how many hold it;
+     health insurance and a happy boss are among them, settled company-wide. */
+  const wants = b.staffDemands || [];
+  const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
+    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
+    b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
 
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
@@ -7755,18 +8119,21 @@ function drawSite(){
       ${sechead("Customers by hour", {why: `${Math.min(...grid.weeks.filter(w => w))} week${
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
-        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.counters} register capacity across ${
-        grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}${grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
+        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
+          ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
+              grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
+          : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
+        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
         notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`})}
       <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv">
         ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        <div class="crew">${crew}</div>
+        <div class="crew">${crew}</div>${demandNote}
       </section>
       <section class="rv">
-        ${sechead("Shelves", {quiet: "before tomorrow's top-up"})}
+        ${office ? sechead("Fees") : sechead("Shelves", {quiet: "before tomorrow's top-up"})}
         ${products}${shelfMore}
       </section>
     </div>
@@ -8999,10 +9366,10 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no stock or no trading day", on:true},
+  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
-  {id:"staff",        label:"Staffing",               note:"A shop with nobody on, or a machine nobody is posted to", on:true},
+  {id:"staff",        label:"Staffing",               note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
   {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
   {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
   {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
@@ -9011,8 +9378,10 @@ const ALERT_GROUPS = [
   {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
   {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
   {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
+  {id:"jobdemand",    label:"Staff demands",          note:"Schedule, desk or building demands of a site's staff not met", on:true},
+  {id:"companydemand",label:"Insurance / happy boss", note:"Staff demands only the owner can meet", on:true},
   {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
-  {id:"trend",        label:"Revenue trend",          note:"A shop's week up or down by more than 15%", on:true},
+  {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
   {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
   {id:"paused",       label:"Import paused",          note:"An import switched off with the depot still drawing", on:true},
@@ -9021,8 +9390,8 @@ const ALERT_GROUPS = [
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import lands", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
-  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff or registers turn people away", on:false},
-  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters staffed through hours that buy nothing", on:false},
+  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:false},
+  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Stock not moving",       note:"Goods sitting in a depot no line draws from", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];

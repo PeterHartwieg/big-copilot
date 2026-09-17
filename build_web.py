@@ -35,6 +35,7 @@ NAME_PREFIXES = (
     "ba:neighborhood_",
     "ba:factoryworkstationtype_",
     "ba:skill_",
+    "ba:jobdemand_",
 )
 
 
@@ -45,6 +46,8 @@ def ships(key: str, text: str) -> bool:
     if key.startswith("help_factory_workstation_"):
         return True
     if key == "help_building_types_content":  # size code -> door cap, for the premises table
+        return True
+    if key == "help_ba:itemname_computergroup_content":  # the computers an office posts staff to
         return True
     if not key.endswith("_content"):
         return False
@@ -58,14 +61,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 REPO = "https://github.com/PeterHartwieg/big-copilot"
 ISSUES_URL = REPO + "/issues/new"
-# Where "Support the project" goes. GitHub Sponsors for now; swap in a Ko-fi
-# or PayPal address here and rebuild if you prefer one.
-DONATE_URL = "https://github.com/sponsors/PeterHartwieg"
-# Cloudflare Web Analytics: cookieless visit counts, nothing about the save.
-# Paste the site token from the dashboard (Analytics & Logs > Web Analytics)
-# here and rebuild; empty means no beacon on the page. The token is public,
-# it sits in the HTML every visitor gets.
-ANALYTICS_TOKEN = ""
+# Where "Support the project" goes: Big Copilot's own PayPal donation page,
+# which returns supporters to bigcopilot.com. The same PayPal account has a
+# RentenWiki page whose purpose text names RentenWiki; never link that one here.
+DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
+# The board template's font links, swapped for the site's own copies.
+GOOGLE_FONTS = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">'
+)
 
 # One set of controls, two homes.
 #
@@ -336,7 +341,9 @@ details.help[open] summary::after{content:"\2013"}
     <span class="lg-foot" id="footSlot">
       <a class="link" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
       <a class="link" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
-      <a class="link" id="sourceLink" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source</a>
+      <a class="link" id="sourceLink" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source</a><span>&middot;</span>
+      <a class="link" id="impressumLink" href="/impressum" target="_blank" rel="noopener">Impressum</a><span>&middot;</span>
+      <a class="link" id="privacyLink" href="/privacy" target="_blank" rel="noopener">Privacy</a>
     </span>
     <span>&middot;</span><span>GAME BUILD __BUILD__</span>
   </footer>
@@ -344,7 +351,7 @@ details.help[open] summary::after{content:"\2013"}
     <summary>Where is my save?</summary>
     <div class="help-content">
       <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
-      <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.__ANALYTICS_NOTE__</p>
+      <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
@@ -381,12 +388,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL).replace(
-    # Cloudflare injects its cookieless beacon at the edge for this domain, so
-    # the note is true whether or not a token is set here.
-    "__ANALYTICS_NOTE__",
-    " Visits are counted by Cloudflare's cookieless analytics; nothing about your save or company is in that count.",
-)
+""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL)
 
 # Everything the page fetches, together with the build inputs that shape it:
 # build_web.py itself, and the wiki generator (code, authored wording and
@@ -400,7 +402,7 @@ STAMP_INPUTS = (
     "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json",
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
-    "tools/wiki_topics.json",
+    "tools/wiki_topics.json", "web/fonts/fonts.css",
 )
 
 
@@ -467,22 +469,25 @@ def page_html(release: dict, root: str = HERE) -> str:
     # straight after them. The template carries the inline SVG favicon, so this
     # door never asks for /favicon.ico either; a viewport tag is all this page
     # adds.
+    # No analytics script: the privacy notice says the site runs none, and
+    # Cloudflare's automatic Web Analytics injection is off for this domain.
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
-    if ANALYTICS_TOKEN:
-        head += (
-            "<script defer src='https://static.cloudflareinsights.com/beacon.min.js' "
-            + "data-cf-beacon='{\"token\": \"" + ANALYTICS_TOKEN + "\"}'></script>" + chr(10)
-        )
     head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
     scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
         "__RELEASE__", release_json(release).replace("<", "\\u003c")
     ).replace("__UPDATE_SCRIPT__", update_script)
-    return render(
+    page = render(
         None, live=True, banner=BANNER, before_script=scripts,
         head=head,
     )
+    # The board template loads its fonts from Google, which is fine for a local
+    # dashboard.html. The site serves its own copies instead (web/fonts/), so no
+    # visitor's IP address reaches Google; the privacy notice relies on that.
+    if GOOGLE_FONTS not in page:
+        raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
+    return page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
 
 
 def check(root: str = HERE) -> list[str]:

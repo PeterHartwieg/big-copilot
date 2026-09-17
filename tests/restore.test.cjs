@@ -91,7 +91,9 @@ async function setup(t, options = {}) {
   }, options);
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
-    if (url.hostname !== 'restore.test') return route.abort();
+    // Only the page and app.js matter here; the stylesheet link to the site's
+    // fonts would otherwise hold scripts back while the fixture answers it.
+    if (url.hostname !== 'restore.test' || url.pathname.startsWith('/fonts/')) return route.abort();
     return route.fulfill({contentType:url.pathname === '/' ? 'text/html' : 'application/javascript',
       body:url.pathname === '/' ? html : url.pathname === '/app.js' ? app : ''});
   });
@@ -140,6 +142,17 @@ test('loading is prominent until data arrives, including runtime ready; remember
   await messages(page);
   await page.evaluate(() => fixture.complete());
   assert.equal(await page.locator('#pageSupply').isVisible(), true);
+});
+
+test('the Impressum and privacy notice stay reachable once the board replaces the landing', async t => {
+  const page = await setup(t);
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  for (const [href, label] of [['/impressum', 'Impressum'], ['/privacy', 'Privacy']]) {
+    assert.equal(await page.locator(`#menuFootSlot a[href="${href}"]`).count(), 1);
+    assert.equal(await page.locator(`#footerLinks a[href="${href}"]`).innerText(), label);
+  }
 });
 
 test('URL destination wins over remembered page without adding a visit', async t => {

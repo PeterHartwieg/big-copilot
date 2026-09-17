@@ -6,6 +6,18 @@
     "summary": "Running the board from Python now finds your game's own text on Windows, macOS and Linux without setup, and falls back to the English text built into the board when the game is not installed. Names read the way the game shows them instead of raw slugs like Hourlylawyerfee. Set BA_LOCALE if the game lives outside the usual Steam folders."
   },
   {
+    "pr": 43,
+    "date": "2026-09-17",
+    "title": "Warnings for unmet staff demands",
+    "summary": "Needs attention now tells you when your employees' demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site's page lists the demands under its crew."
+  },
+  {
+    "pr": 40,
+    "date": "2026-09-16",
+    "title": "Staffing by the hour for offices",
+    "summary": "Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour."
+  },
+  {
     "pr": 34,
     "date": "2026-09-16",
     "title": "Save your location searches",

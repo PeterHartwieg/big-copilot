@@ -7,10 +7,14 @@
  *            updated history, both as JSON strings
  *   name   - the player named a factory line: record it and rebuild from the
  *            save already on hand
- * Nothing here talks to the network except the one-time runtime download.
+ * Nothing here talks to the network except the one-time runtime download,
+ * which comes from this site: Pyodide's core files are served from
+ * web/pyodide/ rather than a CDN, so no visitor's IP address reaches a third
+ * party (the privacy notice relies on that). Updating Pyodide means adding the
+ * new version's folder there; docs/architecture.md lists the files.
  */
 const PYODIDE_VERSION = "314.0.6";
-const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+const PYODIDE_URL = new URL(`pyodide/v${PYODIDE_VERSION}/`, self.location.href).href;
 
 const SAVE_DIR = "/save";
 const DATA_DIR = "/data";

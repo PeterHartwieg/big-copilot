@@ -52,7 +52,7 @@ def entry(item, readings):
     return {"itemName": item, "demandValues": {"$items": readings}}
 
 
-def firm(status="support", hood="Hell's Kitchen"):
+def firm(status="office", hood="Hell's Kitchen"):
     return {"name": "HART. &Partners", "status": status, "typeSlug": LAW, "type": "Law Firm",
             "neighbourhood": hood, "opened": 1, "lines": [{"slug": FEE, "price": 288.9}]}
 

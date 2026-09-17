@@ -5,7 +5,7 @@ the **Optimize staffing** and **Time to break even** ideas (Find a location ship
 15 September 2026 and left the ballot).
 Time to break even would estimate how many in-game days each business needs to
 earn back its setup costs, based on its net profit. The count means
-dashboard browsers seen in the last ten minutes, not verified people or players
+dashboard tabs seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.
 The count paints into the masthead's live status, replacing the "In browser"
 source label beside the green dot (the dot greys when no fresh count is
@@ -13,25 +13,31 @@ available); voting remains a control in the footer.
 
 ## Browser behavior
 
-Presence starts after a save loads. One browser sends a heartbeat about every five
-minutes and receives the public count in the same response. Tabs coordinate through
-browser storage and Web Locks, sharing the ID, next due time and latest result.
-Reloading or changing saves does not deliberately send another heartbeat. When
-storage or locking is unavailable, coordination is best effort. Background tabs
-remain eligible, though browser suspension can make a session expire.
+Presence starts once the board is up, after a save loads or the wiki opens. Each tab sends a heartbeat about every five
+minutes and receives the public count in the same response. The random ID, the next
+due time and the latest count live only in that tab's memory; nothing is written to
+browser storage, because the privacy notice promises that and a stored ID for a
+counter would need consent under § 25 TDDDG. So tabs count separately, and a reload
+starts a new ID while the old one ages out of the ten-minute window. Changing saves
+does not send another heartbeat. Background tabs remain eligible, though browser
+suspension can make a session expire. Earlier versions stored the ID under
+`ba_community_state`; the page removes that key when it loads.
 
 The voting dialog fetches its list when opened. Each feature can receive one vote
 per connection IP. Duplicate submissions are safe. Shared networks may share a
 vote, and changing IP addresses can permit another vote. The online count uses a
-random browser ID independently of the voting identity.
+random per-page-load ID independently of the voting identity.
 
 Save bytes, company names, character IDs and calculations never enter these API
 requests. The voting database holds feature-specific HMACs of connection IPs, not
 raw IPs. These hashes are pseudonymous identifiers, not a claim of anonymity.
-Presence rows hold only the browser ID and last-seen time. Daily cleanup deletes
+Presence rows hold only the tab's ID and last-seen time. Daily cleanup deletes
 rows not seen for 24 hours, so stale records can remain for approximately 48 hours.
-Votes remain until the operator removes them. Cloudflare still processes the
-connection IP in handling network requests.
+The same cleanup deletes the votes of every feature no longer in
+`server/features.json`, so a poll's hashes go within a day of its removal; the
+privacy notice promises both. Cloudflare still processes the connection IP in
+handling network requests. Worker invocation logs are switched off in
+`wrangler.jsonc`, so no request URL or country is kept either.
 
 ## Configuration and release
 
@@ -69,13 +75,14 @@ while static Copilot assets remain usable. Test locally without real saves or IP
 ## Maintaining voting options
 
 Edit `server/features.json` and deploy. Keep IDs stable while a feature remains in
-the poll; changing an ID creates a new voting identity. Removing an option stops
-new votes for it but does not delete historical rows. Titles and descriptions can
+the poll; changing an ID creates a new voting identity and deletes the old ID's votes
+at the next daily cleanup. Removing an option stops new votes for it, and the next
+cleanup deletes its rows. Titles and descriptions can
 change without resetting votes. No administration interface is required.
 
 ## Usage
 
-Forty browsers continuously connected for a full day produce approximately 11,520
+Forty tabs continuously open for a full day produce approximately 11,520
 heartbeats, plus startup/retry overhead. Each normal heartbeat updates a presence
 row and its timestamp index. Early duplicates avoid refreshing an already-fresh
 row. A short edge cache reuses only the public aggregate; it reduces database reads
