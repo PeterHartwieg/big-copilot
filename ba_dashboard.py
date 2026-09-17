@@ -7803,7 +7803,10 @@ function drawSite(){
   const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
-  const shelves = office || showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
+  /* An office bills fees; the phones and monitors boxed up in its cargo are
+     furniture, not lines. Every fee it prices or bills is listed, idle or not. */
+  const shelves = office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
+    : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
     const p = Math.round(t.pressure);
