@@ -180,7 +180,7 @@ from the installed locale — everything `stamp()` hashes has to be in place bef
 
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
 keeps the display names (`NAME_PREFIXES`: items, business types, neighbourhoods,
-workstations, skills), the `recipes_*` keys and the `help_recipes_*_content` pages, the
+workstations, skills, and job demands with their descriptions), the `recipes_*` keys and the `help_recipes_*_content` pages, the
 workstation help pages, the business-type help pages, the item help pages whose body contains
 `Customer Capacity` or `employee station` (which is how cleaning, computer and security
 stations travel), and

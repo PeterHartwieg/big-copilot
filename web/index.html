@@ -1,10 +1,10 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=f004d93a23">
+<link rel="stylesheet" href="community.css?v=bb015b2ad0">
 <title>Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f004d93a23">
+<link rel="stylesheet" href="fonts/fonts.css?v=bb015b2ad0">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1962,8 +1962,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "f004d93a23";</script>
-<script>window.LEDGER_RELEASE = {"version":"f004d93a23","latest":{"pr":40,"date":"2026-09-16","title":"Staffing by the hour for offices","summary":"Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour."}};</script>
+<script>window.LEDGER_BUILD = "bb015b2ad0";</script>
+<script>window.LEDGER_RELEASE = {"version":"bb015b2ad0","latest":{"pr":40,"date":"2026-09-16","title":"Staffing by the hour for offices","summary":"Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2032,8 +2032,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=f004d93a23"></script>
-<script src="community.js?v=f004d93a23"></script>
+<script src="app.js?v=bb015b2ad0"></script>
+<script src="community.js?v=bb015b2ad0"></script>
 
 <script>
 
@@ -3220,6 +3220,7 @@ const ALERT_LINKS = {
   uniform: {sec:"secDetail", site:true}, bathroom: {sec:"secDetail", site:true},
   toiletprivacy: {sec:"secDetail", site:true}, sink: {sec:"secDetail", site:true},
   music: {sec:"secDetail", site:true}, interior: {sec:"secDetail", site:true},
+  jobdemand: {sec:"secDetail", site:true}, companydemand: {sec:"secPayroll"},
   hype: {sec:"secMarket"}, vacant: {sec:"secPortfolio"},
   promotion: {sec:"secPortfolio", port:"ops"},
 };
@@ -3357,6 +3358,9 @@ function findingAmount(a){
       break;
     case "satisfaction":
       if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "satisfied");
+      break;
+    case "jobdemand": case "companydemand":
+      if((m = t.match(/^(\d+) staff/))) return amtHtml(m[1], "staff");
       break;
     case "promotion":
       if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "promotion");
@@ -3831,6 +3835,13 @@ function drawSite(){
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
+  /* The staff's own demands the site does not meet, each with how many hold it;
+     health insurance and a happy boss are among them, settled company-wide. */
+  const wants = b.staffDemands || [];
+  const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
+    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
+    b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
+
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
   $("sitePanel").innerHTML = `
@@ -3855,7 +3866,7 @@ function drawSite(){
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv">
         ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        <div class="crew">${crew}</div>
+        <div class="crew">${crew}</div>${demandNote}
       </section>
       <section class="rv">
         ${office ? sechead("Fees") : sechead("Shelves", {quiet: "before tomorrow's top-up"})}
@@ -8676,6 +8687,8 @@ const ALERT_GROUPS = [
   {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
   {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
   {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
+  {id:"jobdemand",    label:"Staff demands",          note:"Schedule, desk or building demands of a site's staff not met", on:true},
+  {id:"companydemand",label:"Insurance / happy boss", note:"Staff demands only the owner can meet", on:true},
   {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
   {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},

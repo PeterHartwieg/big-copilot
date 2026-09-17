@@ -35,6 +35,7 @@ NAME_PREFIXES = (
     "ba:neighborhood_",
     "ba:factoryworkstationtype_",
     "ba:skill_",
+    "ba:jobdemand_",
 )
 
 
