@@ -43,7 +43,9 @@ async function site(status) {
         opened: 12, revenue: 3491, customers: 9, basket: 387.89, profit: 1200, margin: 34.4,
         cogs: 0, wages: 2000, rent: 291, marketing: 0, theft: 0, licensing: 0,
         staff: 3, staffCost: 2100, crew: [{role: 'Lawyer', count: 3, daily: 2100, absent: 0}], people: [],
-        lines: [{item: 'Lawyer Fee (Hourly)', price: 387.89, rate: 9, units: 0, revenue: 3491, soldPerDay: 9}],
+        lines: [{item: 'Lawyer Fee (Hourly)', price: 387.89, rate: 9, units: 0, revenue: 3491, soldPerDay: 9},
+          // Furniture still boxed in the office's cargo: held, never sold.
+          {item: 'Classic Phone', price: 0, rate: 0, units: 2, revenue: 0, soldPerDay: 0}],
         series: [], rhythm: null, peakDay: null, swing: 0,
       }],
       hours: [{
@@ -86,6 +88,9 @@ test('an office lists its fee, not shelves to top up', async () => {
     assert.doesNotMatch(panel, /Shelves|before tomorrow's top-up|On hand|Pressure/);
     const heads = await page.$$eval('#sitePanel table thead th', ths => ths.map(th => th.textContent));
     assert.deepEqual(heads, ['Fee', 'Hours billed / day', 'Revenue / day']);
+    const fees = await page.$$eval('#sitePanel table tbody tr', rows => rows.map(r => r.cells[0].firstChild.textContent));
+    assert.deepEqual(fees, ['Lawyer Fee (Hourly)'], 'boxed furniture is not a fee');
+    assert.doesNotMatch(panel, /odds and ends/);
   } finally { await page.close(); }
 });
 
@@ -98,6 +103,8 @@ test('a shop keeps its registers and shelves', async () => {
     assert.match(read, /3 of 3 register capacity on/);
     const panel = await page.locator('#sitePanel').innerText();
     assert.match(panel, /Shelves/);
+    // The same boxed phone is a shop's odds and ends, behind the toggle.
+    assert.match(panel, /show 1 more: bags, drinks, odds and ends/);
     assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\/visit/);
   } finally { await page.close(); }
 });
