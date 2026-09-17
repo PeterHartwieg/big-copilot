@@ -1,5 +1,11 @@
 [
   {
+    "pr": 45,
+    "date": "2026-09-17",
+    "title": "The local script finds your game's text",
+    "summary": "Running the board from Python now finds your game's own text on Windows, macOS and Linux without setup, and falls back to the English text built into the board when the game is not installed. Names read the way the game shows them instead of raw slugs like Hourlylawyerfee. Set BA_LOCALE if the game lives outside the usual Steam folders."
+  },
+  {
     "pr": 34,
     "date": "2026-09-16",
     "title": "Save your location searches",
