@@ -193,6 +193,67 @@ AMENITY_DEMANDS = {
     ),
 }
 
+# Every demand the game can give an employee (up to three each, in
+# EmployeeInstances[].demands), as (kind, setting, priority). The save keeps no
+# record of which are met, so each kind below repeats the game's own Fulfilled()
+# check (Entities.Employee.JobDemands.Requirements in BigAmbitions.dll). The item
+# lists, hour windows and priorities are not in the help text: they were read
+# from the game's jobdemands Addressables bundle at build 3680. Priority is the
+# game's own: 0 Nice to have, 1 Important, 2 Critical.
+JOB_DEMANDS = {
+    "ba:jobdemand_fulltime": ("hours", (30, 50), 2),
+    "ba:jobdemand_parttime": ("hours", (10, 30), 2),
+    "ba:jobdemand_fourdaysweek": ("days", 4, 1),
+    "ba:jobdemand_fivedaysweek": ("days", 5, 1),
+    "ba:jobdemand_freeweekends": ("daysoff", (6, 7), 1),
+    "ba:jobdemand_nomornings": ("noshift", ((6, 10),), 0),
+    "ba:jobdemand_noafternoons": ("noshift", ((14, 16),), 0),
+    "ba:jobdemand_noevenings": ("noshift", ((18, 22),), 0),
+    "ba:jobdemand_nonights": ("noshift", ((22, 24), (0, 4)), 0),
+    "ba:jobdemand_nocleaning": ("nocleaning", None, 0),
+    "ba:jobdemand_hascalculator": ("desk", ("calculator",), 0),
+    "ba:jobdemand_hascomputermonitor": ("desk", ("computermonitor",), 1),
+    "ba:jobdemand_hasdeskcalendar": ("desk", ("deskcalendar",), 1),
+    "ba:jobdemand_hasdeskglobe": ("desk", ("deskglobe",), 1),
+    "ba:jobdemand_hasgraphictablet": ("desk", ("graphictablet", "graphictabletwithscreen"), 1),
+    "ba:jobdemand_hasgraphictabletwithscreen": ("desk", ("graphictabletwithscreen",), 1),
+    "ba:jobdemand_hasmousepad": ("desk", ("mousepad",), 0),
+    "ba:jobdemand_hasofficephone": ("desk", ("officephone",), 1),
+    "ba:jobdemand_hasphone": ("desk", ("officephone", "classicphone"), 1),
+    "ba:jobdemand_seatedatmultipurposechair": (
+        "desk", ("multipurposechair", "officechair2", "eameschair"), 1),
+    "ba:jobdemand_seatedatofficechair": (
+        "desk", ("officechair", "multipurposechair", "officechair2", "eameschair"), 1),
+    "ba:jobdemand_seatedatofficechair2": ("desk", ("officechair2", "eameschair"), 1),
+    "ba:jobdemand_seatedatofficedesk1": (
+        "desk", ("officedesk1", "officedesk2left", "officedesk2right"), 1),
+    "ba:jobdemand_seatedatofficedesk2": ("desk", ("officedesk2left", "officedesk2right"), 1),
+    "ba:jobdemand_coffeemachine": ("building", ("cheapcoffeemachine", "industrialcoffeemachine"), 1),
+    "ba:jobdemand_hasprinter": ("building", ("printer", "printertable"), 2),
+    "ba:jobdemand_largemeetingtable": ("building", ("largemeetingtable",), 1),
+    "ba:jobdemand_sofa": ("building", (
+        "modularsofa1l", "modularsofa1r", "modularsofa1m", "cornersofa01", "cornersofa02right",
+        "cornersofa02left", "sofaluxury", "sofaluxurymodular", "sofaluxurymodularcornerleft",
+        "sofaluxurymodularcornerleftpillow", "sofaluxurymodularcornerright",
+        "sofaluxurymodularcornerrightpillow", "sofaluxurymodularpillow", "sofawithblanket"), 1),
+    "ba:jobdemand_standardfridge": ("building", ("standardfridge", "luxuryfridge"), 1),
+    "ba:jobdemand_watercooler": ("building", ("watercooler", "waterfountain"), 0),
+    "ba:jobdemand_bronzehealthinsurance": ("insurance", 0, 1),
+    "ba:jobdemand_silverhealthinsurance": ("insurance", 1, 1),
+    "ba:jobdemand_goldhealthinsurance": ("insurance", 2, 1),
+    "ba:jobdemand_peacefulworkenvironment": ("happiness", 50, 0),
+    "ba:jobdemand_cleanworkplace": ("clean", 80, 1),
+}
+# Demands only the owner can settle for everybody at once: health insurance comes
+# through an HR manager's plan, and a happy boss is the player's own happiness.
+COMPANY_DEMAND_KINDS = {"insurance", "happiness"}
+# A demanded item that can display products counts only while it holds some
+# (HasItemInBuilding.CheckIfItemIsInBuildingAndIsFilled). Of the items above, the
+# game's item data gives display slots to the industrial coffee machine alone;
+# fridges keep food as cargo but have none, so an empty fridge still counts.
+DISPLAY_ITEMS = {"ba:itemname_industrialcoffeemachine"}
+JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
+
 # Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
 # against payroll (hours logged this week) and against import delivery days.
 WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -996,6 +1057,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
             _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
         )
     businesses.sort(key=lambda x: -x["profit"])
+    _job_demands(save, names, businesses)
 
     daily = _daily_series(save, summaries)
     loans = _loans(save, names)
@@ -1277,6 +1339,147 @@ def _staff(save: Save, names: Names):
         staff.append(rec)
         by_addr[rec["addr"]].append(rec)
     return by_addr, staff
+
+
+def _cleanliness(save: Save, building: dict) -> float:
+    """A building's cleanliness as the game scores it, from its saved dirt spots.
+
+    BuildingCleanliness.GetCleanliness: 100 with no spots, or with no spot dirty
+    enough to see (5 or more); otherwise 100 less the mean of the visible dirt and
+    the mean of all dirt, whole points, never below 0.
+    """
+    dirt = [spot.get("dirtiness") or 0 for spot in save.items(building.get("dirtSpots"))]
+    visible = sum(x for x in dirt if x >= 5)
+    if not dirt or not visible:
+        return 100.0
+    return float(max(0, int(100 - sum(dirt) / len(dirt) - visible / len(dirt))))
+
+
+def _job_demands(save: Save, names: Names, businesses: list) -> None:
+    """Which staff demands go unmet at each site, written onto its business row.
+
+    staffDemands is one row per unmet demand with how many staff there hold it,
+    highest priority first; company rows (health insurance, a happy boss) are
+    marked, since no site can settle them. staffLacking, staffLackingCompany and
+    staffLackingAny count the people behind the site rows, the company rows and
+    either, and quitWarnings the people with anything unmet who have already
+    warned they will quit. A demand
+    the table does not know, from a newer game, is left out rather than guessed at.
+    """
+    root = save.root
+    by_key = {b["key"]: b for b in businesses}
+    regs = {
+        site_key((r["StreetName"], r["StreetNumber"])): r
+        for r in save.items(root["BuildingRegistrations"])
+        if r.get("RentedByPlayer")
+    }
+    employees = save.items(root["EmployeeInstances"])
+    by_id = {e.get("id"): e for e in employees}
+    plans = {p.get("id"): p for p in save.items(root.get("hrManagerPlans"))}
+    happiness = root.get("Happiness") or 0
+    held, clean = {}, {}
+
+    def items_at(key):
+        if key not in held:
+            held[key] = collections.defaultdict(list)
+            for holder in save.items(regs[key].get("itemInstances")):
+                item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+                if item and item.get("itemName"):
+                    held[key][item["itemName"]].append(item)
+        return held[key]
+
+    def shifts(key, employee_id):
+        """The employee's shifts on the days the building opens."""
+        for day in save.items(regs[key].get("scheduleDays")):
+            if day.get("isOpen"):
+                for shift in save.items(day.get("workShifts")):
+                    if shift.get("employeeId") == employee_id:
+                        yield shift
+
+    def met(e, key, kind, setting):
+        if kind == "hours":
+            low, high = setting
+            return (low <= (e.get("assignedWeeklyHours") or 0) <= high
+                    and (e.get("workedHoursThisWeek") or 0) <= high)
+        if kind == "days":
+            return (len(save.items(e.get("assignedWeeklyDays"))) == setting
+                    and (e.get("workedDays") or 0) <= setting)
+        if kind == "daysoff":
+            return not set(save.items(e.get("assignedWeeklyDays"))) & set(setting)
+        if kind == "noshift":
+            return not any(
+                low < (s.get("endingHour") or 0) and (s.get("startingHour") or 0) < high
+                for s in shifts(key, e.get("id")) for low, high in setting
+            )
+        if kind == "nocleaning":
+            return bool(regs[key].get("temporarilyClosed")) or not any(
+                s.get("type") == CLEANING_SHIFT for s in shifts(key, e.get("id"))
+            )
+        if kind == "desk":
+            desk = set(save.items(e.get("assignedWorkStationItems")))
+            return any("ba:itemname_" + slug in desk for slug in setting)
+        if kind == "building":
+            here = items_at(key)
+            for slug in setting:
+                for item in here.get("ba:itemname_" + slug, ()):
+                    if item["itemName"] not in DISPLAY_ITEMS or any(
+                        c.get("itemName") and (c.get("amount") or 0) > 0
+                        for c in save.items(item.get("cargoInstances"))
+                    ):
+                        return True
+            return False
+        if kind == "insurance":
+            plan = plans.get(e.get("assignedHrManagerPlanId")) or {}
+            cover = save.deref(plan.get("healthInsurancePlan")) or {}
+            manager = by_id.get(plan.get("assignedEmployeeId")) or {}
+            return (bool(cover) and (cover.get("planType") or 0) >= setting
+                    and bool(manager) and not manager.get("isBeingReplaced"))
+        if kind == "happiness":
+            return happiness >= setting
+        if kind == "clean":
+            if key not in clean:
+                clean[key] = _cleanliness(save, regs[key])
+            return clean[key] >= setting
+        raise ValueError(kind)
+
+    unmet = collections.defaultdict(collections.Counter)
+    # People, not demands: how many at each site lack something the site can
+    # give, how many lack something only the owner can, and how many of those
+    # with anything unmet have warned they will quit.
+    people = collections.defaultdict(collections.Counter)
+    for e in employees:
+        key = site_key(save.address(e.get("assignedAddress")))
+        if key not in by_key or key not in regs:
+            continue
+        lacks = set()
+        for slug in dict.fromkeys(save.items(e.get("demands"))):  # one person, one count
+            rule = JOB_DEMANDS.get(slug)
+            if rule and not met(e, key, rule[0], rule[1]):
+                unmet[key][slug] += 1
+                lacks.add("company" if rule[0] in COMPANY_DEMAND_KINDS else "site")
+        for scope in lacks:
+            people[key][scope] += 1
+        if lacks:
+            people[key]["any"] += 1
+            if e.get("hasSendQuitWarning"):
+                people[key]["quitting"] += 1
+    for b in businesses:
+        rows = [
+            {
+                "slug": slug,
+                "demand": names.label(slug),
+                "count": count,
+                "priority": JOB_DEMANDS[slug][2],
+                "company": JOB_DEMANDS[slug][0] in COMPANY_DEMAND_KINDS,
+            }
+            for slug, count in unmet[b["key"]].items()
+        ]
+        rows.sort(key=lambda r: (-r["priority"], -r["count"], r["demand"]))
+        b["staffDemands"] = rows
+        b["staffLacking"] = people[b["key"]]["site"]
+        b["staffLackingCompany"] = people[b["key"]]["company"]
+        b["staffLackingAny"] = people[b["key"]]["any"]
+        b["quitWarnings"] = people[b["key"]]["quitting"]
 
 
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
@@ -4397,6 +4600,60 @@ def _alerts(
                 continue  # Installing the locker is the first action to take.
             note("warn", b["name"], group, text, always=True, key=b["key"])
 
+    # --- what staff ask for and do not get. A site that has not started trading
+    # still has staff whose satisfaction is moving, so it is not folded away here.
+    for b in businesses:
+        if b["status"] == "vacant":
+            continue
+        demands = b.get("staffDemands", [])
+        wants = [d for d in demands if not d["company"]]
+        quitting = b.get("quitWarnings", 0)
+        # Every demand the site itself can meet, with the game's priority, headed
+        # by how many people lack one. Once somebody with an unmet demand has
+        # warned they will quit, the line is louder and names everything unmet
+        # here, the company-wide demands too, since those may be all they lack.
+        if quitting and demands:
+            count, shown = b.get("staffLackingAny", 0), demands
+        elif wants:
+            count, shown = b.get("staffLacking", 0), wants
+        else:
+            continue
+        text = f"{count} staff with unmet demands: " + ", ".join(
+            f"{d['demand']} for {d['count']} ("
+            + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
+            + ")"
+            for d in shown
+        )
+        if quitting:
+            text += (f"; {quitting} of them {'has' if quitting == 1 else 'have'} "
+                     f"warned they will quit")
+        note(
+            "critical" if quitting else "warn", b["name"], "jobdemand", text,
+            always=True, key=b["key"],
+        )
+
+    # --- the staff demands no single site can settle: health insurance comes
+    # through an HR manager's plan, a happy boss is the owner's own happiness.
+    company, lacking = collections.OrderedDict(), 0
+    for b in businesses:
+        if b["status"] == "vacant":
+            continue
+        lacking += b.get("staffLackingCompany", 0)
+        for d in b.get("staffDemands", []):
+            if d["company"]:
+                row = company.setdefault(d["slug"], dict(d, count=0))
+                row["count"] += d["count"]
+    if company:
+        rows = sorted(company.values(), key=lambda d: (-d["priority"], -d["count"], d["demand"]))
+        insured = any(JOB_DEMANDS[d["slug"]][0] == "insurance" for d in rows)
+        note(
+            "warn", "Company", "companydemand",
+            f"{lacking} staff with demands only you can meet: "
+            + ", ".join(f"{d['demand']} for {d['count']}" for d in rows)
+            + (". Health insurance comes through an HR manager's plan" if insured else ""),
+            always=True,
+        )
+
     # --- the promotion cap, which is reached with campaigns or not at all
     # Promotion is the foot traffic the address comes with plus whatever the
     # marketing campaigns add, held at 100. The address is fixed, so a shop
@@ -7227,6 +7484,7 @@ const ALERT_LINKS = {
   uniform: {sec:"secDetail", site:true}, bathroom: {sec:"secDetail", site:true},
   toiletprivacy: {sec:"secDetail", site:true}, sink: {sec:"secDetail", site:true},
   music: {sec:"secDetail", site:true}, interior: {sec:"secDetail", site:true},
+  jobdemand: {sec:"secDetail", site:true}, companydemand: {sec:"secPayroll"},
   hype: {sec:"secMarket"}, vacant: {sec:"secPortfolio"},
   promotion: {sec:"secPortfolio", port:"ops"},
 };
@@ -7364,6 +7622,9 @@ function findingAmount(a){
       break;
     case "satisfaction":
       if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "satisfied");
+      break;
+    case "jobdemand": case "companydemand":
+      if((m = t.match(/^(\d+) staff/))) return amtHtml(m[1], "staff");
       break;
     case "promotion":
       if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "promotion");
@@ -7838,6 +8099,13 @@ function drawSite(){
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
+  /* The staff's own demands the site does not meet, each with how many hold it;
+     health insurance and a happy boss are among them, settled company-wide. */
+  const wants = b.staffDemands || [];
+  const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
+    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
+    b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
+
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
   $("sitePanel").innerHTML = `
@@ -7862,7 +8130,7 @@ function drawSite(){
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv">
         ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        <div class="crew">${crew}</div>
+        <div class="crew">${crew}</div>${demandNote}
       </section>
       <section class="rv">
         ${office ? sechead("Fees") : sechead("Shelves", {quiet: "before tomorrow's top-up"})}
@@ -9110,6 +9378,8 @@ const ALERT_GROUPS = [
   {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
   {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
   {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
+  {id:"jobdemand",    label:"Staff demands",          note:"Schedule, desk or building demands of a site's staff not met", on:true},
+  {id:"companydemand",label:"Insurance / happy boss", note:"Staff demands only the owner can meet", on:true},
   {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
   {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},

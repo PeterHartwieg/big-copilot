@@ -198,6 +198,12 @@ What is on the list is what moves the number:
   its next import, an order too small for the week it has to cover, a paused import.
 - **Shops and offices at their ceiling, and counters or workstations standing idle.** Both
   come out of the hourly grid described below, and both carry the money they are worth.
+- **Staff demands not met.** Every demand an employee holds that their site does not meet,
+  one line per site headed by how many people lack something, with how many hold each
+  demand and the game's priority, as described below. Health insurance and a happy boss make
+  one company line instead. Once somebody with an unmet demand has warned they will quit,
+  the site's line turns critical and names those company-wide demands too, since they may
+  be all that person lacks.
 - **Promotion left on the table.** A shop's promotion is the foot traffic its address
   comes with plus what its marketing campaigns add, held at 100%. The address cannot be
   changed, so any shop selling something is either at the 100% cap or at 100% marketing.
@@ -339,6 +345,38 @@ A hype wave arriving at a shop already within 10% of its ceiling is added to tha
 line rather than raised separately, because it is the same event. Where pricing is
 handled by pricing staff, capacity is the only lever the wave leaves open, and it comes
 with the wave's end date attached.
+
+## Staff demands
+
+Each employee holds up to three demands, and an ignored one wears their satisfaction down
+until they resign. The save lists the demands (`EmployeeInstances[].demands`) but not
+whether they are met, so the board repeats the game's own check for each kind, read from
+its code at build 3680:
+
+- **Hours and days.** Full-time is 30 to 50 assigned hours a week, part-time 10 to 30, and
+  the hours worked so far this week must not pass the top. Four or five days a week counts
+  the days assigned, and the days worked so far must not pass it; free weekends means no
+  Saturday or Sunday among them.
+- **No shifts in a window.** Mornings 6-10, afternoons 14-16, evenings 18-22, nights 22-4.
+  Any shift of the employee's that touches the window, on a day their building is open,
+  breaks it. No cleaning shifts means no cleaning duty on an open day.
+- **At the desk.** Phones, monitors, mouse pads, chairs and desks are read from the
+  employee's own workstation. Several accept more than the item they are named after: an
+  Office Chair demand is also met by a multipurpose, Stump Mesh or Eames chair.
+- **In the building.** A water cooler, fridge, sofa, meeting table, coffee machine or
+  printer anywhere in the building. An item that displays products has to hold some; of
+  these that is only the industrial coffee machine, so an empty fridge still counts.
+- **Clean workplace.** The building's cleanliness at 80% or more, scored from its dirt
+  spots as the game scores it.
+- **Health insurance and a happy boss.** Cover through an HR manager's plan at the
+  demanded level or better, with that manager still in post; and your own happiness at 50%
+  or more. No site can settle these, so they are one company line.
+
+The item lists and priorities are not in the help text; they come from the game's job
+demand data at build 3680, so they are worth checking again after a game update. A demand
+the table does not know, from a newer game, is left out rather than guessed at.
+Satisfaction moves slowly, so a demand met today can still show in an unhappy employee for
+a while, and a new unmet one before their satisfaction falls.
 
 ## Plan a chain
 
