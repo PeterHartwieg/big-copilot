@@ -311,6 +311,52 @@ DEFAULT_LOCALE = (
     r"\Big Ambitions_Data\StreamingAssets\locale\en.json"
 )
 
+# The game keeps en.json in a few well-known places. Detection is best-effort
+# and lazy: the first file that exists wins, and the English text shipped with
+# the board is the fallback, so a run without the game still shows proper
+# labels instead of raw slugs.
+_LOCALE_CANDIDATES = (
+    DEFAULT_LOCALE,
+    # macOS, the Steam install (inside the app bundle)
+    "~/Library/Application Support/Steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions.app/Contents/Resources/Data/StreamingAssets/locale/en.json",
+    # macOS, a loose install or an older layout
+    "~/Library/Application Support/Steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "/Applications/Big Ambitions.app/Contents/Resources/Data"
+    "/StreamingAssets/locale/en.json",
+    # Linux Steam
+    "~/.steam/steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "~/.local/share/Steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+)
+# The English text built into the page. It sits beside this module in web/py,
+# or one level down from the checkout root, depending on which copy runs.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_BUNDLED_LOCALES = (
+    os.path.join(_HERE, "gametext.json"),
+    os.path.join(_HERE, "web", "py", "gametext.json"),
+)
+
+
+def find_locale() -> str | None:
+    """The best available en.json: the game's own, else the bundled English.
+
+    Detection is deferred to this call, so importing the module never touches
+    the filesystem. That matters in the browser, where only a handful of files
+    sit on Pyodide's virtual disk when the board is imported.
+    """
+    for path in _LOCALE_CANDIDATES:
+        candidate = os.path.expanduser(path)
+        if os.path.isfile(candidate):
+            return candidate
+    for path in _BUNDLED_LOCALES:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 # Street names are not in the locale file, so slugs are re-split by word.
 _STREET_WORDS = [
     "twentyfirst", "twentysecond", "twentythird", "twentyfourth", "twentyfifth",
@@ -334,7 +380,16 @@ _STREET_FIX = {
 }
 
 
-def load_locale(path: str = DEFAULT_LOCALE) -> dict[str, str]:
+def load_locale(path: str | None = None) -> dict[str, str]:
+    """Read a locale table; with no path, detect the game's own or the bundle.
+
+    A missing or malformed file yields an empty table, never an exception: the
+    board is usable without game text, only its labels fall back to slugs.
+    """
+    if path is None:
+        path = find_locale()
+    if not path:
+        return {}
     try:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
