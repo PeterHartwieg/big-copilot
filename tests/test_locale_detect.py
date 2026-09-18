@@ -108,16 +108,53 @@ class FindLocaleTests(unittest.TestCase):
     def test_the_bundle_that_ships_is_really_there(self):
         # Every other test replaces _BUNDLED_LOCALES, so nothing else would
         # notice gametext.json moving and taking the fallback with it.
-        found = [p for p in ba_save._BUNDLED_LOCALES if os.path.isfile(p)]
+        root = os.path.dirname(os.path.dirname(os.path.abspath(ba_save.__file__)))
+        found = [p for p in ba_save._BUNDLED_LOCALES
+                 if os.path.isfile(p) and os.path.abspath(p).startswith(root)]
         self.assertTrue(found, ba_save._BUNDLED_LOCALES)
         with open(found[0], encoding="utf-8") as fh:
             self.assertIn("ba:itemname_hourlylawyerfee", json.load(fh))
 
-    def test_the_bundle_is_recognised_as_the_bundle(self):
-        for path in ba_save._BUNDLED_LOCALES:
-            self.assertTrue(ba_save.bundled_locale(path), path)
+    def test_the_bundle_is_recognised_however_it_is_spelled(self):
+        # Comparing the strings as given would pass trivially, so each spelling
+        # here reaches the same file by a different route.
+        real = next(p for p in ba_save._BUNDLED_LOCALES if os.path.isfile(p))
+        self.assertTrue(ba_save.bundled_locale(real))
+        self.assertTrue(ba_save.bundled_locale(real.upper()))
+        self.assertTrue(ba_save.bundled_locale(
+            os.path.join(os.path.dirname(real), os.pardir, os.path.basename(os.path.dirname(real)),
+                         os.path.basename(real))))
+        cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(real))
+            self.assertTrue(ba_save.bundled_locale(os.path.basename(real)))
+        finally:
+            os.chdir(cwd)
         self.assertFalse(ba_save.bundled_locale(ba_save.DEFAULT_LOCALE))
         self.assertFalse(ba_save.bundled_locale(None))
+
+    def test_a_broken_file_falls_through_to_text_that_loads(self):
+        # A path that exists is not text that loaded: a truncated en.json used
+        # to win the search and take every label down with it.
+        broken = self.write("en.json", "{not json")
+        empty = self.write("empty.json", "{}")
+        good = self.write("good.json", json.dumps({"ba:itemname_gymcovercharge": "Gym Cover Charge"}))
+        with patched((broken, empty, good)):
+            source, table = ba_save.load_best_locale()
+            self.assertEqual(source, good)
+            self.assertEqual(table["ba:itemname_gymcovercharge"], "Gym Cover Charge")
+            self.assertEqual(ba_save.load_locale()["ba:itemname_gymcovercharge"], "Gym Cover Charge")
+
+    def test_a_broken_file_falls_through_to_the_bundle(self):
+        broken = self.write("en.json", "{not json")
+        bundle = self.write("gametext.json", json.dumps({"ba:itemname_gymcovercharge": "Bundled"}))
+        with patched((broken,), (bundle,)):
+            self.assertEqual(ba_save.load_best_locale(), (bundle, {"ba:itemname_gymcovercharge": "Bundled"}))
+
+    def test_nothing_that_loads_reports_no_source(self):
+        broken = self.write("en.json", "{not json")
+        with patched((broken,), (broken,)):
+            self.assertEqual(ba_save.load_best_locale(), (None, {}))
 
     def test_search_paths_report_what_would_be_tried(self):
         # What the build prints when it cannot find the game, so the override
@@ -127,8 +164,40 @@ class FindLocaleTests(unittest.TestCase):
         with patched(("~/en.json",), env=env):
             paths = ba_save.locale_search_paths()
         self.assertEqual(paths[0], "/override/en.json")
-        self.assertTrue(paths[1].startswith(home), paths[1])
-        self.assertNotIn("~", paths[1])
+        # Compared against expanduser under the same environment: asserting on
+        # the spelling would fail where TMP resolves to an 8.3 short name.
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(paths[1], os.path.expanduser("~/en.json"))
+        self.assertNotEqual(paths[1], "~/en.json")
+
+    def test_the_note_reports_the_table_not_the_path(self):
+        # The point of the note: a file that is there but holds nothing must
+        # not read as a healthy run. Asserting on find_locale alone would pass
+        # with the isfile version this replaced.
+        import ba_dashboard
+        truncated = self.write("en.json", "{not json")
+        with patched((truncated,)):
+            source, table = ba_save.load_best_locale()
+            self.assertEqual(ba_dashboard.locale_note(source, table),
+                             "game text: none found, so names fall back to raw slugs")
+
+        bundle = self.write("gametext.json", json.dumps({"ba:itemname_gymcovercharge": "Bundled"}))
+        with patched((truncated,), (bundle,)):
+            note = ba_dashboard.locale_note(*ba_save.load_best_locale())
+        self.assertIn("bundled with the board", note)
+
+        game = self.write("good.json", json.dumps({"ba:itemname_gymcovercharge": "Gym Cover Charge"}))
+        with patched((game,), (bundle,)):
+            note = ba_dashboard.locale_note(*ba_save.load_best_locale())
+        self.assertEqual(note, f"game text: {game}")
+
+    def test_the_bundle_list_holds_no_path_outside_this_tree(self):
+        # "/data/gametext.json" is Pyodide's, where os.sep is "/". On Windows it
+        # would resolve against the current drive and claim C:\data\gametext.json,
+        # so it must not be in the list here.
+        for path in ba_save._BUNDLED_LOCALES:
+            self.assertTrue(
+                os.path.isabs(path) and (os.sep == "/" or not path.startswith("/")), path)
 
     def test_the_candidate_list_is_well_formed(self):
         # Adjacent string literals merge silently if a comma is dropped, so the

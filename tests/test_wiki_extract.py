@@ -449,8 +449,29 @@ class ProvenanceTests(FixtureCase):
         expected = self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
         self.assertEqual(extract_wiki.find_steam_manifest(data_dir), os.path.abspath(expected))
 
-    def test_a_locale_outside_steamapps_has_no_manifest(self):
-        self.assertIsNone(extract_wiki.find_steam_manifest(os.path.join(self._tmp.name, "Desktop")))
+    def test_a_copy_outside_common_does_not_borrow_the_build_id(self):
+        # Built under its own root so the answer cannot depend on where the
+        # machine puts its temp directory.
+        self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
+        stray = os.path.join(self._tmp.name, "steamapps", "backups", "Big Ambitions_Data")
+        os.makedirs(stray, exist_ok=True)
+        self.assertIsNone(extract_wiki.find_steam_manifest(stray))
+
+    def test_a_library_at_a_drive_or_share_root_is_still_found(self):
+        # At S:\ or \nas\steamapps the basename is empty, so a library there
+        # can never be recognised by name; the manifest beside common/ is.
+        root = os.path.join(self._tmp.name, "library")
+        data_dir = os.path.join(root, "common", "Big Ambitions", "Big Ambitions_Data")
+        os.makedirs(data_dir, exist_ok=True)
+        expected = os.path.join(root, "appmanifest_1331550.acf")
+        with open(expected, "w", encoding="utf-8") as fh:
+            fh.write('"appid" "1331550"')
+        self.assertEqual(extract_wiki.find_steam_manifest(data_dir), expected)
+
+    def test_a_path_reaching_the_install_through_dotdot_is_accepted(self):
+        through = os.path.join(self.game, "locale", os.pardir, "locale", "en.json")
+        self.assertEqual(extract_wiki.game_data_dir(through),
+                         extract_wiki.game_data_dir(self.locale_path()))
 
     def test_a_ba_locale_outside_the_install_is_refused(self):
         # BA_LOCALE can name an en.json anywhere, but helpstructure.json is only
@@ -463,6 +484,35 @@ class ProvenanceTests(FixtureCase):
         with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
             with self.assertRaisesRegex(wiki_data.SourceError, "StreamingAssets"):
                 extract_wiki.default_paths(None)
+
+    def test_a_loose_ba_locale_reports_cleanly_instead_of_crashing(self):
+        loose = os.path.join(self._tmp.name, "Desktop", "en.json")
+        os.makedirs(os.path.dirname(loose), exist_ok=True)
+        with open(loose, "w", encoding="utf-8") as fh:
+            json.dump({}, fh)
+        import contextlib
+        import io
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
+            with contextlib.redirect_stderr(err):
+                code = extract_wiki.main(["--list"])
+        self.assertEqual(code, 2)
+        self.assertTrue(err.getvalue().startswith("error: "), err.getvalue())
+
+    def test_explicit_sources_do_not_need_the_detected_install(self):
+        # Naming both sources makes the install irrelevant, so the gate on it
+        # must not refuse the run.
+        loose = os.path.join(self._tmp.name, "Desktop", "en.json")
+        os.makedirs(os.path.dirname(loose), exist_ok=True)
+        with open(loose, "w", encoding="utf-8") as fh:
+            json.dump({}, fh)
+        with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
+            with self.quiet():
+                code = extract_wiki.main([
+                    "--list", "--locale", self.locale_path(),
+                    "--help-structure", self.structure_path(),
+                ])
+        self.assertEqual(code, 0)
 
     def test_a_ba_locale_inside_an_install_resolves(self):
         with mock.patch.dict(os.environ, {"BA_LOCALE": self.locale_path()}, clear=True):

@@ -29,6 +29,7 @@ import argparse
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import wiki_data  # noqa: E402  (tools/ is the package, the repo root is the import root)
@@ -46,7 +47,12 @@ def game_data_dir(locale_path: str) -> str | None:
     of the install asks here rather than deriving a directory from whatever
     parent the path happens to have.
     """
-    streaming_dir = os.path.dirname(os.path.dirname(locale_path))
+    # Normalised first: a path can reach the right file through "..", and
+    # judging it by its spelling would refuse an install that really is one.
+    locale_dir, _ = os.path.split(os.path.abspath(locale_path))
+    streaming_dir, locale_name = os.path.split(locale_dir)
+    if locale_name.lower() != "locale":
+        return None
     if os.path.basename(streaming_dir).lower() != "streamingassets":
         return None
     return os.path.dirname(streaming_dir)
@@ -58,8 +64,18 @@ def default_paths(data_dir: str | None) -> dict:
         from ba_save import DEFAULT_LOCALE, find_game_locale
 
         # The detected install when there is one, so the wiki builds on every
-        # platform; the old Windows constant is only a last resort.
-        default_locale = find_game_locale() or DEFAULT_LOCALE
+        # platform. The old Windows constant is the last resort, and it always
+        # looks like an install, so "nothing found" is answered here rather
+        # than left to surface as that path failing to open.
+        default_locale = find_game_locale()
+        if not default_locale:
+            if os.path.isfile(DEFAULT_LOCALE):
+                default_locale = DEFAULT_LOCALE
+            else:
+                raise wiki_data.SourceError(
+                    "no game text found; set BA_LOCALE to your game's en.json, at "
+                    "<game>/.../StreamingAssets/locale/en.json, or pass --data-dir"
+                )
         # .../StreamingAssets/locale/en.json -> .../Big Ambitions_Data
         data_dir = game_data_dir(default_locale)
         if data_dir is None:
@@ -98,15 +114,21 @@ def find_steam_manifest(data_dir: str | None) -> str | None:
     """
     if not data_dir:
         return None
-    here = os.path.abspath(data_dir)
+    here, below = os.path.abspath(data_dir), ""
     while True:
-        if os.path.basename(here).lower() == "steamapps":
+        # steamapps is recognised by holding the manifest next to the common/
+        # the walk came up through, not by its own name: a library mapped to a
+        # drive or a share has an empty basename at its root. Requiring common/
+        # keeps a copy stored elsewhere under the library from borrowing the
+        # real install's build id.
+        if below.lower() == "common":
             candidate = os.path.join(here, "appmanifest_1331550.acf")
-            return candidate if os.path.isfile(candidate) else None
+            if os.path.isfile(candidate):
+                return candidate
         parent = os.path.dirname(here)
-        if parent == here:  # the filesystem root, and no steamapps on the way
+        if parent == here:  # the filesystem root, and no library on the way
             return None
-        here = parent
+        here, below = parent, os.path.basename(here)
 
 
 def build_metadata(args, data_dir: str | None) -> dict:
@@ -138,7 +160,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-steam-lookup", action="store_true", help="do not look for the appmanifest")
     args = parser.parse_args(argv)
 
-    paths = default_paths(args.data_dir)
+    # Detecting the install can now refuse a BA_LOCALE that is not inside one.
+    # That gate protects the paths this run would otherwise have to guess, so a
+    # caller who named both of them does not need it -- and either way the
+    # refusal leaves through fail(), like every other bad source.
+    try:
+        paths = default_paths(args.data_dir)
+    except wiki_data.SourceError as exc:
+        if not (args.locale and args.help_structure):
+            return fail(exc)
+        paths = {"data_dir": None, "locale": None, "help_structure": None}
     locale_path = args.locale or paths["locale"]
     structure_path = args.help_structure or paths["help_structure"]
 

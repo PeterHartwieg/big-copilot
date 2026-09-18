@@ -112,12 +112,14 @@ To find the game's own text on macOS, use **Steam → Manage → Browse local fi
 and search that folder for `en.json`. If the files are inside an app bundle, use
 Finder's **Show Package Contents**.
 
-Every run prints the text it used on its last line. `game text: the English
-bundled with the board` means no install was found: labels still read properly,
-but from the copy committed here, so anything your game added since is missing
-and shows as a slug like `Haircareproduct`. Set `BA_LOCALE` to read your own
-build instead. `game text: none found` means there was no text at all, which
-also limits recipe and station analysis; it is more than a label issue.
+A run that builds a board says which text it used, in the summary it prints at
+the end and in the `--watch` startup lines. `game text: the English bundled
+with the board` means no install was found: labels still read properly, but
+from the copy committed here, so anything your game added since is missing and
+shows as a slug like `Haircareproduct`. Set `BA_LOCALE` to read your own build
+instead. `game text: none found` means nothing loaded at all — including from a
+file that is there but truncated — which also limits recipe and station
+analysis; it is more than a label issue.
 
 ## What's on the dashboard?
 

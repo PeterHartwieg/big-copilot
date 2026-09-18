@@ -337,16 +337,16 @@ _LOCALE_CANDIDATES = (
     "/Big Ambitions/Big Ambitions_Data/StreamingAssets/locale/en.json",
 )
 # The English text built into the page, wherever the running copy keeps it:
-# beside this module in web/py, one level down from the checkout root, or on
-# Pyodide's virtual disk, where web/worker.js writes it under /data while the
-# module itself sits at the root. The virtual path is last so a real install
-# always wins over a same-named directory on the current drive.
+# beside this module in web/py, or one level down from the checkout root. Under
+# Pyodide the module sits at / and web/worker.js writes the text to /data, so
+# that path joins the list there -- but only there, since on Windows it would
+# resolve against the current drive and claim any C:\data\gametext.json.
+# A bundle is never preferred to an install: find_game_locale() runs first.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _BUNDLED_LOCALES = (
     os.path.join(_HERE, "gametext.json"),
     os.path.join(_HERE, "web", "py", "gametext.json"),
-    "/data/gametext.json",
-)
+) + (("/data/gametext.json",) if os.sep == "/" else ())
 
 
 def _locale_paths() -> tuple[str, ...]:
@@ -375,19 +375,17 @@ def find_game_locale() -> str | None:
 
 
 def find_locale() -> str | None:
-    """The best available en.json: the game's own, else the bundled English.
+    """Where the best available game text came from: the game's, else bundled.
 
     Detection is deferred to this call, so importing the module never touches
     the filesystem. That matters in the browser, where only a handful of files
     sit on Pyodide's virtual disk when the board is imported.
+
+    Answers with the file load_best_locale() would actually read, so the two
+    can never disagree about which text a run is using -- a path that exists
+    but holds nothing is not an answer.
     """
-    found = find_game_locale()
-    if found:
-        return found
-    for path in _BUNDLED_LOCALES:
-        if os.path.isfile(path):
-            return path
-    return None
+    return load_best_locale()[0]
 
 
 def bundled_locale(path: str | None) -> bool:
@@ -400,8 +398,28 @@ def bundled_locale(path: str | None) -> bool:
     """
     if not path:
         return False
-    here = os.path.normcase(os.path.abspath(path))
-    return any(here == os.path.normcase(os.path.abspath(p)) for p in _BUNDLED_LOCALES)
+    here = os.path.normcase(os.path.realpath(path))
+    return any(here == os.path.normcase(os.path.realpath(p)) for p in _BUNDLED_LOCALES)
+
+
+def load_best_locale() -> tuple[str | None, dict[str, str]]:
+    """The best game text available, and the file it came from.
+
+    A path that exists is not the same as text that loaded: a half-copied or
+    truncated en.json reads as an empty table, and stopping there would lose
+    every label while still naming a file. So each candidate is tried in turn
+    and the first that yields entries wins, the bundle included.
+    """
+    for path in _locale_paths():
+        candidate = os.path.expanduser(path)
+        table = load_locale(candidate) if os.path.isfile(candidate) else {}
+        if table:
+            return candidate, table
+    for path in _BUNDLED_LOCALES:
+        table = load_locale(path) if os.path.isfile(path) else {}
+        if table:
+            return path, table
+    return None, {}
 
 
 # Street names are not in the locale file, so slugs are re-split by word.
@@ -434,7 +452,7 @@ def load_locale(path: str | None = None) -> dict[str, str]:
     board is usable without game text, only its labels fall back to slugs.
     """
     if path is None:
-        path = find_locale()
+        return load_best_locale()[1]
     if not path:
         return {}
     try:
