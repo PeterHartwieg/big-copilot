@@ -255,6 +255,26 @@ class FindLocaleTests(unittest.TestCase):
         with patched((self.write("bad.json", "[1, 2]"), good)):
             self.assertEqual(ba_save.load_best_locale()[0], good)
 
+    def test_entries_that_are_not_strings_are_dropped(self):
+        # The annotation says dict[str, str], and downstream believes it: an int
+        # value reaches ships() as a TypeError and a list reaches a page as the
+        # label itself. A real en.json is strings throughout and loses nothing.
+        mixed = self.write("en.json", json.dumps({
+            "ba:itemname_ok": "Gym Cover Charge",
+            "help_ba:itemname_x_content": 42,
+            "ba:itemname_list": ["a"],
+            "ba:itemname_null": None,
+        }))
+        self.assertEqual(ba_save.load_locale(mixed), {"ba:itemname_ok": "Gym Cover Charge"})
+
+    def test_a_file_of_only_non_string_entries_is_no_text_at_all(self):
+        # Dropping the entries has to leave an empty table, so the search moves
+        # on instead of stopping at a file that yielded nothing usable.
+        junk = self.write("en.json", json.dumps({"ba:itemname_x": 1}))
+        good = self.write("good.json", json.dumps({"ba:itemname_gymcovercharge": "Gym"}))
+        with patched((junk, good)):
+            self.assertEqual(ba_save.load_best_locale()[0], good)
+
     def test_main_binds_its_names_on_every_flag_combination(self):
         # The binding is conditional on --watch/--backfill, so a combination
         # that skipped it would raise NameError at the first use. Driven for

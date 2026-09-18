@@ -217,6 +217,27 @@ class FixtureCase(unittest.TestCase):
         with open(path, encoding="utf-8") as fh:
             return fh.read()
 
+    def link_dir(self, link, target):
+        """A directory link, by whatever means this platform allows.
+
+        os.symlink needs a privilege Windows does not grant by default, and a
+        skip there would leave game_layout's literal half untested on the only
+        platform this suite runs on. Junctions need no such right.
+        """
+        os.makedirs(os.path.dirname(link), exist_ok=True)
+        if sys.platform == "win32":
+            import subprocess
+            done = subprocess.run(["cmd", "/c", "mklink", "/J", link, target],
+                                  capture_output=True, text=True)
+            if done.returncode:
+                self.skipTest(f"mklink failed: {(done.stdout + done.stderr).strip()}")
+        else:
+            try:
+                os.symlink(target, link, target_is_directory=True)
+            except (OSError, NotImplementedError, AttributeError) as exc:
+                self.skipTest(f"directory links unavailable here: {exc}")
+        return link
+
     def loose_locale(self):
         """A real en.json, with text, sitting outside any install."""
         path = os.path.join(self._tmp.name, "Desktop", "en.json")
@@ -479,8 +500,9 @@ class ProvenanceTests(FixtureCase):
 
     def test_a_path_reaching_the_install_through_dotdot_is_accepted(self):
         through = os.path.join(self.game, "locale", os.pardir, "locale", "en.json")
-        self.assertEqual(extract_wiki.game_data_dir(through),
-                         extract_wiki.game_data_dir(self.locale_path()))
+        expected = extract_wiki.game_data_dir(self.locale_path())
+        self.assertIsNotNone(expected)
+        self.assertEqual(extract_wiki.game_data_dir(through), expected)
 
     def test_a_ba_locale_outside_the_install_is_refused(self):
         # BA_LOCALE can name an en.json anywhere, but helpstructure.json is only
@@ -538,34 +560,46 @@ class ProvenanceTests(FixtureCase):
         if os.path.normcase(short) == os.path.normcase(self.locale_path()):
             self.skipTest("8.3 names are disabled on this volume")
         self.assertTrue(os.path.isfile(short))
-        self.assertEqual(extract_wiki.game_data_dir(short),
-                         extract_wiki.game_data_dir(self.locale_path()))
+        # Both sides being None would satisfy an equality on its own, so the
+        # expected answer is named outright.
+        expected = extract_wiki.game_data_dir(self.locale_path())
+        self.assertIsNotNone(expected)
+        self.assertEqual(extract_wiki.game_data_dir(short), expected)
 
-    def test_a_linked_locale_inside_an_install_stays_inside_it(self):
-        # The literal half: a modded en.json linked out of an install is still
-        # in one, and resolving alone would refuse it.
-        link = os.path.join(self.game, "locale", "linked.json")
-        target = os.path.join(self._tmp.name, "modded.json")
-        with open(target, "w", encoding="utf-8") as fh:
+    def test_a_locale_folder_linked_out_of_an_install_stays_inside_it(self):
+        # game_layout's literal half. The target is deliberately NOT named
+        # locale/, so resolving refuses it and only the spelling as written
+        # recognises the install -- which is what this pins.
+        modded = os.path.join(self._tmp.name, "modded-text")
+        os.makedirs(modded, exist_ok=True)
+        with open(os.path.join(modded, "en.json"), "w", encoding="utf-8") as fh:
             json.dump({"ba:itemname_gymcovercharge": "Modded"}, fh)
-        try:
-            os.symlink(target, link)
-        except (OSError, NotImplementedError, AttributeError) as exc:
-            self.skipTest(f"symlinks unavailable here: {exc}")
-        self.addCleanup(os.remove, link)
-        self.assertEqual(extract_wiki.game_data_dir(link),
-                         extract_wiki.game_data_dir(self.locale_path()))
+        install = os.path.join(self._tmp.name, "other", "Big Ambitions_Data", "StreamingAssets")
+        via = os.path.join(self.link_dir(os.path.join(install, "locale"), modded), "en.json")
+        self.assertTrue(os.path.isfile(via))
+        self.assertIsNone(extract_wiki.game_data_dir(os.path.realpath(via)))
+        self.assertEqual(extract_wiki.game_data_dir(via), os.path.dirname(install))
 
     def test_the_two_directories_always_belong_together(self):
-        # helpstructure.json is read beside the locale folder, so a data_dir
-        # from one spelling and a streaming_dir from another is how it ends up
-        # looked for where the locale never was.
-        through = os.path.join(self.game, "locale", os.pardir, "locale", "en.json")
-        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", (through,)),                 mock.patch.dict(os.environ, {}, clear=True):
+        # helpstructure.json is read beside the locale folder. Deriving the
+        # data dir from one spelling and the streaming dir from another leaves
+        # it genuinely absent, not merely named oddly, so this links a locale
+        # into an install rather than reaching one through "..".
+        b_locale = os.path.join(self._tmp.name, "real", "Big Ambitions_Data",
+                                "StreamingAssets", "locale")
+        os.makedirs(b_locale, exist_ok=True)
+        with open(os.path.join(b_locale, "en.json"), "w", encoding="utf-8") as fh:
+            json.dump({"ba:itemname_gymcovercharge": "Gym"}, fh)
+        streaming = os.path.dirname(b_locale)
+        structure = os.path.join(streaming, "helpstructure.json")
+        with open(structure, "w", encoding="utf-8") as fh:
+            json.dump({}, fh)
+        via = os.path.join(self.link_dir(os.path.join(self._tmp.name, "away", "locale"),
+                                         b_locale), "en.json")
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", (via,)),                 mock.patch.dict(os.environ, {}, clear=True):
             paths = extract_wiki.default_paths(None)
         self.assertTrue(os.path.isfile(paths["help_structure"]), paths["help_structure"])
-        self.assertEqual(os.path.dirname(paths["help_structure"]),
-                         os.path.dirname(os.path.dirname(os.path.abspath(self.locale_path()))))
+        self.assertEqual(os.path.realpath(paths["help_structure"]), os.path.realpath(structure))
 
     def test_a_locale_folder_by_another_name_is_refused(self):
         # StreamingAssets alone is not enough: helpstructure.json is found by
@@ -597,18 +631,20 @@ class ProvenanceTests(FixtureCase):
         self.assertIsNone(build["steamBuildId"])
         self.assertIn("Not observed", build["note"])
 
-    def test_a_junction_to_a_differently_named_folder_is_still_an_install(self):
-        # The literal half of game_layout: StreamingAssets can be a junction
-        # whose target is named something else, and resolving alone refuses it.
-        link = os.path.join(self._tmp.name, "linked", "StreamingAssets")
-        os.makedirs(os.path.dirname(link), exist_ok=True)
-        try:
-            os.symlink(self.game, link, target_is_directory=True)
-        except (OSError, NotImplementedError, AttributeError) as exc:
-            self.skipTest(f"directory links unavailable here: {exc}")
-        via = os.path.join(link, "locale", "en.json")
+    def test_an_install_linked_into_another_is_filed_under_its_own(self):
+        # game_layout's resolved half, and why it goes first: install A's
+        # en.json reaching into install B must be filed under B, or the
+        # catalogue records B's text beside A's help pages and build id.
+        b_locale = os.path.join(self._tmp.name, "B", "Big Ambitions_Data",
+                                "StreamingAssets", "locale")
+        os.makedirs(b_locale, exist_ok=True)
+        with open(os.path.join(b_locale, "en.json"), "w", encoding="utf-8") as fh:
+            json.dump({"ba:itemname_gymcovercharge": "From B"}, fh)
+        a_streaming = os.path.join(self._tmp.name, "A", "Big Ambitions_Data", "StreamingAssets")
+        via = os.path.join(self.link_dir(os.path.join(a_streaming, "locale"), b_locale), "en.json")
         self.assertTrue(os.path.isfile(via))
-        self.assertEqual(extract_wiki.game_data_dir(via), os.path.dirname(link))
+        b_data = os.path.dirname(os.path.dirname(b_locale))
+        self.assertEqual(extract_wiki.game_data_dir(via), b_data)
 
     def test_a_ba_locale_inside_an_install_resolves(self):
         with mock.patch.dict(os.environ, {"BA_LOCALE": self.locale_path()}, clear=True):

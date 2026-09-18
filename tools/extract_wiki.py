@@ -46,15 +46,22 @@ def game_layout(locale_path: str) -> tuple[str, str] | None:
     and BA_LOCALE can name an en.json anywhere -- so callers ask here instead of
     deriving a directory from whatever parent the path happens to have.
 
-    Both spellings count. As written catches a modded en.json linked out of an
-    install that still is one; resolved catches a path reaching a real install
-    through "..", a link, or an 8.3 name like STREAMI~1. Whichever fits decides
-    both directories together: deriving one from the resolved path and the
-    other from the literal one is how helpstructure.json ends up looked for
-    somewhere the locale never was, and that surfaces much later as a missing
-    file rather than here as a refusal.
+    Both spellings count, resolved first. Resolved catches a path reaching a
+    real install through "..", a link, or an 8.3 name like STREAMI~1, and it is
+    asked first because it names the install the file actually comes from: when
+    one install's en.json links into another's, taking the literal spelling
+    would file the second install's text under the first one's help pages and
+    build id, which is a lie told by the one module whose job is provenance.
+    As written is the fallback, for the cases where nothing is at the other end
+    of the link to recognise -- a modded en.json linked out of an install, or a
+    StreamingAssets junction whose target is named something else.
+
+    Whichever fits decides both directories together: deriving one from the
+    resolved path and the other from the literal one is how helpstructure.json
+    ends up looked for somewhere the locale never was, and that surfaces much
+    later as a missing file rather than here as a refusal.
     """
-    for candidate in (os.path.abspath(locale_path), os.path.realpath(locale_path)):
+    for candidate in (os.path.realpath(locale_path), os.path.abspath(locale_path)):
         streaming_dir, locale_name = os.path.split(os.path.dirname(candidate))
         if (locale_name.lower() == "locale"
                 and os.path.basename(streaming_dir).lower() == "streamingassets"):
@@ -103,6 +110,9 @@ def default_paths(data_dir: str | None) -> dict:
         default_locale = os.path.join(streaming_dir, "locale", "en.json")
     return {
         "data_dir": data_dir,
+        # The folder the locale really sits in, so callers do not rebuild it
+        # from data_dir and lose whatever spelling or link got them here.
+        "streaming_dir": streaming_dir,
         "locale": default_locale,
         "help_structure": os.path.join(streaming_dir, "helpstructure.json"),
     }
@@ -165,12 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-steam-lookup", action="store_true", help="do not look for the appmanifest")
     args = parser.parse_args(argv)
 
-    # Detecting the install can refuse a BA_LOCALE that is not inside one. That
-    # gate protects the locale this run would otherwise have to guess, so a
-    # caller who named it does not need the gate: the help structure is a bonus
-    # and the data directory only feeds a build id that already degrades to an
-    # honest unknown. Either way the refusal leaves through fail(), like every
-    # other bad source.
+    # The refusal leaves through fail(), like every other bad source, and a
+    # caller that named its own locale does not need the gate at all.
     try:
         paths = default_paths(args.data_dir)
     except wiki_data.SourceError as exc:
@@ -180,7 +186,8 @@ def main(argv: list[str] | None = None) -> int:
         # install this gate protects.
         if not args.locale:
             return fail(exc)
-        paths = {"data_dir": None, "locale": None, "help_structure": None}
+        paths = {"data_dir": None, "streaming_dir": None,
+                 "locale": None, "help_structure": None}
     locale_path = args.locale or paths["locale"]
     structure_path = args.help_structure or paths["help_structure"]
 

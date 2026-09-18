@@ -476,7 +476,11 @@ def load_locale(path: str | None = None) -> dict[str, str]:
     A missing or malformed file yields an empty table, never an exception: the
     board is usable without game text, only its labels fall back to slugs. Well
     formed JSON that is not an object counts as malformed -- it would otherwise
-    read as text that loaded and then fail on .get() deep in a render.
+    read as text that loaded and then fail on .get() deep in a render -- and an
+    entry whose key or value is not a string is dropped, so the annotation above
+    holds for everything downstream. A real en.json loses nothing to that: it is
+    strings throughout, and the entries it would drop are the ones that reach
+    ships() as a TypeError or a page as a list.
     """
     if path is None:
         return load_best_locale()[1]
@@ -487,7 +491,9 @@ def load_locale(path: str | None = None) -> dict[str, str]:
             table = json.load(fh)
     except (OSError, ValueError):
         return {}
-    return table if isinstance(table, dict) else {}
+    if not isinstance(table, dict):
+        return {}
+    return {k: v for k, v in table.items() if isinstance(k, str) and isinstance(v, str)}
 
 
 class Names:
