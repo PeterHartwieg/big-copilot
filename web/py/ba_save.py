@@ -51,6 +51,7 @@ import json
 import os
 import re
 import struct
+import sys
 
 # Tags that introduce a *named* property. The same tag + 1 introduces the same
 # kind of value without a name (collection elements, tuple/struct components).
@@ -311,6 +312,141 @@ DEFAULT_LOCALE = (
     r"\Big Ambitions_Data\StreamingAssets\locale\en.json"
 )
 
+# The game keeps en.json in a few well-known places. Detection is best-effort
+# and lazy: the first file that yields text wins -- one that is there but holds
+# nothing is passed over -- and the English shipped with the board is the
+# fallback, so a run without the game still shows proper labels instead of raw
+# slugs. BA_LOCALE, set to a full en.json path, is tried first and covers a
+# Steam library somewhere the list does not know.
+_LOCALE_CANDIDATES = (
+    DEFAULT_LOCALE,
+    # macOS, the Steam install (inside the app bundle)
+    "~/Library/Application Support/Steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions.app/Contents/Resources/Data/StreamingAssets/locale/en.json",
+    # macOS, a loose install or an older layout
+    "~/Library/Application Support/Steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "/Applications/Big Ambitions.app/Contents/Resources/Data"
+    "/StreamingAssets/locale/en.json",
+    # Linux Steam, in its usual homes and the Flatpak sandbox
+    "~/.steam/steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "~/.steam/root/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "~/.local/share/Steam/steamapps/common/Big Ambitions"
+    "/Big Ambitions_Data/StreamingAssets/locale/en.json",
+    "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common"
+    "/Big Ambitions/Big Ambitions_Data/StreamingAssets/locale/en.json",
+)
+# The English text built into the page, wherever the running copy keeps it:
+# beside this module in web/py, or one level down from the checkout root. Under
+# Pyodide the module sits at / and web/worker.js writes the text to /data, so
+# that path joins the list in the browser and nowhere else: on Windows it would
+# resolve against the current drive and claim any C:\data\gametext.json, and on
+# a Linux desktop a real /data/gametext.json is not this board's bundle. The
+# list is built from the running interpreter, so the copy generated on Windows
+# still gains the entry once Pyodide imports it.
+# A bundle is never preferred to an install: the game's own text is tried first.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _bundled_locales(here: str, platform: str) -> tuple[str, ...]:
+    """Where this copy keeps the board's English, for the platform running it."""
+    beside = (os.path.join(here, "gametext.json"),
+              os.path.join(here, "web", "py", "gametext.json"))
+    return beside + (("/data/gametext.json",) if platform == "emscripten" else ())
+
+
+_BUNDLED_LOCALES = _bundled_locales(_HERE, sys.platform)
+
+
+def _locale_paths() -> tuple[str, ...]:
+    """The candidate paths, the BA_LOCALE override first when one is set."""
+    override = os.environ.get("BA_LOCALE")
+    return (override, *_LOCALE_CANDIDATES) if override else _LOCALE_CANDIDATES
+
+
+def locale_search_paths() -> tuple[str, ...]:
+    """Every path detection would try, expanded, for a message that has to say."""
+    return tuple(os.path.expanduser(path) for path in _locale_paths())
+
+
+def find_game_locale() -> str | None:
+    """The game's own en.json, or None when the game is not installed.
+
+    Unlike find_locale this never falls back to the bundled text, so a build
+    that needs the real game (gametext.json, the wiki) can tell the two apart
+    instead of quietly rebuilding the bundle from itself. Answers with the file
+    load_game_locale() would read, so the two can never disagree.
+    """
+    return load_game_locale()[0]
+
+
+def find_locale() -> str | None:
+    """Where the best available game text came from: the game's, else bundled.
+
+    Detection is deferred to this call, so importing the module never touches
+    the filesystem. That matters in the browser, where only a handful of files
+    sit on Pyodide's virtual disk when the board is imported.
+
+    Answers with the file load_best_locale() would actually read, so the two
+    can never disagree about which text a run is using -- a path that exists
+    but holds nothing is not an answer.
+    """
+    return load_best_locale()[0]
+
+
+def bundled_locale(path: str | None) -> bool:
+    """Whether this path is the English text shipped with the board.
+
+    The bundle is a filtered subset of the game's own file, so a caller that
+    needs the real thing -- or wants to tell the player which text they are
+    reading -- has to be able to tell the two apart. Compared by realpath, so a
+    link to the bundle is still the bundle; realpath does not require the path
+    to exist, which it may not.
+    """
+    if not path:
+        return False
+    here = os.path.normcase(os.path.realpath(path))
+    return any(here == os.path.normcase(os.path.realpath(p)) for p in _BUNDLED_LOCALES)
+
+
+def _first_that_loads(paths) -> tuple[str | None, dict[str, str]]:
+    """The first of these that yields entries, and what it yielded.
+
+    A path that exists is not the same as text that loaded: a half-copied or
+    truncated en.json reads as an empty table, and stopping there would lose
+    every label while still naming a file.
+    """
+    for path in paths:
+        candidate = os.path.expanduser(path)
+        table = load_locale(candidate) if os.path.isfile(candidate) else {}
+        if table:
+            return candidate, table
+    return None, {}
+
+
+def load_game_locale() -> tuple[str | None, dict[str, str]]:
+    """The game's own text and where it came from; never the bundled English.
+
+    What a build that has to read the real game wants: rebuilding the bundle
+    from the bundle would change nothing and report success.
+    """
+    return _first_that_loads(_locale_paths())
+
+
+def load_best_locale() -> tuple[str | None, dict[str, str]]:
+    """The best game text available, and the file it came from.
+
+    The game's own where there is one, else the English shipped with the board,
+    which keeps labels readable on a machine with no install.
+    """
+    source, table = load_game_locale()
+    if table:
+        return source, table
+    return _first_that_loads(_BUNDLED_LOCALES)
+
+
 # Street names are not in the locale file, so slugs are re-split by word.
 _STREET_WORDS = [
     "twentyfirst", "twentysecond", "twentythird", "twentyfourth", "twentyfifth",
@@ -334,12 +470,30 @@ _STREET_FIX = {
 }
 
 
-def load_locale(path: str = DEFAULT_LOCALE) -> dict[str, str]:
+def load_locale(path: str | None = None) -> dict[str, str]:
+    """Read a locale table; with no path, detect the game's own or the bundle.
+
+    A missing or malformed file yields an empty table, never an exception: the
+    board is usable without game text, only its labels fall back to slugs. Well
+    formed JSON that is not an object counts as malformed -- it would otherwise
+    read as text that loaded and then fail on .get() deep in a render -- and an
+    entry whose key or value is not a string is dropped, so the annotation above
+    holds for everything downstream. A real en.json loses nothing to that: it is
+    strings throughout, and the entries it would drop are the ones that reach
+    ships() as a TypeError or a page as a list.
+    """
+    if path is None:
+        return load_best_locale()[1]
+    if not path:
+        return {}
     try:
         with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
+            table = json.load(fh)
     except (OSError, ValueError):
         return {}
+    if not isinstance(table, dict):
+        return {}
+    return {k: v for k, v in table.items() if isinstance(k, str) and isinstance(v, str)}
 
 
 class Names:

@@ -89,32 +89,40 @@ name: `python ba_dashboard.py "Costy Co"` or `python ba_dashboard.py "Costy" --w
 **Browser:** game text is built in. To override it with a newer game's `en.json`,
 choose that file through the **More** menu. The choice is remembered in that browser.
 
-**Local Python:** the script currently looks for `en.json` in the default Windows
-Steam installation. On macOS or a custom Steam installation, set `DEFAULT_LOCALE`
-near the bottom of [ba_save.py](ba_save.py) to the full path of your game’s
-`en.json`. On Windows it normally lives at:
+**Local Python:** the script finds `en.json` on its own. It checks the default
+Steam installations for Windows, macOS and Linux and uses the first that yields
+text — a file that is there but truncated is passed over rather than taken for
+the game's. When no install has usable text it falls back to the English bundled
+at `web/py/gametext.json`, so labels still read `Lawyer Fee (Hourly)` rather
+than `Hourlylawyerfee`.
+
+A custom installation — a Steam library on another drive, say — is picked up by
+setting `BA_LOCALE` to the full path of its `en.json`, which is tried ahead of
+every built-in location; if that file holds no text the search carries on, so
+check the `game text:` line to see which one was used. Point it at the copy
+inside the install, at
+`<game>/.../StreamingAssets/locale/en.json`; `python build_web.py` and the wiki
+extractor read `helpstructure.json` beside the locale folder and refuse an
+`en.json` kept anywhere else. You can also add the path to `_LOCALE_CANDIDATES`
+in [ba_save.py](ba_save.py); write it as a raw string (`r"C:\..."`) so `\P` is
+not read as an escape. The Windows default is:
 
 ```text
 C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale\en.json
 ```
 
-You can also use the bundled English text at `web/py/gametext.json`, including on
-macOS. Replace the existing `DEFAULT_LOCALE = (...)` assignment with its absolute
-path, for example (replace the path with your checkout's location):
-
-```python
-DEFAULT_LOCALE = "/Users/yourname/big-copilot/web/py/gametext.json"
-```
-
 To find the game's own text on macOS, use **Steam → Manage → Browse local files**
 and search that folder for `en.json`. If the files are inside an app bundle, use
-Finder's **Show Package Contents**. Installation layouts can vary; the bundled
-file above is an alternative that does not depend on the game installation.
+Finder's **Show Package Contents**.
 
-Restart the script after changing it. There is currently no `--locale` option.
-If names appear as `Haircareproduct` or `Expensiveflower`, the locale was not
-loaded. Check the path above. Missing game text also limits recipe and station
-analysis; it is more than a label issue.
+A run that builds a board says which text it used, in the summary it prints at
+the end and in the `--watch` startup lines. `game text: the English bundled
+with the board` means no install was found: labels still read properly, but
+from the copy committed here, so anything your game added since is missing and
+shows as a slug like `Haircareproduct`. Set `BA_LOCALE` to read your own build
+instead. `game text: none found` means nothing loaded anywhere, the bundle
+included, which also limits recipe and station analysis; it is more than a
+label issue.
 
 ## What's on the dashboard?
 
