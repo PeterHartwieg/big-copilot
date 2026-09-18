@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime as dt
+import fractions
 import hashlib
 import http.server
 import json
@@ -4150,6 +4151,21 @@ def _cash_flow(ledger: list, daily: list, day: int) -> dict | None:
     return flow
 
 
+ENDS_A_CHAIN = ("retail", "office")
+
+# The sites that turn what they are sent into something else, so that a product
+# which goes no further than one has still reached the shops that site serves.
+# Named rather than inferred from "off the shop floor and not a warehouse": a
+# storage type the game renames or adds would land in that gap and be read as a
+# factory. The plans carry the same fact for a site whose production is set up,
+# and either signal is enough.
+MAKES_GOODS = frozenset({
+    "ba:businesstype_factory",
+    "ba:businesstype_foodfactory",
+    "ba:businesstype_electronicsfactory",
+})
+
+
 def _chains(save: Save, businesses: list, trends: list) -> list:
     """Which sites work as one business, read off the logistics plans.
 
@@ -4160,60 +4176,197 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
     Connected components would put everything in one bucket — the food factory
     sends soda to the electronics depot, which links the two chains through a
     side line. So a chain is named by the kind of shop at the end of it, and each
-    warehouse and factory joins the kind of shop it mostly feeds: follow its
-    plans downstream, count where the goods actually end up, and let the majority
-    decide. Nothing here is hand-written; it all comes out of the plans.
+    warehouse and factory joins the kind of shop it mostly feeds.
+
+    What it mostly feeds is read one stock line at a time. Every delivery of a
+    product to a shop or an office is an end, and every line a site ships is one
+    vote, divided between the kinds of shop at the ends that line reaches.
+    Counting sites rather than goods would hand a shared depot's whole trade to
+    anyone who puts a single product into it — one crate of phones into the
+    depot that stocks twelve fast food outlets, and the electronics factory
+    lands in the fast food chain. A line that reaches no end is no evidence and
+    casts no vote, which is what a half-set-up depot looks like until it is
+    plumbed in. Nothing here is hand-written; it all comes out of the plans.
     """
     by_key = {b["key"]: b for b in businesses}
-    edges = collections.defaultdict(set)
+    # source -> the stock lines it ships, in plan order. The dict is an ordered
+    # set: the same product to the same place, named in two plans, is one supply
+    # line, and a real set would order the votes by the hash seed.
+    lines = collections.defaultdict(dict)
+    arriving = collections.defaultdict(dict)
     fed_by = {}
+    makers = {b["key"] for b in businesses if b["typeSlug"] in MAKES_GOODS}
     for plan in save.items(save.root["logisticsManagerPlans"]):
         source = site_key(save.address(plan["targetAddress"]))
         if source not in by_key:
             continue
+        if plan.get("isFactory"):
+            makers.add(source)
         for dest in save.items(plan["destinations"]):
             target = site_key(save.address(dest["deliveryTargetAddress"]))
             if target not in by_key or target == source:
                 continue
-            fed_by.setdefault(target, source)
-            edges[source].add((target, len(save.items(dest["stockTargets"]))))
+            for stock in save.items(dest["stockTargets"]):
+                fed_by.setdefault(target, source)
+                item = stock.get("itemName")
+                lines[source][(target, item)] = None
+                arriving[target][item] = None
 
-    served = {}
+    # What each site sends out, whatever the destination, so that a product
+    # arriving at a factory can be told from one it is only passing along.
+    ships = {key: {item: None for _, item in shipped} for key, shipped in lines.items()}
 
-    def downstream(key: str, seen: frozenset) -> collections.Counter:
-        """Which kinds of shop this site's goods end up in, and how heavily."""
-        if key in served:
-            return served[key]
-        counts = collections.Counter()
-        for target, lines in edges.get(key, ()):
-            if target in seen:
+    # Which ends a product can reach once it is at a site. Depots stock each
+    # other and factories supply factories, so this cannot be had by walking
+    # down the plans: a walk would have to cut those loops somewhere, and where
+    # it cut them would depend on which site the save happened to list first.
+    # It is read by repetition instead, from nothing known, and every step only
+    # ever adds ends, so each reading widens to one exact answer and stops
+    # there however the plans loop back on themselves.
+    carries = collections.defaultdict(bool)
+    ends = collections.defaultdict(frozenset)
+    made = collections.defaultdict(frozenset)
+
+    def carried(target: str, item, known: dict) -> frozenset:
+        """The shop deliveries this product feeds, arriving at this site."""
+        if by_key[target]["status"] in ENDS_A_CHAIN:
+            return frozenset(((target, item),))
+        return known[(target, item)]
+
+    # First, whether a product gets anywhere on its own: handed from site to
+    # site under its own name until it reaches a shop, or reaches a factory that
+    # keeps it and turns it into what that factory ships. Either way it is on
+    # its way somewhere, and the site that sent it is not the one to ask about
+    # it. That question has to be settled by itself and before anything else,
+    # because it is what says whether a product arriving at a factory was handed
+    # on or used up. Reading it off the answer below as that answer grew would
+    # let a reading shrink again — a ring of factories passing one product round
+    # would swap between two answers for ever.
+    def gets_somewhere(target: str, item) -> bool:
+        site = by_key[target]
+        if site["status"] in ENDS_A_CHAIN:
+            return True
+        if target in makers and item not in ships.get(target, ()):
+            return True  # kept here, and made into whatever this factory ships
+        return carries[(target, item)]
+
+    settling = True
+    while settling:
+        settling = False
+        for source, shipped in lines.items():
+            if by_key[source]["status"] in ENDS_A_CHAIN:
                 continue
-            site = by_key[target]
-            if site["status"] == "retail":
-                counts[site["typeSlug"]] += lines
-            else:
-                counts += downstream(target, seen | {key})
-        if not seen:
-            served[key] = counts
-        return counts
+            for item in arriving.get(source, ()):
+                if carries[(source, item)]:
+                    continue
+                if any(gets_somewhere(t, i) for t, i in shipped if i == item):
+                    carries[(source, item)] = True
+                    settling = True
+
+    # Then the reading proper, over the same plans. Which reading a product gets
+    # was settled above, so none of them can take an end away and each pass only
+    # ever adds: the widening reaches one exact answer and stops there. One pass
+    # carries an end one site further back, so a save settles in as many passes
+    # as it has readings; the bound is that, and running it out means the steps
+    # stopped only ever adding, which is a fault in this code rather than
+    # anything a save can ask for.
+    readings = sum(len(items) for items in arriving.values())
+    settling = True
+    passes = readings + 2
+    while settling and passes:
+        settling = False
+        passes -= 1
+        for source, shipped in lines.items():
+            if by_key[source]["status"] in ENDS_A_CHAIN:
+                continue
+            if source in makers:
+                # What this factory makes: everything it ships, less the goods
+                # it was handed to pass along, which are somebody else's trade
+                # and say nothing about what the factory turns its inputs into.
+                #
+                # A product that both arrives here and leaves is read as passing
+                # through, and a factory where every line is such a product is
+                # read as making nothing of its own — so whoever supplies its
+                # inputs waits in Head office and support. That is the one thing
+                # the plans genuinely cannot answer: they record where goods go,
+                # never whether a delivery was a recipe's input or a crate being
+                # moved on, and the two look identical. Reading those lines as
+                # the factory's own making instead would file the site behind
+                # them under whatever the factory happens to be carrying for
+                # somebody else, which is the complaint this whole reading
+                # exists to answer. Better to say nothing than to say that.
+                #
+                # Which lines count is settled before this reading starts:
+                # choosing on whether their ends happen to be filled in yet
+                # would let this set shrink again from one pass to the next, and
+                # then the plan the save stores first would decide the answer.
+                own = [step for step in shipped if not carries[(source, step[1])]]
+                everything = frozenset().union(
+                    *(carried(t, i, ends) for t, i in own)
+                )
+                if everything != made[source]:
+                    made[source] = everything
+                    settling = True
+            for item in arriving.get(source, ()):
+                onward = frozenset().union(
+                    *(carried(t, i, ends) for t, i in shipped if i == item)
+                )
+                if not carries[(source, item)] and source in makers:
+                    # It reaches no shop as itself and this site makes goods, so
+                    # it became what the factory ships — the plans never say
+                    # which arrival was a recipe input, so all of that factory's
+                    # own ends stand behind it.
+                    found = made[source]
+                else:
+                    # Either it goes on from here under its own name, which is
+                    # the plainest evidence there is, or this site only stores
+                    # and forwards, in which case where its onward lines end up
+                    # is the whole of what can be said. A depot holding goods it
+                    # never sends on has no onward line, so it reaches nobody.
+                    found = onward
+                if found != ends[(source, item)]:
+                    ends[(source, item)] = found
+                    settling = True
+
+    def votes(key: str) -> collections.Counter:
+        """Which kinds of shop this site's goods end up in, and how heavily."""
+        cast = collections.Counter()
+        for target, item in lines.get(key, ()):
+            found = carried(target, item, ends)
+            if not found:
+                continue  # these goods reach no shop floor: no chain to vote for
+            kinds = collections.Counter(by_key[shop]["typeSlug"] for shop, _ in found)
+            # One line is one vote wherever it ends up, so a product going to
+            # nine fast food counters and one electronics store divides nine to
+            # one. Exact fractions rather than 0.9: a tie between two kinds is
+            # settled by the name order in `winner`, not by a rounding.
+            reach = sum(kinds.values())
+            for slug, count in kinds.items():
+                cast[slug] += fractions.Fraction(count, reach)
+        return cast
+
+    def winner(cast: collections.Counter):
+        """The kind of shop a site is grouped under, or None if it feeds none.
+
+        A tie goes to the kind of shop named first; most_common() would hand it
+        to whichever the count happened to yield first this run.
+        """
+        return min(cast, key=lambda k: (-cast[k], str(k))) if cast else None
 
     groups = collections.OrderedDict()
     for b in businesses:
         if b["status"] == "vacant":
             key = "\0vacant"
-        elif b["status"] in ("retail", "office"):
+        elif b["status"] in ENDS_A_CHAIN:
             key = b["typeSlug"]
         else:
-            reach = downstream(b["key"], frozenset())
-            # A tie goes to the kind of shop named first; most_common() would hand
-            # it to whichever the edge set happened to yield first this run.
-            key = min(reach, key=lambda k: (-reach[k], str(k))) if reach else "\0support"
+            key = winner(votes(b["key"])) or "\0support"
         groups.setdefault(key, []).append(b)
 
     by_trend = {t["key"]: t for t in trends}
     chains = []
     for key, members in groups.items():
-        shops = [b for b in members if b["status"] in ("retail", "office")]
+        shops = [b for b in members if b["status"] in ENDS_A_CHAIN]
         if key == "\0vacant":
             name = "Vacant leases"
         elif key == "\0support":
@@ -4246,7 +4399,7 @@ def _chain(name: str, members: list, fed_by: dict, by_key: dict, by_trend: dict)
     # company — a factory shipping to a pier. It is real money, but it is not
     # what the shops took, so it is named rather than folded in. An office's fees
     # are its trading, the way a shop's takings are.
-    external = sum(b["revenue"] for b in members if b["status"] not in ("retail", "office"))
+    external = sum(b["revenue"] for b in members if b["status"] not in ENDS_A_CHAIN)
     outside = {
         fed_by[b["key"]]
         for b in members

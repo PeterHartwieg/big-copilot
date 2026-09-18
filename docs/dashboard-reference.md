@@ -474,12 +474,22 @@ whole operation actually runs at, and its sites fold underneath it.
 
 Membership comes out of your logistics plans, not a table written here. A chain is named
 by the kind of shop at the end of it, and each warehouse and factory joins the kind of
-shop it mostly feeds: follow its plans downstream, count where the goods actually end up,
-and let the majority decide. That is why a food factory sits with the supermarkets even
-though it also sends soda to the electronics depot, and why a cinema is its own chain
-rather than a supermarket that happens to share a warehouse. An office agency is a chain of
-its own kind in the same way: law firms together, travel agencies together. Head office
-and the sites that feed nothing make up *Head office and support*.
+shop it mostly feeds. Every stock line a site ships is one vote, cast for the kinds of
+shop that product ends up in and divided between them as the product itself divides. That
+is why a food factory sits with the supermarkets even though it also sends soda to the
+electronics depot, and why one crate of phones into the depot that stocks your fast food
+outlets does not move the electronics factory into the fast food chain: the phones are
+followed, not the depot. Where a product goes no further because a factory turns it into
+something else, the line follows the trade of the factory that bought it. Where it goes no
+further because a warehouse is holding it, it has reached no shop and counts for nothing,
+so a site whose goods have nowhere to go yet waits in *Head office and support* until its
+plans are finished. A factory that only ever ships products it is also sent — goods moving
+through it, or its own output pushed back by a warehouse — waits there too, and so does
+whoever supplies it: your plans say where goods went, never whether a delivery was an
+ingredient or a crate passing along, and the two look the same from outside. A cinema is its own chain rather than a supermarket that happens to
+share a warehouse. An office agency is a chain of its own kind in the same way: law firms
+together, travel agencies together. Head office and the sites that feed nothing make up
+*Head office and support*.
 
 Where a chain's total includes money taken from outside the company, such as a factory
 shipping to a pier, the chain line says so and names the amount, because that is not what
