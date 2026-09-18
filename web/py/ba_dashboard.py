@@ -30,7 +30,7 @@ import traceback
 import webbrowser
 from html import escape as html_escape
 
-from ba_save import Names, Save, load_locale, load_save
+from ba_save import Names, Save, bundled_locale, find_locale, load_locale, load_save
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -689,11 +689,11 @@ DEPOSIT_MAX_FACTOR = 300
 DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 
 # The door capacity each size letter buys, per building type. Read from the
-# game's help page, which travels with the web build's game text (a player's own
+# game's help page, which travels with the bundled game text (a player's own
 # en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
-# it stands for any category the page does not yield, such as on a CLI run when
-# the game is not installed where DEFAULT_LOCALE points. A letter whose variants
-# disagree carries [min, max].
+# it stands for any category the page does not yield. A local run without the game
+# reads the page from the bundle, so this is reached only when there is no game
+# text at all. A letter whose variants disagree carries [min, max].
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
@@ -10854,6 +10854,7 @@ def watch(target: str, out: str, port: int, interval: int, open_browser: bool) -
     print(f"Watching {target}", flush=True)
     print(f"  serving {url}  (checks every {interval}s, rebuilds only on a new save)")
     print(f"  priority {'lowered, the game gets the CPU first' if lowered else 'unchanged'}")
+    print(f"  {locale_note()}")
     print("  Ctrl+C to stop", flush=True)
     if open_browser:
         webbrowser.open(url)
@@ -10862,6 +10863,25 @@ def watch(target: str, out: str, port: int, interval: int, open_browser: bool) -
     except KeyboardInterrupt:
         print("\nStopped.")
         server.shutdown()
+
+
+def locale_note() -> str:
+    """One line naming the game text a local run used, for the CLI summary.
+
+    The bundled English keeps labels reading properly even with no game
+    installed, which is the point of detecting it -- but it is a filtered copy
+    of whatever build shipped it, so a run that fell back has to say so rather
+    than look identical to one reading the player's own install.
+    """
+    found = find_locale()
+    if not found:
+        return "game text: none found, so names fall back to raw slugs"
+    if bundled_locale(found):
+        return (
+            "game text: the English bundled with the board, not your install; "
+            "set BA_LOCALE to your game's en.json for the names your build uses"
+        )
+    return f"game text: {found}"
 
 
 def main() -> None:
@@ -10938,6 +10958,7 @@ def main() -> None:
         f"({minor['count']} more below the ${minor['gate']:,.0f}/day line)"
     )
     print(f"  wrote {out}")
+    print(f"  {locale_note()}")
 
 
 if __name__ == "__main__":

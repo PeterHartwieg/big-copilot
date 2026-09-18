@@ -86,7 +86,11 @@ running game does.
 ## Commands
 
 Run from the repository root. With no `--data-dir`, the extractor reads the
-Steam install `ba_save.DEFAULT_LOCALE` points at.
+Steam install `ba_save.find_game_locale()` detects, or the one `BA_LOCALE`
+names. Either way the path has to be the game's own
+`<game>/.../StreamingAssets/locale/en.json`: the extractor reads
+`helpstructure.json` beside the locale folder, so an `en.json` copied
+somewhere else is refused rather than half-read.
 
 ```sh
 # What can be extracted

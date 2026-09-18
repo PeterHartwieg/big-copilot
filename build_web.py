@@ -20,8 +20,9 @@ import os
 import shutil
 
 from ba_dashboard import VERIFIED_BUILD, render
-from ba_save import find_game_locale, load_locale
+from ba_save import bundled_locale, find_game_locale, load_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
+from tools.extract_wiki import game_data_dir
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
@@ -529,6 +530,38 @@ def check(root: str = HERE) -> list[str]:
 
 def main() -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
+    # Resolve the game text before anything else is written. Every step below
+    # needs it, and the wiki reads helpstructure.json beside it, so a path that
+    # is not the game's own has to stop the build here with a message that says
+    # what is wrong, rather than surface as a missing file two steps later.
+    locale_path = find_game_locale()
+    if not locale_path:
+        raise SystemExit(
+            "no game text found; gametext.json cannot be built. Set BA_LOCALE to the "
+            "full path of your game's en.json, which has to be the one inside the "
+            "install, at <game>/.../StreamingAssets/locale/en.json -- the wiki reads "
+            "helpstructure.json beside it.\nLooked in:\n  "
+            + "\n  ".join(locale_search_paths())
+        )
+    # find_game_locale() skips the bundle when it searches, but BA_LOCALE and an
+    # edited candidate can both name it outright, and rebuilding gametext.json
+    # from gametext.json changes nothing while reporting success.
+    if bundled_locale(locale_path):
+        raise SystemExit(
+            f"{locale_path} is the text this build ships, not the game's; rebuilding "
+            "gametext.json from itself would change nothing and report success. Point "
+            "BA_LOCALE at the game's own en.json."
+        )
+    if game_data_dir(locale_path) is None:
+        raise SystemExit(
+            f"{locale_path} is not inside a game install; the wiki reads "
+            "helpstructure.json beside the locale folder, so the path has to be "
+            "<game>/.../StreamingAssets/locale/en.json"
+        )
+    locale = load_locale(locale_path)
+    if not locale:
+        raise SystemExit(f"no game text at {locale_path}; gametext.json cannot be built")
+
     # Refresh reference content before stamping assets, so a game update also
     # invalidates browser caches for the Wiki catalogue.
     write_public_wiki(os.path.join(WEB, "wiki-data.json"))
@@ -539,17 +572,6 @@ def main() -> None:
     shutil.copyfile(
         os.path.join(HERE, "ba_buildings.json"), os.path.join(WEB, "py", "ba_buildings.json")
     )
-    # The real game, never the bundle: building gametext.json from gametext.json
-    # would look successful and change nothing.
-    locale_path = find_game_locale()
-    if not locale_path:
-        raise SystemExit(
-            "no game text found; gametext.json cannot be built. Set BA_LOCALE to "
-            "the full path of your game's en.json."
-        )
-    locale = load_locale(locale_path)
-    if not locale:
-        raise SystemExit(f"no game text at {locale_path}; gametext.json cannot be built")
     text = {k: v for k, v in locale.items() if ships(k, v)}
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)

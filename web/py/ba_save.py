@@ -336,12 +336,16 @@ _LOCALE_CANDIDATES = (
     "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common"
     "/Big Ambitions/Big Ambitions_Data/StreamingAssets/locale/en.json",
 )
-# The English text built into the page. It sits beside this module in web/py,
-# or one level down from the checkout root, depending on which copy runs.
+# The English text built into the page, wherever the running copy keeps it:
+# beside this module in web/py, one level down from the checkout root, or on
+# Pyodide's virtual disk, where web/worker.js writes it under /data while the
+# module itself sits at the root. The virtual path is last so a real install
+# always wins over a same-named directory on the current drive.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _BUNDLED_LOCALES = (
     os.path.join(_HERE, "gametext.json"),
     os.path.join(_HERE, "web", "py", "gametext.json"),
+    "/data/gametext.json",
 )
 
 
@@ -349,6 +353,11 @@ def _locale_paths() -> tuple[str, ...]:
     """The candidate paths, the BA_LOCALE override first when one is set."""
     override = os.environ.get("BA_LOCALE")
     return (override, *_LOCALE_CANDIDATES) if override else _LOCALE_CANDIDATES
+
+
+def locale_search_paths() -> tuple[str, ...]:
+    """Every path detection would try, expanded, for a message that has to say."""
+    return tuple(os.path.expanduser(path) for path in _locale_paths())
 
 
 def find_game_locale() -> str | None:
@@ -379,6 +388,20 @@ def find_locale() -> str | None:
         if os.path.isfile(path):
             return path
     return None
+
+
+def bundled_locale(path: str | None) -> bool:
+    """Whether this path is the English text shipped with the board.
+
+    The bundle is a filtered subset of the game's own file, so a caller that
+    needs the real thing -- or wants to tell the player which text they are
+    reading -- has to be able to tell the two apart. Compared as text, since
+    the answer is wanted for paths that may not exist.
+    """
+    if not path:
+        return False
+    here = os.path.normcase(os.path.abspath(path))
+    return any(here == os.path.normcase(os.path.abspath(p)) for p in _BUNDLED_LOCALES)
 
 
 # Street names are not in the locale file, so slugs are re-split by word.

@@ -97,9 +97,12 @@ than `Hourlylawyerfee`.
 
 A custom installation — a Steam library on another drive, say — is picked up by
 setting `BA_LOCALE` to the full path of its `en.json`, which wins over every
-built-in location. You can also add the path to `_LOCALE_CANDIDATES` in
-[ba_save.py](ba_save.py); write it as a raw string (`r"C:\..."`) so `\P` is not
-read as an escape. The Windows default is:
+built-in location. Point it at the copy inside the install, at
+`<game>/.../StreamingAssets/locale/en.json`; `python build_web.py` and the wiki
+extractor read `helpstructure.json` beside the locale folder and refuse an
+`en.json` kept anywhere else. You can also add the path to `_LOCALE_CANDIDATES`
+in [ba_save.py](ba_save.py); write it as a raw string (`r"C:\..."`) so `\P` is
+not read as an escape. The Windows default is:
 
 ```text
 C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale\en.json
@@ -109,9 +112,12 @@ To find the game's own text on macOS, use **Steam → Manage → Browse local fi
 and search that folder for `en.json`. If the files are inside an app bundle, use
 Finder's **Show Package Contents**.
 
-If names still appear as `Haircareproduct` or `Expensiveflower`, no game text was
-found at all. Missing game text also limits recipe and station analysis; it is
-more than a label issue.
+Every run prints the text it used on its last line. `game text: the English
+bundled with the board` means no install was found: labels still read properly,
+but from the copy committed here, so anything your game added since is missing
+and shows as a slug like `Haircareproduct`. Set `BA_LOCALE` to read your own
+build instead. `game text: none found` means there was no text at all, which
+also limits recipe and station analysis; it is more than a label issue.
 
 ## What's on the dashboard?
 

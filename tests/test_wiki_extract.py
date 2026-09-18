@@ -16,6 +16,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
@@ -437,6 +438,37 @@ class ProvenanceTests(FixtureCase):
         self.assertIsNone(extract_wiki.find_steam_manifest(data_dir))
         expected = self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
         self.assertEqual(extract_wiki.find_steam_manifest(data_dir), os.path.abspath(expected))
+
+    def test_manifest_discovery_survives_the_macos_app_bundle(self):
+        # Inside a .app the data directory sits four levels below steamapps, not
+        # two, so counting levels finds nothing and the build id goes unknown.
+        data_dir = os.path.join(
+            self._tmp.name, "steamapps", "common", "Big Ambitions",
+            "Big Ambitions.app", "Contents", "Resources", "Data",
+        )
+        expected = self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
+        self.assertEqual(extract_wiki.find_steam_manifest(data_dir), os.path.abspath(expected))
+
+    def test_a_locale_outside_steamapps_has_no_manifest(self):
+        self.assertIsNone(extract_wiki.find_steam_manifest(os.path.join(self._tmp.name, "Desktop")))
+
+    def test_a_ba_locale_outside_the_install_is_refused(self):
+        # BA_LOCALE can name an en.json anywhere, but helpstructure.json is only
+        # beside the real locale folder; deriving a data directory from an
+        # unrelated parent used to send the build looking in the wrong place.
+        loose = os.path.join(self._tmp.name, "Desktop", "en.json")
+        os.makedirs(os.path.dirname(loose), exist_ok=True)
+        with open(loose, "w", encoding="utf-8") as fh:
+            json.dump({}, fh)
+        with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
+            with self.assertRaisesRegex(wiki_data.SourceError, "StreamingAssets"):
+                extract_wiki.default_paths(None)
+
+    def test_a_ba_locale_inside_an_install_resolves(self):
+        with mock.patch.dict(os.environ, {"BA_LOCALE": self.locale_path()}, clear=True):
+            paths = extract_wiki.default_paths(None)
+        self.assertEqual(paths, extract_wiki.default_paths(self.game))
+
 
     def test_raw_help_travels_separately_from_the_facts(self):
         catalogue = self.extract()

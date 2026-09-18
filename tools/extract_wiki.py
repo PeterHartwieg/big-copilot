@@ -2,13 +2,14 @@
 
     python tools/extract_wiki.py --business giftshop --out research/wiki-data/gift-shop.json
 
-Reads the locale file the game ships (default: the Steam install
-`ba_save.DEFAULT_LOCALE` points at) and, when present, the help menu's own
-table of contents beside it, and writes the facts they state as a catalogue of
-records: business types with their ranges, items, recipes and workstations.
-Every record carries the locale keys it was read from; the catalogue carries
-the SHA256 of each source file. The raw help text is written out beside the
-parsed facts, so a page the parser half understood is still there to read.
+Reads the locale file the game ships (default: the install
+`ba_save.find_game_locale()` detects, or the one `BA_LOCALE` names) and, when
+present, the help menu's own table of contents beside it, and writes the facts
+they state as a catalogue of records: business types with their ranges, items,
+recipes and workstations. Every record carries the locale keys it was read
+from; the catalogue carries the SHA256 of each source file. The raw help text
+is written out beside the parsed facts, so a page the parser half understood is
+still there to read.
 
 Nothing here is runtime truth. The help can lag the running game, so these are
 documented game facts; see docs/wiki-data-pipeline.md for the limits.
@@ -36,6 +37,21 @@ import wiki_data  # noqa: E402  (tools/ is the package, the repo root is the imp
 RESEARCH_DIR = os.path.join("research", "wiki-data")
 
 
+def game_data_dir(locale_path: str) -> str | None:
+    """The game data directory an en.json belongs to, or None if it is loose.
+
+    Only the game's own layout, <game>/.../StreamingAssets/locale/en.json, puts
+    helpstructure.json and the Steam manifest where this module looks for them.
+    BA_LOCALE can name an en.json anywhere, so every caller that needs the rest
+    of the install asks here rather than deriving a directory from whatever
+    parent the path happens to have.
+    """
+    streaming_dir = os.path.dirname(os.path.dirname(locale_path))
+    if os.path.basename(streaming_dir).lower() != "streamingassets":
+        return None
+    return os.path.dirname(streaming_dir)
+
+
 def default_paths(data_dir: str | None) -> dict:
     """Where the sources live: the game install the dashboard already knows."""
     if data_dir is None:
@@ -44,9 +60,17 @@ def default_paths(data_dir: str | None) -> dict:
         # The detected install when there is one, so the wiki builds on every
         # platform; the old Windows constant is only a last resort.
         default_locale = find_game_locale() or DEFAULT_LOCALE
-        # .../StreamingAssets/locale/en.json -> .../StreamingAssets
+        # .../StreamingAssets/locale/en.json -> .../Big Ambitions_Data
+        data_dir = game_data_dir(default_locale)
+        if data_dir is None:
+            raise wiki_data.SourceError(
+                f"{default_locale} is not inside a game install: the wiki reads "
+                "helpstructure.json beside the locale folder, so the path has to be "
+                "<game>/.../StreamingAssets/locale/en.json. Point BA_LOCALE at the "
+                "game's own en.json, or pass --data-dir"
+            )
+        # Kept from the path itself, so its real spelling survives.
         streaming_dir = os.path.dirname(os.path.dirname(default_locale))
-        data_dir = os.path.dirname(streaming_dir)
     else:
         data_dir = os.path.abspath(data_dir)
         # Accept direct StreamingAssets paths used by earlier callers too.
@@ -66,15 +90,23 @@ def default_paths(data_dir: str | None) -> dict:
 def find_steam_manifest(data_dir: str | None) -> str | None:
     """The game's appmanifest, next to the install Steam laid it down.
 
-    The id lives two levels above the game root, in steamapps; when that is
-    not readable the extraction goes on without it and says so, which is why
-    this returns a path and not a build id.
+    The id lives in steamapps, which is two levels above the game root on the
+    Windows and Linux layouts but four inside a macOS .app bundle, so walk up
+    until steamapps appears instead of counting levels. When it is not readable
+    the extraction goes on without it and says so, which is why this returns a
+    path and not a build id.
     """
     if not data_dir:
         return None
-    game_root = os.path.dirname(data_dir)  # .../common/Big Ambitions
-    candidate = os.path.abspath(os.path.join(game_root, os.pardir, os.pardir, "appmanifest_1331550.acf"))
-    return candidate if os.path.isfile(candidate) else None
+    here = os.path.abspath(data_dir)
+    while True:
+        if os.path.basename(here).lower() == "steamapps":
+            candidate = os.path.join(here, "appmanifest_1331550.acf")
+            return candidate if os.path.isfile(candidate) else None
+        parent = os.path.dirname(here)
+        if parent == here:  # the filesystem root, and no steamapps on the way
+            return None
+        here = parent
 
 
 def build_metadata(args, data_dir: str | None) -> dict:

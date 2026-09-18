@@ -10,10 +10,14 @@ import ba_save
 
 @contextmanager
 def patched(candidates, bundled=(), env=None):
-    """Detection sees only these candidates, bundles and environment."""
+    """Detection sees only these candidates, bundles and environment.
+
+    The environment is replaced rather than overlaid, so a developer who has
+    BA_LOCALE set for their own install cannot change what these tests detect.
+    """
     with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", tuple(candidates)), \
             mock.patch.object(ba_save, "_BUNDLED_LOCALES", tuple(bundled)), \
-            mock.patch.dict(os.environ, {"BA_LOCALE": "", **(env or {})}):
+            mock.patch.dict(os.environ, env or {}, clear=True):
         yield
 
 
@@ -93,6 +97,38 @@ class FindLocaleTests(unittest.TestCase):
     def test_a_malformed_file_is_ignored(self):
         broken = self.write("en.json", "{not json")
         self.assertEqual(ba_save.load_locale(broken), {})
+
+    def test_a_missing_ba_locale_falls_through_to_a_candidate(self):
+        # A stale override must not hide an install that is really there.
+        game = self.write("en.json", json.dumps({"ba:itemname_gymcovercharge": "Game text"}))
+        gone = os.path.join(self.tmp.name, "moved-away", "en.json")
+        with patched((game,), env={"BA_LOCALE": gone}):
+            self.assertEqual(ba_save.find_game_locale(), game)
+
+    def test_the_bundle_that_ships_is_really_there(self):
+        # Every other test replaces _BUNDLED_LOCALES, so nothing else would
+        # notice gametext.json moving and taking the fallback with it.
+        found = [p for p in ba_save._BUNDLED_LOCALES if os.path.isfile(p)]
+        self.assertTrue(found, ba_save._BUNDLED_LOCALES)
+        with open(found[0], encoding="utf-8") as fh:
+            self.assertIn("ba:itemname_hourlylawyerfee", json.load(fh))
+
+    def test_the_bundle_is_recognised_as_the_bundle(self):
+        for path in ba_save._BUNDLED_LOCALES:
+            self.assertTrue(ba_save.bundled_locale(path), path)
+        self.assertFalse(ba_save.bundled_locale(ba_save.DEFAULT_LOCALE))
+        self.assertFalse(ba_save.bundled_locale(None))
+
+    def test_search_paths_report_what_would_be_tried(self):
+        # What the build prints when it cannot find the game, so the override
+        # is reported first and no unexpanded ~ reaches the message.
+        home = self.tmp.name
+        env = {"BA_LOCALE": "/override/en.json", "HOME": home, "USERPROFILE": home}
+        with patched(("~/en.json",), env=env):
+            paths = ba_save.locale_search_paths()
+        self.assertEqual(paths[0], "/override/en.json")
+        self.assertTrue(paths[1].startswith(home), paths[1])
+        self.assertNotIn("~", paths[1])
 
     def test_the_candidate_list_is_well_formed(self):
         # Adjacent string literals merge silently if a comma is dropped, so the
