@@ -10736,7 +10736,7 @@ def catalogue(root: str) -> list[dict]:
     Groups are ordered by their newest save, so the ones being played lead.
     """
     if os.path.isfile(root):
-        root = os.path.dirname(root)
+        root = os.path.dirname(root) or "."  # a bare filename has no dirname
     folders = [root] + sorted(
         os.path.join(root, n)
         for n in os.listdir(root)
@@ -10793,6 +10793,30 @@ def print_catalogue(groups: list[dict]) -> None:
     print('Pass a character or save name to open it: python ba_dashboard.py "Costy Co"')
 
 
+def default_root(lead: str = "") -> str:
+    """SAVE_ROOT, or a SystemExit saying there is no folder to look in.
+
+    Only the Windows location is found on its own: elsewhere USERPROFILE is
+    unset, so SAVE_ROOT is a bare relative string rather than a place anyone
+    could look, and naming it would send the reader after a folder that was
+    never there. `lead` is what already went wrong, so the two ways on are
+    spelled out once.
+    """
+    if os.path.isdir(SAVE_ROOT):
+        return SAVE_ROOT
+    missing = (
+        f"no save folder at {SAVE_ROOT}"
+        if os.path.isabs(SAVE_ROOT)
+        else "no save folder to look in: only the Windows one is found on its own"
+    )
+    raise SystemExit(
+        # ASCII only: a piped log under cp850 would show an em dash as an escape.
+        f"{lead}there is {missing}. Pass the save folder or a .hsg file as the "
+        "argument (the README has the Windows and macOS paths), or use "
+        "bigcopilot.com, which reads saves in the browser."
+    )
+
+
 def resolve_target(arg: str | None) -> str:
     """Turn the positional argument into a file or folder to read.
 
@@ -10803,13 +10827,12 @@ def resolve_target(arg: str | None) -> str:
     matches are listed and the run stops, so a guess never opens the wrong city.
     """
     if not arg:
-        return SAVE_ROOT
+        return default_root()
     if os.path.exists(arg):
         return arg
-    if not os.path.isdir(SAVE_ROOT):
-        raise SystemExit(f"{arg} does not exist, and there is no save folder at {SAVE_ROOT}")
+    root = default_root(f"{arg} does not exist, and ")  # a name needs the folder
     want = arg.lower().removesuffix(".hsg")
-    groups = catalogue(SAVE_ROOT)
+    groups = catalogue(root)
     saves = [(g, s) for g in groups for s in g["saves"]]
     # Four tiers, each tried on its own: a save named exactly so, a character
     # named exactly so, then the same two as substrings. "Costy Co" is both a
@@ -10828,7 +10851,7 @@ def resolve_target(arg: str | None) -> str:
             for label, path in hits:
                 print(f"  {label:<40} {path}")
             raise SystemExit("be more specific, or pass the path")
-    print(f"nothing named {arg!r} under {SAVE_ROOT}. The saves there:\n")
+    print(f"nothing named {arg!r} under {root}. The saves there:\n")
     print_catalogue(groups)
     raise SystemExit(1)
 
@@ -10916,7 +10939,7 @@ def backfill_history(target: str, history_path: str, names: Names) -> int:
     holding the newest save is read: every other folder is a different character,
     and a different city.
     """
-    folder = os.path.dirname(newest_under(target))
+    folder = os.path.dirname(newest_under(target)) or "."  # a bare filename has none
     saves = sorted(
         os.path.join(folder, n) for n in os.listdir(folder) if n.endswith(".hsg")
     )
@@ -11218,7 +11241,9 @@ def main() -> None:
     ap.add_argument(
         "--interval", type=int, default=5, help="seconds between save-file checks"
     )
-    ap.add_argument("--no-open", action="store_true", help="do not open a browser")
+    ap.add_argument(
+        "--no-open", action="store_true", help="with --watch, do not open a browser"
+    )
     ap.add_argument(
         "--backfill",
         action="store_true",
@@ -11227,7 +11252,14 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.list:
-        root = args.save if args.save and os.path.isdir(args.save) else SAVE_ROOT
+        if not args.save:
+            root = default_root()
+        elif os.path.exists(args.save):
+            root = args.save  # catalogue() takes the folder of a save file
+        else:
+            raise SystemExit(
+                f"{args.save} does not exist. --list takes the save folder or a save file."
+            )
         print_catalogue(catalogue(root))
         return
 
