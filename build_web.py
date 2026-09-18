@@ -543,9 +543,9 @@ def main() -> None:
             "helpstructure.json beside it.\nLooked in:\n  "
             + "\n  ".join(locale_search_paths())
         )
-    # find_game_locale() skips the bundle when it searches, but BA_LOCALE and an
-    # edited candidate can both name it outright, and rebuilding gametext.json
-    # from gametext.json changes nothing while reporting success.
+    # The search skips the bundle, but BA_LOCALE and an edited candidate can
+    # both name it outright, and rebuilding gametext.json from gametext.json
+    # changes nothing while reporting success.
     if bundled_locale(locale_path):
         raise SystemExit(
             f"{locale_path} is the text this build ships, not the game's; rebuilding "

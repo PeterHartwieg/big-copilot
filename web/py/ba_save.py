@@ -313,10 +313,11 @@ DEFAULT_LOCALE = (
 )
 
 # The game keeps en.json in a few well-known places. Detection is best-effort
-# and lazy: the first file that exists wins, and the English text shipped with
-# the board is the fallback, so a run without the game still shows proper
-# labels instead of raw slugs. BA_LOCALE, set to a full en.json path, comes
-# first and covers a Steam library somewhere the list does not know.
+# and lazy: the first file that yields text wins -- one that is there but holds
+# nothing is passed over -- and the English shipped with the board is the
+# fallback, so a run without the game still shows proper labels instead of raw
+# slugs. BA_LOCALE, set to a full en.json path, is tried first and covers a
+# Steam library somewhere the list does not know.
 _LOCALE_CANDIDATES = (
     DEFAULT_LOCALE,
     # macOS, the Steam install (inside the app bundle)
@@ -347,10 +348,16 @@ _LOCALE_CANDIDATES = (
 # still gains the entry once Pyodide imports it.
 # A bundle is never preferred to an install: the game's own text is tried first.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_BUNDLED_LOCALES = (
-    os.path.join(_HERE, "gametext.json"),
-    os.path.join(_HERE, "web", "py", "gametext.json"),
-) + (("/data/gametext.json",) if sys.platform == "emscripten" else ())
+
+
+def _bundled_locales(here: str, platform: str) -> tuple[str, ...]:
+    """Where this copy keeps the board's English, for the platform running it."""
+    beside = (os.path.join(here, "gametext.json"),
+              os.path.join(here, "web", "py", "gametext.json"))
+    return beside + (("/data/gametext.json",) if platform == "emscripten" else ())
+
+
+_BUNDLED_LOCALES = _bundled_locales(_HERE, sys.platform)
 
 
 def _locale_paths() -> tuple[str, ...]:
@@ -467,7 +474,9 @@ def load_locale(path: str | None = None) -> dict[str, str]:
     """Read a locale table; with no path, detect the game's own or the bundle.
 
     A missing or malformed file yields an empty table, never an exception: the
-    board is usable without game text, only its labels fall back to slugs.
+    board is usable without game text, only its labels fall back to slugs. Well
+    formed JSON that is not an object counts as malformed -- it would otherwise
+    read as text that loaded and then fail on .get() deep in a render.
     """
     if path is None:
         return load_best_locale()[1]
@@ -475,9 +484,10 @@ def load_locale(path: str | None = None) -> dict[str, str]:
         return {}
     try:
         with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
+            table = json.load(fh)
     except (OSError, ValueError):
         return {}
+    return table if isinstance(table, dict) else {}
 
 
 class Names:

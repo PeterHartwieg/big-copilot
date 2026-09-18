@@ -97,8 +97,10 @@ at `web/py/gametext.json`, so labels still read `Lawyer Fee (Hourly)` rather
 than `Hourlylawyerfee`.
 
 A custom installation — a Steam library on another drive, say — is picked up by
-setting `BA_LOCALE` to the full path of its `en.json`, which wins over every
-built-in location. Point it at the copy inside the install, at
+setting `BA_LOCALE` to the full path of its `en.json`, which is tried ahead of
+every built-in location; if that file holds no text the search carries on, so
+check the `game text:` line to see which one was used. Point it at the copy
+inside the install, at
 `<game>/.../StreamingAssets/locale/en.json`; `python build_web.py` and the wiki
 extractor read `helpstructure.json` beside the locale folder and refuse an
 `en.json` kept anywhere else. You can also add the path to `_LOCALE_CANDIDATES`

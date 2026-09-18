@@ -517,9 +517,55 @@ class ProvenanceTests(FixtureCase):
     def test_no_game_anywhere_says_so(self):
         # default_paths' own refusal, which nothing reached: build_web has its
         # own message, and on a machine with the game this branch never runs.
-        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {}, clear=True):
+        # DEFAULT_LOCALE is _LOCALE_CANDIDATES[0], so once detection has found
+        # nothing there is nothing left to try. Pointed here at a file that
+        # does exist: a fallback to it would return instead of raising, which
+        # is what makes this fail if that dead branch comes back.
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.object(ba_save, "DEFAULT_LOCALE", self.locale_path()),                 mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(wiki_data.SourceError, "no game text found"):
                 extract_wiki.default_paths(None)
+
+    def test_a_short_name_for_the_install_is_accepted(self):
+        # The realpath half of game_layout. Judging the spelling refuses this,
+        # and the Windows CLI is where 8.3 names turn up.
+        if sys.platform != "win32":
+            self.skipTest("8.3 short names are a Windows filesystem feature")
+        import ctypes
+        buf = ctypes.create_unicode_buffer(1024)
+        if not ctypes.windll.kernel32.GetShortPathNameW(self.locale_path(), buf, 1024):
+            self.skipTest("no short name on this volume")
+        short = buf.value
+        if os.path.normcase(short) == os.path.normcase(self.locale_path()):
+            self.skipTest("8.3 names are disabled on this volume")
+        self.assertTrue(os.path.isfile(short))
+        self.assertEqual(extract_wiki.game_data_dir(short),
+                         extract_wiki.game_data_dir(self.locale_path()))
+
+    def test_a_linked_locale_inside_an_install_stays_inside_it(self):
+        # The literal half: a modded en.json linked out of an install is still
+        # in one, and resolving alone would refuse it.
+        link = os.path.join(self.game, "locale", "linked.json")
+        target = os.path.join(self._tmp.name, "modded.json")
+        with open(target, "w", encoding="utf-8") as fh:
+            json.dump({"ba:itemname_gymcovercharge": "Modded"}, fh)
+        try:
+            os.symlink(target, link)
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            self.skipTest(f"symlinks unavailable here: {exc}")
+        self.addCleanup(os.remove, link)
+        self.assertEqual(extract_wiki.game_data_dir(link),
+                         extract_wiki.game_data_dir(self.locale_path()))
+
+    def test_the_two_directories_always_belong_together(self):
+        # helpstructure.json is read beside the locale folder, so a data_dir
+        # from one spelling and a streaming_dir from another is how it ends up
+        # looked for where the locale never was.
+        through = os.path.join(self.game, "locale", os.pardir, "locale", "en.json")
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", (through,)),                 mock.patch.dict(os.environ, {}, clear=True):
+            paths = extract_wiki.default_paths(None)
+        self.assertTrue(os.path.isfile(paths["help_structure"]), paths["help_structure"])
+        self.assertEqual(os.path.dirname(paths["help_structure"]),
+                         os.path.dirname(os.path.dirname(os.path.abspath(self.locale_path()))))
 
     def test_a_locale_folder_by_another_name_is_refused(self):
         # StreamingAssets alone is not enough: helpstructure.json is found by
@@ -534,6 +580,35 @@ class ProvenanceTests(FixtureCase):
             with self.quiet():
                 code = extract_wiki.main(["--list", "--locale", self.locale_path()])
         self.assertEqual(code, 0)
+
+    def test_a_locale_only_extract_runs_without_an_install(self):
+        # --list returns before the catalogue is built, so it would not notice
+        # data_dir being None reaching build_catalogue.
+        out = os.path.join(self._tmp.name, "catalogue.json")
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {}, clear=True):
+            with self.quiet():
+                code = extract_wiki.main([
+                    "--locale", self.locale_path(), "--business", "giftshop", "--out", out,
+                ])
+        self.assertEqual(code, 0)
+        with open(out, encoding="utf-8") as fh:
+            catalogue = json.load(fh)
+        build = catalogue["source"]["buildMetadata"]
+        self.assertIsNone(build["steamBuildId"])
+        self.assertIn("Not observed", build["note"])
+
+    def test_a_junction_to_a_differently_named_folder_is_still_an_install(self):
+        # The literal half of game_layout: StreamingAssets can be a junction
+        # whose target is named something else, and resolving alone refuses it.
+        link = os.path.join(self._tmp.name, "linked", "StreamingAssets")
+        os.makedirs(os.path.dirname(link), exist_ok=True)
+        try:
+            os.symlink(self.game, link, target_is_directory=True)
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            self.skipTest(f"directory links unavailable here: {exc}")
+        via = os.path.join(link, "locale", "en.json")
+        self.assertTrue(os.path.isfile(via))
+        self.assertEqual(extract_wiki.game_data_dir(via), os.path.dirname(link))
 
     def test_a_ba_locale_inside_an_install_resolves(self):
         with mock.patch.dict(os.environ, {"BA_LOCALE": self.locale_path()}, clear=True):

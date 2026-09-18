@@ -8,6 +8,14 @@ from unittest import mock
 
 import ba_save
 
+SAVE_SHAPE = {
+    "meta": {"save": "Co", "day": 1, "build": 3680},
+    "kpi": {"cash": 0, "netWorth": 0, "profitYesterday": 0, "profitAvg7": 0,
+            "businesses": 0, "employees": 0},
+    "alerts": [],
+    "minor": {"count": 0, "gate": 0},
+}
+
 
 @contextmanager
 def patched(candidates, bundled=(), env=None):
@@ -223,14 +231,47 @@ class FindLocaleTests(unittest.TestCase):
             note = ba_dashboard.locale_note(*ba_save.load_best_locale())
         self.assertEqual(note, f"game text: {game}")
 
-    def test_the_bundle_list_holds_no_path_outside_this_tree(self):
-        # "/data/gametext.json" is Pyodide's, where os.sep is "/". On Windows it
-        # would resolve against the current drive and claim C:\data\gametext.json,
-        # so it must not be in the list here.
+    def test_only_pyodide_gets_the_virtual_bundle_path(self):
+        # "/data/gametext.json" is where web/worker.js writes the text on
+        # Pyodide's virtual disk. Anywhere else it is someone else's file: on
+        # Windows it resolves against the current drive, and on Linux /data is
+        # an ordinary directory. Asserted for both platforms, since the suite
+        # runs on one of them and the entry it is about only appears on the
+        # other.
         for path in ba_save._BUNDLED_LOCALES:
             self.assertTrue(os.path.isabs(path), path)
-        virtual = [p for p in ba_save._BUNDLED_LOCALES if p == "/data/gametext.json"]
-        self.assertEqual(bool(virtual), sys.platform == "emscripten", ba_save._BUNDLED_LOCALES)
+        here = os.path.dirname(os.path.abspath(ba_save.__file__))
+        self.assertIn("/data/gametext.json", ba_save._bundled_locales(here, "emscripten"))
+        for platform in ("win32", "linux", "darwin"):
+            self.assertNotIn("/data/gametext.json", ba_save._bundled_locales(here, platform))
+        self.assertEqual(ba_save._BUNDLED_LOCALES, ba_save._bundled_locales(here, sys.platform))
+
+    def test_json_that_is_not_an_object_counts_as_malformed(self):
+        # It parses, so it used to read as text that loaded, and then failed on
+        # .get() inside a render and on .items() inside the build.
+        for name, content in (("l.json", "[1, 2]"), ("s.json", '"text"'), ("n.json", "42")):
+            self.assertEqual(ba_save.load_locale(self.write(name, content)), {}, name)
+        good = self.write("good.json", json.dumps({"ba:itemname_gymcovercharge": "Gym"}))
+        with patched((self.write("bad.json", "[1, 2]"), good)):
+            self.assertEqual(ba_save.load_best_locale()[0], good)
+
+    def test_main_binds_its_names_on_every_flag_combination(self):
+        # The binding is conditional on --watch/--backfill, so a combination
+        # that skipped it would raise NameError at the first use. Driven for
+        # real rather than read off the source, which drifts.
+        import ba_dashboard
+
+        for argv, watching, backfilling in (
+            ([], False, False),
+            (["--watch"], True, False),
+            (["--backfill"], False, True),
+            (["--backfill", "--watch"], True, True),
+        ):
+            with self.subTest(argv=argv):
+                with mock.patch.object(sys, "argv", ["ba_dashboard.py", *argv]),                         mock.patch.object(ba_dashboard, "resolve_target", return_value="T"),                         mock.patch.object(ba_dashboard, "newest_under", return_value="s.hsg"),                         mock.patch.object(ba_dashboard, "load_save"),                         mock.patch.object(ba_dashboard, "render", return_value=""),                         mock.patch.object(ba_dashboard, "watch") as watch,                         mock.patch.object(ba_dashboard, "backfill_history", return_value=0) as bf,                         mock.patch.object(ba_dashboard, "safe_extract", return_value=SAVE_SHAPE),                         mock.patch("builtins.open", mock.mock_open()),                         mock.patch("builtins.print"):
+                    ba_dashboard.main()
+                self.assertEqual(watch.called, watching)
+                self.assertEqual(bf.called, backfilling)
 
     def test_the_candidate_list_is_well_formed(self):
         # Adjacent string literals merge silently if a comma is dropped, so the

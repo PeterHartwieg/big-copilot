@@ -38,25 +38,34 @@ import wiki_data  # noqa: E402  (tools/ is the package, the repo root is the imp
 RESEARCH_DIR = os.path.join("research", "wiki-data")
 
 
-def game_data_dir(locale_path: str) -> str | None:
-    """The game data directory an en.json belongs to, or None if it is loose.
+def game_layout(locale_path: str) -> tuple[str, str] | None:
+    """(data_dir, StreamingAssets) for an en.json inside an install, else None.
 
     Only the game's own layout, <game>/.../StreamingAssets/locale/en.json, puts
-    helpstructure.json and the Steam manifest where this module looks for them.
-    BA_LOCALE can name an en.json anywhere, so every caller that needs the rest
-    of the install asks here rather than deriving a directory from whatever
-    parent the path happens to have.
+    helpstructure.json and the Steam manifest where this module looks for them,
+    and BA_LOCALE can name an en.json anywhere -- so callers ask here instead of
+    deriving a directory from whatever parent the path happens to have.
+
+    Both spellings count. As written catches a modded en.json linked out of an
+    install that still is one; resolved catches a path reaching a real install
+    through "..", a link, or an 8.3 name like STREAMI~1. Whichever fits decides
+    both directories together: deriving one from the resolved path and the
+    other from the literal one is how helpstructure.json ends up looked for
+    somewhere the locale never was, and that surfaces much later as a missing
+    file rather than here as a refusal.
     """
-    # Resolved first, not just absolutised: a path can reach the right file
-    # through "..", a link, or an 8.3 short name such as STREAMI~1, and judging
-    # it by its spelling would refuse an install that really is one.
-    locale_dir, _ = os.path.split(os.path.realpath(locale_path))
-    streaming_dir, locale_name = os.path.split(locale_dir)
-    if locale_name.lower() != "locale":
-        return None
-    if os.path.basename(streaming_dir).lower() != "streamingassets":
-        return None
-    return os.path.dirname(streaming_dir)
+    for candidate in (os.path.abspath(locale_path), os.path.realpath(locale_path)):
+        streaming_dir, locale_name = os.path.split(os.path.dirname(candidate))
+        if (locale_name.lower() == "locale"
+                and os.path.basename(streaming_dir).lower() == "streamingassets"):
+            return os.path.dirname(streaming_dir), streaming_dir
+    return None
+
+
+def game_data_dir(locale_path: str) -> str | None:
+    """The game data directory an en.json belongs to, or None if it is loose."""
+    layout = game_layout(locale_path)
+    return layout[0] if layout else None
 
 
 def default_paths(data_dir: str | None) -> dict:
@@ -72,17 +81,17 @@ def default_paths(data_dir: str | None) -> dict:
                 "no game text found; set BA_LOCALE to your game's en.json, at "
                 "<game>/.../StreamingAssets/locale/en.json, or pass --data-dir"
             )
-        # .../StreamingAssets/locale/en.json -> .../Big Ambitions_Data
-        data_dir = game_data_dir(default_locale)
-        if data_dir is None:
+        # .../StreamingAssets/locale/en.json -> .../Big Ambitions_Data, and the
+        # StreamingAssets beside it, from the one spelling that fit.
+        layout = game_layout(default_locale)
+        if layout is None:
             raise wiki_data.SourceError(
                 f"{default_locale} is not inside a game install: the wiki reads "
                 "helpstructure.json beside the locale folder, so the path has to be "
                 "<game>/.../StreamingAssets/locale/en.json. Point BA_LOCALE at the "
                 "game's own en.json, or pass --data-dir"
             )
-        # Kept from the path itself, so its real spelling survives.
-        streaming_dir = os.path.dirname(os.path.dirname(default_locale))
+        data_dir, streaming_dir = layout
     else:
         data_dir = os.path.abspath(data_dir)
         # Accept direct StreamingAssets paths used by earlier callers too.
@@ -156,10 +165,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-steam-lookup", action="store_true", help="do not look for the appmanifest")
     args = parser.parse_args(argv)
 
-    # Detecting the install can now refuse a BA_LOCALE that is not inside one.
-    # That gate protects the paths this run would otherwise have to guess, so a
-    # caller who named both of them does not need it -- and either way the
-    # refusal leaves through fail(), like every other bad source.
+    # Detecting the install can refuse a BA_LOCALE that is not inside one. That
+    # gate protects the locale this run would otherwise have to guess, so a
+    # caller who named it does not need the gate: the help structure is a bonus
+    # and the data directory only feeds a build id that already degrades to an
+    # honest unknown. Either way the refusal leaves through fail(), like every
+    # other bad source.
     try:
         paths = default_paths(args.data_dir)
     except wiki_data.SourceError as exc:
