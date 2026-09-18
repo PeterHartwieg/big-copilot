@@ -90,8 +90,9 @@ name: `python ba_dashboard.py "Costy Co"` or `python ba_dashboard.py "Costy" --w
 choose that file through the **More** menu. The choice is remembered in that browser.
 
 **Local Python:** the script finds `en.json` on its own. It checks the default
-Steam installations for Windows, macOS and Linux, and uses the first one that
-exists. When the game is not installed it falls back to the English text bundled
+Steam installations for Windows, macOS and Linux and uses the first that yields
+text — a file that is there but truncated is passed over rather than taken for
+the game's. When no install has usable text it falls back to the English bundled
 at `web/py/gametext.json`, so labels still read `Lawyer Fee (Hourly)` rather
 than `Hourlylawyerfee`.
 
@@ -117,9 +118,9 @@ the end and in the `--watch` startup lines. `game text: the English bundled
 with the board` means no install was found: labels still read properly, but
 from the copy committed here, so anything your game added since is missing and
 shows as a slug like `Haircareproduct`. Set `BA_LOCALE` to read your own build
-instead. `game text: none found` means nothing loaded at all — including from a
-file that is there but truncated — which also limits recipe and station
-analysis; it is more than a label issue.
+instead. `game text: none found` means nothing loaded anywhere, the bundle
+included, which also limits recipe and station analysis; it is more than a
+label issue.
 
 ## What's on the dashboard?
 

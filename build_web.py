@@ -20,7 +20,7 @@ import os
 import shutil
 
 from ba_dashboard import VERIFIED_BUILD, render
-from ba_save import bundled_locale, find_game_locale, load_locale, locale_search_paths
+from ba_save import bundled_locale, load_game_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
 from tools.extract_wiki import game_data_dir
 
@@ -534,7 +534,7 @@ def main() -> None:
     # needs it, and the wiki reads helpstructure.json beside it, so a path that
     # is not the game's own has to stop the build here with a message that says
     # what is wrong, rather than surface as a missing file two steps later.
-    locale_path = find_game_locale()
+    locale_path, locale = load_game_locale()
     if not locale_path:
         raise SystemExit(
             "no game text found; gametext.json cannot be built. Set BA_LOCALE to the "
@@ -558,9 +558,6 @@ def main() -> None:
             "helpstructure.json beside the locale folder, so the path has to be "
             "<game>/.../StreamingAssets/locale/en.json"
         )
-    locale = load_locale(locale_path)
-    if not locale:
-        raise SystemExit(f"no game text at {locale_path}; gametext.json cannot be built")
 
     # Refresh reference content before stamping assets, so a game update also
     # invalidates browser caches for the Wiki catalogue.

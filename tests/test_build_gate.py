@@ -28,11 +28,12 @@ class BuildGateTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
 
-    def write(self, *parts, text="{}"):
+    def write(self, *parts, text=None):
         path = os.path.join(self.tmp.name, *parts)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write(text)
+            fh.write(json.dumps({"ba:itemname_gymcovercharge": "Gym Cover Charge"})
+                     if text is None else text)
         return path
 
     def run_main(self, env):
@@ -59,12 +60,16 @@ class BuildGateTests(unittest.TestCase):
         message = self.run_main({"BA_LOCALE": loose})
         self.assertIn("not inside a game install", message)
 
-    def test_an_empty_locale_inside_an_install_is_refused(self):
+    def test_an_empty_locale_is_passed_over_not_taken_for_the_game(self):
+        # The board skips a file that holds nothing; the build follows the same
+        # rule, so this reports the search finding nothing rather than naming
+        # the empty file as though it were the game's text.
         empty = self.write(
             "Big Ambitions_Data", "StreamingAssets", "locale", "en.json", text="{}"
         )
         message = self.run_main({"BA_LOCALE": empty})
-        self.assertIn("no game text at", message)
+        self.assertIn("no game text found", message)
+        self.assertNotIn(empty, message.split("Looked in:")[0])
 
     def test_the_gate_runs_before_anything_is_written(self):
         # write_public_wiki used to go first, so a bad path surfaced as a

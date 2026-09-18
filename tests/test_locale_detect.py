@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -117,10 +118,11 @@ class FindLocaleTests(unittest.TestCase):
 
     def test_the_bundle_is_recognised_however_it_is_spelled(self):
         # Comparing the strings as given would pass trivially, so each spelling
-        # here reaches the same file by a different route.
+        # here reaches the same file by a different route. Case is deliberately
+        # not one of them: it only differs on a case-insensitive filesystem,
+        # and four of the candidate paths are Linux ones.
         real = next(p for p in ba_save._BUNDLED_LOCALES if os.path.isfile(p))
         self.assertTrue(ba_save.bundled_locale(real))
-        self.assertTrue(ba_save.bundled_locale(real.upper()))
         self.assertTrue(ba_save.bundled_locale(
             os.path.join(os.path.dirname(real), os.pardir, os.path.basename(os.path.dirname(real)),
                          os.path.basename(real))))
@@ -132,6 +134,36 @@ class FindLocaleTests(unittest.TestCase):
             os.chdir(cwd)
         self.assertFalse(ba_save.bundled_locale(ba_save.DEFAULT_LOCALE))
         self.assertFalse(ba_save.bundled_locale(None))
+
+    def test_a_link_to_the_bundle_is_still_the_bundle(self):
+        # The guard that makes this work is realpath; every other spelling in
+        # the test above survives plain abspath, so without this case reverting
+        # realpath would break nothing. BA_LOCALE pointed at such a link would
+        # let build_web rebuild gametext.json from itself.
+        real = next(p for p in ba_save._BUNDLED_LOCALES if os.path.isfile(p))
+        link = os.path.join(self.tmp.name, "en.json")
+        try:
+            os.symlink(real, link)
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            self.skipTest(f"symlinks unavailable here: {exc}")
+        self.assertTrue(ba_save.bundled_locale(link))
+
+    def test_a_short_name_for_the_bundle_is_still_the_bundle(self):
+        # The Windows half of the same guard, since symlinks there need a
+        # privilege this suite cannot assume. An 8.3 name reaches the file and
+        # isfile accepts it, but only realpath spells it back out.
+        if sys.platform != "win32":
+            self.skipTest("8.3 short names are a Windows filesystem feature")
+        import ctypes
+        real = next(p for p in ba_save._BUNDLED_LOCALES if os.path.isfile(p))
+        buf = ctypes.create_unicode_buffer(1024)
+        if not ctypes.windll.kernel32.GetShortPathNameW(real, buf, 1024):
+            self.skipTest("no short name for the bundle on this volume")
+        short = buf.value
+        if os.path.normcase(short) == os.path.normcase(real):
+            self.skipTest("8.3 names are disabled on this volume")
+        self.assertTrue(os.path.isfile(short))
+        self.assertTrue(ba_save.bundled_locale(short))
 
     def test_a_broken_file_falls_through_to_text_that_loads(self):
         # A path that exists is not text that loaded: a truncated en.json used
@@ -196,8 +228,9 @@ class FindLocaleTests(unittest.TestCase):
         # would resolve against the current drive and claim C:\data\gametext.json,
         # so it must not be in the list here.
         for path in ba_save._BUNDLED_LOCALES:
-            self.assertTrue(
-                os.path.isabs(path) and (os.sep == "/" or not path.startswith("/")), path)
+            self.assertTrue(os.path.isabs(path), path)
+        virtual = [p for p in ba_save._BUNDLED_LOCALES if p == "/data/gametext.json"]
+        self.assertEqual(bool(virtual), sys.platform == "emscripten", ba_save._BUNDLED_LOCALES)
 
     def test_the_candidate_list_is_well_formed(self):
         # Adjacent string literals merge silently if a comma is dropped, so the

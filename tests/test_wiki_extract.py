@@ -23,6 +23,7 @@ sys.path.insert(
 )
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import ba_save
 import extract_wiki
 import wiki_data
 
@@ -215,6 +216,14 @@ class FixtureCase(unittest.TestCase):
     def read(self, path):
         with open(path, encoding="utf-8") as fh:
             return fh.read()
+
+    def loose_locale(self):
+        """A real en.json, with text, sitting outside any install."""
+        path = os.path.join(self._tmp.name, "Desktop", "en.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"ba:itemname_gymcovercharge": "Gym Cover Charge"}, fh)
+        return path
 
     def quiet(self):
         """Both CLI streams, so the suite's own output stays readable."""
@@ -477,23 +486,17 @@ class ProvenanceTests(FixtureCase):
         # BA_LOCALE can name an en.json anywhere, but helpstructure.json is only
         # beside the real locale folder; deriving a data directory from an
         # unrelated parent used to send the build looking in the wrong place.
-        loose = os.path.join(self._tmp.name, "Desktop", "en.json")
-        os.makedirs(os.path.dirname(loose), exist_ok=True)
-        with open(loose, "w", encoding="utf-8") as fh:
-            json.dump({}, fh)
-        with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
+        loose = self.loose_locale()
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
             with self.assertRaisesRegex(wiki_data.SourceError, "StreamingAssets"):
                 extract_wiki.default_paths(None)
 
     def test_a_loose_ba_locale_reports_cleanly_instead_of_crashing(self):
-        loose = os.path.join(self._tmp.name, "Desktop", "en.json")
-        os.makedirs(os.path.dirname(loose), exist_ok=True)
-        with open(loose, "w", encoding="utf-8") as fh:
-            json.dump({}, fh)
+        loose = self.loose_locale()
         import contextlib
         import io
         err = io.StringIO()
-        with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
             with contextlib.redirect_stderr(err):
                 code = extract_wiki.main(["--list"])
         self.assertEqual(code, 2)
@@ -502,16 +505,34 @@ class ProvenanceTests(FixtureCase):
     def test_explicit_sources_do_not_need_the_detected_install(self):
         # Naming both sources makes the install irrelevant, so the gate on it
         # must not refuse the run.
-        loose = os.path.join(self._tmp.name, "Desktop", "en.json")
-        os.makedirs(os.path.dirname(loose), exist_ok=True)
-        with open(loose, "w", encoding="utf-8") as fh:
-            json.dump({}, fh)
-        with mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
+        loose = self.loose_locale()
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
             with self.quiet():
                 code = extract_wiki.main([
                     "--list", "--locale", self.locale_path(),
                     "--help-structure", self.structure_path(),
                 ])
+        self.assertEqual(code, 0)
+
+    def test_no_game_anywhere_says_so(self):
+        # default_paths' own refusal, which nothing reached: build_web has its
+        # own message, and on a machine with the game this branch never runs.
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(wiki_data.SourceError, "no game text found"):
+                extract_wiki.default_paths(None)
+
+    def test_a_locale_folder_by_another_name_is_refused(self):
+        # StreamingAssets alone is not enough: helpstructure.json is found by
+        # stepping out of locale/, so a sibling folder would mislocate it.
+        beside = os.path.join(os.path.dirname(self.game), "StreamingAssets", "other", "en.json")
+        self.assertIsNone(extract_wiki.game_data_dir(beside))
+
+    def test_only_the_locale_is_needed_when_it_is_given(self):
+        # The help structure is a bonus and the data dir only feeds the build
+        # id, so naming the locale is enough even with no install to detect.
+        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {}, clear=True):
+            with self.quiet():
+                code = extract_wiki.main(["--list", "--locale", self.locale_path()])
         self.assertEqual(code, 0)
 
     def test_a_ba_locale_inside_an_install_resolves(self):

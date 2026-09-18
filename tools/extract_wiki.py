@@ -47,9 +47,10 @@ def game_data_dir(locale_path: str) -> str | None:
     of the install asks here rather than deriving a directory from whatever
     parent the path happens to have.
     """
-    # Normalised first: a path can reach the right file through "..", and
-    # judging it by its spelling would refuse an install that really is one.
-    locale_dir, _ = os.path.split(os.path.abspath(locale_path))
+    # Resolved first, not just absolutised: a path can reach the right file
+    # through "..", a link, or an 8.3 short name such as STREAMI~1, and judging
+    # it by its spelling would refuse an install that really is one.
+    locale_dir, _ = os.path.split(os.path.realpath(locale_path))
     streaming_dir, locale_name = os.path.split(locale_dir)
     if locale_name.lower() != "locale":
         return None
@@ -61,21 +62,16 @@ def game_data_dir(locale_path: str) -> str | None:
 def default_paths(data_dir: str | None) -> dict:
     """Where the sources live: the game install the dashboard already knows."""
     if data_dir is None:
-        from ba_save import DEFAULT_LOCALE, find_game_locale
+        from ba_save import find_game_locale
 
-        # The detected install when there is one, so the wiki builds on every
-        # platform. The old Windows constant is the last resort, and it always
-        # looks like an install, so "nothing found" is answered here rather
-        # than left to surface as that path failing to open.
+        # The detected install, on every platform. DEFAULT_LOCALE is already
+        # the first candidate, so nothing found here means nothing anywhere.
         default_locale = find_game_locale()
         if not default_locale:
-            if os.path.isfile(DEFAULT_LOCALE):
-                default_locale = DEFAULT_LOCALE
-            else:
-                raise wiki_data.SourceError(
-                    "no game text found; set BA_LOCALE to your game's en.json, at "
-                    "<game>/.../StreamingAssets/locale/en.json, or pass --data-dir"
-                )
+            raise wiki_data.SourceError(
+                "no game text found; set BA_LOCALE to your game's en.json, at "
+                "<game>/.../StreamingAssets/locale/en.json, or pass --data-dir"
+            )
         # .../StreamingAssets/locale/en.json -> .../Big Ambitions_Data
         data_dir = game_data_dir(default_locale)
         if data_dir is None:
@@ -108,9 +104,9 @@ def find_steam_manifest(data_dir: str | None) -> str | None:
 
     The id lives in steamapps, which is two levels above the game root on the
     Windows and Linux layouts but four inside a macOS .app bundle, so walk up
-    until steamapps appears instead of counting levels. When it is not readable
-    the extraction goes on without it and says so, which is why this returns a
-    path and not a build id.
+    looking for the manifest beside a common/ rather than counting levels or
+    trusting a folder name. When it is not readable the extraction goes on
+    without it and says so, which is why this returns a path, not a build id.
     """
     if not data_dir:
         return None
@@ -167,7 +163,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         paths = default_paths(args.data_dir)
     except wiki_data.SourceError as exc:
-        if not (args.locale and args.help_structure):
+        # Only the locale is required: the help structure is a bonus and the
+        # data directory feeds the Steam build id, which already degrades to an
+        # honest unknown. So a run that named its locale does not need the
+        # install this gate protects.
+        if not args.locale:
             return fail(exc)
         paths = {"data_dir": None, "locale": None, "help_structure": None}
     locale_path = args.locale or paths["locale"]

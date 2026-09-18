@@ -10933,8 +10933,11 @@ def main() -> None:
     out = os.path.abspath(args.out)
     history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
 
-    locale_source, locale = load_best_locale()
-    names = Names(locale)
+    # --watch has its own Board, which resolves the text itself, so a plain
+    # watch run does not parse en.json here only to leave it behind.
+    if args.backfill or not args.watch:
+        locale_source, locale = load_best_locale()
+        names = Names(locale)
 
     if args.backfill:
         recorded = backfill_history(target, history, names)
