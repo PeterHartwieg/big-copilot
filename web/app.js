@@ -1145,7 +1145,12 @@
     localeState();
     startWorker();
     if (!canHandle) {
-      $("folderBtn").title = "Choose the folder named Big Ambitions inside SaveGames. In this browser the choice is a snapshot; Update opens the picker again.";
+      // Not always the browser: no browser offers folder access off a secure
+      // origin, so a self-hosted copy served over plain http loses it too.
+      const why = window.isSecureContext
+        ? "In this browser the choice is a snapshot; Update opens the picker again."
+        : "Watching a folder takes Chrome or Edge on an HTTPS or localhost address, so here the choice is a snapshot; Update opens the picker again.";
+      $("folderBtn").title = "Choose the folder named Big Ambitions inside SaveGames. " + why;
       $("drop").title = $("folderBtn").title;
     }
 

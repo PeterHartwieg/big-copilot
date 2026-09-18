@@ -3,6 +3,10 @@
 A dashboard for your Big Ambitions save: profits, stock, supply chains, staffing
 and market demand. It reads `.hsg` files without modifying them.
 
+The Python script reads saves off the disk it runs on: the game's own folder to
+follow along while you play, or a copied `.hsg` anywhere else. The website runs
+anywhere and reads whichever save you hand the browser.
+
 ## Use it in your browser
 
 1. Open [bigcopilot.com](https://bigcopilot.com).
@@ -17,6 +21,42 @@ Chrome and Edge can remember and watch a connected folder for new saves. Returni
 visits reopen it automatically when access is still granted; otherwise, click
 **Open newest save** or **Open chosen save** to reconnect. Firefox and Safari read a snapshot of the selected files;
 use **Update** to pick them again. Dropping a single file does not watch its folder.
+
+### Host the site yourself
+
+`web/` is the whole site: static files, no build step, so any web server will do.
+From a clone of this repository:
+
+```sh
+cd web && python3 -m http.server 8010 --bind 0.0.0.0
+```
+
+Open `http://<server-ip>:8010/` from any machine that can reach it. Do this to
+have your own copy, or to use the board offline. Your save is not the reason:
+bigcopilot.com reads it in your browser and never uploads it either way. What a
+copy of your own does stop is the presence heartbeat the live site sends while
+the board is open.
+
+**Folder watching needs a secure address.** Watching is a Chrome and Edge feature
+to begin with, and browsers only offer it on `https://`, `http://localhost` or
+`http://127.0.0.1`. A plain `http://` network address does not, including on the machine doing
+the serving — the address is what counts, not which computer you sit at. Every
+browser then behaves the way Firefox does above: the folder you choose is a
+snapshot, and **Update** reopens the picker. Chrome and Edge get watching back
+over HTTPS, or at `http://localhost:8010/` on the server itself.
+
+The community count and the feature vote call `/api/community` on whichever
+server the page came from, and only bigcopilot.com has that API — so your own
+server has nothing to answer them with: the masthead reads **Online count
+unavailable** and the feature list will not load. The update banner is the
+opposite: it compares against your own `version.json`, so it appears after you
+pull.
+
+To update: `git pull`, then hard-refresh the page. `web/_headers` is read only by
+Cloudflare, so your server caches `index.html` however it sees fit.
+
+This is for your own use. Questions about the board are welcome as issues; setting
+up a server is not something the project supports.
 
 ## Find your saves
 
@@ -76,7 +116,7 @@ working directory unless you specify `-o`.
 | `--backfill` | Seed trend history from other saves of the same character. |
 | `--port 8770` | Set the local server port. |
 | `--interval 5` | Set the seconds between save checks. |
-| `--no-open` | Start watch mode without opening a browser. |
+| `--no-open` | With `--watch`, do not open the browser; no effect otherwise. |
 
 Add `--watch` to either startup command to keep the board live while playing.
 The server listens on `127.0.0.1` and rebuilds only when the game writes a save.

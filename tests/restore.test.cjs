@@ -149,7 +149,7 @@ test('the Impressum and privacy notice stay reachable once the board replaces th
   await messages(page);
   await page.evaluate(() => fixture.complete());
   assert.equal(await hasBoard(page), true);
-  for (const [href, label] of [['/impressum', 'Impressum'], ['/privacy', 'Privacy']]) {
+  for (const [href, label] of [['impressum.html', 'Impressum'], ['privacy.html', 'Privacy']]) {
     assert.equal(await page.locator(`#menuFootSlot a[href="${href}"]`).count(), 1);
     assert.equal(await page.locator(`#footerLinks a[href="${href}"]`).innerText(), label);
   }
