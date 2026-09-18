@@ -65,12 +65,22 @@ the map.
   where one exists. Below the list, a count of everything too small to be worth a line.
   *Filter kinds* chooses which kinds of finding make the list; every *details ›* link
   opens the page and view the finding is spelt out on and scrolls to it.
-  *Uniforms / locker* checks retail sites for an installed Uniform Locker even when
-  the save marks the uniforms customer demand fulfilled. Gym Lockers and boxed
-  Uniform Lockers do not count. With a locker installed, the saved customer demand
-  still determines whether staff uniforms need attention. If both are missing,
-  one warning points to installing the locker first; new sites not yet trading
-  retain their combined setup warning.
+  *Uniforms / locker* checks retail sites for an installed Uniform Locker. Gym
+  Lockers and boxed Uniform Lockers do not count. With a locker installed, the
+  warning names the roles working a station shift here that have no uniform set,
+  worked out from the roster rather than read from the save's cached answer: the
+  game only settles that at a moment — at midnight, or when you move an item or a
+  worker — so it reads "fine" for a shop whose floor was empty then, and goes back
+  to unset the next time an uncovered role is on. Cover every role named and the
+  demand is met whenever the game looks. Cleaning shifts are exempt, as they are
+  in game. If both locker and uniforms are missing, one warning points to
+  installing the locker first; new sites not yet trading retain their combined
+  setup warning. A hairdresser gets neither warning: its customers never ask
+  about uniforms, so there is nothing to act on.
+
+  The other amenity warnings do come from the save's cached answer, and likewise
+  only where this business type's customers actually make that demand — a
+  florist's and a theatre's never ask for music, so it is never reported there.
 - **Company / Results**: the company, then its chains, then one site. Results is
   the first Company view; existing `#results` links still open it.
   - *Daily result*: a seven-day rolling profit line over the daily ones. Daily profit

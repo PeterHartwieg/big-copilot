@@ -173,13 +173,10 @@ AMENITY_ITEMS = {
 # _type_catalogue_from_help() — so there is nothing to maintain by hand.
 
 # Every customer-facing amenity the game itself checks for, keyed by what
-# cachedFulfilledCustomerDemands calls it when present. Only ever populated for
-# a business that is open, retail, and trading — see hasAmenity in _business().
+# cachedFulfilledCustomerDemands calls it when present. The uniform demand is
+# read from the save's own roster instead — see _uniform_gaps() — because the
+# cached answer is a snapshot of one moment and cannot be trusted either way.
 AMENITY_DEMANDS = {
-    "ba:customerdemand_employeeuniforms": (
-        "uniform",
-        "No staff uniforms set; customers notice the bare-clothes look",
-    ),
     "ba:customerdemand_toilet": ("bathroom", "No customer bathroom here"),
     "ba:customerdemand_toiletprivacy": (
         "toiletprivacy",
@@ -191,6 +188,83 @@ AMENITY_DEMANDS = {
         "interior",
         "Interior design falls short of what customers expect here",
     ),
+}
+
+# The demands a business type's customers never make, covering the uniform one
+# as well as the AMENITY_DEMANDS above. The game keeps the list per type in
+# BusinessType.customerDemandSets and only ever caches a fulfilled demand that is
+# on it, so one the type never makes is absent from the cache for good — warning
+# about it is noise the player cannot act on. Thirteen of the sixteen RETAIL_TYPES
+# ask for all six, so only the three exceptions are listed here; read from the
+# game's own defaultlocalgroup_assets_businesstypes bundle at build 3680. A type
+# added to RETAIL_TYPES later would default to asking for everything, so
+# test_every_retail_type_was_checked_against_the_games_own_table pins the sixteen
+# that were read off the bundle. That test only catches the list changing; it
+# cannot tell whether a later game build changed a type's demands, which is what
+# the bundle re-read in the game-update checklist is for.
+DEMANDS_NOT_MADE = {
+    "ba:businesstype_hairdresser": {"ba:customerdemand_employeeuniforms"},
+    "ba:businesstype_florist": {"ba:customerdemand_music"},
+    "ba:businesstype_theater": {"ba:customerdemand_music"},
+}
+
+UNIFORM_DEMAND = "ba:customerdemand_employeeuniforms"
+
+# The skills a shift can be worked with at each station, in the game's own
+# order — which matters, because EmployeeUniformsCustomerDemand.Fulfilled takes
+# the first of these the worker actually has and stops there. Every item with a
+# suitableSkills list at build 3680, read from the defaultlocalgroup_assets_items
+# bundle. A station missing from the table asks for no uniform, so a game that
+# adds one goes quiet here rather than guessing at a role — which is why the
+# bundle is re-read as part of the game-update checklist. The row count is
+# pinned in tests/test_uniform_alerts.py, but that only catches this table being
+# edited, not the game growing a station it does not have.
+OFFICE_SKILLS = (
+    "ba:skill_lawyer",
+    "ba:skill_purchasingagent",
+    "ba:skill_logisticsmanager",
+    "ba:skill_programmer",
+    "ba:skill_hrmanager",
+    "ba:skill_graphicdesigner",
+    "ba:skill_headhunter",
+    "ba:skill_travelagent",
+    "ba:skill_eventplanner",
+    "ba:skill_pricingmanager",
+)
+STATION_SKILLS = {
+    "ba:itemname_automatedbakingmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_boothcostume": ("ba:skill_stagecrew",),
+    "ba:itemname_boothlighting": ("ba:skill_stagecrew",),
+    "ba:itemname_boothprojection": ("ba:skill_projectionist",),
+    "ba:itemname_boothsound": ("ba:skill_stagecrew",),
+    "ba:itemname_boothticket": ("ba:skill_customerservice",),
+    "ba:itemname_bottlingmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_cashregister": ("ba:skill_customerservice",),
+    "ba:itemname_checkoutcounterleft": ("ba:skill_customerservice",),
+    "ba:itemname_checkoutcounterright": ("ba:skill_customerservice",),
+    "ba:itemname_cleaningstation": ("ba:skill_cleaning",),
+    "ba:itemname_coatcheckleft": ("ba:skill_customerservice",),
+    "ba:itemname_coatcheckright": ("ba:skill_customerservice",),
+    "ba:itemname_computer": OFFICE_SKILLS,
+    "ba:itemname_concessionsstandregister": ("ba:skill_customerservice",),
+    "ba:itemname_consumergoodsassemblymachine": ("ba:skill_factoryworker",),
+    "ba:itemname_desktopcomputer": OFFICE_SKILLS,
+    "ba:itemname_djbooth": ("ba:skill_dj",),
+    "ba:itemname_dressingroom": ("ba:skill_actor",),
+    "ba:itemname_fitnessplanningboard": ("ba:skill_gymtrainer",),
+    "ba:itemname_foodassemblymachine": ("ba:skill_factoryworker",),
+    "ba:itemname_gamingcomputer": OFFICE_SKILLS,
+    "ba:itemname_hairdresserchair": ("ba:skill_hairstylist",),
+    "ba:itemname_hairdresserchairmodern": ("ba:skill_hairstylist",),
+    "ba:itemname_hairdresserheadwash": ("ba:skill_hairstylist",),
+    "ba:itemname_hydroponicplanter": ("ba:skill_factoryworker",),
+    "ba:itemname_industrialblendingmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_industrialsewingmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_kilnmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_laptop": OFFICE_SKILLS,
+    "ba:itemname_lasercuttingmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_polishingmachine": ("ba:skill_factoryworker",),
+    "ba:itemname_securityguardlocker": ("ba:skill_securityguard",),
 }
 
 # Every demand the game can give an employee (up to three each, in
@@ -1324,6 +1398,9 @@ def _staff(save: Save, names: Names):
             "name": char.get("name", "?"),
             "role": names.label(top["name"]) if top else "-",
             "skill": top["name"] if top else None,
+            # Every skill, not just the top one: a character carries one or two,
+            # and a uniform is owed for whichever of them works the station.
+            "skills": [s["name"] for s in skills],
             "level": round(top["value"], 0) if top else 0,
             "wage": money(e.get("hourlyWage", 0)),
             "hours": e.get("assignedWeeklyHours", 0),
@@ -1482,6 +1559,57 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         b["quitWarnings"] = people[b["key"]]["quitting"]
 
 
+def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
+    """The roles working this floor that have no uniform, as the game scores it.
+
+    EmployeeUniformsCustomerDemand.Fulfilled walks the staff on shift at that
+    instant, takes for each the first of their station's suitableSkills they
+    have, and wants uniformsBySkill to hold every skill it collected. The game
+    only ever runs it at a moment — at midnight, or when the player moves an
+    item or a worker — so its cached answer says "fine" for any shop whose floor
+    happened to be empty then, and flips back to "not set" the next time an
+    uncovered role is on. The same rule over the whole week gives the player the
+    one answer that holds at every such moment: cover these skills and the
+    demand is met whenever it is checked.
+
+    Cleaning shifts are left out, as the game leaves them out. Whether anyone is
+    absent today is not considered: absence passes on its own, and the uniform
+    is still owed for the shift.
+    """
+    if not crew:
+        return []  # no staff, no uniforms owed: the game returns fulfilled
+    uniforms = {entry.get("$k") for entry in save.items(b.get("uniformsBySkill"))}
+    # Keyed the way the game looks a station up, by the itemInstances key that
+    # a shift's itemInstanceId names.
+    stations = {}
+    for holder in save.items(b.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item:
+            stations[holder.get("$k")] = item.get("itemName")
+    by_id = {p["id"]: p for p in crew if p.get("id") is not None}
+
+    gaps = set()
+    for schedule_day in save.items(b.get("scheduleDays")):
+        if not schedule_day.get("isOpen"):
+            continue
+        for shift in save.items(schedule_day.get("workShifts")):
+            # The game asks for a Default shift by type, not for "not cleaning",
+            # so a type a later build adds is left out rather than counted in.
+            if shift.get("type") != STATION_SHIFT:
+                continue
+            person = by_id.get(shift.get("employeeId"))
+            if not person:
+                continue
+            held = set(person.get("skills") or ())
+            for skill in STATION_SKILLS.get(stations.get(shift.get("itemInstanceId")), ()):
+                if skill in held:
+                    if skill not in uniforms:
+                        gaps.add(skill)
+                    break  # the game checks the first match and stops
+    # A set decides these, so sort before they reach the payload.
+    return [names.label(skill) for skill in sorted(gaps)]
+
+
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
     st = latest.get(addr, {})
     name = b.get("BusinessName")
@@ -1583,16 +1711,26 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     else:
         status = "support"
 
-    # What customers currently find when they walk in. The game tracks this
-    # itself and only for a business that is open and trading — a factory or
-    # warehouse never has it, so a missing entry only means something for a
-    # retail floor that is actually seeing customers.
+    # What customers currently find when they walk in. The game caches only the
+    # demands it found fulfilled, so an absent one has either failed or is never
+    # asked for here at all — and a demand this type's customers never make is
+    # absent for good, which is why it is dropped rather than reported. A shop
+    # too new to have been scored yet is held back by the not-trading gate in
+    # _alerts() instead. The uniform demand is worked out from the roster rather
+    # than read here at all.
     demands = set(save.items(b.get("cachedFulfilledCustomerDemands")))
+    not_made = DEMANDS_NOT_MADE.get(btype, ())
     missing_amenities = (
-        [slug for slug in AMENITY_DEMANDS if slug not in demands]
+        [
+            slug
+            for slug in AMENITY_DEMANDS
+            if slug not in demands and slug not in not_made
+        ]
         if status == "retail"
         else []
     )
+    wants_uniforms = status == "retail" and UNIFORM_DEMAND not in not_made
+    uniform_gaps = _uniform_gaps(save, b, crew, names) if wants_uniforms else []
 
     return {
         "name": name or "Vacant lease",
@@ -1630,9 +1768,12 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
         "missingAmenities": missing_amenities,
-        # Customer demands can report uniforms fulfilled without a locker.
-        # Check installed furniture directly; a locker still in cargo is boxed.
-        "missingUniformLocker": status == "retail" and not has_uniform_locker,
+        # The roles on this floor with no uniform set for them, named.
+        "uniformGaps": uniform_gaps,
+        # The locker is what the player manages uniforms from, so it is checked
+        # directly rather than through any demand; one still in cargo is boxed.
+        # A type whose customers never ask about uniforms needs neither.
+        "missingUniformLocker": wants_uniforms and not has_uniform_locker,
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
@@ -4589,15 +4730,23 @@ def _alerts(
         if sat is not None and b["customers"] and sat < 80:
             note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%", key=b["key"])
         if b.get("missingUniformLocker"):
+            # Installing the locker is the first action to take, so it stands in
+            # for whichever roles are uncovered behind it.
             note(
                 "warn", b["name"], "uniform",
                 "No uniform locker installed; add one to manage employee uniforms",
                 always=True, key=b["key"],
             )
+        elif b.get("uniformGaps"):
+            roles = ", ".join(b["uniformGaps"])
+            note(
+                "warn", b["name"], "uniform",
+                f"No uniform set for {roles}; customers judge every role on a "
+                f"station shift here",
+                always=True, key=b["key"],
+            )
         for slug in b["missingAmenities"]:
             group, text = AMENITY_DEMANDS[slug]
-            if group == "uniform" and b.get("missingUniformLocker"):
-                continue  # Installing the locker is the first action to take.
             note("warn", b["name"], group, text, always=True, key=b["key"])
 
     # --- what staff ask for and do not get. A site that has not started trading
