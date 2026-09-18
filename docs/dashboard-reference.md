@@ -841,8 +841,9 @@ cap, and carry none; neither do residential or special buildings.
 
 The help page travels with the game text the web build ships, and a player's own `en.json`
 wins over it. The table is also hardcoded as it stands on builds 3675 and 3680, and it
-stands for any category the page does not yield, such as on a CLI run when the game is not
-installed where `DEFAULT_LOCALE` points:
+stands for any category the page does not yield. A local run without the game installed
+reads the page from the bundled text, which carries it, so the hardcoded table is reached
+only when there is no game text at all:
 
 | | A | C | D | J | K | M | S | R |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

@@ -2259,7 +2259,7 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     in a table of their own.
     """
     paths = extract_wiki.default_paths(data_dir)
-    streaming_dir = os.path.join(paths["data_dir"], "StreamingAssets")
+    streaming_dir = paths["streaming_dir"]
 
     locale = wiki_data.load_locale(paths["locale"])
     help_pages, structure_info = wiki_data.load_help_structure(paths["help_structure"])

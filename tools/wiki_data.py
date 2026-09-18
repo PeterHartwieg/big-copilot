@@ -10,7 +10,7 @@ reduced to whatever happened to match.
 Everything here is standard library only, and nothing is read from or imported
 from the dashboard: importing a 9,000-line template to lift six regexes out of
 it would couple two things that change for different reasons. `ba_save` is
-imported lazily by the CLI for its `DEFAULT_LOCALE` path only.
+imported lazily by the CLI to locate the game's own `en.json` only.
 
 Every number comes from a match in the game's text, never from a default, and
 anything the text does not state is recorded as missing. The help can lag the

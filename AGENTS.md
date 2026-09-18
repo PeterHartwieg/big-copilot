@@ -74,7 +74,11 @@ and never attach one to an issue.
 
 ## Environment
 
-- `build_web.py` needs the installed game, at the Steam path in `ba_save.DEFAULT_LOCALE`.
+- `build_web.py` needs the installed game. `ba_save.find_game_locale()` detects it in the
+  usual Windows, macOS and Linux Steam locations; `BA_LOCALE` names its `en.json` when it
+  lives elsewhere, and has to be the copy inside the install, at
+  `<game>/.../StreamingAssets/locale/en.json`, because the wiki reads `helpstructure.json`
+  beside it. The build refuses the text bundled at `web/py/gametext.json`.
 - A worktree without `node_modules` either points `NODE_PATH` at the canonical checkout's
   `node_modules`, or runs `npm ci` and then `npx playwright install chromium`.
 - `PLAYWRIGHT_CHANNEL=msedge` (or `chrome`) uses an installed browser instead.
