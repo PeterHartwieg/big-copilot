@@ -63,8 +63,10 @@ the map.
   masthead. Sparklines cover the last 61 days.
 - **Needs attention**: only what you can act on, each line with a number and a deadline
   where one exists. Below the list, a count of everything too small to be worth a line.
-  *Filter kinds* chooses which kinds of finding make the list; every *details ›* link
-  opens the page and view the finding is spelt out on and scrolls to it.
+  *Filter kinds* chooses which kinds of finding make the list; switching one off moves its
+  findings down into that count rather than hiding them, the count line says how many were
+  moved, and nothing is ever dropped. Every *details ›* link opens the page and view the
+  finding is spelt out on and scrolls to it.
   *Uniforms / locker* checks retail sites for an installed Uniform Locker. Gym
   Lockers and boxed Uniform Lockers do not count. With a locker installed, the
   warning names the roles working a station shift here that have no uniform set,
@@ -206,8 +208,10 @@ What is on the list is what moves the number:
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
   its next import, an order too small for the week it has to cover, a paused import.
-- **Shops and offices at their ceiling, and counters or workstations standing idle.** Both
-  come out of the hourly grid described below, and both carry the money they are worth.
+- **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
+  hourly grid described below, and both carry the money they are worth. Every kind of
+  site that serves a queue is in it, not only the ones with registers: a gym's boards, a
+  hairdresser's chairs, a theatre's booths and a nightclub's DJ desk all hold one.
 - **Staff demands not met.** Every demand an employee holds that their site does not meet,
   one line per site headed by how many people lack something, with how many hold each
   demand and the game's priority, as described below. Health insurance and a happy boss make
@@ -278,10 +282,10 @@ grid and three lines meet.
 
 - **Customers** are measured, averaged over however many weeks that weekday has. A
   weekday resting on fewer than two weeks is starred and left out of the findings.
-- **Registers** are the capacity that was actually staffed. Each work shift names the
-  exact counter the employee was posted to, so the figure is the sum of the counters
+- **Capacity** is what was actually staffed to serve. Each work shift names the
+  exact station the employee was posted to, so the figure is the sum of the stations
   manned in that hour, not the number of staff times a guess. Two people rostered on one
-  counter count that counter once.
+  station count that station once.
 - **The door cap** is the building's own `customerCapacity`: 30 for the small
   supermarkets, 75 for the big ones and the electronics stores, 100 for the cinema. It is
   a per-hour limit, not a daily total.
@@ -290,11 +294,27 @@ Effective capacity is the smallest of these, and the useful finding is *which* o
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red,
 and hours with capacity doing nothing in blue.
 
-Only furniture whose help text says it is an *employee station* requiring Customer Service
-counts towards register capacity: checkout counters at 30 an hour, cash registers at 20,
-concessions stand registers and ticket booths at 50. Fridges, freezers and shelves carry a
-Customer Capacity figure too and are deliberately not summed. They hold products, they do
-not serve a queue.
+Every kind of furniture whose help text says it is an *employee station* with a Customer
+Capacity serves a queue, and each names the skill it asks for: checkout counters at 30 an
+hour, cash registers at 20, concessions stand registers, coat checks and ticket booths at
+50, a gym's fitness planning boards at 20, a hairdresser's chair at 5 and its headwash at
+10, a DJ booth at 50, a projection booth at 25, costume, lighting and sound booths at 100,
+a dressing room at 80. Fridges, freezers, shelves and gym mats carry a Customer Capacity
+figure too and are deliberately not summed. They hold products, they do not serve a queue.
+The cleaning station and the security guard locker are employee stations with no queue, so
+they carry no capacity and take no part in this grid.
+
+A station decides which of the site's people count as serving it: the person the shift
+names has to hold the skill that station asks for, so a lawyer posted at a register serves
+nobody and a cleaner posted at a computer serves nobody. That is also why a gym was
+invisible here until the station table saw its boards — a site with no Customer Service
+station at all had no capacity to read.
+
+**Roles.** A shop asks for one skill and its capacity is the registers manned. A theatre
+asks for four, and a customer has to pass through all of them, so the site is only as fast
+as its slowest role: the grid shows the minimum across roles, the sum only within one, and
+each role's own roster is judged separately in the findings. Two projection booths with one
+projectionist hold the whole theatre back to 25 an hour however many stage crew are on.
 
 **Offices** get the same grid, because they keep the same hour reports. Their customers
 are digital, and each one is an hour billed by one professional, so an office's registers
@@ -313,8 +333,8 @@ Two fields needed working out, and both were settled against data rather than as
 appears with exactly one kind of furniture, the cleaning station, and exactly one skill,
 Cleaning. Type 1 covers everything else: checkout counters, cash registers, projection
 booths, security lockers, assembly machines, office laptops. So type 0 is a roaming
-cleaning duty and type 1 is a post at a named station, and only type 1 shifts on a service
-counter count towards register capacity. As a check on the parse, summing each employee's
+cleaning duty and type 1 is a post at a named station, and only type 1 shifts on a serving
+station count towards the site's capacity. As a check on the parse, summing each employee's
 shift hours reproduces their `assignedWeeklyHours` exactly, for all 253 of them.
 
 **`scheduleDays.day`** runs 1 to 7 and maps straight onto the game day: `day % 7`, with 7
@@ -327,11 +347,24 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 ### The two findings
 
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
-hour is judged on its own roster. Where the door cap is at or below the staffed register
-capacity the building is the limit, and the answer is a bigger site or a second shop
-nearby (for an office, a bigger office or a second one). Where staffed capacity is below
-the counters installed, staffing is the limit. Otherwise it is the counters themselves (an
-office's workstations). A site that runs one
+hour is judged on its own roster, and each role on the roster that was on for it. Where the
+door cap is at or below the site's staffed capacity the building is the limit, and the
+answer is a bigger site or a second shop nearby (for an office, a bigger office or a second
+one). Otherwise every role standing at the site's own minimum is named, and only those: a
+site with more than one role serves nobody until all of them are manned, but hiring into a
+role already faster than the slowest one buys nothing. A role at the minimum with stations
+standing empty is short of people; one with every station manned is short of stations. A
+gym with a spare board and a single manned register is told both, on one line — "Gym
+Trainer staffing and registers are the limit, so the answer is another Gym Trainer on those
+hours and another counter" — because fixing either alone moves nothing, and because the
+trade through an hour is one sum whatever is holding it. Where a role is short of people on
+some hours and short of stations on others, those are two lines with two ids, "Gym Trainer
+staffing" against "fitness planning boards". The limit is the only thing the id hashes, which is why a
+shop's "staffing" and "registers" and an office's "workstations" keep the ids they have
+always had and the player's silences survive. A shop's counters and
+an office's workstations keep the words they have always had — a register asks for another
+counter, a computer for another workstation — while a gym is told another fitness planning
+board or another Gym Trainer, and a theatre another projection booth. A site that runs one
 person at night and a full floor by day can be short of staff at night and at the door by
 day, and then it gets one line for each, rather than a verdict for the whole week that is
 wrong about one of them. Where the hours on one line ran at different ceilings, the line
@@ -343,10 +376,11 @@ the ceiling is not in the save at all.** The game records the customers who came
 the ones who did not. The board gives the throughput and stops there rather than inventing
 a lost-sales figure.
 
-**Capacity standing idle.** Three or more hours in a row where staffed register capacity
-is more than twice the customers and at least two people are on. Here the money *is*
-measurable: the surplus staff-hours at that site's service wage (in an office, its
-professionals' wage), which is what rescheduling them would save.
+**Capacity standing idle.** Three or more hours in a row where a role's staffed capacity is
+more than twice the customers and at least two of that role are on. Here the money *is*
+measurable: the surplus staff-hours at the wage of the best paid person holding that role
+at the site (in an office, its professionals' wage), which is what rescheduling them would
+save. A cleaner's wage prices nothing, because a cleaner holds no serving role.
 
 Both are grouped before they are shown. Six shops hitting the same 30/h ceiling in the
 same hours is one line about six shops. Offices group only with offices.
@@ -355,6 +389,78 @@ A hype wave arriving at a shop already within 10% of its ceiling is added to tha
 line rather than raised separately, because it is the same event. Where pricing is
 handled by pricing staff, capacity is the only lever the wave leaves open, and it comes
 with the wave's end date attached.
+
+### The roster the board would type in
+
+Not drawn yet: the `staffing` payload key is built and tested, and the page that reads it
+is a later change. What it holds, per retail site, and why each part is honest:
+
+**The need curve.** Per role, per weekday, per open hour, how many of that role's stations
+the hour actually wants, with the basis it was worked out on. `measured` is the customers
+who came, on a weekday with two weeks behind it, in an hour that did not run into a
+ceiling. `censored` is an hour that came within 95% of what was available: the real demand
+is unknown and above it, so the estimate is what the **site** served that hour — its
+effective capacity, which is its slowest role with the door cap already applied — plus one
+more of *this* role's stations, then held down by this role's stations installed, the door
+cap and the arrival ceiling, and never dropped below what was measured. Starting from the
+role's own staffed capacity would ask a fast role to grow because a slow one held the hour
+back: a gym whose trainers can serve forty an hour but whose single register lets twenty
+through is short of registers, not of boards.
+`scaled` is a thin weekday read off the best measured one through the game's own day
+curve. `none` is a site too new to say anything about — and a site whose every weekday is
+thin gets no serving shifts at all, rather than a guess.
+
+**Only a measured hour is a target.** The board never presents a censored hour as a number
+to aim at, and never prints the arrival ceiling as demand: the ceiling is the game's own
+arrivals formula, and on a clothing store it over-predicts the customers actually served
+four times over, because it counts arrivals the game then turns away for having nothing
+they want to buy. It is carried to bound a censored hour from above, and for nothing else.
+
+**The shifts.** Each role's stations are manned from the largest throughput down, the hours
+they are wanted are joined into runs, and each run is cut into the fewest shifts of at most
+twelve hours — the game's own cap, which divides a 24-hour day exactly twice. A dip between
+two runs is bridged only while the site's slack budget lasts: 10% of the week's required
+station-hours, cheapest dip first, and the price of the whole shifts is carried as
+`slack.cost` either way. Cleaning stations and security lockers get one person for every
+open hour instead of a derived need, because the game stores no model to derive one from,
+and they are filled after the serving stations so neither ever takes a person off a queue.
+
+**When the doors are open.** `open` is each weekday's opening slots as `[start, end]`
+pairs, and an empty list for a day the site stays shut — a list, because the game's own
+field is one. The hour between two slots is the doors being shut, not trade dipping, so
+nothing is ever rostered into it and it is never bridged.
+
+**A site that cannot be planned says so.** Saves are not always tidy, and a site whose
+schedule or stations the planner chokes on gets a row carrying `failed` and its name alone.
+The rest of the board is unaffected, and so is every other site's plan: each is worked out
+against its own copy of everybody's week, and a site that fails commits none of it.
+
+**Two tables, and indices into them.** A site's row lists its `stations` and its `people`
+once each, and every shift, hiring note and placement below points at them by position
+rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`
+and the current schedule's `current.list` — share one compact row: `d` weekday, `s` station,
+`f` and `t` the hours it runs from and to, `p` the person, and `k` the kind of duty, which
+is left off an ordinary serving shift.
+
+**The people.** Everyone assigned to the site, plus anyone hired and not yet posted
+anywhere; candidates are applicants, not staff. Slots are filled most-constrained-first, so
+somebody who wants no evenings takes the shift they can work before the unconstrained staff
+take it. No shift ever breaks a demand: a slot nobody may legally work becomes a hiring line
+instead, one total per role — and a security locker nobody staffs is real new spending
+rather than another shift, which is why `headcount` says which kind each line is. Anyone
+left under their weekly minimum is named in `shortHours` — including anyone the plan finds
+no work for at all, who is the most short of the lot — and anyone whose four- or five-day
+week the plan cannot fill is named in `shortDays`. Both are staff demands the player is
+about to fail, and the usual fix is to move somebody to another site rather than to bend
+the roster. A hiring line counts people, not hours: four uncovered twelve-hour weekend
+shifts are 48 hours but need two hires, because nobody may work two of them on the same
+day.
+
+**Somebody hired and not yet posted anywhere belongs to one building.** The bench is
+offered to each site in turn, and the first site to give a bench member hours keeps them:
+they appear in that site's `bench`, count towards that site's `headcount.have`, and are
+gone from every later site's pool. One person's week is one week across the whole save, so
+nobody is rostered at two shops in the same hour.
 
 ## Staff demands
 

@@ -65,6 +65,85 @@ async function site(status) {
   return page;
 }
 
+// A theatre: three roles at one site, and a different one holding it back each
+// hour. 10:00 the ticket booths bind on their own, 11:00 they tie with
+// projection at 50/h, 12:00 projection binds with one booth of three manned,
+// and the quiet afternoon leaves five stage crew standing about while the site
+// as a whole never has two people on, so only a per-role reading sees them.
+async function theatre() {
+  const page = await browser.newPage({viewport: {width: 1280, height: 1100}});
+  await page.route('https://**', route => route.abort());
+  await page.setContent(html, {waitUntil: 'load'});
+  await page.evaluate(() => {
+    document.body.classList.add('has-board');
+    const row = v => Array(24).fill(v);
+    const week = v => Array.from({length: 7}, () => row(v));
+    const key = 'ba:street_secondavenue#7';
+    const customers = week(null);
+    const staffed = week(0), onShift = week(0);
+    const role = () => ({staffed: week(0), onShift: week(0), posts: week(0)});
+    const ticket = role(), proj = role(), crew = role();
+    // [customers, ticket posts manned, projection posts manned] by the hour;
+    // the stage crew's five booths are manned all day.
+    const day = {10: [50, 1, 3], 11: [50, 1, 2], 12: [25, 2, 1],
+      14: [5, 1, 1], 15: [5, 1, 1], 16: [5, 1, 1]};
+    for(const [hour, [seen, tp, pp]] of Object.entries(day)){
+      const h = Number(hour);
+      customers[1][h] = seen;
+      ticket.posts[1][h] = tp; ticket.staffed[1][h] = tp * 50; ticket.onShift[1][h] = tp;
+      proj.posts[1][h] = pp; proj.staffed[1][h] = pp * 25; proj.onShift[1][h] = pp;
+      crew.posts[1][h] = 5; crew.staffed[1][h] = 500; crew.onShift[1][h] = 5;
+      staffed[1][h] = Math.min(ticket.staffed[1][h], proj.staffed[1][h], 500);
+      onShift[1][h] = Math.min(tp, pp, 5);
+    }
+    D = {
+      meta: {character: 'theatre-fixture', day: 29},
+      rhythm: null,
+      supply: {shops: []},
+      businesses: [{
+        key, status: 'retail', name: 'Playhouse', code: 'PH', type: 'Theatre',
+        address: '7 Second Avenue', neighbourhood: "Hell's Kitchen",
+        opened: 12, revenue: 3000, customers: 180, basket: 20, profit: 500, margin: 16.6,
+        cogs: 0, wages: 1200, rent: 400, marketing: 0, theft: 0, licensing: 0,
+        staff: 6, staffCost: 1200, crew: [], people: [], lines: [],
+        series: [], rhythm: null, peakDay: null, swing: 0,
+      }],
+      hours: [{
+        key, name: 'Playhouse', office: false, postRate: null, customers,
+        weeks: [0, 2, 0, 0, 0, 0, 0],
+        thin: [true, false, true, true, true, true, true],
+        staffed, onShift, effective: staffed,
+        door: null, cap: 0, counters: 75, stationCount: 10, basket: 20, peak: 50, capHours: 3,
+        roles: [
+          // Customer Service: the role whose alert words are the old ones, so
+          // its `noun` is null and only the station names it on the page.
+          {skill: 'ba:skill_customerservice', label: 'Customer Service', station: 'Ticket Booth',
+            noun: null, one: 'ticket booth', many: 'ticket booths',
+            counters: 100, stationCount: 2, ...ticket},
+          {skill: 'ba:skill_projectionist', label: 'Projectionist', station: 'Projection Booth',
+            noun: 'projection booths', one: 'projection booth', many: 'projection booths',
+            counters: 75, stationCount: 3, ...proj},
+          {skill: 'ba:skill_stagecrew', label: 'Stage Crew', station: 'Costume Booth',
+            noun: 'costume booths', one: 'costume booth', many: 'costume booths',
+            counters: 500, stationCount: 5, ...crew},
+        ],
+      }],
+      // 11:00 ties the ticket booths with projection, so the finding names
+      // both answers and has to agree with a plural verb.
+      hourFindings: [{
+        kind: 'cap', key, site: 'Playhouse', office: false, hours: 3, when: 'Mon 10-13',
+        limit: 'staffing and projection booths', limits: 2,
+        fix: 'more service staff on those hours and another projection booth',
+        noun: 'ticket booths and projection booths',
+        cap: 25, capTop: 50, basket: 20, throughput: 285.71,
+      }],
+    };
+    siteKey = key; siteOpen = true;
+    drawSite();
+  });
+  return page;
+}
+
 const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Hours'}).locator('.why').getAttribute('data-tip');
 const capChip = page => page.locator('#sitePanel .sp-hchip.cap').getAttribute('data-tip');
 
@@ -112,5 +191,69 @@ test('a shop keeps its registers and shelves', async () => {
     assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\/visit/);
     const cap = await capChip(page);
     assert.match(cap, /registers is the limit, so the answer is another counter/);
+  } finally { await page.close(); }
+});
+
+// The capped Monday cells in order: 10:00, 11:00, 12:00.
+const capReads = page => page.$$eval('#sitePanel .hc.cap', cells => cells.map(c => c.dataset.read));
+
+test('a theatre counts furniture and capacity as two numbers, never as one', async () => {
+  const page = await theatre();
+  try {
+    const tip = await hourTip(page);
+    assert.match(tip, /3 roles, the slowest 75 an hour, no door cap/);
+    assert.doesNotMatch(tip, /register capacity/);
+    // 12:00: one projection booth of three is manned, and one booth is 25/h.
+    // The old wording said "25 of 25 projection booths", which is neither.
+    const [, , noon] = await capReads(page);
+    assert.match(noon, /25 customers · 1 of 3 projection booths · 25\/h · slowest of 3 roles · <b>at the ceiling<\/b>/);
+    assert.doesNotMatch(noon, /25 of 25/);
+  } finally { await page.close(); }
+});
+
+test('Customer Service binding a multi-role site names its booths, not registers', async () => {
+  const page = await theatre();
+  try {
+    // 10:00: one of two ticket booths manned, 50 of 100, while projection runs
+    // all three at 75. The site number would read "50 of 50 register capacity
+    // on" — full, and about furniture the theatre does not have.
+    const [ten] = await capReads(page);
+    assert.match(ten, /50 customers · 1 of 2 ticket booths · 50\/h · slowest of 3 roles · <b>at the ceiling<\/b>/);
+    assert.doesNotMatch(ten, /register capacity|counter/);
+  } finally { await page.close(); }
+});
+
+test('two roles tied at the ceiling are both named', async () => {
+  const page = await theatre();
+  try {
+    // 11:00: one ticket booth at 50 and two projection booths at 50. Neither
+    // alone is the answer, so the cell says both, as the findings do.
+    const [, eleven] = await capReads(page);
+    assert.match(eleven, /1 of 2 ticket booths · 50\/h \+ 2 of 3 projection booths · 50\/h · slowest of 3 roles/);
+  } finally { await page.close(); }
+});
+
+test('a finding naming two tied answers reads as a plural', async () => {
+  const page = await theatre();
+  try {
+    // The sentence lives in the chip under the grid, not in the head's ?.
+    const cap = await capChip(page);
+    assert.match(cap, /staffing and projection booths are the limit, so the answer is more service staff on those hours and another projection booth/);
+    assert.doesNotMatch(cap, /projection booths is the limit/);
+    assert.doesNotMatch(await hourTip(page), /is the limit|are the limit/);
+  } finally { await page.close(); }
+});
+
+test('an idle hour names the role that is idle', async () => {
+  const page = await theatre();
+  try {
+    // The site's own onShift is 1 all afternoon, so the old site-wide test saw
+    // nothing; the stage crew's five are idle against five customers an hour,
+    // and the hover has to say it was the stage crew.
+    const slack = page.locator('#sitePanel .hc.slack');
+    assert.equal(await slack.count(), 3, 'the quiet hours 14:00-16:00');
+    const read = await slack.first().getAttribute('data-read');
+    assert.match(read, /5 customers · 1 of 3 projection booths · 25\/h · slowest of 3 roles · Stage Crew idle/);
+    assert.doesNotMatch(read, /Customer Service idle/);
   } finally { await page.close(); }
 });

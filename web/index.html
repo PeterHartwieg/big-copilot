@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=0f970032ad">
+<link rel="stylesheet" href="community.css?v=4a5abfef9b">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=0f970032ad">
+<link rel="stylesheet" href="fonts/fonts.css?v=4a5abfef9b">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2544,8 +2544,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "0f970032ad";</script>
-<script>window.LEDGER_RELEASE = {"version":"0f970032ad","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "4a5abfef9b";</script>
+<script>window.LEDGER_RELEASE = {"version":"4a5abfef9b","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2614,8 +2614,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=0f970032ad"></script>
-<script src="community.js?v=0f970032ad"></script>
+<script src="app.js?v=4a5abfef9b"></script>
+<script src="community.js?v=4a5abfef9b"></script>
 
 <script>
 
@@ -4076,9 +4076,24 @@ function bindFindingRows(host, list){
   });
 }
 
+/* Where a finding shows is decided twice over, by the materiality gate and by
+   its kind's switch, and neither drops it. `list` is every above-gate finding
+   whose kind is still on. `smaller` is what the gate set aside plus every
+   above-gate finding whose kind is switched off, with the switched-off rows
+   sorted after the gate rows so a switch visibly moves its own findings, even
+   the ones that were below the gate already. `off` counts the switched-off rows
+   in `smaller`, from either side of the gate, for the count line to carry.
+   DOM-free and self-contained, so the switches can be tested without a page. */
+function partitionFindings(alerts, minorRows, prefs){
+  const off = a => prefs[a.group] === false;
+  const kept = minorRows.filter(a => !off(a));
+  const smaller = kept.concat(minorRows.filter(off), alerts.filter(off));
+  return {list: alerts.filter(a => !off(a)), smaller, off: smaller.filter(off).length};
+}
+
 function drawAlerts(){
-  const kindOn = a => alertGroupPrefs[a.group] !== false;
-  const list = D.alerts.filter(kindOn);
+  const {list, smaller, off} = partitionFindings(
+    D.alerts, (D.minor || {}).rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
   const gate = (D.minor || {}).gate || 0;
@@ -4101,15 +4116,17 @@ function drawAlerts(){
   bindFindingRows($("alerts"), list);
 
   /* Anything worth less than the materiality gate is counted rather than read
-     out, and so is a finding whose kind is switched off: neither is dropped.
-     The count and the money cover both, and "show" lays the rows out like the
-     list above, a switched-off kind wearing its name as a dim chip. */
-  const rows = ((D.minor || {}).rows || []).concat(D.alerts.filter(a => !kindOn(a)));
+     out, and a finding whose kind is switched off is demoted to it rather than
+     dropped: neither leaves the screen. The count and the money cover both,
+     and "show" lays the rows out like the list above, a switched-off kind
+     wearing its name as a dim chip. */
+  const rows = smaller;
   const host = $("alertMinor"), more = $("minorList");
   if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
   else {
     const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
-    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
+    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day${
+      off ? ` · ${off} switched off` : ""} &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
       showMinor ? "hide" : "show"}</a>`;
     $("minorToggle").onclick = e => { e.preventDefault(); showMinor = !showMinor; drawAlerts(); };
     more.hidden = !showMinor;
@@ -4373,18 +4390,39 @@ function miniChart(series, key, colour, o = {}){
 
 /* --- the shop's week, hour by hour ------------------------------------
    Three numbers meet here. Customers are measured an hour at a time over the
-   fortnight the save keeps. The registers are whatever service staff were
-   rostered that hour, at the capacity of the counters they were posted to; an
-   office's are the professionals posted at its computers. The door cap is the
-   building's own limit. Shade is how busy against the site's own busiest hour;
-   a red outline is an hour spent at the ceiling that was on. The sentence under
-   the grid says which, and when capacity stood idle. */
+   fortnight the save keeps. The capacity is whatever staff were rostered that
+   hour, at the rate of the stations they were posted to; an office's are the
+   professionals posted at its computers, and a site asking for several skills
+   is only as fast as its slowest role. The door cap is the building's own
+   limit. Shade is how busy against the site's own busiest hour; a red outline
+   is an hour spent at the ceiling that was on. The sentence under the grid
+   says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 /* Mirrors AT_CAP in the Python: this close to the ceiling is at the ceiling,
    so the outlined cells are the ones capHours counts. */
 const AT_CAP = 0.95;
+
+/* The roles holding this hour back: every one standing at the site's own
+   minimum, short of its stations or fully manned. The same filter
+   _hour_findings() applies in the Python, so the cell and the alert name the
+   same roles, and a tie names both of them. */
+function hourRoles(g, wd, h){
+  const roles = g.roles || [];
+  if(!roles.length) return [];
+  const low = Math.min(...roles.map(r => r.staffed[wd][h]));
+  const at = roles.filter(r => r.staffed[wd][h] === low);
+  return at.length ? at : roles;
+}
+
+/* One role's stations that hour, furniture and throughput kept apart: how many
+   of them were manned, then what they were worth an hour. */
+function roleRead(r, wd, h){
+  const n = r.posts ? r.posts[wd][h] : 0;
+  const many = r.many || r.noun || "stations";
+  return `${n} of ${r.stationCount} ${r.stationCount === 1 ? (r.one || many) : many} · ${r.staffed[wd][h]}/h`;
+}
 
 function hourGrid(g, todayWd){
   const peak = Math.max(g.peak, 1);
@@ -4398,11 +4436,32 @@ function hourGrid(g, todayWd){
       const a = seen ? 6 + Math.round(Math.min(seen / peak, 1) * 70) : 0;
       const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
-      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
-      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
-        g.office ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
-          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`}${
-        atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
+      /* A role idle while another holds the site back is still idle: judge
+         each role on its own roster, the way the Python findings do, and say
+         which one it was. A grid without roles is an old one, so it keeps the
+         site-wide test. */
+      const roles = g.roles || [];
+      const idle = roles.filter(r => r.onShift[wd][h] >= 2 && r.staffed[wd][h] > Math.max(seen, .5) * 2);
+      const slack = roles.length
+        ? idle.length > 0
+        : cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
+      /* A single-role shop keeps the register sentence it has always had. Once
+         more than one role is in play the site's own numbers say nothing -- its
+         capacity is the minimum and its stations are all of them at once -- so
+         the binding roles speak for themselves. */
+      const binding = g.office ? [] : hourRoles(g, wd, h);
+      const on = g.office
+        ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
+        : roles.length > 1
+          ? `${binding.map(r => roleRead(r, wd, h)).join(" + ")} · slowest of ${roles.length} roles`
+          : binding.length && binding[0].noun
+            ? roleRead(binding[0], wd, h)
+            : `${g.staffed[wd][h]} of ${g.counters} register capacity on`;
+      const idleWord = roles.length > 1 && idle.length
+        ? `${idle.map(r => r.label || "capacity").join(", ")} idle`
+        : "capacity idle";
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
+        atCap ? " · <b>at the ceiling</b>" : slack ? ` · ${idleWord}` : ""}`;
       cells += `<div class="hc${atCap ? ` cap ${spCellLimit(g, wd, h)}` : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
@@ -4469,17 +4528,25 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
 const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
-/* Which ceiling held one capped hour, by the same rule _hour_findings() uses,
-   off the three numbers the grid already carries: the door if it was reached,
-   else staffing if the counters were not all manned, else the counters
-   themselves. The cell wears the answer as a class so a cap chip can pick out
-   its own hours and leave the others alone. */
+/* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
+   the door if it was reached, else every role standing at the site's own
+   minimum that hour, each of them short of people where it has stations
+   standing empty and short of stations where they are all manned. An hour two
+   roles are tied on is held by both at once, so it wears both classes — the
+   same hour reaches two cap chips because the Python files it under two
+   findings. A grid with no roles is an old one and keeps the site-wide rule.
+   The cell wears the answer as a class so a cap chip can pick out its own
+   hours and leave the others alone. */
 const SP_CELL_CLASS = {"the building": "cap-door", staffing: "cap-staff",
                        registers: "cap-post", workstations: "cap-post"};
+const SP_CELL_ORDER = ["cap-staff", "cap-post"];
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
-  return g.door && g.door <= staffed ? "cap-door"
-    : staffed < g.counters ? "cap-staff" : "cap-post";
+  if(g.door && g.door <= staffed) return "cap-door";
+  const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
+  if(!at.length) return staffed < g.counters ? "cap-staff" : "cap-post";
+  const worn = new Set(at.map(r => r.staffed[wd][h] < r.counters ? "cap-staff" : "cap-post"));
+  return SP_CELL_ORDER.filter(c => worn.has(c)).join(" ");
 };
 const spHypeRow = key => {
   for(const wave of D.hypeExposure || []){
@@ -5116,10 +5183,11 @@ function drawSite(){
      hours ran into, and one for idle capacity. */
   const capNotes = sp ? spCapNotes(b.key) : [];
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
-  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} is the limit, so
+  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`;
-  const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.office ? "workstations are staffed" : "counters are on"} ${String(idleNote.from).padStart(2,"0")}:00-${
+  const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.noun || (idleNote.office ? "workstations are staffed" : "counters are on")} ${
+         String(idleNote.from).padStart(2,"0")}:00-${
          String(idleNote.to).padStart(2,"0")}:00 on a ${idleNote.day} for ${idleNote.seen} customers an hour;
          ${idleNote.spare} staff-hours a week, about ${fmt(idleNote.worth)}/day of wages.` : "";
 
@@ -5441,7 +5509,11 @@ function drawSite(){
         Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
           ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
               grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
-          : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
+          : (grid.roles || []).length > 1
+            ? `${grid.roles.length} roles, the slowest ${grid.counters} an hour`
+            : grid.roles && grid.roles[0] && grid.roles[0].noun
+              ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
+              : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
         grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}`})}
       <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="sp-read sp-readout" id="hourRead">Hover an hour</div></div>
       ${hourChips}

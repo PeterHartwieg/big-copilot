@@ -76,8 +76,9 @@ this column is where to look when you change a key's shape — not a complete ca
 | `chains` | `_chains()` | `drawPortfolio` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
-| `hours` | `_hourly()` | `drawSite` |
+| `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
+| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | no reader yet — the site panel's roster block reads it |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -100,9 +101,31 @@ Three indirect routes an agent would otherwise miss:
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 
-Three keys have no reader, but only one of them is dead end to end:
+Four keys have no reader, but only one of them is dead end to end:
 
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
+- `staffing` is unread *for now*: the roster is built and tested ahead of the site panel's
+  roster block, which is the page that will read it. Nothing on the board draws it yet.
+
+`_hourly()` returns every trading site and flags each `reported`. `extract()` passes the
+whole list to `_staffing()` and only the reported ones to the `hours` key and
+`_hour_findings()`, so a shop too new to have been measured is planned — its cleaning and
+security cover and its hiring lines do not wait on a measurement — without the hour grid
+starting to draw an empty week for it.
+
+A site the planner cannot plan still gets a row, `{key, name, typeSlug, failed: true}`
+and nothing else, so the page can say so rather than leave a hole where a shop was; a row
+without `failed` is a whole plan. Each site is planned against its own copy of the week and
+of the bench, written back only once its row is built, so a site that falls over leaves no
+phantom hours behind for the next one to hire around.
+
+A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
+points into them by index rather than repeating an id: `s` a station, `p` a person or null.
+A save's ids are 24 characters of base64 and a fragmented site has hundreds of shift rows
+between `shifts` and `current.list`, so on the reference save the tables take the key from
+210 KB to 90 KB. Those two lists, and only those two, use short keys — `d` weekday, `f` and
+`t` the hours a shift runs from and to, `k` the kind of duty, left off entirely on an
+ordinary serving shift. `roles[].stations` holds indices into the same `stations` table.
 - `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
   binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
   from. Delete the payload key if you like; do not delete the function.
@@ -175,8 +198,8 @@ What `page_html()` produces, top of the file down:
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py` and `ba_buildings.json` into `web/py/`, and writes `web/py/gametext.json`
-from the installed locale — everything `stamp()` hashes has to be in place before
+`ba_dashboard.py`, `ba_buildings.json` and `ba_demand_curves.json` into `web/py/`, and
+writes `web/py/gametext.json` from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
@@ -288,8 +311,10 @@ Everything else it fetches is same-origin, from `web/py/`, carrying the page's b
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
-- `gametext.json` and `ba_buildings.json` — written into the virtual filesystem only when
-  the fetch succeeds, so a build missing either still boots and degrades instead.
+- `gametext.json`, `ba_buildings.json` and `ba_demand_curves.json` — written into the
+  virtual filesystem only when the fetch succeeds, so a build missing one still boots and
+  degrades instead: without the curves the board states no arrival ceiling, and every number
+  it does state still comes off the measured hour grid.
 
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a
