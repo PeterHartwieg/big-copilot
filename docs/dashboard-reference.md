@@ -516,6 +516,54 @@ revenue, and the same hour-by-hour grid as a shop.
 Neighbourhood demand lives in the Market demand view rather than being repeated per
 site, and customer scores stay in the Portfolio's Operations view.
 
+### What a shop's and an office's page adds
+
+A shop and an office draw a fuller page than the other kinds of site. Every block on it
+reads out what is under the pointer on its own line, so the labels stay off the page, and
+hovering a finding lights the block that holds its evidence, pulses the thing inside it
+and dims the rest; clicking scrolls there.
+
+- **The head.** A lamp says whether the doors are open. A site that is not trading adds
+  the five pre-flight checks that say why — staffed, prices set, stock, shelves,
+  delivery plan — red for a failing one, green for one in place, and grey for one that
+  was never checked, because the check stops at the first of prices, stock and shelves
+  that fails. The chip beside them is the site's place by the profit of its last seven
+  days, among the sites that trade; a site with under seven days of trading has no place
+  and reads `–`.
+- **Needs attention here.** The findings about this site alone, loud ones first and the
+  counted-away ones under them, four at a time with *show all* for the rest. Arriving
+  from the board's own list opens the row it came from.
+- **The tiles.** Revenue and customers each carry a fortnight of bars, the week before in
+  grey and the last seven days picked out in the trend's colour. The profit tile carries
+  the day's costs as one bar the width of yesterday's takings, ending in the profit
+  itself, with a red dot on a day in the red. The fourth tile carries the three ceilings a
+  busy hour can run into — the door, the counters or workstations, the people on — with
+  the binding one lit.
+- **Standards.** The four parts of satisfaction as an equaliser against the 80 line the
+  game marks good at. A shop adds one lamp an amenity its type is asked about: lit for one
+  found in place, struck for one looked for and missed, and dashed for one the game has
+  not scored, which is every lamp until customers have walked in. The second row is the
+  uniform locker and the uniforms; without the locker there is nowhere to set a uniform,
+  so that lamp is dashed rather than struck, and the roles with none are named beside it.
+  An office is never asked about bathrooms, music or uniforms, so it draws the bars alone
+  and its workstations beside them, one square a desk, filled while somebody is posted at
+  it at the busiest hour.
+- **Pull** (a shop). Promotion against the game's own 100 cap, split into what the street
+  brings and what campaigns add, with security and how many shoppers fit inside. A demand
+  wave running over the shop adds a bar for the share of its takings riding on the wave
+  and a pip a day left; with no baseline to measure the wave against, the bar is hatched
+  rather than guessed.
+- **Hours.** The two things the grid can say that a daily total cannot are chips under it:
+  what the ceiling costs, with the fix, and what idle hours cost. Hovering a chip picks
+  its own hours out of the grid.
+- **Crew.** What the staff here ask for and nobody has given them, each with how many hold
+  it and the game's own priority as three bars; a company-wide demand is marked as settled
+  somewhere else, and a quit warning is its own red chip. Past a dozen people the pills
+  fold into one row a role and one dot a person, open one click away.
+- **Profit.** The two weeks the trend chip compares are shaded on the chart with their own
+  daily averages across them. Under two full weeks there is no trend, and the line is
+  dashed to say so.
+
 The open site is held by address rather than by position, so a live refresh that
 re-sorts the roster by profit leaves you on the same shop.
 

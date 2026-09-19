@@ -6480,6 +6480,234 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .person.more{color:var(--ink-2);border-style:dashed}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
+/* the site panel ----------------------------------------------------------
+   Everything a shop's or an office's own page draws that the rest of the
+   board does not: the findings about this site, the head marks, the tiles'
+   second line, the standards equaliser and its lamps, the pull of the street,
+   the hour chips and the crew fold. Every class is sp- prefixed, because the
+   board's classes are global across its pages. */
+.sp-i{display:inline-grid;place-items:center;flex:none}
+.sp-i svg,.sp-ico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-ico{width:28px;height:28px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s}
+section:hover > .sechead .sp-ico{color:var(--accent);transform:rotate(-8deg) scale(1.08)}
+section:hover > .sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
+.sp-read{min-height:18px;margin-top:12px;font:500 12px/1.5 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-read b{color:var(--ink);font-weight:500}
+
+/* a finding lights the block that holds its evidence */
+#sitePanel [data-block]{transition:opacity .25s,outline-color .25s;outline:1px solid transparent;outline-offset:14px;border-radius:6px;scroll-margin-top:140px}
+#sitePanel.sp-focus [data-block]:not(.sp-lit){opacity:.3}
+#sitePanel [data-block].sp-lit{outline-color:var(--accent)}
+.sp-hit{animation:sp-hit .9s ease-in-out infinite}
+@keyframes sp-hit{50%{box-shadow:0 0 0 6px var(--accent-soft)}}
+.sp-finds{display:flex;flex-direction:column;border-top:1px solid var(--rule);margin-top:26px}
+.sp-find{display:grid;grid-template-columns:22px 28px 1fr auto 24px;gap:0 12px;align-items:center;min-height:46px;padding:6px 6px 6px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;border-radius:0 6px 6px 0;transition:background .15s}
+.sp-find:hover,.sp-find.arrived{background:var(--surface);color:inherit}
+.sp-find .mark{width:8px;height:8px;border-radius:50%;justify-self:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.sp-find:hover .mark{transform:scale(1.6)}
+.sp-find.crit .mark{background:var(--neg)}
+.sp-find.watch .mark{background:var(--warn)}
+.sp-find.opp .mark{background:var(--accent)}
+.sp-find.arrived .mark{animation:sp-ping 1.6s ease-out infinite}
+@keyframes sp-ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--warn) 60%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+.sp-find .ev{color:var(--ink-3);transition:color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-find:hover .ev{color:var(--accent);transform:translateY(3px)}
+.sp-find .what{font-weight:600;font-size:14px}
+.sp-find .more{grid-column:3/5;max-height:0;overflow:hidden;opacity:0;font-size:12.5px;color:var(--ink-2);transition:max-height .28s ease,opacity .2s,margin .28s}
+.sp-find:hover .more,.sp-find.arrived .more{max-height:60px;opacity:1;margin:2px 0 4px}
+.sp-find .amt{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.sp-find .amt small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+.sp-find .go{color:var(--ink-3);display:grid;place-items:center;transition:transform .2s,color .15s}
+.sp-find .go svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-find:hover .go{color:var(--accent);transform:translateY(3px)}
+.sp-findmore{margin:10px 0 0;font-size:12.5px;color:var(--ink-3)}
+
+/* the head: a lamp says whether the doors are open, and why they are not */
+.sp-lamp{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block;margin-left:12px;vertical-align:3px;animation:sp-glow 2.4s ease-in-out infinite}
+.sp-lamp.off{background:var(--neg);animation:none}
+@keyframes sp-glow{50%{box-shadow:0 0 0 5px var(--accent-soft)}}
+.sp-pre{display:inline-flex;gap:6px;margin-left:14px;vertical-align:-7px}
+.sp-pre span{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--accent);background:var(--accent-soft);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-pre span svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-pre span.no{color:var(--neg);background:color-mix(in srgb,var(--neg) 14%,transparent);animation:sp-nag 2.2s ease-in-out infinite}
+.sp-pre span.unk{color:var(--ink-3);background:none;box-shadow:inset 0 0 0 1px var(--rule)}
+.sp-pre span:hover{transform:translateY(-3px)}
+@keyframes sp-nag{0%,88%,100%{transform:none}92%{transform:rotate(-7deg)}96%{transform:rotate(7deg)}}
+
+/* where this site stands: its place by the last seven days' profit */
+.sp-rank{display:inline-flex;align-items:center;gap:9px;margin-left:16px;vertical-align:4px;padding:5px 10px 5px 9px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink);cursor:default;transition:border-color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-rank small{font-size:11px;color:var(--ink-3)}
+.sp-rank.top{border-color:var(--accent);color:var(--accent)}
+.sp-rank.none{border-style:dashed;color:var(--ink-3)}
+.sp-rank:hover{transform:translateY(-2px);border-color:var(--ink-3)}
+.sp-rank .ladder{display:inline-flex;align-items:flex-end;gap:1px;height:12px}
+.sp-rank .ladder i{width:2px;border-radius:1px;background:var(--ink-3);opacity:.55;height:calc(3px + var(--t)*9px)}
+.sp-rank .ladder i.me{background:currentColor;opacity:1;height:12px;width:3px}
+.sp-rank:hover .ladder i{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*12ms)}
+@keyframes sp-hop{40%{transform:translateY(-4px)}}
+
+/* the tiles' second line: a cost bar, a fortnight spark, the ceilings */
+.sstat{position:relative}
+.sstat .v small{font-size:12px;color:var(--ink-3);margin-left:6px;letter-spacing:0}
+.sstat .chip{vertical-align:3px;margin-left:8px}
+.sstat .chip svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:-1px}
+.sp-flag{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%;background:var(--neg);animation:sp-ping2 1.6s ease-out infinite}
+@keyframes sp-ping2{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--neg) 60%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+.sp-cost{display:flex;height:6px;gap:1px;margin-top:14px;border-radius:3px;overflow:hidden}
+.sp-cost i{display:block;height:100%;min-width:2px;background:color-mix(in srgb,var(--ink) var(--k,40%),var(--surface));transition:transform .15s,filter .15s;transform-origin:bottom}
+.sp-cost i:hover{transform:scaleY(2);filter:brightness(1.25)}
+.sp-cost i.p{background:var(--accent)}
+.sp-cost i.l{background:var(--neg)}
+.sp-tread{min-height:15px;margin-top:6px;font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.04em;color:var(--ink-3)}
+.sp-tread b{color:var(--ink);font-weight:500}
+.sp-spark{display:flex;align-items:flex-end;gap:3px;height:24px;margin-top:10px}
+.sp-spark i{flex:1;height:var(--v);border-radius:1.5px;background:var(--rule);transition:transform .15s;transform-origin:bottom}
+.sp-spark i.l{background:var(--ink-2)}
+.sp-spark.dn i.l{background:var(--neg)}
+.sp-spark.up i.l{background:var(--accent)}
+.sp-spark i:hover{transform:scaleY(1.15)}
+.sp-ceil{display:flex;gap:10px;margin-top:11px;color:var(--ink-3)}
+.sp-ceil .on{color:var(--neg)}
+
+/* standards: the four parts against the 80 line, and the lamps beside them */
+.sp-std{display:flex;align-items:flex-end;gap:30px;flex-wrap:wrap}
+.sp-big{font:500 38px/1 "IBM Plex Mono",monospace;letter-spacing:-.03em}
+.sp-big small{font-size:14px;color:var(--ink-3);margin-left:2px}
+.sp-big.warn{color:var(--warn)}
+.sp-big.bad{color:var(--neg)}
+.sp-big.unk{color:var(--ink-3)}
+.sp-eq{position:relative;display:flex;gap:16px;align-items:flex-end;padding:0 6px}
+.sp-eq .th{position:absolute;left:0;right:-14px;bottom:72px;border-top:1px dashed var(--ink-3);opacity:.7;pointer-events:none}
+.sp-eq .th::after{content:"80";position:absolute;right:0;top:-13px;font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-eqb{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink-3);cursor:default;min-width:24px}
+.sp-eqb .t{position:relative;width:14px;height:60px;border-radius:4px;background:var(--raised);overflow:hidden}
+.sp-eqb .t b{position:absolute;left:0;right:0;bottom:0;height:var(--v);background:var(--accent);border-radius:4px;transform-origin:bottom;transform:scaleY(0);transition:transform .7s cubic-bezier(.34,1.56,.64,1)}
+.rv.in .sp-eqb .t b{transform:none}
+.sp-eqb.low .t b{background:var(--warn)}
+.sp-eqb.bad .t b{background:var(--neg)}
+.sp-eqb.low{color:var(--warn)}
+.sp-eqb.bad{color:var(--neg)}
+.sp-eqb.unk .t{background:none;border:1px dashed var(--rule)}
+.sp-eqb:hover .t b{transform:scaleY(1.06)}
+.sp-lamps{display:grid;gap:10px;margin-left:auto}
+.sp-lamprow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sp-lampb{position:relative;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;border:1px solid transparent;cursor:default;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-lampb svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sp-lampb.ok{background:var(--accent-soft);color:var(--accent)}
+.sp-lampb.unk{border-color:var(--rule);border-style:dashed;color:var(--ink-3)}
+.sp-lampb.miss{border-color:var(--neg);color:var(--neg);background:color-mix(in srgb,var(--neg) 12%,transparent)}
+.sp-lampb.miss::after{content:"";position:absolute;left:5px;right:5px;top:50%;border-top:1.5px solid var(--neg);transform:rotate(-45deg)}
+.sp-lampb:hover{transform:translateY(-3px) scale(1.06)}
+.sp-lampb:hover svg{animation:sp-wiggle .5s ease-in-out}
+.sp-lampb.music:hover svg{animation:sp-bounce .32s ease-in-out infinite alternate}
+.sp-lampb.toiletprivacy:hover svg{animation:sp-swing .7s ease-in-out}
+.sp-lampb.sink:hover .drip{animation:sp-drip .7s ease-in infinite}
+@keyframes sp-wiggle{25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}
+@keyframes sp-bounce{to{transform:translateY(-4px) rotate(-6deg)}}
+@keyframes sp-swing{50%{transform:perspective(60px) rotateY(-38deg)}}
+@keyframes sp-drip{0%{transform:translateY(-2px);opacity:0}30%{opacity:1}100%{transform:translateY(6px);opacity:0}}
+.sp-role{font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;padding:4px 6px;border-radius:4px;border:1px solid var(--warn);color:var(--warn)}
+
+/* pull: promotion against the game's 100 cap, and the wave riding over it */
+.sp-promorow{display:flex;align-items:center;gap:16px}
+.sp-promo{position:relative;flex:1;display:flex;height:16px;border-radius:8px;border:1px dashed var(--rule);overflow:hidden}
+.sp-promo i{display:block;height:100%;transform-origin:left;transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+.rv.in .sp-promo i{transform:none}
+.sp-promo .tr{background:var(--ink-2)}
+.sp-promo .mk{background:var(--accent);transition-delay:.25s}
+.sp-promo i:hover{filter:brightness(1.2)}
+.sp-promo u{position:absolute;top:5px;right:12px;width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:0}
+section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
+.sp-promo u:nth-of-type(2){right:34px;animation-delay:.35s!important}
+.sp-promo u:nth-of-type(3){right:58px;animation-delay:.7s!important}
+@keyframes sp-pull{0%{transform:translateX(30px);opacity:0}40%{opacity:.9}100%{transform:translateX(-46px);opacity:0}}
+.sp-minis{display:flex;gap:22px;margin-top:16px;font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sp-minis span{display:inline-flex;align-items:center;gap:7px;cursor:default}
+.sp-minis .sp-i{color:var(--ink-3)}
+.sp-wave{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-soft);font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
+.sp-wave .sp-i{color:var(--warn)}
+.sp-wave:hover .sp-i svg{animation:sp-surf 1s ease-in-out infinite}
+@keyframes sp-surf{50%{transform:translateX(3px) translateY(-2px)}}
+.sp-wavebar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--rule-soft)}
+.sp-wavebar .base{background:var(--ink-2)}
+.sp-wavebar .lift{background:repeating-linear-gradient(135deg,var(--warn) 0 4px,transparent 4px 7px)}
+.sp-wavebar.unk{background:repeating-linear-gradient(135deg,var(--ink-3) 0 4px,transparent 4px 7px);opacity:.6}
+.sp-pips{display:inline-flex;gap:3px;align-items:center}
+.sp-pips i{width:6px;height:6px;border-radius:50%;background:var(--rule)}
+.sp-pips i.on{background:var(--warn)}
+
+/* hours: the two chips under the grid pick their cells out of it */
+.hours.sp-showcap .hc:not(.cap),.hours.sp-showidle .hc:not(.slack){opacity:.2}
+.hours.sp-showcap .hc.cap,.hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
+@keyframes sp-cell{50%{transform:scale(1.22)}}
+.sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.sp-hchip{display:inline-flex;align-items:center;gap:9px;min-height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default;transition:border-color .15s,transform .2s}
+.sp-hchip:hover{border-color:var(--ink-3);transform:translateY(-2px)}
+.sp-hchip b{color:var(--ink);font-weight:500}
+.sp-hchip .sp-sw{width:12px;height:12px;border-radius:3px;flex:none;background:var(--raised)}
+.sp-hchip.cap .sp-sw{box-shadow:inset 0 0 0 1.5px var(--neg)}
+.sp-hchip.cap .sp-i{color:var(--neg)}
+/* the idle swatch matches the grid's own idle ring, which is the --info one */
+.sp-hchip.idle .sp-sw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--info) 45%,transparent)}
+.sp-hchip.idle .sp-i{color:var(--info)}
+.sp-hchip .fix{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
+
+/* crew: what the staff here ask for, and a roster too big for pills */
+.sp-dems{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.sp-dem{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 10px;border-radius:6px;background:var(--raised);font-size:12.5px;color:var(--ink-2);cursor:default;transition:transform .2s}
+.sp-dem:hover{transform:translateY(-2px)}
+.sp-dem b{font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sp-dem .sp-i{color:var(--ink-3)}
+.sp-dem.quit{background:color-mix(in srgb,var(--neg) 14%,transparent);color:var(--neg)}
+.sp-dem.quit b,.sp-dem.quit .sp-i{color:var(--neg)}
+.sp-dem:hover .sp-i svg{animation:sp-wiggle .5s ease-in-out}
+.sp-pri{display:inline-flex;gap:2px;align-items:flex-end;height:11px}
+.sp-pri i{width:3px;border-radius:1px;background:var(--rule)}
+.sp-pri i:nth-child(1){height:5px}
+.sp-pri i:nth-child(2){height:8px}
+.sp-pri i:nth-child(3){height:11px}
+.sp-pri i.on{background:var(--warn)}
+.sp-pri.hi i.on{background:var(--neg)}
+.person .sp-i{color:var(--warn);margin-left:-2px}
+.person .sp-i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sp-rrow{display:grid;grid-template-columns:200px 1fr auto;gap:18px;align-items:center;min-height:48px;border-bottom:1px solid var(--rule-soft)}
+.sp-rbtn{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;cursor:pointer;text-align:left}
+.sp-rbtn i{width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
+.sp-rbtn .sp-i{color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-rbtn:hover .sp-i{color:var(--accent);transform:translateX(2px)}
+.sp-rrow.open .sp-rbtn .sp-i{transform:rotate(90deg)}
+.sp-dots{display:flex;flex-wrap:wrap;gap:5px;padding:8px 0}
+.sp-dot{width:11px;height:11px;border-radius:50%;background:var(--ink-2);cursor:default;transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .15s}
+.sp-dot.off{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.sp-dot:hover{transform:scale(1.7);background:var(--accent)}
+.sp-dot.off:hover{background:none;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.sp-rrow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*18ms)}
+.sp-rcount{font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right;white-space:nowrap}
+.sp-rpeople{display:none;grid-column:1/-1;padding:4px 0 14px}
+.sp-rrow.open .sp-rpeople{display:block}
+
+/* shelves: the three marks a shop's own table gains */
+.sp-noplan{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px dashed var(--warn);border-radius:4px;color:var(--warn);font-size:11px}
+.sp-noplan svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-red{color:var(--neg)}
+.sp-up{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;border:1px solid var(--rule);font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2);background:var(--surface)}
+.sp-up.bad{border-color:var(--neg);color:var(--neg)}
+.sp-up svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* an office's desks: one square a workstation, filled while it is manned */
+.sp-mach{display:flex;flex-wrap:wrap;gap:10px}
+.sp-m{position:relative;width:32px;height:32px;border-radius:8px;background:var(--raised);overflow:hidden;display:grid;place-items:center;color:var(--on-accent);cursor:default}
+.sp-m::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--h,100%);background:var(--accent)}
+.sp-m svg{position:relative;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-m.z{background:none;border:1px dashed var(--rule);color:var(--ink-3)}
+.sp-m.z::before{display:none}
+
+/* profit: the two weeks the delta chip compares, drawn on the chart */
+.sp-band{fill:var(--ink);opacity:.05;transition:opacity .15s;cursor:default}
+.sp-band.last{opacity:.09}
+.sp-band:hover{opacity:.16}
+
 /* kinds popover ------------------------------------------------------------ */
 .pop{width:520px;margin:40px auto;padding:20px 22px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0008}
 .pop h3{margin:0 0 4px;font-size:15px;font-weight:600}
@@ -6672,6 +6900,9 @@ body:has(#changelogDialog[open]){overflow:hidden}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important; animation:none!important}
   .rv{opacity:1; transform:none}
+  /* the panel's bars grow from nothing on reveal: without the motion they are
+     simply there. */
+  .sp-eqb .t b, .sp-promo i{transform:none}
   .order-item.just-marked::after{display:none}
 }
 </style>
@@ -7025,6 +7256,50 @@ const ICON = {
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
 };
 const icon = name => ICON[name] || "";
+/* The site panel's own drawings, on the same 24 grid: a section's head mark, a
+   finding's evidence, an amenity lamp, a ceiling, a demand. Kept apart from
+   ICON so the panel can name a door or a sink without crowding the board's
+   own small set. */
+const SP_ICON = {
+  alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
+  standards: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"></path>',
+  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4"></path>',
+  hours: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
+  crew: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path>',
+  shelves: '<path d="M4 3v18M20 3v18M4 8h16M4 14h16M4 20h16"></path><path d="M8 8V5.5M12 8V5M16 14v-2.5M9 14v-3"></path>',
+  fees: '<path d="M6 3h9l4 4v14H6z"></path><path d="M14 3v5h5M9.5 13h5M9.5 16.5h5"></path>',
+  profit: '<path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path>',
+  week: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path>',
+  toilet: '<path d="M7 4h4v7H7zM5 11h13a5 5 0 0 1-5 5h-3a5 5 0 0 1-5-5zM10 16l-1 4h6l-1-4"></path>',
+  door: '<path d="M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17M4 21h16"></path><path d="M14.5 12v1"></path>',
+  sink: '<path d="M4 14h16v2a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM9 14V8a3 3 0 0 1 6 0"></path><path class="drip" d="M15 10.2v1.6"></path>',
+  music: '<path d="M9 18V6l10-2v12"></path><circle cx="6.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="16" r="2.5"></circle>',
+  interior: '<path d="M6 11V8a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v3"></path><path d="M4 13a2 2 0 0 1 4 0v2h8v-2a2 2 0 0 1 4 0v5H4zM7 18v2M17 18v2"></path>',
+  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
+  locker: '<rect x="6" y="3" width="12" height="18" rx="1.5"></rect><path d="M9 7h6M9 10h6M14.5 14v2"></path>',
+  shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path>',
+  person: '<circle cx="12" cy="8" r="3.5"></circle><path d="M5 20a7 7 0 0 1 14 0"></path>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"></path><path d="M7.5 8.5v.01"></path>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M18.5 16v4M16.5 18h4"></path>',
+  building: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path>',
+  wave: '<path d="M2 14c2.5 0 2.5-4 5-4s2.5 4 5 4 2.5-4 5-4 2.5 4 5 4"></path>',
+  crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
+  gear: '<circle cx="12" cy="12" r="3.2"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"></path>',
+  pipe: '<path d="M3 8h6v8h12M3 12h2M17 20v-2M21 20v-2"></path>',
+  route: '<circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="5" r="2"></circle><path d="M8 18h7a3.25 3.25 0 0 0 0-6.5H9a3.25 3.25 0 0 1 0-6.5h7"></path>',
+  counter: '<rect x="4" y="11" width="16" height="8" rx="1.5"></rect><path d="M7 11V6h7v5M9 15h6"></path>',
+  monitor: '<rect x="3" y="4.5" width="18" height="12" rx="2"></rect><path d="M9 20.5h6M12 16.5v4"></path>',
+  desk: '<path d="M3 9h18M5 9v10M19 9v10M13 9v6h6"></path>',
+  clock: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
+  exit: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H8"></path>',
+  chev: '<path d="M9 6l6 6-6 6"></path>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"></path>',
+  right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+};
+const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SP_ICON[name]}</svg>` : "";
+/* The same drawing wrapped so it sits on a text line. */
+const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
 /* The board's own two letters for each neighbourhood, filled in from the one
    table Python keeps. A place it does not name wears no pill. */
 const HOOD_TAGS = /*__HOOD_TAGS__*/{};
@@ -7034,9 +7309,10 @@ const attr = s => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;")
 const why = text => `<span class="why" data-tip="${attr(text)}" tabindex="0"><i>?</i></span>`;
 /* A section head: title, optional ? mark, optional quiet aside text, and the
    right-hand aside (a .seg, a .link, counters). `after` is raw markup that sits
-   straight after the title, like the red "7 short" chip on Supply. */
+   straight after the title, like the red "7 short" chip on Supply. `icon` puts
+   one of the site panel's marks before the title, as the artboards draw it. */
 const sechead = (title, o = {}) =>
-  `<div class="sechead"><h2>${title}</h2>${o.after || ""}${o.why ? why(o.why) : ""}${
+  `<div class="sechead">${o.icon ? `<span class="sp-ico${o.iconCls ? ` ${o.iconCls}` : ""}">${spIcon(o.icon)}</span>` : ""}<h2>${title}</h2>${o.after || ""}${o.why ? why(o.why) : ""}${
     o.quiet ? `<span class="quiet">${o.quiet}</span>` : ""}${
     o.aside ? `<div class="aside">${o.aside}</div>` : ""}</div>`;
 const chipHtml = (kind, text, tip) =>
@@ -8560,7 +8836,10 @@ function closeSite(){
 
 /* A small area chart for one site's history: same grammar as the big one,
    without the axes it does not have room for. */
-function miniChart(series, key, colour){
+/* `o.bands` shades the two seven-day windows the site panel's trend compares
+   and draws each one's daily average across it; `o.dash` is the line a site
+   with under a fortnight behind it gets, because there is no trend to read. */
+function miniChart(series, key, colour, o = {}){
   if(series.length < 2) return `<p class="quiet">Not enough history yet.</p>`;
   const W = 540, H = 108, P = {t:8, r:6, b:16, l:4};
   const vals = series.map(d => d[key]);
@@ -8571,13 +8850,19 @@ function miniChart(series, key, colour){
   const pts = series.map((d,i) => `${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
   const base = y(Math.max(lo, 0)).toFixed(1);
   const last = series.length - 1;
+  const bands = (o.bands || []).filter(b => b.from >= 0 && b.to < series.length).map(band =>
+    `<rect class="sp-band ${band.cls || ""}" x="${(x(band.from) - 4).toFixed(1)}" y="${P.t}" width="${
+      (x(band.to) - x(band.from) + 8).toFixed(1)}" height="${H - P.t - P.b}" rx="4" data-read="${attr(band.read)}"></rect>
+     <line x1="${x(band.from).toFixed(1)}" x2="${x(band.to).toFixed(1)}" y1="${y(band.avg).toFixed(1)}" y2="${
+      y(band.avg).toFixed(1)}" stroke="var(--ink-2)" stroke-width="1.2" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`).join("");
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:108px;overflow:visible">
+    ${bands}
     ${lo < 0 ? `<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}"
         stroke="var(--ink-3)" stroke-width="1"/>` : ""}
     <polygon points="${x(0).toFixed(1)},${base} ${pts} ${x(last).toFixed(1)},${base}"
       fill="${colour}" opacity=".10"/>
     <polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="2"
-      stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      stroke-linejoin="round" vector-effect="non-scaling-stroke"${o.dash ? ` stroke-dasharray="5 5"` : ""}/>
     <circle cx="${x(last).toFixed(1)}" cy="${y(series[last][key]).toFixed(1)}" r="3.2"
       fill="var(--surface)" stroke="${colour}" stroke-width="2"/>
     <text x="${P.l}" y="${H-4}" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
@@ -8666,10 +8951,15 @@ function spRank(key){
   const mine = week(me);
   return {place: peers.filter(b => b.series.length >= 7 && week(b) > mine).length + 1, of: peers.length};
 }
+/* The chip by the name, with the ladder the place sits on: one rung a trading
+   site, tallest first, the site's own rung picked out. */
+const spLadder = rank => `<span class="ladder">${
+  [...Array(rank.of).keys()].map(k => `<i${k === rank.place - 1 ? ` class="me"` : ""} style="--t:${
+    rank.of > 1 ? (1 - k / (rank.of - 1)).toFixed(2) : 1};--k:${k}"></i>`).join("")}</span>`;
 const spRankHtml = rank => rank.place === null
   ? `<span class="sp-rank none" data-tip="No place yet: a rank needs seven days of trading"><span>–<small>/${rank.of}</small></span></span>`
-  : `<span class="sp-rank" data-tip="${attr(`${rank.place} of the ${rank.of} sites that trade, by profit over the last 7 days`)}"><span>${
-      rank.place}<small>/${rank.of}</small></span></span>`;
+  : `<span class="sp-rank${rank.place <= 3 ? " top" : ""}" data-tip="${attr(`${rank.place} of the ${rank.of} sites that trade, by profit over the last 7 days`)}"><span>${
+      rank.place}<small>/${rank.of}</small></span>${spLadder(rank)}</span>`;
 
 /* This site's week on week, the limit its busiest hours ran into, and its
    wave, each one lookup a block reads. */
@@ -8704,8 +8994,17 @@ const SP_CHECK_WORD = {
   staff: "staffed", prices: "prices set", stock: "stock on the shelves",
   shelves: "shelves filled", plan: "delivery plan",
 };
+/* What the lamp's own state adds to that word, and the drawing it wears. */
+const SP_CHECK_STATE = {ok: "", no: "missing: ", unk: "not checked yet: "};
+const SP_CHECK_ICON = {staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
 /* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
 const SP_PRIORITY = ["nice to have", "important", "critical"];
+/* What a demand is about, read off its own slug: when they work, what they
+   want at the desk, what the company settles for everyone. */
+const spDemandIcon = slug => /insurance/.test(slug) ? "heart"
+  : /nocleaning|time|days|weekend|morning|afternoon|evening|night/.test(slug) ? "clock"
+  : /clean|peaceful/.test(slug) ? "sparkle"
+  : "desk";
 
 /* The fortnight the Profit section averages: the last seven days and the seven
    before them, each as a daily average, and only when a full week is there. */
@@ -8728,16 +9027,23 @@ const spFindRow = a => {
   return `<a class="sp-find ${SEV_KIND[a.level] || "opp"}${a.id === spArrived ? " arrived" : ""}" href="#${
     alertPage(a)}" data-id="${attr(a.id)}"${ev.block ? ` data-ev="${ev.block}"` : ""}${
     ev.hit ? ` data-hit="${attr(ev.hit)}"` : ""}>
-    <span class="mark"></span><span class="what">${what}</span>
-    <span class="amt">${findingAmount(a)}</span><span class="go">${icon("go")}</span>${
+    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[ev.block] || "alert")}</span><span class="what">${what}</span>
+    <span class="amt">${findingAmount(a)}</span><span class="go">${spIcon("down")}</span>${
     more ? `<span class="more">${more}</span>` : ""}</a>`;
 };
+/* The drawing a finding wears is the one on the head of the block it points
+   at, so the row and its evidence read as the same thing. */
+const SP_BLOCK_ICON = {tiles: "alert", profit: "profit", week: "week", hours: "hours", crew: "crew",
+                       standards: "standards", pull: "magnet", shelves: "shelves", stock: "crate",
+                       inputs: "pipe", lines: "gear"};
 const SP_FINDS_TOP = 4;
 const spFinds = finds => {
   if(!finds.length) return "";
   const shown = spFindsAll ? finds : finds.slice(0, SP_FINDS_TOP);
   const rest = finds.length - shown.length;
-  return `<div class="sp-finds rv" data-block="finds">${shown.map(spFindRow).join("")}</div>${
+  /* The list itself carries no data-block: it must stay lit while one of its
+     own rows dims everything else. */
+  return `<div class="sp-finds rv">${shown.map(spFindRow).join("")}</div>${
     rest > 0 ? `<p class="sp-findmore">${rest} more · <a class="link" href="#" data-allfinds>show all</a></p>` : ""}`;
 };
 
@@ -8746,45 +9052,68 @@ const spFinds = finds => {
    looked for and missed. A site the game has not scored yet — no revenue —
    draws every lamp dashed and none lit, which is the whole never-scored rule;
    data-amenity and data-state carry the reading so the markup stays plain. */
-const SP_SAT_PARTS = [["service", "Service"], ["pricing", "Pricing"], ["cleanliness", "Cleanliness"], ["facility", "Facility"]];
+const SP_SAT_PARTS = [["service", "Service", "person"], ["pricing", "Pricing", "tag"],
+                      ["cleanliness", "Cleanliness", "sparkle"], ["facility", "Facility", "building"]];
 const SP_AMENITY_WORD = {bathroom: "Bathroom", toiletprivacy: "Bathroom stall or door", sink: "Sink",
                          music: "Music", interior: "Interior design"};
+/* The four parts as an equaliser against the 80 line the game marks good at,
+   and the overall score beside it. An unscored part draws an empty dashed
+   column, never a full one. */
+const spBand = v => v < 60 ? "bad" : v < 80 ? "low" : "";
 function spStandards(b){
   const sat = b.satisfaction || {};
-  const bars = SP_SAT_PARTS.map(([key, label]) => {
-    const v = sat[key];
-    const read = v === null || v === undefined ? `${label} <b>not scored yet</b>` : `${label} <b>${v}%</b>`;
-    return `<span class="sp-satbar" data-sat="${key}" data-value="${v ?? ""}" data-read="${attr(read)}">${
-      label} ${v ?? "–"}%</span>`;
-  }).join("");
-  if(b.status !== "retail")
-    return `<div class="sp-sat">${bars}</div><div class="sp-read sp-readout">Hover a bar</div>`;
+  /* A shop the game has not scored has no revenue: nothing here is known. */
   const unknown = !b.revenue;
+  const bars = SP_SAT_PARTS.map(([key, label, ic]) => {
+    const v = sat[key];
+    const blank = unknown || v === null || v === undefined;
+    const read = blank ? `${label} <b>not scored yet</b>` : `${label} <b>${v}%</b>`;
+    return `<div class="sp-eqb ${blank ? "unk" : spBand(v)}" data-sat="${key}" data-value="${v ?? ""}" data-read="${attr(read)}">
+      <span class="t"><b style="--v:${blank ? 0 : v}%"></b></span>${spI(ic)}</div>`;
+  }).join("");
+  const overall = unknown ? null : sat.overall;
+  const big = `<div class="sp-big ${overall === null || overall === undefined ? "unk" : spBand(overall) === "bad" ? "bad" : spBand(overall) ? "warn" : ""}">${
+    overall === null || overall === undefined ? "—" : `${overall}<small>%</small>`}</div>`;
+  const eq = `<div class="sp-std">${big}<div class="sp-eq"><span class="th"></span>${bars}</div>`;
+  if(b.status !== "retail")
+    return `${eq}</div><div class="sp-read sp-readout">Hover a bar</div>`;
   const amenities = b.amenities || {};
   const lamp = (slug, label) => {
     if(amenities[slug] === undefined) return "";
     const state = unknown ? "unk" : amenities[slug] ? "ok" : "miss";
     const read = unknown ? `${label} <b>not scored yet</b>`
       : amenities[slug] ? `${label} in place` : `<b>no</b> ${label.toLowerCase()}`;
-    return `<span class="sp-lampb ${state}" data-el="${slug}" data-amenity="${slug}" data-state="${state}" data-read="${attr(read)}"></span>`;
+    return `<span class="sp-lampb ${state} ${slug}" data-el="${slug}" data-amenity="${slug}" data-state="${state}" data-read="${attr(read)}" role="img" aria-label="${
+      attr(label)}">${spIcon(SP_AMENITY_ICON[slug])}</span>`;
   };
   const roles = b.uniformGaps || [];
-  const lamps = ["bathroom", "toiletprivacy", "sink", "music", "interior"].map(s => lamp(s, SP_AMENITY_WORD[s])).join("")
-    + `<span class="sp-lampb ${b.missingUniformLocker ? "miss" : unknown ? "unk" : "ok"}" data-el="locker" data-state="${
-        b.missingUniformLocker ? "miss" : unknown ? "unk" : "ok"}" data-read="${attr(
-        b.missingUniformLocker ? "<b>No uniform locker</b> installed" : "Uniform locker installed")}"></span>`
-    + (roles.length ? `<span class="sp-lampb miss" data-el="uniform" data-state="miss" data-read="${attr(
-        `<b>No uniform</b> set for ${roles.length} role${roles.length === 1 ? "" : "s"}`)}"></span>` : "");
+  const lockerState = b.missingUniformLocker ? "miss" : unknown ? "unk" : "ok";
+  /* Two rows, as the artboard draws them: what the shop offers customers, and
+     under it what it dresses its staff in. */
+  const lamps = `<div class="sp-lamprow">${
+    ["bathroom", "toiletprivacy", "sink", "music", "interior"].map(s => lamp(s, SP_AMENITY_WORD[s])).join("")}</div><div class="sp-lamprow">`
+    + `<span class="sp-lampb ${lockerState} locker" data-el="locker" data-state="${lockerState}" data-read="${attr(
+        b.missingUniformLocker ? "<b>No uniform locker</b> installed" : "Uniform locker installed")}" role="img" aria-label="Uniform locker">${
+        spIcon("locker")}</span>`
+    /* Without the locker there is nowhere to set a uniform, so the shirt was
+       never looked for: dashed, not struck. */
+    + (roles.length ? `<span class="sp-lampb ${b.missingUniformLocker ? "unk" : "miss"} shirt" data-el="uniform" data-state="${
+        b.missingUniformLocker ? "unk" : "miss"}" data-read="${attr(b.missingUniformLocker
+        ? "Uniforms <b>need the locker first</b>"
+        : `<b>No uniform</b> set for ${roles.length} role${roles.length === 1 ? "" : "s"}`)}" role="img" aria-label="Uniforms">${
+        spIcon("shirt")}</span>` : "");
   /* What the read line says when nothing is under the pointer. */
   const asked = Object.keys(amenities).length;
   const met = Object.values(amenities).filter(Boolean).length;
   const read = unknown ? "Not scored yet"
     : `${asked} asked · <b>${asked - met} unmet</b>${roles.length ? ` · ${roles.length} role${roles.length === 1 ? "" : "s"} without a uniform` : ""}`;
-  return `<div class="sp-sat">${bars}</div>
+  return `${eq}
     <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
-      `${r} <b>has no uniform set</b>`)}">${roleCode(r)}</span>`).join("")}</div>
+      `${r} <b>has no uniform set</b>`)}">${roleCode(r)}</span>`).join("")}</div></div></div>
     <div class="sp-read sp-readout">${read}</div>`;
 }
+const SP_AMENITY_ICON = {bathroom: "toilet", toiletprivacy: "door", sink: "sink",
+                         music: "music", interior: "interior"};
 
 /* The pull of the street: promotion against the game's own 100 cap, the two
    figures behind it, and the wave riding over the shop if one is running. */
@@ -8796,38 +9125,96 @@ function spPull(b){
       <div class="sp-promo">
         <i class="tr" style="width:${traffic}%" data-read="${attr(`Foot traffic <b>${traffic}</b>`)}"></i>${
         marketing ? `<i class="mk" style="width:${marketing}%" data-read="${attr(`Marketing <b>${marketing}</b>`)}"></i>` : ""}
+        <u></u><u></u><u></u>
       </div>
-      <span class="sp-total">${total}<small>/100</small></span></div>
+      <div class="sp-big" style="font-size:26px">${total}<small>/100</small></div></div>
     <div class="sp-minis">
-      <span data-read="${attr(`Security <b>${b.security}%</b>`)}">security ${b.security}%</span>
-      <span data-read="${attr(`<b>${b.capacity}</b> shoppers fit inside at once`)}">capacity ${b.capacity}</span></div>
+      <span data-read="${attr(`Security <b>${b.security}%</b>`)}">${spI("shield")}${b.security}%</span>
+      <span data-read="${attr(`<b>${b.capacity}</b> shoppers fit inside at once`)}">${spI("person")}${b.capacity}</span></div>
     ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${hype.wave.hood} wave over this shop · <b>${
         hype.site.share}%</b> of its takings rides on it · ends in ${hype.wave.daysLeft} day${
         hype.wave.daysLeft === 1 ? "" : "s"}${hype.wave.baseline ? "" : " · no baseline to measure it against"}`)}">${
-      hype.wave.hood} wave · ${hype.site.share}% of takings · ${hype.wave.daysLeft}d left</div>` : ""}
-    <div class="sp-read sp-readout"></div>`;
+      spI("wave")}
+      <div class="sp-wavebar${hype.wave.baseline ? "" : " unk"}">${hype.wave.baseline
+        ? `<i class="base" style="width:${100 - hype.site.share}%"></i><i class="lift" style="width:${hype.site.share}%"></i>` : ""}</div>
+      <span><span class="sp-pips">${[...Array(7).keys()].map(k =>
+        `<i${k < hype.wave.daysLeft ? ` class="on"` : ""}></i>`).join("")}</span>&nbsp; ${hype.wave.daysLeft}d</span></div>` : ""}
+    <div class="sp-read sp-readout">&nbsp;</div>`;
 }
 
 /* The crew of a big site: one row a role, one dot a person, the pills one
    click away. The dots carry the names so the row reads without opening. */
-function spRoster(people){
+function spRoster(people, gaps){
   const roles = [];
   people.forEach(p => {
     let row = roles.find(r => r.role === p.role);
     if(!row) roles.push(row = {role: p.role, people: []});
     row.people.push(p);
   });
-  return `<div class="sp-roster">${roles.map(r => `
+  return `<div data-readzone><div class="sp-roster">${roles.map(r => `
     <div class="sp-rrow">
-      <button type="button" class="sp-rbtn" aria-expanded="false"><i>${roleCode(r.role)}</i>${r.role}</button>
-      <span class="sp-dots">${r.people.map(p => `<i class="sp-dot${p.absent ? " off" : ""}" data-tip="${attr(
-        `${p.name} · ${p.role}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
+      <button type="button" class="sp-rbtn" aria-expanded="false"><i>${roleCode(r.role)}</i>${r.role}${spI("chev")}</button>
+      <span class="sp-dots">${r.people.map((p, k) => `<i class="sp-dot${p.absent ? " off" : ""}" style="--k:${k}" data-read="${attr(
+        `<b>${p.name}</b> · ${p.role}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
       <span class="sp-rcount">${r.people.length}${r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}</span>
-      <div class="sp-rpeople"><div class="crew">${r.people.map(spPersonPill).join("")}</div></div>
-    </div>`).join("")}</div>`;
+      <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps)).join("")}</div></div>
+    </div>`).join("")}</div><div class="sp-read sp-readout">Hover a dot</div></div>`;
 }
-const spPersonPill = p => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
-  p.role}${p.absent ? " · off today" : ""}</small></span>`;
+/* A person, with the shirt mark when nobody in their role has a uniform set. */
+const spPersonPill = (p, gaps) => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
+  p.role}${p.absent ? " · off today" : ""}</small>${
+  (gaps || []).includes(p.role) ? `<span class="sp-i" data-el="uniform" data-tip="No uniform set for this role">${spIcon("shirt")}</span>` : ""}</span>`;
+
+/* The tiles' second line ------------------------------------------------------
+   A fortnight of the figure above, the week before it in grey and the last
+   seven days in ink; the costs that ate yesterday's takings, as one bar the
+   width of them; and the three ceilings a busy hour can run into, the binding
+   one lit. Each reads out on the tile's own line rather than in a tooltip. */
+const spSpark = (series, key, money, tone) => {
+  const days = series.slice(-14);
+  if(days.length < 2) return "";
+  const vals = days.map(d => d[key] || 0);
+  const lo = Math.min(...vals), top = Math.max(...vals);
+  return `<div data-readzone><div class="sp-spark ${tone || ""}">${days.map((d, k) => {
+    const v = vals[k];
+    return `<i class="${k >= days.length - 7 ? "l" : ""}" style="--v:${
+      (25 + (v - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(`day ${d.day} <b>${
+      money ? fmt(v) : Math.round(v).toLocaleString()}</b>`)}"></i>`;
+  }).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
+};
+/* How dark each cost sits in the bar: the big ones darkest, so the shape of a
+   day's spending reads without a legend. */
+const SP_COST_SHADE = {Goods: 62, Wages: 46, Rent: 32, Marketing: 24, Theft: 18, Licensing: 14};
+const spCostBar = (costs, profit) => {
+  const parts = costs.concat([[profit < 0 ? "Loss" : "Profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
+  const total = parts.reduce((t, [, v]) => t + v, 0);
+  if(!total) return "";
+  return `<div data-readzone><div class="sp-cost">${parts.map(([label, v]) =>
+    `<i class="${label === "Profit" ? "p" : label === "Loss" ? "l" : ""}" style="flex:${
+      (v / total).toFixed(4)} 0 0;--k:${SP_COST_SHADE[label] || 40}%" data-read="${attr(
+      `${label} <b>${fmt(v)}</b>`)}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
+};
+/* The limits an hour at the ceiling is held by, as the hour findings name
+   them: the building's door, the counters or workstations, the people on. */
+const SP_LIMIT_ICON = {"the building": "door", registers: "counter", workstations: "monitor", staffing: "person"};
+/* An office's desks: one square a workstation, filled while somebody is
+   posted at it, at the hour the office was busiest over the fortnight. */
+function spDesks(grid){
+  let best = null;
+  for(let wd = 0; wd < 7; wd++)
+    for(let h = 0; h < 24; h++){
+      const seen = grid.customers[wd][h];
+      if(seen !== null && (best === null || seen > best.seen)) best = {wd, h, seen};
+    }
+  const manned = best ? Math.min(grid.stationCount, Math.round(grid.staffed[best.wd][best.h] / grid.postRate)) : 0;
+  const squares = [...Array(grid.stationCount).keys()].map(k => k < manned
+    ? `<span class="sp-m" style="--h:100%" data-read="${attr(`Workstation ${k + 1} · <b>staffed</b> at the busiest hour`)}">${spIcon("monitor")}</span>`
+    : `<span class="sp-m z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
+  return {manned, html: `<div class="sp-mach">${squares}</div>`};
+}
+const spCeiling = (office, limit) => `<div class="sp-ceil">${
+  ["door", office ? "monitor" : "counter", "person"].map(k =>
+    `<span class="sp-i${k === SP_LIMIT_ICON[limit] ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
 
 function drawSite(){
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
@@ -8873,7 +9260,11 @@ function drawSite(){
   const costTip = costs.length
     ? `Yesterday's costs: ${costs.map(([l, v]) => `${l.toLowerCase()} ${fmt(v)}`).join(", ")}.`
     : "No costs recorded yesterday.";
+  /* An office is not held by a door but by the workstations it has, so its
+     fourth tile counts those instead. */
+  const capLabel = sp && office ? "Workstations" : "Door cap";
   const capTile = !grid ? "—"
+    : sp && office ? `${grid.stationCount}<small ${SMALL}>${grid.capHours ? `· ${grid.capHours} h/wk full` : ""}</small>`
     : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
     : `—<small ${SMALL}>no door cap${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
   /* Week on week when two full weeks stand behind it, else how far into the
@@ -8882,13 +9273,22 @@ function drawSite(){
     ? chipHtml(trend.change < 0 ? "bad" : "dim", `${icon(trend.change < 0 ? "trend_dn" : "trend_up")}${pct(trend.change)}`,
         `${compact(trend.last7)} this week against ${compact(trend.prev7)} the week before`)
     : chipHtml("none", `day ${b.daysOpen} of 14`, "A trend needs two full weeks. The first days are a ramp, not a trend.");
+  /* On the shop and office panel the tiles carry their own second line: two
+     fortnight sparks, the cost bar that replaces the profit tooltip, and the
+     ceilings. A day in the red flags the profit tile. */
+  const tone = trend && trend.ready ? (trend.change < 0 ? "dn" : "up") : "";
   const stats = `
-    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div></div>
+    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
+      sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
     <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
-      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div></div>
-    <div class="sstat" data-tip="${attr(costTip)}"><span class="lab">Profit</span><div class="v ${sign(b.profit)}">${fmt(b.profit)}${
-      b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
-    <div class="sstat"${limit ? ` data-limit="${attr(limit)}"` : ""}><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
+      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div>${
+      sp ? spSpark(b.series, "customers", false, "") : ""}</div>
+    <div class="sstat"${sp ? "" : ` data-tip="${attr(costTip)}"`}><span class="lab">Profit</span>${
+      sp && b.profit < 0 ? `<i class="sp-flag"></i>` : ""}<div class="v ${sign(b.profit)}">${fmt(b.profit)}${
+      b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div>${
+      sp ? spCostBar(costs, b.profit) : ""}</div>
+    <div class="sstat"${limit ? ` data-limit="${attr(limit)}"` : ""}><span class="lab">${capLabel}</span><div class="v">${capTile}</div>${
+      sp ? spCeiling(office, limit) : ""}</div>`;
 
   /* One pill a person, as on the canvas: the name, the role under it, dimmed
      when they are off today. A big site keeps to a dozen and a "+n more"
@@ -8901,13 +9301,13 @@ function drawSite(){
     ? `${b.crew.map(c => `${c.role} ${c.count > 1 ? `×${c.count} · ` : "· "}${fmt(c.daily)}/day${
         c.absent ? ` (${c.absent} off)` : ""}`).join("; ")}.${offToday ? ` ${plural(offToday, "person", "people")} off today.` : ""}`
     : "";
-  const personPill = p => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
-    p.role}${p.absent ? " · off today" : ""}</small></span>`;
+  const uniformGaps = sp ? b.uniformGaps : null;
+  const personPill = p => spPersonPill(p, uniformGaps);
   const crew = !sp && people.length > CREW_MAX
     ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
         people.length - CREW_MAX} more</span>`
     : sp && people.length > CREW_MAX
-      ? spRoster(people)
+      ? spRoster(people, uniformGaps)
       : people.length
         ? people.map(personPill).join("")
         : b.crew.length
@@ -8956,8 +9356,8 @@ function drawSite(){
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
-          <td>${!t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">no plan</span>` : "—")
-            : over ? `<span class="sp-up" data-el="raise">${t.target.toLocaleString()} ${icon("go")} <b>${
+          <td>${!t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}no plan</span>` : "—")
+            : over ? `<span class="sp-up${sp ? " bad" : ""}" data-el="raise">${t.target.toLocaleString()} ${spIcon("right")} <b>${
                 ceil100(Math.max(t.target, t.peakSold)).toLocaleString()}</b></span>` : t.target.toLocaleString()}</td>
           <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
           <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString()}</span>` : l.units.toLocaleString()}</td></tr>`;
@@ -8975,10 +9375,11 @@ function drawSite(){
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
   const demandChips = !sp ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     wants.map(d => `<span class="sp-dem" data-tip="${attr(`${d.demand} for ${d.count} · ${
-      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${d.demand} <b>×${d.count}</b>${spPri(d.priority)}${
+      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
+      spI(spDemandIcon(d.slug))}${d.demand} <b>×${d.count}</b>${spPri(d.priority)}${
       d.company ? `<span class="sp-i" data-el="demand">${icon("company")}</span>` : ""}</span>`).join("")}${
     b.quitWarnings ? `<span class="sp-dem quit" data-el="quit" data-tip="${attr(`${
-      plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${icon("go")}<b>${
+      plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${spI("exit")}<b>${
       b.quitWarnings}</b> will quit</span>` : ""}</div>` : "";
 
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
@@ -8989,18 +9390,33 @@ function drawSite(){
   const headMarks = !sp ? "" : `
       <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
       b.revenue ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
-        `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(SP_CHECK_WORD[p.slug])}"></span>`).join("")}</span>`}
+        `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
+          SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
   /* The two hour chips: what the ceiling costs and what idle hours cost, where
      the ? used to carry them. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    (capNote ? `<span class="sp-hchip cap" data-show="cap" data-tip="${attr(capSentence.replace(/\s+/g, " "))}"><b>${capNote.hours} h/wk</b> at the ceiling · ${capNote.when} · ${fmt(capNote.throughput)}/day through it</span>` : "") +
-    (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><b>${idleNote.staff} on</b> ${
+    (capNote ? `<span class="sp-hchip cap" data-show="cap" data-tip="${attr(capSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
+      spI(SP_LIMIT_ICON[capNote.limit] || "door")}<b>${capNote.hours} h/wk</b> at the ceiling · ${capNote.when} · ${
+      fmt(capNote.throughput)}/day through it<span class="fix">${spI("right")}${capNote.fix}</span></span>` : "") +
+    (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
+      spI(idleNote.office ? "monitor" : "counter")}<b>${idleNote.staff} on</b> ${
       String(idleNote.from).padStart(2,"0")}:00–${String(idleNote.to).padStart(2,"0")}:00 a ${idleNote.day} · ${fmt(idleNote.worth)}/day of wages</span>` : "")}</div>`;
+  /* An office's own second block: the workstations beside its standards. */
+  const desks = sp && office && grid && grid.stationCount ? spDesks(grid) : null;
   const sevens = sp ? spSevens(b.series) : null;
   const profitRead = sevens && sevens.last !== null
     ? `<b>${fmt(sevens.last)}</b>/day over the last 7${
         sevens.prev !== null ? ` against <b>${fmt(sevens.prev)}</b>/day the week before` : ""}` : "";
+  /* The two weeks the chip above compares, shaded on the chart with their
+     daily averages across them. Under a fortnight there is no trend to shade,
+     and the line itself is dashed to say so. */
+  const n = b.series.length;
+  const bandRead = (from, to, avg) => `<b>days ${b.series[from].day}–${b.series[to].day}</b> ${fmt(avg)} a day`;
+  const profitChart = !sp ? {} : sevens && sevens.prev !== null && sevens.last !== null
+    ? {bands: [{from: n - 14, to: n - 8, avg: sevens.prev, cls: "", read: bandRead(n - 14, n - 8, sevens.prev)},
+               {from: n - 7, to: n - 1, avg: sevens.last, cls: "last", read: bandRead(n - 7, n - 1, sevens.last)}]}
+    : {dash: !(trend && trend.ready)};
   const hourWhy = why => sp ? why : `${why}.${notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`;
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
@@ -9010,21 +9426,27 @@ function drawSite(){
     </div>
     ${spFinds(finds)}
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
-    ${sp ? `<div class="duo sec">
+    ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
-        ${sechead("Standards", {why: office
+        ${sechead("Standards", {icon: "standards", why: office
           ? "What clients make of the firm. Offices are not asked about bathrooms, music or uniforms."
           : "What customers find when they walk in. A lit lamp was found in place, a struck one was looked for and missed, and a dashed one is not known: the game scores a shop only once customers have walked it."})}
         ${spStandards(b)}
       </section>${
         kind === "retail" ? `
       <section class="rv" data-block="pull" id="sp-pull" data-readzone>
-        ${sechead("Pull", {why: "Promotion against the game's 100% cap: what the street brings, and what campaigns add."})}
+        ${sechead("Pull", {icon: "magnet", iconCls: "magnet", why: "Promotion against the game's 100% cap: what the street brings, and what campaigns add."})}
         ${spPull(b)}
+      </section>` : desks ? `
+      <section class="rv" data-block="desks" id="sp-desks" data-readzone>
+        ${sechead("Desks", {icon: "monitor", quiet: `${grid.postRate} client${grid.postRate === 1 ? "" : "s"}/h each`,
+          why: `A workstation bills ${grid.postRate} client${grid.postRate === 1 ? "" : "s"} an hour while somebody sits at it.`})}
+        ${desks.html}
+        <div class="sp-read sp-readout">${desks.manned} of ${grid.stationCount} staffed at the busiest hour</div>
       </section>` : ""}
     </div>` : ""}
     ${grid ? `<section class="sec rv" data-block="hours" id="sp-hours">
-      ${sechead(sp ? "Hours" : "Customers by hour", {why: hourWhy(`${
+      ${sechead(sp ? "Hours" : "Customers by hour", {icon: sp ? "hours" : null, why: hourWhy(`${
         Math.min(...grid.weeks.filter(w => w))} week${
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
@@ -9038,26 +9460,29 @@ function drawSite(){
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
-        ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${sechead("Crew", {icon: sp ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
         <div class="crew">${crew}</div>${sp ? demandChips : demandNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
-        ${office ? sechead("Fees") : sechead("Shelves", {quiet: "before tomorrow's top-up"})}
+        ${office ? sechead("Fees", {icon: sp ? "fees" : null}) : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up"})}
         ${products}${shelfMore}
       </section>
     </div>
     <div class="duo sec">
       <section class="rv" data-block="profit" id="sp-profit"${sp ? ` data-readzone` : ""}>
-        ${sechead(`Profit, last ${b.series.length} days`)}
-        <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)")}${
-          sp ? `<div class="sp-read sp-readout">${profitRead}</div>` : ""}</div>
+        ${sechead(`Profit, last ${b.series.length} days`, {icon: sp ? "profit" : null, aside: sp ? trendChip : null})}
+        <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)", sp ? profitChart : {})}${
+          sp ? `<div class="sp-read sp-readout">${profitRead || "&nbsp;"}</div>` : ""}</div>
       </section>
       <section class="rv" data-block="week" id="sp-week">
-        ${sechead("Its week", {quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
+        ${sechead("Its week", {icon: sp ? "week" : null, quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
           : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
       </section>
     </div>`;
+  /* A redraw leaves no block lit, so the dimming a hovered finding switched on
+     has to come off with the markup it dimmed. */
+  $("sitePanel").classList.remove("sp-focus");
   drawSitePicker();
   $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
   if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };

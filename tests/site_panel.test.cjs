@@ -53,7 +53,8 @@ async function site(overrides = {}) {
     const other = {...shop, key: 'ba:street_broadway#2', name: 'HART. Other', revenue: 500};
     D = {
       meta: {character: 'sp-fixture', day: 29}, rhythm: null, daily: [],
-      supply: {shops: []}, hours: [], hourFindings: [], trends: [], hypeExposure: [],
+      supply: {shops: []}, hours: overrides.hours || [], hourFindings: overrides.hourFindings || [],
+      trends: overrides.trends || [], hypeExposure: [],
       alerts: overrides.alerts || [], minor: {rows: overrides.minor || []},
       businesses: [Object.assign(shop, overrides.shop || {}), Object.assign(other, overrides.peer || {})],
     };
@@ -202,6 +203,102 @@ test('a silent shop shows the five pre-flight checks in the order it needs them'
   try {
     assert.equal(await trading.locator('#sitePanel .sp-pre').count(), 0);
   } finally { await trading.close(); }
+});
+
+// A fortnight of trading, and a grid to read hours off.
+const fortnight = (n = 16) => Array.from({length: n}, (_, i) =>
+  ({day: i + 1, profit: 100 + i, revenue: 1000 + i * 10, customers: 20 + i}));
+const grid = (office, staffedAt) => {
+  const rows = wd => Array.from({length: 24}, (_, h) => h === 12 ? staffedAt : 0);
+  return [{
+    key: KEY, name: 'HART. Gifts', office, postRate: 1,
+    customers: Array.from({length: 7}, () => Array.from({length: 24}, (_, h) => h === 12 ? 6 : 0)),
+    weeks: [2, 2, 2, 2, 2, 2, 2], thin: Array(7).fill(false),
+    staffed: Array.from({length: 7}, rows), onShift: Array.from({length: 7}, rows),
+    effective: Array.from({length: 7}, rows),
+    door: 50, cap: 50, counters: 3, stationCount: 4, basket: 30, peak: 6, capHours: 3,
+  }];
+};
+
+test("the tiles carry the fortnight, the costs of the day and the ceilings", async () => {
+  const page = await site({
+    shop: {series: fortnight(), cogs: 400, profit: 200},
+    trends: [{key: KEY, ready: true, change: -0.1, last7: 700, prev7: 800}],
+    hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 3,
+                    when: 'Fri 12-13', limit: 'the building', fix: 'a bigger site nearby',
+                    cap: 50, capTop: 50, basket: 30, throughput: 900}],
+    hours: grid(false, 3),
+  });
+  try {
+    // A fortnight of bars, the last seven of them picked out in the trend's colour.
+    const spark = await page.$$eval('#sp-tiles .sp-spark', els =>
+      els.map(e => [e.className.trim(), e.children.length, e.querySelectorAll('i.l').length]));
+    assert.deepEqual(spark, [['sp-spark dn', 14, 7], ['sp-spark', 14, 7]]);
+    // The cost bar replaces the profit tile's tooltip, and ends in the profit.
+    assert.equal(await page.locator('#sp-tiles .sstat', {hasText: 'Profit'}).getAttribute('data-tip'), null);
+    const parts = await page.$$eval('#sp-tiles .sp-cost i', els =>
+      els.map(e => [e.className, e.dataset.read]));
+    assert.equal(parts.at(-1)[0], 'p');
+    assert.match(parts.at(-1)[1], /^Profit/);
+    // The three ceilings, with the one this shop's busy hours ran into lit.
+    const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
+      els.map(e => e.classList.contains('on')));
+    assert.deepEqual(ceil, [true, false, false]);
+  } finally { await page.close(); }
+});
+
+test('a loss flags its tile, and a site with no trend draws a dashed line', async () => {
+  const page = await site({shop: {profit: -500, series: fortnight(4)}});
+  try {
+    assert.equal(await page.locator('#sp-tiles .sp-flag').count(), 1);
+    assert.equal(await page.locator('#sp-tiles .sp-cost i.l').count(), 1);
+    assert.equal(await page.locator('#sp-profit polyline[stroke-dasharray]').count(), 1);
+    assert.equal(await page.locator('#sp-profit .sp-band').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('two full weeks shade the chart with their own averages', async () => {
+  const page = await site({shop: {series: fortnight(20)}});
+  try {
+    const bands = await page.$$eval('#sp-profit .sp-band', els =>
+      els.map(e => [e.classList.contains('last'), e.dataset.read]));
+    assert.equal(bands.length, 2);
+    assert.equal(bands[1][0], true);
+    for(const [, read] of bands) assert.match(read, /^<b>days \d+–\d+<\/b> \$/);
+    assert.equal(await page.locator('#sp-profit polyline[stroke-dasharray]').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('an office draws its workstations where a shop draws its pull', async () => {
+  const page = await site({shop: {status: 'office', type: 'Law Firm'}, hours: grid(true, 3)});
+  try {
+    assert.equal(await page.locator('#sp-pull').count(), 0);
+    const squares = await page.$$eval('#sp-desks .sp-m', els =>
+      els.map(e => e.classList.contains('z')));
+    // Four workstations, three of them manned at the busiest hour.
+    assert.deepEqual(squares, [false, false, false, true]);
+    assert.match(await page.locator('#sp-desks .sp-readout').innerText(), /3 of 4 staffed/);
+  } finally { await page.close(); }
+});
+
+test('without a locker the uniform lamp is dashed, not struck', async () => {
+  const page = await site({shop: {missingUniformLocker: true, uniformGaps: ['Customer service']}});
+  try {
+    const lamps = await page.$$eval('#sp-standards .sp-lampb.locker, #sp-standards .sp-lampb.shirt',
+      els => els.map(e => e.dataset.state));
+    assert.deepEqual(lamps, ['miss', 'unk']);
+    assert.equal(await page.locator('#sp-standards .sp-role').count(), 1);
+  } finally { await page.close(); }
+});
+
+test('the dimming a hovered finding switches on comes off with the redraw', async () => {
+  const page = await site({alerts: [finding('a1', 'music'), finding('a2', 'outruns')]});
+  try {
+    await page.hover('.sp-find[data-id="a1"]');
+    assert.equal(await page.locator('#sitePanel.sp-focus').count(), 1);
+    await page.evaluate(() => drawSite());
+    assert.equal(await page.locator('#sitePanel.sp-focus').count(), 0);
+  } finally { await page.close(); }
 });
 
 test('rank is the place by the last seven days of profit, or nothing under seven', async () => {
