@@ -662,7 +662,9 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     assert.match(await card.locator('.sub').innerText(),/Home/);
     assert.equal(await card.locator('.nums .num').count(),1);
     assert.match(await card.locator('.nums').innerText(),/\$34/);
-    assert.equal(await card.locator('.go2').isHidden(),true);
+    // The arrow is the only way into a flat's panel: it is in no picker.
+    assert.equal(await card.locator('.go2').isHidden(),false);
+    assert.equal(await card.locator('.go2').getAttribute('aria-label'),'Open home details');
     await page.locator('#cityMapPage .sev.lay.home').click();
     assert.equal((await matchKeys(page)).includes(home.key),false);
     assert.equal(await page.locator('#cityMapPage .sev.lay.home').getAttribute('aria-pressed'),'false');

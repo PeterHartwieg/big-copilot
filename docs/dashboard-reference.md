@@ -604,6 +604,18 @@ the figure is what the lines make at the roster, with the rated output beside it
   the delivery log is too short to measure is blank, not nought. Hovering an input picks
   out the lines that draw on it.
 
+### What a home's page shows
+
+A flat you rent is not a business: nothing is sold there and nothing is measured, so its
+page is a drawing of the block and four figures — the rent a day, the same rent over a
+week, the floor in square metres, and the rent per square metre a day. Only the rent comes
+out of the save; the floor comes from the board's own table of every building in the city,
+and an address that table does not carry reads as a dash rather than a nought, with no
+rent per square metre to divide.
+
+A home opens from its card on the Map and nowhere else. It is in no picker and in no
+portfolio row, because there is no trading to rank it against.
+
 ## How goods move
 
 Four columns, being importers, factories, depots and shops, with a line for every real

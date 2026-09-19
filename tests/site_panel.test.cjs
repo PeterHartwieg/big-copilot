@@ -58,6 +58,7 @@ async function site(overrides = {}) {
       hours: overrides.hours || [], hourFindings: overrides.hourFindings || [],
       trends: overrides.trends || [], hypeExposure: [],
       alerts: overrides.alerts || [], minor: {rows: overrides.minor || []},
+      homes: overrides.homes || [],
       businesses: [Object.assign(shop, overrides.shop || {}), Object.assign(other, overrides.peer || {})],
     };
     siteKey = shop.key; siteOpen = true; spArrived = null; spFindsAll = false;
@@ -676,5 +677,70 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
     // The Thinnest tile reads the same row, not only the imported lines.
     assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Thinnest'}).innerText(),
       /3\.5 d\s*Burger/);
+  } finally { await page.close(); }
+});
+
+// --- a home -----------------------------------------------------------------
+// A flat is the one address the panel draws that is not a business. It is
+// reached from its map card alone, so the picker never lists it.
+const HOME = {key: 'ba:street_bleeckerstreet#14', address: '14 Bleecker Street',
+              rent: 1150, m: 204, hood: 'Greenwich Village'};
+
+// Opens a home over the shop fixture, the way the map card does.
+async function home(row = HOME) {
+  const page = await site({homes: [row]});
+  await page.evaluate(key => openSite(key, false), row.key);
+  return page;
+}
+
+test('a home draws its four tiles and none of the shop blocks', async () => {
+  const page = await home();
+  try {
+    const tiles = await page.$$eval('#sitePanel .sp-hometiles .sstat', ts => ts.map(t => [
+      t.querySelector('.lab').textContent, t.querySelector('.v').textContent]));
+    assert.deepEqual(tiles, [
+      ['Rent / day', '$1,150'],
+      ['Rent / week', '$8,050'],
+      ['Size', '204m²'],
+      ['Per m²', '$5.64/day'],
+    ]);
+    // The head names the flat and its neighbourhood, with the hood's two letters.
+    assert.equal(await page.textContent('#sitePanel .sitehead h2'), '14 Bleecker Street');
+    assert.match(await page.textContent('#sitePanel .sitehead .sub'), /^Home · Greenwich Village$/);
+    // Nothing a shop draws belongs to a flat, and neither does the picker.
+    for(const sel of ['#sp-tiles', '#sp-standards', '#sp-pull', '#sp-hours', '#sp-crew',
+                      '#sp-shelves', '#sp-profit', '#sp-week', '#sp-stock', '.sp-find', '#sitePick'])
+      assert.equal(await page.locator(`#sitePanel ${sel}`).count(), 0, sel);
+    assert.equal(await page.locator('#sitePanel .sp-house svg').count(), 1);
+    // Closing it puts the section back exactly as a business leaves it.
+    await page.evaluate(() => closeSite());
+    assert.equal(await page.locator('#secDetail').isHidden(), true);
+    assert.equal(await page.evaluate(() => $('sitePanel').innerHTML), '');
+  } finally { await page.close(); }
+});
+
+test('a flat the building table does not carry reads as a dash, never a zero', async () => {
+  const page = await home({...HOME, m: null, hood: null});
+  try {
+    const tiles = await page.$$eval('#sitePanel .sp-hometiles .sstat .v', vs => vs.map(v => v.textContent));
+    assert.deepEqual(tiles, ['$1,150', '$8,050', '—', '—']);
+    // No neighbourhood is no bullet and no second half of the line.
+    assert.equal(await page.textContent('#sitePanel .sitehead .sub'), 'Home');
+    assert.equal(await page.locator('#sitePanel .sitehead .bullet').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('a save with no home at all opens nothing and throws nothing', async () => {
+  const page = await site();
+  try {
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    const still = await page.evaluate(() => {
+      openSite('ba:street_bleeckerstreet#14', false);
+      return siteKey;
+    });
+    // The shop that was open stays open; the address that is nothing is refused.
+    assert.equal(still, 'ba:street_secondavenue#10');
+    assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

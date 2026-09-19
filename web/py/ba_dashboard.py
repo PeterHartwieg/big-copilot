@@ -2188,15 +2188,25 @@ def _owned_buildings(save: Save, names: Names) -> list[dict]:
 
 
 def _homes(buildings: list, residential: set, names: Names) -> list[dict]:
-    """Rented homes: registrations the save bills as residences, never businesses."""
+    """Rented homes: registrations the save bills as residences, never businesses.
+
+    Size and neighbourhood come from the static building table, read here and
+    not at import time: in the browser nothing is on the virtual filesystem
+    until the worker has written it. An address the table does not carry gets
+    None for both, never a zero — the flat has a size, it is just not known.
+    """
+    table = load_buildings()
     result = []
     for b in buildings:
         addr = (b["StreetName"], b["StreetNumber"])
         if addr in residential:
+            row = table.get(addr) or {}
             result.append({
                 "key": site_key(addr),
                 "address": f"{b['StreetNumber']} {names.street(b['StreetName'])}",
                 "rent": money(b.get("RentPerDay") or 0),
+                "m": row.get("m") or None,
+                "hood": row.get("h") or None,
             })
     return result
 
@@ -6776,6 +6786,29 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .sp-band.last{opacity:.09}
 .sp-band:hover{opacity:.16}
 
+/* a home: the drawing and its four figures. Nothing here is measured, so the
+   block is an illustration beside the rent the save bills. */
+.sp-home{display:grid;grid-template-columns:400px 1fr;gap:32px;align-items:stretch;margin-top:26px}
+.sp-house{border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);display:grid;place-items:end center;padding:20px 20px 0;overflow:hidden;cursor:default}
+.sp-house svg{width:100%;height:auto;overflow:visible}
+.sp-house .sp-wall{fill:var(--raised);stroke:var(--rule);stroke-width:1.5}
+.sp-house .sp-win{fill:var(--ground);stroke:var(--rule);stroke-width:1.2;transition:fill .35s}
+.sp-house .sp-win.sp-lit{fill:var(--warn)}
+.sp-house:hover .sp-win{fill:var(--warn)}
+.sp-house:hover .sp-win.sp-late{fill:var(--ground)}
+.sp-house .sp-doorleaf{fill:var(--accent);transform-origin:183px 0;transform-box:fill-box;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.sp-house:hover .sp-doorleaf{transform:perspective(200px) scaleX(.55)}
+.sp-house .sp-moon{fill:var(--ink-2);transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
+.sp-house:hover .sp-moon{transform:translate(18px,-8px)}
+.sp-house .sp-star{fill:var(--ink-3)}
+.sp-house:hover .sp-star{animation:blink 1.4s steps(1) infinite}
+.sp-house .sp-ground{stroke:var(--rule);stroke-width:1.5}
+.sp-house .sp-tree{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.3}
+.sp-house:hover .sp-tree{animation:sp-sway 1.8s ease-in-out infinite;transform-origin:50% 100%;transform-box:fill-box}
+@keyframes sp-sway{50%{transform:rotate(3deg)}}
+.sp-hometiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start}
+@media (max-width:760px){.sp-home{grid-template-columns:1fr;gap:18px}}
+
 /* kinds popover ------------------------------------------------------------ */
 .pop{width:520px;margin:40px auto;padding:20px 22px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0008}
 .pop h3{margin:0 0 4px;font-size:15px;font-weight:600}
@@ -8904,8 +8937,12 @@ function drawSitePicker(){
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
   q("select", host).onchange = e => openSite(e.target.value);
 }
+/* The one address the panel knows that is not a business. A home is reached
+   from its map card alone, so it never enters the picker and the portfolio
+   never lists it. */
+const spHome = key => key === null ? null : (D.homes || []).find(h => h.key === key) || null;
 function openSite(key, scroll = true, finding = null){
-  if(!D.businesses.some(b => b.key === key)) return;
+  if(!D.businesses.some(b => b.key === key) && !spHome(key)) return;
   if(key !== siteKey) spFindsAll = false;
   spArrived = finding;
   siteKey = key; siteOpen = true;
@@ -9599,10 +9636,72 @@ function spInputs(site){
   }).join("");
 }
 
+/* --- a home -------------------------------------------------------------
+   A flat is not a business: nothing is sold there and nothing is measured, so
+   the panel is a drawing of the block beside the four figures the save and the
+   building table between them can answer. The lit windows are decoration, not
+   a reading; they are the same every night. */
+const SP_HOUSE_LIT = ["0,1", "2,0", "3,2"], SP_HOUSE_LATE = ["1,1", "2,2"];
+function spHouse(){
+  let wins = "";
+  for(let r = 0; r < 4; r++) for(let c = 0; c < 3; c++){
+    const at = `${r},${c}`;
+    const cls = SP_HOUSE_LIT.includes(at) ? "sp-win sp-lit" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-late" : "sp-win";
+    wins += `<rect class="${cls}" x="${130 + c * 40}" y="${48 + r * 34}" width="22" height="22" rx="2" style="transition-delay:${(r * 3 + c) * 45}ms"></rect>`;
+  }
+  return `<svg viewBox="0 0 360 230" role="img" aria-label="An apartment block at night">
+    <circle class="sp-moon" cx="292" cy="46" r="15"></circle>
+    <circle class="sp-star" cx="60" cy="40" r="1.6"></circle><circle class="sp-star" cx="96" cy="76" r="1.2"></circle>
+    <circle class="sp-star" cx="250" cy="92" r="1.4"></circle><circle class="sp-star" cx="326" cy="112" r="1.2"></circle>
+    <rect class="sp-wall" x="116" y="32" width="128" height="178" rx="3"></rect>
+    <path class="sp-wall" d="M110 32h140l-8-12H118z"></path>
+    ${wins}
+    <rect class="sp-win" x="168" y="182" width="24" height="28" rx="2"></rect>
+    <rect class="sp-doorleaf" x="168" y="182" width="24" height="28" rx="2"></rect>
+    <path class="sp-tree" d="M70 210v-26M70 150c-16 0-22 12-22 22s10 16 22 16 22-6 22-16-6-22-22-22z"></path>
+    <path class="sp-ground" d="M20 210h320" fill="none"></path>
+  </svg>`;
+}
+/* Rent is billed daily, so the week is the day seven times over. A floor the
+   building table does not carry is a dash, and the rent per square metre it
+   would divide is left out rather than guessed. */
+function spHomePanel(home){
+  const m = Number.isFinite(home.m) && home.m > 0 ? home.m : null;
+  const rent = home.rent || 0;
+  const code = HOOD_TAGS[home.hood] || "";
+  const tiles = spTile("Rent / day", fmt(rent))
+    + spTile("Rent / week", fmt(rent * 7))
+    + spTile("Size", m === null ? "—" : `${m.toLocaleString()}<small>m²</small>`)
+    + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
+  return `
+    <div class="sitehead rv">
+      ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
+      <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">Home${
+        home.hood ? ` · ${spEsc(home.hood)}` : ""}</span></div>
+      <div class="aside" style="margin-left:auto;display:flex;gap:8px"><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
+    </div>
+    <div class="sp-home rv" data-block="home">
+      <div class="sp-house">${spHouse()}</div>
+      <div class="sp-hometiles">${tiles}</div>
+    </div>`;
+}
+
 function drawSite(){
+  const sec = $("secDetail");
+  /* A home is not in D.businesses, so it is answered before the lookup that
+     would come back empty. */
+  const home = siteOpen ? spHome(siteKey) : null;
+  if(home){
+    siteTab = -1;
+    sec.hidden = false;
+    $("sitePanel").innerHTML = spHomePanel(home);
+    $("sitePanel").classList.remove("sp-focus");
+    $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
+    wireTips(); wireReveal();
+    return;
+  }
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
   const b = siteTab >= 0 ? D.businesses[siteTab] : null;
-  const sec = $("secDetail");
   if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
   sec.hidden = false;
 

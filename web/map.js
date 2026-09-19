@@ -1199,7 +1199,12 @@ class CityMapView {
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
-    card.querySelector('.go2').hidden = !b;
+    /* The arrow opens the site panel. A business has always had one; a home
+       has one too now, and it is the only way in — a flat is in no picker. */
+    const go = card.querySelector('.go2');
+    go.hidden = !b && !home;
+    go.setAttribute('aria-label', b ? 'Open business details' : 'Open home details');
+    if(this.panel) go.dataset.tip = b ? 'Open business details' : 'Open home details';
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }
