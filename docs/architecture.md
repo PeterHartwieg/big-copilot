@@ -129,11 +129,24 @@ The board reads all of it in one place, `spRosterBlock()` in `drawSite()`, which
 only for a `retail` site — an office, a depot, a factory and a home have no row. It builds
 its rows through `spRosterRows()`, and the rest of the block is small pure helpers next to
 it: `spRosterMeasured()` (does any hour have a basis other than `none`), `spSameDays()`
-(which weekday is a copy of which), `spNeedAt()` (the need strip's height and its least
-certain basis for one hour), `spTickId()`/`spTicksRead()`/`spTicksWrite()`/`spTyped()` (the
-player's own ticks, in `localStorage` under `ba_dash_roster:<site key>`, every access
-wrapped because a browser may refuse), and `spRosterCounts()`. `drawOptimizeStaffing()`
-reads the same key for the Next-moves card, through `spBestRoster()`.
+(which weekday is a copy of which), `spOpenAt()` (are the doors open that hour),
+`spNeedAt()` (the need strip's height and its least certain basis for one hour),
+`spTickId()`/`spTicksRead()`/`spTicksWrite()`/`spTyped()` (the player's own ticks, in
+`localStorage` under `ba_dash_roster:<site key>`, every access wrapped because a browser
+may refuse), and `spRosterCounts()`. `drawOptimizeStaffing()` reads the same key for the
+Next-moves card, through `spBestRoster()`.
+
+`shifts` carries the lines nobody at the site may legally work as well as the ones somebody
+can be put on: same row, `p: null`. The page draws those dashed and cannot tick them, so
+the progress counts a third number — the tickable lines — which `spRosterBlock()` works out
+once and puts on the section as `data-tickable` for the retally to read back.
+
+One ceiling and one role: a capped hour's cell carries `data-caps`, a space-separated list
+of `<kind>:<skill>` tokens (`door` alone for the building), and a cap chip's `data-show`
+carries the same tokens, worked back out of the finding's own words by `spLimitShow()` and
+`spLimitRole()`. Hovering a chip lights the cells holding *every* token it names. Keying on
+the kind alone let two findings of one kind on two different roles light each other's
+hours, and a tie between people and posts light neither's.
 - `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
   binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
   from. Delete the payload key if you like; do not delete the function.

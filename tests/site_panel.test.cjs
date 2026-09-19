@@ -363,9 +363,12 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
     hourFindings: [cap('the building', 'a bigger site nearby'), cap('staffing', 'more service staff')],
   });
   try {
+    // A cell says which kind of ceiling held it and whose role it was. This
+    // shop has one nameless role, so the role half of the token is empty and
+    // only the kind carries.
     const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
       els.map(e => [e.dataset.limit, e.dataset.show]));
-    assert.deepEqual(chips, [['the building', 'cap-door'], ['staffing', 'cap-staff']]);
+    assert.deepEqual(chips, [['the building', 'door'], ['staffing', 'staff:']]);
     // The door and the people are lit; the counters were never the limit.
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));
@@ -373,8 +376,8 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
     // A chip picks out the hours its own ceiling held, not every capped hour.
     // The fixture staffs 3 of 3 counters against a 50/h door, so its capped
     // hours are the counters', and the staffing chip lights none of them.
-    await page.hover('#sp-hours .sp-hchip[data-show="cap-staff"]');
-    const dimmed = await page.$$eval('#sp-hours .hc.cap-post', els =>
+    await page.hover('#sp-hours .sp-hchip[data-show="staff:"]');
+    const dimmed = await page.$$eval('#sp-hours .hc[data-caps="post:"]', els =>
       els.map(e => getComputedStyle(e).opacity));
     assert.ok(dimmed.length, 'the fixture has hours held by the counters');
     assert.ok(dimmed.every(o => Number(o) < 0.5), 'a chip for another ceiling dims them');

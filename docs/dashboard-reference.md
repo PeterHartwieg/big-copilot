@@ -665,14 +665,18 @@ and dims the rest; clicking scrolls there.
 - **Roster** (a shop). The week the board would type into BizMan, on the hour grid's own
   24 columns: a strip of what the measured hours ask for, then one row a station with the
   shifts to enter. A bar is a person and an hour range; a dashed one is a line nobody here
-  can legally work, counted in the hiring line below rather than given a name. The pin
+  can legally work, drawn where its hours fall and counted once in the hiring line below.
+  Hours the doors are shut are marked out of every lane, so a weekday with two opening
+  slots does not read as trading straight through the middle. The pin
   marks a shift placed where it is because of somebody's demand, and the bench mark says
   they have to be assigned to this shop in MyEmployees first. A day tab with a dash before
   it is an earlier day again, people and all: copy the schedule and paste it. Under the
   grid, one entry a role with a dot a person, and the staff demands this plan would fail.
   The toggle in the head swaps the plan for the schedule as it stands, so you can see what
   the typing replaces. Click a shift once you have entered it; the ticks are kept in this
-  browser, per shop, and a shift that moves in a later plan simply loses its tick.
+  browser, per shop, and a shift that moves in a later plan simply loses its tick. The
+  count beside the ring is the lines somebody can be put on; a line waiting on a hire is
+  not one of them.
   A shop with no hour reports yet still gets the block, because its cleaning and security
   cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
   two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the

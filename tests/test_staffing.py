@@ -532,6 +532,22 @@ def who(site, row):
     return None if row["p"] is None else site["people"][row["p"]]["id"]
 
 
+def staffed(site):
+    """The shifts somebody actually works.
+
+    `shifts` also carries the lines nobody here may legally work, with `p:
+    null`, so the page can draw the hiring line where the hours are rather than
+    only counting it. They are nobody's work: they earn no hours, no days and
+    no wage, so every rule about what a person may be given is asked of these.
+    """
+    return [row for row in site["shifts"] if row["p"] is not None]
+
+
+def open_lines(site):
+    """The other half: the lines the plan wants and has nobody for."""
+    return [row for row in site["shifts"] if row["p"] is None]
+
+
 def named(site, row):
     return None if row["p"] is None else site["people"][row["p"]]["name"]
 
@@ -611,13 +627,15 @@ class RosterRulesTest(unittest.TestCase):
 
     def test_no_shift_breaks_a_rule(self):
         row, people = self.roster()
-        self.assertTrue(row["shifts"])
+        self.assertTrue(staffed(row))
         by_person = collections.defaultdict(list)
+        # A line nobody works breaks no rule about a person, but it still
+        # belongs to a station this site holds and to one hour of one day.
         for shift in row["shifts"]:
-            by_person[who(row, shift)].append(shift)
             self.assertLessEqual(hours(shift), SHIFT_CAP)
-            # A station this site holds, and a person this site employs.
             self.assertIsNotNone(where(row, shift))
+        for shift in staffed(row):
+            by_person[who(row, shift)].append(shift)
             self.assertIsNotNone(who(row, shift))
         stations = collections.Counter()
         for shift in row["shifts"]:
@@ -714,9 +732,13 @@ class HeadcountTest(unittest.TestCase):
 
     def test_a_site_with_nobody_assigned_gets_hiring_lines_and_no_shifts(self):
         row = plan([(1, REGISTER)], [], {h: 1 for h in range(24)})
-        self.assertEqual(row["shifts"], [])
+        self.assertEqual(staffed(row), [])
         self.assertEqual(row["headcount"][SERVICE]["have"], 0)
         self.assertGreater(row["headcount"][SERVICE]["hire"], 0)
+        # The week the player would be hiring for is on the page, not just
+        # counted: every line of it, with nobody on it.
+        self.assertTrue(open_lines(row))
+        self.assertEqual(len(open_lines(row)), len(row["shifts"]))
 
 
 class CoverTest(unittest.TestCase):
@@ -748,8 +770,8 @@ class CoverTest(unittest.TestCase):
             employee("yes", [CLEANING], wage=99.0),
         ]
         row = plan(items, people, FLAT)
-        self.assertTrue(row["shifts"])
-        self.assertEqual({who(row, s) for s in row["shifts"]}, {"yes"})
+        self.assertTrue(staffed(row))
+        self.assertEqual({who(row, s) for s in staffed(row)}, {"yes"})
 
 
 class SlackTest(unittest.TestCase):
@@ -849,8 +871,10 @@ class PayloadTest(unittest.TestCase):
         )
         self.assertTrue(row["shifts"])
         self.assertEqual(row["people"], [{"id": "bench", "name": "BENCH"}])
-        self.assertEqual(row["bench"], [{"p": 0, "skill": SERVICE}])
-        self.assertTrue(all(s["p"] == 0 for s in row["shifts"]))
+        self.assertEqual(row["bench"], [{"p": 0, "skill": SERVICE, "skills": [SERVICE]}])
+        # One person off the bench, so every shift they can take is theirs and
+        # the hours they cannot reach are hiring lines.
+        self.assertTrue(all(s["p"] == 0 for s in staffed(row)))
 
     def test_a_site_with_no_measured_weekday_gets_no_recommendation(self):
         """basis none end to end: the site is too new to say anything about."""
@@ -918,12 +942,18 @@ class SurvivalTest(unittest.TestCase):
             "demands": None,
         }
         row = plan([(1, REGISTER)], [broken], FLAT)
-        self.assertEqual(row["shifts"], [])  # no skills, so nobody may be posted
+        # No skills, so nobody may be posted: every line is a hiring line.
+        self.assertEqual(staffed(row), [])
+        self.assertTrue(open_lines(row))
 
     def test_a_station_nobody_can_man(self):
         row = plan([(1, BOARD)], [employee("a", [SERVICE])], FLAT)
-        self.assertEqual(row["shifts"], [])
+        self.assertEqual(staffed(row), [])
         self.assertGreater(row["headcount"][TRAINER]["hire"], 0)
+        # The board the gym owns and nobody may work is drawn as the hours it
+        # wants, so the hiring count has somewhere to point.
+        self.assertTrue(open_lines(row))
+        self.assertEqual({r["s"] for r in open_lines(row)}, {0})
 
     def test_a_site_open_no_hours_at_all(self):
         items = [(1, REGISTER), (8, CLEAN_STATION)]
@@ -962,7 +992,7 @@ class OneWeekPerPersonTest(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         worked = collections.defaultdict(set)
         for row in rows:
-            for shift in row["shifts"]:
+            for shift in staffed(row):
                 for hour in range(shift["f"], shift["t"]):
                     cell = (shift["d"], hour)
                     self.assertNotIn(cell, worked[who(row, shift)], "two shops at once")
@@ -972,17 +1002,19 @@ class OneWeekPerPersonTest(unittest.TestCase):
         rows = self.sites()
         hours = collections.Counter()
         for row in rows:
-            for shift in row["shifts"]:
+            for shift in staffed(row):
                 hours[who(row, shift)] += shift["t"] - shift["f"]
         self.assertTrue(hours)
         self.assertLessEqual(max(hours.values()), FULL_TIME[1])
 
     def test_a_bench_member_belongs_to_the_site_that_took_them(self):
         first, second = self.sites()
-        self.assertTrue(first["shifts"])
-        self.assertEqual(first["bench"], [{"p": 0, "skill": SERVICE}])
+        self.assertTrue(staffed(first))
+        self.assertEqual(first["bench"], [{"p": 0, "skill": SERVICE, "skills": [SERVICE]}])
         self.assertEqual(second["bench"], [])
-        self.assertEqual(second["shifts"], [])
+        # The second site is offered the same bench member and gets nobody, so
+        # its whole week is hiring lines.
+        self.assertEqual(staffed(second), [])
         # And only the site that took them counts them as staff it has.
         self.assertEqual(first["headcount"][SERVICE]["have"], 1)
         self.assertEqual(second["headcount"][SERVICE]["have"], 0)
@@ -1122,7 +1154,43 @@ class HiringResidueTest(unittest.TestCase):
         self.assertEqual(counts["have"], 4)
         self.assertEqual(math.ceil(48 / FULL_TIME[1]), 1)  # what hours alone say
         self.assertEqual(counts["hire"], 2)
-        self.assertEqual([s for s in row["shifts"] if s["d"] in (6, 0)], [])
+        self.assertEqual([s for s in staffed(row) if s["d"] in (6, 0)], [])
+
+    def test_the_uncovered_weekend_is_on_the_page_as_well_as_in_the_count(self):
+        """A hiring count with no hours behind it cannot be acted on.
+
+        The same fixture: the board says "hire 2", and the player's next
+        question is *for when*. Those four twelve-hour lines are the answer,
+        and they are in `shifts` with nobody on them so the page can draw them
+        where they fall rather than only counting them.
+        """
+        people = [
+            employee(f"p{i}", [SERVICE], demands=("ba:jobdemand_freeweekends",))
+            for i in range(4)
+        ]
+        row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
+        open_rows = open_lines(row)
+        self.assertEqual({r["d"] for r in open_rows}, {6, 0})
+        self.assertEqual(
+            sorted((r["d"], r["f"], r["t"]) for r in open_rows),
+            [(0, 0, 12), (0, 12, 24), (6, 0, 12), (6, 12, 24)],
+        )
+        # Still one line per station per hour, and still priced at nothing:
+        # there is no wage to quote until somebody is hired at one.
+        self.assertEqual({r["s"] for r in open_rows}, {0})
+        weekend = sum(hours(r) for r in open_rows)
+        self.assertEqual(weekend, 48)
+        # `cost.weekly` still means what it always did: what the plan pays the
+        # people it can price. The same week without the hiring lines costs
+        # exactly the same, which is the whole claim.
+        without = plan(
+            [(1, REGISTER)],
+            [employee(f"p{i}", [SERVICE]) for i in range(4)],
+            {h: 1 for h in range(24)},
+        )
+        self.assertEqual(open_lines(without), [])
+        paid = sum(hours(r) for r in staffed(row))
+        self.assertEqual(paid * 20.0, row["cost"]["weekly"])  # employee()'s wage
 
 
 class ShortfallTest(unittest.TestCase):
@@ -1172,7 +1240,7 @@ class ShortfallTest(unittest.TestCase):
             employee("one", [SERVICE], demands=("ba:jobdemand_fourdaysweek",)),
         ]
         row = plan([(1, REGISTER)], people, FLAT)
-        days = {s["d"] for s in row["shifts"]}
+        days = {s["d"] for s in staffed(row)}
         self.assertLessEqual(len(days), 4)
 
 

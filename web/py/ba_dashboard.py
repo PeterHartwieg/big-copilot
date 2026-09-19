@@ -4383,6 +4383,28 @@ def _take_slot(slot: dict, pool: list, state: dict, shifts: list) -> bool:
     return True
 
 
+def _open_slot(slot: dict) -> dict:
+    """One slot of the week with nobody to give it to, in a shift's shape.
+
+    The same row `_take_slot()` writes, without a person: `_shift_row()` turns
+    the missing employee into the payload's ``p: null`` and the page draws a
+    dashed hiring line where the shift would be. It is not work anybody does,
+    so it earns nobody hours, days or a station, and it is priced at nothing.
+    """
+    return {
+        "wd": slot["wd"],
+        "station": slot["station"],
+        "skill": slot["skill"],
+        "from": slot["from"],
+        "to": slot["to"],
+        "employee": None,
+        "name": None,
+        "hours": slot["to"] - slot["from"],
+        "kind": slot["kind"],
+        "fromBench": False,
+    }
+
+
 def _demand_driven(shifts: list, pool: list) -> list:
     """Who has a schedule demand, and where the plan put them because of it.
 
@@ -4713,6 +4735,14 @@ def _plan_site(
         for slot in _by_fewest_eligible(group, pool, state):
             if not _take_slot(slot, pool, state, shifts):
                 uncovered[slot["skill"]].append(slot)
+                # A slot nobody here may legally work is still a line of the
+                # week: it is the one the player has to hire for, and leaving
+                # it out of `shifts` left the page with a headcount saying
+                # "hire 2" and no way to see which two hours were meant. It
+                # goes in with no employee, which is what `p: null` means on
+                # the page. It is counted once in `headcount.hire` below
+                # through `uncovered`, the same as it always was.
+                shifts.append(_open_slot(slot))
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )
@@ -4721,7 +4751,9 @@ def _plan_site(
     # member counts here only if this site is the one that drew them off it.
     # One pass over the shifts, not one per person: the bench is every
     # unassigned employee in the save, and this runs once per site.
-    worked = {shift["employee"] for shift in shifts}
+    worked = {
+        shift["employee"] for shift in shifts if shift["employee"] is not None
+    }
     mine_now = {
         person["id"]
         for person in pool
@@ -4770,11 +4802,30 @@ def _plan_site(
     short_days.sort(key=lambda r: (r["days"] - r["want"], str(r["employee"])))
 
     wage_of = {person["id"]: person["wage"] for person in pool}
-    weekly = sum(s["hours"] * wage_of.get(s["employee"], 0.0) for s in shifts)
+    # What the plan pays the people it can price, which is what this number has
+    # always meant: somebody the save gives no wage for is already counted at
+    # nothing here, and a shift with nobody on it is the same case -- there is
+    # no wage to quote until the player has hired somebody at one. What those
+    # lines would cost is the hiring line's business, and `headcount.hireHours`
+    # is the honest half of it.
+    weekly = sum(
+        s["hours"] * wage_of.get(s["employee"], 0.0)
+        for s in shifts
+        if s["employee"] is not None
+    )
     current = _current_roster(save, building, {**stations, **cover_stations})
     placed = _demand_driven(shifts, pool)
+    # `skill` names a bench member for the page to read; `skills` is every
+    # role they are counted under, because `have` above counts them once per
+    # skill they hold. A reader taking a bench member off `have` under one
+    # skill alone would show a two-skill bench member as somebody already here
+    # under their second role.
     bench_rows = [
-        {"employee": person["id"], "skill": _first_skill(person)}
+        {
+            "employee": person["id"],
+            "skill": _first_skill(person),
+            "skills": _in_order(person["skills"]),
+        }
         for person in bench
         if person["id"] in worked
     ]
@@ -4848,7 +4899,11 @@ def _plan_site(
             for r in placed
         ],
         "bench": [
-            {"p": table["person"][r["employee"]], "skill": r["skill"]}
+            {
+                "p": table["person"][r["employee"]],
+                "skill": r["skill"],
+                "skills": r["skills"],
+            }
             for r in bench_rows
         ],
         "slack": {
@@ -8121,15 +8176,8 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* hours: the two chips under the grid pick their cells out of it */
 /* A site can be held by its door at one hour and by its staffing at another,
    so each cap chip lights only the hours its own ceiling held. */
-.hours.sp-showcap-door .hc:not(.cap-door),
-.hours.sp-showcap-staff .hc:not(.cap-staff),
-.hours.sp-showcap-post .hc:not(.cap-post),
-.hours.sp-showidle .hc:not(.slack){opacity:.2}
-.hours.sp-showcap-door .hc.cap-door,
-.hours.sp-showcap-staff:not(.sp-showcap-post) .hc.cap-staff,
-.hours.sp-showcap-post:not(.sp-showcap-staff) .hc.cap-post,
-.hours.sp-showcap-staff.sp-showcap-post .hc.cap-staff.cap-post,
-.hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
+.hours.sp-dim .hc:not(.sp-lit){opacity:.2}
+.hours.sp-dim .hc.sp-lit{animation:sp-cell .8s ease-in-out infinite}
 @keyframes sp-cell{50%{transform:scale(1.22)}}
 .sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .sp-hchip{display:inline-flex;align-items:center;gap:9px;min-height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default;transition:border-color .15s,transform .2s}
@@ -8141,7 +8189,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* the idle swatch matches the grid's own idle ring, which is the --info one */
 .sp-hchip.idle .sp-sw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--info) 45%,transparent)}
 .sp-hchip.idle .sp-i{color:var(--info)}
-.sp-hchip.unmeas{border-style:dashed;color:var(--ink-3)}
+.sp-hchip.sp-unmeas{border-style:dashed;color:var(--ink-3)}
 .sp-hchip .fix{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
 
 /* crew: what the staff here ask for, and a roster too big for pills */
@@ -8176,15 +8224,15 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-typed a:hover{color:var(--ink)}
 .sp-ring{width:30px;height:30px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--rule) 0);display:grid;place-items:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .sp-ring::after{content:"";width:22px;height:22px;border-radius:50%;background:var(--ground)}
-.sp-ring.bump{transform:scale(1.25)}
+.sp-ring.sp-bump{transform:scale(1.25)}
 .sp-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .sp-step{display:inline-flex;align-items:center;gap:9px;min-height:36px;padding:0 12px 0 9px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,transform .2s}
 .sp-step:hover{border-color:var(--ink-3);transform:translateY(-1px)}
-.sp-step .box{width:16px;height:16px;flex:none;border-radius:5px;border:1.5px solid var(--rule);display:grid;place-items:center;color:var(--on-accent);transition:all .25s cubic-bezier(.34,1.56,.64,1)}
-.sp-step .box svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:0}
-.sp-step.done .box{background:var(--accent);border-color:var(--accent)}
-.sp-step.done .box svg{opacity:1}
-.sp-step.done{color:var(--ink-3)}
+.sp-step .sp-box{width:16px;height:16px;flex:none;border-radius:5px;border:1.5px solid var(--rule);display:grid;place-items:center;color:var(--on-accent);transition:all .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-step .sp-box svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.sp-step.sp-done .sp-box{background:var(--accent);border-color:var(--accent)}
+.sp-step.sp-done .sp-box svg{opacity:1}
+.sp-step.sp-done{color:var(--ink-3)}
 .sp-step small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sp-daytabs a{position:relative;min-width:30px;text-align:center}
 .sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
@@ -8194,44 +8242,46 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-grow::before{content:"";grid-column:2/-1;grid-row:1;height:32px;border-radius:7px;background:var(--raised);opacity:.45}
 .sp-grow .lab{grid-column:1;grid-row:1;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3);cursor:default;overflow:hidden}
 .sp-grow .hh{font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:center;padding-bottom:6px}
-.sp-grow.need{min-height:30px;align-items:end;margin-bottom:4px}
-.sp-grow.need::before{display:none}
-.sp-grow.need .lab{align-self:end;padding-bottom:2px}
-.sp-grow.need.unmeas::before{display:block;grid-column:2/-1;grid-row:1;align-self:end;height:0;background:none;opacity:1;border-top:1px dashed var(--rule);border-radius:0}
-.sp-grow.shut::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:.6}
+.sp-grow.sp-needrow{min-height:30px;align-items:end;margin-bottom:4px}
+.sp-grow.sp-needrow::before{display:none}
+.sp-grow.sp-needrow .lab{align-self:end;padding-bottom:2px}
+.sp-grow.sp-needrow.sp-unmeas::before{display:block;grid-column:2/-1;grid-row:1;align-self:end;height:0;background:none;opacity:1;border-top:1px dashed var(--rule);border-radius:0}
+.sp-grow.sp-shut::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:.6}
+.sp-closed{grid-row:1;height:32px;border-radius:7px;background:var(--ground);box-shadow:inset 0 0 0 1px var(--rule-soft);opacity:.85}
+.sp-grow.sp-needrow .sp-closed{display:none}
 .sp-need{grid-row:1;height:calc(var(--n)*8px);border-radius:2px;background:var(--ink-2);transition:transform .15s;transform-origin:bottom;cursor:default}
 .sp-need:hover{transform:scaleY(1.2)}
-.sp-need.c{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px);box-shadow:inset 0 0 0 1px var(--neg)}
-.sp-need.s{background:none;box-shadow:inset 0 0 0 1px var(--ink-3)}
+.sp-need.sp-cens{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px);box-shadow:inset 0 0 0 1px var(--neg)}
+.sp-need.sp-scaled{background:none;box-shadow:inset 0 0 0 1px var(--ink-3)}
 .sp-shift{grid-row:1;z-index:1;height:32px;min-width:0;border-radius:7px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);color:var(--ink);display:flex;align-items:center;gap:7px;padding:0 10px;font:500 12.5px/1 Archivo,sans-serif;white-space:nowrap;overflow:hidden;cursor:pointer;transition:opacity .3s,transform .35s cubic-bezier(.34,1.56,.64,1),outline-color .15s;outline:1.5px solid transparent;outline-offset:1px;transform-origin:left;box-sizing:border-box;text-align:left}
 .sp-shift small{margin-left:auto;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
 .sp-shift .sp-i svg{width:12px;height:12px}
-.sp-shift.clean,.sp-shift.security{background:var(--raised);border-color:var(--rule)}
-.sp-shift.hire{background:none;border:1px dashed var(--warn);color:var(--warn);cursor:default}
-.sp-shift.hire small{color:var(--warn)}
-.sp-shift .pin{color:var(--warn)}
+.sp-shift.sp-clean,.sp-shift.sp-security{background:var(--raised);border-color:var(--rule)}
+.sp-shift.sp-hire{background:none;border:1px dashed var(--warn);color:var(--warn);cursor:default}
+.sp-shift.sp-hire small{color:var(--warn)}
+.sp-shift .sp-pin{color:var(--warn)}
 .sp-shift:hover{transform:translateY(-2px)}
-.sp-shift.done{opacity:.4;text-decoration:line-through}
-.sp-shift .tick{display:none;color:var(--accent)}
-.sp-shift.done .tick{display:inline-grid;animation:pop .35s cubic-bezier(.34,1.56,.64,1)}
+.sp-shift.sp-done{opacity:.4;text-decoration:line-through}
+.sp-shift .sp-tick{display:none;color:var(--accent)}
+.sp-shift.sp-done .sp-tick{display:inline-grid;animation:pop .35s cubic-bezier(.34,1.56,.64,1)}
 .sp-me{outline-color:var(--accent)!important}
 .person.sp-me{outline:1.5px solid var(--accent);outline-offset:1px}
 .sp-frag{grid-row:1;z-index:1;height:32px;border-radius:4px;background:color-mix(in srgb,var(--ink) 22%,var(--surface));opacity:0;transform:scaleX(.6);transition:opacity .3s,transform .4s cubic-bezier(.34,1.56,.64,1);transition-delay:calc(var(--k)*14ms);pointer-events:none}
-.sp-gantt.now .sp-frag{opacity:1;transform:none}
-.sp-gantt.now .sp-shift{opacity:0;transform:scaleX(.9);pointer-events:none}
-.sp-gantt.now .sp-grow.need{opacity:.35}
-.sp-gantt.none .sp-grow::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:1;border-radius:7px}
+.sp-gantt.sp-now .sp-frag{opacity:1;transform:none}
+.sp-gantt.sp-now .sp-shift{opacity:0;transform:scaleX(.9);pointer-events:none}
+.sp-gantt.sp-now .sp-grow.sp-needrow{opacity:.35}
+.sp-gantt.sp-empty .sp-grow::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:1;border-radius:7px}
 .sp-hc{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-soft)}
 .sp-hc>span{display:inline-flex;align-items:center;gap:9px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
-.sp-hc .code{width:26px;height:26px;flex:none;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-hc .sp-code{width:26px;height:26px;flex:none;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
 .sp-hc .sp-dots{padding:0;gap:4px}
 .sp-hc .sp-i{color:var(--ink-3)}
-.sp-dot.bench{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-2);position:relative}
-.sp-dot.bench::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink-2)}
-.sp-dot.hire{background:none;box-shadow:none;border:1.5px dashed var(--warn);box-sizing:border-box}
-.sp-hc .new{color:var(--warn)}
-.sp-hc .new b{font-weight:600}
-.sp-hc .new .sp-i,.sp-hc .new .code{color:var(--warn)}
+.sp-dot.sp-bench{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-2);position:relative}
+.sp-dot.sp-bench::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink-2)}
+.sp-dot.sp-hire{background:none;box-shadow:none;border:1.5px dashed var(--warn);box-sizing:border-box}
+.sp-hc .sp-new{color:var(--warn)}
+.sp-hc .sp-new b{font-weight:600}
+.sp-hc .sp-new .sp-i,.sp-hc .sp-new .sp-code{color:var(--warn)}
 
 .person .sp-i{color:var(--warn);margin-left:-2px}
 .person .sp-i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -10666,7 +10716,11 @@ function hourGrid(g, todayWd){
         : "capacity idle";
       const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
         atCap ? " · <b>at the ceiling</b>" : slack ? ` · ${idleWord}` : ""}`;
-      cells += `<div class="hc${atCap ? ` cap ${spCellLimit(g, wd, h)}` : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
+      /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
+         can ask for its own hours by kind and role together. */
+      const held = atCap ? spCellLimit(g, wd, h) : "";
+      cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}"${
+        held ? ` data-caps="${attr(held)}"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
   return `<div class="hours">${cells}</div>`;
@@ -10736,30 +10790,49 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
    the door if it was reached, else every role standing at the site's own
    minimum that hour, each of them short of people where it has stations
    standing empty and short of stations where they are all manned. An hour two
-   roles are tied on is held by both at once, so it wears both classes — the
-   same hour reaches two cap chips because the Python files it under two
-   findings. A grid with no roles is an old one and keeps the site-wide rule.
-   The cell wears the answer as a class so a cap chip can pick out its own
-   hours and leave the others alone. */
-const SP_CELL_CLASS = {"the building": "cap-door", staffing: "cap-staff",
-                       registers: "cap-post", workstations: "cap-post"};
-const SP_CELL_ORDER = ["cap-staff", "cap-post"];
-/* The cells one cap chip is about. A finding naming two tied answers — "Trainer
-   staffing and registers" — is about the hours where both held at once, and
-   those cells wear both classes, so the chip does too and the grid lights the
-   overlap. A role's own words are its label plus "staffing" or its station's
-   plural, so people are the only thing "staffing" ever names. */
-const spLimitShow = n => n.limit === "the building" ? "cap-door"
-  : SP_CELL_ORDER.filter(c => String(n.limit).split(" and ").some(
-      part => (/\bstaffing$/.test(part) ? "cap-staff" : "cap-post") === c)).join(" ");
+   roles are tied on is held by both at once and says both.
+
+   The answer is a kind AND a role, not a kind alone. A gym held by "Gym
+   Trainer staffing" at ten and by its cashiers' plain "staffing" at noon has
+   two findings of one kind, and a cell saying only "short of people" would be
+   claimed by both chips at once. So the token is `<kind>:<skill>`. The door's
+   is `door` alone, because a door belongs to the building rather than to
+   anybody's role. A grid with no roles is an old one and keeps the site-wide
+   rule under a nameless role. */
+const spRoleToken = (kind, skill) => `${kind}:${String(skill || "").replace(/\s+/g, "")}`;
+const SP_CELL_ORDER = {staff: 0, post: 1};
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
-  if(g.door && g.door <= staffed) return "cap-door";
+  if(g.door && g.door <= staffed) return "door";
   const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
-  if(!at.length) return staffed < g.counters ? "cap-staff" : "cap-post";
-  const worn = new Set(at.map(r => r.staffed[wd][h] < r.counters ? "cap-staff" : "cap-post"));
-  return SP_CELL_ORDER.filter(c => worn.has(c)).join(" ");
+  if(!at.length) return spRoleToken(staffed < g.counters ? "staff" : "post", "");
+  return [...new Set(at.map(r =>
+    spRoleToken(r.staffed[wd][h] < r.counters ? "staff" : "post", r.skill)))]
+    .sort((a, b) => SP_CELL_ORDER[a.split(":")[0]] - SP_CELL_ORDER[b.split(":")[0]]
+      || a.localeCompare(b))
+    .join(" ");
 };
+/* Which of the grid's roles a limit's words name. _role_words() builds those
+   words out of the role itself -- "<label> staffing", or the station's own
+   plural -- while a shop's Customer Service and an office's single role keep
+   the older "staffing", "registers" and "workstations". */
+const SP_PLAIN_LIMIT = {staffing: true, registers: true, workstations: true};
+function spLimitRole(part, roles){
+  if(SP_PLAIN_LIMIT[part]) return (roles || []).find(r => !r.noun) || null;
+  const staffing = /\bstaffing$/.test(part);
+  const want = part.replace(/\s*staffing$/, "");
+  return (roles || []).find(r => staffing ? r.label === want : r.noun === part) || null;
+}
+/* The cells one cap chip is about, in the cells' own tokens. A finding naming
+   two tied answers -- "Gym Trainer staffing and registers" -- is about the
+   hours where both held at once, so it asks for both and the grid lights the
+   overlap alone. */
+const spLimitShow = (n, g) => n.limit === "the building" ? "door"
+  : String(n.limit).split(" and ").map(part => {
+      const role = spLimitRole(part, (g || {}).roles);
+      return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
+        role ? role.skill : "");
+    }).join(" ");
 /* the roster ------------------------------------------------------------------
    docs/dashboard-reference.md's `staffing` row: the week the player would
    otherwise drag out by hand in BizMan, drawn on the hour grid's own 24
@@ -10781,10 +10854,17 @@ const spOpenAt = (slots, h) => (slots || []).some(s => s[0] <= h && h < s[1]);
    and `s` come out of a save, so a row pointing outside the tables is dropped
    rather than drawn against the wrong station. */
 function spRosterRows(row, list){
+  const people = row.people || [];
   const days = [...Array(7)].map(() => (row.stations || []).map(() => []));
   (list || []).forEach(s => {
     const day = days[s.d];
-    if(day && Array.isArray(day[s.s])) day[s.s].push(s);
+    if(!day || !Array.isArray(day[s.s])) return;
+    /* `p: null` is a line the plan wants and has nobody for, which is a real
+       state worth drawing. An index pointing outside the people table is not
+       that: it is a row we cannot read, and drawing it as a hiring line would
+       tell the player nobody may work an hour somebody probably does. */
+    if(s.p !== null && s.p !== undefined && !people[s.p]) return;
+    day[s.s].push(s);
   });
   days.forEach(day => day.forEach(shifts => shifts.sort((a, b) => a.f - b.f || a.t - b.t)));
   return days;
@@ -10866,7 +10946,7 @@ const spStationKind = (row, st) => ((row.headcount || {})[st.skill] || {}).kind 
 /* One hour of the need strip: how many stations the measured hours ask for,
    and the least certain basis among the roles asking. An hour nobody has a
    reading for is not drawn at all -- an unknown is never a zero. */
-const SP_BASIS_CLASS = {censored: "c", scaled: "s", measured: ""};
+const SP_BASIS_CLASS = {censored: "sp-cens", scaled: "sp-scaled", measured: ""};
 const SP_BASIS_READ = {
   censored: " · <b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target",
   scaled: " · <b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks",
@@ -11213,9 +11293,17 @@ const spCostBar = (costs, profit) => {
       (v / total).toFixed(4)} 0 0;--k:${SP_COST_SHADE[label] || 40}%" data-read="${attr(
       `${label} <b>${fmt(v)}</b>`)}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
-/* The limits an hour at the ceiling is held by, as the hour findings name
-   them: the building's door, the counters or workstations, the people on. */
-const SP_LIMIT_ICON = {"the building": "door", registers: "counter", workstations: "monitor", staffing: "person"};
+/* The limits an hour at the ceiling is held by, drawn. A finding names them in
+   its own words, and since the staffing track those words belong to the role:
+   "Trainer staffing", "projection booths", or both joined for an hour two
+   roles are tied on. Looking a joined or role-specific phrase up in a table of
+   the four old limits missed, and every miss drew a DOOR -- on a gym, a
+   theatre or a salon, often one with no door cap at all. So the phrase is read
+   instead: people wherever a part ends in "staffing", and the site's own kind
+   of post otherwise. */
+const spLimitIcons = (limit, office) => limit === "the building" ? ["door"]
+  : [...new Set(String(limit).split(" and ").map(part =>
+      /\bstaffing$/.test(part) ? "person" : office ? "monitor" : "counter"))];
 /* An office's desks: one square a workstation, filled while somebody is
    posted at it, at the hour the office was busiest over the fortnight. */
 function spDesks(grid){
@@ -11248,7 +11336,7 @@ function spRosterNone(row){
     ${sechead("Roster", {icon: "roster", why: failed
       ? `This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.`
       : `A roster is cut from measured hours, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
-    <div class="chartbox sp-gantt none">${rows}</div>
+    <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to roster"}</div>
   </section>`;
 }
@@ -11260,10 +11348,16 @@ function spRosterDay(c, wd, on){
      one cut from the arrival ceiling. The strip keeps its lane so the rows
      below still line up against the hours, and the chip beside it says why it
      is empty. */
-  let out = `<div class="sp-grow need${c.measured ? "" : " unmeas"}"><span class="lab" data-read="${attr(
+  let out = `<div class="sp-grow sp-needrow${c.measured ? "" : " sp-unmeas"}"><span class="lab" data-read="${attr(
     c.measured ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
       : `No hour reports for this shop yet, so nothing is asked for`)}">${spI("person")}</span>`;
+  const slots = (c.row.open || [])[wd] || [];
   for(let h = 0; c.measured && h < 24; h++){
+    /* The doors decide before the measurement does. A weekday with two
+       opening slots has an hour in the middle when the shop is shut, and a
+       scaled need can land in it; demand nobody could have walked through is
+       not demand. */
+    if(!spOpenAt(slots, h)) continue;
     const need = spNeedAt(c.row, wd, h);
     if(!need) continue;
     const read = `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> ${need.n} station${
@@ -11272,12 +11366,22 @@ function spRosterDay(c, wd, on){
       need.n}" data-read="${attr(read)}"></i>`;
   }
   out += `</div>`;
+  /* The hours the doors are shut, marked once and reused down the lanes: a
+     two-slot day used to paint the whole 00-24 lane as trading. */
+  let shutMarks = "", run = null;
+  for(let h = 0; h <= 24; h++){
+    const open = h < 24 && spOpenAt(slots, h);
+    if(!open && run === null) run = h;
+    if((open || h === 24) && run !== null){
+      if(h > run) shutMarks += `<i class="sp-closed" style="grid-column:${run + 2}/${h + 2}"></i>`;
+      run = null;
+    }
+  }
   c.stations.forEach((st, si) => {
     const kind = spStationKind(c.row, st);
-    const shut = !(c.row.open || [])[wd] || !(c.row.open[wd] || []).length;
-    out += `<div class="sp-grow${shut ? " shut" : ""}"><span class="lab" data-read="${attr(
+    out += `<div class="sp-grow${slots.length ? "" : " sp-shut"}"><span class="lab" data-read="${attr(
       `${spEsc(st.name || "?")}${st.rate ? ` · serves ${st.rate} an hour` : " · covered every open hour"}`)}">${
-      spEsc(c.codes[si])}</span>`;
+      spEsc(c.codes[si])}</span>${shutMarks}`;
     /* The schedule as it stands, behind the plan: one block a fragment, so
        the toggle shows what typing this week actually replaces. */
     (c.now[wd][si] || []).forEach((s, k) => {
@@ -11296,8 +11400,8 @@ function spShiftBar(c, s, st, kind){
   const span = `grid-column:${s.f + 2}/${s.t + 2}`;
   const hrs = `${String(s.f).padStart(2, "0")}–${String(s.t).padStart(2, "0")}`;
   const when = `${WEEK_SHORT[s.d]} ${hrs} · ${spEsc(st.name || "?")}`;
-  if(s.p === null || s.p === undefined || !c.people[s.p])
-    return `<span class="sp-shift hire" style="${span}" data-read="${attr(
+  if(s.p === null || s.p === undefined)
+    return `<span class="sp-shift sp-hire" style="${span}" data-read="${attr(
       `<b>${when}</b> · <b>nobody to give it to</b>: counted in the hire below`)}">hire<small>${hrs}</small></span>`;
   const who = c.people[s.p].name || "?";
   const why = (c.placed[s.p] || []).find(r => r.wd === s.d && r.from < s.t && r.to > s.f);
@@ -11305,12 +11409,12 @@ function spShiftBar(c, s, st, kind){
   let read = `<b>${spEsc(who)}</b> · ${when}`;
   if(why) read += ` · ${spEsc(why.label || why.demand)}: the plan works around it`;
   else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
-  const marks = (why ? `<span class="sp-i pin">${spIcon("pinned")}</span>` : "")
+  const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
     + (benched ? spI("bench") : "");
   const id = spTickId(s);
-  return `<button type="button" class="sp-shift${kind === "serve" ? "" : ` ${kind}`}${
-    c.ticks.has(id) ? " done" : ""}" style="${span}" data-p="${s.p}" data-tick="${attr(id)}" data-read="${
-    attr(read)}"><span class="sp-i tick">${spIcon("tick")}</span>${marks}${spEsc(who)}<small>${hrs}</small></button>`;
+  return `<button type="button" class="sp-shift${kind === "serve" ? "" : ` sp-${kind}`}${
+    c.ticks.has(id) ? " sp-done" : ""}" style="${span}" data-p="${s.p}" data-tick="${attr(id)}" data-read="${
+    attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${marks}${spEsc(who)}<small>${hrs}</small></button>`;
 }
 
 /* The headcount line: one entry a role, a dot a person, then the staff
@@ -11320,7 +11424,12 @@ function spShiftBar(c, s, st, kind){
 function spRosterCount(c){
   const dots = (n, cls) => [...Array(Math.max(0, Math.min(n, 40))).keys()].map(() =>
     `<i class="sp-dot${cls ? ` ${cls}` : ""}"></i>`).join("");
-  const benchOf = skill => (c.row.bench || []).filter(r => r.skill === skill).length;
+  /* A bench member is counted in `headcount.have` under every skill they
+     hold, so they have to come off it under every one of those too -- taking
+     them off under their first skill alone showed a two-skill bench member as
+     somebody already here under their second role. */
+  const benchOf = skill => (c.row.bench || []).filter(
+    r => (r.skills || [r.skill]).includes(skill)).length;
   /* A serving role names itself; cleaning and security are not roles in the
      payload, so they are named by the furniture they cover. */
   const labelOf = skill => ((c.row.roles || []).find(r => r.skill === skill) || {}).label
@@ -11337,9 +11446,9 @@ function spRosterCount(c){
       h.min} to ${h.max} people · <b>${have} here${bench ? `, ${bench} from the bench` : ""}${
       h.hire ? `, ${h.hire} to hire` : ""}</b>${isNew
         ? ` · <b>${h.hireHours} h a week of new spending</b>: nobody covers this locker today` : ""}`;
-    return `<span${isNew ? ` class="new"` : ""} data-read="${attr(read)}"><span class="code">${
-      spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "bench")}${
-      dots(h.hire, "hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
+    return `<span${isNew ? ` class="sp-new"` : ""} data-read="${attr(read)}"><span class="sp-code">${
+      spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
+      dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
   }).join("");
   out += spShortChips(c, c.row.shortHours, r => [`${r.hours}`, `${r.min} h`,
     `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours} hours; their demand asks for ${r.min}. The usual answer is another site, not a longer week here`]);
@@ -11355,11 +11464,11 @@ function spShortChips(c, rows, words){
   if(!rows || !rows.length) return "";
   const shown = rows.slice(0, SP_SHORT_SHOWN).map(r => {
     const [got, want, read] = words(r);
-    return `<span class="new" data-p="${r.p}" data-read="${attr(read)}">${spI("clock")}<span>${
+    return `<span class="sp-new" data-p="${r.p}" data-read="${attr(read)}">${spI("clock")}<span>${
       spEsc(c.name(r.p))} <b>${got}</b>/${want}</span></span>`;
   }).join("");
   const rest = rows.length - SP_SHORT_SHOWN;
-  return shown + (rest > 0 ? `<span class="new" data-read="${attr(
+  return shown + (rest > 0 ? `<span class="sp-new" data-read="${attr(
     `Also short: ${rows.slice(SP_SHORT_SHOWN).map(r => spEsc(c.name(r.p))).join(", ")}`)}">+${rest} more</span>` : "");
 }
 
@@ -11386,10 +11495,19 @@ function spRosterBlock(b){
   };
   const counts = spRosterCounts(row);
   const same = spSameDays(c.plan);
-  const typed = spTyped(row.shifts, c.ticks);
+  /* What the player can actually tick: the lines that reach the page with
+     somebody on them. A hiring line has nobody to enter yet, and a row the
+     tables cannot read is not drawn at all, so neither belongs in the
+     progress -- and both halves of that progress, the first render and every
+     retally after it, have to count the same set or the ring and the words
+     disagree. `data-tickable` is that one number. */
+  c.tickable = c.plan.flat(2).filter(s => s.p !== null && s.p !== undefined);
+  const typed = spTyped(c.tickable, c.ticks);
   /* The week opens on the first day that has anything on it, so a shop shut
-     on Sunday does not open on an empty grid. */
-  const first = HOUR_ROWS.find(wd => c.plan[wd].some(s => s.length));
+     on Sunday does not open on an empty grid. With nothing anywhere -- every
+     row dropped as unreadable -- it opens on Monday rather than on no day at
+     all, which would leave the tabs with none of them selected. */
+  const first = HOUR_ROWS.find(wd => c.plan[wd].some(s => s.length)) ?? HOUR_ROWS[0];
   const tabs = HOUR_ROWS.map(wd => {
     const copy = same[wd];
     const read = copy === null
@@ -11398,14 +11516,15 @@ function spRosterBlock(b){
     return `<a href="#" class="${wd === first ? "on" : ""}" data-day="${wd}" data-read="${attr(read)}">${
       copy === null ? "" : "<u></u>"}${WEEK_SHORT[wd].toUpperCase()}</a>`;
   }).join("");
-  const hours = `<div class="sp-grow need" style="min-height:0;margin:0"><span></span>${
+  const hours = `<div class="sp-grow sp-needrow" style="min-height:0;margin:0"><span></span>${
     [...Array(24).keys()].map(h => `<div class="hh" style="grid-column:${h + 2}">${h % 3 === 0 ? h : ""}</div>`).join("")}</div>`;
   const slack = row.slack || {};
   const cost = row.cost || {};
-  const steps = `<button type="button" class="sp-step"><span class="box">${spIcon("tick")}</span>Clear entire schedule<small>BizMan › Schedule</small></button>`
-    + (row.bench || []).map(r => `<button type="button" class="sp-step" data-p="${r.p}"><span class="box">${
+  const steps = `<button type="button" class="sp-step"><span class="sp-box">${spIcon("tick")}</span>Clear entire schedule<small>BizMan › Schedule</small></button>`
+    + (row.bench || []).map(r => `<button type="button" class="sp-step" data-p="${r.p}"><span class="sp-box">${
       spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
-  return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${attr(row.key)}">
+  return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
+    attr(row.key)}" data-tickable="${c.tickable.length}">
     ${sechead("Roster", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="on" data-view="plan">plan</a></span>`,
       why: `A week to type into BizMan › Schedule: clear the schedule, then enter these. Shifts run as long as the game allows, 12 hours, and nobody is put inside a window they asked to keep free. Click a shift once it is typed; the ticks stay in this browser.`})}
     <div class="sp-ba">
@@ -11420,14 +11539,14 @@ function spRosterBlock(b){
         slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
         Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>
       <div class="sp-typed"><span class="sp-ring" style="--p:${
-        counts.plan ? (typed / counts.plan * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
-        typed}</b> of ${counts.plan} typed</span>${
+        c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
+        typed}</b> of ${c.tickable.length} typed</span>${
         /* Nothing to clear until something is ticked, and the line has no room
            to carry a dead link across every site that has never been typed. */
         ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>clear ticks</a></div>
     </div>
     <div class="sp-steps">${steps}<span class="seg sp-daytabs" style="margin-left:auto">${tabs}</span></div>
-    ${c.measured ? "" : `<div class="sp-hchips" style="margin:0 0 10px"><span class="sp-hchip unmeas" data-tip="${
+    ${c.measured ? "" : `<div class="sp-hchips" style="margin:0 0 10px"><span class="sp-hchip sp-unmeas" data-tip="${
       attr(`Serving shifts are cut from measured hours, and this shop has none yet: they arrive once it has two weeks of hour reports. The cleaning and security cover below does not wait on a measurement.`)}">${
       /* No swatch: the cap and idle chips carry one because they pick their own
          cells out of the grid, and this chip is about cells that are not
@@ -11441,7 +11560,7 @@ function spRosterBlock(b){
 }
 
 const spCeiling = (office, limits) => {
-  const lit = limits.map(l => SP_LIMIT_ICON[l]);
+  const lit = limits.flatMap(l => spLimitIcons(l, office));
   return `<div class="sp-ceil">${
     ["door", office ? "monitor" : "counter", "person"].map(k =>
       `<span class="sp-i${lit.includes(k) ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
@@ -12101,9 +12220,9 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap" data-show="${spLimitShow(n)}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spI(SP_LIMIT_ICON[n.limit] || "door")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
+      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
       fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
     (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}<b>${idleNote.staff} on</b> ${
@@ -13347,22 +13466,34 @@ function drawFindLocation(){
     best.address}, ${best.hood} (${best.traffic}).`;
 }
 
-/* Next moves: the Optimize staffing card opens the roster with most to gain.
-   "Most to gain" is lines of typing saved -- the shifts the schedule holds
-   today against the shifts the plan asks for -- because that is the whole
-   point of the block: a fragmented shop is 182 rows of dragging, and the plan
-   is 65. An unmeasured shop counts too, and usually wins: its plan is cover
-   shifts alone, but replacing 182 scraps with 14 of them is the largest saving
-   on the board. Only a site with a plan at all can be offered; a
-   board built before the feature has no staffing payload and the card says
-   nothing it cannot know. Ties go to the name, so the card does not move
-   between runs of the same save. */
+/* Next moves: the Optimize staffing card opens the roster with most to gain,
+   and there are three different things it can have to say.
+
+   Usually the gain is lines of typing saved -- what the schedule holds today
+   against what the plan asks for -- because that is the whole point of the
+   block: a fragmented shop is 182 rows of dragging and the plan is 65. An
+   unmeasured shop counts too, and usually wins: its plan is cover shifts
+   alone, but replacing 182 scraps with 14 is the largest saving on the board.
+
+   A player who has never opened BizMan has no schedule to save anything
+   against, and a plan for them is still worth having -- so when no plan is
+   shorter than what is there, the card offers the biggest plan and reads out
+   its size rather than a saving. Only with no plan anywhere does it fall back
+   to the measurement wording, and a board built before the feature says
+   nothing at all. Ties go to the name, so the card does not move between runs
+   of the same save. */
+const spRosterPlans = () => (D.staffing || []).filter(
+  r => !r.failed && (r.shifts || []).length);
+const spPickRoster = (rows, score) => rows.reduce((a, b) =>
+  score(b) > score(a) || (score(b) === score(a) && b.name < a.name) ? b : a);
 function spBestRoster(){
-  const rows = (D.staffing || []).filter(r => !r.failed && (r.shifts || []).length
-    && (r.current || {}).shifts > r.shifts.length);
+  const rows = spRosterPlans();
   if(!rows.length) return null;
-  const saved = r => r.current.shifts - r.shifts.length;
-  return rows.reduce((a, b) => saved(b) > saved(a) || (saved(b) === saved(a) && b.name < a.name) ? b : a);
+  const saved = r => (r.current || {}).shifts - r.shifts.length;
+  const shorter = rows.filter(r => saved(r) > 0);
+  return shorter.length
+    ? {row: spPickRoster(shorter, saved), saves: true}
+    : {row: spPickRoster(rows, r => r.shifts.length), saves: false};
 }
 function drawOptimizeStaffing(){
   const card = $("optimizeStaffingCard"); if(!card) return;
@@ -13374,12 +13505,20 @@ function drawOptimizeStaffing(){
     text.textContent = D.staffing
       ? "No shop has been measured long enough to cut a roster from yet."
       : "Shifts from the hour grid: registers, door caps and who is off today.";
+    /* Nothing to open: a live reload that leaves no usable plan must not keep
+       sending the player to the site the last one named. */
+    delete card.dataset.site;
     return;
   }
+  const row = best.row;
   badge.className = "soon live";
-  badge.textContent = `−${best.current.shifts - best.shifts.length} LINES`;
-  text.textContent = `${best.name}: ${best.current.shifts} shifts become ${best.shifts.length}.`;
-  card.dataset.site = best.key;
+  badge.textContent = best.saves
+    ? `\u2212${row.current.shifts - row.shifts.length} LINES`
+    : `${row.shifts.length} SHIFTS`;
+  text.textContent = best.saves
+    ? `${row.name}: ${row.current.shifts} shifts become ${row.shifts.length}.`
+    : `${row.name}: a week of ${row.shifts.length} shifts to enter.`;
+  card.dataset.site = row.key;
 }
 
 function drawFooter(){
@@ -13812,8 +13951,9 @@ buildAlertSettingsPanel();
      .sp-find             hover lights the block named in data-ev and pulses the
                           [data-el] things named in data-hit; click scrolls to it.
      .sp-rbtn             click opens a role row of a big crew into its people.
-     .sp-hchip[data-show] hover adds .sp-show<what> to the section's .hours
-                          grid — one ceiling's cells, or the idle ones.
+     .sp-hchip[data-show] hover dims the section's .hours grid and lights the
+                          cells whose data-caps match the chip's kind:role
+                          tokens — one ceiling's own cells, or the idle ones.
 
    Supply — drawOrderChecklist, wireFlow:
      .up                  a suggested change to enter in-game; never changes
@@ -14530,10 +14670,25 @@ const wireSiteLines = once(() => {
 });
 const wireSiteChips = once(() => {
   const grid = c => q(".hours", c.closest("section"));
-  /* A chip may name two classes at once, for an hour two roles are tied on. */
-  const shown = c => (c.dataset.show || "").split(" ").filter(Boolean).map(s => "sp-show" + s);
-  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add(...shown(c)); });
-  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove(...shown(c)); });
+  /* A chip asks for hours by kind and role at once, so the match is on the
+     cell's own tokens rather than on a class per kind: two findings of one
+     kind on two different roles would otherwise light each other's hours. A
+     chip naming two tied answers wants the hours where both held, which is
+     every token matching, not any of them. */
+  const light = (c, on) => {
+    const g = grid(c);
+    if(!g) return;
+    g.classList.toggle("sp-dim", on);
+    const want = (c.dataset.show || "").split(" ").filter(Boolean);
+    $$(".hc", g).forEach(cell => {
+      const has = c.dataset.show === "idle"
+        ? cell.classList.contains("slack")
+        : want.length && want.every(t => (cell.dataset.caps || "").split(" ").includes(t));
+      cell.classList.toggle("sp-lit", on && has);
+    });
+  };
+  onEnter(".sp-hchip[data-show]", c => light(c, true));
+  onLeave(".sp-hchip[data-show]", c => light(c, false));
 });
 
 /* The roster: the day tabs, the now/plan toggle, and the ticks. A tick is the
@@ -14547,16 +14702,17 @@ const wireRoster = once(() => {
   const retally = s => {
     const ring = q(".sp-ring", s), count = q(".sp-count", s);
     if(!ring || !count) return;
-    const done = $$(".sp-shift.done", s).length, all = $$("button.sp-shift", s).length;
+    const done = $$(".sp-shift.sp-done", s).length;
+    const all = +(s.dataset.tickable || 0);
     count.textContent = done;
     const clear = q(".sp-clear", s);
     if(clear) clear.hidden = !done;
     ring.style.setProperty("--p", all ? (done / all * 100).toFixed(0) : 0);
-    ring.classList.add("bump");
-    setTimeout(() => ring.classList.remove("bump"), 260);
+    ring.classList.add("sp-bump");
+    setTimeout(() => ring.classList.remove("sp-bump"), 260);
   };
   const store = s => spTicksWrite(s.dataset.site || "",
-    new Set($$(".sp-shift.done", s).map(el => el.dataset.tick)));
+    new Set($$(".sp-shift.sp-done", s).map(el => el.dataset.tick)));
   on("click", ".sp-daytabs a", (a, e) => {
     e.preventDefault();
     const s = sec(a);
@@ -14568,18 +14724,18 @@ const wireRoster = once(() => {
     const s = sec(a);
     $$(".sp-nowplan a", s).forEach(x => x.classList.toggle("on", x === a));
     const g = q(".sp-gantt", s);
-    if(g) g.classList.toggle("now", a.dataset.view === "now");
+    if(g) g.classList.toggle("sp-now", a.dataset.view === "now");
   });
   on("click", "button.sp-shift", el => {
-    el.classList.toggle("done");
+    el.classList.toggle("sp-done");
     const s = sec(el);
     store(s); retally(s);
   });
-  on("click", ".sp-step", el => el.classList.toggle("done"));
+  on("click", ".sp-step", el => el.classList.toggle("sp-done"));
   on("click", ".sp-clear", (a, e) => {
     e.preventDefault();
     const s = sec(a);
-    $$(".sp-shift.done", s).forEach(el => el.classList.remove("done"));
+    $$(".sp-shift.sp-done", s).forEach(el => el.classList.remove("sp-done"));
     spTicksWrite(site(a), new Set());
     retally(s);
   });
