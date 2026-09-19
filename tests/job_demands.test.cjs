@@ -45,21 +45,40 @@ async function site(demands, quit = 0) {
   return page;
 }
 
-test('a site lists its unmet staff demands under the crew', async () => {
+test('a site lists its unmet staff demands as chips under the crew', async () => {
   const page = await site([
     {slug: 'ba:jobdemand_fulltime', demand: 'Full-time', count: 1, priority: 2, company: false},
     {slug: 'ba:jobdemand_goldhealthinsurance', demand: 'Gold Health Insurance', count: 2, priority: 1, company: true},
   ], 1);
   try {
-    const crew = await page.locator('#sitePanel section', {hasText: 'Crew'}).first().innerText();
-    assert.match(crew, /Unmet staff demands: Full-time ×1 · Gold Health Insurance ×2 \(company-wide\) · 1 has warned they will quit/);
+    const chips = await page.$$eval('#sitePanel .sp-dem', els => els.map(e => ({
+      text: e.textContent.replace(/\s+/g, ' ').trim(),
+      priority: [...e.querySelectorAll('.sp-pri i')].map(i => i.classList.contains('on')),
+      high: !!e.querySelector('.sp-pri.hi'),
+      company: !!e.querySelector('[data-el="demand"]'),
+      quit: e.dataset.el === 'quit',
+      tip: e.getAttribute('data-tip'),
+    })));
+    // The priority bars are the game's own ranking, highest last; the company
+    // demand is marked as settled somewhere else, and the quit warning is its
+    // own chip.
+    assert.deepEqual(chips.map(c => c.text),
+                     ['Full-time ×1', 'Gold Health Insurance ×2', '1 will quit']);
+    assert.deepEqual(chips, [
+      {text: 'Full-time ×1', priority: [true, true, true], high: true, company: false,
+       quit: false, tip: 'Full-time for 1 · critical'},
+      {text: 'Gold Health Insurance ×2', priority: [true, true, false], high: false, company: true,
+       quit: false, tip: 'Gold Health Insurance for 2 · important · settled company-wide, not here'},
+      {text: '1 will quit', priority: [], high: false, company: false, quit: true,
+       tip: '1 person here has warned they will quit'},
+    ]);
   } finally { await page.close(); }
 });
 
 test('a site with every demand met says nothing', async () => {
   const page = await site([]);
   try {
-    assert.doesNotMatch(await page.locator('#sitePanel').innerText(), /Unmet staff demands/);
+    assert.equal(await page.locator('#sitePanel .sp-dems').count(), 0);
   } finally { await page.close(); }
 });
 

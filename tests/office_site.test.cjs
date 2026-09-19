@@ -65,15 +65,19 @@ async function site(status) {
   return page;
 }
 
-const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Customers by hour'}).locator('.why').getAttribute('data-tip');
+const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Hours'}).locator('.why').getAttribute('data-tip');
+const capChip = page => page.locator('#sitePanel .sp-hchip.cap').getAttribute('data-tip');
 
 test('an office reads its grid as staffed workstations, with the finding and its money', async () => {
   const page = await site('office');
   try {
     const tip = await hourTip(page);
     assert.match(tip, /3 workstations, each billing 1 customer an hour when staffed, 50\/h door cap/);
-    assert.match(tip, /workstations is the limit, so the answer is another computer workstation\. \$[\d.,]+k?\/day of trade/);
     assert.doesNotMatch(tip, /register capacity|counter/);
+    // The ceiling sentence moved out of the ? into the chip under the grid.
+    const cap = await capChip(page);
+    assert.match(cap, /workstations is the limit, so the answer is another computer workstation\. \$[\d.,]+k?\/day of trade/);
+    assert.doesNotMatch(tip, /is the limit/);
     const read = await page.locator('#sitePanel .hc.cap').first().getAttribute('data-read');
     assert.match(read, /3 customers · 3 of 3 workstations staffed · <b>at the ceiling<\/b>/);
     assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\$387\.89\/hour billed/);
@@ -106,5 +110,7 @@ test('a shop keeps its registers and shelves', async () => {
     // The same boxed phone is a shop's odds and ends, behind the toggle.
     assert.match(panel, /show 1 more: bags, drinks, odds and ends/);
     assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\/visit/);
+    const cap = await capChip(page);
+    assert.match(cap, /registers is the limit, so the answer is another counter/);
   } finally { await page.close(); }
 });

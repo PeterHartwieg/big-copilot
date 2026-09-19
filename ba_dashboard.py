@@ -1777,6 +1777,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         for e in orders
         if e.get("totalCustomers")
     ]
+    customer_by_day = dict(customer_days)
     revenue_days = [
         (dayno, by_addr[addr]["TotalSales"])
         for dayno, by_addr in history
@@ -1839,6 +1840,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                     "day": dayno,
                     "profit": money(s["TotalProfit"]),
                     "revenue": money(s["TotalSales"]),
+                    # The same day's door count, so a site can draw a fortnight
+                    # of shoppers beside its fortnight of takings.
+                    "customers": customer_by_day.get(dayno, 0),
                 }
             )
 
@@ -1917,6 +1921,19 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
         "missingAmenities": missing_amenities,
+        # The same walk, amenity by amenity: True is the game cached the demand
+        # as fulfilled, False is looked for and missed. A demand the type never
+        # makes has no row at all, so a florist has no music key — and an office
+        # is never asked, so it carries no dict and the panel draws no lamps.
+        "amenities": (
+            {
+                group: slug in demands
+                for slug, (group, _text) in AMENITY_DEMANDS.items()
+                if slug not in not_made
+            }
+            if status == "retail"
+            else None
+        ),
         # The roles on this floor with no uniform set for them, named.
         "uniformGaps": uniform_gaps,
         # The locker is what the player manages uniforms from, so it is checked
@@ -4975,18 +4992,27 @@ def _alerts(
         silent.add(b["key"])
         priced = [l for l in b["lines"] if l["price"] > 0]
         stocked = [l for l in priced if l["units"] > 0]
-        reasons = []
+        # Which of the five pre-flight checks fail is the finding, so the slugs
+        # are kept on the business beside the words: the site panel reads the
+        # same list and the two cannot drift apart. An office sells hours, not
+        # goods, so it has nothing to stock or deliver.
+        failed, reasons = [], []
         if b["staff"] == 0:
+            failed.append("staff")
             reasons.append("no staff")
         if not priced:
+            failed.append("prices")
             reasons.append("no prices set")
-        # An office sells hours, not goods: nothing to stock or deliver.
         elif not office and not stocked:
+            failed.append("stock")
             reasons.append("no stock")
         elif not office and len(stocked) * 2 < len(priced):
+            failed.append("shelves")
             reasons.append(f"{len(priced) - len(stocked)} of {len(priced)} shelves bare")
         if not office and b["key"] not in planned:
+            failed.append("plan")
             reasons.append("no delivery plan")
+        b["notTrading"] = failed
         if not reasons:
             reasons.append(
                 f"staffed and {'priced' if office else 'stocked'}, no trading day booked yet"
@@ -8108,14 +8134,49 @@ function goToAlert(a){
     view = link.port; sortKey = null;
     drawPortfolio();
   }
-  /* A synthetic site has nothing to open; the section still shows. */
+  /* A synthetic site has nothing to open; the section still shows. The
+     finding's id goes along, so the panel can mark the row it came from. */
   if(link.site){
     const b = alertSite(a);
-    if(b) openSite(b.key, false);
+    if(b) openSite(b.key, false, a.id);
   }
   reveal(link.sec);
 }
 const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
+
+/* Where the same findings sit when the site's own panel is open: the block to
+   light, and — named by their data-el — the things inside it that carry the
+   evidence. One row per group that can be about a single site; a group whose
+   block the panel does not draw (the depot and factory ones, until those
+   panels exist) simply lights nothing. */
+const ALERT_EVIDENCE = {
+  notrading: {block: "tiles"},
+  loss: {block: "tiles"},
+  trend: {block: "profit"},
+  atcap: {block: "hours"},
+  idlestaff: {block: "hours"},
+  staff: {block: "crew"},
+  jobdemand: {block: "crew"},
+  satisfaction: {block: "standards"},
+  uniform: {block: "standards", hit: "uniform"},
+  bathroom: {block: "standards", hit: "bathroom"},
+  toiletprivacy: {block: "standards", hit: "toiletprivacy"},
+  sink: {block: "standards", hit: "sink"},
+  music: {block: "standards", hit: "music"},
+  interior: {block: "standards", hit: "interior"},
+  hype: {block: "pull", hit: "wave"},
+  promotion: {block: "pull"},
+  outruns: {block: "shelves", hit: "outruns"},
+  unplanned: {block: "shelves", hit: "noplan"},
+  target: {block: "shelves"},
+  dead: {block: "shelves"},
+  shortfall: {block: "stock"},
+  order: {block: "stock"},
+  paused: {block: "stock"},
+  feed: {block: "inputs"},
+  unnamed: {block: "lines"},
+  unset: {block: "lines"},
+};
 
 /* The three severities of the list: the alert levels Python assigns, in the
    design's words. */
@@ -8484,14 +8545,16 @@ function drawSitePicker(){
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
   q("select", host).onchange = e => openSite(e.target.value);
 }
-function openSite(key, scroll = true){
+function openSite(key, scroll = true, finding = null){
   if(!D.businesses.some(b => b.key === key)) return;
+  if(key !== siteKey) spFindsAll = false;
+  spArrived = finding;
   siteKey = key; siteOpen = true;
   drawSite(); drawPortfolio();
   if(scroll) reveal("secDetail");
 }
 function closeSite(){
-  siteOpen = false;
+  siteOpen = false; spArrived = null;
   drawSite(); drawPortfolio();
 }
 
@@ -8570,6 +8633,202 @@ const CLOSE_ICON = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></pa
 /* Two letters for a role: the initials of its first two words. */
 const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1][0] : (w[0] || "??").slice(0, 2)).toUpperCase(); };
 
+/* --- the site panel's own vocabulary -----------------------------------------
+   The lookups its blocks read, the findings about the one site that is open,
+   and the wiring that makes a block read out what is under the pointer. The
+   panel forks on a kind: a shop and an office draw all of it, the other kinds
+   keep the plainer panel they have today. */
+
+/* Which panel this site draws: a shop, an office, a factory (it has a line in
+   the factory table), a depot (any other support or overhead site) or a home. */
+function spKind(b){
+  if(b.status === "retail") return "retail";
+  if(b.status === "office") return "office";
+  const factories = ((D.supply || {}).factories || {}).sites;
+  if(factories && factories.some(r => r.s === siteTab)) return "factory";
+  if(b.status === "support" || b.status === "overhead") return "depot";
+  return "home";
+}
+
+/* The findings about this site, out of the loud list and the counted-away one
+   beneath it, in the order the list reads them out. */
+const spSiteFindings = key => [].concat(D.alerts || [], (D.minor || {}).rows || [])
+  .filter(a => a.siteKey && a.siteKey === key);
+
+/* Where this site stands by the profit of its last seven series entries,
+   among the sites that trade: a depot books no sale, so counting it would
+   always read last. Under seven entries there is no place to have. */
+function spRank(key){
+  const peers = D.businesses.filter(b => b.status === "retail" || b.status === "office");
+  const week = b => b.series.slice(-7).reduce((t, s) => t + s.profit, 0);
+  const me = peers.find(b => b.key === key);
+  if(!me || me.series.length < 7) return {place: null, of: peers.length};
+  const mine = week(me);
+  return {place: peers.filter(b => b.series.length >= 7 && week(b) > mine).length + 1, of: peers.length};
+}
+const spRankHtml = rank => rank.place === null
+  ? `<span class="sp-rank none" data-tip="No place yet: a rank needs seven days of trading"><span>–<small>/${rank.of}</small></span></span>`
+  : `<span class="sp-rank" data-tip="${attr(`${rank.place} of the ${rank.of} sites that trade, by profit over the last 7 days`)}"><span>${
+      rank.place}<small>/${rank.of}</small></span></span>`;
+
+/* This site's week on week, the limit its busiest hours ran into, and its
+   wave, each one lookup a block reads. */
+const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
+const spBindingLimit = key => {
+  const f = (D.hourFindings || []).find(f => f.key === key && f.kind === "cap");
+  return f ? f.limit : null;
+};
+const spHypeRow = key => {
+  for(const wave of D.hypeExposure || []){
+    const site = (wave.sites || []).find(s => s.key === key);
+    if(site) return {wave, site};
+  }
+  return null;
+};
+
+/* The five pre-flight checks, in the order a shop needs them. Red is failing
+   (b.notTrading, the same list the not-trading finding reads out); grey was
+   never checked, because the alert stops at the first of prices, stock and
+   shelves that fails; green is in place. An office has nothing to stock,
+   shelve or deliver, so it shows two. */
+function spPreflight(b){
+  const failed = b.notTrading || [];
+  const chain = ["prices", "stock", "shelves"];
+  const stops = chain.findIndex(s => failed.includes(s));
+  return ["staff", "prices", "stock", "shelves", "plan"]
+    .filter(s => b.status !== "office" || s === "staff" || s === "prices")
+    .map(s => ({slug: s, state: failed.includes(s) ? "no"
+      : stops >= 0 && chain.indexOf(s) > stops ? "unk" : "ok"}));
+}
+const SP_CHECK_WORD = {
+  staff: "staffed", prices: "prices set", stock: "stock on the shelves",
+  shelves: "shelves filled", plan: "delivery plan",
+};
+/* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
+const SP_PRIORITY = ["nice to have", "important", "critical"];
+
+/* The fortnight the Profit section averages: the last seven days and the seven
+   before them, each as a daily average, and only when a full week is there. */
+const spSevens = series => {
+  const avg = days => days.length === 7 ? days.reduce((t, s) => t + s.profit, 0) / 7 : null;
+  return {last: avg(series.slice(-7)), prev: avg(series.slice(-14, -7))};
+};
+
+/* The three bars a demand chip carries are the game's own priority, highest
+   last and lit up to it. */
+const spPri = p => `<span class="sp-pri${p >= 2 ? " hi" : ""}">${
+  [0, 1, 2].map(k => `<i${k <= p ? ` class="on"` : ""}></i>`).join("")}</span>`;
+
+/* The head line of a finding, and the row: severity dot, headline, amount, an
+   arrow to its evidence, and the rest of the sentence folded under it. */
+let spFindsAll = false, spArrived = null;
+const spFindRow = a => {
+  const ev = ALERT_EVIDENCE[a.group] || {};
+  const {what, more} = splitFinding(a);
+  return `<a class="sp-find ${SEV_KIND[a.level] || "opp"}${a.id === spArrived ? " arrived" : ""}" href="#${
+    alertPage(a)}" data-id="${attr(a.id)}"${ev.block ? ` data-ev="${ev.block}"` : ""}${
+    ev.hit ? ` data-hit="${attr(ev.hit)}"` : ""}>
+    <span class="mark"></span><span class="what">${what}</span>
+    <span class="amt">${findingAmount(a)}</span><span class="go">${icon("go")}</span>${
+    more ? `<span class="more">${more}</span>` : ""}</a>`;
+};
+const SP_FINDS_TOP = 4;
+const spFinds = finds => {
+  if(!finds.length) return "";
+  const shown = spFindsAll ? finds : finds.slice(0, SP_FINDS_TOP);
+  const rest = finds.length - shown.length;
+  return `<div class="sp-finds rv" data-block="finds">${shown.map(spFindRow).join("")}</div>${
+    rest > 0 ? `<p class="sp-findmore">${rest} more · <a class="link" href="#" data-allfinds>show all</a></p>` : ""}`;
+};
+
+/* What customers find when they walk in: one lamp an amenity the type asks
+   for, lit when the game cached the demand as fulfilled and struck when it was
+   looked for and missed. A site the game has not scored yet — no revenue —
+   draws every lamp dashed and none lit, which is the whole never-scored rule;
+   data-amenity and data-state carry the reading so the markup stays plain. */
+const SP_SAT_PARTS = [["service", "Service"], ["pricing", "Pricing"], ["cleanliness", "Cleanliness"], ["facility", "Facility"]];
+const SP_AMENITY_WORD = {bathroom: "Bathroom", toiletprivacy: "Bathroom stall or door", sink: "Sink",
+                         music: "Music", interior: "Interior design"};
+function spStandards(b){
+  const sat = b.satisfaction || {};
+  const bars = SP_SAT_PARTS.map(([key, label]) => {
+    const v = sat[key];
+    const read = v === null || v === undefined ? `${label} <b>not scored yet</b>` : `${label} <b>${v}%</b>`;
+    return `<span class="sp-satbar" data-sat="${key}" data-value="${v ?? ""}" data-read="${attr(read)}">${
+      label} ${v ?? "–"}%</span>`;
+  }).join("");
+  if(b.status !== "retail")
+    return `<div class="sp-sat">${bars}</div><div class="sp-read sp-readout">Hover a bar</div>`;
+  const unknown = !b.revenue;
+  const amenities = b.amenities || {};
+  const lamp = (slug, label) => {
+    if(amenities[slug] === undefined) return "";
+    const state = unknown ? "unk" : amenities[slug] ? "ok" : "miss";
+    const read = unknown ? `${label} <b>not scored yet</b>`
+      : amenities[slug] ? `${label} in place` : `<b>no</b> ${label.toLowerCase()}`;
+    return `<span class="sp-lampb ${state}" data-el="${slug}" data-amenity="${slug}" data-state="${state}" data-read="${attr(read)}"></span>`;
+  };
+  const roles = b.uniformGaps || [];
+  const lamps = ["bathroom", "toiletprivacy", "sink", "music", "interior"].map(s => lamp(s, SP_AMENITY_WORD[s])).join("")
+    + `<span class="sp-lampb ${b.missingUniformLocker ? "miss" : unknown ? "unk" : "ok"}" data-el="locker" data-state="${
+        b.missingUniformLocker ? "miss" : unknown ? "unk" : "ok"}" data-read="${attr(
+        b.missingUniformLocker ? "<b>No uniform locker</b> installed" : "Uniform locker installed")}"></span>`
+    + (roles.length ? `<span class="sp-lampb miss" data-el="uniform" data-state="miss" data-read="${attr(
+        `<b>No uniform</b> set for ${roles.length} role${roles.length === 1 ? "" : "s"}`)}"></span>` : "");
+  /* What the read line says when nothing is under the pointer. */
+  const asked = Object.keys(amenities).length;
+  const met = Object.values(amenities).filter(Boolean).length;
+  const read = unknown ? "Not scored yet"
+    : `${asked} asked · <b>${asked - met} unmet</b>${roles.length ? ` · ${roles.length} role${roles.length === 1 ? "" : "s"} without a uniform` : ""}`;
+  return `<div class="sp-sat">${bars}</div>
+    <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
+      `${r} <b>has no uniform set</b>`)}">${roleCode(r)}</span>`).join("")}</div>
+    <div class="sp-read sp-readout">${read}</div>`;
+}
+
+/* The pull of the street: promotion against the game's own 100 cap, the two
+   figures behind it, and the wave riding over the shop if one is running. */
+function spPull(b){
+  const hype = spHypeRow(b.key);
+  const traffic = b.traffic || 0, marketing = b.marketingIndex || 0;
+  const total = Math.min(100, traffic + marketing);
+  return `<div class="sp-promorow">
+      <div class="sp-promo">
+        <i class="tr" style="width:${traffic}%" data-read="${attr(`Foot traffic <b>${traffic}</b>`)}"></i>${
+        marketing ? `<i class="mk" style="width:${marketing}%" data-read="${attr(`Marketing <b>${marketing}</b>`)}"></i>` : ""}
+      </div>
+      <span class="sp-total">${total}<small>/100</small></span></div>
+    <div class="sp-minis">
+      <span data-read="${attr(`Security <b>${b.security}%</b>`)}">security ${b.security}%</span>
+      <span data-read="${attr(`<b>${b.capacity}</b> shoppers fit inside at once`)}">capacity ${b.capacity}</span></div>
+    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${hype.wave.hood} wave over this shop · <b>${
+        hype.site.share}%</b> of its takings rides on it · ends in ${hype.wave.daysLeft} day${
+        hype.wave.daysLeft === 1 ? "" : "s"}${hype.wave.baseline ? "" : " · no baseline to measure it against"}`)}">${
+      hype.wave.hood} wave · ${hype.site.share}% of takings · ${hype.wave.daysLeft}d left</div>` : ""}
+    <div class="sp-read sp-readout"></div>`;
+}
+
+/* The crew of a big site: one row a role, one dot a person, the pills one
+   click away. The dots carry the names so the row reads without opening. */
+function spRoster(people){
+  const roles = [];
+  people.forEach(p => {
+    let row = roles.find(r => r.role === p.role);
+    if(!row) roles.push(row = {role: p.role, people: []});
+    row.people.push(p);
+  });
+  return `<div class="sp-roster">${roles.map(r => `
+    <div class="sp-rrow">
+      <button type="button" class="sp-rbtn" aria-expanded="false"><i>${roleCode(r.role)}</i>${r.role}</button>
+      <span class="sp-dots">${r.people.map(p => `<i class="sp-dot${p.absent ? " off" : ""}" data-tip="${attr(
+        `${p.name} · ${p.role}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
+      <span class="sp-rcount">${r.people.length}${r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}</span>
+      <div class="sp-rpeople"><div class="crew">${r.people.map(spPersonPill).join("")}</div></div>
+    </div>`).join("")}</div>`;
+}
+const spPersonPill = p => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
+  p.role}${p.absent ? " · off today" : ""}</small></span>`;
+
 function drawSite(){
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
   const b = siteTab >= 0 ? D.businesses[siteTab] : null;
@@ -8585,15 +8844,26 @@ function drawSite(){
   /* An office sells billed hours, not goods: its line is a fee with nothing to
      stock or top up, and its registers are staffed computers. */
   const office = b.status === "office";
+  /* The shop and office panel. A depot, a factory and a home keep the plainer
+     panel they have today until their own are drawn. */
+  const kind = spKind(b);
+  const sp = kind === "retail" || kind === "office";
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
-  const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
-    f.kind === "cap"
-      ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
-         the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
-         hours; the save records nothing about what is turned away above them.`
-      : `${f.staff} ${f.office ? "workstations are staffed" : "counters are on"} ${String(f.from).padStart(2,"0")}:00-${
-         String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
-         ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
+  const finds = sp ? spSiteFindings(b.key) : [];
+  const rank = sp ? spRank(b.key) : null;
+  const trend = sp ? spTrend(b.key) : null;
+  const limit = sp ? spBindingLimit(b.key) : null;
+  /* The two sentences the hour grid used to carry in its ?; on the shop and
+     office panel they are the two chips under the grid instead. */
+  const capNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind === "cap");
+  const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
+  const capSentence = capNote ? `At the ceiling ${capNote.hours} hours a week (${capNote.when}); ${capNote.limit} is the limit, so
+         the answer is ${capNote.fix}. ${fmt(capNote.throughput)}/day of trade goes through those
+         hours; the save records nothing about what is turned away above them.` : "";
+  const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.office ? "workstations are staffed" : "counters are on"} ${String(idleNote.from).padStart(2,"0")}:00-${
+         String(idleNote.to).padStart(2,"0")}:00 on a ${idleNote.day} for ${idleNote.seen} customers an hour;
+         ${idleNote.spare} staff-hours a week, about ${fmt(idleNote.worth)}/day of wages.` : "";
+  const notes = [capSentence, idleSentence].filter(Boolean);
 
   /* The costs behind the profit tile, on hover. */
   const costs = [
@@ -8606,13 +8876,19 @@ function drawSite(){
   const capTile = !grid ? "—"
     : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
     : `—<small ${SMALL}>no door cap${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
+  /* Week on week when two full weeks stand behind it, else how far into the
+     fortnight a trend needs this site is. 14 is TREND_MIN_DAYS in the Python. */
+  const trendChip = !sp ? "" : trend && trend.ready
+    ? chipHtml(trend.change < 0 ? "bad" : "dim", `${icon(trend.change < 0 ? "trend_dn" : "trend_up")}${pct(trend.change)}`,
+        `${compact(trend.last7)} this week against ${compact(trend.prev7)} the week before`)
+    : chipHtml("none", `day ${b.daysOpen} of 14`, "A trend needs two full weeks. The first days are a ramp, not a trend.");
   const stats = `
-    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}</div></div>
+    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div></div>
     <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
       b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div></div>
     <div class="sstat" data-tip="${attr(costTip)}"><span class="lab">Profit</span><div class="v ${sign(b.profit)}">${fmt(b.profit)}${
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div></div>
-    <div class="sstat"><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
+    <div class="sstat"${limit ? ` data-limit="${attr(limit)}"` : ""}><span class="lab">Door cap</span><div class="v">${capTile}</div></div>`;
 
   /* One pill a person, as on the canvas: the name, the role under it, dimmed
      when they are off today. A big site keeps to a dozen and a "+n more"
@@ -8627,14 +8903,17 @@ function drawSite(){
     : "";
   const personPill = p => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
     p.role}${p.absent ? " · off today" : ""}</small></span>`;
-  const crew = people.length
-    ? people.slice(0, CREW_MAX).map(personPill).join("") + (people.length > CREW_MAX
-        ? `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
-            people.length - CREW_MAX} more</span>` : "")
-    : b.crew.length
-      ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
-          c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
-      : `<span class="quiet">Nobody assigned.</span>`;
+  const crew = !sp && people.length > CREW_MAX
+    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
+        people.length - CREW_MAX} more</span>`
+    : sp && people.length > CREW_MAX
+      ? spRoster(people)
+      : people.length
+        ? people.map(personPill).join("")
+        : b.crew.length
+          ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
+              c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
+          : `<span class="quiet">Nobody assigned.</span>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
@@ -8667,63 +8946,113 @@ function drawSite(){
         <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
       <tbody>${shelves.map(l => {
         const t = targets[l.item];
-        return `<tr>
+        /* A busiest hour above the top-up is the shelf emptying before the
+           next drop: red, with the setting to change it to. Nothing planned is
+           a chip, not a dash, because it is a fix the player still owes. */
+        const over = sp && t && t.target && t.peakSold > t.target;
+        const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
+        return `<tr${over ? ` data-el="outruns"` : ""}>
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
-          <td>${t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—"}</td>
+          <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
-          <td>${t && t.target ? t.target.toLocaleString() : "—"}</td>
+          <td>${!t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">no plan</span>` : "—")
+            : over ? `<span class="sp-up" data-el="raise">${t.target.toLocaleString()} ${icon("go")} <b>${
+                ceil100(Math.max(t.target, t.peakSold)).toLocaleString()}</b></span>` : t.target.toLocaleString()}</td>
           <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
-          <td>${l.units.toLocaleString()}</td></tr>`;
+          <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString()}</span>` : l.units.toLocaleString()}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
   const shelfMore = !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
   /* The staff's own demands the site does not meet, each with how many hold it;
-     health insurance and a happy boss are among them, settled company-wide. */
+     health insurance and a happy boss are among them, settled company-wide.
+     The panel reads the game's own priority as the three bars on a chip. */
   const wants = b.staffDemands || [];
   const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
     wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
+  const demandChips = !sp ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
+    wants.map(d => `<span class="sp-dem" data-tip="${attr(`${d.demand} for ${d.count} · ${
+      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${d.demand} <b>×${d.count}</b>${spPri(d.priority)}${
+      d.company ? `<span class="sp-i" data-el="demand">${icon("company")}</span>` : ""}</span>`).join("")}${
+    b.quitWarnings ? `<span class="sp-dem quit" data-el="quit" data-tip="${attr(`${
+      plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${icon("go")}<b>${
+      b.quitWarnings}</b> will quit</span>` : ""}</div>` : "";
 
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
+  /* The head marks: whether the doors are open, and — where they are not — the
+     five pre-flight checks that say why, and the site's place by the profit of
+     its last seven days. */
+  const headMarks = !sp ? "" : `
+      <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
+      b.revenue ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
+        `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(SP_CHECK_WORD[p.slug])}"></span>`).join("")}</span>`}
+      ${spRankHtml(rank)}`;
+  /* The two hour chips: what the ceiling costs and what idle hours cost, where
+     the ? used to carry them. Hovering one picks its hours out of the grid. */
+  const hourChips = !sp ? "" : `<div class="sp-hchips">${
+    (capNote ? `<span class="sp-hchip cap" data-show="cap" data-tip="${attr(capSentence.replace(/\s+/g, " "))}"><b>${capNote.hours} h/wk</b> at the ceiling · ${capNote.when} · ${fmt(capNote.throughput)}/day through it</span>` : "") +
+    (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><b>${idleNote.staff} on</b> ${
+      String(idleNote.from).padStart(2,"0")}:00–${String(idleNote.to).padStart(2,"0")}:00 a ${idleNote.day} · ${fmt(idleNote.worth)}/day of wages</span>` : "")}</div>`;
+  const sevens = sp ? spSevens(b.series) : null;
+  const profitRead = sevens && sevens.last !== null
+    ? `<b>${fmt(sevens.last)}</b>/day over the last 7${
+        sevens.prev !== null ? ` against <b>${fmt(sevens.prev)}</b>/day the week before` : ""}` : "";
+  const hourWhy = why => sp ? why : `${why}.${notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`;
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
-      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
+      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
-    <div class="sstats rv">${stats}</div>
-    ${grid ? `<section class="sec rv">
-      ${sechead("Customers by hour", {why: `${Math.min(...grid.weeks.filter(w => w))} week${
+    ${spFinds(finds)}
+    <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
+    ${sp ? `<div class="duo sec">
+      <section class="rv" data-block="standards" id="sp-standards" data-readzone>
+        ${sechead("Standards", {why: office
+          ? "What clients make of the firm. Offices are not asked about bathrooms, music or uniforms."
+          : "What customers find when they walk in. A lit lamp was found in place, a struck one was looked for and missed, and a dashed one is not known: the game scores a shop only once customers have walked it."})}
+        ${spStandards(b)}
+      </section>${
+        kind === "retail" ? `
+      <section class="rv" data-block="pull" id="sp-pull" data-readzone>
+        ${sechead("Pull", {why: "Promotion against the game's 100% cap: what the street brings, and what campaigns add."})}
+        ${spPull(b)}
+      </section>` : ""}
+    </div>` : ""}
+    ${grid ? `<section class="sec rv" data-block="hours" id="sp-hours">
+      ${sechead(sp ? "Hours" : "Customers by hour", {why: hourWhy(`${
+        Math.min(...grid.weeks.filter(w => w))} week${
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
         Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
           ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
               grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
           : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
-        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
-        notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`})}
-      <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>
+        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}`)})}
+      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="${sp ? "sp-read sp-readout" : "hourread sp-readout"}" id="hourRead">Hover an hour</div></div>
+      ${hourChips}
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
-      <section class="rv">
+      <section class="rv" data-block="crew" id="sp-crew">
         ${sechead("Crew", {why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        <div class="crew">${crew}</div>${demandNote}
+        <div class="crew">${crew}</div>${sp ? demandChips : demandNote}
       </section>
-      <section class="rv">
+      <section class="rv" data-block="shelves" id="sp-shelves">
         ${office ? sechead("Fees") : sechead("Shelves", {quiet: "before tomorrow's top-up"})}
         ${products}${shelfMore}
       </section>
     </div>
     <div class="duo sec">
-      <section class="rv">
+      <section class="rv" data-block="profit" id="sp-profit"${sp ? ` data-readzone` : ""}>
         ${sechead(`Profit, last ${b.series.length} days`)}
-        <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)")}</div>
+        <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)")}${
+          sp ? `<div class="sp-read sp-readout">${profitRead}</div>` : ""}</div>
       </section>
-      <section class="rv">
+      <section class="rv" data-block="week" id="sp-week">
         ${sechead("Its week", {quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
           : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
@@ -8732,7 +9061,7 @@ function drawSite(){
   drawSitePicker();
   $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
   if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
-  wireSiteHours(); wireTips(); wireReveal();
+  wireSiteReads(); wireSiteFinds(); wireSiteChips(); wireTips(); wireReveal();
 }
 
 /* The site cell of the redesign's tables: the hood pill, the short name, and
@@ -10185,7 +10514,7 @@ buildAlertSettingsPanel();
                           #alertSection, or anything marked data-kinds — opens
                           it and anchors it there.
 
-   Results — wireChart, wirePortfolio, wireSiteHours:
+   Results — wireChart, wirePortfolio, wireSiteReads, wireSiteFinds, wireSiteChips:
      .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
                           day; inside it an svg with <g class="xh"><line/><circle/></g>,
                           a .readout line, and .legend a[data-series] toggling
@@ -10193,7 +10522,14 @@ buildAlertSettingsPanel();
      tr.chain[data-chain]  click toggles .open and .show on tr.kid[data-parent=…];
                           open chains are the existing openChains set. A row
                           carrying its own onclick (the legacy table) is left alone.
-     .hc[data-read]       hover writes data-read into #hourRead.
+     [data-readzone]      one .sp-readout line per block: hovering anything inside
+                          carrying data-read writes it there. The hour grid's
+                          #hourRead is the same line.
+     .sp-find             hover lights the block named in data-ev and pulses the
+                          [data-el] things named in data-hit; click scrolls to it.
+     .sp-rbtn             click opens a role row of a big crew into its people.
+     .sp-hchip[data-show] hover adds .sp-showcap / .sp-showidle to the section's
+                          .hours grid, picking those cells out.
 
    Supply — drawOrderChecklist, wireFlow:
      .up                  a suggested change to enter in-game; never changes
@@ -10850,8 +11186,42 @@ const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
 }));
 function wirePlan(){ bindPlan(); planDraw(); }
 
-/* site detail: the hour grid reads out under the pointer ------------------------- */
-const wireSiteHours = once(() => onEnter(".hc[data-read]", c => { const hr = $("hourRead"); if(hr) hr.innerHTML = c.dataset.read; }));
+/* site detail: the panel answers the pointer -------------------------------------
+   A block reads out on its own line whatever inside it carries data-read, a
+   finding lights the block holding its evidence and pulses the things named in
+   data-hit, and an hour chip picks its hours out of the grid. All delegated, so
+   a redraw needs no rebinding. */
+const wireSiteReads = once(() => onEnter("[data-readzone] [data-read]", el => {
+  const out = q(".sp-readout", el.closest("[data-readzone]"));
+  if(out) out.innerHTML = el.dataset.read;
+}));
+const wireSiteFinds = once(() => {
+  const hits = (f, lit) => {
+    const panel = $("sitePanel");
+    panel.classList.toggle("sp-focus", lit);
+    const blk = f.dataset.ev && q(`[data-block="${f.dataset.ev}"]`, panel);
+    if(blk) blk.classList.toggle("sp-lit", lit);
+    (f.dataset.hit || "").split(" ").filter(Boolean).forEach(h =>
+      $$(`[data-el~="${h}"]`, panel).forEach(el => el.classList.toggle("sp-hit", lit)));
+  };
+  onEnter(".sp-find", f => hits(f, true));
+  onLeave(".sp-find", f => hits(f, false));
+  on("click", ".sp-find", (f, e) => {
+    e.preventDefault();
+    const blk = f.dataset.ev && q(`[data-block="${f.dataset.ev}"]`, $("sitePanel"));
+    if(blk) blk.scrollIntoView({behavior: "smooth", block: "center"});
+  });
+  on("click", "[data-allfinds]", (a, e) => { e.preventDefault(); spFindsAll = true; drawSite(); });
+  on("click", ".sp-rbtn", b => {
+    const row = b.closest(".sp-rrow"), open = row.classList.toggle("open");
+    b.setAttribute("aria-expanded", String(open));
+  });
+});
+const wireSiteChips = once(() => {
+  const grid = c => q(".hours", c.closest("section"));
+  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add("sp-show" + c.dataset.show); });
+  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove("sp-show" + c.dataset.show); });
+});
 
 /* kinds popover: switches flip; with a data-kind they also flip the preference --- */
 const bindKinds = once(() => on("click", ".sw", s => {
@@ -10876,7 +11246,7 @@ function wireKinds(){
 function wireAll(){
   wireTips(); wireTiles(); wireCards();
   wireSev(); wireFinds(); wireKinds();
-  wireChart(); wirePortfolio(); wireSiteHours();
+  wireChart(); wirePortfolio(); wireSiteReads();
   wireFlow();
   wireHeat(); wirePlan();
   wireReveal();
