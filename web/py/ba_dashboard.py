@@ -53,6 +53,10 @@ DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
 # The channel the Big Copilot shorts go on, as YouTube's own oEmbed reports it.
 YOUTUBE_URL = "https://www.youtube.com/@PeterHartwieg"
 SUBREDDIT_URL = "https://www.reddit.com/r/bigambitions/"
+# The project's own Discord. A never-expiring invite code, not a vanity URL:
+# if it ever stops resolving the invite was revoked, and a fresh one that also
+# never expires belongs here.
+DISCORD_URL = "https://discord.gg/TxHaVpSkNg"
 # Who made the game, and where a visitor who has never heard of it can go and look.
 GAME_NAME = "Big Ambitions"
 GAME_MAKER = "Hovgaard Games"
@@ -157,6 +161,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         <h2 class="sf-head">Follow</h2>
         {_sf_out(YOUTUBE_URL, "YouTube", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>')}
         {_sf_out(SUBREDDIT_URL, "r/bigambitions", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>')}
+        {_sf_out(DISCORD_URL, "Discord", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7.4 18.4 5.6 9.3c-.2-1.2.5-2.3 1.7-2.6A16.4 16.4 0 0 1 12 6.1c1.6 0 3.2.2 4.7.6 1.2.3 1.9 1.4 1.7 2.6l-1.8 9.1a10.6 10.6 0 0 1-2.8 1.3l-.8-1.5c-.7.1-1.3.1-2 0l-.8 1.5a10.6 10.6 0 0 1-2.8-1.3z"/><path d="M9.7 12.4v.5M14.3 12.4v.5"/></svg>')}
       </div>
       <div class="sf-col">
         <h2 class="sf-head">{GAME_NAME} &middot; official</h2>
