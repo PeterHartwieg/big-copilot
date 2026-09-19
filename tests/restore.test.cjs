@@ -158,7 +158,7 @@ test('the Impressum and privacy notice stay reachable once the board replaces th
   }
 });
 
-test('the board footer offers the game and the channel, and stays voteless without community.js', async t => {
+test('the board footer offers the game, the channel and the Discord, and stays voteless without community.js', async t => {
   const page = await setup(t);
   await messages(page);
   await page.evaluate(() => fixture.complete());
@@ -166,6 +166,10 @@ test('the board footer offers the game and the channel, and stays voteless witho
   const foot = page.locator('.sitefoot');
   assert.equal(await foot.locator('a[href*="store.steampowered.com"]').count(), 1);
   assert.equal(await foot.locator('a[href*="youtube.com/@"]').count(), 1);
+  // Two invites, not one: the Follow column's server invite, and the support
+  // channel's own, which is where "Bugs and feedback" goes instead of GitHub.
+  assert.equal(await foot.locator('a[href*="discord.gg/"]').count(), 2);
+  assert.equal(await foot.locator('a[href*="discord.gg/"]', {hasText:'Bugs and feedback'}).count(), 1);
   assert.match(await foot.locator('.sf-said').innerText(), /Not affiliated with/);
   // This fixture serves no community.js, which is also what the CLI's
   // dashboard.html is: nothing reveals the card, so it must ship hidden. The

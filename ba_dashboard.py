@@ -45,7 +45,6 @@ MIN_BUILD = 3540  # saves older than this lack fields the board relies on (check
 # into the dashboard.html the CLI writes, which travels on its own) and once into
 # the site's landing screen. One list, so the two cannot drift apart.
 REPO_URL = "https://github.com/PeterHartwieg/big-copilot"
-ISSUES_URL = REPO_URL + "/issues/new"
 # "Support the project" goes to Big Copilot's own PayPal donation page, which
 # returns supporters to bigcopilot.com. The same PayPal account has a RentenWiki
 # page whose purpose text names RentenWiki; never link that one here.
@@ -53,6 +52,14 @@ DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
 # The channel the Big Copilot shorts go on, as YouTube's own oEmbed reports it.
 YOUTUBE_URL = "https://www.youtube.com/@PeterHartwieg"
 SUBREDDIT_URL = "https://www.reddit.com/r/bigambitions/"
+# The project's own Discord. Never-expiring invite codes, not vanity URLs: if
+# one ever stops resolving the invite was revoked, and a fresh one that also
+# never expires belongs here. The second was made from inside the support
+# channel, so it lands a new arrival there rather than on the default channel,
+# and it is where bug reports go instead of the repo's issue tracker: far more
+# players have a Discord account than a GitHub one.
+DISCORD_URL = "https://discord.gg/TxHaVpSkNg"
+FEEDBACK_URL = "https://discord.gg/EdjRzkxQTu"
 # Who made the game, and where a visitor who has never heard of it can go and look.
 GAME_NAME = "Big Ambitions"
 GAME_MAKER = "Hovgaard Games"
@@ -150,13 +157,14 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
       <div class="sf-col">
         <h2 class="sf-head">Big Copilot</h2>
         {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
-        {_sf_out(ISSUES_URL, "Report a bug", title="A save that will not build, a wrong number, or something the board should show: all welcome.")}
+        {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.")}
         {_sf_out(REPO_URL, "Source code", title="MIT-licensed")}
       </div>
       <div class="sf-col">
         <h2 class="sf-head">Follow</h2>
         {_sf_out(YOUTUBE_URL, "YouTube", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>')}
         {_sf_out(SUBREDDIT_URL, "r/bigambitions", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>')}
+        {_sf_out(DISCORD_URL, "Discord", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7.4 18.4 5.6 9.3c-.2-1.2.5-2.3 1.7-2.6A16.4 16.4 0 0 1 12 6.1c1.6 0 3.2.2 4.7.6 1.2.3 1.9 1.4 1.7 2.6l-1.8 9.1a10.6 10.6 0 0 1-2.8 1.3l-.8-1.5c-.7.1-1.3.1-2 0l-.8 1.5a10.6 10.6 0 0 1-2.8-1.3z"/><path d="M9.7 12.4v.5M14.3 12.4v.5"/></svg>')}
       </div>
       <div class="sf-col">
         <h2 class="sf-head">{GAME_NAME} &middot; official</h2>
