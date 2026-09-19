@@ -579,7 +579,12 @@ attention here* list, and each finding pulses the line it is about.
   with what leaves a day.
 - **Stock.** One row a line, with the next seven days beside it, left to right from
   today: a filled cell is a day covered, red hatching is a day dry, and the truck sits on
-  the day the delivery lands. A paused contract strikes its truck through. A line nothing
+  the day the delivery lands. Where two suppliers deliver in the same week the loaded
+  truck is the later one, because that is the delivery the cover, the run-out day and the
+  catch-up quantity are measured against; the earlier drop rides along faintly. A paused
+  contract is dry from the day its cover ends, and keeps the delivery day it was stopped
+  on — usually behind today, so there is no truck at all; where there is one, it is
+  struck through. A line nothing
   draws on sleeps instead of showing cover, because there is nothing for it to run out
   against. The column beside the rail is what to do about it — the units to bring in by
   hand before the shelf empties, or the order to raise — and the *Weekly order* column
