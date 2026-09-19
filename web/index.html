@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c45671aa97">
+<link rel="stylesheet" href="community.css?v=b5753067a3">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=c45671aa97">
+<link rel="stylesheet" href="fonts/fonts.css?v=b5753067a3">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2225,8 +2225,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c45671aa97";</script>
-<script>window.LEDGER_RELEASE = {"version":"c45671aa97","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "b5753067a3";</script>
+<script>window.LEDGER_RELEASE = {"version":"b5753067a3","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2295,8 +2295,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=c45671aa97"></script>
-<script src="community.js?v=c45671aa97"></script>
+<script src="app.js?v=b5753067a3"></script>
+<script src="community.js?v=b5753067a3"></script>
 
 <script>
 
@@ -3975,16 +3975,24 @@ const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","
    so the outlined cells are the ones capHours counts. */
 const AT_CAP = 0.95;
 
-/* The role holding this hour back: one at the site's own minimum that is short
-   of its stations, else the smallest. Mirrors _hour_findings() in the Python,
-   tie for smallest broken on the skill so the words do not move. */
-function hourRole(g, wd, h){
+/* The roles holding this hour back: every one standing at the site's own
+   minimum, short of its stations or fully manned. The same filter
+   _hour_findings() applies in the Python, so the cell and the alert name the
+   same roles, and a tie names both of them. */
+function hourRoles(g, wd, h){
   const roles = g.roles || [];
-  if(!roles.length) return null;
+  if(!roles.length) return [];
   const low = Math.min(...roles.map(r => r.staffed[wd][h]));
-  const pool = roles.filter(r => r.staffed[wd][h] === low && r.staffed[wd][h] < r.counters);
-  return (pool.length ? pool : roles).reduce((a, b) =>
-    b.counters < a.counters || (b.counters === a.counters && (b.skill || "") < (a.skill || "")) ? b : a);
+  const at = roles.filter(r => r.staffed[wd][h] === low);
+  return at.length ? at : roles;
+}
+
+/* One role's stations that hour, furniture and throughput kept apart: how many
+   of them were manned, then what they were worth an hour. */
+function roleRead(r, wd, h){
+  const n = r.posts ? r.posts[wd][h] : 0;
+  const many = r.many || r.noun || "stations";
+  return `${n} of ${r.stationCount} ${r.stationCount === 1 ? (r.one || many) : many} · ${r.staffed[wd][h]}/h`;
 }
 
 function hourGrid(g, todayWd){
@@ -4000,20 +4008,31 @@ function hourGrid(g, todayWd){
       const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
       /* A role idle while another holds the site back is still idle: judge
-         each role on its own roster, the way the Python findings do. A grid
-         without roles is an old one, so it keeps the site-wide test. */
-      const slack = (g.roles || []).length
-        ? g.roles.some(r => r.onShift[wd][h] >= 2 && r.staffed[wd][h] > Math.max(seen, .5) * 2)
+         each role on its own roster, the way the Python findings do, and say
+         which one it was. A grid without roles is an old one, so it keeps the
+         site-wide test. */
+      const roles = g.roles || [];
+      const idle = roles.filter(r => r.onShift[wd][h] >= 2 && r.staffed[wd][h] > Math.max(seen, .5) * 2);
+      const slack = roles.length
+        ? idle.length > 0
         : cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
-      const role = hourRole(g, wd, h);
+      /* A single-role shop keeps the register sentence it has always had. Once
+         more than one role is in play the site's own numbers say nothing -- its
+         capacity is the minimum and its stations are all of them at once -- so
+         the binding roles speak for themselves. */
+      const binding = g.office ? [] : hourRoles(g, wd, h);
       const on = g.office
         ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
-        : role && role.noun
-          ? `${role.staffed[wd][h]} of ${role.counters} ${role.noun} on${
-              g.roles.length > 1 ? ` · slowest of ${g.roles.length} roles` : ""}`
-          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`;
+        : roles.length > 1
+          ? `${binding.map(r => roleRead(r, wd, h)).join(" + ")} · slowest of ${roles.length} roles`
+          : binding.length && binding[0].noun
+            ? roleRead(binding[0], wd, h)
+            : `${g.staffed[wd][h]} of ${g.counters} register capacity on`;
+      const idleWord = roles.length > 1 && idle.length
+        ? `${idle.map(r => r.label || "capacity").join(", ")} idle`
+        : "capacity idle";
       const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
-        atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
+        atCap ? " · <b>at the ceiling</b>" : slack ? ` · ${idleWord}` : ""}`;
       cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
@@ -4046,7 +4065,7 @@ function drawSite(){
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
-      ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
+      ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} ${f.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`
       : `${f.staff} ${f.noun || (f.office ? "workstations are staffed" : "counters are on")} ${
