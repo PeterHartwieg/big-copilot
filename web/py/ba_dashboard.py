@@ -233,6 +233,47 @@ def load_buildings() -> dict:
     return _buildings
 
 
+# The game's own arrival curves, from its Addressables bundles:
+# make_demand_curves.py generates ba_demand_curves.json beside this file and the
+# browser worker writes it to /data/, exactly as with the building table. Read it
+# lazily, never at import time: in Pyodide nothing is on the virtual filesystem
+# when this module is imported.
+_demand_curves = None
+
+
+def load_demand_curves() -> dict:
+    """ba_demand_curves.json as {"types": {...}, "items": {...}}, read once.
+
+    Per business type: `d` the seven day multipliers indexed by the board's
+    weekday, `h` the twenty-four hour multipliers, `p` the type's primary
+    products. Per item name: its productSalesRatio, non-zero ones only, so a
+    name that is absent sells nothing. A missing file is not an error — the
+    arrival ceiling is simply unavailable, and every number the board states
+    comes off the measured hour grid regardless.
+    """
+    global _demand_curves
+    if _demand_curves is None:
+        for path in (
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "ba_demand_curves.json"
+            ),
+            "/data/ba_demand_curves.json",  # where the worker puts it in a browser
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                _demand_curves = {
+                    "types": loaded.get("types") or {},
+                    "items": loaded.get("items") or {},
+                }
+                break
+            except (OSError, ValueError, AttributeError):
+                continue  # not here, or unreadable: try the next place
+        else:
+            _demand_curves = {"types": {}, "items": {}}
+    return _demand_curves
+
+
 # Business types that sell to walk-in customers; the rest are support sites.
 # Every physical retail floor the game documents with an F1 help page (the
 # handful of pure office agencies — law firm, travel agency and the like — say
@@ -3622,6 +3663,168 @@ def _capped_cells(grid: dict) -> set:
         and grid["effective"][wd][hour]
         and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * AT_CAP
     }
+
+
+def _arrival_ceiling(
+    type_slug: str,
+    sqm: float,
+    products,
+    promotion: float,
+    base_promotion: float,
+    door: int,
+) -> list | None:
+    """CustomerEntriesCalculatorRetail.GetCustomersByHour, per weekday and hour.
+
+        ceil(min(initial x promotion x dayMultiplier x hourMultiplier,
+                 the building's customer capacity))
+
+    `initial` is the largest productSalesRatio among the products the shop has
+    on hand that are primary for its type, times the building's square metres.
+    `promotion` is the save's own baseCustomerPromotionMultiplier plus
+    0.75 x the promotion total over 100.
+
+    **This is an upper bound on arrivals, never the demand, and the board must
+    never print it as one.** It over-predicts served customers four times over
+    on a clothing store, because it counts arrivals the game then turns away for
+    having nothing they want to buy. It has exactly two jobs: bounding a
+    censored hour from above in _need_curve(), and answering "how much more
+    could there be". None where the curves file is missing or does not know the
+    type, which is not an error: every number the board states comes off the
+    measured grid either way.
+    """
+    curves = load_demand_curves()
+    curve = curves["types"].get(type_slug)
+    if not curve:
+        return None
+    ratios = curves["items"]
+    primary = set(curve.get("p") or ())
+    initial = max(
+        (ratios.get(name, 0.0) for name in products if name in primary), default=0.0
+    ) * (sqm or 0)
+    promo = base_promotion + 0.75 * (promotion or 0) / 100
+    day, hour = curve["d"], curve["h"]
+    out = []
+    for wd in range(7):
+        row = []
+        for h in range(24):
+            reach = initial * promo * day[wd] * hour[h]
+            row.append(math.ceil(min(reach, door) if door else reach))
+        out.append(row)
+    return out
+
+
+def _fill_stations(demand: float, rates: list) -> int:
+    """How many of a role's stations it takes to serve `demand` an hour.
+
+    The smallest set whose throughputs sum to the demand, largest first, and
+    never more stations than are installed. One person per station, so this is
+    also the people that hour.
+    """
+    if demand <= 0:
+        return 0
+    served, count = 0.0, 0
+    for rate in sorted(rates, reverse=True):
+        if served >= demand:
+            break
+        served += rate
+        count += 1
+    return count
+
+
+def _role_rates(role: dict, rates: dict | None) -> list:
+    """The throughputs of one role's stations.
+
+    `rates` is {skill: [throughput per station]} where the caller has the
+    station list to hand. Without it the grid carries only the role's total and
+    its station count, so the honest stand-in is an even split.
+    """
+    if rates and role["skill"] in rates:
+        return list(rates[role["skill"]])
+    count = role["stationCount"]
+    if not count:
+        return []
+    return [role["counters"] / count] * count
+
+
+def _need_curve(
+    grid: dict, day: list | None = None, ceiling: list | None = None, rates: dict | None = None
+) -> dict:
+    """How many of each role's stations an hour actually wants, and on what basis.
+
+    Per role, per weekday, per hour, one of four cases (the staffing scope,
+    section 4):
+
+      measured  a weekday with enough weeks behind it, an hour that did not run
+                into a ceiling: the customers measured are the demand
+      censored   the hour sits within AT_CAP of what was available, so the real
+                demand is unknown and above it. The estimate is what this role
+                served plus one more of its stations, bounded from above by the
+                arrival ceiling, the door cap and the stations installed
+      scaled     a thin weekday, or an hour with no report, read off a measured
+                weekday through the game's own day curve
+      none       nothing measured anywhere: no recommendation, the site is new
+
+    Returns {skill: {"demand": [[customers/hour]], "need": [[stations]],
+    "basis": [[case]]}}. Only a measured cell may be stated as a target;
+    everything else has to be qualified, and `basis` is what qualifies it.
+    """
+    capped = _capped_cells(grid)
+    customers, door = grid["customers"], grid["door"]
+    # The weekday a thin day is scaled from: the best measured one, most weeks
+    # first and the earliest weekday to break a tie, so it never moves between
+    # two runs of the same save.
+    measured_days = [
+        wd
+        for wd in range(7)
+        if not grid["thin"][wd] and any(c is not None for c in customers[wd])
+    ]
+    source = (
+        min(measured_days, key=lambda wd: (-grid["weeks"][wd], wd))
+        if measured_days
+        else None
+    )
+
+    out = {}
+    for role in grid["roles"]:
+        station_rates = _role_rates(role, rates)
+        installed = sum(station_rates)
+
+        def cell(wd: int, hour: int) -> tuple:
+            """One weekday-hour of this role, as (demand, basis)."""
+            seen = customers[wd][hour]
+            if grid["thin"][wd] or seen is None:
+                return (0.0, None)  # nothing of its own; the caller may scale it
+            if (wd, hour) not in capped:
+                return (seen, "measured")
+            served = min(role["staffed"][wd][hour], door) if door else role["staffed"][wd][hour]
+            step = max(station_rates) if station_rates else 0
+            bounds = [served + step]
+            if installed:
+                bounds.append(installed)
+            if door:
+                bounds.append(door)
+            if ceiling:
+                bounds.append(ceiling[wd][hour])
+            return (max(seen, min(bounds)), "censored")
+
+        demand = [[0.0] * 24 for _ in range(7)]
+        basis = [["none"] * 24 for _ in range(7)]
+        for wd in range(7):
+            for hour in range(24):
+                value, case = cell(wd, hour)
+                if case:
+                    demand[wd][hour], basis[wd][hour] = value, case
+                elif source is not None and day and day[source]:
+                    from_value, from_case = cell(source, hour)
+                    if from_case:
+                        demand[wd][hour] = from_value * day[wd] / day[source]
+                        basis[wd][hour] = "scaled"
+        out[role["skill"]] = {
+            "demand": [[round(v, 1) for v in row] for row in demand],
+            "need": [[_fill_stations(v, station_rates) for v in row] for row in demand],
+            "basis": basis,
+        }
+    return out
 
 
 def _lower_first(text: str) -> str:

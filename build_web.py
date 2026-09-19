@@ -378,7 +378,7 @@ details.help[open] summary::after{content:"\2013"}
 # changing that order, or appending to the list, changes the stamp, which is
 # the point for an append: a deploy busts caches.
 STAMP_INPUTS = (
-    "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json",
+    "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
     "tools/wiki_topics.json", "web/fonts/fonts.css",
@@ -494,7 +494,7 @@ def check(root: str = HERE) -> list[str]:
         except FileNotFoundError:
             return True
 
-    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json"):
+    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json"):
         copied = "web/py/" + name
         if differs(copied, read_text(os.path.join(root, name))):
             stale.append(copied)
@@ -542,11 +542,11 @@ def main() -> None:
     write_public_wiki(os.path.join(WEB, "wiki-data.json"))
     for name in ("ba_save.py", "ba_dashboard.py"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
-    # The building table travels with the code; make_buildings.py has to have
-    # been run, since the worker hands it to Python as data.
-    shutil.copyfile(
-        os.path.join(HERE, "ba_buildings.json"), os.path.join(WEB, "py", "ba_buildings.json")
-    )
+    # The building table and the arrival curves travel with the code;
+    # make_buildings.py and make_demand_curves.py have to have been run, since
+    # the worker hands both to Python as data.
+    for name in ("ba_buildings.json", "ba_demand_curves.json"):
+        shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     text = {k: v for k, v in locale.items() if ships(k, v)}
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)

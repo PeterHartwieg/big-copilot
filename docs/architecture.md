@@ -175,8 +175,8 @@ What `page_html()` produces, top of the file down:
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py` and `ba_buildings.json` into `web/py/`, and writes `web/py/gametext.json`
-from the installed locale — everything `stamp()` hashes has to be in place before
+`ba_dashboard.py`, `ba_buildings.json` and `ba_demand_curves.json` into `web/py/`, and
+writes `web/py/gametext.json` from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
@@ -288,8 +288,10 @@ Everything else it fetches is same-origin, from `web/py/`, carrying the page's b
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
-- `gametext.json` and `ba_buildings.json` — written into the virtual filesystem only when
-  the fetch succeeds, so a build missing either still boots and degrades instead.
+- `gametext.json`, `ba_buildings.json` and `ba_demand_curves.json` — written into the
+  virtual filesystem only when the fetch succeeds, so a build missing one still boots and
+  degrades instead: without the curves the board states no arrival ceiling, and every number
+  it does state still comes off the measured hour grid.
 
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a

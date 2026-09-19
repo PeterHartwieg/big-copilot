@@ -22,6 +22,7 @@ const HISTORY = `${DATA_DIR}/market_history.json`;
 const LOCALE = `${DATA_DIR}/en.json`;
 const NAMES = `${DATA_DIR}/gametext.json`;  // game text shipped with the page
 const BUILDINGS = `${DATA_DIR}/ba_buildings.json`;  // the fixed city map
+const CURVES = `${DATA_DIR}/ba_demand_curves.json`;  // the game's arrival curves
 
 let py = null;
 let lastSave = null; // {name, mtime} of the save currently in the filesystem
@@ -51,6 +52,10 @@ const ready = (async () => {
   if (names.ok) py.FS.writeFile(NAMES, await names.text());
   const buildings = await fetch(`py/ba_buildings.json?v=${stamp}`, {cache: "no-store"});
   if (buildings.ok) py.FS.writeFile(BUILDINGS, await buildings.text());
+  // Both data tables are optional: the board falls back to the name prefix
+  // without the city map, and simply states no arrival ceiling without these.
+  const curves = await fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache: "no-store"});
+  if (curves.ok) py.FS.writeFile(CURVES, await curves.text());
   await py.runPythonAsync(`
 import sys
 sys.path.insert(0, "/")
