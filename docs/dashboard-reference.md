@@ -430,6 +430,11 @@ pairs, and an empty list for a day the site stays shut — a list, because the g
 field is one. The hour between two slots is the doors being shut, not trade dipping, so
 nothing is ever rostered into it and it is never bridged.
 
+**A site that cannot be planned says so.** Saves are not always tidy, and a site whose
+schedule or stations the planner chokes on gets a row carrying `failed` and its name alone.
+The rest of the board is unaffected, and so is every other site's plan: each is worked out
+against its own copy of everybody's week, and a site that fails commits none of it.
+
 **Two tables, and indices into them.** A site's row lists its `stations` and its `people`
 once each, and every shift, hiring note and placement below points at them by position
 rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`

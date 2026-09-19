@@ -113,6 +113,12 @@ whole list to `_staffing()` and only the reported ones to the `hours` key and
 security cover and its hiring lines do not wait on a measurement — without the hour grid
 starting to draw an empty week for it.
 
+A site the planner cannot plan still gets a row, `{key, name, typeSlug, failed: true}`
+and nothing else, so the page can say so rather than leave a hole where a shop was; a row
+without `failed` is a whole plan. Each site is planned against its own copy of the week and
+of the bench, written back only once its row is built, so a site that falls over leaves no
+phantom hours behind for the next one to hire around.
+
 A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
 points into them by index rather than repeating an id: `s` a station, `p` a person or null.
 A save's ids are 24 characters of base64 and a fragmented site has hundreds of shift rows

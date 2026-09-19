@@ -4014,6 +4014,16 @@ def _fresh_state() -> dict:
     }
 
 
+def _copy_state(entry: dict) -> dict:
+    """One person's week, deep enough that filling the copy leaves the original alone."""
+    return {
+        "hours": entry["hours"],
+        "busy": [set(hours) for hours in entry["busy"]],
+        "days": set(entry["days"]),
+        "stations": set(entry["stations"]),
+    }
+
+
 def _can_work(person: dict, state: dict, slot: dict) -> bool:
     """Would this shift break any rule the game or the person's demands set?
 
@@ -4506,15 +4516,37 @@ def _staffing(
     )
     out = []
     for business, building, grid in planned:
+        # A site is planned against its own copy of the week, and the copy is
+        # only written back once the whole row is built. _plan_site() places
+        # people well before it reads the current schedule or builds the lookup
+        # tables, so a site that falls over halfway through would otherwise
+        # leave phantom hours on people it never actually rosters -- and the
+        # next site would hire around staff who are, in fact, free. Only the
+        # people this site could roster are copied, which is a handful of small
+        # sets per site: this runs in Pyodide.
+        scratch = {
+            person["id"]: _copy_state(state[person["id"]])
+            for person in _site_pool(people, business, bench)
+        }
         try:
-            row = _plan_site(save, names, business, building, grid, people, bench,
-                             state, curves, table, base_promotion)
+            row = _plan_site(save, names, business, building, grid, people,
+                             list(bench), scratch, curves, table, base_promotion)
         except Exception:
-            # One odd site is one missing plan, not a blank board. Everything
-            # else on the page is already computed by the time this runs, and a
-            # site that cannot be planned is skipped in the same place on every
-            # run, so the payload stays the same twice over.
+            # One odd site is one missing plan, not a blank board, and not a
+            # silent hole either: the row says the site could not be planned so
+            # the page can say so. Nothing of it is committed, and it fails in
+            # the same place on every run, so the payload stays the same twice
+            # over.
+            out.append(
+                {
+                    "key": business["key"],
+                    "name": business["name"],
+                    "typeSlug": business["typeSlug"],
+                    "failed": True,
+                }
+            )
             continue
+        state.update(scratch)
         out.append(row)
         # Whoever this site drew off the bench now works here, so they leave it.
         taken = {p["id"] for p in row.pop("_took")}

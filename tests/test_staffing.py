@@ -1269,11 +1269,12 @@ class OddSaveTest(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertTrue(row["shifts"])
 
-    def test_a_site_that_cannot_be_planned_is_skipped_not_fatal(self):
-        specs = [
-            dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
-            dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
-        ]
+    SPECS = [
+        dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
+        dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+    ]
+
+    def test_a_site_that_cannot_be_planned_says_so_and_costs_nothing_else(self):
         people = [employee("a", [SERVICE], number=12), employee("b", [SERVICE], number=14)]
         real = ba_dashboard._plan_site
 
@@ -1283,9 +1284,51 @@ class OddSaveTest(unittest.TestCase):
             return real(save, names, business, building, *args, **kw)
 
         with unittest.mock.patch.object(ba_dashboard, "_plan_site", explode):
-            rows = plan_sites(specs, people)
-        self.assertEqual([r["key"] for r in rows], [site_key((STREET, 14))])
-        self.assertTrue(rows[0]["shifts"])
+            rows = plan_sites(self.SPECS, people)
+        # Two sites in, two rows out: the failed one is named, not dropped.
+        self.assertEqual(len(rows), 2)
+        broken, whole = rows
+        self.assertEqual(
+            broken,
+            {"key": site_key((STREET, 12)), "name": "HART. Test 12",
+             "typeSlug": SHOP, "failed": True},
+        )
+        self.assertNotIn("failed", whole)
+        self.assertTrue(whole["shifts"])
+
+    def test_a_site_that_fails_after_placing_people_leaves_no_trace(self):
+        """The failure has to be transactional: it rosters, then falls over."""
+        people = [
+            employee("b", [SERVICE], number=14, demands=("ba:jobdemand_fulltime",)),
+            employee("free", [SERVICE], here=False,
+                     demands=("ba:jobdemand_fulltime",)),
+        ]
+        real = ba_dashboard._current_roster
+
+        def explode(save, building, stations):
+            if building["StreetNumber"] == 12:
+                raise ValueError("this site's schedule is malformed")
+            return real(save, building, stations)
+
+        with unittest.mock.patch.object(ba_dashboard, "_current_roster", explode):
+            rows = plan_sites(self.SPECS, people)
+        self.assertEqual(len(rows), 2)
+        broken, whole = rows
+        self.assertTrue(broken["failed"])
+
+        # Site 12 placed the bench employee before it fell over. Site 14 has to
+        # see a week and a bench that never heard of site 12.
+        alone = plan_sites([self.SPECS[1]], people)[0]
+        self.assertEqual(
+            json.dumps(whole["shifts"], sort_keys=True),
+            json.dumps(alone["shifts"], sort_keys=True),
+        )
+        self.assertEqual(
+            [p["id"] for p in whole["people"]], [p["id"] for p in alone["people"]]
+        )
+        self.assertIn("free", {p["id"] for p in whole["people"]})
+        self.assertEqual(whole["headcount"][SERVICE]["have"],
+                         alone["headcount"][SERVICE]["have"])
 
 
 class HashSeedTest(unittest.TestCase):
