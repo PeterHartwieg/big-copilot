@@ -741,10 +741,12 @@ test('every finding on a depot and a factory points at a block and a row that ar
     paused: {slug: kind === 'factory' ? 'gb' : 'soda'},
     // _feed_notes re-keys an import finding to the depot that imports it, and
     // the slug is the only thing that joins the recipe's label to the depot's.
-    feed: {slug: kind === 'factory' ? 'gb' : 'soda'},
+    // On the depot the goods are its own line; nothing else here shares it.
+    feed: {slug: kind === 'factory' ? 'gb' : 'cheapgift'},
   });
   for (const [kind, shop, supply] of [
-    ['depot', DEPOT, {day: 29, imports: [importRow()], idle: [deadRow]}],
+    ['depot', DEPOT, {day: 29, idle: [deadRow],
+      imports: [importRow(), importRow({item: 'Cheap Gift', slug: 'cheapgift'})]}],
     ['factory', FACTORY, {day: 29, factories: factories()}],
   ]) {
     const ev = evOf(kind);
@@ -954,7 +956,10 @@ test('an empty depot and an unreadable factory still draw', async () => {
       slots: [1], machines: 1, gaps: [{slot: 1, off: 'Sunday'}]}]}]})}});
   try {
     const square = noHours.locator('#sp-lines .sp-m').first();
-    assert.equal(await square.getAttribute('class'), 'sp-m sp-q');
+    // Its own mark: an empty dashed square, not the amber ? of a recipe the
+    // board cannot name.
+    assert.equal(await square.getAttribute('class'), 'sp-m sp-u');
+    assert.equal((await square.innerText()).trim(), '');
     assert.match(await square.getAttribute('data-read'),
       /^Machine 1 · hours <b>not known<\/b>: nobody on it Sunday$/);
     assert.equal(await square.evaluate(e => e.style.getPropertyValue('--h')), '');
@@ -1011,4 +1016,59 @@ test("a name out of the save is text on the depot and the factory page", async (
     assert.equal(await depot.locator('#sp-feeds .sp-feed').count(), 1);
     assert.equal(await depot.locator('#sp-feeds img').count(), 0);
   } finally { await depot.close(); }
+});
+
+test('a depot expected to hold something and holding none draws that row', async () => {
+  // A factory input routed from this depot, with no standing import and
+  // nothing on the floor: the slug is in none of imports, idle rows or
+  // holdings, and its absence is the whole finding.
+  const page = await site({
+    shop: {...DEPOT, lines: []},
+    supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, s: 1, unnamed: [],
+      lines: [FACTORY_SITE.lines[0]],
+      needs: [{...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
+               perDay: 4100, lines: ['Burger'], from: 0, target: 0,
+               status: 'noimport', level: 'warn'}]}]})},
+    alerts: [finding('n1', 'feed', 'HART. Depot', KEY, 'warn', {slug: 'tomato'})],
+  });
+  try {
+    const rows = await page.$$eval('#sp-stock tbody tr', rs => rs.map(r => ({
+      el: r.dataset.el, read: r.dataset.read,
+      cells: [...r.querySelectorAll('td')].map(td => td.textContent.trim()),
+      red: !!r.querySelector('.sp-red'),
+      cells7: [...r.querySelectorAll('.sp-rail i')].map(i => i.className),
+    })));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].el, slugTok('tomato'));
+    // Nothing on hand, in red, with the factory that draws it counted.
+    assert.equal(rows[0].cells[1], '0');
+    assert.equal(rows[0].red, true);
+    assert.equal(rows[0].cells[2], '4,100');
+    assert.match(rows[0].cells.at(-2), /no import/);
+    assert.equal(rows[0].cells.at(-1), '1');
+    assert.deepEqual(rows[0].cells7, Array(7).fill(''));
+    assert.match(rows[0].read, /^<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day/);
+    // And the finding that named it now has a row to pulse.
+    const row = await page.$eval('#sitePanel .sp-find', r => [r.dataset.ev, r.dataset.hit]);
+    assert.deepEqual(row, ['stock', slugTok('tomato')]);
+    await page.hover('#sitePanel .sp-find');
+    assert.equal(await page.locator('#sp-stock .sp-hit').count(), 1);
+  } finally { await page.close(); }
+});
+
+test('a finding whose row the panel did not draw carries no hit at all', async () => {
+  // Nothing on this depot knows the slug: no import, no idle pile, no holding
+  // and no factory drawing it from here. The block is still worth scrolling
+  // to; a pulse that lands on nothing would only dim the page.
+  const page = await site({
+    shop: DEPOT,
+    supply: {day: 29, imports: [importRow()], idle: [deadRow]},
+    alerts: [finding('x1', 'feed', 'HART. Depot', KEY, 'warn', {slug: 'nowhere'}),
+             finding('x2', 'staff', 'HART. Works', KEY, 'warn', {slot: 99})],
+  });
+  try {
+    const rows = await page.$$eval('#sitePanel .sp-find', rs =>
+      rs.map(r => [r.dataset.id, r.dataset.ev || null, r.dataset.hit || null]));
+    assert.deepEqual(rows, [['x1', 'stock', null], ['x2', 'crew', null]]);
+  } finally { await page.close(); }
 });
