@@ -582,10 +582,13 @@ RECIPE_ITEMS = {
 # patch that changes a recipe changes the dashboard with it.
 
 # "**Bacon** is a special *employee station* that requires employees with
-# [Customer Service](skill-customerservice) skill." — only those serve a queue.
+# [Customer Service](skill-customerservice) skill." Every one of those serves a
+# queue, whatever skill it asks for — a fitness planning board is as much a
+# serving station as a checkout counter, and the link names the skill it wants.
 # Fridges and shelves carry a Customer Capacity too and must never be summed.
 _STATION_RE = re.compile(
-    r"special \*employee station\* that requires employees with \[([^\]]+)\]"
+    r"special \*employee station\* that requires employees with"
+    r" \[([^\]]+)\]\(skill-([a-z0-9_]+)\)"
 )
 _CAPACITY_RE = re.compile(r"\*\*Customer Capacity:\*\*\s*([\d,]+)")
 _ITEM_HELP_RE = re.compile(r"^help_(ba:itemname_[a-z0-9_]+)_content$")
@@ -629,7 +632,13 @@ def _int(text: str) -> int:
 
 
 def _service_stations(names: Names) -> dict:
-    """Which furniture serves a customer queue, and how many an hour."""
+    """Which furniture serves a customer queue, the skill it asks for, and how many an hour.
+
+    Every *employee station* with a Customer Capacity is here, not just the
+    Customer Service ones: a gym's fitness planning boards, a hairdresser's
+    chairs and a theatre's booths all hold a queue of their own, and a site
+    whose stations want different skills is only as fast as its slowest role.
+    """
     out = {}
     for key, text in names.locale.items():
         match = _ITEM_HELP_RE.match(key)
@@ -637,8 +646,8 @@ def _service_stations(names: Names) -> dict:
             continue
         station = _STATION_RE.search(text)
         capacity = _CAPACITY_RE.search(text)
-        if station and capacity and "Customer Service" in station.group(1):
-            out[match.group(1)] = _int(capacity.group(1))
+        if station and capacity:
+            out[match.group(1)] = ("ba:skill_" + station.group(2), _int(capacity.group(1)))
     return out
 
 
@@ -1315,13 +1324,22 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     chains = _chains(save, businesses, trends)
     hype = _hype_exposure(businesses, market)
 
-    grids = _hourly(save, buildings, businesses, stations, _office_posts(names), crew_skill)
+    grids = _hourly(
+        save, buildings, businesses, stations, _office_posts(names), crew_skill, names
+    )
     status_of = {b["key"]: b["status"] for b in businesses}
-    service_wage = collections.defaultdict(float)
+    # The wage that prices a role's idle hours is the best paid person holding
+    # that role at the site. An office's professionals are everyone there but
+    # the cleaners, so a cleaner's wage prices no office hour.
+    service_wage = collections.defaultdict(lambda: collections.defaultdict(float))
     for person in staff:
+        if not person["addr"]:
+            continue
+        skill = person["skill"]
+        if status_of.get(site_key(person["addr"])) == "office" and skill == CLEANING_SKILL:
+            continue
         key = site_key(person["addr"])
-        if person["addr"] and _serves(status_of.get(key), person["skill"]):
-            service_wage[key] = max(service_wage[key], person["wage"])
+        service_wage[key][skill] = max(service_wage[key].get(skill, 0.0), person["wage"])
     hour_findings = _hour_findings(grids, businesses, service_wage)
     plan = _plan(
         save,
@@ -3401,29 +3419,40 @@ def _factories(
     }
 
 
-def _serves(status: str | None, skill: str | None) -> bool:
-    """Whether someone with this skill serves the customers of this kind of site.
+def _serves(status: str | None, skill: str | None, needed: str | None = None) -> bool:
+    """Whether someone with this skill can hold the post a station is.
 
-    A shop's queue is served by Customer Service at the registers. An office's
-    customers are served by the professional the agency employs, which is
-    everyone there but the cleaners.
+    A shop's queue is served at whichever station the shift posts to, and the
+    station names its own skill: the fitness planning board wants a Gym Trainer,
+    the hairdresser chair a Hair Stylist, the register Customer Service. An
+    office's customers are served by the professional the agency employs, which
+    is everyone there but the cleaners, so its computers name no skill at all.
     """
     if status == "office":
         return bool(skill) and skill != CLEANING_SKILL
-    return skill == SERVICE_SKILL
+    return skill is not None and skill == needed
 
 
 def _hourly(
-    save: Save, buildings: list, businesses: list, stations: dict, computers: set, crew: dict
+    save: Save,
+    buildings: list,
+    businesses: list,
+    stations: dict,
+    computers: set,
+    crew: dict,
+    names: Names | None = None,
 ) -> list:
     """What each shop-front and office took per hour, against the capacity that was on.
 
     Three numbers meet in one grid. The customers are measured, an hour at a
-    time, over the fortnight the save keeps. The registers are whatever service
-    staff were rostered on that hour, at the capacity of the exact counters they
-    were posted to; in an office they are the professionals posted at computers,
-    OFFICE_POST_RATE an hour each. The door cap is the building's own limit. The
-    smallest of them is the one that decides, and the finding is which.
+    time, over the fortnight the save keeps. The capacity is whatever staff were
+    rostered on that hour, at the rate of the exact stations they were posted to;
+    in an office they are the professionals posted at computers, OFFICE_POST_RATE
+    an hour each. A site whose stations want different skills serves a customer
+    only through its slowest role, so its grid is the minimum across roles, and
+    `roles` carries each role's own grid beside it. The door cap is the
+    building's own limit. The smallest of them is the one that decides, and the
+    finding is which.
     """
     by_key = {b["key"]: b for b in businesses}
     out = []
@@ -3433,7 +3462,12 @@ def _hourly(
         if not business or business["status"] not in ("retail", "office"):
             continue
         office = business["status"] == "office"
-        posts = {slug: OFFICE_POST_RATE for slug in computers} if office else stations
+        # An office posts to its computers, and any professional but a cleaner
+        # can hold one. A shop's posts are its serving stations, each with the
+        # skill it asks for and the customers an hour it serves.
+        posts = (
+            {slug: (None, OFFICE_POST_RATE) for slug in computers} if office else stations
+        )
 
         seen = [[[] for _ in range(24)] for _ in range(7)]
         for entry in save.items(b["orderHistory"]):
@@ -3449,35 +3483,81 @@ def _hourly(
             [round(sum(h) / len(h), 1) if h else None for h in row] for row in seen
         ]
 
-        here = {}
+        here, labels = {}, {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
             if item and item.get("itemName") in posts:
                 here[item.get("id")] = posts[item["itemName"]]
-        counters = sum(here.values())
+                labels[item.get("id")] = (
+                    names.label(item["itemName"]) if names else item["itemName"]
+                )
+        # One role per skill the site's stations ask for. A set decides the
+        # order they reach the payload in.
+        by_skill = collections.defaultdict(dict)
+        for post, (skill, rate) in here.items():
+            by_skill[skill][post] = rate
+        roles = []
+        for skill in _in_order(by_skill):
+            rates = {}
+            for post, rate in by_skill[skill].items():
+                label = labels[post]
+                rates[label] = max(rates.get(label, 0), rate)
+            biggest = max(_in_order(rates), key=rates.get)
+            roles.append(
+                {
+                    "skill": skill,
+                    "label": names.label(skill) if skill and names else skill,
+                    # The station of this role worth adding another of: the
+                    # largest, ties broken by name so the words do not move.
+                    "station": biggest,
+                    "counters": sum(by_skill[skill].values()),
+                    "stationCount": len(by_skill[skill]),
+                    "staffed": [[0] * 24 for _ in range(7)],
+                    "onShift": [[0] * 24 for _ in range(7)],
+                }
+            )
 
         # The roster, read the same way the game reads it: scheduleDay.day is the
-        # game day modulo 7, with 7 standing in for Sunday's 0.
+        # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
+        # serving station installed has no roster to read and stays at zero.
         staffed = [[0] * 24 for _ in range(7)]
         on_shift = [[0] * 24 for _ in range(7)]
-        for scheduled in save.items(b.get("scheduleDays")):
-            wd = scheduled["day"] % 7
-            manned = [set() for _ in range(24)]
-            for shift in save.items(scheduled.get("workShifts")):
-                if shift.get("type") != STATION_SHIFT:
-                    continue
-                if not _serves(business["status"], crew.get(shift.get("employeeId"))):
-                    continue
-                post = shift.get("itemInstanceId")
-                if post not in here:
-                    continue
-                for hour in range(
-                    max(0, shift["startingHour"]), min(24, shift["endingHour"])
-                ):
-                    manned[hour].add(post)
-                    on_shift[wd][hour] += 1
-            for hour in range(24):
-                staffed[wd][hour] = sum(here[post] for post in manned[hour])
+        if by_skill:
+            for scheduled in save.items(b.get("scheduleDays")):
+                wd = scheduled["day"] % 7
+                manned = {skill: [set() for _ in range(24)] for skill in by_skill}
+                on = {skill: [0] * 24 for skill in by_skill}
+                for shift in save.items(scheduled.get("workShifts")):
+                    if shift.get("type") != STATION_SHIFT:
+                        continue
+                    post = shift.get("itemInstanceId")
+                    if post not in here:
+                        continue
+                    needed = here[post][0]
+                    if not _serves(
+                        business["status"], crew.get(shift.get("employeeId")), needed
+                    ):
+                        continue
+                    for hour in range(
+                        max(0, shift["startingHour"]), min(24, shift["endingHour"])
+                    ):
+                        manned[needed][hour].add(post)
+                        on[needed][hour] += 1
+                for role in roles:
+                    skill = role["skill"]
+                    posts_here = by_skill[skill]
+                    for hour in range(24):
+                        role["staffed"][wd][hour] = sum(
+                            rate
+                            for post, rate in posts_here.items()
+                            if post in manned[skill][hour]
+                        )
+                        role["onShift"][wd][hour] = on[skill][hour]
+                for hour in range(24):
+                    # A customer passes through every role, so the site is only
+                    # as fast as its slowest one that hour.
+                    staffed[wd][hour] = min(role["staffed"][wd][hour] for role in roles)
+                    on_shift[wd][hour] = min(role["onShift"][wd][hour] for role in roles)
 
         door = b.get("customerCapacity", 0) or 0
         effective = [
@@ -3499,8 +3579,10 @@ def _hourly(
             "door": door,
             # The same number under the name the cap findings think in.
             "cap": door,
-            "counters": counters,
+            # The most an hour the site can serve with every role manned.
+            "counters": min((role["counters"] for role in roles), default=0),
             "stationCount": len(here),
+            "roles": roles,
             "basket": business["basket"],
             "peak": max(
                 (c for row in customers for c in row if c is not None), default=0
@@ -3530,109 +3612,178 @@ def _capped_cells(grid: dict) -> set:
     }
 
 
+def _lower_first(text: str) -> str:
+    """A game label dropped into the middle of a sentence, DJ and all."""
+    return " ".join(
+        word if word.isupper() and len(word) > 1 else word.lower()
+        for word in text.split(" ")
+    )
+
+
+def _role_words(role: dict, office: bool) -> dict:
+    """What a finding about one of a site's roles calls its limit and its answer.
+
+    A register asks for another counter and a computer for another workstation;
+    a gym's board and a theatre's booth are neither, so those findings name the
+    role and the piece of furniture it works. `noun` is the plural the alert
+    lines use, and None where the words the board has always used still fit.
+    """
+    if office:
+        return {
+            "noun": None,
+            "staffing": ("staffing", "more staff at the computers on those hours"),
+            "posts": ("workstations", "another computer workstation"),
+        }
+    if role["skill"] == SERVICE_SKILL:
+        return {
+            "noun": None,
+            "staffing": ("staffing", "more service staff on those hours"),
+            "posts": ("registers", "another counter"),
+        }
+    station = _lower_first(role["station"])
+    cover = f"{role['label']} cover"
+    return {
+        "noun": _plural(station),
+        "staffing": (cover, f"another {role['label']} on those hours"),
+        "posts": (cover, f"another {station}"),
+    }
+
+
+KIND_ORDER = {"the building": 0, "staffing": 1, "registers": 2}
+
+
 def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
-    """The two things an hourly grid can tell you that a daily total cannot."""
+    """The two things an hourly grid can tell you that a daily total cannot.
+
+    Each role is judged on the roster that was on for it, so a gym short of
+    trainers and a theatre short of projectionists get the line that fits them,
+    while a shop's counters and an office's workstations keep the words they
+    have always had. Wages arrive per role, as ``{site key: {skill: wage}}``.
+    """
     by_key = {b["key"]: b for b in businesses}
     out = []
     for grid in grids:
         business = by_key[grid["key"]]
         basket = grid["basket"] or 0
-        door, counters = grid["door"], grid["counters"]
+        door = grid["door"]
 
         # Each capped hour is held by its own limit: a roster that runs one
         # person at night and a full floor by day is short of staff at night and
         # up against the door by day, and a verdict for the week as a whole
-        # would be wrong about one of them.
+        # would be wrong about one of them. Where a site asks for more than one
+        # skill, every role short that hour is named, because it serves nobody
+        # until all of them are manned.
         office = grid.get("office", False)
+        roles = {role["skill"]: role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
-        for wd, hour in _capped_cells(grid):
-            staffed = grid["staffed"][wd][hour]
-            if door and door <= staffed:
-                by_limit["the building"][wd].add(hour)
-            elif staffed < counters:
-                by_limit["staffing"][wd].add(hour)
-            else:
-                by_limit["registers"][wd].add(hour)
-        for limit, fix in (
-            ("the building", "a bigger office or a second one nearby" if office
-             else "a bigger site or a second shop nearby"),
-            ("staffing", "more staff at the computers on those hours" if office
-             else "more service staff on those hours"),
-            ("registers", "another computer workstation" if office else "another counter"),
-        ):
-            capped = by_limit.get(limit)
-            if not capped:
+        for wd, hour in sorted(_capped_cells(grid)):
+            if door and door <= grid["staffed"][wd][hour]:
+                by_limit["the building", None][wd].add(hour)
                 continue
-            cells = [(wd, h) for wd, hs in capped.items() for h in hs]
-            ceilings = [grid["effective"][wd][h] for wd, h in cells]
-            out.append(
-                {
-                    "kind": "cap",
-                    "key": grid["key"],
-                    "site": grid["name"],
-                    "office": office,
-                    "hours": len(cells),
-                    "when": _hour_phrase(capped),
-                    "limit": "workstations" if office and limit == "registers" else limit,
-                    "fix": fix,
-                    "cap": min(ceilings),
-                    "capTop": max(ceilings),
-                    "basket": basket,
-                    # What is measurably flowing through the ceiling, hour by
-                    # hour. What is being turned away above it is not in the
-                    # save at all.
-                    "throughput": money(
-                        sum(grid["customers"][wd][h] for wd, h in cells) * basket / 7
-                    ),
-                }
+            short = [r for r in roles.values() if r["staffed"][wd][hour] < r["counters"]]
+            if short:
+                for role in short:
+                    by_limit["staffing", role["skill"]][wd].add(hour)
+                continue
+            # Fully manned and still capped: the slowest role's stations are the
+            # ceiling, and they are what another one buys.
+            binding = min(
+                roles.values(), key=lambda r: (r["counters"], r["skill"] or "")
             )
+            by_limit["registers", binding["skill"]][wd].add(hour)
 
-        best = None
-        service_wage = wages.get(grid["key"], 0)
-        for wd in range(7):
-            if grid["thin"][wd]:
-                continue
-            run = []
-            for hour in range(25):
-                seen = grid["customers"][wd][hour] if hour < 24 else None
-                on = grid["onShift"][wd][hour] if hour < 24 else 0
-                cap = grid["staffed"][wd][hour] if hour < 24 else 0
-                slack = (
-                    seen is not None
-                    and on >= IDLE_STAFF
-                    and cap > max(seen, 0.5) * IDLE_RATIO
+        for kind, skill in sorted(
+            by_limit, key=lambda k: (KIND_ORDER[k[0]], k[1] is None, str(k[1]))
+        ):
+            capped = {wd: sorted(hours) for wd, hours in by_limit[kind, skill].items()}
+            cells = [(wd, h) for wd in sorted(capped) for h in capped[wd]]
+            ceilings = [grid["effective"][wd][h] for wd, h in cells]
+            finding = {
+                "kind": "cap",
+                "key": grid["key"],
+                "site": grid["name"],
+                "office": office,
+                "hours": len(cells),
+                "when": _hour_phrase(capped),
+                "cap": min(ceilings),
+                "capTop": max(ceilings),
+                "basket": basket,
+                # What is measurably flowing through the ceiling, hour by
+                # hour. What is being turned away above it is not in the
+                # save at all.
+                "throughput": money(
+                    sum(grid["customers"][wd][h] for wd, h in cells) * basket / 7
+                ),
+            }
+            if kind == "the building":
+                finding["limit"] = "the building"
+                finding["fix"] = (
+                    "a bigger office or a second one nearby"
+                    if office
+                    else "a bigger site or a second shop nearby"
                 )
-                if slack:
-                    per_post = cap / on if on else 0
-                    needed = max(1, math.ceil(seen / per_post)) if per_post else 1
-                    run.append((hour, on - needed, seen, on))
+            else:
+                words = _role_words(roles[skill], office)
+                finding["limit"], finding["fix"] = (
+                    words["staffing"] if kind == "staffing" else words["posts"]
+                )
+                finding["noun"] = words["noun"]
+            out.append(finding)
+
+        # Overstaffing is a property of the roster that was on, so each role is
+        # read on its own: a gym's spare trainer-hours are real even on an hour
+        # when the site was held up by another role. The best run across roles
+        # and weekdays wins, first past the post on a tie.
+        wages_here = wages.get(grid["key"], {})
+        best = None
+        for role in grid["roles"]:
+            for wd in range(7):
+                if grid["thin"][wd]:
                     continue
-                if len(run) >= IDLE_RUN:
-                    spare = sum(r[1] for r in run)
-                    if not best or spare > best["spare"]:
-                        best = {
-                            "wd": wd,
-                            "from": run[0][0],
-                            "to": run[-1][0] + 1,
-                            "spare": spare,
-                            "staff": max(r[3] for r in run),
-                            "seen": round(sum(r[2] for r in run) / len(run)),
-                        }
                 run = []
-        if best and service_wage:
+                for hour in range(25):
+                    seen = grid["customers"][wd][hour] if hour < 24 else None
+                    on = role["onShift"][wd][hour] if hour < 24 else 0
+                    cap = role["staffed"][wd][hour] if hour < 24 else 0
+                    slack = (
+                        seen is not None
+                        and on >= IDLE_STAFF
+                        and cap > max(seen, 0.5) * IDLE_RATIO
+                    )
+                    if slack:
+                        per_post = cap / on if on else 0
+                        needed = max(1, math.ceil(seen / per_post)) if per_post else 1
+                        run.append((hour, on - needed, seen, on))
+                        continue
+                    if len(run) >= IDLE_RUN:
+                        spare = sum(r[1] for r in run)
+                        if not best or spare > best["spare"]:
+                            best = {
+                                "wd": wd,
+                                "from": run[0][0],
+                                "to": run[-1][0] + 1,
+                                "spare": spare,
+                                "staff": max(r[3] for r in run),
+                                "seen": round(sum(r[2] for r in run) / len(run)),
+                                "role": role,
+                            }
+                    run = []
+        wage = wages_here.get(best["role"]["skill"]) if best else None
+        if best and wage:
             out.append(
                 {
                     "kind": "idle",
                     "key": grid["key"],
                     "site": grid["name"],
                     "office": office,
+                    "noun": _role_words(best["role"], office)["noun"],
                     "day": WEEKDAYS[best["wd"]],
                     "from": best["from"],
                     "to": best["to"],
                     "staff": best["staff"],
                     "seen": best["seen"],
                     "spare": best["spare"],
-                    "worth": money(best["spare"] * service_wage / 7),
+                    "worth": money(best["spare"] * wage / 7),
                 }
             )
     return out
@@ -4532,6 +4683,10 @@ def _plural(label: str) -> str:
     # "Travel Agency" chains as "Travel Agencies"; "Gift Shop" just takes an s.
     if len(label) > 1 and label.endswith("y") and label[-2].lower() not in "aeiou":
         return label[:-1] + "ies"
+    # A station's name goes into a sentence too: "another hairdresser headwash"
+    # is one, "the hairdresser headwashes" is two of them.
+    if label.endswith(("sh", "ch", "x", "z")):
+        return label + "es"
     return label + "s"
 
 
@@ -4875,7 +5030,7 @@ def _plan(
         "priceDay": prices["day"],
         "priceCount": len(prices["unit"]),
         "peak": round(uplift, 3),
-        "stations": {names.label(s): c for s, c in stations.items()},
+        "stations": {names.label(s): rate for s, (_skill, rate) in stations.items()},
     }
 
 
@@ -5351,12 +5506,13 @@ def _alerts(
                 f"The building is the limit, so the answer is {group[0]['fix']}{who}"
             )
         else:
+            noun = group[0].get("noun") or ("workstations" if office else "counters")
             text = (
                 f"{where} fill{'s' if len(group) == 1 else ''} "
-                f"{'the workstations' if office else 'the counters'} {when}, "
+                f"the {noun} {when}, "
                 f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
-                f"ceiling. {limit.capitalize()} is the limit, so the answer is "
-                f"{group[0]['fix']}{who}"
+                f"ceiling. {limit if limit[:1].isupper() else limit.capitalize()} is the "
+                f"limit, so the answer is {group[0]['fix']}{who}"
             )
         # One site can be at more than one ceiling: its limit keeps the ids apart.
         note(
@@ -5368,16 +5524,20 @@ def _alerts(
         if finding["key"] in silent or finding["kind"] != "idle":
             continue
         site = finding["site"]
+        # A role's idle hours keep their own id: two roles can be idle at one
+        # site, and silencing one must not silence the other.
+        noun = finding.get("noun")
         note(
             "info",
             site,
             "idlestaff",
             f"{site} runs {finding['staff']} "
-            f"{'workstations' if finding.get('office') else 'counters'} "
+            f"{noun or ('workstations' if finding.get('office') else 'counters')} "
             f"{finding['from']:02d}:00-{finding['to']:02d}:00 on a "
             f"{finding['day']} for {finding['seen']} customers an hour; "
             f"{finding['spare']} staff-hours a week that buy nothing",
             worth=finding["worth"],
+            subject=noun or "",
             key=finding["key"],
         )
 
@@ -8244,9 +8404,24 @@ function bindFindingRows(host, list){
   });
 }
 
+/* Where a finding shows is decided twice over, by the materiality gate and by
+   its kind's switch, and neither drops it. `list` is every above-gate finding
+   whose kind is still on. `smaller` is what the gate set aside plus every
+   above-gate finding whose kind is switched off, with the switched-off rows
+   sorted after the gate rows so a switch visibly moves its own findings, even
+   the ones that were below the gate already. `off` counts the switched-off rows
+   in `smaller`, from either side of the gate, for the count line to carry.
+   DOM-free and self-contained, so the switches can be tested without a page. */
+function partitionFindings(alerts, minorRows, prefs){
+  const off = a => prefs[a.group] === false;
+  const kept = minorRows.filter(a => !off(a));
+  const smaller = kept.concat(minorRows.filter(off), alerts.filter(off));
+  return {list: alerts.filter(a => !off(a)), smaller, off: smaller.filter(off).length};
+}
+
 function drawAlerts(){
-  const kindOn = a => alertGroupPrefs[a.group] !== false;
-  const list = D.alerts.filter(kindOn);
+  const {list, smaller, off} = partitionFindings(
+    D.alerts, (D.minor || {}).rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
   const gate = (D.minor || {}).gate || 0;
@@ -8269,15 +8444,17 @@ function drawAlerts(){
   bindFindingRows($("alerts"), list);
 
   /* Anything worth less than the materiality gate is counted rather than read
-     out, and so is a finding whose kind is switched off: neither is dropped.
-     The count and the money cover both, and "show" lays the rows out like the
-     list above, a switched-off kind wearing its name as a dim chip. */
-  const rows = ((D.minor || {}).rows || []).concat(D.alerts.filter(a => !kindOn(a)));
+     out, and a finding whose kind is switched off is demoted to it rather than
+     dropped: neither leaves the screen. The count and the money cover both,
+     and "show" lays the rows out like the list above, a switched-off kind
+     wearing its name as a dim chip. */
+  const rows = smaller;
   const host = $("alertMinor"), more = $("minorList");
   if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
   else {
     const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
-    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
+    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day${
+      off ? ` · ${off} switched off` : ""} &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
       showMinor ? "hide" : "show"}</a>`;
     $("minorToggle").onclick = e => { e.preventDefault(); showMinor = !showMinor; drawAlerts(); };
     more.hidden = !showMinor;

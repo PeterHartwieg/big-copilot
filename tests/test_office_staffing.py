@@ -15,7 +15,6 @@ from ba_dashboard import (
     money,
 )
 from ba_save import Names, Save
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_web import ships  # noqa: E402
 
@@ -104,8 +103,8 @@ class OfficeGridTests(unittest.TestCase):
         hourly = {h: (1 if h < 4 else 2 if h < 9 else 3 if h < 17 else 0) for h in range(24)}
         save = Save({}, {}, "")
         b = building(LAW, items, shifts, hourly, door=3)
-        [grid] = _hourly(save, [b], [site("office")], {REGISTER: 20},
-                         {COMPUTER, LAPTOP}, self.CREW)
+        [grid] = _hourly(save, [b], [site("office")], {REGISTER: (SERVICE, 20)},
+                         {COMPUTER, LAPTOP}, self.CREW, Names({SERVICE: "Customer Service"}))
         return grid
 
     def test_professionals_at_computers_are_the_capacity(self):
@@ -150,7 +149,7 @@ class OfficeGridTests(unittest.TestCase):
         hourly = {h: 2 if 9 <= h < 13 else 0 for h in range(24)}
         b = building(LAW, items, shifts, hourly, door=50)
         [grid] = _hourly(Save({}, {}, ""), [b], [site("office")], {}, {COMPUTER}, crew)
-        [idle] = _hour_findings([grid], [site("office")], {grid["key"]: 146.0})
+        [idle] = _hour_findings([grid], [site("office")], {grid["key"]: {None: 146.0}})
         self.assertEqual((idle["kind"], idle["staff"], idle["spare"]), ("idle", 6, 16))
         self.assertEqual(idle["worth"], money(16 * 146.0 / 7))
         self.assertTrue(idle["office"])
@@ -164,7 +163,8 @@ class ShopGridTests(unittest.TestCase):
         hourly = {h: 20 if 9 <= h < 17 else 0 for h in range(24)}
         b = building(SHOP, items, shifts, hourly, door=30, name="Mart")
         shop = site("retail", name="Mart", basket=12.0)
-        [grid] = _hourly(Save({}, {}, ""), [b], [shop], {REGISTER: 20}, {COMPUTER}, crew)
+        [grid] = _hourly(Save({}, {}, ""), [b], [shop], {REGISTER: (SERVICE, 20)},
+                         {COMPUTER}, crew, Names({SERVICE: "Customer Service"}))
         self.assertFalse(grid["office"])
         self.assertEqual((grid["counters"], grid["staffed"][MONDAY][10]), (20, 20))
         [finding] = _hour_findings([grid], [shop], {})
