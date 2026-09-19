@@ -101,6 +101,28 @@ async function shop(which = 'full', edit, boot){
   return page;
 }
 
+
+/** One of the planner's rows resized: `staffed` lines somebody can be put on,
+ *  `hire` lines waiting on somebody being hired, and `now` shifts in the game.
+ *  Every row is a clone of one the planner really wrote, re-stamped onto a
+ *  weekday so the lines stay distinct, and `current.shifts` is counted off
+ *  `current.list` rather than asserted beside it. */
+function sized(name, {staffed, hire, now}){
+  const row = copy(ROWS.full);
+  const cycle = (from, n) => Array.from({length: n}, (_, k) =>
+    Object.assign({}, from[k % from.length], {d: k % 7}));
+  const staffedRows = ROWS.full.shifts.filter(x => x.p !== null);
+  const hireRows = ROWS.full.shifts.filter(x => x.p === null);
+  row.key = name;
+  row.name = name;
+  row.shifts = cycle(staffedRows, staffed).concat(cycle(hireRows, hire));
+  row.current.list = cycle(ROWS.full.current.list, now);
+  row.current.shifts = row.current.list.length;
+  row.current.fragments = row.current.list.length;
+  return row;
+}
+
+
 const mon = '#sp-roster .sp-day[data-d="1"] ';
 
 // --- what the planner actually emits ----------------------------------------
@@ -198,16 +220,18 @@ test('the counts are the plan against what the schedule holds today', async () =
 test('a week of nothing but thin days has no measured hour to plan from', async () => {
   const page = await shop('full');
   try {
-    const answers = await page.evaluate(key => [
+    // The never-measured shop is handed in beside the measured one rather
+    // than read off `D.staffing`, which holds only the row the page opened.
+    const answers = await page.evaluate(([key, cover]) => [
       spRosterMeasured(spRosterRow(key)),
-      spRosterMeasured(D.staffing[1]),
+      spRosterMeasured(cover),
       spRosterMeasured({key: 'x', name: 'x', failed: true}),
       spRosterMeasured(null),
-    ], KEY);
+    ], [KEY, copy(ROWS.cover)]);
     assert.deepEqual(answers, [true, false, false, false]);
   } finally { await page.close(); }
 });
-// The second row above is the never-measured shop, handed in beside the first.
+
 test('the never-measured row really is all `none`', () => {
   const basis = ROWS.cover.basis['ba:skill_customerservice'];
   assert.deepEqual([...new Set(basis.flat())], ['none']);
@@ -731,6 +755,39 @@ test('the Optimize staffing card opens the roster with most typing to save', asy
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
 });
+
+
+test('the card measures a saving in lines to enter, not in lines the plan drew', async () => {
+  // grok's pair. A is 100 scraps against 70 lines to enter and 30 posts to
+  // hire for; B is 80 against 70 with nobody to hire. Counting the hiring
+  // lines in makes A look like no saving at all and sends the player to B,
+  // which saves a third as much typing.
+  const page = await shop('full');
+  try {
+    const a = sized('shop-a', {staffed: 70, hire: 30, now: 100});
+    const b = sized('shop-b', {staffed: 70, hire: 0, now: 80});
+    // The rows are what they claim to be before anything is asserted about
+    // the card that reads them.
+    for(const [row, hire] of [[a, 30], [b, 0]]){
+      assert.equal(row.current.shifts, row.current.list.length);
+      assert.equal(row.shifts.filter(s => s.p === null).length, hire);
+      assert.equal(row.shifts.filter(s => s.p !== null).length, 70);
+    }
+    const shown = await page.evaluate(rows => {
+      D.staffing = rows;
+      drawOptimizeStaffing();
+      const card = $('optimizeStaffingCard');
+      return [card.querySelector('.soon').textContent,
+        card.lastElementChild.textContent, card.dataset.site,
+        JSON.stringify(rows.map(r => spRosterCounts(r).tickable))];
+    }, [a, b]);
+    assert.equal(shown[3], '[70,70]', 'both plans are 70 lines to enter');
+    assert.equal(shown[0], '\u221230 LINES');
+    assert.match(shown[1], /shop-a: 100 shifts become 70\./);
+    assert.equal(shown[2], 'shop-a', 'not shop-b, which saves ten');
+  } finally { await page.close(); }
+});
+
 
 test('the card scores the saving on the lines somebody can be put on', async () => {
   const page = await shop('full');
