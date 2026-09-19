@@ -1,10 +1,19 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=99867937a8">
+<link rel="stylesheet" href="community.css?v=673bd30a38">
 <title>Big Copilot</title>
+<script>
+/* The remembered theme, before anything paints. It has to be an inline, blocking
+   script in the head: the board's own script runs at the end of the body, which
+   is far too late to stop a dark page flashing white, or the reverse. "Auto"
+   stores nothing and leaves the attribute off, so prefers-color-scheme decides.
+   Blocked or full storage throws, and the system setting is then the answer,
+   which is what the default is anyway. */
+try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=99867937a8">
+<link rel="stylesheet" href="fonts/fonts.css?v=673bd30a38">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -714,23 +723,27 @@ body.map-modal-open{overflow:hidden}
 }
 
 /* Tokens: the generator's .board palette. Dark is the base, as on the canvas;
-   the light values follow the system setting or an explicit data-theme, the way
-   the board has always done it. */
+   the light values follow the system setting or an explicit data-theme, which the
+   footer's theme control sets. color-scheme rides along with each set so that
+   scrollbars, selects and the other native widgets follow a chosen theme instead
+   of staying with the operating system's. */
 :root{
+  color-scheme:dark;
   --ground:#0d100f; --surface:#151917; --raised:#1c211e;
   --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#6b756f;
   --rule:#262c28; --rule-soft:#1e2320;
-  --accent:#43c07a; --accent-soft:#43c07a26;
+  --accent:#43c07a; --accent-soft:#43c07a26; --on-accent:#08130d;
   --pos:#43c07a; --neg:#ff6257; --warn:#f0913a; --info:#6ea8ff;
   --tip-bg:#e9ece6; --tip-ink:#0d100f;
   --shadow:0 1px 2px #00000059;
 }
 @media (prefers-color-scheme:light){
   :root:not([data-theme="dark"]){
+    color-scheme:light;
     --ground:#eef0ea; --surface:#fdfdfb; --raised:#f3f4ef;
     --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
     --rule:#d2d6cd; --rule-soft:#e0e3da;
-    --accent:#00703a; --accent-soft:#00703a1f;
+    --accent:#00703a; --accent-soft:#00703a1f; --on-accent:#ffffff;
     --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
     --tip-bg:#15181a; --tip-ink:#f3f4ef;
     --shadow:0 1px 2px #15181a0f;
@@ -739,10 +752,11 @@ body.map-modal-open{overflow:hidden}
   :root:not([data-theme="dark"]) .orb::after{opacity:.2}
 }
 :root[data-theme="light"]{
+  color-scheme:light;
   --ground:#eef0ea; --surface:#fdfdfb; --raised:#f3f4ef;
   --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
   --rule:#d2d6cd; --rule-soft:#e0e3da;
-  --accent:#00703a; --accent-soft:#00703a1f;
+  --accent:#00703a; --accent-soft:#00703a1f; --on-accent:#ffffff;
   --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
   --tip-bg:#15181a; --tip-ink:#f3f4ef;
   --shadow:0 1px 2px #15181a0f;
@@ -1426,15 +1440,90 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
 
 /* footer ------------------------------------------------------------------- */
-.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:16px 22px;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
-.foot > span:last-child{margin-left:auto}
-#footerLinks{display:flex;flex-wrap:wrap;gap:14px;align-items:center;text-transform:none}
-#footerLinks:empty{display:none}
+/* After the "Big Copilot Footer" canvas. Built by footer_html() and placed
+   twice, so every rule here serves the board and the landing alike; the landing
+   adds .sf-landing for the horizontal inset .wrap already gives the board.
+   Prefixed sf- throughout: the canvas's own .door/.cta/.seg/.mono are the kind
+   of bare names this stylesheet has collided over before. */
+.sitefoot{margin-top:64px}
+.sf-landing{align-self:stretch;width:100%;margin-top:40px}
+/* No cap on the board: .wrap already sets the page's measure, and a narrower
+   footer would leave the hairline and the orb floating inside the sections
+   above it, badly so on a wide monitor. The landing has no .wrap, so it takes
+   the same inset and a cap of its own. */
+.sf-landing .sf-in{max-width:1180px;margin:0 auto;width:calc(100% - clamp(32px,5vw,80px))}
+.sf-rule{position:relative;height:1px;background:var(--rule)}
+.sf-orb{position:absolute;left:0;bottom:0;width:26px;height:26px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--accent) 45%,white),var(--accent) 52%,color-mix(in srgb,var(--accent) 55%,black));
+  box-shadow:0 0 18px var(--accent-soft)}
+.sf-cards{display:flex;flex-wrap:wrap;gap:16px;margin-top:32px}
+.sf-card{flex:1 1 320px;display:flex;align-items:center;gap:18px;padding:20px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:8px;transition:transform .18s ease,border-color .18s ease}
+.sf-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.sf-card:hover .sf-beat{animation:sfbeat .7s ease-in-out infinite}
+.sf-card:hover .sf-nudge{animation:sfnudge .7s ease-in-out infinite}
+.sf-card-head{display:flex;align-items:flex-start;gap:14px;flex-grow:1;min-width:0}
+.sf-badge{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;
+  background:var(--accent-soft);color:var(--accent);flex-shrink:0}
+.sf-card-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.sf-card-title{display:inline-flex;align-items:center;gap:10px;font-size:17px;font-weight:600;color:var(--ink)}
+.sf-card-title .feature-new{margin-left:0}
+.sf-card-note{font-size:13px;line-height:1.5;color:var(--ink-2)}
+.sf-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;flex-shrink:0;
+  box-sizing:border-box;border-radius:999px;border:1px solid var(--accent);cursor:pointer;white-space:nowrap;
+  font:600 14px/1 Archivo,"Helvetica Neue",Arial,sans-serif;text-decoration:none}
+.sf-cta.sf-fill{background:var(--accent);color:var(--on-accent)}
+.sf-cta.sf-fill:hover{filter:brightness(1.08);color:var(--on-accent)}
+.sf-cta.sf-line{background:transparent;color:var(--accent)}
+.sf-cta.sf-line:hover{background:var(--accent-soft);color:var(--accent)}
+.sf-cols{display:flex;flex-wrap:wrap;gap:24px 88px;margin-top:40px}
+.sf-col{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.sf-head{margin:0;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sf-link{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);text-decoration:none}
+.sf-link:hover{color:var(--accent)}
+.sf-btn{padding:0;border:0;background:none;font:inherit;font-size:14px;cursor:pointer}
+.sf-ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+/* The theme control keeps the right edge of the row, as on the canvas. */
+.sf-theme{margin-left:auto;align-items:flex-end}
+.sf-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:999px;background:var(--surface)}
+.sf-segbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
+  border:0;border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer}
+.sf-segbtn:hover{color:var(--ink)}
+.sf-segbtn[aria-pressed="true"]{background:var(--raised);color:var(--accent);box-shadow:inset 0 0 0 1px var(--rule)}
+/* The label each button carries for a screen reader; title= alone is not read
+   reliably, and the icons have none of their own. */
+.sf-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.sf-ext{color:var(--ink-2)}
+.sitefoot :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.sf-base{display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;
+  margin-top:40px;padding-top:16px;border-top:1px solid var(--rule-soft)}
+.sf-who{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.sf-mark{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:15px;letter-spacing:-.01em;color:var(--ink)}
+.sf-dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.sf-said{font-size:12px;line-height:1.6;color:var(--ink-2)}
+.sf-legal{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap;
+  font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.04em;color:var(--ink-2)}
+.sf-legal a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule)}
+.sf-legal a:hover{color:var(--ink)}
+.sf-meta:empty{display:none}
+@keyframes sfbeat{0%,100%{transform:scale(1)}40%{transform:scale(1.22)}}
+@keyframes sfnudge{0%,100%{transform:translateY(0)}40%{transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.sf-card,.sf-beat,.sf-nudge{animation:none!important;transition:none}}
+/* The phone artboard: cards stack, the columns pair up, the base unstacks. */
+@media (max-width:720px){
+  .sf-cards{flex-direction:column}
+  .sf-card{flex-direction:column;align-items:stretch;gap:16px}
+  .sf-cta{width:100%}
+  .sf-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px}
+  .sf-theme{margin-left:0;align-items:flex-start}
+  .sf-segbtn{width:44px;height:44px}
+  .sf-link{min-height:44px}
+  .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
+  .sf-who{flex-direction:column;align-items:flex-start;gap:8px}
+}
 .feature-new{display:inline-block;flex:none;margin-left:6px;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
 .nav .feature-new{margin-left:0}
-.changelog-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;color:var(--ink-3);font:inherit;letter-spacing:inherit;cursor:pointer}
-.changelog-link:hover{color:var(--ink);border-color:var(--ink-3)}
-.changelog-link:focus-visible,.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 body:has(#changelogDialog[open]){overflow:hidden}
 .changelog-dialog{width:min(640px,calc(100vw - 32px));max-width:none;max-height: min(780px,calc(100dvh - 48px));padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
 .changelog-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
@@ -1518,7 +1607,6 @@ body .mast{top:var(--release-height,0px)}
 .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 button.btn{border:0;cursor:pointer}
 .landing .row{display:flex;align-items:center;gap:18px}
-.landing footer{margin-top:40px;display:flex;gap:18px;align-items:center;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
 .landing{position:relative;overflow:clip}
 .landing .orb{width:360px;height:360px;z-index:0}
 .landing .orb i{box-shadow:0 40px 90px #43c07a44,inset -24px -34px 60px #00000066,inset 10px 14px 30px #ffffff22}
@@ -1592,8 +1680,6 @@ button.btn{border:0;cursor:pointer}
 .menu-panel .save-picker{width:100%;margin-bottom:8px}
 .menu-panel .save-options{position:relative;top:auto;right:auto;width:100%;max-width:none;margin-top:6px;box-shadow:none}
 .strip .right .menu-panel{white-space:normal}
-.lg-foot{display:contents}
-.landing footer a{cursor:pointer}
 .landing details.help{width:560px;margin-top:-8px}
 .landing details.help:not([open]){display:none}
 .landing details.help > summary{display:none}
@@ -1607,10 +1693,8 @@ button.btn{border:0;cursor:pointer}
 .save-location select{max-width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:4px 6px}
 .save-location p{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--ink-3)}
 .menu-panel .save-location{width:100%;max-width:100%}
-.foot #footerLinks a.lg-footlink{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--rule)}
-.foot #footerLinks a.lg-footlink:hover{color:var(--ink);border-color:var(--ink-3)}
 @media (max-width:1100px){.landing .orb{display:none}}
-@media (max-width:640px){.drop,.landing .strip,.landing details.help{width:calc(100vw - 48px)}.landing footer{flex-wrap:wrap;justify-content:center;line-height:1.8}}
+@media (max-width:640px){.drop,.landing .strip,.landing details.help{width:calc(100vw - 48px)}}
 
 /* shared pieces the More menu still uses --------------------------------- */
 .lg-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:36px;padding:8px 14px;
@@ -1664,12 +1748,11 @@ details.help[open] summary::after{content:"\2013"}
 .menu-panel .help-content{padding-bottom:12px}
 .menu-panel .path-row{flex-wrap:wrap}
 .menu-panel .path-row code{flex-basis:100%;font-size:10px}
-.menu-foot{border-top:1px solid var(--rule);padding:14px 10px 5px;display:flex;justify-content:space-between;font-size:11px}
+/* Only Forget history moves in here now: the project links live in the board's
+   own footer rather than being carried over from the landing. */
+.menu-foot{border-top:1px solid var(--rule);margin-top:4px;padding:12px 10px 4px;display:flex;font-size:11px}
 .foot-links{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
-.foot-links a.lg-text{color:var(--ink-2)}
-.menu-foot .foot-links{width:100%;gap:4px 14px}
-.menu-foot .foot-links .lg-btn{width:100%;margin:0 0 4px}
-.menu-foot .foot-links .lg-text{margin-top:6px}
+.foot-links .lg-text{color:var(--ink-2)}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
 <aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>
@@ -1710,18 +1793,80 @@ details.help[open] summary::after{content:"\2013"}
     </div>
     <p class="quiet lg-note" id="srcNote" hidden></p>
   </div>
-  <footer class="rv">
-    <a class="link" id="helpLink" href="#help">Where saves live</a><span>&middot;</span>
-    <button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button><span>&middot;</span>
-    <span class="lg-foot" id="footSlot">
-      <a class="link" id="issueLink" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
-      <a class="link" id="donateLink" href="https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
-      <a class="link" id="sourceLink" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source</a><span>&middot;</span>
-      <a class="link" id="impressumLink" href="impressum.html" target="_blank" rel="noopener">Impressum</a><span>&middot;</span>
-      <a class="link" id="privacyLink" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
-    </span>
-    <span>&middot;</span><span>GAME BUILD 3680</span>
-  </footer>
+  <footer class="sitefoot sf-landing rv">
+  <div class="sf-in">
+    <div class="sf-rule"><span class="sf-orb"></span></div>
+    <div class="sf-cards">
+      <!-- Ships hidden and is revealed by community.js, which the CLI's
+           dashboard.html never loads; that file hides it again once heartbeats
+           have failed without one ever succeeding, which is what a copy with no
+           /api/community behind it looks like. Do not make this wait for the API
+           before showing: the landing sends no request until the reader asks for
+           one, and that silence is a promise the privacy notice makes.
+           Marked by attribute, not id: the landing's footer and the board's are
+           both in the page until the board replaces the landing. -->
+      <div class="sf-card" data-vote-card hidden>
+        <div class="sf-card-head">
+          <span class="sf-badge"><svg class="sf-ic sf-nudge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 13.5l4-4 4 4"/></svg></span>
+          <div class="sf-card-copy">
+            <span class="sf-card-title">Vote on what comes next<span class="feature-new" data-new-feature="community-voting" hidden>New</span></span>
+            <span class="sf-card-note">Pick the features Big Copilot gets next.</span>
+          </div>
+        </div>
+        <button type="button" class="sf-cta sf-fill" data-community-open aria-haspopup="dialog">Vote on features</button>
+      </div>
+      <div class="sf-card">
+        <div class="sf-card-head">
+          <span class="sf-badge"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></span>
+          <div class="sf-card-copy">
+            <span class="sf-card-title">Support the project</span>
+            <span class="sf-card-note">A small thank-you keeps this and future Big Ambitions projects going.</span>
+          </div>
+        </div>
+        <a class="sf-cta sf-line" href="https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>Donate via PayPal</a>
+      </div>
+    </div>
+    <nav class="sf-cols" aria-label="About Big Copilot">
+      <div class="sf-col">
+        <h2 class="sf-head">Big Copilot</h2>
+        <a class="sf-link" id="helpLink" href="#help">Where saves live</a>
+        <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
+        <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source code<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+      </div>
+      <div class="sf-col">
+        <h2 class="sf-head">Follow</h2>
+        <a class="sf-link" href="https://www.youtube.com/@PeterHartwieg" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>YouTube<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://www.reddit.com/r/bigambitions/" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>r/bigambitions<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+      </div>
+      <div class="sf-col">
+        <h2 class="sf-head">Big Ambitions &middot; official</h2>
+        <a class="sf-link" href="https://store.steampowered.com/app/1331550/Big_Ambitions/" target="_blank" rel="noopener">Steam store page<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://www.bigambitionsgame.com/" target="_blank" rel="noopener">Hovgaard Games<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+      </div>
+      <!-- Marked by attribute rather than id, and wired by the board script for
+           whichever copies are in the page: the landing's footer and the board's
+           are both here until the board replaces the landing. -->
+      <div class="sf-col sf-theme">
+        <h2 class="sf-head" id="themeHeadL">Theme</h2>
+        <div class="sf-seg" role="group" aria-labelledby="themeHeadL">
+          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false" title="Match system"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false" title="Light"><span class="sf-sr">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false" title="Dark"><span class="sf-sr">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
+        </div>
+      </div>
+    </nav>
+    <div class="sf-base">
+      <div class="sf-who">
+        <span class="sf-mark"><span class="sf-dot"></span>Big Copilot</span>
+        <span class="sf-said">Fan-made companion for Big Ambitions. Not affiliated with, endorsed by or supported by Hovgaard Games.</span>
+      </div>
+      <div class="sf-legal">
+        <a href="impressum.html" target="_blank" rel="noopener">Impressum</a><a href="privacy.html" target="_blank" rel="noopener">Privacy</a><span class="sf-meta">Game build 3680</span>
+      </div>
+    </div>
+  </div>
+</footer>
   <details class="help" id="help">
     <summary>Where is my save?</summary>
     <div class="help-content">
@@ -1746,7 +1891,8 @@ details.help[open] summary::after{content:"\2013"}
 </section>
 <!-- The strip's More menu, cloned into the strip when a save loads. app.js
      moves the folder button, the one-file picker, the game-text chip, the help
-     and the footer links into its slots. -->
+     and Forget history into its slots. The project links are not among them:
+     the board has its own footer and carries them itself. -->
 <template id="boardControls">
   <div class="menu" id="srcMenu">
     <button type="button" class="ibtn tr" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="More" data-tip="Change folder · one file · watch · game text · history · about"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg></button>
@@ -1908,17 +2054,83 @@ details.help[open] summary::after{content:"\2013"}
       <p class="quiet" style="margin-top:44px">The wiki is not part of this build.</p>
     </div>
   </div>
-  <footer class="foot" id="footer">
-    <span>Big Copilot</span>
-    <span id="footFile"></span>
-    <!-- a host page may append its own project links here -->
-    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button></span>
-    <span id="footBuild"></span>
-  </footer>
+<footer class="sitefoot">
+  <div class="sf-in">
+    <div class="sf-rule"><span class="sf-orb"></span></div>
+    <div class="sf-cards">
+      <!-- Ships hidden and is revealed by community.js, which the CLI's
+           dashboard.html never loads; that file hides it again once heartbeats
+           have failed without one ever succeeding, which is what a copy with no
+           /api/community behind it looks like. Do not make this wait for the API
+           before showing: the landing sends no request until the reader asks for
+           one, and that silence is a promise the privacy notice makes.
+           Marked by attribute, not id: the landing's footer and the board's are
+           both in the page until the board replaces the landing. -->
+      <div class="sf-card" data-vote-card hidden>
+        <div class="sf-card-head">
+          <span class="sf-badge"><svg class="sf-ic sf-nudge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 13.5l4-4 4 4"/></svg></span>
+          <div class="sf-card-copy">
+            <span class="sf-card-title">Vote on what comes next<span class="feature-new" data-new-feature="community-voting" hidden>New</span></span>
+            <span class="sf-card-note">Pick the features Big Copilot gets next.</span>
+          </div>
+        </div>
+        <button type="button" class="sf-cta sf-fill" data-community-open aria-haspopup="dialog">Vote on features</button>
+      </div>
+      <div class="sf-card">
+        <div class="sf-card-head">
+          <span class="sf-badge"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></span>
+          <div class="sf-card-copy">
+            <span class="sf-card-title">Support the project</span>
+            <span class="sf-card-note">A small thank-you keeps this and future Big Ambitions projects going.</span>
+          </div>
+        </div>
+        <a class="sf-cta sf-line" href="https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>Donate via PayPal</a>
+      </div>
+    </div>
+    <nav class="sf-cols" aria-label="About Big Copilot">
+      <div class="sf-col">
+        <h2 class="sf-head">Big Copilot</h2>
+        <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
+        <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source code<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+      </div>
+      <div class="sf-col">
+        <h2 class="sf-head">Follow</h2>
+        <a class="sf-link" href="https://www.youtube.com/@PeterHartwieg" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>YouTube<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://www.reddit.com/r/bigambitions/" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>r/bigambitions<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+      </div>
+      <div class="sf-col">
+        <h2 class="sf-head">Big Ambitions &middot; official</h2>
+        <a class="sf-link" href="https://store.steampowered.com/app/1331550/Big_Ambitions/" target="_blank" rel="noopener">Steam store page<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://www.bigambitionsgame.com/" target="_blank" rel="noopener">Hovgaard Games<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+      </div>
+      <!-- Marked by attribute rather than id, and wired by the board script for
+           whichever copies are in the page: the landing's footer and the board's
+           are both here until the board replaces the landing. -->
+      <div class="sf-col sf-theme">
+        <h2 class="sf-head" id="themeHead">Theme</h2>
+        <div class="sf-seg" role="group" aria-labelledby="themeHead">
+          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false" title="Match system"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false" title="Light"><span class="sf-sr">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false" title="Dark"><span class="sf-sr">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
+        </div>
+      </div>
+    </nav>
+    <div class="sf-base">
+      <div class="sf-who">
+        <span class="sf-mark"><span class="sf-dot"></span>Big Copilot</span>
+        <span class="sf-said">Fan-made companion for Big Ambitions. Not affiliated with, endorsed by or supported by Hovgaard Games.</span>
+      </div>
+      <div class="sf-legal">
+        <a href="impressum.html" target="_blank" rel="noopener">Impressum</a><a href="privacy.html" target="_blank" rel="noopener">Privacy</a><span class="sf-meta" id="footFile"></span><span class="sf-meta" id="footBuild"></span>
+      </div>
+    </div>
+  </div>
+</footer>
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
-  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-17">17 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/43" target="_blank" rel="noopener" aria-label="View pull request 43">PR #43 ↗</a></div><h3>Warnings for unmet staff demands</h3><p>Needs attention now tells you when your employees&#x27; demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site&#x27;s page lists the demands under its crew.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/40" target="_blank" rel="noopener" aria-label="View pull request 40">PR #40 ↗</a></div><h3>Staffing by the hour for offices</h3><p>Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-18">18 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/50" target="_blank" rel="noopener" aria-label="View pull request 50">PR #50 ↗</a></div><h3>Choose light or dark</h3><p>The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system&#x27;s.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-17">17 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/43" target="_blank" rel="noopener" aria-label="View pull request 43">PR #43 ↗</a></div><h3>Warnings for unmet staff demands</h3><p>Needs attention now tells you when your employees&#x27; demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site&#x27;s page lists the demands under its crew.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/40" target="_blank" rel="noopener" aria-label="View pull request 40">PR #40 ↗</a></div><h3>Staffing by the hour for offices</h3><p>Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves. */
@@ -1957,13 +2169,50 @@ featureDiscovery.refresh();
     if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
   });
 })();
+/* --- theme control --------------------------------------------------- */
+/* Three states over one attribute on <html>, which the palette keys off:
+   light and dark set it, auto removes it and lets prefers-color-scheme decide.
+   The head's inline script has already applied the stored choice by the time
+   this runs; all this adds is the buttons and keeping them in step.
+
+   Every copy of the control is wired, because the landing's footer and the
+   board's are both in the page until the board replaces the landing, and the
+   two have to agree. Storage that throws still switches the theme for this
+   page; only remembering it across visits is lost. */
+(() => {
+  const KEY = 'ba_dash_theme';
+  const read = () => {
+    let stored = null;
+    try { stored = localStorage.getItem(KEY); } catch(e) {}
+    return stored === 'light' || stored === 'dark' ? stored : 'auto';
+  };
+  function paint(mode){
+    const root = document.documentElement;
+    if(mode === 'auto') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', mode);
+    document.querySelectorAll('[data-theme-set]').forEach(button => {
+      button.setAttribute('aria-pressed', button.dataset.themeSet === mode ? 'true' : 'false');
+    });
+  }
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-theme-set]');
+    if(!button) return;
+    const mode = button.dataset.themeSet;
+    try {
+      if(mode === 'auto') localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, mode);
+    } catch(e) {}
+    paint(mode);
+  });
+  paint(read());
+})();
 </script>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "99867937a8";</script>
-<script>window.LEDGER_RELEASE = {"version":"99867937a8","latest":{"pr":43,"date":"2026-09-17","title":"Warnings for unmet staff demands","summary":"Needs attention now tells you when your employees' demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site's page lists the demands under its crew."}};</script>
+<script>window.LEDGER_BUILD = "673bd30a38";</script>
+<script>window.LEDGER_RELEASE = {"version":"673bd30a38","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2032,8 +2281,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=99867937a8"></script>
-<script src="community.js?v=99867937a8"></script>
+<script src="app.js?v=673bd30a38"></script>
+<script src="community.js?v=673bd30a38"></script>
 
 <script>
 

@@ -24,7 +24,10 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       });
     }
     await page.goto(base);
-    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),5);
+    // Six: the landing's footer and the board's each carry a Changelog and a
+    // voting badge, and the nav adds two. The pairs share an id, so the counts
+    // below still go to zero together once the feature has been opened.
+    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),6);
     await page.locator('#landing [data-community-open]').click();
     assert.equal(await page.locator('.community-dialog').evaluate(d => d.open),true);
     assert.equal(await page.locator('[data-new-feature="community-voting"]:not([hidden])').count(),0);

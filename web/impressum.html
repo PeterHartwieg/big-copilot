@@ -7,12 +7,18 @@
 <meta name="robots" content="noindex">
 <title>Impressum · Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
+<script>
+/* The theme the board's footer pinned, so opening this page from there does not
+   flip to the operating system's. Same key and same attribute as the board. */
+try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
+</script>
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root{--ground:#0d100f;--ink:#e9ece6;--ink-2:#9aa39d;--rule:#262c28;--accent:#43c07a;color-scheme:dark}
 @media (prefers-color-scheme:light){
-  :root{--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
+  :root:not([data-theme="dark"]){--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
 }
+:root[data-theme="light"]{--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.6 Archivo,"Helvetica Neue",Arial,sans-serif}
 main{max-width:560px;margin:0 auto;padding:48px 16px}
 h1{font-size:28px;margin:0 0 4px}
@@ -39,6 +45,9 @@ a{color:var(--accent)}
   <h2>Contact</h2>
   <p>Email: <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a></p>
   <p>Phone: <a href="tel:+4915126176537">+49 151 26176537</a></p>
+
+  <h2>Affiliation</h2>
+  <p>Big Copilot is a fan-made companion for <a href="https://store.steampowered.com/app/1331550/Big_Ambitions/" target="_blank" rel="noopener">Big Ambitions</a>, a game by Hovgaard Games. It is not affiliated with, endorsed by or supported by Hovgaard Games. Game names and trade marks belong to their owners.</p>
 
   <p class="back"><a href="/">Back to Big Copilot</a> · <a href="privacy.html">Privacy</a></p>
 </main>

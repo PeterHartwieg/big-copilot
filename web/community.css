@@ -1,7 +1,7 @@
-/* Community footer control and voting dialog. Hosted build only: build_web.py
+/* Community online count and voting dialog. Hosted build only: build_web.py
    puts this in the head. Everything custom is prefixed community-; colours and
-   fonts come from the board's own tokens, and the buttons reuse .btn2 and the
-   .changelog-link footer treatment. */
+   fonts come from the board's own tokens, and the buttons reuse .btn2. The
+   footer's vote card is the board's own markup, styled with the .sf- rules. */
 
 /* The count lives in the masthead's .live status, taking over its em beside
    the green dot, so it wears the board's own typography and this file adds

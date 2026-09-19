@@ -19,7 +19,7 @@ import json
 import os
 import shutil
 
-from ba_dashboard import VERIFIED_BUILD, render
+from ba_dashboard import VERIFIED_BUILD, footer_html, render
 from ba_save import bundled_locale, load_game_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
 from tools.extract_wiki import game_data_dir
@@ -60,12 +60,6 @@ def ships(key: str, text: str) -> bool:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
-REPO = "https://github.com/PeterHartwieg/big-copilot"
-ISSUES_URL = REPO + "/issues/new"
-# Where "Support the project" goes: Big Copilot's own PayPal donation page,
-# which returns supporters to bigcopilot.com. The same PayPal account has a
-# RentenWiki page whose purpose text names RentenWiki; never link that one here.
-DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
 # The board template's font links, swapped for the site's own copies.
 GOOGLE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
@@ -144,7 +138,6 @@ body .mast{top:var(--release-height,0px)}
 .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 button.btn{border:0;cursor:pointer}
 .landing .row{display:flex;align-items:center;gap:18px}
-.landing footer{margin-top:40px;display:flex;gap:18px;align-items:center;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
 .landing{position:relative;overflow:clip}
 .landing .orb{width:360px;height:360px;z-index:0}
 .landing .orb i{box-shadow:0 40px 90px #43c07a44,inset -24px -34px 60px #00000066,inset 10px 14px 30px #ffffff22}
@@ -218,8 +211,6 @@ button.btn{border:0;cursor:pointer}
 .menu-panel .save-picker{width:100%;margin-bottom:8px}
 .menu-panel .save-options{position:relative;top:auto;right:auto;width:100%;max-width:none;margin-top:6px;box-shadow:none}
 .strip .right .menu-panel{white-space:normal}
-.lg-foot{display:contents}
-.landing footer a{cursor:pointer}
 .landing details.help{width:560px;margin-top:-8px}
 .landing details.help:not([open]){display:none}
 .landing details.help > summary{display:none}
@@ -233,10 +224,8 @@ button.btn{border:0;cursor:pointer}
 .save-location select{max-width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:4px 6px}
 .save-location p{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--ink-3)}
 .menu-panel .save-location{width:100%;max-width:100%}
-.foot #footerLinks a.lg-footlink{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--rule)}
-.foot #footerLinks a.lg-footlink:hover{color:var(--ink);border-color:var(--ink-3)}
 @media (max-width:1100px){.landing .orb{display:none}}
-@media (max-width:640px){.drop,.landing .strip,.landing details.help{width:calc(100vw - 48px)}.landing footer{flex-wrap:wrap;justify-content:center;line-height:1.8}}
+@media (max-width:640px){.drop,.landing .strip,.landing details.help{width:calc(100vw - 48px)}}
 
 /* shared pieces the More menu still uses --------------------------------- */
 .lg-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:36px;padding:8px 14px;
@@ -290,12 +279,11 @@ details.help[open] summary::after{content:"\2013"}
 .menu-panel .help-content{padding-bottom:12px}
 .menu-panel .path-row{flex-wrap:wrap}
 .menu-panel .path-row code{flex-basis:100%;font-size:10px}
-.menu-foot{border-top:1px solid var(--rule);padding:14px 10px 5px;display:flex;justify-content:space-between;font-size:11px}
+/* Only Forget history moves in here now: the project links live in the board's
+   own footer rather than being carried over from the landing. */
+.menu-foot{border-top:1px solid var(--rule);margin-top:4px;padding:12px 10px 4px;display:flex;font-size:11px}
 .foot-links{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
-.foot-links a.lg-text{color:var(--ink-2)}
-.menu-foot .foot-links{width:100%;gap:4px 14px}
-.menu-foot .foot-links .lg-btn{width:100%;margin:0 0 4px}
-.menu-foot .foot-links .lg-text{margin-top:6px}
+.foot-links .lg-text{color:var(--ink-2)}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
 <aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>
@@ -336,18 +324,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
     <p class="quiet lg-note" id="srcNote" hidden></p>
   </div>
-  <footer class="rv">
-    <a class="link" id="helpLink" href="#help">Where saves live</a><span>&middot;</span>
-    <button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button><span>&middot;</span>
-    <span class="lg-foot" id="footSlot">
-      <a class="link" id="issueLink" href="__ISSUES__" target="_blank" rel="noopener" title="Opens a new issue on GitHub. A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug</a><span>&middot;</span>
-      <a class="link" id="donateLink" href="__DONATE__" target="_blank" rel="noopener" title="A small thank-you keeps this and future Big Ambitions projects going.">Support the project</a><span>&middot;</span>
-      <a class="link" id="sourceLink" href="__REPO__" target="_blank" rel="noopener" title="MIT-licensed">Source</a><span>&middot;</span>
-      <a class="link" id="impressumLink" href="impressum.html" target="_blank" rel="noopener">Impressum</a><span>&middot;</span>
-      <a class="link" id="privacyLink" href="privacy.html" target="_blank" rel="noopener">Privacy</a>
-    </span>
-    <span>&middot;</span><span>GAME BUILD __BUILD__</span>
-  </footer>
+  <!--__FOOTER__-->
   <details class="help" id="help">
     <summary>Where is my save?</summary>
     <div class="help-content">
@@ -372,7 +349,8 @@ details.help[open] summary::after{content:"\2013"}
 </section>
 <!-- The strip's More menu, cloned into the strip when a save loads. app.js
      moves the folder button, the one-file picker, the game-text chip, the help
-     and the footer links into its slots. -->
+     and Forget history into its slots. The project links are not among them:
+     the board has its own footer and carries them itself. -->
 <template id="boardControls">
   <div class="menu" id="srcMenu">
     <button type="button" class="ibtn tr" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="More" data-tip="Change folder · one file · watch · game text · history · about">__ICON_MORE__</button>
@@ -389,7 +367,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("__REPO__", REPO).replace("__ISSUES__", ISSUES_URL).replace("__DONATE__", DONATE_URL)
+""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("<!--__FOOTER__-->", footer_html(landing=True, site=True))
 
 # Everything the page fetches, together with the build inputs that shape it:
 # build_web.py itself, and the wiki generator (code, authored wording and
@@ -481,7 +459,7 @@ def page_html(release: dict, root: str = HERE) -> str:
     ).replace("__UPDATE_SCRIPT__", update_script)
     page = render(
         None, live=True, banner=BANNER, before_script=scripts,
-        head=head,
+        head=head, site=True,
     )
     # The board template loads its fonts from Google, which is fine for a local
     # dashboard.html. The site serves its own copies instead (web/fonts/), so no

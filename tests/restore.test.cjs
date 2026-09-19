@@ -149,10 +149,28 @@ test('the Impressum and privacy notice stay reachable once the board replaces th
   await messages(page);
   await page.evaluate(() => fixture.complete());
   assert.equal(await hasBoard(page), true);
+  // They used to be carried into the More menu and copied into a link strip.
+  // The board has its own footer now and holds them itself; the landing's copy
+  // goes with the landing, so exactly one of each is left.
   for (const [href, label] of [['impressum.html', 'Impressum'], ['privacy.html', 'Privacy']]) {
-    assert.equal(await page.locator(`#menuFootSlot a[href="${href}"]`).count(), 1);
-    assert.equal(await page.locator(`#footerLinks a[href="${href}"]`).innerText(), label);
+    assert.equal(await page.locator(`a[href="${href}"]`).count(), 1);
+    assert.equal(await page.locator(`.sitefoot a[href="${href}"]`).innerText(), label);
   }
+});
+
+test('the board footer offers the game and the channel, and stays voteless without community.js', async t => {
+  const page = await setup(t);
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  const foot = page.locator('.sitefoot');
+  assert.equal(await foot.locator('a[href*="store.steampowered.com"]').count(), 1);
+  assert.equal(await foot.locator('a[href*="youtube.com/@"]').count(), 1);
+  assert.match(await foot.locator('.sf-said').innerText(), /Not affiliated with/);
+  // This fixture serves no community.js, which is also what the CLI's
+  // dashboard.html is: nothing reveals the card, so it must ship hidden. The
+  // other direction, a copy whose API fails, is driven in community-browser.
+  assert.equal(await foot.locator('[data-vote-card]').isVisible(), false);
 });
 
 test('URL destination wins over remembered page without adding a visit', async t => {
