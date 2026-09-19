@@ -6684,6 +6684,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-dot.off:hover{background:none;box-shadow:inset 0 0 0 1.5px var(--accent)}
 .sp-rrow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*18ms)}
 .sp-rcount{font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right;white-space:nowrap}
+.sp-rcount b{color:var(--ink);font-weight:500}
 .sp-rpeople{display:none;grid-column:1/-1;padding:4px 0 14px}
 .sp-rrow.open .sp-rpeople{display:block}
 
@@ -9156,7 +9157,9 @@ function spRoster(people, gaps){
       <button type="button" class="sp-rbtn" aria-expanded="false"><i>${roleCode(r.role)}</i>${r.role}${spI("chev")}</button>
       <span class="sp-dots">${r.people.map((p, k) => `<i class="sp-dot${p.absent ? " off" : ""}" style="--k:${k}" data-read="${attr(
         `<b>${p.name}</b> · ${p.role}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
-      <span class="sp-rcount">${r.people.length}${r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}</span>
+      <span class="sp-rcount"><b>${r.people.length}</b>${
+        r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}${
+        r.people.every(p => typeof p.daily === "number") ? ` · ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
       <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps)).join("")}</div></div>
     </div>`).join("")}</div><div class="sp-read sp-readout">Hover a dot</div></div>`;
 }
