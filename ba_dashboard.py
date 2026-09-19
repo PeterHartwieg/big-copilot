@@ -1772,12 +1772,13 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     neighbourhood = building["h"] if building else NEIGHBOURHOODS.get(tag, "")
 
     orders = save.items(b["orderHistory"])
-    customer_days = [
-        (e["dayNumber"], e.get("totalCustomers", 0))
-        for e in orders
-        if e.get("totalCustomers")
-    ]
-    customer_by_day = dict(customer_days)
+    # Every day the order history still holds, zeros included: a shop that
+    # served nobody on Sunday measured that, and the fortnight spark has to
+    # tell it apart from a day the history no longer reaches.
+    customer_by_day = {e["dayNumber"]: e.get("totalCustomers", 0) for e in orders}
+    # The weekday profile is a shape, and a closed day is not part of it, so
+    # that one keeps to the days somebody came.
+    customer_days = [(day, seen) for day, seen in customer_by_day.items() if seen]
     revenue_days = [
         (dayno, by_addr[addr]["TotalSales"])
         for dayno, by_addr in history
@@ -6645,8 +6646,16 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-pips i.on{background:var(--warn)}
 
 /* hours: the two chips under the grid pick their cells out of it */
-.hours.sp-showcap .hc:not(.cap),.hours.sp-showidle .hc:not(.slack){opacity:.2}
-.hours.sp-showcap .hc.cap,.hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
+/* A site can be held by its door at one hour and by its staffing at another,
+   so each cap chip lights only the hours its own ceiling held. */
+.hours.sp-showcap-door .hc:not(.cap-door),
+.hours.sp-showcap-staff .hc:not(.cap-staff),
+.hours.sp-showcap-post .hc:not(.cap-post),
+.hours.sp-showidle .hc:not(.slack){opacity:.2}
+.hours.sp-showcap-door .hc.cap-door,
+.hours.sp-showcap-staff .hc.cap-staff,
+.hours.sp-showcap-post .hc.cap-post,
+.hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
 @keyframes sp-cell{50%{transform:scale(1.22)}}
 .sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .sp-hchip{display:inline-flex;align-items:center;gap:9px;min-height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default;transition:border-color .15s,transform .2s}
@@ -7363,7 +7372,9 @@ const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="tr
    for a demand — is text, not markup, and has to be escaped before it is
    composed into any of the panel's HTML. A read-out goes through two decodings
    (attr() into the attribute, then dataset.read into innerHTML), so escaping
-   here and attr()-ing the composed string is what keeps it inert both times. */
+   here and attr()-ing the composed string is what keeps it inert both times.
+   A data-tip is not one of those places: showTip() sets it as textContent, so
+   attr() alone carries it and escaping it here would print the entities. */
 const spEsc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /* The same drawing wrapped so it sits on a text line. */
 const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
@@ -8976,7 +8987,7 @@ function hourGrid(g, todayWd){
         g.office ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
           : `${g.staffed[wd][h]} of ${g.counters} register capacity on`}${
         atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
-      cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
+      cells += `<div class="hc${atCap ? ` cap ${spCellLimit(g, wd, h)}` : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
   return `<div class="hours">${cells}</div>`;
@@ -9042,6 +9053,18 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
 const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
+/* Which ceiling held one capped hour, by the same rule _hour_findings() uses,
+   off the three numbers the grid already carries: the door if it was reached,
+   else staffing if the counters were not all manned, else the counters
+   themselves. The cell wears the answer as a class so a cap chip can pick out
+   its own hours and leave the others alone. */
+const SP_CELL_CLASS = {"the building": "cap-door", staffing: "cap-staff",
+                       registers: "cap-post", workstations: "cap-post"};
+const spCellLimit = (g, wd, h) => {
+  const staffed = g.staffed[wd][h];
+  return g.door && g.door <= staffed ? "cap-door"
+    : staffed < g.counters ? "cap-staff" : "cap-post";
+};
 const spHypeRow = key => {
   for(const wave of D.hypeExposure || []){
     const site = (wave.sites || []).find(s => s.key === key);
@@ -9682,7 +9705,9 @@ function drawSite(){
      rows, so it replaces that row rather than becoming one item inside it. */
   const folded = spAny && people.length > CREW_MAX;
   const pills = !spAny && people.length > CREW_MAX
-    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${spEsc(p.name)} (${spEsc(p.role)}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
+    /* A tip is set as textContent, so attr() alone carries it: escaping the
+       name for markup first would show the entities. */
+    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
         people.length - CREW_MAX} more</span>`
     : people.length
       ? people.map(personPill).join("")
@@ -9751,7 +9776,8 @@ function drawSite(){
     wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
   const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
-    wants.map(d => `<span class="sp-dem" data-el="demand" data-tip="${attr(`${spEsc(d.demand)} for ${d.count} · ${
+    /* The tip lands as textContent: attr() alone, no markup escaping. */
+    wants.map(d => `<span class="sp-dem" data-el="demand" data-tip="${attr(`${d.demand} for ${d.count} · ${
       SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
       spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
       d.company ? `<span class="sp-i sp-co">${icon("company")}</span>` : ""}</span>`).join("")}${
@@ -9778,7 +9804,7 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap" data-show="cap" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap" data-show="${SP_CELL_CLASS[n.limit] || "cap-door"}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(SP_LIMIT_ICON[n.limit] || "door")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
       fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
@@ -11437,8 +11463,8 @@ buildAlertSettingsPanel();
      .sp-find             hover lights the block named in data-ev and pulses the
                           [data-el] things named in data-hit; click scrolls to it.
      .sp-rbtn             click opens a role row of a big crew into its people.
-     .sp-hchip[data-show] hover adds .sp-showcap / .sp-showidle to the section's
-                          .hours grid, picking those cells out.
+     .sp-hchip[data-show] hover adds .sp-show<what> to the section's .hours
+                          grid — one ceiling's cells, or the idle ones.
 
    Supply — drawOrderChecklist, wireFlow:
      .up                  a suggested change to enter in-game; never changes
