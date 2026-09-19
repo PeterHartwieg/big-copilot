@@ -8089,8 +8089,9 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .hours.sp-showcap-post .hc:not(.cap-post),
 .hours.sp-showidle .hc:not(.slack){opacity:.2}
 .hours.sp-showcap-door .hc.cap-door,
-.hours.sp-showcap-staff .hc.cap-staff,
-.hours.sp-showcap-post .hc.cap-post,
+.hours.sp-showcap-staff:not(.sp-showcap-post) .hc.cap-staff,
+.hours.sp-showcap-post:not(.sp-showcap-staff) .hc.cap-post,
+.hours.sp-showcap-staff.sp-showcap-post .hc.cap-staff.cap-post,
 .hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
 @keyframes sp-cell{50%{transform:scale(1.22)}}
 .sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
@@ -10587,6 +10588,14 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
 const SP_CELL_CLASS = {"the building": "cap-door", staffing: "cap-staff",
                        registers: "cap-post", workstations: "cap-post"};
 const SP_CELL_ORDER = ["cap-staff", "cap-post"];
+/* The cells one cap chip is about. A finding naming two tied answers — "Trainer
+   staffing and registers" — is about the hours where both held at once, and
+   those cells wear both classes, so the chip does too and the grid lights the
+   overlap. A role's own words are its label plus "staffing" or its station's
+   plural, so people are the only thing "staffing" ever names. */
+const spLimitShow = n => n.limit === "the building" ? "cap-door"
+  : SP_CELL_ORDER.filter(c => String(n.limit).split(" and ").some(
+      part => (/\bstaffing$/.test(part) ? "cap-staff" : "cap-post") === c)).join(" ");
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
   if(g.door && g.door <= staffed) return "cap-door";
@@ -11402,7 +11411,7 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap" data-show="${SP_CELL_CLASS[n.limit] || "cap-door"}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap" data-show="${spLimitShow(n)}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(SP_LIMIT_ICON[n.limit] || "door")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
       fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
@@ -13769,8 +13778,10 @@ const wireSiteLines = once(() => {
 });
 const wireSiteChips = once(() => {
   const grid = c => q(".hours", c.closest("section"));
-  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add("sp-show" + c.dataset.show); });
-  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove("sp-show" + c.dataset.show); });
+  /* A chip may name two classes at once, for an hour two roles are tied on. */
+  const shown = c => (c.dataset.show || "").split(" ").filter(Boolean).map(s => "sp-show" + s);
+  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add(...shown(c)); });
+  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove(...shown(c)); });
 });
 
 /* kinds popover: switches flip; with a data-kind they also flip the preference --- */

@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=4a5abfef9b">
+<link rel="stylesheet" href="community.css?v=59c3af7171">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=4a5abfef9b">
+<link rel="stylesheet" href="fonts/fonts.css?v=59c3af7171">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1534,8 +1534,9 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .hours.sp-showcap-post .hc:not(.cap-post),
 .hours.sp-showidle .hc:not(.slack){opacity:.2}
 .hours.sp-showcap-door .hc.cap-door,
-.hours.sp-showcap-staff .hc.cap-staff,
-.hours.sp-showcap-post .hc.cap-post,
+.hours.sp-showcap-staff:not(.sp-showcap-post) .hc.cap-staff,
+.hours.sp-showcap-post:not(.sp-showcap-staff) .hc.cap-post,
+.hours.sp-showcap-staff.sp-showcap-post .hc.cap-staff.cap-post,
 .hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
 @keyframes sp-cell{50%{transform:scale(1.22)}}
 .sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
@@ -2544,8 +2545,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "4a5abfef9b";</script>
-<script>window.LEDGER_RELEASE = {"version":"4a5abfef9b","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "59c3af7171";</script>
+<script>window.LEDGER_RELEASE = {"version":"59c3af7171","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2614,8 +2615,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=4a5abfef9b"></script>
-<script src="community.js?v=4a5abfef9b"></script>
+<script src="app.js?v=59c3af7171"></script>
+<script src="community.js?v=59c3af7171"></script>
 
 <script>
 
@@ -4540,6 +4541,14 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
 const SP_CELL_CLASS = {"the building": "cap-door", staffing: "cap-staff",
                        registers: "cap-post", workstations: "cap-post"};
 const SP_CELL_ORDER = ["cap-staff", "cap-post"];
+/* The cells one cap chip is about. A finding naming two tied answers — "Trainer
+   staffing and registers" — is about the hours where both held at once, and
+   those cells wear both classes, so the chip does too and the grid lights the
+   overlap. A role's own words are its label plus "staffing" or its station's
+   plural, so people are the only thing "staffing" ever names. */
+const spLimitShow = n => n.limit === "the building" ? "cap-door"
+  : SP_CELL_ORDER.filter(c => String(n.limit).split(" and ").some(
+      part => (/\bstaffing$/.test(part) ? "cap-staff" : "cap-post") === c)).join(" ");
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
   if(g.door && g.door <= staffed) return "cap-door";
@@ -5355,7 +5364,7 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap" data-show="${SP_CELL_CLASS[n.limit] || "cap-door"}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap" data-show="${spLimitShow(n)}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(SP_LIMIT_ICON[n.limit] || "door")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
       fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
@@ -11303,8 +11312,10 @@ const wireSiteLines = once(() => {
 });
 const wireSiteChips = once(() => {
   const grid = c => q(".hours", c.closest("section"));
-  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add("sp-show" + c.dataset.show); });
-  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove("sp-show" + c.dataset.show); });
+  /* A chip may name two classes at once, for an hour two roles are tied on. */
+  const shown = c => (c.dataset.show || "").split(" ").filter(Boolean).map(s => "sp-show" + s);
+  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add(...shown(c)); });
+  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove(...shown(c)); });
 });
 
 /* kinds popover: switches flip; with a data-kind they also flip the preference --- */

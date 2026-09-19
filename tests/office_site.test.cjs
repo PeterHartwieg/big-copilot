@@ -244,6 +244,40 @@ test('a finding naming two tied answers reads as a plural', async () => {
   } finally { await page.close(); }
 });
 
+test('a chip for two tied answers asks for both kinds of hour, not the door', async () => {
+  const page = await theatre();
+  try {
+    // "staffing and projection booths" is a tie between people and posts, and
+    // the chip has to ask the grid for both. Looking the joined sentence up in
+    // a table of single limits misses, and the miss used to light the door's
+    // hours -- a ceiling this theatre does not even have.
+    const chip = page.locator('#sitePanel .sp-hchip.cap');
+    assert.equal(await chip.getAttribute('data-show'), 'cap-staff cap-post');
+    // The block is off screen, so the delegated listener is given the event
+    // straight rather than Playwright's hover, which waits for visibility.
+    await page.evaluate(() => document.querySelector('#sitePanel .sp-hchip.cap')
+      .dispatchEvent(new MouseEvent('mouseover', {bubbles: true})));
+    const lit = await page.locator('#sitePanel .hours').getAttribute('class');
+    assert.match(lit, /sp-showcap-staff/);
+    assert.match(lit, /sp-showcap-post/);
+    assert.doesNotMatch(lit, /sp-showcap-door/);
+  } finally { await page.close(); }
+});
+
+test('every role standing at a capped hour names its own ceiling on the cell', async () => {
+  const page = await theatre();
+  try {
+    // 10:00 the ticket booths alone stand at the site's 50/h, 11:00 projection
+    // ties with them, and both are short of people rather than of furniture.
+    // A site-wide reading would have called 11:00 posts, because the site's own
+    // 50 is its full capacity that hour while neither role's is.
+    const worn = await page.$$eval('#sitePanel .hc.cap',
+      cells => cells.map(c => [...c.classList].filter(c => c.startsWith('cap-')).join(' ')));
+    assert.deepEqual(worn, ['cap-staff', 'cap-staff', 'cap-staff']);
+    assert.equal(await page.locator('#sitePanel .hc.cap-post').count(), 0);
+  } finally { await page.close(); }
+});
+
 test('an idle hour names the role that is idle', async () => {
   const page = await theatre();
   try {
