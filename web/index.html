@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=4e869bf19e">
+<link rel="stylesheet" href="community.css?v=298f704e58">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=4e869bf19e">
+<link rel="stylesheet" href="fonts/fonts.css?v=298f704e58">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1529,14 +1529,8 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* hours: the two chips under the grid pick their cells out of it */
 /* A site can be held by its door at one hour and by its staffing at another,
    so each cap chip lights only the hours its own ceiling held. */
-.hours.sp-showcap-door .hc:not(.cap-door),
-.hours.sp-showcap-staff .hc:not(.cap-staff),
-.hours.sp-showcap-post .hc:not(.cap-post),
-.hours.sp-showidle .hc:not(.slack){opacity:.2}
-.hours.sp-showcap-door .hc.cap-door,
-.hours.sp-showcap-staff .hc.cap-staff,
-.hours.sp-showcap-post .hc.cap-post,
-.hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
+.hours.sp-dim .hc:not(.sp-lit){opacity:.2}
+.hours.sp-dim .hc.sp-lit{animation:sp-cell .8s ease-in-out infinite}
 @keyframes sp-cell{50%{transform:scale(1.22)}}
 .sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .sp-hchip{display:inline-flex;align-items:center;gap:9px;min-height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default;transition:border-color .15s,transform .2s}
@@ -1548,6 +1542,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* the idle swatch matches the grid's own idle ring, which is the --info one */
 .sp-hchip.idle .sp-sw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--info) 45%,transparent)}
 .sp-hchip.idle .sp-i{color:var(--info)}
+.sp-hchip.sp-unmeas{border-style:dashed;color:var(--ink-3)}
 .sp-hchip .fix{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
 
 /* crew: what the staff here ask for, and a roster too big for pills */
@@ -1566,6 +1561,84 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-pri i:nth-child(3){height:11px}
 .sp-pri i.on{background:var(--warn)}
 .sp-pri.hi i.on{background:var(--neg)}
+
+/* the roster: the week to type, on the hour grid's own 24 columns */
+.sp-ba{display:flex;gap:40px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px}
+.sp-ba>div{cursor:default}
+.sp-ba .lab{display:block;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.sp-ba .v{font:500 22px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.sp-ba .v s{font-size:14px;color:var(--ink-3);text-decoration-thickness:1px}
+.sp-ba .v .sp-i{color:var(--ink-3)}
+.sp-ba .sp-meter{width:150px;margin-top:0;display:inline-block;vertical-align:middle}
+.sp-ba .sp-meter i{background:var(--ink-2)}
+.sp-typed{margin-left:auto;display:flex;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-typed b{color:var(--ink);font-weight:500}
+.sp-typed a{color:var(--ink-3);text-decoration:none;border-bottom:1px solid var(--rule)}
+.sp-typed a:hover{color:var(--ink)}
+.sp-ring{width:30px;height:30px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--rule) 0);display:grid;place-items:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sp-ring::after{content:"";width:22px;height:22px;border-radius:50%;background:var(--ground)}
+.sp-ring.sp-bump{transform:scale(1.25)}
+.sp-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.sp-step{display:inline-flex;align-items:center;gap:9px;min-height:36px;padding:0 12px 0 9px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,transform .2s}
+.sp-step:hover{border-color:var(--ink-3);transform:translateY(-1px)}
+.sp-step .sp-box{width:16px;height:16px;flex:none;border-radius:5px;border:1.5px solid var(--rule);display:grid;place-items:center;color:var(--on-accent);transition:all .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-step .sp-box svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.sp-step.sp-done .sp-box{background:var(--accent);border-color:var(--accent)}
+.sp-step.sp-done .sp-box svg{opacity:1}
+.sp-step.sp-done{color:var(--ink-3)}
+.sp-step small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-daytabs a{position:relative;min-width:30px;text-align:center}
+.sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
+.sp-day{display:none}
+.sp-day.sp-on{display:block}
+/* The board's .seg styles its chosen option with a bare `on`; the roster's
+   two segmented controls carry their own so the modifier stays prefixed. */
+.sp-daytabs a.sp-on,.sp-nowplan a.sp-on{background:var(--ink);color:var(--ground)}
+.sp-grow{position:relative;display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center;min-height:38px}
+.sp-grow::before{content:"";grid-column:2/-1;grid-row:1;height:32px;border-radius:7px;background:var(--raised);opacity:.45}
+.sp-grow .lab{grid-column:1;grid-row:1;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3);cursor:default;overflow:hidden}
+.sp-grow .hh{font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:center;padding-bottom:6px}
+.sp-grow.sp-needrow{min-height:30px;align-items:end;margin-bottom:4px}
+.sp-grow.sp-needrow::before{display:none}
+.sp-grow.sp-needrow .lab{align-self:end;padding-bottom:2px}
+.sp-grow.sp-needrow.sp-unmeas::before{display:block;grid-column:2/-1;grid-row:1;align-self:end;height:0;background:none;opacity:1;border-top:1px dashed var(--rule);border-radius:0}
+.sp-grow.sp-shut::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:.6}
+.sp-closed{grid-row:1;height:32px;border-radius:7px;background:var(--ground);box-shadow:inset 0 0 0 1px var(--rule-soft);opacity:.85}
+.sp-grow.sp-needrow .sp-closed{display:none}
+.sp-need{grid-row:1;height:calc(var(--n)*8px);border-radius:2px;background:var(--ink-2);transition:transform .15s;transform-origin:bottom;cursor:default}
+.sp-need:hover{transform:scaleY(1.2)}
+.sp-need.sp-cens{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px);box-shadow:inset 0 0 0 1px var(--neg)}
+.sp-need.sp-scaled{background:none;box-shadow:inset 0 0 0 1px var(--ink-3)}
+.sp-shift{grid-row:1;z-index:1;height:32px;min-width:0;border-radius:7px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);color:var(--ink);display:flex;align-items:center;gap:7px;padding:0 10px;font:500 12.5px/1 Archivo,sans-serif;white-space:nowrap;overflow:hidden;cursor:pointer;transition:opacity .3s,transform .35s cubic-bezier(.34,1.56,.64,1),outline-color .15s;outline:1.5px solid transparent;outline-offset:1px;transform-origin:left;box-sizing:border-box;text-align:left}
+.sp-shift small{margin-left:auto;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-shift .sp-i svg{width:12px;height:12px}
+.sp-shift.sp-clean,.sp-shift.sp-security{background:var(--raised);border-color:var(--rule)}
+.sp-shift.sp-hire{background:none;border:1px dashed var(--warn);color:var(--warn);cursor:default}
+.sp-shift.sp-hire small{color:var(--warn)}
+.sp-shift .sp-pin{color:var(--warn)}
+.sp-shift:hover{transform:translateY(-2px)}
+.sp-shift.sp-done{opacity:.4;text-decoration:line-through}
+.sp-shift .sp-tick{display:none;color:var(--accent)}
+.sp-shift.sp-done .sp-tick{display:inline-grid;animation:pop .35s cubic-bezier(.34,1.56,.64,1)}
+.sp-me{outline-color:var(--accent)!important}
+.person.sp-me{outline:1.5px solid var(--accent);outline-offset:1px}
+.sp-frag{grid-row:1;z-index:1;height:32px;border-radius:4px;background:color-mix(in srgb,var(--ink) 22%,var(--surface));opacity:0;transform:scaleX(.6);transition:opacity .3s,transform .4s cubic-bezier(.34,1.56,.64,1);transition-delay:calc(var(--k)*14ms);pointer-events:none}
+.sp-gantt.sp-now .sp-frag{opacity:1;transform:none}
+.sp-gantt.sp-now .sp-shift{opacity:0;transform:scaleX(.9);pointer-events:none}
+.sp-gantt.sp-now .sp-grow.sp-needrow{opacity:.35}
+.sp-gantt.sp-empty .sp-grow::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:1;border-radius:7px}
+.sp-hc{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-soft)}
+.sp-hc>span{display:inline-flex;align-items:center;gap:9px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
+.sp-hc .sp-code{width:26px;height:26px;flex:none;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-hc .sp-dots{padding:0;gap:4px}
+.sp-hc .sp-i{color:var(--ink-3)}
+.sp-dot.sp-bench{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-2);position:relative}
+.sp-dot.sp-bench::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink-2)}
+.sp-dot.sp-hire{background:none;box-shadow:none;border:1.5px dashed var(--warn);box-sizing:border-box}
+.sp-hc .sp-new{color:var(--warn)}
+.sp-hc .sp-new b{font-weight:600}
+.sp-hc .sp-new .sp-i,.sp-hc .sp-new .sp-code{color:var(--warn)}
+
 .person .sp-i{color:var(--warn);margin-left:-2px}
 .person .sp-i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
@@ -1599,13 +1672,91 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-m{position:relative;width:32px;height:32px;border-radius:8px;background:var(--raised);overflow:hidden;display:grid;place-items:center;color:var(--on-accent);cursor:default}
 .sp-m::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--h,100%);background:var(--accent)}
 .sp-m svg{position:relative;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.sp-m.z{background:none;border:1px dashed var(--rule);color:var(--ink-3)}
-.sp-m.z::before{display:none}
+.sp-m.sp-z{background:none;border:1px dashed var(--rule);color:var(--ink-3);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.06em}
+.sp-m.sp-z::before{display:none}
+
+/* a depot's week: seven days of cover, with the truck on the day it lands */
+.sp-rail{position:relative;display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;height:28px;align-items:end;padding-bottom:4px;box-sizing:border-box;vertical-align:middle}
+.sp-rail i{display:block;height:6px;border-radius:2px;background:var(--rule)}
+.sp-rail i.sp-c{background:var(--accent)}
+.sp-rail i.sp-d{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px)}
+.sp-trk{position:absolute;top:0;left:calc(var(--d)*23px + 2px);color:var(--ink);transition:left 1.2s cubic-bezier(.2,.7,.2,1) .3s}
+.rv:not(.in) .sp-trk{left:-26px}
+.sp-trk svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-trk.sp-held,.sp-trk.sp-early{color:var(--ink-3)}
+.sp-trk.sp-early{opacity:.55}
+.sp-trk.sp-early svg{width:13px;height:13px}
+.sp-trk.sp-held::after{content:"";position:absolute;left:0;right:0;top:50%;border-top:1.5px solid var(--neg);transform:rotate(-35deg)}
+tr:hover .sp-trk:not(.sp-held):not(.sp-early) svg{animation:sp-drive .5s ease-in-out infinite}
+@keyframes sp-drive{50%{transform:translateY(-1.5px)}}
+.sp-days{display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;text-align:center}
+.sp-days b{font-weight:500}.sp-days b.sp-now{color:var(--ink)}
+.sp-zz{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);letter-spacing:.1em}
+tr:hover .sp-zz{animation:sp-zz 1.2s ease-in-out infinite}
+@keyframes sp-zz{50%{transform:translateY(-2px);opacity:.5}}
+.sp-feeds{display:flex;flex-direction:column;gap:9px}
+.sp-feed{display:grid;grid-template-columns:24px 1fr 90px 74px;gap:10px;align-items:center;font-size:13px}
+.sp-feed .sp-tr{height:6px;border-radius:3px;background:var(--rule-soft);overflow:hidden}
+.sp-feed .sp-tr i{display:block;height:100%;width:var(--w);background:var(--ink-2);border-radius:3px;transition:background .2s}
+.sp-feed:hover .sp-tr i{background:var(--accent)}
+.sp-feed .sp-rate{font:500 12px "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+/* the bar under a tile's figure, where a spark would sit on a shop */
+.sp-meter{height:6px;border-radius:3px;background:var(--rule);margin-top:14px;overflow:hidden}
+.sp-meter i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:3px}
+.sp-meter.bad i{background:var(--neg)}
+/* the line a tile names: a long item name is clipped, not wrapped */
+.sp-tname{display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:-3px}
+
+/* a factory's lines: one square a machine, filled by its share of the week */
+.sp-line{display:grid;grid-template-columns:230px minmax(116px,auto) 1fr 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
+.sp-line.sp-head{padding:0 0 8px;border-bottom:1px solid var(--rule);font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.sp-line .sp-n{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.sp-line.sp-head .sp-n{font-size:10.5px}
+.sp-line .sp-n small{display:block;font-size:10.5px;color:var(--ink-3)}
+.sp-lines.sp-dim .sp-line:not(.sp-on):not(.sp-head){opacity:.3}
+.sp-line .sp-mach{gap:6px}
+.sp-line:hover .sp-m:not(.sp-q):not(.sp-z) svg,.sp-line.sp-on .sp-m:not(.sp-q):not(.sp-z) svg{animation:sp-spin 2.4s linear infinite}
+@keyframes sp-spin{to{transform:rotate(360deg)}}
+.sp-m.sp-q{background:none;box-sizing:border-box;border:1px dashed var(--warn);color:var(--warn);font:600 14px/1 "IBM Plex Mono",monospace}
+.sp-m.sp-q::before{display:none}
+/* a machine the roster could not be read for: no fill and no mark at all */
+.sp-m.sp-u{background:none;box-sizing:border-box;border:1px dashed var(--rule)}
+.sp-m.sp-u::before{display:none}
+.sp-belt{height:2px;background-image:repeating-linear-gradient(90deg,var(--ink-3) 0 6px,transparent 6px 12px);opacity:.45}
+.sp-line:hover .sp-belt,.sp-line.sp-on .sp-belt{opacity:1;background-image:repeating-linear-gradient(90deg,var(--accent) 0 6px,transparent 6px 12px);animation:sp-belt .5s linear infinite}
+.sp-belt.sp-stop{background-image:repeating-linear-gradient(90deg,var(--neg) 0 2px,transparent 2px 12px)!important;animation:none!important}
+@keyframes sp-belt{to{background-position:12px 0}}
+.sp-pile{display:inline-flex;align-items:center;gap:5px;color:var(--warn)}
+.sp-pile svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8px;margin-left:0;min-height:30px;max-width:210px}
 
 /* profit: the two weeks the delta chip compares, drawn on the chart */
 .sp-band{fill:var(--ink);opacity:.05;transition:opacity .15s;cursor:default}
 .sp-band.last{opacity:.09}
 .sp-band:hover{opacity:.16}
+
+/* a home: the drawing and its four figures. Nothing here is measured, so the
+   block is an illustration beside the rent the save bills. */
+.sp-home{display:grid;grid-template-columns:400px 1fr;gap:32px;align-items:stretch;margin-top:26px}
+.sp-house{border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);display:grid;place-items:end center;padding:20px 20px 0;overflow:hidden;cursor:default}
+.sp-house svg{width:100%;height:auto;overflow:visible}
+.sp-house .sp-wall{fill:var(--raised);stroke:var(--rule);stroke-width:1.5}
+.sp-house .sp-win{fill:var(--ground);stroke:var(--rule);stroke-width:1.2;transition:fill .35s}
+.sp-house .sp-win.sp-win-on{fill:var(--warn)}
+.sp-house:hover .sp-win{fill:var(--warn)}
+.sp-house:hover .sp-win.sp-win-late{fill:var(--ground)}
+.sp-house .sp-doorleaf{fill:var(--accent);transform-origin:183px 0;transform-box:fill-box;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.sp-house:hover .sp-doorleaf{transform:perspective(200px) scaleX(.55)}
+.sp-house .sp-moon{fill:var(--ink-2);transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
+.sp-house:hover .sp-moon{transform:translate(18px,-8px)}
+.sp-house .sp-star{fill:var(--ink-3)}
+.sp-house:hover .sp-star{animation:blink 1.4s steps(1) infinite}
+.sp-house .sp-ground{stroke:var(--rule);stroke-width:1.5}
+.sp-house .sp-tree{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.3}
+.sp-house:hover .sp-tree{animation:sp-sway 1.8s ease-in-out infinite;transform-origin:50% 100%;transform-box:fill-box}
+@keyframes sp-sway{50%{transform:rotate(3deg)}}
+.sp-hometiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start}
+@media (max-width:760px){.sp-home{grid-template-columns:1fr;gap:18px}}
 
 /* kinds popover ------------------------------------------------------------ */
 .pop{width:520px;margin:40px auto;padding:20px 22px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0008}
@@ -2087,13 +2238,14 @@ details.help[open] summary::after{content:"\2013"}
         <h2 class="sf-head">Big Copilot</h2>
         <a class="sf-link" id="helpLink" href="#help">Where saves live</a>
         <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
-        <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://discord.gg/EdjRzkxQTu" target="_blank" rel="noopener" title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.">Bugs and feedback<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source code<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
       </div>
       <div class="sf-col">
         <h2 class="sf-head">Follow</h2>
         <a class="sf-link" href="https://www.youtube.com/@PeterHartwieg" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>YouTube<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://www.reddit.com/r/bigambitions/" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>r/bigambitions<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://discord.gg/TxHaVpSkNg" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7.4 18.4 5.6 9.3c-.2-1.2.5-2.3 1.7-2.6A16.4 16.4 0 0 1 12 6.1c1.6 0 3.2.2 4.7.6 1.2.3 1.9 1.4 1.7 2.6l-1.8 9.1a10.6 10.6 0 0 1-2.8 1.3l-.8-1.5c-.7.1-1.3.1-2 0l-.8 1.5a10.6 10.6 0 0 1-2.8-1.3z"/><path d="M9.7 12.4v.5M14.3 12.4v.5"/></svg>Discord<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
       </div>
       <div class="sf-col">
         <h2 class="sf-head">Big Ambitions &middot; official</h2>
@@ -2197,14 +2349,15 @@ details.help[open] summary::after{content:"\2013"}
       <div class="finds" id="minorList" style="margin-top:12px" hidden></div>
     </section>
 
-    <!-- Next moves: the import checklist is available; the other two cards
-         are planned. The cards tilt from wireCards(). -->
+    <!-- Next moves: each card carries what it can say about this save, filled
+         by drawFindLocation() and drawOptimizeStaffing(). The cards tilt from
+         wireCards(). -->
     <section class="sec rv" id="secMoves">
       <div class="sechead"><h2>Next moves</h2>
-        <span class="why" data-tip="Tools for the decisions you make each week. Plan imports opens a change checklist; the other tools are planned." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="Tools for the decisions you make each week. Plan imports opens a change checklist, Optimize staffing opens a shop's roster, and Find a location ranks the free buildings." tabindex="0"><i>?</i></span></div>
       <div class="moves">
         <a class="move rv" href="#secLogistics" id="planImportsCard"><span class="soon">CHECKLIST</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span>Plan weekly orders and get a checklist of settings to enter in-game.</span></a>
-        <a class="move rv" href="#"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
+        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span>Shifts from the hour grid: registers, door caps and who is off today.</span></a>
         <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span>Free buildings ranked by demand, rivals and the door cap you would get.</span></a>
       </div>
     </section>
@@ -2350,13 +2503,14 @@ details.help[open] summary::after{content:"\2013"}
       <div class="sf-col">
         <h2 class="sf-head">Big Copilot</h2>
         <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
-        <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot/issues/new" target="_blank" rel="noopener" title="A save that will not build, a wrong number, or something the board should show: all welcome.">Report a bug<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://discord.gg/EdjRzkxQTu" target="_blank" rel="noopener" title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.">Bugs and feedback<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source code<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
       </div>
       <div class="sf-col">
         <h2 class="sf-head">Follow</h2>
         <a class="sf-link" href="https://www.youtube.com/@PeterHartwieg" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>YouTube<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://www.reddit.com/r/bigambitions/" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>r/bigambitions<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
+        <a class="sf-link" href="https://discord.gg/TxHaVpSkNg" target="_blank" rel="noopener"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7.4 18.4 5.6 9.3c-.2-1.2.5-2.3 1.7-2.6A16.4 16.4 0 0 1 12 6.1c1.6 0 3.2.2 4.7.6 1.2.3 1.9 1.4 1.7 2.6l-1.8 9.1a10.6 10.6 0 0 1-2.8 1.3l-.8-1.5c-.7.1-1.3.1-2 0l-.8 1.5a10.6 10.6 0 0 1-2.8-1.3z"/><path d="M9.7 12.4v.5M14.3 12.4v.5"/></svg>Discord<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
       </div>
       <div class="sf-col">
         <h2 class="sf-head">Big Ambitions &middot; official</h2>
@@ -2390,7 +2544,7 @@ details.help[open] summary::after{content:"\2013"}
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
-  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-18">18 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/50" target="_blank" rel="noopener" aria-label="View pull request 50">PR #50 ↗</a></div><h3>Choose light or dark</h3><p>The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system&#x27;s.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-17">17 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/43" target="_blank" rel="noopener" aria-label="View pull request 43">PR #43 ↗</a></div><h3>Warnings for unmet staff demands</h3><p>Needs attention now tells you when your employees&#x27; demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site&#x27;s page lists the demands under its crew.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/40" target="_blank" rel="noopener" aria-label="View pull request 40">PR #40 ↗</a></div><h3>Staffing by the hour for offices</h3><p>Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-19">19 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/58" target="_blank" rel="noopener" aria-label="View pull request 58">PR #58 ↗</a></div><h3>A page for every site, and a roster you can type in</h3><p>Every site&#x27;s page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get a Roster: the week cut into long shifts up to the game&#x27;s 12-hour limit, people placed where their schedule demands hold, cleaning and security covered, how many to hire for each role, and lines you tick off as you enter them in BizMan; the Optimize staffing card on Today opens the shop where it saves the most typing. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-19">19 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/56" target="_blank" rel="noopener" aria-label="View pull request 56">PR #56 ↗</a></div><h3>A Discord to talk it over in</h3><p>The footer&#x27;s Follow column now links a Discord server for Big Ambitions and Big Copilot: somewhere to ask what a number means, compare saves and strategies, and say what the board should show next. The invite is in the footer on the landing screen and on the board, beside YouTube and the subreddit.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-18">18 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/50" target="_blank" rel="noopener" aria-label="View pull request 50">PR #50 ↗</a></div><h3>Choose light or dark</h3><p>The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system&#x27;s.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-17">17 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/43" target="_blank" rel="noopener" aria-label="View pull request 43">PR #43 ↗</a></div><h3>Warnings for unmet staff demands</h3><p>Needs attention now tells you when your employees&#x27; demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site&#x27;s page lists the demands under its crew.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/40" target="_blank" rel="noopener" aria-label="View pull request 40">PR #40 ↗</a></div><h3>Staffing by the hour for offices</h3><p>Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves. */
@@ -2471,8 +2625,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "4e869bf19e";</script>
-<script>window.LEDGER_RELEASE = {"version":"4e869bf19e","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "298f704e58";</script>
+<script>window.LEDGER_RELEASE = {"version":"298f704e58","latest":{"pr":58,"date":"2026-09-19","title":"A page for every site, and a roster you can type in","summary":"Every site's page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get a Roster: the week cut into long shifts up to the game's 12-hour limit, people placed where their schedule demands hold, cleaning and security covered, how many to hire for each role, and lines you tick off as you enter them in BizMan; the Optimize staffing card on Today opens the shop where it saves the most typing. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2541,8 +2695,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=4e869bf19e"></script>
-<script src="community.js?v=4e869bf19e"></script>
+<script src="app.js?v=298f704e58"></script>
+<script src="community.js?v=298f704e58"></script>
 
 <script>
 
@@ -2691,6 +2845,8 @@ const SP_ICON = {
   building: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path>',
   wave: '<path d="M2 14c2.5 0 2.5-4 5-4s2.5 4 5 4 2.5-4 5-4 2.5 4 5 4"></path>',
   crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
+  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+  pause: '<path d="M9 6v12M15 6v12"></path>',
   gear: '<circle cx="12" cy="12" r="3.2"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"></path>',
   pipe: '<path d="M3 8h6v8h12M3 12h2M17 20v-2M21 20v-2"></path>',
   route: '<circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="5" r="2"></circle><path d="M8 18h7a3.25 3.25 0 0 0 0-6.5H9a3.25 3.25 0 0 1 0-6.5h7"></path>',
@@ -2701,6 +2857,12 @@ const SP_ICON = {
   heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
   exit: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H8"></path>',
   chev: '<path d="M9 6l6 6-6 6"></path>',
+  roster: '<path d="M4 7h9M4 12h16M4 17h6"></path><path d="M16 5v4M13 15v4"></path>',
+  list: '<path d="M8 6h12M8 12h12M8 18h12M4 6v.01M4 12v.01M4 18v.01"></path>',
+  coin: '<circle cx="12" cy="12" r="8.5"></circle><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.2 0-2.2-.6-2.6-1.6M12 6.5V8M12 16v1.5"></path>',
+  bench: '<path d="M4 11h16M5 11V7M19 11V7M6 11v7M18 11v7M4 15h16"></path>',
+  pinned: '<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path>',
+  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"></path>',
   right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
 };
@@ -2715,6 +2877,34 @@ const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="tr
 const spEsc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /* The same drawing wrapped so it sits on a text line. */
 const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
+/* Every character that is not a letter, a digit or a hyphen becomes a
+   delimited hex escape, so the token is whitespace-free, safe inside a
+   data-el~= selector, and one-to-one with the identity it encodes: "A+B" and
+   "A B" stay apart, and a name in any script keeps a token of its own. */
+const spTok = s => "sp-" + String(s ?? "").replace(/[^A-Za-z0-9-]/g,
+  ch => "_" + ch.codePointAt(0).toString(16) + "_");
+/* The three namespaces never meet: a line is keyed on its slug where it has
+   one and on its label only where it has none, and a machine on its list
+   position. */
+const spSlugTok = slug => spTok("s-" + slug);
+const spSlotTok = slot => spTok("m-" + slot);
+const spKeyTok = (slug, item) => slug ? spSlugTok(slug) : spTok("i-" + item);
+/* What a finding points at has to be inside the block it sends the reader to,
+   and the rows are composed in the same pass as the findings, so the check is
+   made against the finished markup rather than against a register every row
+   has to remember to sign. A token with nothing behind it is dropped; the
+   block, still worth scrolling to, is kept. Two blocks can key the same goods
+   on the same token — a shop's shelves and a factory's lines — so the search
+   is inside the named block, never across the panel. */
+function spPruneHits(panel){
+  $$(".sp-find[data-hit]", panel).forEach(f => {
+    const host = f.dataset.ev ? q(`[data-block="${f.dataset.ev}"]`, panel) : null;
+    const kept = (f.dataset.hit || "").split(" ").filter(Boolean)
+      .filter(tok => host && q(`[data-el~="${tok}"]`, host));
+    if(kept.length) f.dataset.hit = kept.join(" ");
+    else f.removeAttribute("data-hit");
+  });
+}
 /* The board's own two letters for each neighbourhood, filled in from the one
    table Python keeps. A place it does not name wears no pill. */
 const HOOD_TAGS = {"Midtown":"MT","Hell's Kitchen":"HK","Murray Hill":"MH","Lower Manhattan":"LM","Garment District":"GD","Industry City":"IC","The Hamptons":"HA"};
@@ -3489,13 +3679,17 @@ function localNames(){
   try{ return JSON.parse(localStorage.getItem(LINE_NAMES_KEY)) || {}; }catch(e){ return {}; }
 }
 function nameLine(rid, slug){
+  spViewCache = null;
   const names = localNames();
   if(slug) names[rid] = slug; else delete names[rid];
   try{ localStorage.setItem(LINE_NAMES_KEY, JSON.stringify(names)); }catch(e){}
-  if(!LIVE){ drawStock(); drawLogistics(); wireAll(); return; }
+  /* The site panel reads the same overlaid view, so the open factory has to
+     be redrawn with the tables. */
+  const again = () => { drawStock(); drawLogistics(); drawSite(); wireAll(); };
+  if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
-    .then(data => { if(data){ D = data; renderAll(); } })
-    .catch(() => { drawStock(); drawLogistics(); wireAll(); });
+    .then(data => { if(data){ D = data; renderAll(); } else again(); })
+    .catch(again);
 }
 const feedFit = (need, have) => {
   if(!need || !have) return "ok";
@@ -3837,9 +4031,11 @@ const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])
 
 /* Where the same findings sit when the site's own panel is open: the block to
    light, and — named by their data-el — the things inside it that carry the
-   evidence. One row per group that can be about a single site; a group whose
-   block the panel does not draw (the depot and factory ones, until those
-   panels exist) simply lights nothing. */
+   evidence. One row per group that can be about a single site. This table is
+   the shop and office panel's answer; SP_EVIDENCE_KIND overrides it where a
+   depot or a factory keeps the same finding somewhere else, and spEvidence()
+   drops any block the open kind does not draw, so a row never lights nothing
+   and scrolls nowhere. */
 const ALERT_EVIDENCE = {
   notrading: {block: "tiles"},
   loss: {block: "tiles"},
@@ -3867,8 +4063,8 @@ const ALERT_EVIDENCE = {
   order: {block: "stock"},
   paused: {block: "stock"},
   feed: {block: "inputs"},
-  unnamed: {block: "lines"},
-  unset: {block: "lines"},
+  unnamed: {block: "lines", hit: "unnamed"},
+  unset: {block: "lines", hit: "unset"},
 };
 
 /* The three severities of the list: the alert levels Python assigns, in the
@@ -3998,9 +4194,24 @@ function bindFindingRows(host, list){
   });
 }
 
+/* Where a finding shows is decided twice over, by the materiality gate and by
+   its kind's switch, and neither drops it. `list` is every above-gate finding
+   whose kind is still on. `smaller` is what the gate set aside plus every
+   above-gate finding whose kind is switched off, with the switched-off rows
+   sorted after the gate rows so a switch visibly moves its own findings, even
+   the ones that were below the gate already. `off` counts the switched-off rows
+   in `smaller`, from either side of the gate, for the count line to carry.
+   DOM-free and self-contained, so the switches can be tested without a page. */
+function partitionFindings(alerts, minorRows, prefs){
+  const off = a => prefs[a.group] === false;
+  const kept = minorRows.filter(a => !off(a));
+  const smaller = kept.concat(minorRows.filter(off), alerts.filter(off));
+  return {list: alerts.filter(a => !off(a)), smaller, off: smaller.filter(off).length};
+}
+
 function drawAlerts(){
-  const kindOn = a => alertGroupPrefs[a.group] !== false;
-  const list = D.alerts.filter(kindOn);
+  const {list, smaller, off} = partitionFindings(
+    D.alerts, (D.minor || {}).rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
   const gate = (D.minor || {}).gate || 0;
@@ -4023,15 +4234,17 @@ function drawAlerts(){
   bindFindingRows($("alerts"), list);
 
   /* Anything worth less than the materiality gate is counted rather than read
-     out, and so is a finding whose kind is switched off: neither is dropped.
-     The count and the money cover both, and "show" lays the rows out like the
-     list above, a switched-off kind wearing its name as a dim chip. */
-  const rows = ((D.minor || {}).rows || []).concat(D.alerts.filter(a => !kindOn(a)));
+     out, and a finding whose kind is switched off is demoted to it rather than
+     dropped: neither leaves the screen. The count and the money cover both,
+     and "show" lays the rows out like the list above, a switched-off kind
+     wearing its name as a dim chip. */
+  const rows = smaller;
   const host = $("alertMinor"), more = $("minorList");
   if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
   else {
     const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
-    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
+    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day${
+      off ? ` · ${off} switched off` : ""} &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
       showMinor ? "hide" : "show"}</a>`;
     $("minorToggle").onclick = e => { e.preventDefault(); showMinor = !showMinor; drawAlerts(); };
     more.hidden = !showMinor;
@@ -4231,15 +4444,21 @@ function drawSitePicker(){
   const order = trading.concat(support);
   const at = order.findIndex(b => b.key === siteKey);
   const prev = at > 0 ? order[at - 1] : null, next = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
-  const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${shortName(b)}</option>`;
-  const step = b => b ? `<span><a href="#" data-key="${attr(b.key)}">${shortName(b)}</a>${mapButton(b.key,b.name)}</span>` : "";
+  /* A site's name is the player's own text: it is escaped here, as everywhere
+     else the panel composes it into markup. */
+  const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${spEsc(shortName(b))}</option>`;
+  const step = b => b ? `<span><a href="#" data-key="${attr(b.key)}">${spEsc(shortName(b))}</a>${mapButton(b.key,b.name)}</span>` : "";
   host.innerHTML = `${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
     support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}`;
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
   q("select", host).onchange = e => openSite(e.target.value);
 }
+/* The one address the panel knows that is not a business. A home is reached
+   from its map card alone, so it never enters the picker and the portfolio
+   never lists it. */
+const spHome = key => key === null ? null : (D.homes || []).find(h => h.key === key) || null;
 function openSite(key, scroll = true, finding = null){
-  if(!D.businesses.some(b => b.key === key)) return;
+  if(!D.businesses.some(b => b.key === key) && !spHome(key)) return;
   if(key !== siteKey) spFindsAll = false;
   spArrived = finding;
   siteKey = key; siteOpen = true;
@@ -4291,18 +4510,39 @@ function miniChart(series, key, colour, o = {}){
 
 /* --- the shop's week, hour by hour ------------------------------------
    Three numbers meet here. Customers are measured an hour at a time over the
-   fortnight the save keeps. The registers are whatever service staff were
-   rostered that hour, at the capacity of the counters they were posted to; an
-   office's are the professionals posted at its computers. The door cap is the
-   building's own limit. Shade is how busy against the site's own busiest hour;
-   a red outline is an hour spent at the ceiling that was on. The sentence under
-   the grid says which, and when capacity stood idle. */
+   fortnight the save keeps. The capacity is whatever staff were rostered that
+   hour, at the rate of the stations they were posted to; an office's are the
+   professionals posted at its computers, and a site asking for several skills
+   is only as fast as its slowest role. The door cap is the building's own
+   limit. Shade is how busy against the site's own busiest hour; a red outline
+   is an hour spent at the ceiling that was on. The sentence under the grid
+   says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 /* Mirrors AT_CAP in the Python: this close to the ceiling is at the ceiling,
    so the outlined cells are the ones capHours counts. */
 const AT_CAP = 0.95;
+
+/* The roles holding this hour back: every one standing at the site's own
+   minimum, short of its stations or fully manned. The same filter
+   _hour_findings() applies in the Python, so the cell and the alert name the
+   same roles, and a tie names both of them. */
+function hourRoles(g, wd, h){
+  const roles = g.roles || [];
+  if(!roles.length) return [];
+  const low = Math.min(...roles.map(r => r.staffed[wd][h]));
+  const at = roles.filter(r => r.staffed[wd][h] === low);
+  return at.length ? at : roles;
+}
+
+/* One role's stations that hour, furniture and throughput kept apart: how many
+   of them were manned, then what they were worth an hour. */
+function roleRead(r, wd, h){
+  const n = r.posts ? r.posts[wd][h] : 0;
+  const many = r.many || r.noun || "stations";
+  return `${n} of ${r.stationCount} ${r.stationCount === 1 ? (r.one || many) : many} · ${r.staffed[wd][h]}/h`;
+}
 
 function hourGrid(g, todayWd){
   const peak = Math.max(g.peak, 1);
@@ -4316,12 +4556,37 @@ function hourGrid(g, todayWd){
       const a = seen ? 6 + Math.round(Math.min(seen / peak, 1) * 70) : 0;
       const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
-      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
-      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
-        g.office ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
-          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`}${
-        atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
-      cells += `<div class="hc${atCap ? ` cap ${spCellLimit(g, wd, h)}` : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
+      /* A role idle while another holds the site back is still idle: judge
+         each role on its own roster, the way the Python findings do, and say
+         which one it was. A grid without roles is an old one, so it keeps the
+         site-wide test. */
+      const roles = g.roles || [];
+      const idle = roles.filter(r => r.onShift[wd][h] >= 2 && r.staffed[wd][h] > Math.max(seen, .5) * 2);
+      const slack = roles.length
+        ? idle.length > 0
+        : cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
+      /* A single-role shop keeps the register sentence it has always had. Once
+         more than one role is in play the site's own numbers say nothing -- its
+         capacity is the minimum and its stations are all of them at once -- so
+         the binding roles speak for themselves. */
+      const binding = g.office ? [] : hourRoles(g, wd, h);
+      const on = g.office
+        ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
+        : roles.length > 1
+          ? `${binding.map(r => roleRead(r, wd, h)).join(" + ")} · slowest of ${roles.length} roles`
+          : binding.length && binding[0].noun
+            ? roleRead(binding[0], wd, h)
+            : `${g.staffed[wd][h]} of ${g.counters} register capacity on`;
+      const idleWord = roles.length > 1 && idle.length
+        ? `${idle.map(r => r.label || "capacity").join(", ")} idle`
+        : "capacity idle";
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
+        atCap ? " · <b>at the ceiling</b>" : slack ? ` · ${idleWord}` : ""}`;
+      /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
+         can ask for its own hours by kind and role together. */
+      const held = atCap ? spCellLimit(g, wd, h) : "";
+      cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}"${
+        held ? ` data-caps="${attr(held)}"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
   return `<div class="hours">${cells}</div>`;
@@ -4338,16 +4603,16 @@ const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length 
 /* --- the site panel's own vocabulary -----------------------------------------
    The lookups its blocks read, the findings about the one site that is open,
    and the wiring that makes a block read out what is under the pointer. The
-   panel forks on a kind: a shop and an office draw all of it, the other kinds
-   keep the plainer panel they have today. */
+   panel forks on a kind: a shop, an office, a depot and a factory each draw
+   their own blocks and no others, and a home keeps the plainer panel it has
+   until its own is drawn. */
 
 /* Which panel this site draws: a shop, an office, a factory (it has a line in
    the factory table), a depot (any other support or overhead site) or a home. */
 function spKind(b){
   if(b.status === "retail") return "retail";
   if(b.status === "office") return "office";
-  const factories = ((D.supply || {}).factories || {}).sites;
-  if(factories && factories.some(r => r.s === siteTab)) return "factory";
+  if(spFactorySites().some(r => r.s === siteTab)) return "factory";
   if(b.status === "support" || b.status === "overhead") return "depot";
   return "home";
 }
@@ -4387,18 +4652,226 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
 const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
-/* Which ceiling held one capped hour, by the same rule _hour_findings() uses,
-   off the three numbers the grid already carries: the door if it was reached,
-   else staffing if the counters were not all manned, else the counters
-   themselves. The cell wears the answer as a class so a cap chip can pick out
-   its own hours and leave the others alone. */
-const SP_CELL_CLASS = {"the building": "cap-door", staffing: "cap-staff",
-                       registers: "cap-post", workstations: "cap-post"};
+/* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
+   the door if it was reached, else every role standing at the site's own
+   minimum that hour, each of them short of people where it has stations
+   standing empty and short of stations where they are all manned. An hour two
+   roles are tied on is held by both at once and says both.
+
+   The answer is a kind AND a role, not a kind alone. A gym held by "Gym
+   Trainer staffing" at ten and by its cashiers' plain "staffing" at noon has
+   two findings of one kind, and a cell saying only "short of people" would be
+   claimed by both chips at once. So the token is `<kind>:<skill>`. The door's
+   is `door` alone, because a door belongs to the building rather than to
+   anybody's role. A grid with no roles is an old one and keeps the site-wide
+   rule under a nameless role. */
+const spRoleToken = (kind, skill) => `${kind}:${String(skill || "").replace(/\s+/g, "")}`;
+const SP_CELL_ORDER = {staff: 0, post: 1};
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
-  return g.door && g.door <= staffed ? "cap-door"
-    : staffed < g.counters ? "cap-staff" : "cap-post";
+  if(g.door && g.door <= staffed) return "door";
+  const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
+  if(!at.length) return spRoleToken(staffed < g.counters ? "staff" : "post", "");
+  return [...new Set(at.map(r =>
+    spRoleToken(r.staffed[wd][h] < r.counters ? "staff" : "post", r.skill)))]
+    .sort((a, b) => SP_CELL_ORDER[a.split(":")[0]] - SP_CELL_ORDER[b.split(":")[0]]
+      || a.localeCompare(b))
+    .join(" ");
 };
+/* Which of the grid's roles a limit's words name. _role_words() builds those
+   words out of the role itself -- "<label> staffing", or the station's own
+   plural -- while a shop's Customer Service and an office's single role keep
+   the older "staffing", "registers" and "workstations". */
+const SP_PLAIN_LIMIT = {staffing: true, registers: true, workstations: true};
+function spLimitRole(part, roles){
+  if(SP_PLAIN_LIMIT[part]) return (roles || []).find(r => !r.noun) || null;
+  const staffing = /\bstaffing$/.test(part);
+  const want = part.replace(/\s*staffing$/, "");
+  return (roles || []).find(r => staffing ? r.label === want : r.noun === part) || null;
+}
+/* The cells one cap chip is about, in the cells' own tokens. A finding naming
+   two tied answers -- "Gym Trainer staffing and registers" -- is about the
+   hours where both held at once, so it asks for both and the grid lights the
+   overlap alone. */
+const spLimitShow = (n, g) => n.limit === "the building" ? "door"
+  : String(n.limit).split(" and ").map(part => {
+      const role = spLimitRole(part, (g || {}).roles);
+      return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
+        role ? role.skill : "");
+    }).join(" ");
+/* the roster ------------------------------------------------------------------
+   docs/dashboard-reference.md's `staffing` row: the week the player would
+   otherwise drag out by hand in BizMan, drawn on the hour grid's own 24
+   columns. Everything from here to spRosterBlock() is pure -- it takes the
+   payload row and gives back numbers and small objects -- so the shapes can be
+   checked without a page in front of them. */
+const SP_ROSTER_STORE = "ba_dash_roster:";
+const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
+/* Whether the plan rests on a measured hour at all. Every serving role thin
+   all week means the planner cut no serving shifts, and there is nothing
+   honest to put on the strip: the game's own arrival ceiling over-predicts a
+   shop like this fourfold, so it is never shown as demand. */
+const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
+  skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
+/* Whether the doors are open that hour. The game keeps a list of slots a day,
+   and the hour between two of them is the shop shut, not trade dipping. */
+const spOpenAt = (slots, h) => (slots || []).some(s => s[0] <= h && h < s[1]);
+/* One list of shifts per station per weekday, each in the order they run. `d`
+   and `s` come out of a save, so a row pointing outside the tables is dropped
+   rather than drawn against the wrong station. */
+/* Whether a row reaches the page at all. `p: null` is a line the plan wants
+   and has nobody for, which is a real state worth drawing. An index pointing
+   outside either table is not that: it is a row we cannot read, and drawing it
+   would put an hour against the wrong station, or tell the player nobody may
+   work an hour somebody probably does. */
+const spNobody = p => p === null || p === undefined;
+const spDrawn = (row, s) => s.d >= 0 && s.d < 7 && !!(row.stations || [])[s.s]
+  && (spNobody(s.p) || !!(row.people || [])[s.p]);
+/* And whether it is a line the player can tick off: one with somebody on it,
+   at a station and for a person the save names. A hiring line is drawn but
+   there is nothing to enter for it yet, and a record with no id of its own has
+   nothing for a tick to be about -- its bar is drawn and can still be typed
+   into the game, it just cannot be marked done. */
+const spHasId = v => typeof v === "string" ? v !== "" : v !== null && v !== undefined;
+const spTickable = (row, s) => spDrawn(row, s) && !spNobody(s.p)
+  && spHasId(((row.stations || [])[s.s] || {}).id)
+  && spHasId(((row.people || [])[s.p] || {}).id);
+const spTickableRows = row => (row.shifts || []).filter(s => spTickable(row, s));
+function spRosterRows(row, list){
+  const days = [...Array(7)].map(() => (row.stations || []).map(() => []));
+  (list || []).forEach(s => {
+    const day = days[s.d];
+    if(!day || !Array.isArray(day[s.s])) return;
+    if(!spDrawn(row, s)) return;
+    day[s.s].push(s);
+  });
+  days.forEach(day => day.forEach(shifts => shifts.sort((a, b) => a.f - b.f || a.t - b.t)));
+  return days;
+}
+/* One weekday as a string, people and all, so two days can be compared. */
+const spDaySig = day => day.map(shifts => shifts.map(
+  s => `${s.f}-${s.t}:${s.p === null || s.p === undefined ? "?" : s.p}:${s.k || ""}`).join(",")).join("|");
+/* The weekday each day is a copy of, or null. BizMan copies a schedule day and
+   pastes it, so a day identical to an earlier one is two clicks rather than a
+   morning of typing; a day with nothing on it is nobody's copy. */
+function spSameDays(days){
+  const sigs = days.map(spDaySig);
+  return days.map((day, d) => {
+    if(!day.some(shifts => shifts.length)) return null;
+    const first = sigs.indexOf(sigs[d]);
+    return first < d ? first : null;
+  });
+}
+/* What a tick means: this exact line is entered in the game. So its identity
+   is the line the player typed -- the weekday, the station, the hours from and
+   to, and the person -- and nothing else. A plan that changes any of those has
+   changed the line, and the tick stops matching, which is the whole
+   invalidation the block needs: no fingerprint, no version, no migration.
+
+   The station and the person go in by their save ids rather than by their
+   index into this row's tables, because those tables are rebuilt every run:
+   buying one more register or hiring one more cashier renumbers everybody
+   after it, and a tick that followed the index would land on somebody else's
+   shift. An id may hold any character, so the tuple is serialised as JSON,
+   which keeps the boundary between one part and the next. */
+const spTickId = (row, s) => {
+  const post = ((row.stations || [])[s.s] || {}).id;
+  const who = ((row.people || [])[s.p] || {}).id;
+  /* No id, no tick: there is nothing here to tell this line apart from the
+     next one, and two of them would share whatever stood in for the missing
+     part. The bar is drawn anyway -- see spTickable(). */
+  return spHasId(post) && spHasId(who) ? JSON.stringify([s.d, post, s.f, s.t, who]) : null;
+};
+/* The ticks are a convenience, kept per site in the browser. Storage can be
+   missing or refuse to answer -- a private window, site data blocked, the
+   board opened from a file -- and every path here ends with the block drawing
+   anyway, with nothing ticked. */
+const spTicksRead = key => {
+  try {
+    const kept = JSON.parse(localStorage.getItem(SP_ROSTER_STORE + key) || "[]");
+    return new Set(Array.isArray(kept) ? kept.filter(x => typeof x === "string") : []);
+  } catch(e){ return new Set(); }
+};
+const spTicksWrite = (key, ticks) => {
+  try {
+    if(ticks.size) localStorage.setItem(SP_ROSTER_STORE + key, JSON.stringify([...ticks]));
+    else localStorage.removeItem(SP_ROSTER_STORE + key);
+  } catch(e){ /* nothing to do: the plan is still on the page */ }
+};
+/* How much of *this* plan is typed. A tick left over from an older plan
+   counts for nothing, so the ring never promises more than is there, and the
+   next write drops it. */
+const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
+  (n, s) => n + (ticks.has(spTickId(row, s)) ? 1 : 0), 0);
+/* What the week costs to type, against what is in the game now. `fragments`
+   is how much of what is there now is a two-hour scrap.
+
+   `plan` is every line the planner produced and `tickable` is the ones with
+   somebody on them; the difference is `hire`, the lines waiting on somebody
+   being hired first. Only `tickable` is a week of typing, and it is the number
+   the tile, the ring and the Next-moves card all have to agree on -- a shop
+   with an unstaffed locker otherwise showed 42 struck through against 42 while
+   the ring beside it counted 35. */
+function spRosterCounts(row){
+  const drawn = (row.shifts || []).filter(s => spDrawn(row, s));
+  return {
+    plan: (row.shifts || []).length,
+    tickable: drawn.filter(s => spTickable(row, s)).length,
+    hire: drawn.filter(s => spNobody(s.p)).length,
+    now: (row.current || {}).shifts || 0,
+    fragments: (row.current || {}).fragments || 0,
+  };
+}
+
+/* Two letters and a number for a station, the way the player picks it out of
+   BizMan's list: the initials of its name, numbered only where more than one
+   station shares them. */
+function spStationCodes(stations){
+  const total = {}, seen = {};
+  stations.forEach(s => { const c = roleCode(s.name || "??"); total[c] = (total[c] || 0) + 1; });
+  return stations.map(s => {
+    const c = roleCode(s.name || "??");
+    seen[c] = (seen[c] || 0) + 1;
+    return total[c] > 1 ? `${c}${seen[c]}` : c;
+  });
+}
+/* The same for a set of names that have to stay apart rather than be numbered:
+   "Customer Service" and "Cleaning Station" are both CS, and two identical
+   codes on the headcount line would say the shop has two of one role. Where
+   the initials collide, the first three letters of the first word are used
+   instead. */
+function spNameCodes(labels){
+  const short = labels.map(l => roleCode(l));
+  return labels.map((l, k) => short.some((c, j) => j !== k && c === short[k])
+    ? (String(l).trim().split(/\s+/)[0] || "??").slice(0, 3).toUpperCase()
+    : short[k]);
+}
+/* What a station is for, so a shift bar and an empty row can wear it. The
+   payload says it per skill, because a cleaning station and a security locker
+   are covered every open hour rather than from a measured need. */
+const spStationKind = (row, st) => ((row.headcount || {})[st.skill] || {}).kind || "serve";
+/* One hour of the need strip: how many stations the measured hours ask for,
+   and the least certain basis among the roles asking. An hour nobody has a
+   reading for is not drawn at all -- an unknown is never a zero. */
+const SP_BASIS_CLASS = {censored: "sp-cens", scaled: "sp-scaled", measured: ""};
+const SP_BASIS_READ = {
+  censored: " · <b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target",
+  scaled: " · <b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks",
+  measured: " · measured",
+};
+function spNeedAt(row, wd, h){
+  let n = 0, basis = null;
+  (row.roles || []).forEach(r => {
+    const need = ((row.need || {})[r.skill] || [])[wd] || [];
+    const bases = ((row.basis || {})[r.skill] || [])[wd] || [];
+    if(!need[h]) return;
+    n += need[h];
+    const here = bases[h];
+    if(here === "censored" || (here === "scaled" && basis !== "censored") || !basis) basis = here;
+  });
+  return n ? {n, basis: basis || "measured"} : null;
+}
+
 const spHypeRow = key => {
   for(const wave of D.hypeExposure || []){
     const site = (wave.sites || []).find(s => s.key === key);
@@ -4467,14 +4940,69 @@ let spFindsAll = false, spArrived = null;
 /* A group whose evidence depends on the site: the uniform finding is about the
    locker while there is none, and about the roles once there is one. */
 const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
-const spFindRow = (a, b) => {
+/* Which blocks each kind of panel actually draws. A finding pointing anywhere
+   else gets no data-ev at all, rather than dimming the page and scrolling
+   nowhere; `desks` and `pull` are drawn in the same slot, so both are listed. */
+const SP_BLOCKS = {
+  retail: ["tiles", "standards", "pull", "hours", "crew", "shelves", "profit", "week"],
+  office: ["tiles", "standards", "desks", "hours", "crew", "shelves", "profit", "week"],
+  depot: ["tiles", "stock", "feeds", "crew"],
+  factory: ["tiles", "lines", "inputs", "crew"],
+  home: [],
+};
+/* Where a depot and a factory keep the findings the shop panel puts elsewhere.
+   A depot and a factory are both `support` sites, so every import, idle-stock
+   and staffing finding can carry one of their keys.
+   - stock standing still is a shelf on a shop, a line on a depot, and at a
+     factory either an input it eats or something it makes;
+   - an import finding (paused/shortfall/order) is about the depot's own
+     holding, and about a factory's inputs when the factory imports directly;
+   - a `feed` finding is attributed to the import site by _feed_notes(), so on
+     a depot it is about that depot's stock, not about anybody's inputs;
+   - `staff` is "No staff assigned" on a shop and a machine nobody is posted to
+     on a factory;
+   - neither draws a profit chart, so a trend lands on the tiles. */
+const SP_EVIDENCE_KIND = {
+  depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock",
+          shortfall: "stock", order: "stock", paused: "stock"},
+  factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
+            feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
+};
+/* The block a finding points at on the open kind of panel, and the things
+   inside it to pulse. What it is about comes off the finding's own `ev` — the
+   item's slug, a machine's list position — because _condense() drops `rank`
+   and `subject` from every row before the payload is written, and a label
+   would be the wrong key anyway: a recipe's "Bag of Tomatoes" is the depot's
+   "Tomatoes", and only the slug says they are the same goods. */
+function spEvidence(a, b, kind){
   const ev = ALERT_EVIDENCE[a.group] || {};
-  const hit = SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit;
+  const about = a.ev || {};
+  let block = (SP_EVIDENCE_KIND[kind] || {})[a.group] || ev.block;
+  /* A factory eats some items and makes others; the finding follows its own. */
+  if(kind === "factory" && (a.group === "dead" || a.group === "target") && about.slug){
+    const site = spFactorySite();
+    if(site && (site.needs || []).some(n => n.slug === about.slug)) block = "inputs";
+  }
+  if(!(SP_BLOCKS[kind] || []).includes(block)) block = null;
+  /* An item and a machine are only rows of the blocks that draw rows: the
+     same finding on a shop's Crew block has nothing there to pulse. */
+  /* Whatever is pulsed sits inside the block; with no block there is nothing
+     to point at. These are candidates — spPruneHits() drops the ones the
+     block turns out not to hold. */
+  const hit = !block ? "" : [
+    SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit,
+    about.slug ? spSlugTok(about.slug) : "",
+    Number.isFinite(about.slot) ? spSlotTok(about.slot) : ""]
+    .filter(Boolean).join(" ");
+  return {block, hit};
+}
+const spFindRow = (a, b, kind) => {
+  const {block, hit} = spEvidence(a, b, kind);
   const {what, more} = splitFinding(a);
   return `<a class="sp-find ${SEV_KIND[a.level] || "opp"}${a.id === spArrived ? " arrived" : ""}" href="#${
-    alertPage(a)}" data-id="${attr(a.id)}"${ev.block ? ` data-ev="${ev.block}"` : ""}${
+    alertPage(a)}" data-id="${attr(a.id)}"${block ? ` data-ev="${block}"` : ""}${
     hit ? ` data-hit="${attr(hit)}"` : ""}>
-    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[ev.block] || "alert")}</span><span class="what">${spEsc(what)}</span>
+    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[block] || "alert")}</span><span class="what">${spEsc(what)}</span>
     <span class="amt">${findingAmount(a)}</span><span class="go">${spIcon("down")}</span>${
     more ? `<span class="more">${spEsc(more)}</span>` : ""}</a>`;
 };
@@ -4484,13 +5012,13 @@ const SP_BLOCK_ICON = {tiles: "alert", profit: "profit", week: "week", hours: "h
                        standards: "standards", pull: "magnet", shelves: "shelves", stock: "crate",
                        inputs: "pipe", lines: "gear"};
 const SP_FINDS_TOP = 4;
-const spFinds = (finds, b) => {
+const spFinds = (finds, b, kind) => {
   if(!finds.length) return "";
   const shown = spFindsAll ? finds : finds.slice(0, SP_FINDS_TOP);
   const rest = finds.length - shown.length;
   /* The list itself carries no data-block: it must stay lit while one of its
      own rows dims everything else. */
-  return `<div class="sp-finds rv">${shown.map(a => spFindRow(a, b)).join("")}</div>${
+  return `<div class="sp-finds rv">${shown.map(a => spFindRow(a, b, kind)).join("")}</div>${
     rest > 0 ? `<p class="sp-findmore">${rest} more · <a class="link" href="#" data-allfinds>show all</a></p>` : ""}`;
 };
 
@@ -4594,7 +5122,7 @@ function spPull(b){
 
 /* The crew of a big site: one row a role, one dot a person, the pills one
    click away. The dots carry the names so the row reads without opening. */
-function spRoster(people, gaps){
+function spRoster(people, gaps, pairs){
   const roles = [];
   people.forEach(p => {
     let row = roles.find(r => r.role === p.role);
@@ -4609,11 +5137,29 @@ function spRoster(people, gaps){
       <span class="sp-rcount"><b>${r.people.length}</b>${
         r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}${
         r.people.every(p => typeof p.daily === "number") ? ` · ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
-      <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps)).join("")}</div></div>
+      <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps, pairs)).join("")}</div></div>
     </div>`).join("")}</div><div class="sp-read sp-readout">Hover a dot</div></div>`;
 }
+/* Name → the roster's index for that person, for the names that pick out
+   exactly one person on each side. A save permits two people with one name,
+   and _people() invents "Cashier 2" for a nameless one, so both lists can
+   hold a name twice; those names are left out and their pills do not light. */
+function spRosterPairs(b, people){
+  const row = spRosterRow(b.key);
+  if(!row || row.failed) return {};
+  const once = list => {
+    const seen = {};
+    (list || []).forEach(p => { seen[p.name] = seen[p.name] === undefined ? 1 : seen[p.name] + 1; });
+    return seen;
+  };
+  const here = once(people), there = once(row.people);
+  const out = {};
+  (row.people || []).forEach((p, k) => { if(here[p.name] === 1 && there[p.name] === 1) out[p.name] = k; });
+  return out;
+}
 /* A person, with the shirt mark when nobody in their role has a uniform set. */
-const spPersonPill = (p, gaps) => `<span class="person${p.absent ? " off" : ""}"><i>${spEsc(roleCode(p.role))}</i>${spEsc(p.name)}<small>${
+const spPersonPill = (p, gaps, pairs) => `<span class="person${p.absent ? " off" : ""}"${
+  pairs && pairs[p.name] !== undefined ? ` data-p="${pairs[p.name]}"` : ""}><i>${spEsc(roleCode(p.role))}</i>${spEsc(p.name)}<small>${
   spEsc(p.role)}${p.absent ? " · off today" : ""}</small>${
   (gaps || []).includes(p.role) ? `<span class="sp-i" data-el="uniform" data-tip="No uniform set for this role">${spIcon("shirt")}</span>` : ""}</span>`;
 
@@ -4643,7 +5189,10 @@ const spSpark = (series, key, money, tone) => {
    day's spending reads without a legend. */
 const SP_COST_SHADE = {Goods: 62, Wages: 46, Rent: 32, Marketing: 24, Theft: 18, Licensing: 14};
 const spCostBar = (costs, profit) => {
-  const parts = costs.concat([[profit < 0 ? "Loss" : "Profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
+  /* A depot and a factory book no sale of their own, so their bar is the
+     spending alone: there is no profit to close it with. */
+  const parts = costs.concat(profit === null ? []
+    : [[profit < 0 ? "Loss" : "Profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
   const total = parts.reduce((t, [, v]) => t + v, 0);
   if(!total) return "";
   return `<div data-readzone><div class="sp-cost">${parts.map(([label, v]) =>
@@ -4651,9 +5200,17 @@ const spCostBar = (costs, profit) => {
       (v / total).toFixed(4)} 0 0;--k:${SP_COST_SHADE[label] || 40}%" data-read="${attr(
       `${label} <b>${fmt(v)}</b>`)}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
-/* The limits an hour at the ceiling is held by, as the hour findings name
-   them: the building's door, the counters or workstations, the people on. */
-const SP_LIMIT_ICON = {"the building": "door", registers: "counter", workstations: "monitor", staffing: "person"};
+/* The limits an hour at the ceiling is held by, drawn. A finding names them in
+   its own words, and since the staffing track those words belong to the role:
+   "Trainer staffing", "projection booths", or both joined for an hour two
+   roles are tied on. Looking a joined or role-specific phrase up in a table of
+   the four old limits missed, and every miss drew a DOOR -- on a gym, a
+   theatre or a salon, often one with no door cap at all. So the phrase is read
+   instead: people wherever a part ends in "staffing", and the site's own kind
+   of post otherwise. */
+const spLimitIcons = (limit, office) => limit === "the building" ? ["door"]
+  : [...new Set(String(limit).split(" and ").map(part =>
+      /\bstaffing$/.test(part) ? "person" : office ? "monitor" : "counter"))];
 /* An office's desks: one square a workstation, filled while somebody is
    posted at it, at the hour the office was busiest over the fortnight. */
 function spDesks(grid){
@@ -4666,20 +5223,704 @@ function spDesks(grid){
   const manned = best ? Math.min(grid.stationCount, Math.round(grid.staffed[best.wd][best.h] / grid.postRate)) : 0;
   const squares = [...Array(grid.stationCount).keys()].map(k => k < manned
     ? `<span class="sp-m" style="--h:100%" data-read="${attr(`Workstation ${k + 1} · <b>staffed</b> at the busiest hour`)}">${spIcon("monitor")}</span>`
-    : `<span class="sp-m z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
+    : `<span class="sp-m sp-z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
   return {manned, html: `<div class="sp-mach">${squares}</div>`};
 }
+/* --- the roster block --------------------------------------------------------
+   A week of shifts on the hour grid's own 24 columns, one row a station, with
+   the measured need above them: what the player would type into BizMan ›
+   Schedule, and a tick per line once they have. */
+
+/* The empty state. A shop too new to have been measured is not given a guess:
+   the game's own arrival ceiling over-predicts a shop like it fourfold, and a
+   roster cut from that would be a fiction with a shift count on it. */
+function spRosterNone(row){
+  const stations = (row && row.stations) || [];
+  const codes = spStationCodes(stations);
+  const rows = stations.map((st, k) => `<div class="sp-grow"><span class="lab">${spEsc(codes[k])}</span></div>`).join("");
+  const failed = !!(row && row.failed);
+  return `<section class="sec rv" data-block="roster" id="sp-roster">
+    ${sechead("Roster", {icon: "roster", why: failed
+      ? `This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.`
+      : `A roster is cut from measured hours, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
+    <div class="chartbox sp-gantt sp-empty">${rows}</div>
+    <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to roster"}</div>
+  </section>`;
+}
+
+/* One weekday of the grid: the need strip, then a row per station carrying
+   this week's plan and, behind it, the fragments the schedule holds today. */
+function spRosterDay(c, wd, on){
+  /* Nothing measured means no bar at all, not a bar of zero and certainly not
+     one cut from the arrival ceiling. The strip keeps its lane so the rows
+     below still line up against the hours, and the chip beside it says why it
+     is empty. */
+  let out = `<div class="sp-grow sp-needrow${c.measured ? "" : " sp-unmeas"}"><span class="lab" data-read="${attr(
+    c.measured ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
+      : `No hour reports for this shop yet, so nothing is asked for`)}">${spI("person")}</span>`;
+  const slots = (c.row.open || [])[wd] || [];
+  for(let h = 0; c.measured && h < 24; h++){
+    /* The doors decide before the measurement does. A weekday with two
+       opening slots has an hour in the middle when the shop is shut, and a
+       scaled need can land in it; demand nobody could have walked through is
+       not demand. */
+    if(!spOpenAt(slots, h)) continue;
+    const need = spNeedAt(c.row, wd, h);
+    if(!need) continue;
+    const read = `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> ${need.n} station${
+      need.n === 1 ? "" : "s"}${SP_BASIS_READ[need.basis] || ""}`;
+    out += `<i class="sp-need ${SP_BASIS_CLASS[need.basis] || ""}" style="grid-column:${h + 2};--n:${
+      need.n}" data-read="${attr(read)}"></i>`;
+  }
+  out += `</div>`;
+  /* The hours the doors are shut, marked once and reused down the lanes: a
+     two-slot day used to paint the whole 00-24 lane as trading. */
+  let shutMarks = "", run = null;
+  for(let h = 0; h <= 24; h++){
+    const open = h < 24 && spOpenAt(slots, h);
+    if(!open && run === null) run = h;
+    if((open || h === 24) && run !== null){
+      if(h > run) shutMarks += `<i class="sp-closed" style="grid-column:${run + 2}/${h + 2}"></i>`;
+      run = null;
+    }
+  }
+  c.stations.forEach((st, si) => {
+    const kind = spStationKind(c.row, st);
+    out += `<div class="sp-grow${slots.length ? "" : " sp-shut"}"><span class="lab" data-read="${attr(
+      `${spEsc(st.name || "?")}${st.rate ? ` · serves ${st.rate} an hour` : " · covered every open hour"}`)}">${
+      spEsc(c.codes[si])}</span>${shutMarks}`;
+    /* The schedule as it stands, behind the plan: one block a fragment, so
+       the toggle shows what typing this week actually replaces. */
+    (c.now[wd][si] || []).forEach((s, k) => {
+      out += `<i class="sp-frag" style="grid-column:${s.f + 2}/${s.t + 2};--k:${Math.min(k, 40)}"></i>`;
+    });
+    (c.plan[wd][si] || []).forEach(s => { out += spShiftBar(c, s, st, kind); });
+    out += `</div>`;
+  });
+  return `<div class="sp-day${on ? " sp-on" : ""}" data-d="${wd}">${out}</div>`;
+}
+
+/* One shift. A line with nobody to give it to is a hiring line, not a
+   shift: it is drawn dashed and cannot be ticked off, because there is
+   nothing to type yet. */
+function spShiftBar(c, s, st, kind){
+  const span = `grid-column:${s.f + 2}/${s.t + 2}`;
+  const hrs = `${String(s.f).padStart(2, "0")}–${String(s.t).padStart(2, "0")}`;
+  const when = `${WEEK_SHORT[s.d]} ${hrs} · ${spEsc(st.name || "?")}`;
+  if(s.p === null || s.p === undefined)
+    return `<span class="sp-shift sp-hire" style="${span}" data-read="${attr(
+      `<b>${when}</b> · <b>nobody to give it to</b>: counted in the hire below`)}">hire<small>${hrs}</small></span>`;
+  const who = c.people[s.p].name || "?";
+  const why = (c.placed[s.p] || []).find(r => r.wd === s.d && r.from < s.t && r.to > s.f);
+  const benched = c.bench.has(s.p);
+  let read = `<b>${spEsc(who)}</b> · ${when}`;
+  if(why) read += ` · ${spEsc(why.label || why.demand)}: the plan works around it`;
+  else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
+  const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
+    + (benched ? spI("bench") : "");
+  const body = `${marks}${spEsc(who)}<small>${hrs}</small>`;
+  const cls = `sp-shift${kind === "serve" ? "" : ` sp-${kind}`}`;
+  /* A station or a person the save gives no id to has nothing for a tick to
+     hang on, and two of them would share the same empty one. The line is real
+     and still worth typing, so it is drawn -- it simply cannot be marked. */
+  if(!spTickable(c.row, s))
+    return `<span class="${cls}" style="${span}" data-p="${s.p}" data-read="${attr(
+      `${read} · <b>no id to tick against</b>: type it, but the board cannot mark it done`
+      )}">${body}</span>`;
+  const id = spTickId(c.row, s);
+  return `<button type="button" class="${cls}${
+    c.ticks.has(id) ? " sp-done" : ""}" style="${span}" data-p="${s.p}" data-tick="${attr(id)}" data-read="${
+    attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${body}</button>`;
+}
+
+/* The headcount line: one entry a role, a dot a person, then the staff
+   demands this plan would fail. A security locker nobody staffs is money
+   the player is not spending yet, so it is marked as new spending rather
+   than folded in with the rest. */
+function spRosterCount(c){
+  const dots = (n, cls) => [...Array(Math.max(0, Math.min(n, 40))).keys()].map(() =>
+    `<i class="sp-dot${cls ? ` ${cls}` : ""}"></i>`).join("");
+  /* A bench member is counted in `headcount.have` under every skill they
+     hold, so they have to come off it under every one of those too -- taking
+     them off under their first skill alone showed a two-skill bench member as
+     somebody already here under their second role. */
+  const benchOf = skill => (c.row.bench || []).filter(
+    r => (r.skills || [r.skill]).includes(skill)).length;
+  /* A serving role names itself; cleaning and security are not roles in the
+     payload, so they are named by the furniture they cover. */
+  const labelOf = skill => ((c.row.roles || []).find(r => r.skill === skill) || {}).label
+    || (c.stations.find(st => st.skill === skill) || {}).name || String(skill).split("_").pop();
+  const skills = Object.keys(c.row.headcount || {});
+  const codes = spNameCodes(skills.map(labelOf));
+  let out = skills.map((skill, si) => {
+    const h = c.row.headcount[skill] || {};
+    const label = labelOf(skill);
+    const bench = benchOf(skill), have = Math.max(0, (h.have || 0) - bench);
+    const isNew = h.kind === "security" && h.hire;
+    const words = [`${have}`, bench ? `${bench} bench` : "", h.hire ? `hire ${h.hire}` : ""].filter(Boolean).join(" · ");
+    const read = `${spEsc(label)} · ${h.needed} station-hour${h.needed === 1 ? "" : "s"} want ${
+      h.min} to ${h.max} people · <b>${have} here${bench ? `, ${bench} from the bench` : ""}${
+      h.hire ? `, ${h.hire} to hire` : ""}</b>${isNew
+        ? ` · <b>${h.hireHours} h a week of new spending</b>: nobody covers this locker today` : ""}`;
+    return `<span${isNew ? ` class="sp-new"` : ""} data-read="${attr(read)}"><span class="sp-code">${
+      spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
+      dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
+  }).join("");
+  out += spShortChips(c, c.row.shortHours, r => [`${r.hours}`, `${r.min} h`,
+    `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours} hours; their demand asks for ${r.min}. The usual answer is another site, not a longer week here`]);
+  out += spShortChips(c, c.row.shortDays, r => [`${r.days}`, `${r.want} days`,
+    `<b>${spEsc(c.name(r.p))}</b> works ${r.days} days here; their demand asks for ${r.want}. The usual answer is another site, not a longer week here`]);
+  return `<div class="sp-hc">${out}</div>`;
+}
+
+/* The first three of a demand the plan would fail, then a count of the rest:
+   a busy shop can leave a dozen people short and the line is not a list. */
+const SP_SHORT_SHOWN = 3;
+function spShortChips(c, rows, words){
+  if(!rows || !rows.length) return "";
+  const shown = rows.slice(0, SP_SHORT_SHOWN).map(r => {
+    const [got, want, read] = words(r);
+    return `<span class="sp-new" data-p="${r.p}" data-read="${attr(read)}">${spI("clock")}<span>${
+      spEsc(c.name(r.p))} <b>${got}</b>/${want}</span></span>`;
+  }).join("");
+  const rest = rows.length - SP_SHORT_SHOWN;
+  return shown + (rest > 0 ? `<span class="sp-new" data-read="${attr(
+    `Also short: ${rows.slice(SP_SHORT_SHOWN).map(r => spEsc(c.name(r.p))).join(", ")}`)}">+${rest} more</span>` : "");
+}
+
+function spRosterBlock(b){
+  const row = spRosterRow(b.key);
+  /* A week with nothing in it is the only empty state. A shop too new to have
+     been measured still has cleaning and security cover to type -- and that is
+     where the block earns its keep, because an unmeasured shop is exactly the
+     one whose schedule is 182 two-hour scraps -- so it gets the whole block
+     with the need strip in its not-measured state, rather than nothing. */
+  if(!row || row.failed || !(row.shifts || []).length) return spRosterNone(row);
+  const stations = row.stations || [], people = row.people || [];
+  const placed = {};
+  (row.placed || []).forEach(r => { (placed[r.p] = placed[r.p] || []).push(r); });
+  const c = {
+    row, stations, people, placed,
+    codes: spStationCodes(stations),
+    bench: new Set((row.bench || []).map(r => r.p)),
+    plan: spRosterRows(row, row.shifts),
+    now: spRosterRows(row, (row.current || {}).list),
+    ticks: spTicksRead(row.key),
+    name: p => (people[p] || {}).name || "?",
+    measured: spRosterMeasured(row),
+  };
+  const counts = spRosterCounts(row);
+  const same = spSameDays(c.plan);
+  /* What the player can actually tick: the lines that reach the page with
+     somebody on them. A hiring line has nobody to enter yet, and a row the
+     tables cannot read is not drawn at all, so neither belongs in the
+     progress -- and both halves of that progress, the first render and every
+     retally after it, have to count the same set or the ring and the words
+     disagree. `data-tickable` is that one number. */
+  c.tickable = spTickableRows(row);
+  const typed = spTyped(row, c.tickable, c.ticks);
+  /* The week opens on the first day that has anything on it, so a shop shut
+     on Sunday does not open on an empty grid. With nothing anywhere -- every
+     row dropped as unreadable -- it opens on Monday rather than on no day at
+     all, which would leave the tabs with none of them selected. */
+  const first = HOUR_ROWS.find(wd => c.plan[wd].some(s => s.length)) ?? HOUR_ROWS[0];
+  const tabs = HOUR_ROWS.map(wd => {
+    const copy = same[wd];
+    const read = copy === null
+      ? `<b>${WEEK_FULL[wd]}</b> · ${c.plan[wd].reduce((n, s) => n + s.length, 0)} shifts`
+      : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
+    return `<a href="#" class="${wd === first ? "sp-on" : ""}" data-day="${wd}" data-read="${attr(read)}">${
+      copy === null ? "" : "<u></u>"}${WEEK_SHORT[wd].toUpperCase()}</a>`;
+  }).join("");
+  const hours = `<div class="sp-grow sp-needrow" style="min-height:0;margin:0"><span></span>${
+    [...Array(24).keys()].map(h => `<div class="hh" style="grid-column:${h + 2}">${h % 3 === 0 ? h : ""}</div>`).join("")}</div>`;
+  const slack = row.slack || {};
+  const cost = row.cost || {};
+  const steps = `<button type="button" class="sp-step"><span class="sp-box">${spIcon("tick")}</span>Clear entire schedule<small>BizMan › Schedule</small></button>`
+    + (row.bench || []).map(r => `<button type="button" class="sp-step" data-p="${r.p}"><span class="sp-box">${
+      spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
+  return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
+    attr(row.key)}" data-tickable="${c.tickable.length}">
+    ${sechead("Roster", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span>`,
+      why: `A week to type into BizMan › Schedule: clear the schedule, then enter these. Shifts run as long as the game allows, 12 hours, and nobody is put inside a window they asked to keep free. Click a shift once it is typed; the ticks stay in this browser.`})}
+    <div class="sp-ba">
+      <div data-read="${attr(`Shifts to enter for the week: <b>${counts.now}</b> today${
+        counts.fragments ? `, ${counts.fragments} of them two hours long` : ""}, against <b>${
+        counts.tickable}</b>${counts.hire
+          ? ` · ${counts.hire} more line${counts.hire === 1 ? "" : "s"} the plan wants and has nobody for, waiting on a hire` : ""}`)}"><span class="lab">Shifts / week</span><div class="v">${
+        spI("list")}<s>${counts.now}</s>${counts.tickable}${counts.hire
+          ? `<small style="font-size:12px;color:var(--warn)">+${counts.hire} hire</small>` : ""}</div></div>
+      <div data-read="${attr(`<b>${fmt(cost.current)}</b> a week as the schedule stands, <b>${
+        fmt(cost.weekly)}</b> for the plan, for the staff the save prices`)}"><span class="lab">Wages / week</span><div class="v">${
+        spI("coin")}<s>${money(cost.current)}</s>${money(cost.weekly)}</div></div>
+      <div data-read="${attr(`<b>${slack.hours} h</b> bought to keep shifts whole, of the <b>${
+        slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
+        slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
+        Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>
+      <div class="sp-typed"><span class="sp-ring" style="--p:${
+        c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
+        typed}</b> of ${c.tickable.length} typed</span>${
+        /* Nothing to clear until something is ticked, and the line has no room
+           to carry a dead link across every site that has never been typed. */
+        ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>clear ticks</a></div>
+    </div>
+    <div class="sp-steps">${steps}<span class="seg sp-daytabs" style="margin-left:auto">${tabs}</span></div>
+    ${c.measured ? "" : `<div class="sp-hchips" style="margin:0 0 10px"><span class="sp-hchip sp-unmeas" data-tip="${
+      attr(`Serving shifts are cut from measured hours, and this shop has none yet: they arrive once it has two weeks of hour reports. The cleaning and security cover below does not wait on a measurement.`)}">${
+      /* No swatch: the cap and idle chips carry one because they pick their own
+         cells out of the grid, and this chip is about cells that are not
+         there. Beside the step buttons an empty square reads as a checkbox. */
+      spI("person")}Not measured</span></div>`}
+    <div class="chartbox sp-gantt">${hours}${
+      HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
+    ${spRosterCount(c)}
+    <div class="sp-read sp-readout">Hover a shift</div>
+  </section>`;
+}
+
 const spCeiling = (office, limits) => {
-  const lit = limits.map(l => SP_LIMIT_ICON[l]);
+  const lit = limits.flatMap(l => spLimitIcons(l, office));
   return `<div class="sp-ceil">${
     ["door", office ? "monitor" : "counter", "person"].map(k =>
       `<span class="sp-i${lit.includes(k) ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
 };
 
+/* --- the depot and the factory ----------------------------------------------
+   A depot is a pipe: what it holds, what draws on it, and the day the next
+   truck lands. A factory is a row of machines: what each line makes while
+   somebody is posted to it, and what those lines eat. Both read their rows out
+   of the same supply payload the Supply page is built from, so nothing new is
+   extracted for them.
+
+   Everything here matches on a line's slug, never on its label: a recipe calls
+   an input "Bag of Tomatoes" where the depot line is "Tomatoes", and
+   _factories() reconciles the two through the slug. */
+
+/* Mirrors STAFF_HOURS in the Python: a machine posted every hour of the week. */
+const SP_STAFF_HOURS = 168;
+const SP_RAIL_DAYS = 7;
+const SP_DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
+
+/* The seven days from today, left to right: a cell a day, filled while the
+   holding covers it, hatched once it is dry, and the truck sitting on the day
+   the delivery lands. A line nothing draws on has no cover to run out and
+   sleeps instead.
+
+   Whether the days past the cover are dry is a different question from where
+   the truck sits. A paused contract keeps the delivery day it had when it was
+   stopped, and an order can be due beyond the seven days the rail draws:
+   either way the line is dry to the end of the week, with no truck on it.
+   Without any delivery at all — a line made in-house, or bought off plan —
+   those days are unknown rather than dry: nothing says when it is topped up
+   again. */
+function spRail(cover, truck, held, dead, early, known){
+  if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz">zzz</span>`;
+  const c = Math.max(0, Math.min(SP_RAIL_DAYS, Math.floor(cover || 0)));
+  const end = truck === null ? (held || known ? SP_RAIL_DAYS : c) : held ? SP_RAIL_DAYS : truck;
+  const cells = [...Array(SP_RAIL_DAYS).keys()].map(k =>
+    `<i class="${k < c || (!held && truck !== null && k >= truck) ? "sp-c" : k < end ? "sp-d" : ""}"></i>`).join("");
+  const lorry = (d, cls, tip) => `<span class="sp-trk${cls}" style="--d:${d}" data-tip="${attr(tip)}">${spIcon("truck")}</span>`;
+  return `<span class="sp-rail">${cells}${
+    early === null || early === undefined ? "" : lorry(early, " sp-early", "An earlier delivery; the numbers beside this line are about the last one")}${
+    truck === null ? "" : lorry(truck, held ? " sp-held" : "", held ? "The delivery this contract had before it was paused" : "The delivery the cover is measured against")}</span>`;
+}
+const spDays = today => `<span class="sp-days">${[...Array(SP_RAIL_DAYS).keys()].map(k =>
+  `<b class="${k ? "" : "sp-now"}">${SP_DAY_LETTER[((today || 0) + k) % 7]}</b>`).join("")}</span>`;
+/* What a figure should be set to, beside what it is now. */
+const spUp = (now, to, bad) => `<span class="sp-up${bad ? " bad" : ""}">${spEsc(now)} ${
+  spIcon("right")} <b>${spEsc(to)}</b></span>`;
+const spMeter = (pct, bad) => `<div class="sp-meter${bad ? " bad" : ""}"><i style="--w:${
+  Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
+/* A figure the payload does not carry is a dash, never a nought. */
+const spNum = n => Number.isFinite(n) ? Math.round(n).toLocaleString() : "—";
+/* The total of one key over some rows, or nothing at all when no row carries
+   it: a factory whose every machine runs a recipe the board cannot name has an
+   unknown output, not an output of zero. */
+const spSum = (rows, key) => {
+  const vals = (rows || []).map(r => r[key]).filter(v => Number.isFinite(v));
+  return vals.length ? vals.reduce((t, v) => t + v, 0) : null;
+};
+/* A tile of the depot and factory panels: the label, the figure, and whatever
+   line sits under it. */
+const spTile = (label, value, extra, flag) => `<div class="sstat">${
+  flag ? `<i class="sp-flag"></i>` : ""}<span class="lab">${label}</span><div class="v">${value}</div>${extra || ""}</div>`;
+/* A block with nothing in it says so in two words; the sentence is its ?. */
+const spNone = label => `<p class="quiet">${label}</p>`;
+
+/* Everything that draws on this depot, one row a site: the shops' shelves and
+   the factory lines' inputs, which are the same trucks leaving the same door. */
+function spFeedRows(){
+  const by = new Map();
+  const add = (s, perDay) => {
+    if(s === null || s === undefined || !(perDay > 0)) return;
+    by.set(s, (by.get(s) || 0) + perDay);
+  };
+  ((D.supply || {}).shops || []).forEach(r => { if(r.from === siteTab) add(r.s, r.sold); });
+  (spFactorySites() || []).forEach(site =>
+    (site.needs || []).forEach(n => { if(n.from === siteTab) add(site.s, n.perDay); }));
+  return [...by.entries()].map(([s, perDay]) => ({s, perDay})).sort((a, b) => b.perDay - a.perDay);
+}
+/* One row of the chain and one line of this depot are the same goods when
+   their slugs agree; a row from an older payload with no slug falls back to
+   its label. */
+const spSameItem = (row, slug, item) =>
+  row.slug !== undefined && row.slug !== null && slug ? row.slug === slug : row.item === item;
+/* Who draws one line out of this depot, and how much of it a day. */
+function spItemDraw(slug, item){
+  const sites = new Set();
+  let perDay = 0;
+  ((D.supply || {}).shops || []).forEach(r => {
+    if(r.from === siteTab && spSameItem(r, slug, item)){ sites.add(r.s); perDay += r.sold || 0; }
+  });
+  (spFactorySites() || []).forEach(site =>
+    (site.needs || []).forEach(n => {
+      if(n.from === siteTab && spSameItem(n, slug, item)){ sites.add(site.s); perDay += n.perDay || 0; }
+    }));
+  return {sites: sites.size, perDay};
+}
+/* The factory that makes a line, where one of this company's does. */
+function spMadeAt(slug, item){
+  for(const site of spFactorySites() || [])
+    if((site.lines || []).some(l => spSameItem(l, slug, item))) return D.businesses[site.s] || null;
+  return null;
+}
+
+/* The weekday a day number falls on, spelt out; WEEK_FULL is indexed the way
+   the hour grid indexes it. */
+const SP_WEEK_FULL_DAY = day => WEEK_FULL[((day % 7) + 7) % 7];
+/* Which day of the seven a delivery falls on, or nothing when it is not in
+   the week ahead — a paused contract's delivery day is usually in the past. */
+const spTruckDay = (arrives, today) => {
+  if(!Number.isFinite(arrives) || !Number.isFinite(today)) return null;
+  const away = arrives - today;
+  return away >= 0 && away < SP_RAIL_DAYS ? away : null;
+};
+
+/* The depot's Stock table: an import row knows its cover and its next truck; a
+   holding that nothing draws on knows only that it is standing still. */
+function spStockRows(b){
+  const supply = D.supply || {};
+  const today = supply.day;
+  const imports = (supply.imports || []).filter(r => r.s === siteTab);
+  const seen = new Set();
+  const take = r => { const k = r.slug || r.item; if(seen.has(k)) return false; seen.add(k); return true; };
+  const rows = [];
+  imports.filter(take).forEach(r => {
+    /* cover, runsOut and catchUp are about the delivery _scheduled_import_gap()
+       projected through — the last upcoming drop, not necessarily the first —
+       so that is the truck the rail puts them beside. Where an earlier drop
+       falls in the week too it rides along, quietly, as what it is. */
+    const due = Number.isFinite(r.coverageUntil) ? r.coverageUntil : r.arrives;
+    const truck = spTruckDay(due, today);
+    const first = spTruckDay(r.arrives, today);
+    const early = !r.paused && first !== null && first !== truck ? first : null;
+    /* A delivery is coming even when it lands past the seven days the rail
+       draws, and the days before it are still dry. */
+    const known = !r.paused && Number.isFinite(due) && Number.isFinite(today) && due >= today;
+    const el = [spKeyTok(r.slug, r.item), r.paused ? "paused" : "",
+                r.coverFit === "short" ? "short" : "",
+                r.orderFit === "short" || r.orderFit === "tight" ? "order" : ""].filter(Boolean);
+    const act = r.paused
+      ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
+      : r.coverFit === "short" && r.catchUp > 0
+        ? spUp(`+${spNum(r.catchUp)}`, r.runsOut ? `by ${r.runsOut}` : "now", true)
+        : "";
+    /* A paused contract orders nothing this week; what it used to bring is the
+       only figure there is, and the chip beside it says it is not coming. */
+    const order = r.paused ? spNum(r.weekly || r.lastWeek)
+      : r.orderFit === "short" || r.orderFit === "tight"
+        ? spUp(spNum(r.weekly), spNum(r.weekNeed), r.orderFit === "short")
+        : spNum(r.weekly);
+    const read = r.paused ? `Import <b>paused</b>; <b>${spNum(r.cover)}</b> days left`
+      : r.coverFit === "short" && r.runsOut
+        ? `Runs dry <b>${spEsc(r.runsOut)}</b>${truck !== null ? `, the truck lands <b>${
+            SP_WEEK_FULL_DAY(today + truck)}</b>` : ""}`
+      : r.orderFit === "short"
+        ? `A week draws <b>${spNum(r.weekNeed)}</b>; the order brings <b>${spNum(r.weekly)}</b>`
+      : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? "Covered through the week"
+      : `<b>${spNum(r.cover)}</b> days on hand`;
+    const draw = spItemDraw(r.slug, r.item);
+    rows.push({item: r.item, hand: r.stock, draw: spNum(r.perDay),
+               cover: r.paused || !Number.isFinite(r.cover) ? null : r.cover,
+               short: r.coverFit === "short",
+               rail: spRail(r.cover, truck, r.paused, false, early, known), act, order,
+               feeds: draw.sites, el, read});
+  });
+  (supply.idle || []).filter(r => r.s === siteTab).filter(take).forEach(r => {
+    rows.push({
+      item: r.item, hand: r.stock, draw: r.perWeek ? spNum(r.perWeek / 7) : "—",
+      rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, r.dead, null, false),
+      act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
+      el: [spKeyTok(r.slug, r.item), r.dead ? "dead" : "target"],
+      read: r.dead ? "<b>Nothing draws</b> on these" : `<b>${spNum(r.weeks)}</b> weeks on hand`,
+    });
+  });
+  /* Everything else on the floor. A line nothing imports is made in-house or
+     bought elsewhere; its cover is what it holds against what leaves, and it
+     has no truck to draw. */
+  ((b && b.lines) || []).filter(take).forEach(l => {
+    const draw = spItemDraw(l.slug, l.item);
+    const units = Number.isFinite(l.units) ? l.units : 0;
+    if(!units && !draw.perDay) return;
+    const made = spMadeAt(l.slug, l.item);
+    const cover = draw.perDay ? units / draw.perDay : 0;
+    rows.push({
+      item: l.item, hand: l.units, draw: draw.perDay ? spNum(draw.perDay) : "—",
+      cover: draw.perDay ? cover : null, short: !!draw.perDay && cover < 1,
+      rail: spRail(cover, null, false, !draw.perDay, null, false),
+      act: "", feeds: draw.sites,
+      order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
+      el: [spKeyTok(l.slug, l.item), draw.perDay ? "" : "dead"].filter(Boolean),
+      read: !draw.perDay ? "<b>Nothing draws</b> on these"
+        : cover >= SP_RAIL_DAYS ? "Covered through the week"
+        : `<b>${cover.toFixed(1)}</b> days on hand`,
+    });
+  });
+  /* And what the depot is expected to hold and does not. A factory input
+     routed from here with nothing on the floor is in none of the three lists
+     above — no import, no idle pile, no holding — and its absence is the
+     finding. The name is the recipe's, because the depot has no line of its
+     own to name it. */
+  (spFactorySites() || []).forEach(site => (site.needs || []).forEach(n => {
+    if(n.from !== siteTab || !(n.perDay > 0)) return;
+    if(!take({slug: n.slug, item: n.item})) return;
+    const draw = spItemDraw(n.slug, n.item);
+    const perDay = draw.perDay || n.perDay;
+    /* Why there is none of it here is the need's own verdict, never an
+       assumption: _supply() builds its import rows from what a site holds, so
+       a contract signed before its first delivery has a live weekly order and
+       no row on the floor to carry it, and goods made in one of this
+       company's factories are never imported at all. Only the two verdicts
+       that really mean nothing tops this up say so; the rest of the eleven
+       statuses _factories() can set leave the column at a dash rather than
+       inventing a reason. */
+    const importing = Number.isFinite(n.importWeekly) && n.importWeekly > 0;
+    const made = n.status === "made" ? spMadeAt(n.slug, n.item) : null;
+    const unfed = n.status === "noimport" || n.status === "unplanned";
+    const order = n.status === "paused"
+      ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
+      : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>/wk</small>`
+      : made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
+      : unfed ? `<span class="sp-noplan">${spIcon("route")}no import</span>`
+      : "—";
+    const read = n.status === "paused"
+      ? `Import <b>paused</b>; <b>nothing</b> on hand`
+      : importing
+        ? `<b>${spNum(n.importWeekly)}</b> a week is on order; <b>nothing</b> on hand yet`
+      : made ? `Made at <b>${spEsc(shortName(made))}</b>; <b>nothing</b> on hand here`
+      : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
+    rows.push({
+      item: n.item, hand: 0, draw: spNum(perDay),
+      rail: spRail(0, null, n.status === "paused", false, null, importing),
+      act: "", feeds: draw.sites, cover: 0, short: true,
+      order, el: [spKeyTok(n.slug, n.item)], read,
+    });
+  }));
+  rows.sort((x, y) => (y.feeds || 0) - (x.feeds || 0));
+  return rows;
+}
+/* The factories as the Supply page reads them: the board's own rows with the
+   recipes the player named in this browser laid over them, so a line named
+   there is named here too. factoryView() copies the whole payload, and the
+   panel asks for it once a row, so one draw keeps one answer; drawSite() and
+   nameLine() are the only two things that can change it. */
+let spViewCache = null;
+const spFactorySites = () => {
+  if(spViewCache) return spViewCache;
+  const own = (((D || {}).supply || {}).factories || {}).sites || [];
+  try{
+    const view = D && D.supply && D.supply.factories && typeof factoryView === "function"
+      ? factoryView() : null;
+    spViewCache = (view && view.sites) || own;
+  }catch(e){ spViewCache = own; }
+  return spViewCache;
+};
+/* A factory's own row, or nothing where the lines could not be read at all. */
+const spFactorySite = () => spFactorySites().find(r => r.s === siteTab) || null;
+/* One square a machine, filled by the share of the week somebody is posted to
+   it: full unless the line lists it among its gaps. Each square carries its
+   own list position, which is what a staffing finding names. */
+function spMachines(count, gaps, slots){
+  const bySlot = new Map((gaps || []).filter(g => g && Number.isFinite(g.slot)).map(g => [g.slot, g]));
+  const posts = (slots && slots.length ? slots
+    : [...Array(Math.max(Number.isFinite(count) ? count : 0, 0)).keys()].map(k => k + 1));
+  return `<div class="sp-mach">${posts.map((slot, k) => {
+    const gap = bySlot.get(slot) || (slots && slots.length ? null : (gaps || [])[k]);
+    /* A machine listed among the gaps is not fully rostered by definition, so
+       one whose hours did not come through is unknown, never full. */
+    const hours = gap ? gap.hours : SP_STAFF_HOURS;
+    const read = `Machine ${spEsc(slot)} · ${Number.isFinite(hours)
+      ? `<b>${hours} of ${SP_STAFF_HOURS} h</b> rostered` : `hours <b>not known</b>`}${
+      gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`;
+    return Number.isFinite(hours)
+      ? `<span class="sp-m" style="--h:${Math.round(hours / SP_STAFF_HOURS * 100)}%" data-el="${
+          attr(spSlotTok(slot))}" data-read="${attr(read)}">${spIcon("gear")}</span>`
+      : `<span class="sp-m sp-u" data-el="${attr(spSlotTok(slot))}" data-read="${attr(read)}"></span>`;
+  }).join("")}</div>`;
+}
+const SP_LINE_HEAD = `<div class="sp-line sp-head"><span>Line</span><span>Machines</span><span></span>${
+  ["Makes / day", "Ships / day", "On hand"].map(t => `<span class="sp-n">${t}</span>`).join("")}</div>`;
+/* The lines, then the machines the board cannot read: one running a recipe it
+   cannot name, which the player can name here as on the Supply page, and one
+   with no recipe set at all. */
+function spLines(site){
+  const where = r => `${spEsc(r.workstation)}${(r.slots || []).length
+    ? ` · ${r.slots.map(s => `#${spEsc(s)}`).join(" ")}` : ""}`;
+  let html = SP_LINE_HEAD;
+  (site.lines || []).forEach(l => {
+    const stop = !l.atRoster || (l.missing || []).length;
+    html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spKeyTok(l.slug, l.item))}">
+      <div>${spEsc(l.item)}<span class="sub">${where(l)}</span></div>
+      ${spMachines(l.machines, l.gaps, l.slots)}
+      <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
+      <div class="sp-n">${spNum(l.atRoster)}<small>of ${spNum(l.makes)} rated</small></div>
+      <div class="sp-n">${spNum(l.ships)}</div>
+      <div class="sp-n">${l.piling
+        ? `<span class="sp-pile">${spIcon("crate")}${spNum(l.stock)}</span>` : spNum(l.stock)}</div></div>`;
+  });
+  (site.unnamed || []).forEach((u, k) => {
+    const idle = u.idle;
+    const mach = `<div class="sp-mach">${(u.slots && u.slots.length ? u.slots
+      : [...Array(Math.max(Number.isFinite(u.machines) ? u.machines : 0, 0)).keys()].map(i => i + 1)).map(slot =>
+      `<span class="sp-m ${idle ? "sp-z" : "sp-q"}" data-el="${attr(spSlotTok(slot))}" data-read="${attr(idle
+        ? `Machine ${spEsc(slot)} · staffed and rented, <b>making nothing</b>`
+        : `Machine ${spEsc(slot)} · running a recipe <b>the board cannot name</b>`)}">${idle ? "zz" : "?"}</span>`).join("")}</div>`;
+    /* The picker is offered on the same terms the Supply page offers it: a
+       recipe id to attach the choice to, and candidates to choose from. */
+    const pick = !idle && u.rid && (u.candidates || []).length
+      ? `<select class="linepick sp-pick" data-rid="${attr(u.rid)}" aria-label="Name this line"><option value="">Which recipe is this?</option>${
+          u.candidates.map(c => `<option value="${attr(c.slug)}">${spEsc(c.item)}</option>`).join("")}</select>`
+      : `<span class="quiet">${idle ? "No recipe" : "Unnamed recipe"}</span>`;
+    html += `<div class="sp-line" data-line="sp-unnamed-${k}" data-el="${idle ? "unset" : "unnamed"}">
+      <div>${pick}<span class="sub">${where(u)}</span></div>${mach}
+      <div class="sp-belt${idle ? " sp-stop" : ""}"></div>
+      <div class="sp-n">${idle ? "0" : "—"}</div><div class="sp-n">${idle ? "0" : "—"}</div><div class="sp-n">${idle ? "0" : "—"}</div></div>`;
+  });
+  return `<div class="sp-lines">${html}</div>`;
+}
+/* What the machines eat, against the top-up set to feed them. The status the
+   Python already worked out decides the mark and the read-out; hovering a row
+   lights the lines that draw on it. */
+const SP_NEED_EL = {unplanned: "noplan", target: "target", paused: "paused",
+                    import: "import", noimport: "import", dry: "dry",
+                    idle: "idle", staffing: "staffing", waiting: "waiting"};
+function spNeedRead(n){
+  switch(n.status){
+    case "unplanned": return "<b>No plan</b> tops this up";
+    case "target": return `Tops up to <b>${spNum(n.target)}</b>, the machines eat <b>${spNum(n.dailyNeed)}</b>`;
+    case "paused": return "Import <b>paused</b>";
+    case "dry": return `<b>${spNum(n.arrives)}</b>/day arrives against <b>${spNum(n.perDay)}</b> needed`;
+    case "idle": return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
+    case "staffing": return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
+    case "waiting": return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
+    case "import": case "noimport":
+      return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(n.depotNeed)}</b> a week`;
+    case "made": return "Made in-house";
+    default: return "In step";
+  }
+}
+/* An input's lines are named by their labels, and the line rows are keyed by
+   their slugs, so the map between them is made here rather than guessed. */
+function spNeedLines(site, n){
+  return (n.lines || []).map(item => {
+    const line = (site.lines || []).find(l => l.item === item);
+    return spKeyTok(line && line.slug, item);
+  }).join(" ");
+}
+function spInputs(site){
+  return (site.needs || []).map(n => {
+    const el = [spKeyTok(n.slug, n.item), SP_NEED_EL[n.status] || "",
+                n.stalled ? "stalled" : ""].filter(Boolean);
+    const top = n.directImport
+      ? (Number.isFinite(n.importWeekly) ? `${spNum(n.importWeekly)}<small>/wk</small>` : "—")
+      : !n.target ? `<span class="sp-noplan">${spIcon("route")}no plan</span>`
+      : n.raiseTarget ? spUp(spNum(n.target), spNum(n.raiseTarget), true)
+      : spNum(n.target);
+    /* Nothing arrived is only a reading where the delivery log is long enough
+       to be read; otherwise the column is blank, not zero. */
+    const arrived = !n.known ? "—"
+      : n.arrives ? spNum(n.arrives) : `<span class="sp-red">0</span>`;
+    const from = n.directImport ? "direct import"
+      : n.from === null || n.from === undefined ? "—" : spEsc(shortName(D.businesses[n.from]));
+    return `<tr data-lines="${attr(spNeedLines(site, n))}" data-el="${attr(el.join(" "))}" data-read="${
+      attr(spNeedRead(n))}"><td class="l">${spEsc(n.item)}</td><td>${spNum(n.perDay)}</td><td>${top}</td>
+      <td>${arrived}</td><td>${spNum(n.stock)}</td><td class="l" style="color:var(--ink-2)">${from}</td></tr>`;
+  }).join("");
+}
+
+/* --- a home -------------------------------------------------------------
+   A flat is not a business: nothing is sold there and nothing is measured, so
+   the panel is a drawing of the block beside the four figures the save and the
+   building table between them can answer. The lit windows are decoration, not
+   a reading; they are the same every night. */
+const SP_HOUSE_ON = ["0,1", "2,0", "3,2"], SP_HOUSE_LATE = ["1,1", "2,2"];
+function spHouse(){
+  let wins = "";
+  for(let r = 0; r < 4; r++) for(let c = 0; c < 3; c++){
+    const at = `${r},${c}`;
+    const cls = SP_HOUSE_ON.includes(at) ? "sp-win sp-win-on" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-win-late" : "sp-win";
+    wins += `<rect class="${cls}" x="${130 + c * 40}" y="${48 + r * 34}" width="22" height="22" rx="2" style="transition-delay:${(r * 3 + c) * 45}ms"></rect>`;
+  }
+  return `<svg viewBox="0 0 360 230" role="img" aria-label="An apartment block at night">
+    <circle class="sp-moon" cx="292" cy="46" r="15"></circle>
+    <circle class="sp-star" cx="60" cy="40" r="1.6"></circle><circle class="sp-star" cx="96" cy="76" r="1.2"></circle>
+    <circle class="sp-star" cx="250" cy="92" r="1.4"></circle><circle class="sp-star" cx="326" cy="112" r="1.2"></circle>
+    <rect class="sp-wall" x="116" y="32" width="128" height="178" rx="3"></rect>
+    <path class="sp-wall" d="M110 32h140l-8-12H118z"></path>
+    ${wins}
+    <rect class="sp-win" x="168" y="182" width="24" height="28" rx="2"></rect>
+    <rect class="sp-doorleaf" x="168" y="182" width="24" height="28" rx="2"></rect>
+    <path class="sp-tree" d="M70 210v-26M70 150c-16 0-22 12-22 22s10 16 22 16 22-6 22-16-6-22-22-22z"></path>
+    <path class="sp-ground" d="M20 210h320" fill="none"></path>
+  </svg>`;
+}
+/* Rent is billed daily, so the week is the day seven times over — seven times
+   the day this panel shows, not seven times the cents behind it, or the two
+   tiles disagree with each other on a fractional rent. Per m² divides the
+   unrounded rent: it is a rate, not a second reading of the tile above it. A
+   floor the building table does not carry is a dash, and the rate it would
+   divide is left out rather than guessed. */
+function spHomePanel(home){
+  const m = Number.isFinite(home.m) && home.m > 0 ? home.m : null;
+  const rent = home.rent || 0;
+  const day = Math.round(rent);
+  const code = HOOD_TAGS[home.hood] || "";
+  const tiles = spTile("Rent / day", fmt(day))
+    + spTile("Rent / week", fmt(day * 7))
+    + spTile("Size", m === null ? "—" : `${m.toLocaleString()}<small>m²</small>`)
+    + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
+  return `
+    <div class="sitehead rv">
+      ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
+      <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">Home${
+        home.hood ? ` · ${spEsc(home.hood)}` : ""}</span></div>
+      <div class="aside" style="margin-left:auto;display:flex;gap:8px"><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
+    </div>
+    <div class="sp-home rv" data-block="home">
+      <div class="sp-house">${spHouse()}</div>
+      <div class="sp-hometiles">${tiles}</div>
+    </div>`;
+}
+
 function drawSite(){
+  const sec = $("secDetail");
+  spViewCache = null;
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
   const b = siteTab >= 0 ? D.businesses[siteTab] : null;
-  const sec = $("secDetail");
+  /* A flat is the one address that is not a business, so it is answered where
+     the business lookup came back empty — never before it. extract() bills an
+     address as a residence or as a business and never as both, but a key that
+     does turn up in both lists is a business: that is the panel with something
+     to say. */
+  const home = !b && siteOpen ? spHome(siteKey) : null;
+  if(home){
+    sec.hidden = false;
+    $("sitePanel").innerHTML = spHomePanel(home);
+    $("sitePanel").classList.remove("sp-focus");
+    $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
+    wireTips(); wireReveal();
+    return;
+  }
   if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
   sec.hidden = false;
 
@@ -4687,16 +5928,25 @@ function drawSite(){
   D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.item] = r; });
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
-  const grid = (D.hours || []).find(h => h.key === b.key);
   /* An office sells billed hours, not goods: its line is a fee with nothing to
      stock or top up, and its registers are staffed computers. */
   const office = b.status === "office";
-  /* The shop and office panel. A depot, a factory and a home keep the plainer
-     panel they have today until their own are drawn. */
+  /* The shop and office panel; then the depot's and the factory's. */
   const kind = spKind(b);
   const sp = kind === "retail" || kind === "office";
+  const dep = kind === "depot", fac = kind === "factory";
+  /* A depot and a factory carry their own tiles and no shelves at all, so the
+     shop and office blocks are not composed for them. This only saves the
+     work: what keeps a finding from pointing into a block that is not there
+     is spPruneHits(), which reads the finished markup. */
+  const shelved = !dep && !fac;
+  /* Only a shop and an office are measured hour by hour, so the grid never
+     belongs to the other kinds. */
+  const grid = sp ? (D.hours || []).find(h => h.key === b.key) : null;
+  /* Every kind but a home leads with its own findings. */
+  const spAny = sp || dep || fac;
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
-  const finds = sp ? spSiteFindings(b.key) : [];
+  const finds = spAny ? spSiteFindings(b.key) : [];
   const rank = sp ? spRank(b.key) : null;
   const trend = sp ? spTrend(b.key) : null;
   const limits = sp ? spBindingLimits(b.key) : [];
@@ -4705,10 +5955,11 @@ function drawSite(){
      hours ran into, and one for idle capacity. */
   const capNotes = sp ? spCapNotes(b.key) : [];
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
-  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} is the limit, so
+  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`;
-  const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.office ? "workstations are staffed" : "counters are on"} ${String(idleNote.from).padStart(2,"0")}:00-${
+  const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.noun || (idleNote.office ? "workstations are staffed" : "counters are on")} ${
+         String(idleNote.from).padStart(2,"0")}:00-${
          String(idleNote.to).padStart(2,"0")}:00 on a ${idleNote.day} for ${idleNote.seen} customers an hour;
          ${idleNote.spare} staff-hours a week, about ${fmt(idleNote.worth)}/day of wages.` : "";
 
@@ -4747,7 +5998,8 @@ function drawSite(){
      fortnight sparks, the cost bar that replaces the profit tooltip, and the
      ceilings. A day in the red flags the profit tile. */
   const tone = ready && trend.change ? (trend.change < 0 ? "dn" : "up") : "";
-  const stats = `
+  /* A depot and a factory carry their own tiles inside spBody. */
+  const stats = !shelved ? "" : `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
     <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
@@ -4772,11 +6024,18 @@ function drawSite(){
         c.absent ? ` (${c.absent} off)` : ""}`).join("; ")}.${offToday ? ` ${plural(offToday, "person", "people")} off today.` : ""}`
     : "";
   const uniformGaps = sp ? b.uniformGaps : null;
-  const personPill = p => spPersonPill(p, uniformGaps);
+  /* The Crew pills and the Roster's people are two different lists out of the
+     save -- one folded into roles for the page, the other indexed for the
+     shifts -- and the only thing they share is the name. So a pill is tied to
+     a roster person only where the name picks out exactly one of each; an
+     ambiguous name simply does not light, rather than lighting the wrong
+     person's shifts. */
+  const rosterPeople = spRosterPairs(b, people);
+  const personPill = p => spPersonPill(p, uniformGaps, rosterPeople);
   /* The pills sit in a wrapping flex row; the folded roster is a grid of full
      rows, so it replaces that row rather than becoming one item inside it. */
-  const folded = sp && people.length > CREW_MAX;
-  const pills = !sp && people.length > CREW_MAX
+  const folded = spAny && people.length > CREW_MAX;
+  const pills = !spAny && people.length > CREW_MAX
     /* A tip is set as textContent, so attr() alone carries it: escaping the
        name for markup first would show the entities. */
     ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
@@ -4787,27 +6046,31 @@ function drawSite(){
         ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${spEsc(roleCode(c.role))}</i>${spEsc(c.role)}<small>${
             c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
         : `<span class="quiet">Nobody assigned.</span>`;
-  const crew = folded ? spRoster(people, uniformGaps) : `<div class="crew">${pills}</div>`;
+  const crew = folded ? spRoster(people, uniformGaps, rosterPeople) : `<div class="crew">${pills}</div>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
      the save logs as sales too, at a sliver of what the real lines move. They
      stay out of the main table and fold into a "show more" rather than
-     vanishing outright. */
-  const shelvesAll = b.lines.filter(l => l.rate > 0 || l.units > 0);
+     vanishing outright.
+
+     A depot and a factory draw no shelves, so none of this is composed for
+     them: `shelved` is what says so. */
+  const shelvesAll = shelved ? b.lines.filter(l => l.rate > 0 || l.units > 0) : [];
   const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
-  const shelves = office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
+  const shelves = !shelved ? []
+    : office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
     const p = Math.round(t.pressure);
     return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
   };
-  const products = office ? (shelves.length ? `
+  const products = !shelved ? "" : office ? (shelves.length ? `
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr>
@@ -4825,7 +6088,7 @@ function drawSite(){
            a chip, not a dash, because it is a fix the player still owes. */
         const over = sp && t && t.target && t.peakSold > t.target;
         const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
-        return `<tr${over ? ` data-el="outruns"` : ""}>
+        return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
@@ -4836,7 +6099,7 @@ function drawSite(){
           <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
           <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString()}</span>` : l.units.toLocaleString()}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
-  const shelfMore = !office && sideShelves.length ? `
+  const shelfMore = shelved && !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
@@ -4847,7 +6110,7 @@ function drawSite(){
   const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
     wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
-  const demandChips = !sp ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
+  const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     /* The tip lands as textContent: attr() alone, no markup escaping. */
     wants.map(d => `<span class="sp-dem" data-el="demand" data-tip="${attr(`${d.demand} for ${d.count} · ${
       SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
@@ -4876,9 +6139,9 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap" data-show="${SP_CELL_CLASS[n.limit] || "cap-door"}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spI(SP_LIMIT_ICON[n.limit] || "door")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
+      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
       fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
     (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}<b>${idleNote.staff} on</b> ${
@@ -4898,13 +6161,117 @@ function drawSite(){
     ? {bands: [{from: bands.prev.at, to: bands.prev.to, avg: bands.prev.avg, cls: "", read: bandRead(bands.prev)},
                {from: bands.last.at, to: bands.last.to, avg: bands.last.avg, cls: "last", read: bandRead(bands.last)}]}
     : {dash: true};
+  /* The depot's panel: the week of trucks, and who draws on it. Its tiles
+     count what is on the floor rather than a day's takings, because a depot
+     books no sale of its own. */
+  let spBody = "";
+  const spend = costs.reduce((t, [, v]) => t + v, 0);
+  if(dep){
+    const rows = spStockRows(b);
+    const feedRows = spFeedRows();
+    const perDay = feedRows.reduce((t, r) => t + r.perDay, 0);
+    const onFloor = spSum(b.lines, "units");
+    /* The thinnest line is the one with the least cover, out of the lines
+       something still draws on: a paused contract is its own finding, and a
+       holding nothing draws on has no cover to run out. */
+    const thin = rows.filter(r => Number.isFinite(r.cover))
+      .reduce((w, r) => !w || r.cover < w.cover ? r : w, null);
+    spBody = `
+    <div class="sstats rv" data-block="tiles" id="sp-tiles">
+      ${spTile("Cost / day", costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
+      ${spTile("On the floor", `${spNum(onFloor)}<small ${SMALL}>${
+        plural(((b.lines) || []).length, "line")}</small>`)}
+      ${thin ? spTile("Thinnest", `<span class="${thin.short ? "neg" : ""}">${thin.cover.toFixed(1)} d</span><small class="sp-tname" ${
+        SMALL}>${spEsc(thin.item)}</small>`, spMeter(thin.cover / SP_RAIL_DAYS * 100, thin.short), thin.short)
+        : spTile("Thinnest", "—")}
+      ${spTile("Feeds", `${feedRows.length}<small ${SMALL}>${feedRows.length === 1 ? "site" : "sites"} · ${
+        spNum(perDay)}/day</small>`)}
+    </div>
+    <section class="sec rv" data-block="stock" id="sp-stock" data-readzone>
+      ${sechead("Stock", {icon: "crate", why: `The next seven days, left to right from today. A filled cell is a day covered, red hatching is a day dry, and the truck sits on the day it lands.${
+        rows.length ? "" : " Nothing is held or imported here yet."}`})}
+      ${rows.length ? `<div class="scrollx"><table>
+        <thead><tr><th>Line</th><th>On hand</th><th>Draw / day</th><th class="l">${
+          spDays(D.meta.day % 7)}</th><th></th><th>Weekly order</th><th>Feeds</th></tr></thead>
+        <tbody>${rows.map(r => `<tr data-el="${attr(r.el.join(" "))}" data-read="${attr(r.read)}">
+          <td class="l">${spEsc(r.item)}</td><td>${r.hand === 0
+            ? `<span class="sp-red">0</span>` : spNum(r.hand)}</td><td>${r.draw}</td>
+          <td class="l">${r.rail}</td><td>${r.act}</td><td>${r.order}</td>
+          <td>${r.feeds || "—"}</td></tr>`).join("")}</tbody></table></div>`
+        : spNone("No stock")}
+      <div class="sp-read sp-readout">Hover a line</div>
+    </section>
+    <div class="duo sec" style="grid-template-columns:1fr 1fr">
+      <section class="rv" data-block="feeds" id="sp-feeds">
+        ${sechead("Feeds", {icon: "pipe", quiet: perDay ? `${spNum(perDay)}/day` : "",
+          why: feedRows.length ? null : "Nothing on a plan draws out of this site."})}
+        ${feedRows.length ? `<div class="sp-feeds">${feedRows.map(r => {
+          const site = D.businesses[r.s];
+          return `<div class="sp-feed">${hoodHtml(site)}<span>${spEsc(shortName(site))}</span><span class="sp-tr"><i style="--w:${
+            (r.perDay / feedRows[0].perDay * 100).toFixed(0)}%"></i></span><span class="sp-rate">${spNum(r.perDay)}/day</span></div>`;
+        }).join("")}</div>` : spNone("No feeds")}
+      </section>
+      <section class="rv" data-block="crew" id="sp-crew">
+        ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
+          b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${crew}${demandChips}
+      </section>
+    </div>`;
+  }
+  /* The factory's panel: the lines and what they eat. A machine runs only
+     while somebody is posted to it, so what it makes at the roster is the
+     figure, with the rated output beside it. A machine whose recipe the board
+     cannot name is in no total, so a factory of nothing but those reads as a
+     dash: its output is unknown, not nought. */
+  if(fac){
+    const site = spFactorySite() || {};
+    const lines = site.lines || [];
+    const unnamed = site.unnamed || [];
+    const running = spSum(lines, "machines");
+    const made = spSum(lines, "atRoster"), rated = spSum(lines, "makes");
+    const ships = spSum(lines, "ships");
+    const blind = unnamed.reduce((t, u) => t + (Number.isFinite(u.machines) ? u.machines : 0), 0);
+    spBody = `
+    <div class="sstats rv" data-block="tiles" id="sp-tiles">
+      ${spTile("Machines", `${spNum(site.machines)}${running === null ? "" : `<small ${SMALL}>· ${
+        running} running</small>`}`)}
+      ${spTile("Made / day", `${spNum(made)}${rated === null ? "" : `<small ${SMALL}>of ${
+        spNum(rated)} rated</small>`}`, rated ? spMeter(made / rated * 100) : "")}
+      ${spTile("Shipped / day", spNum(ships), made && ships !== null ? spMeter(ships / made * 100) : "")}
+      ${spTile("Cost / day", costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
+    </div>
+    <section class="sec rv" data-block="lines" id="sp-lines" data-readzone>
+      ${sechead("Lines", {icon: "gear", why: `A machine runs only while someone is posted to it. The fill of each square is the share of the week it is rostered.${
+        blind ? " A machine running a recipe the board cannot name is in none of the totals; name it here and it joins them." : ""}${
+        lines.length || unnamed.length ? "" : " No machine could be read at this site."}`})}
+      ${lines.length || unnamed.length ? `<div class="scrollx">${spLines(site)}</div>`
+        : spNone("No machines")}
+      <div class="sp-read sp-readout">Hover a machine</div>
+    </section>
+    <section class="sec rv" data-block="inputs" id="sp-inputs" data-readzone>
+      ${sechead("Inputs", {icon: "pipe", why: `What the machines eat at full rate, against the daily top-up set to feed them.${
+        (site.needs || []).length ? "" : " No named line here draws on anything yet."}`})}
+      ${(site.needs || []).length ? `<div class="scrollx"><table>
+        <thead><tr><th>Input</th><th>Eats / day</th><th>Top-up</th><th>Arrived / day</th>
+          <th>On hand</th><th class="l">From</th></tr></thead>
+        <tbody>${spInputs(site)}</tbody></table></div>`
+        : spNone("No inputs")}
+      <div class="sp-read sp-readout">Hover an input</div>
+    </section>
+    <section class="sec rv" data-block="crew" id="sp-crew">
+      ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
+        b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+      ${crew}${demandChips}
+    </section>`;
+  }
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
       <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
-    ${spFinds(finds, b)}
+    ${spFinds(finds, b, kind)}
+    ${spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
@@ -4935,15 +6302,22 @@ function drawSite(){
         Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
           ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
               grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
-          : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
+          : (grid.roles || []).length > 1
+            ? `${grid.roles.length} roles, the slowest ${grid.counters} an hour`
+            : grid.roles && grid.roles[0] && grid.roles[0].noun
+              ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
+              : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
         grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}`})}
       <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="sp-read sp-readout" id="hourRead">Hover an hour</div></div>
       ${hourChips}
     </section>` : ""}
+    ${/* Only a shop is planned: an office bills hours rather than serving a
+          queue, and a depot, a factory and a home have no row at all. */""}
+    ${kind === "retail" ? spRosterBlock(b) : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
-        ${sechead("Crew", {icon: sp ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        ${crew}${sp ? demandChips : demandNote}
+        ${sechead("Crew", {icon: spAny ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${crew}${spAny ? demandChips : demandNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
         ${office ? sechead("Fees", {icon: sp ? "fees" : null}) : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up"})}
@@ -4961,14 +6335,20 @@ function drawSite(){
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
           : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
       </section>
-    </div>`;
+    </div>`}`;
+  spPruneHits($("sitePanel"));
   /* A redraw leaves no block lit, so the dimming a hovered finding switched on
      has to come off with the markup it dimmed. */
   $("sitePanel").classList.remove("sp-focus");
   drawSitePicker();
   $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
   if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
-  wireSiteReads(); wireSiteFinds(); wireSiteChips(); wireTips(); wireReveal();
+  /* A factory's unnamed line is named here the same way it is on the Supply
+     page: the same select, the same call. */
+  $$("#sp-lines select.linepick").forEach(sel => {
+    sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
+  });
+  wireSiteReads(); wireSiteFinds(); wireSiteChips(); wireSiteLines(); wireRoster(); wireTips(); wireReveal();
 }
 
 /* The site cell of the redesign's tables: the hood pill, the short name, and
@@ -6003,6 +7383,67 @@ function drawFindLocation(){
   badge.textContent = `${vacant.length} VACANT`;
   text.textContent = `${plural(vacant.length, "vacant retail unit")} right now. Best foot traffic: ${
     best.address}, ${best.hood} (${best.traffic}).`;
+}
+
+/* Next moves: the Optimize staffing card opens the roster with most to gain,
+   and there are three different things it can have to say.
+
+   Usually the gain is lines of typing saved -- what the schedule holds today
+   against what the plan asks for -- because that is the whole point of the
+   block: a fragmented shop is 182 rows of dragging and the plan is 65. An
+   unmeasured shop counts too, and usually wins: its plan is cover shifts
+   alone, but replacing 182 scraps with 14 is the largest saving on the board.
+
+   A player who has never opened BizMan has no schedule to save anything
+   against, and a plan for them is still worth having -- so when no plan is
+   shorter than what is there, the card offers the biggest plan and reads out
+   its size rather than a saving. Only with no plan anywhere does it fall back
+   to the measurement wording, and a board built before the feature says
+   nothing at all. Ties go to the name, so the card does not move between runs
+   of the same save. */
+const spRosterPlans = () => (D.staffing || []).filter(
+  r => !r.failed && (r.shifts || []).length);
+const spPickRoster = (rows, score) => rows.reduce((a, b) =>
+  score(b) > score(a) || (score(b) === score(a) && b.name < a.name) ? b : a);
+function spBestRoster(){
+  const rows = spRosterPlans();
+  if(!rows.length) return null;
+  /* A week of typing is the lines somebody can be put on. Counting the hiring
+     lines in understated the saving at exactly the shop the card is for: a
+     fragmented store with an unstaffed locker goes from 42 scraps to 35 lines
+     and one post to hire for, and scoring on the raw 42 called that nothing. */
+  const week = r => spRosterCounts(r).tickable;
+  const saved = r => (r.current || {}).shifts - week(r);
+  const shorter = rows.filter(r => saved(r) > 0);
+  return shorter.length
+    ? {row: spPickRoster(shorter, saved), saves: true}
+    : {row: spPickRoster(rows, week), saves: false};
+}
+function drawOptimizeStaffing(){
+  const card = $("optimizeStaffingCard"); if(!card) return;
+  const badge = card.querySelector(".soon"), text = card.lastElementChild;
+  const best = spBestRoster();
+  if(!best){
+    badge.className = "soon";
+    badge.textContent = D.staffing ? "NO PLAN" : "SOON";
+    text.textContent = D.staffing
+      ? "No shop has been measured long enough to cut a roster from yet."
+      : "Shifts from the hour grid: registers, door caps and who is off today.";
+    /* Nothing to open: a live reload that leaves no usable plan must not keep
+       sending the player to the site the last one named. */
+    delete card.dataset.site;
+    return;
+  }
+  const row = best.row;
+  const week = spRosterCounts(row).tickable;
+  badge.className = "soon live";
+  badge.textContent = best.saves
+    ? `\u2212${row.current.shifts - week} LINES`
+    : `${week} SHIFTS`;
+  text.textContent = best.saves
+    ? `${row.name}: ${row.current.shifts} shifts become ${week}.`
+    : `${row.name}: a week of ${week} shifts to enter.`;
+  card.dataset.site = row.key;
 }
 
 function drawFooter(){
@@ -7216,7 +8657,12 @@ class CityMapView {
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
-    card.querySelector('.go2').hidden = !b;
+    /* The arrow opens the site panel. A business has always had one; a home
+       has one too now, and it is the only way in — a flat is in no picker. */
+    const go = card.querySelector('.go2');
+    go.hidden = !b && !home;
+    go.setAttribute('aria-label', b ? 'Open business details' : 'Open home details');
+    if(this.panel) go.dataset.tip = b ? 'Open business details' : 'Open home details';
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }
@@ -7328,7 +8774,10 @@ function openLocationMap(key, trigger){
   const b = mapBusinesses().get(key);
   const title = $('locationMapTitle');
   if(title){
-    const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address || '';
+    /* A flat you rent is the third thing with an address here: its own panel
+       carries a map pin, so a home key reaches this dialog too. */
+    const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address
+      || (D?.homes || []).find(h => h.key === key)?.address || '';
     title.textContent = b ? `${b.name.replace(/^\[\w+\]\s*/, '')} · ${address}` : address || 'Location map';
   }
   if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'), {panel:false});
@@ -9598,7 +11047,7 @@ function renderAll(){
   drawChart(); drawRhythm(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
-  drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawFooter();
+  drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawOptimizeStaffing(); drawFooter();
   wireAll();
   refreshCityMaps();
   /* The wiki is the game's own text and does not move with a save, but the one
@@ -10008,8 +11457,9 @@ buildAlertSettingsPanel();
      .sp-find             hover lights the block named in data-ev and pulses the
                           [data-el] things named in data-hit; click scrolls to it.
      .sp-rbtn             click opens a role row of a big crew into its people.
-     .sp-hchip[data-show] hover adds .sp-show<what> to the section's .hours
-                          grid — one ceiling's cells, or the idle ones.
+     .sp-hchip[data-show] hover dims the section's .hours grid and lights the
+                          cells whose data-caps match the chip's kind:role
+                          tokens — one ceiling's own cells, or the idle ones.
 
    Supply — drawOrderChecklist, wireFlow:
      .up                  a suggested change to enter in-game; never changes
@@ -10356,6 +11806,16 @@ const wireCards = once(() => {
     $("orderChecklist").open = true;
     $("orderChecklistTitle").focus();
   });
+  $("optimizeStaffingCard").addEventListener("click", e => {
+    e.preventDefault();
+    /* Nothing to open before the payload carries a plan: the card then behaves
+       like the rest of the panel's entry points and simply shows the sites. */
+    const card = $("optimizeStaffingCard");
+    if(card.dataset.site) openSite(card.dataset.site);
+    else reveal("secDetail");
+    const block = q("#sp-roster");
+    if(block) block.scrollIntoView({behavior: "smooth", block: "start"});
+  });
   $("findLocationCard").addEventListener("click", e => {
     e.preventDefault();
     /* Retail, any type: the count on the card is the retail one. */
@@ -10681,8 +12141,12 @@ const wireSiteFinds = once(() => {
     panel.classList.toggle("sp-focus", lit);
     const blk = f.dataset.ev && q(`[data-block="${f.dataset.ev}"]`, panel);
     if(blk) blk.classList.toggle("sp-lit", lit);
+    /* Inside the block that is lit, the same host spPruneHits() checked
+       against: a factory makes Dough on one line and eats it on another, and
+       only the one the finding is about should pulse — the other sits in a
+       block this row has just dimmed. */
     (f.dataset.hit || "").split(" ").filter(Boolean).forEach(h =>
-      $$(`[data-el~="${h}"]`, panel).forEach(el => el.classList.toggle("sp-hit", lit)));
+      $$(`[data-el~="${h}"]`, blk || panel).forEach(el => el.classList.toggle("sp-hit", lit)));
   };
   onEnter(".sp-find", f => hits(f, true));
   onLeave(".sp-find", f => hits(f, false));
@@ -10697,10 +12161,95 @@ const wireSiteFinds = once(() => {
     b.setAttribute("aria-expanded", String(open));
   });
 });
+/* Hovering an input picks out the lines that draw on it: the rest of the
+   table steps back rather than the row lighting up alone. */
+const wireSiteLines = once(() => {
+  const light = (tr, on) => {
+    const host = q("#sp-lines .sp-lines");
+    if(!host) return;
+    host.classList.toggle("sp-dim", on);
+    const want = (tr.dataset.lines || "").split(" ").filter(Boolean);
+    $$(".sp-line", host).forEach(l => l.classList.toggle("sp-on", on && want.includes(l.dataset.line)));
+  };
+  onEnter("#sp-inputs tr[data-lines]", tr => light(tr, true));
+  onLeave("#sp-inputs tr[data-lines]", tr => light(tr, false));
+});
 const wireSiteChips = once(() => {
   const grid = c => q(".hours", c.closest("section"));
-  onEnter(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.add("sp-show" + c.dataset.show); });
-  onLeave(".sp-hchip[data-show]", c => { const g = grid(c); if(g) g.classList.remove("sp-show" + c.dataset.show); });
+  /* A chip asks for hours by kind and role at once, so the match is on the
+     cell's own tokens rather than on a class per kind: two findings of one
+     kind on two different roles would otherwise light each other's hours. A
+     chip naming two tied answers wants the hours where both held, which is
+     every token matching, not any of them. */
+  const light = (c, on) => {
+    const g = grid(c);
+    if(!g) return;
+    g.classList.toggle("sp-dim", on);
+    const want = (c.dataset.show || "").split(" ").filter(Boolean);
+    $$(".hc", g).forEach(cell => {
+      const has = c.dataset.show === "idle"
+        ? cell.classList.contains("slack")
+        : want.length && want.every(t => (cell.dataset.caps || "").split(" ").includes(t));
+      cell.classList.toggle("sp-lit", on && has);
+    });
+  };
+  onEnter(".sp-hchip[data-show]", c => light(c, true));
+  onLeave(".sp-hchip[data-show]", c => light(c, false));
+});
+
+/* The roster: the day tabs, the now/plan toggle, and the ticks. A tick is the
+   one thing on the panel the player owns, so it is written straight back to
+   this browser and read again on the next draw. Everything is delegated off
+   the panel, so a redraw needs no rebinding. */
+const wireRoster = once(() => {
+  const sec = el => el.closest("section");
+  const site = el => (sec(el) || {dataset: {}}).dataset.site || "";
+  /* The ring and the count, after anything that changes what is ticked. */
+  const retally = s => {
+    const ring = q(".sp-ring", s), count = q(".sp-count", s);
+    if(!ring || !count) return;
+    const done = $$(".sp-shift.sp-done", s).length;
+    const all = +(s.dataset.tickable || 0);
+    count.textContent = done;
+    const clear = q(".sp-clear", s);
+    if(clear) clear.hidden = !done;
+    ring.style.setProperty("--p", all ? (done / all * 100).toFixed(0) : 0);
+    ring.classList.add("sp-bump");
+    setTimeout(() => ring.classList.remove("sp-bump"), 260);
+  };
+  const store = s => spTicksWrite(s.dataset.site || "",
+    new Set($$(".sp-shift.sp-done", s).map(el => el.dataset.tick)));
+  on("click", ".sp-daytabs a", (a, e) => {
+    e.preventDefault();
+    const s = sec(a);
+    $$(".sp-daytabs a", s).forEach(x => x.classList.toggle("sp-on", x === a));
+    $$(".sp-day", s).forEach(d => d.classList.toggle("sp-on", d.dataset.d === a.dataset.day));
+  });
+  on("click", ".sp-nowplan a", (a, e) => {
+    e.preventDefault();
+    const s = sec(a);
+    $$(".sp-nowplan a", s).forEach(x => x.classList.toggle("sp-on", x === a));
+    const g = q(".sp-gantt", s);
+    if(g) g.classList.toggle("sp-now", a.dataset.view === "now");
+  });
+  on("click", "button.sp-shift", el => {
+    el.classList.toggle("sp-done");
+    const s = sec(el);
+    store(s); retally(s);
+  });
+  on("click", ".sp-step", el => el.classList.toggle("sp-done"));
+  on("click", ".sp-clear", (a, e) => {
+    e.preventDefault();
+    const s = sec(a);
+    $$(".sp-shift.sp-done", s).forEach(el => el.classList.remove("sp-done"));
+    spTicksWrite(site(a), new Set());
+    retally(s);
+  });
+  /* One person, wherever they are named: a shift, a bench step, a demand the
+     plan would fail, and their pill in the Crew block. */
+  const mark = (p, on) => $$(`#sitePanel [data-p="${p}"]`).forEach(el => el.classList.toggle("sp-me", on));
+  onEnter("#sp-roster [data-p]", el => mark(el.dataset.p, true));
+  onLeave("#sp-roster [data-p]", el => mark(el.dataset.p, false));
 });
 
 /* kinds popover: switches flip; with a data-kind they also flip the preference --- */
