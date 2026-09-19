@@ -78,7 +78,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
 | `hours` | `_hourly()` | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
-| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_plan_people()`, `_current_roster()` | no reader yet — the site panel's roster block reads it |
+| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | no reader yet — the site panel's roster block reads it |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -106,6 +106,14 @@ Four keys have no reader, but only one of them is dead end to end:
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
 - `staffing` is unread *for now*: the roster is built and tested ahead of the site panel's
   roster block, which is the page that will read it. Nothing on the board draws it yet.
+
+A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
+points into them by index rather than repeating an id: `s` a station, `p` a person or null.
+A save's ids are 24 characters of base64 and a fragmented site has hundreds of shift rows
+between `shifts` and `current.list`, so on the reference save the tables take the key from
+210 KB to 90 KB. Those two lists, and only those two, use short keys — `d` weekday, `f` and
+`t` the hours a shift runs from and to, `k` the kind of duty, left off entirely on an
+ordinary serving shift. `roles[].stations` holds indices into the same `stations` table.
 - `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
   binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
   from. Delete the payload key if you like; do not delete the function.

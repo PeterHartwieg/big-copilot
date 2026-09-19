@@ -415,6 +415,13 @@ station-hours, cheapest dip first, and the price of the whole shifts is carried 
 open hour instead of a derived need, because the game stores no model to derive one from,
 and they are filled after the serving stations so neither ever takes a person off a queue.
 
+**Two tables, and indices into them.** A site's row lists its `stations` and its `people`
+once each, and every shift, hiring note and placement below points at them by position
+rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`
+and the current schedule's `current.list` — share one compact row: `d` weekday, `s` station,
+`f` and `t` the hours it runs from and to, `p` the person, and `k` the kind of duty, which
+is left off an ordinary serving shift.
+
 **The people.** Everyone assigned to the site, plus anyone hired and not yet posted
 anywhere; candidates are applicants, not staff. Slots are filled most-constrained-first, so
 somebody who wants no evenings takes the shift they can work before the unconstrained staff

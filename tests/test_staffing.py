@@ -471,6 +471,28 @@ def plan(items, employees, hourly, **kw):
 FLAT = {h: 15 for h in range(24)}  # 15 customers an hour, all day, every day
 
 
+# A roster row is d/s/f/t/p, plus k on anything but an ordinary serving shift,
+# with s and p indexing the row's own stations and people tables.
+def kind(row):
+    return row.get("k", "serve")
+
+
+def hours(row):
+    return row["t"] - row["f"]
+
+
+def who(site, row):
+    return None if row["p"] is None else site["people"][row["p"]]["id"]
+
+
+def named(site, row):
+    return None if row["p"] is None else site["people"][row["p"]]["name"]
+
+
+def where(site, row):
+    return site["stations"][row["s"]]["id"]
+
+
 class CutTest(unittest.TestCase):
     """No shift over twelve hours, and the fewest of them."""
 
@@ -529,14 +551,15 @@ class RosterRulesTest(unittest.TestCase):
         self.assertTrue(row["shifts"])
         by_person = collections.defaultdict(list)
         for shift in row["shifts"]:
-            by_person[shift["employee"]].append(shift)
-            # The station's skill, and no shift over the cap.
-            self.assertLessEqual(shift["to"] - shift["from"], SHIFT_CAP)
-            self.assertEqual(shift["hours"], shift["to"] - shift["from"])
+            by_person[who(row, shift)].append(shift)
+            self.assertLessEqual(hours(shift), SHIFT_CAP)
+            # A station this site holds, and a person this site employs.
+            self.assertIsNotNone(where(row, shift))
+            self.assertIsNotNone(who(row, shift))
         stations = collections.Counter()
         for shift in row["shifts"]:
-            for hour in range(shift["from"], shift["to"]):
-                stations[(shift["wd"], shift["station"], hour)] += 1
+            for hour in range(shift["f"], shift["t"]):
+                stations[(shift["d"], shift["s"], hour)] += 1
         self.assertEqual(max(stations.values()), 1, "one person per station per hour")
 
         for eid, shifts in by_person.items():
@@ -545,30 +568,30 @@ class RosterRulesTest(unittest.TestCase):
                 for slug in people[eid]["demands"]["$items"]
                 if slug in JOB_DEMANDS
             ]
-            hours = sum(s["hours"] for s in shifts)
-            days = {s["wd"] for s in shifts}
-            for kind, setting, _priority in rules:
-                if kind == "hours":
-                    self.assertLessEqual(hours, setting[1], eid)
-                elif kind == "days":
+            worked = sum(hours(s) for s in shifts)
+            days = {s["d"] for s in shifts}
+            for rule, setting, _priority in rules:
+                if rule == "hours":
+                    self.assertLessEqual(worked, setting[1], eid)
+                elif rule == "days":
                     self.assertLessEqual(len(days), setting, eid)
-                elif kind == "daysoff":
+                elif rule == "daysoff":
                     self.assertFalse(days & {6, 0}, eid)
-                elif kind == "noshift":
+                elif rule == "noshift":
                     for low, high in setting:
                         for shift in shifts:
                             self.assertFalse(
-                                low < shift["to"] and shift["from"] < high, (eid, shift)
+                                low < shift["t"] and shift["f"] < high, (eid, shift)
                             )
-                elif kind == "nocleaning":
-                    self.assertFalse([s for s in shifts if s["kind"] == "clean"], eid)
+                elif rule == "nocleaning":
+                    self.assertFalse([s for s in shifts if kind(s) == "clean"], eid)
             per_day = collections.Counter()
             busy = collections.defaultdict(set)
             for shift in shifts:
-                per_day[shift["wd"]] += shift["hours"]
-                for hour in range(shift["from"], shift["to"]):
-                    self.assertNotIn(hour, busy[shift["wd"]], "one shift per hour")
-                    busy[shift["wd"]].add(hour)
+                per_day[shift["d"]] += hours(shift)
+                for hour in range(shift["f"], shift["t"]):
+                    self.assertNotIn(hour, busy[shift["d"]], "one shift per hour")
+                    busy[shift["d"]].add(hour)
             self.assertLessEqual(max(per_day.values()), OVERWORK_HOURS, eid)
 
     def test_a_blackout_is_tested_by_overlap_not_containment(self):
@@ -577,8 +600,7 @@ class RosterRulesTest(unittest.TestCase):
         nights = [
             s
             for s in row["shifts"]
-            if s["employee"] == "p8"
-            and (s["from"] < 4 or s["to"] > 22)
+            if who(row, s) == "p8" and (s["f"] < 4 or s["t"] > 22)
         ]
         self.assertEqual(nights, [])
 
@@ -637,19 +659,18 @@ class CoverTest(unittest.TestCase):
         items = [(1, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
         people = [employee(f"p{i}", [SERVICE, CLEANING, GUARD]) for i in range(12)]
         row = plan(items, people, FLAT, opens=(8, 20))
-        for kind in ("clean", "security"):
-            hours = sum(s["hours"] for s in row["shifts"] if s["kind"] == kind)
-            self.assertEqual(hours, 12 * 7, kind)
-            for shift in row["shifts"]:
-                if shift["kind"] == kind:
-                    self.assertGreaterEqual(shift["from"], 8)
-                    self.assertLessEqual(shift["to"], 20)
+        for duty in ("clean", "security"):
+            covered = [s for s in row["shifts"] if kind(s) == duty]
+            self.assertEqual(sum(hours(s) for s in covered), 12 * 7, duty)
+            for shift in covered:
+                self.assertGreaterEqual(shift["f"], 8)
+                self.assertLessEqual(shift["t"], 20)
 
     def test_a_closed_day_is_rostered_by_nobody(self):
         items = [(1, REGISTER), (8, CLEAN_STATION)]
         people = [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(8)]
         row = plan(items, people, FLAT, open_days=(1, 2, 3, 4, 5))
-        self.assertEqual([s for s in row["shifts"] if s["wd"] in (6, 0)], [])
+        self.assertEqual([s for s in row["shifts"] if s["d"] in (6, 0)], [])
         self.assertEqual(row["open"][6], None)
         self.assertEqual(row["open"][1], [0, 24])
 
@@ -661,7 +682,7 @@ class CoverTest(unittest.TestCase):
         ]
         row = plan(items, people, FLAT)
         self.assertTrue(row["shifts"])
-        self.assertEqual({s["employee"] for s in row["shifts"]}, {"yes"})
+        self.assertEqual({who(row, s) for s in row["shifts"]}, {"yes"})
 
 
 class SlackTest(unittest.TestCase):
@@ -681,8 +702,8 @@ class SlackTest(unittest.TestCase):
         covered = {
             hour
             for s in row["shifts"]
-            if s["kind"] == "serve" and s["wd"] == 1
-            for hour in range(s["from"], s["to"])
+            if kind(s) == "serve" and s["d"] == 1
+            for hour in range(s["f"], s["t"])
         }
         self.assertIn(13, covered)
         self.assertNotIn(20, covered)
@@ -701,18 +722,31 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(
             set(row),
             {
-                "key", "name", "typeSlug", "open", "roles", "need", "basis",
-                "ceiling", "shifts", "headcount", "shortHours", "placed",
-                "bench", "slack", "cost", "current",
+                "key", "name", "typeSlug", "open", "stations", "people",
+                "roles", "need", "basis", "ceiling", "shifts", "headcount",
+                "shortHours", "placed", "bench", "slack", "cost", "current",
             },
         )
 
-    def test_a_shift_names_a_station_the_roles_list(self):
+    def test_a_serving_shift_indexes_a_station_its_role_lists(self):
         row = self.row()
-        known = {s["id"] for role in row["roles"] for s in role["stations"]}
+        known = {index for role in row["roles"] for index in role["stations"]}
         for shift in row["shifts"]:
-            if shift["kind"] == "serve":
-                self.assertIn(shift["station"], known)
+            if kind(shift) == "serve":
+                self.assertIn(shift["s"], known)
+        # The cleaning station is a station of the site but of no serving role.
+        self.assertTrue([s for s in row["shifts"] if kind(s) == "clean"])
+        self.assertEqual({row["stations"][i]["skill"] for i in known}, {SERVICE})
+
+    def test_the_tables_are_what_the_indices_point_at(self):
+        row = self.row()
+        for shift in row["shifts"]:
+            self.assertIsNotNone(where(row, shift))
+            self.assertIsNotNone(named(row, shift))
+        ids = [p["id"] for p in row["people"]]
+        self.assertEqual(len(ids), len(set(ids)), "nobody is listed twice")
+        posts = [s["id"] for s in row["stations"]]
+        self.assertEqual(len(posts), len(set(posts)), "no station is listed twice")
 
     def test_the_current_roster_is_listed_for_the_now_and_plan_toggle(self):
         shifts = [
@@ -728,16 +762,16 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual((current["shifts"], current["fragments"]), (2, 1))
         self.assertEqual(current["cleaning"], 1)
         # Sorted by weekday then by the hour it starts, so the all-day
-        # cleaning duty comes before the morning register shift.
+        # cleaning duty comes before the morning register shift. A serving
+        # shift carries no k at all, which is what "serve" looks like.
+        cleaning, serving = current["list"]
         self.assertEqual(
-            current["list"],
-            [
-                {"wd": 1, "station": 8, "from": 0, "to": 24, "employee": "p1",
-                 "name": "P1", "kind": "clean"},
-                {"wd": 1, "station": 1, "from": 8, "to": 10, "employee": "p0",
-                 "name": "P0", "kind": "serve"},
-            ],
+            cleaning, {"d": 1, "s": 1, "f": 0, "t": 24, "p": 1, "k": "clean"}
         )
+        self.assertEqual(serving, {"d": 1, "s": 0, "f": 8, "t": 10, "p": 0})
+        self.assertEqual(kind(serving), "serve")
+        self.assertEqual((where(row, serving), named(row, serving)), (1, "P0"))
+        self.assertEqual((where(row, cleaning), named(row, cleaning)), (8, "P1"))
 
     def test_the_bench_needs_a_myemployees_step_first(self):
         row = plan(
@@ -746,10 +780,9 @@ class PayloadTest(unittest.TestCase):
             {h: 1 for h in range(24)},
         )
         self.assertTrue(row["shifts"])
-        self.assertTrue(all(s["fromBench"] for s in row["shifts"]))
-        self.assertEqual(
-            row["bench"], [{"employee": "bench", "name": "BENCH", "skill": SERVICE}]
-        )
+        self.assertEqual(row["people"], [{"id": "bench", "name": "BENCH"}])
+        self.assertEqual(row["bench"], [{"p": 0, "skill": SERVICE}])
+        self.assertTrue(all(s["p"] == 0 for s in row["shifts"]))
 
     def test_a_site_with_no_measured_weekday_gets_no_recommendation(self):
         """basis none end to end: the site is too new to say anything about."""
@@ -772,7 +805,7 @@ class PayloadTest(unittest.TestCase):
         )
         [row] = _staffing(save, LABELS, sites, grids, staff, 0.55)
         self.assertEqual({c for r in row["basis"][SERVICE] for c in r}, {"none"})
-        self.assertEqual([s for s in row["shifts"] if s["kind"] == "serve"], [])
+        self.assertEqual([s for s in row["shifts"] if kind(s) == "serve"], [])
 
 
 class MultiRoleTest(unittest.TestCase):

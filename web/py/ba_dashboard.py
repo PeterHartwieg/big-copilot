@@ -4067,7 +4067,7 @@ def _bridge_troughs(wanted: dict, wage: float, budget: float) -> float:
     return spent, cost
 
 
-def _current_roster(save: Save, building: dict, stations: dict, people: dict) -> dict:
+def _current_roster(save: Save, building: dict, stations: dict) -> dict:
     """The site's schedule as it stands, to show beside the plan.
 
     Counts the shifts the player would have to clear, how many of them are the
@@ -4084,7 +4084,6 @@ def _current_roster(save: Save, building: dict, stations: dict, people: dict) ->
                 continue
             post = shift.get("itemInstanceId")
             station = stations.get(post)
-            person = people.get(shift.get("employeeId"))
             if shift.get("type") == CLEANING_SHIFT:
                 kind = "clean"
             elif station and station["slug"] in COVER_STATIONS:
@@ -4098,7 +4097,6 @@ def _current_roster(save: Save, building: dict, stations: dict, people: dict) ->
                     "from": start,
                     "to": end,
                     "employee": shift.get("employeeId"),
-                    "name": (person or {}).get("name"),
                     "kind": kind,
                 }
             )
@@ -4258,6 +4256,81 @@ def _demand_driven(shifts: list, pool: list) -> list:
     return out
 
 
+def _shift_row(shift: dict, table: dict) -> dict:
+    """One line of a roster, plan or current, as the payload carries it.
+
+    d weekday, s the station's index, f and t the hours it runs from and to, p
+    the person's index or null, k the kind of duty. `k` is left off an ordinary
+    serving shift, which is what a row without one means: two thirds of a
+    fragmented site's rows are serving shifts, and the repeated word costs more
+    than everything else on the row put together.
+    """
+    row = {
+        "d": shift["wd"],
+        "s": table["station"][shift["station"]],
+        "f": shift["from"],
+        "t": shift["to"],
+        "p": table["person"].get(shift["employee"]),
+    }
+    if shift["kind"] != "serve":
+        row["k"] = shift["kind"]
+    return row
+
+
+def _index_table(posts: list, station_rows, person_rows, people: dict) -> dict:
+    """The two lookup tables a site's rows point into, and the maps to build them.
+
+    A save's employee and item ids are 24 characters of base64, and a busy site
+    has nearly a thousand shift rows between its plan and its current schedule.
+    Repeating the ids there costs more than the rest of the row put together, so
+    the rows carry an index and this is what they index into. Every station the
+    plan or the current roster posts anyone to is listed, including one the
+    board knows nothing else about, and so is everyone either names.
+    """
+    stations, station_index = [], {}
+
+    def station(post_id, name=None, skill=None, rate=None):
+        if post_id not in station_index:
+            station_index[post_id] = len(stations)
+            stations.append(
+                {"id": post_id, "name": name, "skill": skill, "rate": rate}
+            )
+        return station_index[post_id]
+
+    for post in posts:
+        station(
+            post["id"],
+            post.get("name"),
+            post.get("skill") or (COVER_STATIONS.get(post.get("slug")) or (None, None))[1],
+            post.get("rate"),
+        )
+    for rows in station_rows:
+        for row in rows:
+            station(row["station"])
+
+    # A row whose employee is unknown keeps a null rather than an index: that is
+    # what a hire bar is, a shift the plan wants with nobody to put on it.
+    seen = [
+        row["employee"]
+        for rows in person_rows
+        for row in rows
+        if row.get("employee") is not None
+    ]
+    order = sorted(
+        dict.fromkeys(seen),
+        key=lambda pid: ((people.get(pid) or {}).get("name") or "", str(pid)),
+    )
+    person_index = {pid: index for index, pid in enumerate(order)}
+    return {
+        "stations": stations,
+        "station": station_index,
+        "people": [
+            {"id": pid, "name": (people.get(pid) or {}).get("name")} for pid in order
+        ],
+        "person": person_index,
+    }
+
+
 def _current_cost(current: dict, wage_of: dict) -> float:
     """What the schedule as it stands pays out in a week, for the staff we can price."""
     return sum(
@@ -4394,7 +4467,8 @@ def _plan_site(
     # the same way and placed after the serving stations, so neither ever steals
     # a person from a queue.
     cover_slots = []
-    for post in _cover_posts(save, building, names):
+    cover_posts = _cover_posts(save, building, names)
+    for post in cover_posts:
         kind, skill = COVER_STATIONS[post["slug"]]
         for wd in range(7):
             for start, end in _runs(open_hours[wd]):
@@ -4464,7 +4538,24 @@ def _plan_site(
 
     wage_of = {person["id"]: person["wage"] for person in pool}
     weekly = sum(s["hours"] * wage_of.get(s["employee"], 0.0) for s in shifts)
-    current = _current_roster(save, building, stations, people)
+    current = _current_roster(save, building, stations)
+    placed = _demand_driven(shifts, pool)
+    bench_rows = [
+        {"employee": person["id"], "skill": _first_skill(person)}
+        for person in bench
+        if any(s["employee"] == person["id"] for s in shifts)
+    ]
+
+    # Two lookup tables, so the many rows below can be indices rather than
+    # repeated 24-character ids. Everything a row points at is here: every
+    # station the plan or the current roster posts anyone to, and everyone
+    # either of them names.
+    table = _index_table(
+        grid["stations"] + cover_posts,
+        (shifts, current["list"]),
+        (shifts, current["list"], short_hours, placed, bench_rows),
+        people,
+    )
     return {
         "key": grid["key"],
         "name": business["name"],
@@ -4476,12 +4567,15 @@ def _plan_site(
             [open_hours[wd][0], open_hours[wd][-1] + 1] if open_hours[wd] else None
             for wd in range(7)
         ],
+        # The two tables every index below reads through.
+        "stations": table["stations"],
+        "people": table["people"],
         "roles": [
             {
                 "skill": role["skill"],
                 "label": role["label"],
                 "stations": [
-                    {"id": s["id"], "name": s["name"], "rate": s["rate"]}
+                    table["station"][s["id"]]
                     for s in grid["stations"]
                     if s["skill"] == role["skill"]
                 ],
@@ -4491,15 +4585,28 @@ def _plan_site(
         "need": {skill: need[skill]["need"] for skill in _in_order(need)},
         "basis": {skill: need[skill]["basis"] for skill in _in_order(need)},
         "ceiling": ceiling,
-        "shifts": shifts,
+        # One row shape, shared with current.list below: see _shift_row(). These
+        # two lists are the only ones long enough for key names to weigh
+        # anything, so they alone carry short ones.
+        "shifts": [_shift_row(s, table) for s in shifts],
         "headcount": {skill: headcount[skill] for skill in _in_order(headcount)},
-        "shortHours": short_hours,
-        "placed": _demand_driven(shifts, pool),
+        "shortHours": [
+            {"p": table["person"][r["employee"]], "hours": r["hours"], "min": r["min"]}
+            for r in short_hours
+        ],
+        "placed": [
+            {
+                "p": table["person"][r["employee"]],
+                "demand": r["demand"],
+                "wd": r["wd"],
+                "from": r["from"],
+                "to": r["to"],
+            }
+            for r in placed
+        ],
         "bench": [
-            {"employee": person["id"], "name": person["name"],
-             "skill": _first_skill(person)}
-            for person in bench
-            if any(s["employee"] == person["id"] for s in shifts)
+            {"p": table["person"][r["employee"]], "skill": r["skill"]}
+            for r in bench_rows
         ],
         "slack": {
             "hours": round(slack_hours, 1),
@@ -4507,7 +4614,13 @@ def _plan_site(
             "budget": round(budget, 1),
         },
         "cost": {"weekly": money(weekly), "current": money(_current_cost(current, wage_of))},
-        "current": current,
+        "current": {
+            "shifts": current["shifts"],
+            "fragments": current["fragments"],
+            "cleaning": current["cleaning"],
+            "security": current["security"],
+            "list": [_shift_row(r, table) for r in current["list"]],
+        },
     }
 
 
