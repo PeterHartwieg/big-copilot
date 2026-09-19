@@ -567,6 +567,43 @@ and dims the rest; clicking scrolls there.
 The open site is held by address rather than by position, so a live refresh that
 re-sorts the roster by profit leaves you on the same shop.
 
+### What a depot's page shows
+
+A warehouse or a head office books no sale, so it draws a pipe rather than a till: what
+it holds, what draws on it, and when the next truck lands. It leads with the same *Needs
+attention here* list, and each finding pulses the line it is about.
+
+- **The tiles.** What the site costs a day, as a bar the width of the spending with no
+  profit to close it; what is on the floor, over how many lines; the thinnest line, as
+  the days it covers against the week, with its own bar; and how many sites it feeds,
+  with what leaves a day.
+- **Stock.** One row a line, with the next seven days beside it, left to right from
+  today: a filled cell is a day covered, red hatching is a day dry, and the truck sits on
+  the day the delivery lands. A paused contract strikes its truck through. A line nothing
+  draws on sleeps instead of showing cover, because there is nothing for it to run out
+  against. The column beside the rail is what to do about it — the units to bring in by
+  hand before the shelf empties, or the order to raise — and the *Weekly order* column
+  names the factory instead where the goods are made in-house rather than imported.
+- **Feeds.** One row a site that draws on this depot, longest bar first, with what it
+  takes a day.
+
+### What a factory's page shows
+
+A factory's page is its machines. A machine runs only while somebody is posted to it, so
+the figure is what the lines make at the roster, with the rated output beside it.
+
+- **The tiles.** The machines and how many are on a named line; what is made a day
+  against the rated output; what ships against what is made; and the day's costs.
+- **Lines.** One row a line: the recipe, the workstation and machine numbers, and a
+  square a machine, filled by the share of the week it is rostered. A machine running a
+  recipe the board cannot name keeps the picker that names it, the same one the Supply
+  page carries; a machine with no recipe at all is drawn as asleep, and its belt stops.
+- **Inputs.** What the machines eat at full rate, against the daily top-up set to feed
+  them, what arrived and what is on hand. A top-up too small for the line says what to
+  raise it to; an input on no plan says so rather than reading as a zero, and an arrival
+  the delivery log is too short to measure is blank, not nought. Hovering an input picks
+  out the lines that draw on it.
+
 ## How goods move
 
 Four columns, being importers, factories, depots and shops, with a line for every real

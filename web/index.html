@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=eb555dab7d">
+<link rel="stylesheet" href="community.css?v=c5a8083bd9">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=eb555dab7d">
+<link rel="stylesheet" href="fonts/fonts.css?v=c5a8083bd9">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1594,6 +1594,56 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-m.z{background:none;border:1px dashed var(--rule);color:var(--ink-3)}
 .sp-m.z::before{display:none}
 
+/* a depot's week: seven days of cover, with the truck on the day it lands */
+.sp-rail{position:relative;display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;height:28px;align-items:end;padding-bottom:4px;box-sizing:border-box;vertical-align:middle}
+.sp-rail i{display:block;height:6px;border-radius:2px;background:var(--rule)}
+.sp-rail i.c{background:var(--accent)}
+.sp-rail i.d{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px)}
+.sp-rail .trk{position:absolute;top:0;left:calc(var(--d)*23px + 2px);color:var(--ink);transition:left 1.2s cubic-bezier(.2,.7,.2,1) .3s}
+.rv:not(.in) .sp-rail .trk{left:-26px}
+.sp-rail .trk svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-rail .trk.held{color:var(--ink-3)}
+.sp-rail .trk.held::after{content:"";position:absolute;left:0;right:0;top:50%;border-top:1.5px solid var(--neg);transform:rotate(-35deg)}
+tr:hover .sp-rail .trk:not(.held) svg{animation:sp-drive .5s ease-in-out infinite}
+@keyframes sp-drive{50%{transform:translateY(-1.5px)}}
+.sp-days{display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;text-align:center}
+.sp-days b{font-weight:500}.sp-days b.now{color:var(--ink)}
+.sp-zz{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);letter-spacing:.1em}
+tr:hover .sp-zz{animation:sp-zz 1.2s ease-in-out infinite}
+@keyframes sp-zz{50%{transform:translateY(-2px);opacity:.5}}
+.sp-feeds{display:flex;flex-direction:column;gap:9px}
+.sp-feed{display:grid;grid-template-columns:24px 1fr 90px 74px;gap:10px;align-items:center;font-size:13px}
+.sp-feed .tr{height:6px;border-radius:3px;background:var(--rule-soft);overflow:hidden}
+.sp-feed .tr i{display:block;height:100%;width:var(--w);background:var(--ink-2);border-radius:3px;transition:background .2s}
+.sp-feed:hover .tr i{background:var(--accent)}
+.sp-feed .c{font:500 12px "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+/* the bar under a tile's figure, where a spark would sit on a shop */
+.sp-meter{height:6px;border-radius:3px;background:var(--rule);margin-top:14px;overflow:hidden}
+.sp-meter i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:3px}
+.sp-meter.bad i{background:var(--neg)}
+/* the line a tile names: a long item name is clipped, not wrapped */
+.sp-tname{display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:-3px}
+
+/* a factory's lines: one square a machine, filled by its share of the week */
+.sp-line{display:grid;grid-template-columns:230px minmax(116px,auto) 1fr 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
+.sp-line.head{padding:0 0 8px;border-bottom:1px solid var(--rule);font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.sp-line .n{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.sp-line.head .n{font-size:10.5px}
+.sp-line .n small{display:block;font-size:10.5px;color:var(--ink-3)}
+.sp-lines.dim .sp-line:not(.lit):not(.head){opacity:.3}
+.sp-line .sp-mach{gap:6px}
+.sp-line:hover .sp-m:not(.q):not(.z) svg,.sp-line.lit .sp-m:not(.q):not(.z) svg{animation:sp-spin 2.4s linear infinite}
+@keyframes sp-spin{to{transform:rotate(360deg)}}
+.sp-m.q{background:none;box-sizing:border-box;border:1px dashed var(--warn);color:var(--warn);font:600 14px/1 "IBM Plex Mono",monospace}
+.sp-m.q::before{display:none}
+.sp-belt{height:2px;background-image:repeating-linear-gradient(90deg,var(--ink-3) 0 6px,transparent 6px 12px);opacity:.45}
+.sp-line:hover .sp-belt,.sp-line.lit .sp-belt{opacity:1;background-image:repeating-linear-gradient(90deg,var(--accent) 0 6px,transparent 6px 12px);animation:sp-belt .5s linear infinite}
+.sp-belt.stop{background-image:repeating-linear-gradient(90deg,var(--neg) 0 2px,transparent 2px 12px)!important;animation:none!important}
+@keyframes sp-belt{to{background-position:12px 0}}
+.sp-pile{display:inline-flex;align-items:center;gap:5px;color:var(--warn)}
+.sp-pile svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8px;margin-left:0;min-height:30px;max-width:210px}
+
 /* profit: the two weeks the delta chip compares, drawn on the chart */
 .sp-band{fill:var(--ink);opacity:.05;transition:opacity .15s;cursor:default}
 .sp-band.last{opacity:.09}
@@ -2463,8 +2513,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "eb555dab7d";</script>
-<script>window.LEDGER_RELEASE = {"version":"eb555dab7d","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "c5a8083bd9";</script>
+<script>window.LEDGER_RELEASE = {"version":"c5a8083bd9","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2533,8 +2583,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=eb555dab7d"></script>
-<script src="community.js?v=eb555dab7d"></script>
+<script src="app.js?v=c5a8083bd9"></script>
+<script src="community.js?v=c5a8083bd9"></script>
 
 <script>
 
@@ -2683,6 +2733,8 @@ const SP_ICON = {
   building: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path>',
   wave: '<path d="M2 14c2.5 0 2.5-4 5-4s2.5 4 5 4 2.5-4 5-4 2.5 4 5 4"></path>',
   crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
+  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+  pause: '<path d="M9 6v12M15 6v12"></path>',
   gear: '<circle cx="12" cy="12" r="3.2"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"></path>',
   pipe: '<path d="M3 8h6v8h12M3 12h2M17 20v-2M21 20v-2"></path>',
   route: '<circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="5" r="2"></circle><path d="M8 18h7a3.25 3.25 0 0 0 0-6.5H9a3.25 3.25 0 0 1 0-6.5h7"></path>',
@@ -2705,6 +2757,9 @@ const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="tr
 const spEsc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /* The same drawing wrapped so it sits on a text line. */
 const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
+/* One token an item, so a finding about it pulses the row that carries it: a
+   supply finding's subject is the item's own name. */
+const spTok = s => "sp-it-" + String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
 /* The board's own two letters for each neighbourhood, filled in from the one
    table Python keeps. A place it does not name wears no pill. */
 const HOOD_TAGS = {"Midtown":"MT","Hell's Kitchen":"HK","Murray Hill":"MH","Lower Manhattan":"LM","Garment District":"GD","Industry City":"IC","The Hamptons":"HA"};
@@ -4445,14 +4500,25 @@ let spFindsAll = false, spArrived = null;
 /* A group whose evidence depends on the site: the uniform finding is about the
    locker while there is none, and about the roles once there is one. */
 const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
-const spFindRow = (a, b) => {
+/* Stock standing still is a shelf on a shop and a line on a depot: the same
+   finding, two blocks. */
+const SP_EVIDENCE_BLOCK = {dead: kind => kind === "depot" ? "stock" : "shelves",
+                           target: kind => kind === "depot" ? "stock" : "shelves"};
+/* Groups whose evidence is one row of a table rather than a fixed mark: the
+   finding's subject is the item's name, and every such row carries its token. */
+const SP_EVIDENCE_ITEM = ["shortfall", "order", "paused", "dead", "target", "feed",
+                          "outruns", "unplanned"];
+const spFindRow = (a, b, kind) => {
   const ev = ALERT_EVIDENCE[a.group] || {};
-  const hit = SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit;
+  const block = SP_EVIDENCE_BLOCK[a.group] ? SP_EVIDENCE_BLOCK[a.group](kind) : ev.block;
+  const hit = [SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit,
+               SP_EVIDENCE_ITEM.includes(a.group) && a.subject ? spTok(a.subject) : ""]
+    .filter(Boolean).join(" ");
   const {what, more} = splitFinding(a);
   return `<a class="sp-find ${SEV_KIND[a.level] || "opp"}${a.id === spArrived ? " arrived" : ""}" href="#${
-    alertPage(a)}" data-id="${attr(a.id)}"${ev.block ? ` data-ev="${ev.block}"` : ""}${
+    alertPage(a)}" data-id="${attr(a.id)}"${block ? ` data-ev="${block}"` : ""}${
     hit ? ` data-hit="${attr(hit)}"` : ""}>
-    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[ev.block] || "alert")}</span><span class="what">${spEsc(what)}</span>
+    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[block] || "alert")}</span><span class="what">${spEsc(what)}</span>
     <span class="amt">${findingAmount(a)}</span><span class="go">${spIcon("down")}</span>${
     more ? `<span class="more">${spEsc(more)}</span>` : ""}</a>`;
 };
@@ -4462,13 +4528,13 @@ const SP_BLOCK_ICON = {tiles: "alert", profit: "profit", week: "week", hours: "h
                        standards: "standards", pull: "magnet", shelves: "shelves", stock: "crate",
                        inputs: "pipe", lines: "gear"};
 const SP_FINDS_TOP = 4;
-const spFinds = (finds, b) => {
+const spFinds = (finds, b, kind) => {
   if(!finds.length) return "";
   const shown = spFindsAll ? finds : finds.slice(0, SP_FINDS_TOP);
   const rest = finds.length - shown.length;
   /* The list itself carries no data-block: it must stay lit while one of its
      own rows dims everything else. */
-  return `<div class="sp-finds rv">${shown.map(a => spFindRow(a, b)).join("")}</div>${
+  return `<div class="sp-finds rv">${shown.map(a => spFindRow(a, b, kind)).join("")}</div>${
     rest > 0 ? `<p class="sp-findmore">${rest} more · <a class="link" href="#" data-allfinds>show all</a></p>` : ""}`;
 };
 
@@ -4621,7 +4687,10 @@ const spSpark = (series, key, money, tone) => {
    day's spending reads without a legend. */
 const SP_COST_SHADE = {Goods: 62, Wages: 46, Rent: 32, Marketing: 24, Theft: 18, Licensing: 14};
 const spCostBar = (costs, profit) => {
-  const parts = costs.concat([[profit < 0 ? "Loss" : "Profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
+  /* A depot and a factory book no sale of their own, so their bar is the
+     spending alone: there is no profit to close it with. */
+  const parts = costs.concat(profit === null ? []
+    : [[profit < 0 ? "Loss" : "Profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
   const total = parts.reduce((t, [, v]) => t + v, 0);
   if(!total) return "";
   return `<div data-readzone><div class="sp-cost">${parts.map(([label, v]) =>
@@ -4654,6 +4723,249 @@ const spCeiling = (office, limits) => {
       `<span class="sp-i${lit.includes(k) ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
 };
 
+/* --- the depot and the factory ----------------------------------------------
+   A depot is a pipe: what it holds, what draws on it, and the day the next
+   truck lands. A factory is a row of machines: what each line makes while
+   somebody is posted to it, and what those lines eat. Both read their rows out
+   of the same supply payload the Supply page is built from, so nothing new is
+   extracted for them. */
+
+/* Mirrors STAFF_HOURS in the Python: a machine posted every hour of the week. */
+const SP_STAFF_HOURS = 168;
+const SP_RAIL_DAYS = 7;
+const SP_DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
+
+/* The seven days from today, left to right: a cell a day, filled while the
+   holding covers it, hatched once it is dry, and the truck sitting on the day
+   the next delivery lands. A line nothing draws on has no cover to run out and
+   sleeps instead. */
+function spRail(cover, truck, held, dead){
+  if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz">zzz</span>`;
+  const c = Math.max(0, Math.min(SP_RAIL_DAYS, Math.floor(cover || 0)));
+  const end = truck === null ? c : held ? SP_RAIL_DAYS : truck;
+  const cells = [...Array(SP_RAIL_DAYS).keys()].map(k =>
+    `<i class="${k < c || (!held && truck !== null && k >= truck) ? "c" : k < end ? "d" : ""}"></i>`).join("");
+  return `<span class="sp-rail">${cells}${truck === null ? ""
+    : `<span class="trk${held ? " held" : ""}" style="--d:${truck}">${spIcon("truck")}</span>`}</span>`;
+}
+const spDays = today => `<span class="sp-days">${[...Array(SP_RAIL_DAYS).keys()].map(k =>
+  `<b class="${k ? "" : "now"}">${SP_DAY_LETTER[((today || 0) + k) % 7]}</b>`).join("")}</span>`;
+/* What a figure should be set to, beside what it is now. */
+const spUp = (now, to, bad) => `<span class="sp-up${bad ? " bad" : ""}">${spEsc(now)} ${
+  spIcon("right")} <b>${spEsc(to)}</b></span>`;
+const spMeter = (pct, bad) => `<div class="sp-meter${bad ? " bad" : ""}"><i style="--w:${
+  Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
+const spNum = n => Number.isFinite(n) ? Math.round(n).toLocaleString() : "—";
+/* A tile of the depot and factory panels: the label, the figure, and whatever
+   line sits under it. */
+const spTile = (label, value, extra, flag) => `<div class="sstat">${
+  flag ? `<i class="sp-flag"></i>` : ""}<span class="lab">${label}</span><div class="v">${value}</div>${extra || ""}</div>`;
+
+/* Everything that draws on this depot, one row a site: the shops' shelves and
+   the factory lines' inputs, which are the same trucks leaving the same door. */
+function spFeedRows(){
+  const by = new Map();
+  const add = (s, perDay) => {
+    if(s === null || s === undefined || !(perDay > 0)) return;
+    by.set(s, (by.get(s) || 0) + perDay);
+  };
+  ((D.supply || {}).shops || []).forEach(r => { if(r.from === siteTab) add(r.s, r.sold); });
+  (((D.supply || {}).factories || {}).sites || []).forEach(site =>
+    (site.needs || []).forEach(n => { if(n.from === siteTab) add(site.s, n.perDay); }));
+  return [...by.entries()].map(([s, perDay]) => ({s, perDay})).sort((a, b) => b.perDay - a.perDay);
+}
+/* Who draws one item out of this depot, and how much of it a day. */
+function spItemDraw(item){
+  const sites = new Set();
+  let perDay = 0;
+  ((D.supply || {}).shops || []).forEach(r => {
+    if(r.from === siteTab && r.item === item){ sites.add(r.s); perDay += r.sold || 0; }
+  });
+  (((D.supply || {}).factories || {}).sites || []).forEach(site =>
+    (site.needs || []).forEach(n => {
+      if(n.from === siteTab && n.item === item){ sites.add(site.s); perDay += n.perDay || 0; }
+    }));
+  return {sites: sites.size, perDay};
+}
+/* The factory that makes an item, where one of this company's does. */
+function spMadeAt(item){
+  for(const site of ((D.supply || {}).factories || {}).sites || [])
+    if((site.lines || []).some(l => l.item === item)) return D.businesses[site.s] || null;
+  return null;
+}
+
+/* The weekday a day number falls on, spelt out; WEEK_FULL is indexed the way
+   the hour grid indexes it. */
+const SP_WEEK_FULL_DAY = day => WEEK_FULL[((day % 7) + 7) % 7];
+
+/* The depot's Stock table: an import row knows its cover and its next truck; a
+   holding that nothing draws on knows only that it is standing still. */
+function spStockRows(b){
+  const supply = D.supply || {};
+  const today = supply.day;
+  const imports = (supply.imports || []).filter(r => r.s === siteTab);
+  const named = new Set(imports.map(r => r.item));
+  const rows = imports.map(r => {
+    const away = Number.isFinite(r.arrives) && Number.isFinite(today) ? r.arrives - today : null;
+    const truck = away !== null && away >= 0 && away < SP_RAIL_DAYS ? away : null;
+    const el = [spTok(r.item), r.paused ? "paused" : "", r.coverFit === "short" ? "short" : "",
+                r.orderFit === "short" || r.orderFit === "tight" ? "order" : ""].filter(Boolean);
+    const act = r.paused
+      ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
+      : r.coverFit === "short" && r.catchUp > 0
+        ? spUp(`+${spNum(r.catchUp)}`, r.runsOut ? `by ${r.runsOut}` : "now", true)
+        : "";
+    /* A paused contract orders nothing this week; what it used to bring is the
+       only figure there is, and the chip beside it says it is not coming. */
+    const order = r.paused ? spNum(r.weekly || r.lastWeek)
+      : r.orderFit === "short" || r.orderFit === "tight"
+        ? spUp(spNum(r.weekly), spNum(r.weekNeed), r.orderFit === "short")
+        : spNum(r.weekly);
+    const read = r.paused ? `Import <b>paused</b>; <b>${r.cover}</b> days left`
+      : r.coverFit === "short" && r.runsOut
+        ? `Runs dry <b>${spEsc(r.runsOut)}</b>${truck !== null ? `, the truck lands <b>${
+            SP_WEEK_FULL_DAY(today + truck)}</b>` : ""}`
+      : r.orderFit === "short"
+        ? `A week draws <b>${spNum(r.weekNeed)}</b>; the order brings <b>${spNum(r.weekly)}</b>`
+      : r.cover >= SP_RAIL_DAYS ? "Covered through the week"
+      : `<b>${r.cover}</b> days on hand`;
+    const draw = spItemDraw(r.item);
+    return {item: r.item, hand: r.stock, draw: spNum(r.perDay),
+            cover: r.paused ? null : r.cover, short: r.coverFit === "short",
+            rail: spRail(r.cover, truck, r.paused, false), act, order,
+            feeds: draw.sites, el, read};
+  });
+  (supply.idle || []).filter(r => r.s === siteTab && !named.has(r.item)).forEach(r => {
+    named.add(r.item);
+    rows.push({
+      item: r.item, hand: r.stock, draw: r.perWeek ? spNum(r.perWeek / 7) : "—",
+      rail: spRail(r.weeks === null ? 0 : r.weeks * 7, null, false, r.dead),
+      act: "", order: "—", feeds: spItemDraw(r.item).sites, cover: null, short: false,
+      el: [spTok(r.item), r.dead ? "dead" : "target"],
+      read: r.dead ? "<b>Nothing draws</b> on these" : `<b>${r.weeks}</b> weeks on hand`,
+    });
+  });
+  /* Everything else on the floor. A line nothing imports is made in-house or
+     bought elsewhere; its cover is what it holds against what leaves, and it
+     has no truck to draw. */
+  ((b && b.lines) || []).forEach(l => {
+    if(named.has(l.item)) return;
+    const draw = spItemDraw(l.item);
+    if(!l.units && !draw.perDay) return;
+    named.add(l.item);
+    const made = spMadeAt(l.item);
+    const cover = draw.perDay ? l.units / draw.perDay : 0;
+    rows.push({
+      item: l.item, hand: l.units, draw: draw.perDay ? spNum(draw.perDay) : "—",
+      cover: draw.perDay ? cover : null, short: !!draw.perDay && cover < 1,
+      rail: spRail(cover, null, false, !draw.perDay),
+      act: "", feeds: draw.sites,
+      order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
+      el: [spTok(l.item), draw.perDay ? "" : "dead"].filter(Boolean),
+      read: !draw.perDay ? "<b>Nothing draws</b> on these"
+        : cover >= SP_RAIL_DAYS ? "Covered through the week"
+        : `<b>${cover.toFixed(1)}</b> days on hand`,
+    });
+  });
+  rows.sort((x, y) => x.feeds === y.feeds ? 0 : y.feeds - x.feeds);
+  return rows;
+}
+/* A factory's own row in the supply payload, or nothing when the lines could
+   not be read at all. */
+const spFactorySite = () => (((D.supply || {}).factories || {}).sites || [])
+  .find(r => r.s === siteTab) || null;
+/* One square a machine, filled by the share of the week somebody is posted to
+   it: full unless the line lists it among its gaps. */
+function spMachines(count, gaps, slots){
+  const bySlot = new Map((gaps || []).map(g => [g.slot, g]));
+  const posts = (slots && slots.length ? slots : [...Array(Math.max(count || 0, 0)).keys()].map(k => k + 1));
+  return `<div class="sp-mach">${posts.map((slot, k) => {
+    const gap = bySlot.get(slot) || (slots && slots.length ? null : (gaps || [])[k]);
+    const hours = gap ? gap.hours : SP_STAFF_HOURS;
+    return `<span class="sp-m" style="--h:${Math.round(hours / SP_STAFF_HOURS * 100)}%" data-read="${attr(
+      `Machine ${slot} · <b>${hours} of ${SP_STAFF_HOURS} h</b> rostered${
+        gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`)}">${spIcon("gear")}</span>`;
+  }).join("")}</div>`;
+}
+const SP_LINE_HEAD = `<div class="sp-line head"><span>Line</span><span>Machines</span><span></span>${
+  ["Makes / day", "Ships / day", "On hand"].map(t => `<span class="n">${t}</span>`).join("")}</div>`;
+/* The lines, then the machines the board cannot read: one running a recipe it
+   cannot name, which the player can name here as on the Supply page, and one
+   with no recipe set at all. */
+function spLines(site){
+  const where = r => `${spEsc(r.workstation)}${(r.slots || []).length
+    ? ` · ${r.slots.map(s => `#${s}`).join(" ")}` : ""}`;
+  let html = SP_LINE_HEAD;
+  (site.lines || []).forEach(l => {
+    const stop = !l.atRoster || (l.missing || []).length;
+    const el = [spTok(l.item), l.piling ? "piling" : ""].filter(Boolean);
+    html += `<div class="sp-line" data-line="${attr(spTok(l.item))}" data-el="${attr(el.join(" "))}">
+      <div>${spEsc(l.item)}<span class="sub">${where(l)}</span></div>
+      ${spMachines(l.machines, l.gaps, l.slots)}
+      <div class="sp-belt${stop ? " stop" : ""}"></div>
+      <div class="n">${spNum(l.atRoster)}<small>of ${spNum(l.makes)} rated</small></div>
+      <div class="n">${spNum(l.ships)}</div>
+      <div class="n">${l.piling
+        ? `<span class="sp-pile">${spIcon("crate")}${spNum(l.stock)}</span>` : spNum(l.stock)}</div></div>`;
+  });
+  (site.unnamed || []).forEach((u, k) => {
+    const idle = u.idle;
+    const mach = `<div class="sp-mach">${(u.slots && u.slots.length ? u.slots
+      : [...Array(Math.max(u.machines || 0, 0)).keys()].map(i => i + 1)).map(slot =>
+      `<span class="sp-m ${idle ? "z" : "q"}" data-read="${attr(idle
+        ? `Machine ${slot} · staffed and rented, <b>making nothing</b>`
+        : `Machine ${slot} · running a recipe <b>the board cannot name</b>`)}">${idle ? "zz" : "?"}</span>`).join("")}</div>`;
+    const pick = idle ? `<span class="quiet">No recipe</span>`
+      : `<select class="linepick sp-pick" data-rid="${attr(u.rid)}" aria-label="Name this line"><option value="">Which recipe is this?</option>${
+          (u.candidates || []).map(c => `<option value="${attr(c.slug)}">${spEsc(c.item)}</option>`).join("")}</select>`;
+    html += `<div class="sp-line" data-line="sp-unnamed-${k}" data-el="${idle ? "unset" : "unnamed"}">
+      <div>${pick}<span class="sub">${where(u)}</span></div>${mach}
+      <div class="sp-belt${idle ? " stop" : ""}"></div>
+      <div class="n">${idle ? "0" : "—"}</div><div class="n">${idle ? "0" : "—"}</div><div class="n">${idle ? "0" : "—"}</div></div>`;
+  });
+  return `<div class="sp-lines">${html}</div>`;
+}
+/* What the machines eat, against the top-up set to feed them. The status the
+   Python already worked out decides the mark and the read-out; hovering a row
+   lights the lines that draw on it. */
+const SP_NEED_EL = {unplanned: "noplan", target: "target", paused: "paused",
+                    import: "import", noimport: "import", dry: "dry",
+                    idle: "idle", staffing: "staffing", waiting: "waiting"};
+function spNeedRead(n){
+  switch(n.status){
+    case "unplanned": return "<b>No plan</b> tops this up";
+    case "target": return `Tops up to <b>${spNum(n.target)}</b>, the machines eat <b>${spNum(n.dailyNeed)}</b>`;
+    case "paused": return "Import <b>paused</b>";
+    case "dry": return `<b>${spNum(n.arrives)}</b>/day arrives against <b>${spNum(n.perDay)}</b> needed`;
+    case "idle": return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
+    case "staffing": return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
+    case "waiting": return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
+    case "import": case "noimport":
+      return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(n.depotNeed)}</b> a week`;
+    case "made": return "Made in-house";
+    default: return "In step";
+  }
+}
+function spInputs(site){
+  return (site.needs || []).map(n => {
+    const el = [spTok(n.item), SP_NEED_EL[n.status] || "", n.stalled ? "stalled" : ""].filter(Boolean);
+    const top = n.directImport
+      ? (n.importWeekly === null || n.importWeekly === undefined ? "—" : `${spNum(n.importWeekly)}<small>/wk</small>`)
+      : !n.target ? `<span class="sp-noplan">${spIcon("route")}no plan</span>`
+      : n.raiseTarget ? spUp(spNum(n.target), spNum(n.raiseTarget), true)
+      : spNum(n.target);
+    /* Nothing arrived is only a reading where the delivery log is long enough
+       to be read; otherwise the column is blank, not zero. */
+    const arrived = !n.known ? "—"
+      : n.arrives ? spNum(n.arrives) : `<span class="sp-red">0</span>`;
+    const from = n.directImport ? "direct import"
+      : n.from === null || n.from === undefined ? "—" : spEsc(shortName(D.businesses[n.from]));
+    return `<tr data-lines="${attr((n.lines || []).map(spTok).join(" "))}" data-el="${attr(el.join(" "))}" data-read="${
+      attr(spNeedRead(n))}"><td class="l">${spEsc(n.item)}</td><td>${spNum(n.perDay)}</td><td>${top}</td>
+      <td>${arrived}</td><td>${spNum(n.stock)}</td><td class="l" style="color:var(--ink-2)">${from}</td></tr>`;
+  }).join("");
+}
+
 function drawSite(){
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
   const b = siteTab >= 0 ? D.businesses[siteTab] : null;
@@ -4665,16 +4977,21 @@ function drawSite(){
   D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.item] = r; });
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
-  const grid = (D.hours || []).find(h => h.key === b.key);
   /* An office sells billed hours, not goods: its line is a fee with nothing to
      stock or top up, and its registers are staffed computers. */
   const office = b.status === "office";
-  /* The shop and office panel. A depot, a factory and a home keep the plainer
-     panel they have today until their own are drawn. */
+  /* The shop and office panel; then the depot's and the factory's. A home
+     keeps the plainer panel it has today until its own is drawn. */
   const kind = spKind(b);
   const sp = kind === "retail" || kind === "office";
+  const dep = kind === "depot", fac = kind === "factory";
+  /* Only a shop and an office are measured hour by hour, so the grid never
+     belongs to the other kinds. */
+  const grid = sp ? (D.hours || []).find(h => h.key === b.key) : null;
+  /* Every kind but a home leads with its own findings. */
+  const spAny = sp || dep || fac;
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
-  const finds = sp ? spSiteFindings(b.key) : [];
+  const finds = spAny ? spSiteFindings(b.key) : [];
   const rank = sp ? spRank(b.key) : null;
   const trend = sp ? spTrend(b.key) : null;
   const limits = sp ? spBindingLimits(b.key) : [];
@@ -4753,8 +5070,8 @@ function drawSite(){
   const personPill = p => spPersonPill(p, uniformGaps);
   /* The pills sit in a wrapping flex row; the folded roster is a grid of full
      rows, so it replaces that row rather than becoming one item inside it. */
-  const folded = sp && people.length > CREW_MAX;
-  const pills = !sp && people.length > CREW_MAX
+  const folded = spAny && people.length > CREW_MAX;
+  const pills = !spAny && people.length > CREW_MAX
     ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${spEsc(p.name)} (${spEsc(p.role)}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
         people.length - CREW_MAX} more</span>`
     : people.length
@@ -4801,7 +5118,7 @@ function drawSite(){
            a chip, not a dash, because it is a fix the player still owes. */
         const over = sp && t && t.target && t.peakSold > t.target;
         const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
-        return `<tr${over ? ` data-el="outruns"` : ""}>
+        return `<tr data-el="${attr(spTok(l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
@@ -4823,7 +5140,7 @@ function drawSite(){
   const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
     wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
-  const demandChips = !sp ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
+  const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     wants.map(d => `<span class="sp-dem" data-el="demand" data-tip="${attr(`${spEsc(d.demand)} for ${d.count} · ${
       SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
       spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
@@ -4873,13 +5190,108 @@ function drawSite(){
     ? {bands: [{from: bands.prev.at, to: bands.prev.to, avg: bands.prev.avg, cls: "", read: bandRead(bands.prev)},
                {from: bands.last.at, to: bands.last.to, avg: bands.last.avg, cls: "last", read: bandRead(bands.last)}]}
     : {dash: true};
+  /* The depot's panel: the week of trucks, and who draws on it. Its tiles
+     count what is on the floor rather than a day's takings, because a depot
+     books no sale of its own. */
+  let spBody = "";
+  if(dep){
+    const rows = spStockRows(b);
+    const feedRows = spFeedRows();
+    const perDay = feedRows.reduce((t, r) => t + r.perDay, 0);
+    const onFloor = (b.lines || []).reduce((t, l) => t + (l.units || 0), 0);
+    const spend = costs.reduce((t, [, v]) => t + v, 0);
+    /* The thinnest line is the one with the least cover, out of the lines
+       something still draws on: a paused contract is its own finding, and a
+       holding nothing draws on has no cover to run out. */
+    const thin = rows.filter(r => Number.isFinite(r.cover))
+      .reduce((w, r) => !w || r.cover < w.cover ? r : w, null);
+    spBody = `
+    <div class="sstats rv" data-block="tiles" id="sp-tiles">
+      ${spTile("Cost / day", fmt(spend), spCostBar(costs, null))}
+      ${spTile("On the floor", `${onFloor.toLocaleString()}<small ${SMALL}>${
+        plural((b.lines || []).length, "line")}</small>`)}
+      ${thin ? spTile("Thinnest", `<span class="${thin.short ? "neg" : ""}">${thin.cover.toFixed(1)} d</span><small class="sp-tname" ${
+        SMALL}>${spEsc(thin.item)}</small>`, spMeter(thin.cover / SP_RAIL_DAYS * 100, thin.short), thin.short)
+        : spTile("Thinnest", "—")}
+      ${spTile("Feeds", `${feedRows.length}<small ${SMALL}>${feedRows.length === 1 ? "site" : "sites"} · ${
+        spNum(perDay)}/day</small>`)}
+    </div>
+    <section class="sec rv" data-block="stock" id="sp-stock" data-readzone>
+      ${sechead("Stock", {icon: "crate", why: "The next seven days, left to right from today. A filled cell is a day covered, red hatching is a day dry, and the truck sits on the day it lands."})}
+      ${rows.length ? `<div class="scrollx"><table>
+        <thead><tr><th>Line</th><th>On hand</th><th>Draw / day</th><th class="l">${
+          spDays(D.meta.day % 7)}</th><th></th><th>Weekly order</th><th>Feeds</th></tr></thead>
+        <tbody>${rows.map(r => `<tr data-el="${attr(r.el.join(" "))}" data-read="${attr(r.read)}">
+          <td class="l">${spEsc(r.item)}</td><td>${r.hand.toLocaleString()}</td><td>${r.draw}</td>
+          <td class="l">${r.rail}</td><td>${r.act}</td><td>${r.order}</td>
+          <td>${r.feeds || "—"}</td></tr>`).join("")}</tbody></table></div>`
+        : `<p class="quiet">Nothing is held or imported here yet.</p>`}
+      <div class="sp-read sp-readout">Hover a line</div>
+    </section>
+    <div class="duo sec" style="grid-template-columns:1fr 1fr">
+      <section class="rv" data-block="feeds" id="sp-feeds">
+        ${sechead("Feeds", {icon: "pipe", quiet: perDay ? `${spNum(perDay)}/day` : ""})}
+        ${feedRows.length ? `<div class="sp-feeds">${feedRows.map(r => {
+          const site = D.businesses[r.s];
+          return `<div class="sp-feed">${hoodHtml(site)}<span>${spEsc(shortName(site))}</span><span class="tr"><i style="--w:${
+            (r.perDay / feedRows[0].perDay * 100).toFixed(0)}%"></i></span><span class="c">${spNum(r.perDay)}/day</span></div>`;
+        }).join("")}</div>` : `<p class="quiet">Nothing draws on this depot.</p>`}
+      </section>
+      <section class="rv" data-block="crew" id="sp-crew">
+        ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
+          b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${crew}${demandChips}
+      </section>
+    </div>`;
+  }
+  /* The factory's panel: the lines and what they eat. A machine runs only
+     while somebody is posted to it, so what it makes at the roster is the
+     figure, with the rated output beside it. */
+  if(fac){
+    const site = spFactorySite() || {lines: [], unnamed: [], needs: [], machines: 0};
+    const lines = site.lines || [];
+    const running = lines.reduce((t, l) => t + (l.machines || 0), 0);
+    const made = lines.reduce((t, l) => t + (l.atRoster || 0), 0);
+    const rated = lines.reduce((t, l) => t + (l.makes || 0), 0);
+    const ships = lines.reduce((t, l) => t + (l.ships || 0), 0);
+    const spend = costs.reduce((t, [, v]) => t + v, 0);
+    spBody = `
+    <div class="sstats rv" data-block="tiles" id="sp-tiles">
+      ${spTile("Machines", `${site.machines || 0}<small ${SMALL}>· ${running} running</small>`)}
+      ${spTile("Made / day", `${spNum(made)}<small ${SMALL}>of ${spNum(rated)} rated</small>`,
+        rated ? spMeter(made / rated * 100) : "")}
+      ${spTile("Shipped / day", spNum(ships), made ? spMeter(ships / made * 100) : "")}
+      ${spTile("Cost / day", fmt(spend), spCostBar(costs, null))}
+    </div>
+    <section class="sec rv" data-block="lines" id="sp-lines" data-readzone>
+      ${sechead("Lines", {icon: "gear", why: "A machine runs only while someone is posted to it. The fill of each square is the share of the week it is rostered."})}
+      ${lines.length || (site.unnamed || []).length ? `<div class="scrollx">${spLines(site)}</div>`
+        : `<p class="quiet">No machines could be read here.</p>`}
+      <div class="sp-read sp-readout">Hover a machine</div>
+    </section>
+    <section class="sec rv" data-block="inputs" id="sp-inputs" data-readzone>
+      ${sechead("Inputs", {icon: "pipe", why: "What the machines eat at full rate, against the daily top-up set to feed them."})}
+      ${(site.needs || []).length ? `<div class="scrollx"><table>
+        <thead><tr><th>Input</th><th>Eats / day</th><th>Top-up</th><th>Arrived / day</th>
+          <th>On hand</th><th class="l">From</th></tr></thead>
+        <tbody>${spInputs(site)}</tbody></table></div>`
+        : `<p class="quiet">Nothing is drawn here yet.</p>`}
+      <div class="sp-read sp-readout">Hover an input</div>
+    </section>
+    <section class="sec rv" data-block="crew" id="sp-crew">
+      ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
+        b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+      ${crew}${demandChips}
+    </section>`;
+  }
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
       <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
-    ${spFinds(finds, b)}
+    ${spFinds(finds, b, kind)}
+    ${spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
@@ -4917,8 +5329,8 @@ function drawSite(){
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
-        ${sechead("Crew", {icon: sp ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        ${crew}${sp ? demandChips : demandNote}
+        ${sechead("Crew", {icon: spAny ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${crew}${spAny ? demandChips : demandNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
         ${office ? sechead("Fees", {icon: sp ? "fees" : null}) : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up"})}
@@ -4936,14 +5348,19 @@ function drawSite(){
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
           : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
       </section>
-    </div>`;
+    </div>`}`;
   /* A redraw leaves no block lit, so the dimming a hovered finding switched on
      has to come off with the markup it dimmed. */
   $("sitePanel").classList.remove("sp-focus");
   drawSitePicker();
   $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
   if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
-  wireSiteReads(); wireSiteFinds(); wireSiteChips(); wireTips(); wireReveal();
+  /* A factory's unnamed line is named here the same way it is on the Supply
+     page: the same select, the same call. */
+  $$("#sp-lines select.linepick").forEach(sel => {
+    sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
+  });
+  wireSiteReads(); wireSiteFinds(); wireSiteChips(); wireSiteLines(); wireTips(); wireReveal();
 }
 
 /* The site cell of the redesign's tables: the hood pill, the short name, and
@@ -10671,6 +11088,19 @@ const wireSiteFinds = once(() => {
     const row = b.closest(".sp-rrow"), open = row.classList.toggle("open");
     b.setAttribute("aria-expanded", String(open));
   });
+});
+/* Hovering an input picks out the lines that draw on it: the rest of the
+   table steps back rather than the row lighting up alone. */
+const wireSiteLines = once(() => {
+  const light = (tr, on) => {
+    const host = q("#sp-lines .sp-lines");
+    if(!host) return;
+    host.classList.toggle("dim", on);
+    const want = (tr.dataset.lines || "").split(" ").filter(Boolean);
+    $$(".sp-line", host).forEach(l => l.classList.toggle("lit", on && want.includes(l.dataset.line)));
+  };
+  onEnter("#sp-inputs tr[data-lines]", tr => light(tr, true));
+  onLeave("#sp-inputs tr[data-lines]", tr => light(tr, false));
 });
 const wireSiteChips = once(() => {
   const grid = c => q(".hours", c.closest("section"));
