@@ -92,6 +92,16 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertIsNone(row["reason"])
         self.assertIsNone(row["catchUp"])
 
+    def test_a_supply_row_carries_the_slug_its_label_cannot_be_matched_on(self):
+        """A recipe's label for an input is not the depot line's label, so the
+        rows the site panel joins carry the slug the chain reconciles them on."""
+        data = self.build([contract(1000, last=1000)], routed=True)
+        row = next(r for r in data["supply"]["imports"] if r["s"] == 1)
+        self.assertEqual(row["slug"], WATER)
+        self.assertNotEqual(row["slug"], row["item"])
+        for shop in data["supply"]["shops"]:
+            self.assertIn("slug", shop)
+
     def test_direct_factory_import_covers_input_without_daily_topup(self):
         need = self.need(self.build([contract(2000, last=2000, destination=("factory", 0))]))
         self.assertEqual(need["status"], "ok")
