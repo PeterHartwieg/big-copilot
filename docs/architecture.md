@@ -78,6 +78,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
 | `hours` | `_hourly()` | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
+| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_plan_people()`, `_current_roster()` | no reader yet — the site panel's roster block reads it |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -100,9 +101,11 @@ Three indirect routes an agent would otherwise miss:
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 
-Three keys have no reader, but only one of them is dead end to end:
+Four keys have no reader, but only one of them is dead end to end:
 
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
+- `staffing` is unread *for now*: the roster is built and tested ahead of the site panel's
+  roster block, which is the page that will read it. Nothing on the board draws it yet.
 - `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
   binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
   from. Delete the payload key if you like; do not delete the function.

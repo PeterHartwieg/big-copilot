@@ -385,6 +385,45 @@ line rather than raised separately, because it is the same event. Where pricing 
 handled by pricing staff, capacity is the only lever the wave leaves open, and it comes
 with the wave's end date attached.
 
+### The roster the board would type in
+
+Not drawn yet: the `staffing` payload key is built and tested, and the page that reads it
+is a later change. What it holds, per retail site, and why each part is honest:
+
+**The need curve.** Per role, per weekday, per open hour, how many of that role's stations
+the hour actually wants, with the basis it was worked out on. `measured` is the customers
+who came, on a weekday with two weeks behind it, in an hour that did not run into a
+ceiling. `censored` is an hour that came within 95% of what was available: the real demand
+is unknown and above it, so the estimate is what the role served plus one more of its
+stations, held down by the arrival ceiling, the door cap and the stations installed.
+`scaled` is a thin weekday read off the best measured one through the game's own day
+curve. `none` is a site too new to say anything about — and a site whose every weekday is
+thin gets no serving shifts at all, rather than a guess.
+
+**Only a measured hour is a target.** The board never presents a censored hour as a number
+to aim at, and never prints the arrival ceiling as demand: the ceiling is the game's own
+arrivals formula, and on a clothing store it over-predicts the customers actually served
+four times over, because it counts arrivals the game then turns away for having nothing
+they want to buy. It is carried to bound a censored hour from above, and for nothing else.
+
+**The shifts.** Each role's stations are manned from the largest throughput down, the hours
+they are wanted are joined into runs, and each run is cut into the fewest shifts of at most
+twelve hours — the game's own cap, which divides a 24-hour day exactly twice. A dip between
+two runs is bridged only while the site's slack budget lasts: 10% of the week's required
+station-hours, cheapest dip first, and the price of the whole shifts is carried as
+`slack.cost` either way. Cleaning stations and security lockers get one person for every
+open hour instead of a derived need, because the game stores no model to derive one from,
+and they are filled after the serving stations so neither ever takes a person off a queue.
+
+**The people.** Everyone assigned to the site, plus anyone hired and not yet posted
+anywhere; candidates are applicants, not staff. Slots are filled most-constrained-first, so
+somebody who wants no evenings takes the shift they can work before the unconstrained staff
+take it. No shift ever breaks a demand: a slot nobody may legally work becomes a hiring line
+instead, one total per role — and a security locker nobody staffs is real new spending
+rather than another shift, which is why `headcount` says which kind each line is. Anyone
+left under their weekly minimum is named in `shortHours`, because that is a staff demand
+the player is about to fail and the usual fix is to move them, not to bend the roster.
+
 ## Staff demands
 
 Each employee holds up to three demands, and an ignored one wears their satisfaction down
