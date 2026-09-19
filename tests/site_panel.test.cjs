@@ -360,14 +360,16 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
   // runs all three. That is _hour_findings()' rule — door reached, else fewer
   // staffed than counters, else the counters themselves — so the three cap
   // rows below are what it would emit for this grid.
-  const cap = (limit, fix, when) => ({kind: 'cap', key: KEY, site: 'HART. Gifts', office: false,
-    hours: 7, when, limit, fix, cap: 50, capTop: 50, basket: 30, throughput: 900});
+  // These three rows are not hand-written: they are what the real
+  // _hour_findings() emits for mixedGrid(), copied verbatim.
+  const cap = (when, limit, fix, at, throughput) => ({kind: 'cap', key: KEY, site: 'HART. Gifts',
+    office: false, hours: 7, when, limit, fix, cap: at, capTop: at, basket: 30, throughput});
   const page = await site({
     hours: mixedGrid(),
     hourFindings: [
-      cap('the building', 'a bigger site nearby', 'every day 09-10'),
-      cap('staffing', 'more service staff on those hours', 'every day 12-13'),
-      cap('registers', 'another counter', 'every day 15-16'),
+      cap('every day 9', 'the building', 'a bigger site or a second shop nearby', 50, 1500),
+      cap('every day 12', 'staffing', 'more service staff on those hours', 2, 60),
+      cap('every day 15', 'registers', 'another counter', 3, 90),
     ],
   });
   try {
@@ -379,27 +381,26 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));
     assert.deepEqual(ceil, [true, true, true]);
-    // Each hour wears the ceiling that held it, by _hour_findings()' own rule.
-    const cells = await page.evaluate(() => ({
-      door: document.querySelectorAll('#sp-hours .hc.cap-door').length,
-      staff: document.querySelectorAll('#sp-hours .hc.cap-staff').length,
-      post: document.querySelectorAll('#sp-hours .hc.cap-post').length,
-    }));
-    assert.deepEqual(cells, {door: 7, staff: 7, post: 7});
-    // A chip picks out the hours its own ceiling held and dims the others',
-    // rather than lighting every capped hour on the grid.
-    const opacity = sel => page.$$eval(sel, els => els.map(e => Number(getComputedStyle(e).opacity)));
-    for(const [mine, ...others] of [['cap-door', 'cap-staff', 'cap-post'],
-                                    ['cap-staff', 'cap-door', 'cap-post'],
-                                    ['cap-post', 'cap-door', 'cap-staff']]){
+    // Each hour wears the ceiling that held it, and it is the right hour: the
+    // grid is seven rows of 24 cells, so cell wd*24+h is that weekday's hour h.
+    const marks = await page.evaluate(() => {
+      const cells = [...document.querySelectorAll('#sp-hours .hc')];
+      const mark = e => ['cap-door', 'cap-staff', 'cap-post'].find(c => e.classList.contains(c)) || null;
+      return [...Array(7).keys()].map(wd =>
+        [...Array(24).keys()].map(h => mark(cells[wd * 24 + h])).filter(Boolean).length === 3
+          ? [mark(cells[wd * 24 + 9]), mark(cells[wd * 24 + 12]), mark(cells[wd * 24 + 15])]
+          : ['extra marks on this day']);
+    });
+    for(const day of marks) assert.deepEqual(day, ['cap-door', 'cap-staff', 'cap-post']);
+    // A chip lights exactly its own ceiling's hours — nothing else on the
+    // grid, and not another ceiling's capped hours either.
+    const HOUR = {'cap-door': 9, 'cap-staff': 12, 'cap-post': 15};
+    for(const [mine, hour] of Object.entries(HOUR)){
       await page.hover(`#sp-hours .sp-hchip[data-show="${mine}"]`);
-      const lit = await opacity(`#sp-hours .hc.${mine}`);
-      assert.equal(lit.length, 7, `${mine} has its own hours`);
-      assert.ok(lit.every(o => o === 1), `the ${mine} chip leaves its own hours lit`);
-      for(const other of others){
-        const dim = await opacity(`#sp-hours .hc.${other}`);
-        assert.ok(dim.every(o => o < 0.5), `the ${mine} chip dims the ${other} hours`);
-      }
+      const lit = await page.evaluate(() => [...document.querySelectorAll('#sp-hours .hc')]
+        .map((e, i) => Number(getComputedStyle(e).opacity) === 1 ? i % 24 : null)
+        .filter(h => h !== null));
+      assert.deepEqual(lit, Array(7).fill(hour), `the ${mine} chip lights ${hour}:00 and nothing else`);
     }
   } finally { await page.close(); }
 });
