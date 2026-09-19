@@ -40,6 +40,152 @@ SAVE_ROOT = os.path.join(
 VERIFIED_BUILD = 3680  # the game build every number here was last checked against
 MIN_BUILD = 3540  # saves older than this lack fields the board relies on (checked over 57 saves)
 
+# Everywhere the footer points. They live here, not in build_web.py, because the
+# same footer is built twice from one function below: once into the board (and so
+# into the dashboard.html the CLI writes, which travels on its own) and once into
+# the site's landing screen. One list, so the two cannot drift apart.
+REPO_URL = "https://github.com/PeterHartwieg/big-copilot"
+ISSUES_URL = REPO_URL + "/issues/new"
+# "Support the project" goes to Big Copilot's own PayPal donation page, which
+# returns supporters to bigcopilot.com. The same PayPal account has a RentenWiki
+# page whose purpose text names RentenWiki; never link that one here.
+DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
+# The channel the Big Copilot shorts go on, as YouTube's own oEmbed reports it.
+YOUTUBE_URL = "https://www.youtube.com/@PeterHartwieg"
+SUBREDDIT_URL = "https://www.reddit.com/r/bigambitions/"
+# Who made the game, and where a visitor who has never heard of it can go and look.
+GAME_NAME = "Big Ambitions"
+GAME_MAKER = "Hovgaard Games"
+GAME_URL = "https://store.steampowered.com/app/1331550/Big_Ambitions/"
+GAME_MAKER_URL = "https://hovgaard.com/"
+# This board is a fan project: it reads saves and is not the game's, so it says so
+# once in every footer, and again in the site's Impressum.
+COLOPHON = (
+    f"Fan-made companion for {GAME_NAME}. Not affiliated with, endorsed by or "
+    f"supported by {GAME_MAKER}."
+)
+
+# The footer, built once and placed twice. `landing=True` adds the landing's own
+# "Where saves live" toggle and leaves out the two ids the board's script fills
+# (#footFile, #footBuild), because both footers are in the one document until the
+# board replaces the landing and ids may not be shared.
+#
+# After mockup canvas "Big Copilot Footer" (18 Sep 2026): a hairline with the orb
+# on it, two cards, three link columns including the canvas's light/dark/auto
+# switch, then the bottom bar.
+#
+# Every class is prefixed sf- or scoped under .sitefoot: the canvas called them
+# .door, .cta, .seg and .mono, which are exactly the kind of bare names the
+# board's global stylesheet has collided with before.
+_ARROW = '<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg>'
+
+
+def _sf_out(href: str, text: str, icon: str = "", title: str = "") -> str:
+    """One outbound footer link, with the little corner arrow."""
+    tip = f' title="{title}"' if title else ""
+    return (f'<a class="sf-link" href="{href}" target="_blank" rel="noopener"{tip}>'
+            f"{icon}{text}{_ARROW}</a>")
+
+
+def footer_html(landing: bool = False, site: bool = False) -> str:
+    """The footer. ``site`` is true only for the pages build_web.py writes.
+
+    The Impressum and the privacy notice ride along only there. They sit beside
+    those pages, so a self-hosted copy reaches its own; nowhere else are they
+    beside the page, since the CLI writes dashboard.html next to the saves and
+    the watch server answers an allowlist that has never held them. A board on
+    someone's own disk publishes nothing and owes no notice, so it gets no link
+    rather than two that 404. This is not the same split as ``landing``, which
+    both site pages share.
+    """
+    legal = ('<a href="impressum.html" target="_blank" rel="noopener">Impressum</a>'
+             '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a>') if site else ""
+    # Carries its own indent so that leaving it out does not strand a line of
+    # whitespace in the page; the board's footer has no help to toggle.
+    saves = ('<a class="sf-link" id="helpLink" href="#help">Where saves live</a>\n        '
+             if landing else "")
+    # The board's script writes the save's name and the game build into these two.
+    # The landing has no save yet, so it states the build the page was checked on.
+    file_slot = "" if landing else '<span class="sf-meta" id="footFile"></span>'
+    build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
+             else '<span class="sf-meta" id="footBuild"></span>')
+    return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
+  <div class="sf-in">
+    <div class="sf-rule"><span class="sf-orb"></span></div>
+    <div class="sf-cards">
+      <!-- Ships hidden, and only community.js reveals it. The CLI's
+           dashboard.html never loads that file, so there the card simply stays
+           hidden; a copy served from web/ with no /api/community behind it gets
+           it revealed and then hidden again, once heartbeats have failed with
+           none ever having answered. Do not make this wait for the API
+           before showing: the landing sends no request until the reader asks for
+           one, and that silence is a promise the privacy notice makes.
+           Marked by attribute, not id: the landing's footer and the board's are
+           both in the page until the board replaces the landing. -->
+      <div class="sf-card" data-vote-card hidden>
+        <div class="sf-card-head">
+          <span class="sf-badge"><svg class="sf-ic sf-nudge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 13.5l4-4 4 4"/></svg></span>
+          <div class="sf-card-copy">
+            <span class="sf-card-title">Vote on what comes next<span class="feature-new" data-new-feature="community-voting" hidden>New</span></span>
+            <span class="sf-card-note">Pick the features Big Copilot gets next.</span>
+          </div>
+        </div>
+        <button type="button" class="sf-cta sf-fill" data-community-open aria-haspopup="dialog">Vote on features</button>
+      </div>
+      <div class="sf-card">
+        <div class="sf-card-head">
+          <span class="sf-badge"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></span>
+          <div class="sf-card-copy">
+            <span class="sf-card-title">Support the project</span>
+            <span class="sf-card-note">A small thank-you keeps this and future {GAME_NAME} projects going.</span>
+          </div>
+        </div>
+        <a class="sf-cta sf-line" href="{DONATE_URL}" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>Donate via PayPal</a>
+      </div>
+    </div>
+    <div class="sf-cols">
+      <nav class="sf-nav" aria-label="About Big Copilot">
+      <div class="sf-col">
+        <h2 class="sf-head">Big Copilot</h2>
+        {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
+        {_sf_out(ISSUES_URL, "Report a bug", title="A save that will not build, a wrong number, or something the board should show: all welcome.")}
+        {_sf_out(REPO_URL, "Source code", title="MIT-licensed")}
+      </div>
+      <div class="sf-col">
+        <h2 class="sf-head">Follow</h2>
+        {_sf_out(YOUTUBE_URL, "YouTube", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>')}
+        {_sf_out(SUBREDDIT_URL, "r/bigambitions", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>')}
+      </div>
+      <div class="sf-col">
+        <h2 class="sf-head">{GAME_NAME} &middot; official</h2>
+        {_sf_out(GAME_URL, "Steam store page")}
+        {_sf_out(GAME_MAKER_URL, GAME_MAKER)}
+      </div>
+      </nav>
+      <!-- Marked by attribute rather than id, and wired by the board script for
+           whichever copies are in the page: the landing's footer and the board's
+           are both here until the board replaces the landing. -->
+      <div class="sf-col sf-theme">
+        <h2 class="sf-head" id="themeHead{'L' if landing else ''}">Theme</h2>
+        <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
+          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false"><span class="sf-sr">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="sf-base">
+      <div class="sf-who">
+        <span class="sf-mark"><span class="sf-dot"></span>Big Copilot</span>
+        <span class="sf-said">{COLOPHON}</span>
+      </div>
+      <div class="sf-legal">
+        {legal}{file_slot}{build}
+      </div>
+    </div>
+  </div>
+</footer>'''
+
 # The player tags each business with its neighbourhood, e.g. "[MT] Costco 38 1stAV".
 NEIGHBOURHOODS = {
     "MT": "Midtown",
@@ -5553,6 +5699,7 @@ def render(
     before_script: str = "",
     head: str = "",
     map_external: bool = False,
+    site: bool = False,
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
@@ -5640,12 +5787,22 @@ def render(
         .replace("<!--__CHANGELOG__-->", changelog)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
+        .replace("<!--__FOOTER__-->", footer_html(site=site))
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
     )
 
 
 TEMPLATE = r"""<title>__TITLE__</title>
+<script>
+/* The remembered theme, before anything paints. It has to be an inline, blocking
+   script in the head: the board's own script runs at the end of the body, which
+   is far too late to stop a dark page flashing white, or the reverse. "Auto"
+   stores nothing and leaves the attribute off, so prefers-color-scheme decides.
+   Blocked or full storage throws, and the system setting is then the answer,
+   which is what the default is anyway. */
+try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -5654,23 +5811,27 @@ TEMPLATE = r"""<title>__TITLE__</title>
 /*__MAP_CSS__*/
 /*__WIKI_CSS__*/
 /* Tokens: the generator's .board palette. Dark is the base, as on the canvas;
-   the light values follow the system setting or an explicit data-theme, the way
-   the board has always done it. */
+   the light values follow the system setting or an explicit data-theme, which the
+   footer's theme control sets. color-scheme rides along with each set so that
+   scrollbars, selects and the other native widgets follow a chosen theme instead
+   of staying with the operating system's. */
 :root{
+  color-scheme:dark;
   --ground:#0d100f; --surface:#151917; --raised:#1c211e;
   --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#6b756f;
   --rule:#262c28; --rule-soft:#1e2320;
-  --accent:#43c07a; --accent-soft:#43c07a26;
+  --accent:#43c07a; --accent-soft:#43c07a26; --on-accent:#08130d;
   --pos:#43c07a; --neg:#ff6257; --warn:#f0913a; --info:#6ea8ff;
   --tip-bg:#e9ece6; --tip-ink:#0d100f;
   --shadow:0 1px 2px #00000059;
 }
 @media (prefers-color-scheme:light){
   :root:not([data-theme="dark"]){
+    color-scheme:light;
     --ground:#eef0ea; --surface:#fdfdfb; --raised:#f3f4ef;
     --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
     --rule:#d2d6cd; --rule-soft:#e0e3da;
-    --accent:#00703a; --accent-soft:#00703a1f;
+    --accent:#00703a; --accent-soft:#00703a1f; --on-accent:#ffffff;
     --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
     --tip-bg:#15181a; --tip-ink:#f3f4ef;
     --shadow:0 1px 2px #15181a0f;
@@ -5679,10 +5840,11 @@ TEMPLATE = r"""<title>__TITLE__</title>
   :root:not([data-theme="dark"]) .orb::after{opacity:.2}
 }
 :root[data-theme="light"]{
+  color-scheme:light;
   --ground:#eef0ea; --surface:#fdfdfb; --raised:#f3f4ef;
   --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
   --rule:#d2d6cd; --rule-soft:#e0e3da;
-  --accent:#00703a; --accent-soft:#00703a1f;
+  --accent:#00703a; --accent-soft:#00703a1f; --on-accent:#ffffff;
   --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
   --tip-bg:#15181a; --tip-ink:#f3f4ef;
   --shadow:0 1px 2px #15181a0f;
@@ -6366,15 +6528,99 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 @keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
 
 /* footer ------------------------------------------------------------------- */
-.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:16px 22px;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase}
-.foot > span:last-child{margin-left:auto}
-#footerLinks{display:flex;flex-wrap:wrap;gap:14px;align-items:center;text-transform:none}
-#footerLinks:empty{display:none}
+/* After the "Big Copilot Footer" canvas. Built by footer_html() and placed
+   twice, so every rule here serves the board and the landing alike; the landing
+   adds .sf-landing for the horizontal inset .wrap already gives the board.
+   Prefixed sf- throughout: the canvas's own .door/.cta/.seg/.mono are the kind
+   of bare names this stylesheet has collided over before. */
+.sitefoot{margin-top:64px}
+.sf-landing{align-self:stretch;width:100%;margin-top:40px}
+/* No cap on the board: .wrap already sets the page's measure, and a narrower
+   footer would leave the hairline and the orb floating inside the sections
+   above it, badly so on a wide monitor. The landing has no .wrap, so it takes
+   the same inset and a cap of its own. */
+.sf-landing .sf-in{max-width:1180px;margin:0 auto;width:calc(100% - clamp(32px,5vw,80px))}
+.sf-rule{position:relative;height:1px;background:var(--rule)}
+.sf-orb{position:absolute;left:0;bottom:0;width:26px;height:26px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--accent) 45%,white),var(--accent) 52%,color-mix(in srgb,var(--accent) 55%,black));
+  box-shadow:0 0 18px var(--accent-soft)}
+.sf-cards{display:flex;flex-wrap:wrap;gap:16px;margin-top:32px}
+.sf-card{flex:1 1 320px;display:flex;align-items:center;gap:18px;padding:20px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:8px;transition:transform .18s ease,border-color .18s ease}
+.sf-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.sf-card:hover .sf-beat{animation:sfbeat .7s ease-in-out infinite}
+.sf-card:hover .sf-nudge{animation:sfnudge .7s ease-in-out infinite}
+.sf-card-head{display:flex;align-items:flex-start;gap:14px;flex-grow:1;min-width:0}
+.sf-badge{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;
+  background:var(--accent-soft);color:var(--accent);flex-shrink:0}
+.sf-card-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.sf-card-title{display:inline-flex;align-items:center;gap:10px;font-size:17px;font-weight:600;color:var(--ink)}
+.sf-card-title .feature-new{margin-left:0}
+.sf-card-note{font-size:13px;line-height:1.5;color:var(--ink-2)}
+.sf-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;flex-shrink:0;
+  box-sizing:border-box;border-radius:999px;border:1px solid var(--accent);cursor:pointer;white-space:nowrap;
+  font:600 14px/1 Archivo,"Helvetica Neue",Arial,sans-serif;text-decoration:none}
+.sf-cta.sf-fill{background:var(--accent);color:var(--on-accent)}
+.sf-cta.sf-fill:hover{filter:brightness(1.08);color:var(--on-accent)}
+.sf-cta.sf-line{background:transparent;color:var(--accent)}
+.sf-cta.sf-line:hover{background:var(--accent-soft);color:var(--accent)}
+.sf-cols{display:flex;flex-wrap:wrap;justify-content:space-between;gap:24px 48px;margin-top:40px}
+.sf-nav{display:flex;flex-wrap:wrap;gap:24px 88px}
+.sf-col{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.sf-head{margin:0;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sf-link{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);text-decoration:none}
+.sf-link:hover{color:var(--accent)}
+.sf-btn{padding:0;border:0;background:none;font:inherit;font-size:14px;cursor:pointer}
+.sf-ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+/* The theme control keeps the right edge of the row, as on the canvas. */
+.sf-theme{align-items:flex-end}
+.sf-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:999px;background:var(--surface)}
+.sf-segbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
+  border:0;border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer}
+.sf-segbtn:hover{color:var(--ink)}
+.sf-segbtn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.sf-segbtn[aria-pressed="true"] .sf-ic{stroke-width:2.1}
+.sf-segbtn[aria-pressed="true"]:hover{color:var(--on-accent);filter:brightness(1.08)}
+/* The label each button carries for a screen reader; title= alone is not read
+   reliably, and the icons have none of their own. */
+.sf-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.sf-ext{color:var(--ink-2)}
+.sitefoot :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.sf-base{display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;
+  margin-top:40px;padding-top:16px;border-top:1px solid var(--rule-soft)}
+.sf-who{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.sf-mark{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:15px;letter-spacing:-.01em;color:var(--ink)}
+.sf-dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.sf-said{font-size:12px;line-height:1.6;color:var(--ink-2)}
+.sf-legal{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap;
+  font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.04em;color:var(--ink-2)}
+.sf-legal a{display:inline-flex;align-items:center;color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule)}
+.sf-legal a:hover{color:var(--ink)}
+.sf-meta:empty{display:none}
+@keyframes sfbeat{0%,100%{transform:scale(1)}40%{transform:scale(1.22)}}
+@keyframes sfnudge{0%,100%{transform:translateY(0)}40%{transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.sf-card,.sf-beat,.sf-nudge{animation:none!important;transition:none}}
+/* The phone artboard, at the brief's ~640px: cards stack, the columns pair
+   up, the base unstacks. */
+@media (max-width:640px){
+  .sf-cards{flex-direction:column}
+  /* The 320px basis is a width while the cards sit in a row. Once they stack it
+     becomes their height, which left a third of each card empty. */
+  .sf-card{flex:0 0 auto;flex-direction:column;align-items:stretch;gap:16px}
+  .sf-cta{width:100%}
+  /* The nav keeps a box of its own rather than display:contents, which can
+     drop the landmark from the accessibility tree; the switch sits under it. */
+  .sf-cols{flex-direction:column;gap:20px}
+  .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
+  .sf-theme{align-items:flex-start}
+  .sf-segbtn{width:44px;height:44px}
+  .sf-link,.sf-legal a{min-height:44px}
+  .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
+  .sf-who{flex-direction:column;align-items:flex-start;gap:8px}
+}
 .feature-new{display:inline-block;flex:none;margin-left:6px;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
 .nav .feature-new{margin-left:0}
-.changelog-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;color:var(--ink-3);font:inherit;letter-spacing:inherit;cursor:pointer}
-.changelog-link:hover{color:var(--ink);border-color:var(--ink-3)}
-.changelog-link:focus-visible,.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.changelog-dialog a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 body:has(#changelogDialog[open]){overflow:hidden}
 .changelog-dialog{width:min(640px,calc(100vw - 32px));max-width:none;max-height: min(780px,calc(100dvh - 48px));padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
 .changelog-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
@@ -6546,13 +6792,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
       <p class="quiet" style="margin-top:44px">The wiki is not part of this build.</p>
     </div>
   </div>
-  <footer class="foot" id="footer">
-    <span>Big Copilot</span>
-    <span id="footFile"></span>
-    <!-- a host page may append its own project links here -->
-    <span id="footerLinks"><button type="button" class="changelog-link" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button></span>
-    <span id="footBuild"></span>
-  </footer>
+<!--__FOOTER__-->
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
@@ -6594,6 +6834,43 @@ featureDiscovery.refresh();
     const box = dialog.getBoundingClientRect();
     if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
   });
+})();
+/* --- theme control --------------------------------------------------- */
+/* Three states over one attribute on <html>, which the palette keys off:
+   light and dark set it, auto removes it and lets prefers-color-scheme decide.
+   The head's inline script has already applied the stored choice by the time
+   this runs; all this adds is the buttons and keeping them in step.
+
+   Every copy of the control is wired, because the landing's footer and the
+   board's are both in the page until the board replaces the landing, and the
+   two have to agree. Storage that throws still switches the theme for this
+   page; only remembering it across visits is lost. */
+(() => {
+  const KEY = 'ba_dash_theme';
+  const read = () => {
+    let stored = null;
+    try { stored = localStorage.getItem(KEY); } catch(e) {}
+    return stored === 'light' || stored === 'dark' ? stored : 'auto';
+  };
+  function paint(mode){
+    const root = document.documentElement;
+    if(mode === 'auto') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', mode);
+    document.querySelectorAll('[data-theme-set]').forEach(button => {
+      button.setAttribute('aria-pressed', button.dataset.themeSet === mode ? 'true' : 'false');
+    });
+  }
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-theme-set]');
+    if(!button) return;
+    const mode = button.dataset.themeSet;
+    try {
+      if(mode === 'auto') localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, mode);
+    } catch(e) {}
+    paint(mode);
+  });
+  paint(read());
 })();
 </script>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">

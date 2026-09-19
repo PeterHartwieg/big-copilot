@@ -2,9 +2,10 @@
  *
  * The local Python build never loads this file. The build adds it (and its
  * stylesheet) after app.js and the parent calls BigCopilotCommunity.start()
- * once enterBoard has placed the controls; until then the only community UI
- * is a footer button on the landing screen, which opens the voting dialog on
- * demand. No request is made until start() or that click.
+ * once enterBoard has placed the controls. The footer carries the vote card in
+ * its own markup; this file only reveals it, which is what keeps it off the
+ * CLI's dashboard.html. Until start(), or a click on that card, no request is
+ * made at all.
  *
  * Presence: once the board is up (a save loaded or the wiki opened), one
  * heartbeat POSTs a random id to /api/community/presence and the response
@@ -97,15 +98,43 @@
     return {count, nextIn: Number.isFinite(nextIn) ? clamp(Math.floor(nextIn), 1, 300) : 300};
   }
 
+  /* The footer's vote card ships hidden in the markup and this file reveals it,
+     so the dashboard.html the CLI writes, which never loads this file, does not
+     offer a vote that cannot be cast.
+
+     It cannot wait for the API to answer first: the landing makes no request at
+     all until the reader asks for one, and that silence is a promise the privacy
+     notice makes. So the card appears as soon as this file runs, and goes away
+     again only once a second heartbeat has failed without either ever having
+     answered, which is what a copy served from anywhere but bigcopilot.com looks
+     like. One failure is a blip, and so is any number of them once something has
+     answered: those leave the card alone. */
+  function syncVoteCard(available) {
+    document.querySelectorAll("[data-vote-card]").forEach((card) => { card.hidden = !available; });
+  }
+
+  // Its own flag, not presence.receivedAt: that one is cleared by every failure,
+  // so two dropped beats in a row would have read as "this copy has no API" on a
+  // site that had been answering all along.
+  let everAnswered = false;
+
   function settle(ok, count, nextIn, retryAfterMs) {
     const now = Date.now();
     if (ok) {
+      everAnswered = true;
+      syncVoteCard(true);
       presence.count = count;
       presence.receivedAt = now;  // display staleness runs on local receipt time
       presence.failures = 0;
       // nextHeartbeatIn is a delay, not an epoch: due = receipt + delay.
       presence.nextDue = now + clamp(nextIn * 1000, MIN_DUE_MS, MAX_DUE_MS) + Math.random() * JITTER_MS;
     } else {
+      // Two failures, and nothing has ever answered: no API behind this copy.
+      // One failure is a blip, and the first beat goes out at enterBoard(), the
+      // busiest moment of the page; hiding on it would pull a card the reader
+      // can already see, for the whole minute the backoff waits. A copy that
+      // has answered before keeps its card through any number of failures.
+      if (!everAnswered && presence.failures >= 1) syncVoteCard(false);
       presence.count = null;
       presence.receivedAt = null;
       presence.failures++;
@@ -339,49 +368,11 @@
     }
   }
 
-  /* --- the controls --------------------------------------------------------- */
-
-  function voteButton() {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "changelog-link";
-    button.setAttribute("data-community-open", "");
-    button.setAttribute("aria-haspopup", "dialog");
-    button.textContent = "Vote on features";
-    const badge = document.createElement("span");
-    badge.className = "feature-new";
-    badge.setAttribute("data-new-feature", "community-voting");
-    badge.hidden = true;
-    badge.textContent = "New";
-    button.appendChild(badge);
-    return button;
-  }
-
-  /* The landing's controls sit in its footer and die with the landing; the
-     board's are separate and are appended by start(). Both open the same
-     dialog through the one delegated click handler. */
-  function insertLandingControls() {
-    const landing = document.getElementById("landing");
-    const footer = landing && landing.querySelector("footer");
-    if (!footer || footer.querySelector("[data-community-open]")) return;
-    const anchor = footer.querySelector("[data-changelog]") || footer.lastElementChild;
-    const separator = document.createElement("span");
-    separator.textContent = "·";
-    anchor.after(separator, voteButton());
-  }
-
-  function insertBoardControls() {
-    const links = document.getElementById("footerLinks");
-    if (!links || links.querySelector("[data-community-open]")) return;
-    links.appendChild(voteButton());  // the count paints into the masthead's #live instead
-  }
-
   /* --- entry points ---------------------------------------------------------- */
 
   function start() {
     if (started) return;
     started = true;
-    insertBoardControls();
     paintOnline();  // repaints the shared count into whatever masthead is up
     if (typeof featureDiscovery !== "undefined") featureDiscovery.refresh();
     tick();  // the first heartbeat of this page load
@@ -390,7 +381,7 @@
   function init() {
     // Earlier versions stored the presence id; drop it from returning browsers.
     try { localStorage.removeItem(LEGACY_STORE_KEY); } catch (e) {}
-    insertLandingControls();
+    syncVoteCard(true);
     buildDialog();
     document.addEventListener("click", (event) => {
       const button = event.target.closest("[data-community-open]");

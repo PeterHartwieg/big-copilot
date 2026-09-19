@@ -7,12 +7,18 @@
 <meta name="robots" content="noindex">
 <title>Privacy · Big Copilot</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
+<script>
+/* The theme the board's footer pinned, so opening this page from there does not
+   flip to the operating system's. Same key and same attribute as the board. */
+try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
+</script>
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root{--ground:#0d100f;--ink:#e9ece6;--ink-2:#9aa39d;--rule:#262c28;--accent:#43c07a;color-scheme:dark}
 @media (prefers-color-scheme:light){
-  :root{--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
+  :root:not([data-theme="dark"]){--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
 }
+:root[data-theme="light"]{--ground:#eef0ea;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;color-scheme:light}
 body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.6 Archivo,"Helvetica Neue",Arial,sans-serif}
 main{max-width:640px;margin:0 auto;padding:48px 16px}
 h1{font-size:28px;margin:0 0 4px}
@@ -49,7 +55,7 @@ a{color:var(--accent);overflow-wrap:anywhere}
   <p>The legal basis is Art. 6(1)(f) GDPR; our legitimate interest is running the website securely and reliably and having an overview of how it is used.</p>
 
   <h2>4. Data in your browser</h2>
-  <p>Settings, the save folder you chose, saved searches and the market and cash history are kept in your browser's storage (localStorage, sessionStorage, IndexedDB). They do not leave your device. This storage is necessary for the features you use (§ 25(2) no. 2 TDDDG). You can delete this data at any time in your browser settings, and the history also with "Forget history".</p>
+  <p>Settings, the light or dark theme you pick, the save folder you chose, saved searches and the market and cash history are kept in your browser's storage (localStorage, sessionStorage, IndexedDB). They do not leave your device. This storage is necessary for the features you use (§ 25(2) no. 2 TDDDG). You can delete this data at any time in your browser settings, and the history also with "Forget history".</p>
 
   <h2>5. Online count and votes</h2>
   <p>Online count: while you have the dashboard or the wiki open, your browser sends a random identifier to our server about every five minutes, so that we can count how many browser tabs currently have the site open. The identifier is created anew each time the page loads and is not stored in your browser. The server keeps only this identifier and the time; both are deleted within two days.</p>
@@ -61,7 +67,7 @@ a{color:var(--accent);overflow-wrap:anywhere}
   <p>If you write to us, we use your details only to answer your request. Our mailbox is provided by Google (Google Workspace); transfers to Google LLC in the USA are covered by the EU-US Data Privacy Framework. The legal basis is Art. 6(1)(f) GDPR. We delete the messages once your request has been dealt with.</p>
 
   <h2>7. External links and donations</h2>
-  <p>Links to PayPal and GitHub open those providers' pages. Only then do they receive data from you, and their own privacy policies apply.</p>
+  <p>The footer links out to PayPal, GitHub, YouTube, Reddit, Steam and the game developer's own site. Following one opens that provider's page; only then do they receive data from you, and their own privacy policies apply.</p>
   <p>Donations are handled by PayPal (Europe) S.à r.l. et Cie, S.C.A., 22–24 Boulevard Royal, L-2449 Luxembourg, as an independent controller. When you donate, PayPal gives us your name, your email address and the amount. We use these details only to process the donation and keep them for as long as we need them as a record of it. The legal basis is Art. 6(1)(b) GDPR, and Art. 6(1)(c) GDPR where a statutory retention duty applies.</p>
 
   <h2>8. Your rights</h2>

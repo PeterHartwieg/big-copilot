@@ -1,0 +1,45 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-18T19:59:04Z"
+ },
+ "title": "Big Copilot Footer",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 440,
+   "title": "Footer",
+   "is_interactive": true
+  },
+  "MainLight.dc.html": {
+   "x": 0,
+   "y": 560,
+   "w": 1280,
+   "h": 440,
+   "title": "Footer, light",
+   "is_interactive": true
+  },
+  "Phone.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 390,
+   "h": 960,
+   "title": "Footer, phone",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "MainLight.dc.html",
+  "Phone.dc.html"
+ ],
+ "notes": {},
+ "designSystems": []
+}

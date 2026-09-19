@@ -332,18 +332,12 @@
       if ($("saveLocation")) $("help").querySelector(".help-content").prepend($("saveLocation"));
       $("help").open = false;
       $("menuHelpSlot").appendChild($("help"));
-      const links = [...$("footSlot").querySelectorAll("a")];
-      const quiet = new Set(["sourceLink", "impressumLink", "privacyLink"]);
-      links.forEach((a) => { a.className = quiet.has(a.id) ? "lg-text" : "lg-btn"; });
+      // The project links used to be carried from the landing into this menu and
+      // copied into the board's footer. The board has its own full footer now,
+      // the Impressum and privacy notice included, so only Forget history, which
+      // belongs to the save history rather than to the footer, still moves.
       $("forgetHistory").className = "lg-text";
-      $("menuFootSlot").append(...links, $("forgetHistory"));
-      // The project links, the Impressum and the privacy notice, which German
-      // law wants reachable from every view, also live in the board's own
-      // footer. Links carry no handlers, so copies are safe.
-      const foot = $("footerLinks");
-      [$("issueLink"), $("donateLink"), $("impressumLink"), $("privacyLink")].forEach((a) => {
-        const c = a.cloneNode(true); c.removeAttribute("id"); c.className = "lg-footlink"; foot.appendChild(c);
-      });
+      $("menuFootSlot").append($("forgetHistory"));
       // The hidden pickers must outlive the landing.
       document.body.append($("folderPick"), $("localePick"));
       wireMenu();

@@ -102,9 +102,10 @@ test('landing is network quiet; actual save loading starts presence and preserve
   assert.match(state.heartbeats[0].browserId,/^[0-9a-f-]{36}$/i);
   assert.equal(await page.locator('#landing').count(),0);
   // The count lives in the masthead's live status: its dot stays, and the
-  // footer keeps only the vote button.
+  // footer's job is only the vote card, never a second copy of the count.
   assert.equal(await page.locator('#live b').count(),1);
-  assert.equal(await page.locator('#footerLinks .community-online').count(),0);
+  assert.equal(await page.locator('.sitefoot .community-online').count(),0);
+  assert.equal(await page.locator('.sitefoot [data-vote-card]').first().isVisible(),true);
   // A masthead rebuild repaints the stored count without another heartbeat.
   await page.evaluate(() => { renderAll(); });
   await online(page).waitFor();
@@ -192,6 +193,77 @@ test('a sleeping browser skips missed intervals and a failed heartbeat backs off
   assert.equal(await page.locator('#nav').isVisible(),true);
 });
 
+test('a copy with no API loses the vote card, but one bad beat does not', async t => {
+  const {page,state,loadSave} = await setup(t);
+  // Revealed before any request: the landing must stay quiet, so this cannot
+  // wait for the API to confirm itself.
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true);
+  assert.equal(state.heartbeats.length,0);
+
+  state.failPresence = true;
+  const first = page.waitForResponse('**/api/community/presence');
+  await loadSave(page);
+  await first;
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  assert.equal(state.heartbeats.length,1);
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true,
+    'one failure is a blip: the card a reader can already see stays put');
+
+  // The second failure with nothing good in between is what a copy served
+  // without /api/community actually looks like.
+  const second = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(100000);
+  await second;
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  assert.equal(state.heartbeats.length,2);
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),false,
+    'no API behind this copy: stop offering a vote that cannot be cast');
+});
+
+test('a site that has answered keeps its vote card through a run of failures', async t => {
+  const {page,state,loadSave} = await setup(t);
+  await loadSave(page); await online(page).waitFor();
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true);
+
+  // presence.receivedAt is cleared by every failure, so it never meant "has
+  // ever answered". Two dropped beats used to read as "no API behind this copy"
+  // on a site that had been answering all along.
+  state.failPresence = true;
+  for (const wait of [3600000, 100000, 200000]) {
+    const beat = page.waitForResponse('**/api/community/presence');
+    await page.clock.fastForward(wait);
+    await beat;
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  }
+  await page.getByText('Online count unavailable',{exact:true}).waitFor();
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true,
+    'the API answered once; a run of blips is not a copy without one');
+});
+
+test('a card hidden by an outage comes back when the API does', async t => {
+  const {page,state,loadSave} = await setup(t);
+  // Cold start into an outage: two failures with nothing ever answered is the
+  // one case that hides the card, and only the reveal in settle()'s ok branch
+  // brings it back when the outage ends.
+  state.failPresence = true;
+  const first = page.waitForResponse('**/api/community/presence');
+  await loadSave(page);
+  await first;
+  const second = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(100000);
+  await second;
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),false);
+
+  state.failPresence = false;
+  const recovered = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(200000);
+  await recovered;
+  await online(page).waitFor();
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true,
+    'the API is back, so the vote is castable again');
+});
+
 test('a heartbeat whose settling throws still leaves the schedule running, without a page error', async t => {
   const {page,state,loadSave} = await setup(t);
   await loadSave(page); await online(page).waitFor();
@@ -239,7 +311,9 @@ test('voting fetches on demand, prevents duplicates and uses the mutation result
   await openVotes(page);
   await page.waitForFunction(() => [...document.querySelectorAll('dialog[open] button')].filter(b => b.textContent === 'Voted').length === 2);
   assert.equal(state.reads,2);
-  assert.equal(await page.locator('[data-new-feature="community-voting"]').isVisible(),false);
+  // The landing's footer and the board's both carry the badge under one id, so
+  // voting has to clear every copy, not just the one on screen.
+  assert.equal(await page.locator('[data-new-feature="community-voting"]:not([hidden])').count(),0);
 });
 
 test('voting errors have a user-triggered retry and feature text is rendered as text', async t => {
