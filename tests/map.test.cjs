@@ -691,3 +691,24 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 });
+
+test("the home panel's map pin titles the dialog with the flat's address",async()=>{
+  // The head of a home carries the same map shortcut every site head does, so a
+  // home key reaches openLocationMap(), which used to name a business or an
+  // owned building and nothing else.
+  const {page,errors}=await fixture();
+  try{
+    const home=geometry.buildings.find(b=>b.key==='ba:street_tenthstreet#2' && b.path) || geometry.buildings.find(b=>b.region==='mainland' && b.path && b.key!==place.key);
+    await page.evaluate(h=>{
+      D.homes=[{key:h.key,address:h.address,rent:34,m:96,hood:"Hell's Kitchen"}];
+      refreshCityMaps();showPage('company');openSite(h.key,false);
+    },home);
+    assert.equal(await page.locator('#sitePanel .sp-house').count(),1);
+    await page.locator('#sitePanel .sitehead .map-shortcut').click();
+    await ready(page,'#cityMapOverlay');
+    assert.equal(await page.locator('#locationMapDialog').evaluate(d=>d.open),true);
+    assert.equal(await page.locator('#locationMapTitle').innerText(),home.address);
+    await page.keyboard.press('Escape');
+    assert.deepEqual(errors,[]);
+  } finally { await page.close(); }
+});

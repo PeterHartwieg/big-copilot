@@ -1316,7 +1316,10 @@ function openLocationMap(key, trigger){
   const b = mapBusinesses().get(key);
   const title = $('locationMapTitle');
   if(title){
-    const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address || '';
+    /* A flat you rent is the third thing with an address here: its own panel
+       carries a map pin, so a home key reaches this dialog too. */
+    const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address
+      || (D?.homes || []).find(h => h.key === key)?.address || '';
     title.textContent = b ? `${b.name.replace(/^\[\w+\]\s*/, '')} · ${address}` : address || 'Location map';
   }
   if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'), {panel:false});
