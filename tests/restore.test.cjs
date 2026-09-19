@@ -166,7 +166,10 @@ test('the board footer offers the game, the channel and the Discord, and stays v
   const foot = page.locator('.sitefoot');
   assert.equal(await foot.locator('a[href*="store.steampowered.com"]').count(), 1);
   assert.equal(await foot.locator('a[href*="youtube.com/@"]').count(), 1);
-  assert.equal(await foot.locator('a[href*="discord.gg/"]').count(), 1);
+  // Two invites, not one: the Follow column's server invite, and the support
+  // channel's own, which is where "Bugs and feedback" goes instead of GitHub.
+  assert.equal(await foot.locator('a[href*="discord.gg/"]').count(), 2);
+  assert.equal(await foot.locator('a[href*="discord.gg/"]', {hasText:'Bugs and feedback'}).count(), 1);
   assert.match(await foot.locator('.sf-said').innerText(), /Not affiliated with/);
   // This fixture serves no community.js, which is also what the CLI's
   // dashboard.html is: nothing reveals the card, so it must ship hidden. The

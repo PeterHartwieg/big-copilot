@@ -45,7 +45,6 @@ MIN_BUILD = 3540  # saves older than this lack fields the board relies on (check
 # into the dashboard.html the CLI writes, which travels on its own) and once into
 # the site's landing screen. One list, so the two cannot drift apart.
 REPO_URL = "https://github.com/PeterHartwieg/big-copilot"
-ISSUES_URL = REPO_URL + "/issues/new"
 # "Support the project" goes to Big Copilot's own PayPal donation page, which
 # returns supporters to bigcopilot.com. The same PayPal account has a RentenWiki
 # page whose purpose text names RentenWiki; never link that one here.
@@ -53,10 +52,14 @@ DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=Q8KVURCRBFLQN"
 # The channel the Big Copilot shorts go on, as YouTube's own oEmbed reports it.
 YOUTUBE_URL = "https://www.youtube.com/@PeterHartwieg"
 SUBREDDIT_URL = "https://www.reddit.com/r/bigambitions/"
-# The project's own Discord. A never-expiring invite code, not a vanity URL:
-# if it ever stops resolving the invite was revoked, and a fresh one that also
-# never expires belongs here.
+# The project's own Discord. Never-expiring invite codes, not vanity URLs: if
+# one ever stops resolving the invite was revoked, and a fresh one that also
+# never expires belongs here. The second was made from inside the support
+# channel, so it lands a new arrival there rather than on the default channel,
+# and it is where bug reports go instead of the repo's issue tracker: far more
+# players have a Discord account than a GitHub one.
 DISCORD_URL = "https://discord.gg/TxHaVpSkNg"
+FEEDBACK_URL = "https://discord.gg/EdjRzkxQTu"
 # Who made the game, and where a visitor who has never heard of it can go and look.
 GAME_NAME = "Big Ambitions"
 GAME_MAKER = "Hovgaard Games"
@@ -154,7 +157,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
       <div class="sf-col">
         <h2 class="sf-head">Big Copilot</h2>
         {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
-        {_sf_out(ISSUES_URL, "Report a bug", title="A save that will not build, a wrong number, or something the board should show: all welcome.")}
+        {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.")}
         {_sf_out(REPO_URL, "Source code", title="MIT-licensed")}
       </div>
       <div class="sf-col">
