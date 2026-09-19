@@ -240,6 +240,30 @@ test('a site that has answered keeps its vote card through a run of failures', a
     'the API answered once; a run of blips is not a copy without one');
 });
 
+test('a card hidden by an outage comes back when the API does', async t => {
+  const {page,state,loadSave} = await setup(t);
+  // Cold start into an outage: two failures with nothing ever answered is the
+  // one case that hides the card, and only the reveal in settle()'s ok branch
+  // brings it back when the outage ends.
+  state.failPresence = true;
+  const first = page.waitForResponse('**/api/community/presence');
+  await loadSave(page);
+  await first;
+  const second = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(100000);
+  await second;
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),false);
+
+  state.failPresence = false;
+  const recovered = page.waitForResponse('**/api/community/presence');
+  await page.clock.fastForward(200000);
+  await recovered;
+  await online(page).waitFor();
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true,
+    'the API is back, so the vote is castable again');
+});
+
 test('a heartbeat whose settling throws still leaves the schedule running, without a page error', async t => {
   const {page,state,loadSave} = await setup(t);
   await loadSave(page); await online(page).waitFor();

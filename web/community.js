@@ -105,10 +105,10 @@
      It cannot wait for the API to answer first: the landing makes no request at
      all until the reader asks for one, and that silence is a promise the privacy
      notice makes. So the card appears as soon as this file runs, and goes away
-     again only once a heartbeat has actually failed without one ever having
-     succeeded, which is what a copy served from anywhere but bigcopilot.com looks
-     like. A later failure after a good one is a blip, not a missing API, and
-     leaves the card alone. */
+     again only once a second heartbeat has failed without either ever having
+     answered, which is what a copy served from anywhere but bigcopilot.com looks
+     like. One failure is a blip, and so is any number of them once something has
+     answered: those leave the card alone. */
   function syncVoteCard(available) {
     document.querySelectorAll("[data-vote-card]").forEach((card) => { card.hidden = !available; });
   }
