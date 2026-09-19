@@ -350,13 +350,16 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 hour is judged on its own roster, and each role on the roster that was on for it. Where the
 door cap is at or below the site's staffed capacity the building is the limit, and the
 answer is a bigger site or a second shop nearby (for an office, a bigger office or a second
-one). Otherwise the roles named are the ones actually holding that hour back: a role short
-of its stations whose staffed capacity is the site's own minimum, since a site with more
-than one role serves nobody until all of them are manned but hiring into a role that is
-already faster than the slowest one buys nothing. Where no short role holds the minimum,
-the stations of the slowest role are the ceiling and another one of those is the answer.
-Short of people and short of posts are two different answers, so they are two lines with
-two ids — "Gym Trainer staffing" against "Gym Trainer cover". A shop's counters and
+one). Otherwise every role standing at the site's own minimum is named, and only those: a
+site with more than one role serves nobody until all of them are manned, but hiring into a
+role already faster than the slowest one buys nothing. A role at the minimum with stations
+standing empty is short of people; one with every station manned is short of stations, and
+a gym with a spare board and a single register is told both. Where no role holds the
+minimum the slowest role's stations are the ceiling. Short of people and short of posts are
+two different answers, so they are two lines with two ids — "Gym Trainer staffing" against
+"fitness planning boards". The limit is the only thing the id hashes, which is why a
+shop's "staffing" and "registers" and an office's "workstations" keep the ids they have
+always had and the player's silences survive. A shop's counters and
 an office's workstations keep the words they have always had — a register asks for another
 counter, a computer for another workstation — while a gym is told another fitness planning
 board or another Gym Trainer, and a theatre another projection booth. A site that runs one
