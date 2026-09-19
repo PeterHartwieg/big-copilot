@@ -6,6 +6,7 @@ site whose stations want different skills is only as fast as its slowest role.
 """
 import json
 import os
+import subprocess
 import sys
 import unittest
 
@@ -16,7 +17,9 @@ from ba_dashboard import (
     _hour_findings,
     _hourly,
     _service_stations,
+    _service_wages,
     _serves,
+    money,
 )
 from ba_save import Names, Save
 
@@ -126,8 +129,10 @@ class StationTableTests(unittest.TestCase):
                          sorted([BOARD, BOOTH, PROJECTION, COSTUME, DRESSING, CHAIR, WASH]))
 
     def test_every_station_with_a_customer_capacity_is_in_the_shipped_table(self):
-        """The 17 serving stations of build 3680, keyed by the skill each asks for.
+        """The 17 serving stations of build 3680, each with its skill and its rate.
 
+        Read as triples, not as a count and a set: a register that came back
+        asking for a DJ, or a booth that lost its rate, has to fail here.
         Fridges, shelves, gym mats and the cinema screen carry a Customer
         Capacity and must never join them; the cleaning station and the guard
         locker are employee stations with no queue, and stay out too.
@@ -136,11 +141,27 @@ class StationTableTests(unittest.TestCase):
                             "web", "py", "gametext.json")
         with open(path, encoding="utf-8") as fh:
             shipped = _service_stations(Names(json.load(fh)))
-        self.assertEqual(len(shipped), 17)
-        self.assertEqual(
-            {skill for skill, _rate in shipped.values()},
-            {SERVICE_SKILL, TRAINER, STYLIST, ACTOR, PROJECTIONIST, STAGECREW, "ba:skill_dj"},
-        )
+        expected = [
+            ("ba:itemname_boothcostume", "ba:skill_stagecrew", 100),
+            ("ba:itemname_boothlighting", "ba:skill_stagecrew", 100),
+            ("ba:itemname_boothprojection", PROJECTIONIST, 25),
+            ("ba:itemname_boothsound", STAGECREW, 100),
+            ("ba:itemname_boothticket", SERVICE_SKILL, 50),
+            ("ba:itemname_cashregister", SERVICE_SKILL, 20),
+            ("ba:itemname_checkoutcounterleft", SERVICE_SKILL, 30),
+            ("ba:itemname_checkoutcounterright", SERVICE_SKILL, 30),
+            ("ba:itemname_coatcheckleft", SERVICE_SKILL, 50),
+            ("ba:itemname_coatcheckright", SERVICE_SKILL, 50),
+            ("ba:itemname_concessionsstandregister", SERVICE_SKILL, 50),
+            ("ba:itemname_djbooth", "ba:skill_dj", 50),
+            ("ba:itemname_dressingroom", ACTOR, 80),
+            ("ba:itemname_fitnessplanningboard", TRAINER, 20),
+            ("ba:itemname_hairdresserchair", STYLIST, 5),
+            ("ba:itemname_hairdresserchairmodern", STYLIST, 5),
+            ("ba:itemname_hairdresserheadwash", STYLIST, 10),
+        ]
+        self.assertEqual(sorted((slug, skill, rate) for slug, (skill, rate) in shipped.items()),
+                         expected)
         for slug in ("ba:itemname_clothingrack", "ba:itemname_cleaningstation",
                      "ba:itemname_securityguardlocker", "ba:itemname_screencinema",
                      "ba:itemname_treadmill", "ba:itemname_industrialcoffeemachine"):
@@ -156,6 +177,63 @@ class ServesTests(unittest.TestCase):
     def test_an_office_still_takes_every_professional_but_a_cleaner(self):
         self.assertTrue(_serves("office", "ba:skill_lawyer"))
         self.assertFalse(_serves("office", CLEANING))
+
+
+LAWYER = "ba:skill_lawyer"
+LAW = "ba:businesstype_lawfirm"
+SECOND = "ba:street_secondavenue"
+
+
+def person(addr, skill, wage):
+    return {"addr": addr, "skill": skill, "wage": wage}
+
+
+class WageTests(unittest.TestCase):
+    """The wage that prices idle hours arrives through the extraction's own loop."""
+
+    def test_an_office_stores_its_professionals_under_the_role_it_looks_up(self):
+        # The office role is built with no skill of its own, so its wage has to
+        # sit under that same None key or no office is ever called overstaffed.
+        addr = (SECOND, 10)
+        wages = _service_wages(
+            [person(addr, LAWYER, 700.0), person(addr, CLEANING, 90.0)],
+            {f"{SECOND}#10": "office"},
+        )
+        self.assertEqual(dict(wages[f"{SECOND}#10"]), {None: 700.0})
+
+    def test_a_retail_site_stores_each_skill_under_itself(self):
+        addr = (SECOND, 12)
+        wages = _service_wages(
+            [person(addr, TRAINER, 105.0), person(addr, TRAINER, 130.0),
+             person(addr, CLEANING, 900.0)],
+            {f"{SECOND}#12": "retail"},
+        )
+        self.assertEqual(dict(wages[f"{SECOND}#12"]), {TRAINER: 130.0, CLEANING: 900.0})
+
+    def test_an_offices_idle_professionals_are_found_through_that_loop(self):
+        """End to end: the grid, the wage loop, then the finding.
+
+        A regression for the round where the office wage went in under the
+        lawyers' own skill and every office lost its overstaffing finding.
+        """
+        items = [(i, "ba:itemname_computer") for i in range(1, 7)]
+        crew = {str(i): LAWYER for i in range(1, 7)}
+        shifts = [shift(str(i), i, 9, 13) for i in range(1, 7)]
+        hourly = {h: 2 if 9 <= h < 13 else 0 for h in range(24)}
+        key = f"{STREET}#10"
+        b = building(items, shifts, hourly, 50, btype=LAW, number=10, name="HART. &Partners")
+        [grid] = _hourly(Save({}, {}, ""), [b],
+                         [{"key": key, "status": "office",
+                           "name": "HART. &Partners", "basket": 388.0}],
+                         {}, {"ba:itemname_computer"}, crew, NAMES)
+        wages = _service_wages(
+            [person((STREET, 10), LAWYER, 146.0), person((STREET, 10), CLEANING, 90.0)],
+            {key: "office"},
+        )
+        [idle] = _hour_findings([grid], [{"key": grid["key"], "name": grid["name"]}], wages)
+        self.assertEqual((idle["staff"], idle["spare"]), (6, 16))
+        self.assertEqual(idle["worth"], money(16 * 146.0 / 7))
+        self.assertIsNone(idle["noun"])
 
 
 class GymGridTests(unittest.TestCase):
@@ -197,7 +275,7 @@ class GymGridTests(unittest.TestCase):
         grid = self.gym(boards=3, on=2, customers=40)
         [finding] = _hour_findings([grid], [site()], {})
         self.assertEqual((finding["limit"], finding["fix"]),
-                         ("Gym Trainer cover", "another Gym Trainer on those hours"))
+                         ("Gym Trainer staffing", "another Gym Trainer on those hours"))
 
     def test_spare_trainers_are_overstaffing_in_their_own_wage(self):
         """Three trainers on two boards: one of them buys nothing."""
@@ -217,27 +295,52 @@ class GymGridTests(unittest.TestCase):
                   ["lines"] if a["group"] == "idlestaff"]
         self.assertIn("Pump runs 3 fitness planning boards 08:00-20:00 on a Monday", line["text"])
 
+    def test_one_trainer_then_two_give_two_findings_with_two_ids(self):
+        """Mornings are short of a trainer, afternoons short of a board.
+
+        Both are the same role at the same site, so the limit has to say which
+        one it means: a shared id would silence both lines with one click.
+        """
+        items = [(1, BOARD), (2, BOARD)]
+        crew = {"1": TRAINER, "2": TRAINER}
+        shifts = [shift("1", 1, 8, 20), shift("2", 2, 14, 20)]
+        hourly = {h: (20 if h < 14 else 40) if 8 <= h < 20 else 0 for h in range(24)}
+        b = building(items, shifts, hourly, 100)
+        grid = grid_of(b, crew, _service_stations(NAMES))
+        findings = _hour_findings([grid], [site()], {})
+        self.assertEqual([(f["limit"], f["fix"]) for f in findings], [
+            ("Gym Trainer staffing", "another Gym Trainer on those hours"),
+            ("Gym Trainer cover", "another fitness planning board"),
+        ])
+        business = _business(Save({}, {}, ""), NAMES,
+                             building([], [], {9: 1}, 50),
+                             (STREET, 3), {(STREET, 3): {"TotalSales": 1000}}, [], {}, 3)
+        lines = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], findings, [], 3, 0.0)
+                 ["lines"] if a["group"] == "atcap"]
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(len({a["id"] for a in lines}), 2)
+        self.assertTrue(any("another Gym Trainer" in a["text"] for a in lines))
+        self.assertTrue(any("another fitness planning board" in a["text"] for a in lines))
+
 
 class TheatreGridTests(unittest.TestCase):
     """A theatre asks for four skills; the site is only as fast as its slowest."""
 
-    def theatre(self, projectionists=1, booths=1):
-        items = [
-            (1, BOOTH),      # ticket booth, 50/h
-            (2, PROJECTION),  # `booths` projection booths, 25/h each
-            (3, COSTUME),     # costume booth, 100/h
-            (4, DRESSING),    # dressing room, 80/h
-        ] + [(5 + i, PROJECTION) for i in range(booths - 1)]
-        crew = {"t": SERVICE, "t2": SERVICE, "p": PROJECTIONIST,
-                "c": STAGECREW, "a": ACTOR}
-        shifts = [
-            shift("t", 1, 8, 20), shift("t2", 1, 8, 20),
-            shift("c", 3, 8, 20), shift("a", 4, 8, 20),
-            shift("p", 2, 8, 20),
-        ] if projectionists else [
-            shift("t", 1, 8, 20), shift("t2", 1, 8, 20),
-            shift("c", 3, 8, 20), shift("a", 4, 8, 20),
-        ]
+    def theatre(self, projectionists=1, booths=1, service_booths=1, service_staff=2):
+        """`service_booths` ticket booths with `service_staff` on them, 8-20 Monday."""
+        items = [(1 + i, BOOTH) for i in range(service_booths)]
+        items += [
+            (10, PROJECTION),  # `booths` projection booths, 25/h each
+            (11, COSTUME),     # costume booth, 100/h
+            (12, DRESSING),    # dressing room, 80/h
+        ] + [(13 + i, PROJECTION) for i in range(booths - 1)]
+        crew = {"p": PROJECTIONIST, "c": STAGECREW, "a": ACTOR}
+        crew.update({f"t{i + 1}": SERVICE for i in range(service_staff)})
+        shifts = [shift("c", 11, 8, 20), shift("a", 12, 8, 20)]
+        shifts += [shift(f"t{i + 1}", (i % service_booths) + 1, 8, 20)
+                   for i in range(service_staff)]
+        if projectionists:
+            shifts.append(shift("p", 10, 8, 20))
         hourly = {h: 25 if 8 <= h < 20 else 0 for h in range(24)}
         b = building(items, shifts, hourly, 200, btype=THEATRE, number=7, name="Playhouse")
         return grid_of(b, crew, _service_stations(NAMES), name="Playhouse", basket=20.0)
@@ -265,28 +368,68 @@ class TheatreGridTests(unittest.TestCase):
         grid = self.theatre(projectionists=1, booths=2)
         [finding] = _hour_findings([grid], [site("Playhouse", number=7, basket=20.0)], {})
         self.assertEqual((finding["limit"], finding["hours"]),
-                         ("Projectionist cover", 12))
+                         ("Projectionist staffing", 12))
         self.assertEqual((finding["fix"], finding["noun"]),
                          ("another Projectionist on those hours", "projection booths"))
 
+    def test_a_role_faster_than_the_binding_one_is_not_the_limit(self):
+        """Two ticket booths, one service employee, projection fully manned.
+
+        Projection holds the site at 25 an hour. The service employee is short
+        of a second booth, but hiring one cannot raise the site while the
+        projectionist is the slowest thing in it.
+        """
+        grid = self.theatre(service_booths=2, service_staff=1)
+        service = next(r for r in grid["roles"] if r["skill"] == SERVICE)
+        self.assertEqual((service["counters"], service["staffed"][MONDAY][10]), (100, 50))
+        self.assertEqual(grid["staffed"][MONDAY][10], 25)
+        [finding] = _hour_findings([grid], [site("Playhouse", number=7, basket=20.0)], {})
+        self.assertEqual((finding["limit"], finding["fix"]),
+                         ("Projectionist cover", "another projection booth"))
+        self.assertNotIn("Customer Service", finding["fix"])
+
     def test_the_words_do_not_move_between_runs(self):
-        first, second = self.theatre(booths=2), self.theatre(booths=2)
-        self.assertEqual(
-            [(r["skill"], r["label"], r["station"], r["counters"]) for r in first["roles"]],
-            [(r["skill"], r["label"], r["station"], r["counters"]) for r in second["roles"]],
+        """The same fixture under two hash seeds names the roles in one order."""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        script = (
+            "import json, sys\n"
+            "sys.path[:0] = [sys.argv[1], sys.argv[2]]\n"
+            "import test_stations as T\n"
+            "from ba_dashboard import _service_stations\n"
+            "grid = T.TheatreGridTests().theatre(booths=2)\n"
+            "print(json.dumps([(r['skill'], r['label'], r['station'], r['counters'], r['noun'])"
+            " for r in grid['roles']]))\n"
         )
-        self.assertEqual([r["station"] for r in first["roles"]],
-                         ["Dressing Room", "Ticket Booth", "Projection Booth", "Costume Booth"])
+        seeds = []
+        for seed in ("0", "1"):
+            run = subprocess.run(
+                [sys.executable, "-c", script, root, os.path.dirname(os.path.abspath(__file__))],
+                capture_output=True, text=True, env=dict(os.environ, PYTHONHASHSEED=seed),
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            seeds.append(run.stdout)
+        self.assertEqual(seeds[0], seeds[1])
+        self.assertEqual(json.loads(seeds[0]), [
+            [ACTOR, "Actor", "Dressing Room", 80, "dressing rooms"],
+            [SERVICE, "Customer Service", "Ticket Booth", 50, None],
+            [PROJECTIONIST, "Projectionist", "Projection Booth", 50, "projection booths"],
+            [STAGECREW, "Stage Crew", "Costume Booth", 100, "costume booths"],
+        ])
 
 
 class HairdresserTests(unittest.TestCase):
+    def hairdresser(self, chairs=0, washes=0, number=9, name="Curls"):
+        """Chairs at 5/h and headwashes at 10/h, all manned 9-18, 20 customers an hour."""
+        posts = [i + 1 for i in range(chairs)] + [20 + i for i in range(washes)]
+        items = [(post, CHAIR if post <= chairs else WASH) for post in posts]
+        crew = {str(i + 1): STYLIST for i in range(len(posts))}
+        shifts = [shift(str(i + 1), post, 9, 18) for i, post in enumerate(posts)]
+        hourly = {h: 20 if 9 <= h < 18 else 0 for h in range(24)}
+        b = building(items, shifts, hourly, 30, btype=HAIRDRESSER, number=number, name=name)
+        return grid_of(b, crew, _service_stations(NAMES), name=name, basket=30.0)
+
     def test_two_stations_of_one_role_take_the_larger_for_their_answer(self):
-        items = [(1, CHAIR), (2, WASH)]
-        crew = {"1": STYLIST, "2": STYLIST}
-        shifts = [shift("1", 1, 9, 18), shift("2", 2, 9, 18)]
-        hourly = {h: 15 if 9 <= h < 18 else 0 for h in range(24)}
-        b = building(items, shifts, hourly, 20, btype=HAIRDRESSER, number=9, name="Curls")
-        grid = grid_of(b, crew, _service_stations(NAMES), name="Curls", basket=30.0)
+        grid = self.hairdresser(chairs=1, washes=1)
         [role] = grid["roles"]
         self.assertEqual((role["label"], role["station"], role["counters"]),
                          ("Hair Stylist", "Hairdresser Headwash", 15))
@@ -294,6 +437,39 @@ class HairdresserTests(unittest.TestCase):
         self.assertEqual((finding["limit"], finding["fix"]),
                          ("Hair Stylist cover", "another hairdresser headwash"))
         self.assertEqual(finding["noun"], "hairdresser headwashes")
+
+    def test_two_sites_short_of_different_stations_are_two_lines(self):
+        """Same role, same ceiling, same hours, two different answers.
+
+        A shop short of chairs and one short of a headwash share a limit
+        phrase, so the grouping has to look at the answer too: merged, the
+        second shop is told to buy the first one's station.
+        """
+        curls = self.hairdresser(chairs=4, number=9, name="Curls")
+        braids = self.hairdresser(washes=2, number=11, name="Braids")
+        findings = _hour_findings(
+            [curls, braids],
+            [site("Curls", number=9, basket=30.0), site("Braids", number=11, basket=30.0)],
+            {},
+        )
+        self.assertEqual([(f["site"], f["fix"], f["noun"]) for f in findings], [
+            ("Curls", "another hairdresser chair", "hairdresser chairs"),
+            ("Braids", "another hairdresser headwash", "hairdresser headwashes"),
+        ])
+        businesses = [
+            _business(Save({}, {}, ""), NAMES,
+                      building([], [], {9: 1}, 30, btype=HAIRDRESSER, number=9, name="Curls"),
+                      (STREET, 9), {(STREET, 9): {"TotalSales": 1000}}, [], {}, 3),
+            _business(Save({}, {}, ""), NAMES,
+                      building([], [], {9: 1}, 30, btype=HAIRDRESSER, number=11, name="Braids"),
+                      (STREET, 11), {(STREET, 11): {"TotalSales": 1000}}, [], {}, 3),
+        ]
+        lines = [a for a in _alerts(businesses, EMPTY_SUPPLY, [], [], [], findings, [], 3, 0.0)
+                 ["lines"] if a["group"] == "atcap"]
+        self.assertEqual(len(lines), 2)
+        self.assertEqual([a["site"] for a in lines], ["Curls", "Braids"])
+        self.assertIn("another hairdresser chair", lines[0]["text"])
+        self.assertIn("another hairdresser headwash", lines[1]["text"])
 
 
 if __name__ == "__main__":

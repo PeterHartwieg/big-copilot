@@ -1327,19 +1327,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     grids = _hourly(
         save, buildings, businesses, stations, _office_posts(names), crew_skill, names
     )
-    status_of = {b["key"]: b["status"] for b in businesses}
-    # The wage that prices a role's idle hours is the best paid person holding
-    # that role at the site. An office's professionals are everyone there but
-    # the cleaners, so a cleaner's wage prices no office hour.
-    service_wage = collections.defaultdict(lambda: collections.defaultdict(float))
-    for person in staff:
-        if not person["addr"]:
-            continue
-        skill = person["skill"]
-        if status_of.get(site_key(person["addr"])) == "office" and skill == CLEANING_SKILL:
-            continue
-        key = site_key(person["addr"])
-        service_wage[key][skill] = max(service_wage[key].get(skill, 0.0), person["wage"])
+    service_wage = _service_wages(staff, {b["key"]: b["status"] for b in businesses})
     hour_findings = _hour_findings(grids, businesses, service_wage)
     plan = _plan(
         save,
@@ -3433,6 +3421,28 @@ def _serves(status: str | None, skill: str | None, needed: str | None = None) ->
     return skill is not None and skill == needed
 
 
+def _service_wages(staff: list, status_of: dict) -> dict:
+    """The wage that prices each role's idle hours, per site, per skill.
+
+    It is the best paid person holding that role at the site. An office's
+    professionals are everyone there but the cleaners, and the office is one
+    role with no skill of its own, so their best wage goes under the None key
+    that role looks up; a cleaner's wage prices no hour anywhere.
+    """
+    wages = collections.defaultdict(lambda: collections.defaultdict(float))
+    for person in staff:
+        if not person["addr"]:
+            continue
+        key = site_key(person["addr"])
+        skill = person["skill"]
+        if status_of.get(key) == "office":
+            if not skill or skill == CLEANING_SKILL:
+                continue
+            skill = None  # the office role's own key, as _hourly() builds it
+        wages[key][skill] = max(wages[key].get(skill, 0.0), person["wage"])
+    return wages
+
+
 def _hourly(
     save: Save,
     buildings: list,
@@ -3503,19 +3513,21 @@ def _hourly(
                 label = labels[post]
                 rates[label] = max(rates.get(label, 0), rate)
             biggest = max(_in_order(rates), key=rates.get)
-            roles.append(
-                {
-                    "skill": skill,
-                    "label": names.label(skill) if skill and names else skill,
-                    # The station of this role worth adding another of: the
-                    # largest, ties broken by name so the words do not move.
-                    "station": biggest,
-                    "counters": sum(by_skill[skill].values()),
-                    "stationCount": len(by_skill[skill]),
-                    "staffed": [[0] * 24 for _ in range(7)],
-                    "onShift": [[0] * 24 for _ in range(7)],
-                }
-            )
+            role = {
+                "skill": skill,
+                "label": names.label(skill) if skill and names else skill,
+                # The station of this role worth adding another of: the
+                # largest, ties broken by name so the words do not move.
+                "station": biggest,
+                "counters": sum(by_skill[skill].values()),
+                "stationCount": len(by_skill[skill]),
+                "staffed": [[0] * 24 for _ in range(7)],
+                "onShift": [[0] * 24 for _ in range(7)],
+            }
+            # The plural the page names this role's stations by, where
+            # "register capacity" would be wrong; None where it would not.
+            role["noun"] = _role_words(role, office)["noun"]
+            roles.append(role)
 
         # The roster, read the same way the game reads it: scheduleDay.day is the
         # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
@@ -3641,11 +3653,13 @@ def _role_words(role: dict, office: bool) -> dict:
             "posts": ("registers", "another counter"),
         }
     station = _lower_first(role["station"])
-    cover = f"{role['label']} cover"
     return {
         "noun": _plural(station),
-        "staffing": (cover, f"another {role['label']} on those hours"),
-        "posts": (cover, f"another {station}"),
+        # Two different answers, two different limits, the way a shop's
+        # "staffing" and "registers" are two: one line is about people, the
+        # other about posts, and each keeps its own id.
+        "staffing": (f"{role['label']} staffing", f"another {role['label']} on those hours"),
+        "posts": (f"{role['label']} cover", f"another {station}"),
     }
 
 
@@ -3670,9 +3684,10 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # Each capped hour is held by its own limit: a roster that runs one
         # person at night and a full floor by day is short of staff at night and
         # up against the door by day, and a verdict for the week as a whole
-        # would be wrong about one of them. Where a site asks for more than one
-        # skill, every role short that hour is named, because it serves nobody
-        # until all of them are manned.
+        # would be wrong about one of them. A site asking for more than one
+        # skill serves nobody until every role is manned, but only a role
+        # holding the site's own minimum that hour is holding it back: hiring
+        # into a role that is already faster than the slowest one buys nothing.
         office = grid.get("office", False)
         roles = {role["skill"]: role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
@@ -3680,7 +3695,11 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
             if door and door <= grid["staffed"][wd][hour]:
                 by_limit["the building", None][wd].add(hour)
                 continue
-            short = [r for r in roles.values() if r["staffed"][wd][hour] < r["counters"]]
+            site_staffed = grid["staffed"][wd][hour]
+            short = [
+                r for r in roles.values()
+                if r["staffed"][wd][hour] == site_staffed and r["staffed"][wd][hour] < r["counters"]
+            ]
             if short:
                 for role in short:
                     by_limit["staffing", role["skill"]][wd].add(hour)
@@ -5474,7 +5493,9 @@ def _alerts(
 
     # --- what the hour-by-hour grid says that a daily total cannot
     # Five shops hitting the same 30/h ceiling in the same hours is one finding
-    # about five shops, not five findings. Offices group only with offices.
+    # about five shops, not five findings. Offices group only with offices, and
+    # a role's stations only with the same stations: two findings that name two
+    # different answers are two lines, whatever else they share.
     same = collections.OrderedDict()
     for finding in hours:
         if finding["kind"] == "cap" and finding["key"] not in silent:
@@ -5486,10 +5507,12 @@ def _alerts(
                     finding.get("capTop", finding["cap"]),
                     finding["when"],
                     finding["hours"],
+                    finding.get("noun"),
+                    finding.get("fix"),
                 ),
                 [],
             ).append(finding)
-    for (office, limit, cap, top, when, per_week), group in same.items():
+    for (office, limit, cap, top, when, per_week, _noun, _fix), group in same.items():
         worth = sum(f["throughput"] for f in group)
         where = (
             group[0]["site"]
@@ -5514,9 +5537,13 @@ def _alerts(
                 f"ceiling. {limit if limit[:1].isupper() else limit.capitalize()} is the "
                 f"limit, so the answer is {group[0]['fix']}{who}"
             )
-        # One site can be at more than one ceiling: its limit keeps the ids apart.
+        # One site can be at more than one ceiling, and one role can be both
+        # short of people and short of posts, so the id hashes the answer along
+        # with the limit: whatever the grouping key separates gets its own id,
+        # and silencing one line never silences the other.
         note(
-            "warn", where, "atcap", text, subject=limit, worth=worth,
+            "warn", where, "atcap", text,
+            subject=f"{limit} · {group[0]['fix']}", worth=worth,
             key=group[0]["key"] if len(group) == 1 else None,
         )
 
@@ -5524,8 +5551,6 @@ def _alerts(
         if finding["key"] in silent or finding["kind"] != "idle":
             continue
         site = finding["site"]
-        # A role's idle hours keep their own id: two roles can be idle at one
-        # site, and silencing one must not silence the other.
         noun = finding.get("noun")
         note(
             "info",
@@ -5537,7 +5562,6 @@ def _alerts(
             f"{finding['day']} for {finding['seen']} customers an hour; "
             f"{finding['spare']} staff-hours a week that buy nothing",
             worth=finding["worth"],
-            subject=noun or "",
             key=finding["key"],
         )
 
@@ -8703,18 +8727,31 @@ function miniChart(series, key, colour){
 
 /* --- the shop's week, hour by hour ------------------------------------
    Three numbers meet here. Customers are measured an hour at a time over the
-   fortnight the save keeps. The registers are whatever service staff were
-   rostered that hour, at the capacity of the counters they were posted to; an
-   office's are the professionals posted at its computers. The door cap is the
-   building's own limit. Shade is how busy against the site's own busiest hour;
-   a red outline is an hour spent at the ceiling that was on. The sentence under
-   the grid says which, and when capacity stood idle. */
+   fortnight the save keeps. The capacity is whatever staff were rostered that
+   hour, at the rate of the stations they were posted to; an office's are the
+   professionals posted at its computers, and a site asking for several skills
+   is only as fast as its slowest role. The door cap is the building's own
+   limit. Shade is how busy against the site's own busiest hour; a red outline
+   is an hour spent at the ceiling that was on. The sentence under the grid
+   says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 /* Mirrors AT_CAP in the Python: this close to the ceiling is at the ceiling,
    so the outlined cells are the ones capHours counts. */
 const AT_CAP = 0.95;
+
+/* The role holding this hour back: one at the site's own minimum that is short
+   of its stations, else the smallest. Mirrors _hour_findings() in the Python,
+   tie for smallest broken on the skill so the words do not move. */
+function hourRole(g, wd, h){
+  const roles = g.roles || [];
+  if(!roles.length) return null;
+  const low = Math.min(...roles.map(r => r.staffed[wd][h]));
+  const pool = roles.filter(r => r.staffed[wd][h] === low && r.staffed[wd][h] < r.counters);
+  return (pool.length ? pool : roles).reduce((a, b) =>
+    b.counters < a.counters || (b.counters === a.counters && (b.skill || "") < (a.skill || "")) ? b : a);
+}
 
 function hourGrid(g, todayWd){
   const peak = Math.max(g.peak, 1);
@@ -8728,10 +8765,20 @@ function hourGrid(g, todayWd){
       const a = seen ? 6 + Math.round(Math.min(seen / peak, 1) * 70) : 0;
       const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
-      const slack = cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
-      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${
-        g.office ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
-          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`}${
+      /* A role idle while another holds the site back is still idle: judge
+         each role on its own roster, the way the Python findings do. A grid
+         without roles is an old one, so it keeps the site-wide test. */
+      const slack = (g.roles || []).length
+        ? g.roles.some(r => r.onShift[wd][h] >= 2 && r.staffed[wd][h] > Math.max(seen, .5) * 2)
+        : cap && g.onShift[wd][h] >= 2 && cap > Math.max(seen, .5) * 2;
+      const role = hourRole(g, wd, h);
+      const on = g.office
+        ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
+        : role && role.noun
+          ? `${role.staffed[wd][h]} of ${role.counters} ${role.noun} on${
+              g.roles.length > 1 ? ` · slowest of ${g.roles.length} roles` : ""}`
+          : `${g.staffed[wd][h]} of ${g.counters} register capacity on`;
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
         atCap ? " · <b>at the ceiling</b>" : slack ? " · capacity idle" : ""}`;
       cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}" style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
@@ -8768,7 +8815,8 @@ function drawSite(){
       ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
          the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`
-      : `${f.staff} ${f.office ? "workstations are staffed" : "counters are on"} ${String(f.from).padStart(2,"0")}:00-${
+      : `${f.staff} ${f.noun || (f.office ? "workstations are staffed" : "counters are on")} ${
+         String(f.from).padStart(2,"0")}:00-${
          String(f.to).padStart(2,"0")}:00 on a ${f.day} for ${f.seen} customers an hour;
          ${f.spare} staff-hours a week, about ${fmt(f.worth)}/day of wages.`);
 
@@ -8880,7 +8928,11 @@ function drawSite(){
         Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
           ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
               grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
-          : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
+          : (grid.roles || []).length > 1
+            ? `${grid.roles.length} roles, the slowest ${grid.counters} an hour`
+            : grid.roles && grid.roles[0] && grid.roles[0].noun
+              ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
+              : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
         grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}.${
         notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`})}
       <div class="chartbox">${hourGrid(grid, D.meta.day % 7)}<div class="hourread" id="hourRead">Hover an hour</div></div>

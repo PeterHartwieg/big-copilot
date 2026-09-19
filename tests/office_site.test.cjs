@@ -65,6 +65,68 @@ async function site(status) {
   return page;
 }
 
+// A theatre: two roles at one site, the projection booth the slower of them.
+// Stage crew are five on the floor while one projectionist holds the ceiling,
+// so the site's own onShift never reaches two and only a per-role reading can
+// see the idle stage crew.
+async function theatre() {
+  const page = await browser.newPage({viewport: {width: 1280, height: 1100}});
+  await page.route('https://**', route => route.abort());
+  await page.setContent(html, {waitUntil: 'load'});
+  await page.evaluate(() => {
+    document.body.classList.add('has-board');
+    const row = v => Array(24).fill(v);
+    const week = v => Array.from({length: 7}, () => row(v));
+    const key = 'ba:street_secondavenue#7';
+    const customers = week(null);
+    const staffed = week(0), onShift = week(0);
+    const crewStaffed = week(0), crewOn = week(0);
+    const projStaffed = week(0), projOn = week(0);
+    for(let h = 9; h < 18; h++){
+      customers[1][h] = h < 13 ? 25 : 5;   // full house, then a quiet afternoon
+      staffed[1][h] = 25; onShift[1][h] = 1;  // the site is its slowest role
+      projStaffed[1][h] = 25; projOn[1][h] = 1;
+      crewStaffed[1][h] = 500; crewOn[1][h] = 5;
+    }
+    D = {
+      meta: {character: 'theatre-fixture', day: 29},
+      rhythm: null,
+      supply: {shops: []},
+      businesses: [{
+        key, status: 'retail', name: 'Playhouse', code: 'PH', type: 'Theatre',
+        address: '7 Second Avenue', neighbourhood: "Hell's Kitchen",
+        opened: 12, revenue: 3000, customers: 180, basket: 20, profit: 500, margin: 16.6,
+        cogs: 0, wages: 1200, rent: 400, marketing: 0, theft: 0, licensing: 0,
+        staff: 6, staffCost: 1200, crew: [], people: [], lines: [],
+        series: [], rhythm: null, peakDay: null, swing: 0,
+      }],
+      hours: [{
+        key, name: 'Playhouse', office: false, postRate: null, customers,
+        weeks: [0, 2, 0, 0, 0, 0, 0],
+        thin: [true, false, true, true, true, true, true],
+        staffed, onShift, effective: staffed,
+        door: null, cap: 25, counters: 25, stationCount: 6, basket: 20, peak: 25, capHours: 4,
+        roles: [
+          {skill: 'ba:skill_projectionist', label: 'Projectionist', station: 'Projection Booth',
+            noun: 'projection booths', counters: 25, stationCount: 1,
+            staffed: projStaffed, onShift: projOn},
+          {skill: 'ba:skill_stagecrew', label: 'Stage Crew', station: 'Costume Booth',
+            noun: 'costume booths', counters: 500, stationCount: 5,
+            staffed: crewStaffed, onShift: crewOn},
+        ],
+      }],
+      hourFindings: [{
+        kind: 'cap', key, site: 'Playhouse', office: false, hours: 4, when: 'Mon 9-13',
+        limit: 'Projectionist cover', fix: 'another projection booth',
+        noun: 'projection booths', cap: 25, capTop: 25, basket: 20, throughput: 285.71,
+      }],
+    };
+    siteKey = key; siteOpen = true;
+    drawSite();
+  });
+  return page;
+}
+
 const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Customers by hour'}).locator('.why').getAttribute('data-tip');
 
 test('an office reads its grid as staffed workstations, with the finding and its money', async () => {
@@ -106,5 +168,28 @@ test('a shop keeps its registers and shelves', async () => {
     // The same boxed phone is a shop's odds and ends, behind the toggle.
     assert.match(panel, /show 1 more: bags, drinks, odds and ends/);
     assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\/visit/);
+  } finally { await page.close(); }
+});
+
+test('a theatre reads its grid by the role that holds it back, not by registers', async () => {
+  const page = await theatre();
+  try {
+    const tip = await hourTip(page);
+    assert.match(tip, /2 roles, the slowest 25 an hour, no door cap/);
+    assert.doesNotMatch(tip, /register capacity|counters/);
+    const read = await page.locator('#sitePanel .hc.cap').first().getAttribute('data-read');
+    assert.match(read, /25 customers · 25 of 25 projection booths on · slowest of 2 roles · <b>at the ceiling<\/b>/);
+    assert.doesNotMatch(read, /register capacity/);
+  } finally { await page.close(); }
+});
+
+test('idle stage crew are outlined although the site as a whole runs one person', async () => {
+  const page = await theatre();
+  try {
+    // The site's own onShift is 1 all afternoon, so the old site-wide test saw
+    // nothing; the stage crew's five are idle against five customers an hour.
+    const slack = page.locator('#sitePanel .hc.slack');
+    assert.equal(await slack.count(), 5, 'the quiet hours 13:00-17:00');
+    assert.match(await slack.first().getAttribute('data-read'), /5 customers · .* · capacity idle/);
   } finally { await page.close(); }
 });

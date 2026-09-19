@@ -12,6 +12,7 @@ from ba_dashboard import (
     _hourly,
     _office_posts,
     _plural,
+    _service_wages,
     money,
 )
 from ba_save import Names, Save
@@ -28,6 +29,12 @@ COMPUTER = "ba:itemname_computer"
 LAPTOP = "ba:itemname_laptop"
 REGISTER = "ba:itemname_cashregister"
 MONDAY = 1  # day % 7; days 1 and 8 give Monday two weeks of reports
+SECOND = "ba:street_secondavenue"
+
+
+def person(addr, skill, wage):
+    """One employee as extraction holds them: an address, a skill, a wage."""
+    return {"addr": addr, "skill": skill, "wage": wage}
 
 # The Computer Options page as the game writes it: the workstation it serves is
 # linked before the options and is not itself a computer.
@@ -149,7 +156,13 @@ class OfficeGridTests(unittest.TestCase):
         hourly = {h: 2 if 9 <= h < 13 else 0 for h in range(24)}
         b = building(LAW, items, shifts, hourly, door=50)
         [grid] = _hourly(Save({}, {}, ""), [b], [site("office")], {}, {COMPUTER}, crew)
-        [idle] = _hour_findings([grid], [site("office")], {grid["key"]: {None: 146.0}})
+        # The wages come the way extraction builds them: the office's
+        # professionals under the key its one role looks up, the cleaner's
+        # under her own.
+        wages = _service_wages([person((SECOND, 10), LAWYER, 146.0),
+                                person((SECOND, 10), CLEANING, 90.0)],
+                               {grid["key"]: "office"})
+        [idle] = _hour_findings([grid], [site("office")], wages)
         self.assertEqual((idle["kind"], idle["staff"], idle["spare"]), ("idle", 6, 16))
         self.assertEqual(idle["worth"], money(16 * 146.0 / 7))
         self.assertTrue(idle["office"])

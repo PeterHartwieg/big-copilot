@@ -350,9 +350,13 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 hour is judged on its own roster, and each role on the roster that was on for it. Where the
 door cap is at or below the site's staffed capacity the building is the limit, and the
 answer is a bigger site or a second shop nearby (for an office, a bigger office or a second
-one). Otherwise every role short that hour is named, because a site with more than one role
-serves nobody until all of them are manned; where none is short, the stations of the
-slowest role are the ceiling and another one of those is the answer. A shop's counters and
+one). Otherwise the roles named are the ones actually holding that hour back: a role short
+of its stations whose staffed capacity is the site's own minimum, since a site with more
+than one role serves nobody until all of them are manned but hiring into a role that is
+already faster than the slowest one buys nothing. Where no short role holds the minimum,
+the stations of the slowest role are the ceiling and another one of those is the answer.
+Short of people and short of posts are two different answers, so they are two lines with
+two ids — "Gym Trainer staffing" against "Gym Trainer cover". A shop's counters and
 an office's workstations keep the words they have always had — a register asks for another
 counter, a computer for another workstation — while a gym is told another fitness planning
 board or another Gym Trainer, and a theatre another projection booth. A site that runs one
