@@ -10909,8 +10909,8 @@ function spSameDays(days){
    index into this row's tables, because those tables are rebuilt every run:
    buying one more register or hiring one more cashier renumbers everybody
    after it, and a tick that followed the index would land on somebody else's
-   shift. An id may hold anything base64 does, so the parts are joined with a
-   character an id never contains. */
+   shift. An id may hold any character, so the tuple is serialised as JSON,
+   which keeps the boundary between one part and the next. */
 const spTickId = (row, s) => {
   const post = ((row.stations || [])[s.s] || {}).id;
   const who = ((row.people || [])[s.p] || {}).id;
