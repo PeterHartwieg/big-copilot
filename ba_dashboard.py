@@ -9670,20 +9670,29 @@ function spStockRows(b){
     if(!take({slug: n.slug, item: n.item})) return;
     const draw = spItemDraw(n.slug, n.item);
     const perDay = draw.perDay || n.perDay;
-    /* Why there is none of it here is the need's own verdict, not something
-       to assume: _supply() builds its import rows from what a site holds, so
+    /* Why there is none of it here is the need's own verdict, never an
+       assumption: _supply() builds its import rows from what a site holds, so
        a contract signed before its first delivery has a live weekly order and
-       no row on the floor to carry it. */
+       no row on the floor to carry it, and goods made in one of this
+       company's factories are never imported at all. Only the two verdicts
+       that really mean nothing tops this up say so; the rest of the eleven
+       statuses _factories() can set leave the column at a dash rather than
+       inventing a reason. */
     const importing = Number.isFinite(n.importWeekly) && n.importWeekly > 0;
+    const made = n.status === "made" ? spMadeAt(n.slug, n.item) : null;
+    const unfed = n.status === "noimport" || n.status === "unplanned";
     const order = n.status === "paused"
       ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
       : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>/wk</small>`
-      : `<span class="sp-noplan">${spIcon("route")}no import</span>`;
+      : made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
+      : unfed ? `<span class="sp-noplan">${spIcon("route")}no import</span>`
+      : "—";
     const read = n.status === "paused"
       ? `Import <b>paused</b>; <b>nothing</b> on hand`
       : importing
         ? `<b>${spNum(n.importWeekly)}</b> a week is on order; <b>nothing</b> on hand yet`
-        : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
+      : made ? `Made at <b>${spEsc(shortName(made))}</b>; <b>nothing</b> on hand here`
+      : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
     rows.push({
       item: n.item, hand: 0, draw: spNum(perDay),
       rail: spRail(0, null, n.status === "paused", false, null, importing),

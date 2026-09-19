@@ -1134,31 +1134,52 @@ test('the same goods on a shelf and on a line are told apart by their block', as
   } finally { await page.close(); }
 });
 
-test('the zero-stock row says why there is none of it, not always "no import"', async () => {
-  // _supply() builds its import rows from what a site holds, so a contract
-  // signed before its first delivery has a live order and no row on the floor.
+test('the zero-stock row says why there is none of it, for every verdict', async () => {
+  // Every status _factories() can put on a need. _supply() builds its import
+  // rows from what a site holds, so a contract signed before its first
+  // delivery has a live order and no row on the floor; goods made in one of
+  // this company's factories are never imported at all; and a verdict that
+  // says nothing about the supply leaves the column at a dash.
   const need = over => ({...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
-                         perDay: 4100, lines: ['Burger'], from: 0, target: 0, ...over});
+                         perDay: 4100, lines: ['Burger'], from: 0, target: 0,
+                         importWeekly: null, madeAt: [], ...over});
+  const nothing = /<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day is drawn from here/;
   const cases = [
-    [{status: 'import', level: 'warn', importWeekly: 8000}, /8,000\s*\/wk/,
+    ['paused', {importWeekly: 0}, /paused/, /Import <b>paused<\/b>; <b>nothing<\/b> on hand/],
+    ['import', {importWeekly: 8000}, /8,000\s*\/wk/,
      /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
-    [{status: 'paused', level: 'critical', importWeekly: 0}, /paused/,
-     /Import <b>paused<\/b>; <b>nothing<\/b> on hand/],
-    [{status: 'noimport', level: 'warn', importWeekly: null}, /no import/,
-     /<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day is drawn from here/],
+    ['ok', {importWeekly: 8000}, /8,000\s*\/wk/,
+     /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
+    ['made', {madeAt: [1]}, /made at HART\. Other/,
+     /Made at <b>HART\. Other<\/b>; <b>nothing<\/b> on hand here/],
+    ['noimport', {}, /no import/, nothing],
+    ['unplanned', {}, /no import/, nothing],
+    // Nothing these say is about the supply, so nothing is claimed about it.
+    ['target', {}, /^—$/, nothing],
+    ['waiting', {}, /^—$/, nothing],
+    ['staffing', {}, /^—$/, nothing],
+    ['dry', {}, /^—$/, nothing],
+    ['idle', {}, /^—$/, nothing],
   ];
-  for (const [over, order, read] of cases) {
+  for (const [status, over, order, read] of cases) {
     const page = await site({
       shop: {...DEPOT, lines: []},
+      // The site that makes it has to be a factory of this company for the
+      // `made` verdict to have a name to give.
+      peer: {name: 'HART. Other', status: 'support'},
       supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, s: 1, unnamed: [],
-        lines: [FACTORY_SITE.lines[0]], needs: [need(over)]}]})},
+        lines: [{...FACTORY_SITE.lines[0], item: 'Bag of Tomatoes', slug: 'tomato'}],
+        needs: [need({status, ...over})]}]})},
     });
     try {
-      const row = page.locator('#sp-stock tbody tr').first();
-      assert.match((await row.innerText()).replace(/\s+/g, ' '), order, over.status);
-      assert.match(await row.getAttribute('data-read'), read, over.status);
+      const cells = await page.$$eval('#sp-stock tbody tr:first-child td',
+        tds => tds.map(td => td.textContent.trim()));
+      assert.match(cells.at(-2).replace(/\s+/g, ' '), order, status);
+      assert.match(await page.locator('#sp-stock tbody tr').first().getAttribute('data-read'),
+        read, status);
       // Whatever the reason, nothing on hand still reads in red.
-      assert.equal(await row.locator('.sp-red').innerText(), '0');
+      assert.equal(cells[1], '0', status);
+      assert.equal(await page.locator('#sp-stock tbody tr .sp-red').count(), 1, status);
     } finally { await page.close(); }
   }
 });
