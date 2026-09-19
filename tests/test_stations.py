@@ -30,6 +30,8 @@ PROJECTION = "ba:itemname_boothprojection"
 COSTUME = "ba:itemname_boothcostume"
 DRESSING = "ba:itemname_dressingroom"
 REGISTER = "ba:itemname_cashregister"
+DJBOOTH = "ba:itemname_djbooth"
+COAT = "ba:itemname_coatcheckleft"
 CHAIR = "ba:itemname_hairdresserchair"
 WASH = "ba:itemname_hairdresserheadwash"
 TRAINER = "ba:skill_gymtrainer"
@@ -37,6 +39,7 @@ STYLIST = "ba:skill_hairstylist"
 ACTOR = "ba:skill_actor"
 PROJECTIONIST = "ba:skill_projectionist"
 STAGECREW = "ba:skill_stagecrew"
+DJ = "ba:skill_dj"
 SERVICE = "ba:skill_customerservice"
 CLEANING = "ba:skill_cleaning"
 GYM = "ba:businesstype_gym"
@@ -63,6 +66,8 @@ NAMES = Names(dict({
     f"help_{BOOTH}_content": page("Ticket Booth", SERVICE, 50),
     f"help_{PROJECTION}_content": page("Projection Booth", PROJECTIONIST, 25),
     f"help_{REGISTER}_content": page("Cash Register", SERVICE, 20),
+    f"help_{DJBOOTH}_content": page("DJ Booth", DJ, 50),
+    f"help_{COAT}_content": page("Coat Check Left", SERVICE, 50),
     f"help_{COSTUME}_content": page("Costume Booth", STAGECREW, 100),
     f"help_{DRESSING}_content": page("Dressing Room", ACTOR, 80),
     f"help_{CHAIR}_content": page("Hairdresser Chair", STYLIST, 5),
@@ -74,7 +79,7 @@ NAMES = Names(dict({
 }, **{
     slug: label for slug, label in {
         BOARD: "Fitness Planning Board", BOOTH: "Ticket Booth", PROJECTION: "Projection Booth",
-        REGISTER: "Cash Register",
+        REGISTER: "Cash Register", DJBOOTH: "DJ Booth", COAT: "Coat Check Left", DJ: "DJ",
         COSTUME: "Costume Booth", DRESSING: "Dressing Room", CHAIR: "Hairdresser Chair",
         WASH: "Hairdresser Headwash", TRAINER: "Gym Trainer", STYLIST: "Hair Stylist",
         ACTOR: "Actor", PROJECTIONIST: "Projectionist", STAGECREW: "Stage Crew",
@@ -130,8 +135,8 @@ class StationTableTests(unittest.TestCase):
 
     def test_furniture_that_holds_but_does_not_serve_stays_out(self):
         self.assertEqual(sorted(_service_stations(NAMES)),
-                         sorted([BOARD, BOOTH, PROJECTION, REGISTER, COSTUME, DRESSING,
-                                 CHAIR, WASH]))
+                         sorted([BOARD, BOOTH, PROJECTION, REGISTER, DJBOOTH, COAT,
+                                 COSTUME, DRESSING, CHAIR, WASH]))
 
     def test_every_station_with_a_customer_capacity_is_in_the_shipped_table(self):
         """The 17 serving stations of build 3680, each with its skill and its rate.
@@ -385,6 +390,29 @@ class BindingRoleTests(unittest.TestCase):
         self.assertEqual(sum(a["worth"] for a in lines), whole)
         self.assertIn("Gym Trainer staffing and registers are the limit", lines[0]["text"])
         self.assertIn("fills the fitness planning boards and counters", lines[0]["text"])
+
+    def test_a_tie_keeps_the_capitals_inside_it(self):
+        """A nightclub: a coat check and a DJ booth, both at 50 and both manned.
+
+        Only the first character of a joined limit may be touched. Capitalising
+        the whole string lowercased everything after it, and "DJ" is the game's
+        own capitalisation, not a sentence that happens to start with one.
+        """
+        items = [(1, COAT), (2, DJBOOTH)]
+        crew = {"s": SERVICE, "d": DJ}
+        shifts = [shift("s", 1, 20, 24), shift("d", 2, 20, 24)]
+        hourly = {h: 50 if 20 <= h < 24 else 0 for h in range(24)}
+        grid = grid_of(building(items, shifts, hourly, 200), crew, _service_stations(NAMES))
+        [finding] = _hour_findings([grid], [site()], {})
+        self.assertEqual((finding["limit"], finding["fix"]),
+                         ("registers and DJ booths", "another counter and another DJ booth"))
+        business = _business(Save({}, {}, ""), NAMES,
+                             building([], [], {9: 1}, 200), (STREET, 3),
+                             {(STREET, 3): {"TotalSales": 1000}}, [], {}, 3)
+        [line] = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], [finding], [], 3, 0.0)
+                  ["lines"] if a["group"] == "atcap"]
+        self.assertIn("Registers and DJ booths are the limit", line["text"])
+        self.assertNotIn("dj booths", line["text"])
 
     def test_an_untied_site_keeps_the_numbers_it_had(self):
         """Two boards, one trainer, no register: one role, one line, one sum."""

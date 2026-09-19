@@ -128,10 +128,14 @@ async function theatre() {
             counters: 500, stationCount: 5, ...crew},
         ],
       }],
+      // 11:00 ties the ticket booths with projection, so the finding names
+      // both answers and has to agree with a plural verb.
       hourFindings: [{
         kind: 'cap', key, site: 'Playhouse', office: false, hours: 3, when: 'Mon 10-13',
-        limit: 'staffing', fix: 'more service staff on those hours',
-        noun: null, cap: 25, capTop: 50, basket: 20, throughput: 285.71,
+        limit: 'staffing and projection booths', limits: 2,
+        fix: 'more service staff on those hours and another projection booth',
+        noun: 'ticket booths and projection booths',
+        cap: 25, capTop: 50, basket: 20, throughput: 285.71,
       }],
     };
     siteKey = key; siteOpen = true;
@@ -220,6 +224,15 @@ test('two roles tied at the ceiling are both named', async () => {
     // alone is the answer, so the cell says both, as the findings do.
     const [, eleven] = await capReads(page);
     assert.match(eleven, /1 of 2 ticket booths · 50\/h \+ 2 of 3 projection booths · 50\/h · slowest of 3 roles/);
+  } finally { await page.close(); }
+});
+
+test('a finding naming two tied answers reads as a plural', async () => {
+  const page = await theatre();
+  try {
+    const tip = await hourTip(page);
+    assert.match(tip, /staffing and projection booths are the limit, so the answer is more service staff on those hours and another projection booth/);
+    assert.doesNotMatch(tip, /projection booths is the limit/);
   } finally { await page.close(); }
 });
 

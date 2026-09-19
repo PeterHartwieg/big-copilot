@@ -5581,7 +5581,9 @@ def _alerts(
                 f"{where} fill{'s' if len(group) == 1 else ''} "
                 f"the {noun} {when}, "
                 f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
-                f"ceiling. {limit if limit[:1].isupper() else limit.capitalize()} "
+                # Only the first character: a tie joins two limits, and
+                # str.capitalize() would lowercase "DJ booths" in the second.
+                f"ceiling. {limit[:1].upper() + limit[1:]} "
                 f"{'are' if group[0].get('limits', 1) > 1 else 'is'} the "
                 f"limit, so the answer is {group[0]['fix']}{who}"
             )
@@ -8880,7 +8882,7 @@ function drawSite(){
   const todayName = D.rhythm && D.rhythm.today ? D.rhythm.today.day : null;
   const notes = (D.hourFindings || []).filter(f => f.key === b.key).map(f =>
     f.kind === "cap"
-      ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} is the limit, so
+      ? `At the ceiling ${f.hours} hours a week (${f.when}); ${f.limit} ${f.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${f.fix}. ${fmt(f.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`
       : `${f.staff} ${f.noun || (f.office ? "workstations are staffed" : "counters are on")} ${
