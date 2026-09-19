@@ -264,6 +264,34 @@ const grid = (office, staffedAt) => {
     door: 50, cap: 50, counters: 3, stationCount: 4, basket: 30, peak: 6, capHours: 3,
   }];
 };
+// A day with one hour at each of the three ceilings. An hour is at the ceiling
+// when the customers seen reach the capacity that was on, so customers and
+// effective match; the number on the floor is what decides which ceiling held
+// it: 50 reaches the door, 2 is short of the three counters, 3 mans them.
+const STAFFED_AT = {9: 50, 12: 2, 15: 3};
+// _hourly() gives every trading site a role per skill its stations ask for, so
+// a shop with counters has exactly one, and it keeps the words the board has
+// always used: `noun` null, so its cells and its findings say "register
+// capacity", "staffing" and "registers" rather than naming the furniture.
+const SERVICE = 'ba:skill_customerservice';
+const mixedGrid = () => {
+  const row = () => Array.from({length: 24}, (_, h) => STAFFED_AT[h] || 0);
+  const week = () => Array.from({length: 7}, row);
+  return [{
+    key: KEY, name: 'HART. Gifts', office: false, postRate: 1,
+    customers: week(), weeks: [2, 2, 2, 2, 2, 2, 2],
+    thin: Array(7).fill(false), staffed: week(),
+    onShift: week(), effective: week(),
+    door: 50, cap: 50, counters: 3, stationCount: 4, basket: 30, peak: 50, capHours: 21,
+    roles: [{
+      skill: SERVICE, label: 'Customer Service', station: 'Cash register',
+      noun: null, one: 'cash register', many: 'cash registers',
+      counters: 3, stationCount: 3,
+      staffed: week(), onShift: week(),
+      posts: Array.from({length: 7}, () => Array(24).fill(1)),
+    }],
+  }];
+};
 
 test("the tiles carry the fortnight, the costs of the day and the ceilings", async () => {
   const page = await site({
@@ -356,31 +384,59 @@ test('the ramp chip counts only while the site is still ramping up', async () =>
 });
 
 test('every ceiling the busy hours ran into gets a chip and a lit icon', async () => {
-  const cap = (limit, fix) => ({kind: 'cap', key: KEY, site: 'HART. Gifts', office: false,
-    hours: 3, when: 'Fri 12-13', limit, fix, cap: 50, capTop: 50, basket: 30, throughput: 900});
+  // Three hours a day at the ceiling, each held by a different one: 09:00 has
+  // the whole 50/h door on the floor, 12:00 runs 2 of the 3 counters, 15:00
+  // runs all three. That is _hour_findings()' rule — door reached, else fewer
+  // staffed than counters, else the counters themselves — so the three cap
+  // rows below are what it would emit for this grid.
+  // These three rows are not hand-written: they are what the real
+  // _hour_findings() emits for mixedGrid(), copied verbatim.
+  const cap = (when, limit, fix, at, throughput, limits) => ({kind: 'cap', key: KEY,
+    site: 'HART. Gifts', office: false, hours: 7, when, limit, fix, cap: at, capTop: at,
+    basket: 30, throughput, ...(limits ? {limits, noun: null} : {})});
   const page = await site({
-    hours: grid(false, 3),
-    hourFindings: [cap('the building', 'a bigger site nearby'), cap('staffing', 'more service staff')],
+    hours: mixedGrid(),
+    hourFindings: [
+      cap('every day 9', 'the building', 'a bigger site or a second shop nearby', 50, 1500),
+      cap('every day 12', 'staffing', 'more service staff on those hours', 2, 60, 1),
+      cap('every day 15', 'registers', 'another counter', 3, 90, 1),
+    ],
   });
   try {
-    // A cell says which kind of ceiling held it and whose role it was. This
-    // shop has one nameless role, so the role half of the token is empty and
-    // only the kind carries.
+    // A cell says which kind of ceiling held it and whose role held it, as
+    // `<kind>:<skill>`; the door is nobody's role, so its token stands alone.
     const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
       els.map(e => [e.dataset.limit, e.dataset.show]));
-    assert.deepEqual(chips, [['the building', 'door'], ['staffing', 'staff:']]);
-    // The door and the people are lit; the counters were never the limit.
+    assert.deepEqual(chips, [
+      ['the building', 'door'],
+      ['staffing', `staff:${SERVICE}`],
+      ['registers', `post:${SERVICE}`]]);
+    // All three ceilings held hours here, so all three icons are lit.
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));
-    assert.deepEqual(ceil, [true, false, true]);
-    // A chip picks out the hours its own ceiling held, not every capped hour.
-    // The fixture staffs 3 of 3 counters against a 50/h door, so its capped
-    // hours are the counters', and the staffing chip lights none of them.
-    await page.hover('#sp-hours .sp-hchip[data-show="staff:"]');
-    const dimmed = await page.$$eval('#sp-hours .hc[data-caps="post:"]', els =>
-      els.map(e => getComputedStyle(e).opacity));
-    assert.ok(dimmed.length, 'the fixture has hours held by the counters');
-    assert.ok(dimmed.every(o => Number(o) < 0.5), 'a chip for another ceiling dims them');
+    assert.deepEqual(ceil, [true, true, true]);
+    // Each hour wears the ceiling that held it, and it is the right hour: the
+    // grid is seven rows of 24 cells, so cell wd*24+h is that weekday's hour h.
+    const marks = await page.evaluate(skill => {
+      const cells = [...document.querySelectorAll('#sp-hours .hc')];
+      const mark = e => e.dataset.caps || null;
+      return [...Array(7).keys()].map(wd =>
+        [...Array(24).keys()].map(h => mark(cells[wd * 24 + h])).filter(Boolean).length === 3
+          ? [mark(cells[wd * 24 + 9]), mark(cells[wd * 24 + 12]), mark(cells[wd * 24 + 15])]
+          : ['extra marks on this day']);
+    }, SERVICE);
+    for(const day of marks)
+      assert.deepEqual(day, ['door', `staff:${SERVICE}`, `post:${SERVICE}`]);
+    // A chip lights exactly its own ceiling's hours — nothing else on the
+    // grid, and not another ceiling's capped hours either.
+    const HOUR = {door: 9, [`staff:${SERVICE}`]: 12, [`post:${SERVICE}`]: 15};
+    for(const [mine, hour] of Object.entries(HOUR)){
+      await page.hover(`#sp-hours .sp-hchip[data-show="${mine}"]`);
+      const lit = await page.evaluate(() => [...document.querySelectorAll('#sp-hours .hc')]
+        .map((e, i) => Number(getComputedStyle(e).opacity) === 1 ? i % 24 : null)
+        .filter(h => h !== null));
+      assert.deepEqual(lit, Array(7).fill(hour), `the ${mine} chip lights ${hour}:00 and nothing else`);
+    }
   } finally { await page.close(); }
 });
 
