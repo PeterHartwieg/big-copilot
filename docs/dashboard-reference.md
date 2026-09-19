@@ -420,6 +420,11 @@ station-hours, cheapest dip first, and the price of the whole shifts is carried 
 open hour instead of a derived need, because the game stores no model to derive one from,
 and they are filled after the serving stations so neither ever takes a person off a queue.
 
+**When the doors are open.** `open` is each weekday's opening slots as `[start, end]`
+pairs, and an empty list for a day the site stays shut — a list, because the game's own
+field is one. The hour between two slots is the doors being shut, not trade dipping, so
+nothing is ever rostered into it and it is never bridged.
+
 **Two tables, and indices into them.** A site's row lists its `stations` and its `people`
 once each, and every shift, hiring note and placement below points at them by position
 rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`
@@ -433,8 +438,19 @@ somebody who wants no evenings takes the shift they can work before the unconstr
 take it. No shift ever breaks a demand: a slot nobody may legally work becomes a hiring line
 instead, one total per role — and a security locker nobody staffs is real new spending
 rather than another shift, which is why `headcount` says which kind each line is. Anyone
-left under their weekly minimum is named in `shortHours`, because that is a staff demand
-the player is about to fail and the usual fix is to move them, not to bend the roster.
+left under their weekly minimum is named in `shortHours` — including anyone the plan finds
+no work for at all, who is the most short of the lot — and anyone whose four- or five-day
+week the plan cannot fill is named in `shortDays`. Both are staff demands the player is
+about to fail, and the usual fix is to move somebody to another site rather than to bend
+the roster. A hiring line counts people, not hours: four uncovered twelve-hour weekend
+shifts are 48 hours but need two hires, because nobody may work two of them on the same
+day.
+
+**Somebody hired and not yet posted anywhere belongs to one building.** The bench is
+offered to each site in turn, and the first site to give a bench member hours keeps them:
+they appear in that site's `bench`, count towards that site's `headcount.have`, and are
+gone from every later site's pool. One person's week is one week across the whole save, so
+nobody is rostered at two shops in the same hour.
 
 ## Staff demands
 

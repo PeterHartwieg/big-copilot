@@ -15,10 +15,12 @@ import unittest
 
 import ba_dashboard
 from ba_dashboard import (
+    FULL_TIME,
     JOB_DEMANDS,
     SHIFT_CAP,
     OVERWORK_HOURS,
     _arrival_ceiling,
+    _bridge_troughs,
     _cut_run,
     _fill_stations,
     _hourly,
@@ -298,8 +300,12 @@ class ArrivalCeilingTest(unittest.TestCase):
     def test_an_unknown_business_type_has_no_ceiling(self):
         self.assertIsNone(self.ceiling(type_slug="ba:businesstype_nowhere"))
 
-    def test_a_shop_stocking_nothing_primary_has_no_arrivals(self):
-        self.assertEqual(self.ceiling(products=["ba:itemname_towel"])[1][12], 0)
+    def test_a_shop_stocking_nothing_primary_has_no_ceiling_at_all(self):
+        """Not a grid of zeros: that would read off the page as "nobody can come"."""
+        self.assertIsNone(self.ceiling(products=["ba:itemname_towel"]))
+
+    def test_an_unknown_building_size_has_no_ceiling_either(self):
+        self.assertIsNone(self.ceiling(sqm=0))
 
 
 class DemandCurvesFileTest(unittest.TestCase):
@@ -375,7 +381,7 @@ LABELS = Names(
 )
 
 
-def employee(eid, skills, wage=20.0, here=True, demands=()):
+def employee(eid, skills, wage=20.0, here=True, demands=(), number=NUMBER):
     """One hired person; `here` false leaves them on the unassigned bench."""
     return {
         "id": eid,
@@ -386,14 +392,29 @@ def employee(eid, skills, wage=20.0, here=True, demands=()):
             "skills": {"$items": [{"name": s, "value": 50.0} for s in skills]},
         },
         "assignedAddress": (
-            {"streetName": STREET, "streetNumber": NUMBER} if here else None
+            {"streetName": STREET, "streetNumber": number} if here else None
         ),
         "demands": {"$items": list(demands)},
     }
 
 
-def registration(items, hourly, shifts=(), opens=(0, 24), open_days=range(7), door=100):
-    """A rented retail floor, its stations, its opening hours and a measured week."""
+def registration(
+    items,
+    hourly,
+    shifts=(),
+    opens=((0, 24),),
+    open_days=range(7),
+    door=100,
+    number=NUMBER,
+    weeks=2,
+    products=(),
+):
+    """A rented retail floor, its stations, its opening hours and a measured week.
+
+    `opens` is a list of [start, end) slots, the way the game's openingHourSlots
+    is a list, and `weeks` is how many weeks of hour reports are behind it: 2 is
+    measured, 1 is thin, 0 is a site that has never reported at all.
+    """
     reports = {"$items": [{"hour": h, "customers": c} for h, c in hourly.items()]}
     schedule = []
     for wd in range(7):
@@ -404,7 +425,7 @@ def registration(items, hourly, shifts=(), opens=(0, 24), open_days=range(7), do
                 "isOpen": wd in open_days,
                 "openingHourSlots": {
                     "$items": (
-                        [{"startingHour": opens[0], "endingHour": opens[1]}]
+                        [{"startingHour": a, "endingHour": b} for a, b in opens]
                         if wd in open_days
                         else []
                     )
@@ -413,10 +434,10 @@ def registration(items, hourly, shifts=(), opens=(0, 24), open_days=range(7), do
             }
         )
     return {
-        "BusinessName": "HART. Test",
+        "BusinessName": f"HART. Test {number}",
         "businessTypeName": SHOP,
         "StreetName": STREET,
-        "StreetNumber": NUMBER,
+        "StreetNumber": number,
         "creationDay": 1,
         "customerCapacity": door,
         "orderHistory": {
@@ -426,21 +447,21 @@ def registration(items, hourly, shifts=(), opens=(0, 24), open_days=range(7), do
                     "totalCustomers": sum(hourly.values()),
                     "hourReports": reports,
                 }
-                # Two weeks of every weekday, so no day is thin.
-                for day in list(range(1, 8)) + list(range(8, 15))
+                for day in range(1, 7 * weeks + 1)
             ]
         },
         "retailPrices": {"$items": []},
         "itemInstances": {"$items": [{"$v": {"id": i, "itemName": s}} for i, s in items]},
         "cachedFulfilledCustomerDemands": {"$items": []},
+        "cachedAvailableProducts": {"$items": list(products)},
         "scheduleDays": {"$items": schedule},
     }
 
 
-def business(status="retail"):
+def business(status="retail", number=NUMBER):
     return {
-        "key": KEY,
-        "name": "HART. Test",
+        "key": site_key((STREET, number)),
+        "name": f"HART. Test {number}",
         "status": status,
         "typeSlug": SHOP,
         "basket": 20.0,
@@ -449,26 +470,42 @@ def business(status="retail"):
     }
 
 
-def plan(items, employees, hourly, **kw):
-    """Run the whole chain a site's row comes out of, and return that row."""
-    reg = registration(items, hourly, **kw)
+def plan_sites(specs, employees, status="retail"):
+    """Several rented sites and one staff list, planned together."""
+    regs = [registration(**spec) for spec in specs]
     save = Save(
         {
             "EmployeeInstances": {"$items": employees},
-            "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]},
+            "BuildingRegistrations": {
+                "$items": [dict(reg, RentedByPlayer=True) for reg in regs]
+            },
         },
         {},
         "test.hsg",
     )
-    sites = [business()]
+    sites = [business(status, reg["StreetNumber"]) for reg in regs]
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
-    grids = _hourly(save, [reg], sites, STATIONS, set(), crew, LABELS)
-    rows = _staffing(save, LABELS, sites, grids, staff, 0.55)
+    grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
+    return _staffing(save, LABELS, sites, grids, staff, 0.55)
+
+
+def plan(items, employees, hourly, **kw):
+    """Run the whole chain one site's row comes out of, and return that row."""
+    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees)
     return rows[0] if rows else None
 
 
 FLAT = {h: 15 for h in range(24)}  # 15 customers an hour, all day, every day
+
+# Every demand kind that bears on a roster, and one person per demand that holds
+# one. Both are taken from JOB_DEMANDS rather than copied out of it, so a kind a
+# future game build adds fails the property test until somebody decides what the
+# roster builder should do with it.
+SCHEDULING = ("hours", "days", "daysoff", "noshift", "nocleaning")
+SCHEDULING_DEMANDS = [
+    (slug,) for slug in sorted(JOB_DEMANDS) if JOB_DEMANDS[slug][0] in SCHEDULING
+]
 
 
 # A roster row is d/s/f/t/p, plus k on anything but an ordinary serving shift,
@@ -523,28 +560,39 @@ class CutTest(unittest.TestCase):
 class RosterRulesTest(unittest.TestCase):
     """A property test: no produced shift may break any rule, on any fixture."""
 
-    DEMANDS = [
+    SCHEDULING = SCHEDULING
+    DEMANDS = SCHEDULING_DEMANDS + [
         (),
-        ("ba:jobdemand_fulltime",),
-        ("ba:jobdemand_parttime",),
-        ("ba:jobdemand_fourdaysweek",),
-        ("ba:jobdemand_fivedaysweek", "ba:jobdemand_freeweekends"),
-        ("ba:jobdemand_nomornings",),
-        ("ba:jobdemand_noafternoons",),
-        ("ba:jobdemand_noevenings",),
-        ("ba:jobdemand_nonights",),
-        ("ba:jobdemand_nocleaning",),
         ("ba:jobdemand_fulltime", "ba:jobdemand_nonights", "ba:jobdemand_freeweekends"),
         ("ba:jobdemand_cleanworkplace",),  # nothing to do with when they work
     ]
 
+    def test_the_fixture_covers_every_kind_that_bears_on_a_roster(self):
+        covered = {
+            JOB_DEMANDS[slug][0] for group in self.DEMANDS for slug in group
+        }
+        self.assertEqual(covered & set(self.SCHEDULING), set(self.SCHEDULING))
+        # And the other way round: no kind of JOB_DEMANDS is left unclassified.
+        self.assertTrue(set(self.SCHEDULING) <= {rule[0] for rule in JOB_DEMANDS.values()})
+
     def roster(self):
         items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
         people = [
-            employee(f"p{i}", [SERVICE, CLEANING, GUARD], wage=20 + i, demands=d)
+            employee(f"p{i:02d}", [SERVICE, CLEANING, GUARD], wage=20 + i, demands=d)
             for i, d in enumerate(self.DEMANDS)
         ]
+        # One person who can only ever work a register: deleting the skill check
+        # in _can_work() puts them on the cleaning station and fails the test.
+        people.append(
+            employee("only", [SERVICE], wage=1.0, demands=("ba:jobdemand_fulltime",))
+        )
         return plan(items, people, FLAT), {p["id"]: p for p in people}
+
+    def test_a_single_skilled_person_is_only_posted_where_they_can_work(self):
+        row, _people = self.roster()
+        theirs = {kind(s) for s in row["shifts"] if who(row, s) == "only"}
+        self.assertTrue(theirs)
+        self.assertEqual(theirs, {"serve"})
 
     def test_no_shift_breaks_a_rule(self):
         row, people = self.roster()
@@ -594,13 +642,17 @@ class RosterRulesTest(unittest.TestCase):
                     busy[shift["d"]].add(hour)
             self.assertLessEqual(max(per_day.values()), OVERWORK_HOURS, eid)
 
+    def person_with(self, slug):
+        return f"p{self.DEMANDS.index((slug,)):02d}"
+
     def test_a_blackout_is_tested_by_overlap_not_containment(self):
         """Someone who wants no nights never touches 22-24 or 0-4, even by an hour."""
         row, _people = self.roster()
         nights = [
             s
             for s in row["shifts"]
-            if who(row, s) == "p8" and (s["f"] < 4 or s["t"] > 22)
+            if who(row, s) == self.person_with("ba:jobdemand_nonights")
+            and (s["f"] < 4 or s["t"] > 22)
         ]
         self.assertEqual(nights, [])
 
@@ -658,7 +710,7 @@ class CoverTest(unittest.TestCase):
     def test_cleaning_and_security_cover_every_open_hour(self):
         items = [(1, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
         people = [employee(f"p{i}", [SERVICE, CLEANING, GUARD]) for i in range(12)]
-        row = plan(items, people, FLAT, opens=(8, 20))
+        row = plan(items, people, FLAT, opens=((8, 20),))
         for duty in ("clean", "security"):
             covered = [s for s in row["shifts"] if kind(s) == duty]
             self.assertEqual(sum(hours(s) for s in covered), 12 * 7, duty)
@@ -671,8 +723,8 @@ class CoverTest(unittest.TestCase):
         people = [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(8)]
         row = plan(items, people, FLAT, open_days=(1, 2, 3, 4, 5))
         self.assertEqual([s for s in row["shifts"] if s["d"] in (6, 0)], [])
-        self.assertEqual(row["open"][6], None)
-        self.assertEqual(row["open"][1], [0, 24])
+        self.assertEqual(row["open"][6], [])
+        self.assertEqual(row["open"][1], [[0, 24]])
 
     def test_nocleaning_keeps_a_person_off_the_cleaning_station(self):
         items = [(8, CLEAN_STATION)]
@@ -724,7 +776,8 @@ class PayloadTest(unittest.TestCase):
             {
                 "key", "name", "typeSlug", "open", "stations", "people",
                 "roles", "need", "basis", "ceiling", "shifts", "headcount",
-                "shortHours", "placed", "bench", "slack", "cost", "current",
+                "shortHours", "shortDays", "placed", "bench", "slack", "cost",
+                "current",
             },
         )
 
@@ -861,7 +914,7 @@ class SurvivalTest(unittest.TestCase):
         items = [(1, REGISTER), (8, CLEAN_STATION)]
         row = plan(items, [employee("a", [SERVICE, CLEANING])], FLAT, open_days=())
         self.assertEqual(row["shifts"], [])
-        self.assertEqual(row["open"], [None] * 7)
+        self.assertEqual(row["open"], [[]] * 7)
         self.assertEqual(row["slack"]["budget"], 0)
 
     def test_a_site_with_no_station_at_all(self):
@@ -874,6 +927,253 @@ class SurvivalTest(unittest.TestCase):
     def row_for_json(self):
         people = [employee(f"p{i}", [SERVICE, CLEANING, GUARD]) for i in range(6)]
         return plan([(1, REGISTER), (8, CLEAN_STATION), (9, LOCKER)], people, FLAT)
+
+
+class OneWeekPerPersonTest(unittest.TestCase):
+    """A bench member is one person, not one per site (review round 1, item 1)."""
+
+    def sites(self):
+        return plan_sites(
+            [
+                dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
+                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+            ],
+            [employee("free", [SERVICE], here=False,
+                      demands=("ba:jobdemand_fulltime",))],
+        )
+
+    def test_nobody_works_two_shops_at_once(self):
+        rows = self.sites()
+        self.assertEqual(len(rows), 2)
+        worked = collections.defaultdict(set)
+        for row in rows:
+            for shift in row["shifts"]:
+                for hour in range(shift["f"], shift["t"]):
+                    cell = (shift["d"], hour)
+                    self.assertNotIn(cell, worked[who(row, shift)], "two shops at once")
+                    worked[who(row, shift)].add(cell)
+
+    def test_the_week_never_passes_the_band_across_sites(self):
+        rows = self.sites()
+        hours = collections.Counter()
+        for row in rows:
+            for shift in row["shifts"]:
+                hours[who(row, shift)] += shift["t"] - shift["f"]
+        self.assertTrue(hours)
+        self.assertLessEqual(max(hours.values()), FULL_TIME[1])
+
+    def test_a_bench_member_belongs_to_the_site_that_took_them(self):
+        first, second = self.sites()
+        self.assertTrue(first["shifts"])
+        self.assertEqual(first["bench"], [{"p": 0, "skill": SERVICE}])
+        self.assertEqual(second["bench"], [])
+        self.assertEqual(second["shifts"], [])
+        # And only the site that took them counts them as staff it has.
+        self.assertEqual(first["headcount"][SERVICE]["have"], 1)
+        self.assertEqual(second["headcount"][SERVICE]["have"], 0)
+
+    def test_the_bench_goes_to_the_same_site_on_every_run(self):
+        first = json.dumps([r["shifts"] for r in self.sites()], sort_keys=True)
+        second = json.dumps([r["shifts"] for r in self.sites()], sort_keys=True)
+        self.assertEqual(first, second)
+
+
+class UnmeasuredSiteTest(unittest.TestCase):
+    """A shop that has never reported an hour is still a shop (item 2)."""
+
+    def row(self):
+        return plan(
+            [(1, REGISTER), (8, CLEAN_STATION), (9, LOCKER)],
+            [employee("a", [SERVICE, CLEANING, GUARD])],
+            {},
+            weeks=0,
+            opens=((8, 20),),
+        )
+
+    def test_it_gets_a_row_with_cover_and_hiring_lines(self):
+        row = self.row()
+        self.assertIsNotNone(row)
+        self.assertEqual({c for r in row["basis"][SERVICE] for c in r}, {"none"})
+        self.assertEqual([s for s in row["shifts"] if kind(s) == "serve"], [])
+        self.assertEqual(
+            sum(hours(s) for s in row["shifts"] if kind(s) == "clean"), 12 * 7
+        )
+        self.assertGreater(row["headcount"][GUARD]["hire"], 0)
+
+    def test_the_hour_grid_still_skips_it(self):
+        """The panel must not start drawing an empty grid for a new shop."""
+        reg = registration([(1, REGISTER)], {}, weeks=0)
+        save = Save(
+            {"EmployeeInstances": {"$items": []},
+             "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
+            {}, "t.hsg",
+        )
+        [grid] = _hourly(save, [reg], [business()], STATIONS, set(), {}, LABELS)
+        self.assertFalse(grid["reported"])
+
+
+class CensoredBaseTest(unittest.TestCase):
+    """A censored hour starts from what the site served, not from one role (item 3)."""
+
+    def test_a_fast_role_is_not_told_to_grow_for_a_slow_one(self):
+        # A gym with three boards, two of them manned (40/h), and one register
+        # manned (20/h). The site served 20 an hour and the hour is capped, so
+        # the trainers are wanted for 20 + one more board = 40, two boards --
+        # not their own 40 + 20 = 60, which would buy a third board to serve
+        # customers the single register cannot let through anyway.
+        customers = [[None] * 24 for _ in range(7)]
+        customers[1][12] = 20.0
+        trainers = [[0] * 24 for _ in range(7)]
+        trainers[1][12] = 40
+        cashiers = [[0] * 24 for _ in range(7)]
+        cashiers[1][12] = 20
+        roles = [
+            role(TRAINER, [20, 20, 20], trainers),
+            role(SERVICE, [20], cashiers),
+        ]
+        out = _need_curve(grid(roles, customers))
+        self.assertEqual(out[TRAINER]["basis"][1][12], "censored")
+        self.assertEqual(out[TRAINER]["demand"][1][12], 40.0)
+        self.assertEqual(out[TRAINER]["need"][1][12], 2)
+
+
+class BridgeOrderTest(unittest.TestCase):
+    """One budget for the site, spent cheapest gap first (items 4 and 5)."""
+
+    def wanted(self, gaps):
+        out = {}
+        for skill, missing in gaps.items():
+            days = [set(range(0, 24)) for _ in range(7)]
+            for hour in missing:
+                days[1].discard(hour)
+            out[skill] = {0: days}
+        return out
+
+    def test_a_cheap_long_gap_beats_an_expensive_short_one(self):
+        # Customer Service, sorted first, has a one-hour gap at a wage of 100;
+        # the Gym Trainers have a two-hour gap at a wage of 1. The budget buys
+        # two hours, so the cheap gap has to win outright.
+        wanted = self.wanted({SERVICE: [12], TRAINER: [12, 13]})
+        spent, cost = _bridge_troughs(
+            wanted, {SERVICE: 100.0, TRAINER: 1.0}, 2, [[[0, 24]]] * 7
+        )
+        self.assertEqual((spent, cost), (2, 2.0))
+        self.assertIn(12, wanted[TRAINER][0][1])
+        self.assertNotIn(12, wanted[SERVICE][0][1])
+
+    def test_a_gap_between_two_opening_slots_is_never_bridged(self):
+        wanted = self.wanted({SERVICE: [12]})
+        spent, cost = _bridge_troughs(
+            wanted, {SERVICE: 1.0}, 24, [[[0, 12], [13, 24]]] * 7
+        )
+        self.assertEqual((spent, cost), (0.0, 0.0))
+        self.assertNotIn(12, wanted[SERVICE][0][1])
+
+
+class TwoOpeningSlotsTest(unittest.TestCase):
+    """The hour between two slots is the doors shut, not a dip in trade (item 5)."""
+
+    def row(self):
+        items = [(1, REGISTER), (8, CLEAN_STATION)]
+        people = [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(8)]
+        return plan(items, people, FLAT, opens=((8, 12), (13, 17)))
+
+    def test_nobody_is_rostered_into_the_closed_hour(self):
+        row = self.row()
+        self.assertTrue(row["shifts"])
+        for shift in row["shifts"]:
+            self.assertFalse(shift["f"] <= 12 < shift["t"], shift)
+            self.assertGreaterEqual(shift["f"], 8)
+            self.assertLessEqual(shift["t"], 17)
+
+    def test_the_payload_carries_both_slots(self):
+        self.assertEqual(self.row()["open"][1], [[8, 12], [13, 17]])
+
+
+class HiringResidueTest(unittest.TestCase):
+    """Hours alone understate the hires a residue needs (item 6)."""
+
+    def test_two_shifts_on_one_day_cannot_be_one_hire(self):
+        # Every one of the four staff demands free weekends, so Saturday and
+        # Sunday are uncovered: two 12-hour shifts each, 48 hours. A single
+        # full-time hire could take 48 hours in a week but not two twelves on
+        # the same day, so the honest answer is two.
+        people = [
+            employee(f"p{i}", [SERVICE], demands=("ba:jobdemand_freeweekends",))
+            for i in range(4)
+        ]
+        row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
+        counts = row["headcount"][SERVICE]
+        self.assertEqual(counts["have"], 4)
+        self.assertEqual(math.ceil(48 / FULL_TIME[1]), 1)  # what hours alone say
+        self.assertEqual(counts["hire"], 2)
+        self.assertEqual([s for s in row["shifts"] if s["d"] in (6, 0)], [])
+
+
+class ShortfallTest(unittest.TestCase):
+    """Who the plan leaves short, in hours and in days (items 7 and 9)."""
+
+    def test_somebody_given_no_shift_at_all_is_still_short(self):
+        # One register, one cleaning station, and three full-time staff: the
+        # plan cannot find 30 hours for all of them, and whoever gets nothing is
+        # the most short, not absent from the list.
+        people = [
+            employee(f"p{i:02d}", [SERVICE, CLEANING],
+                     demands=("ba:jobdemand_fulltime",))
+            for i in range(40)
+        ]
+        row = plan([(1, REGISTER), (8, CLEAN_STATION)], people, {h: 1 for h in range(24)})
+        idle = [r for r in row["shortHours"] if r["hours"] == 0]
+        self.assertTrue(idle)
+        self.assertEqual(idle[0]["min"], 30)
+        # The worst off sort first.
+        self.assertEqual(row["shortHours"][0]["hours"], 0)
+
+    def test_a_four_day_week_is_four_days_not_at_most_four(self):
+        # A site open four hours a day has nowhere near enough work for a
+        # four-day week per person, so the demand goes unmet and is reported.
+        people = [
+            employee(f"p{i}", [SERVICE], demands=("ba:jobdemand_fourdaysweek",))
+            for i in range(7)
+        ]
+        row = plan([(1, REGISTER)], people, FLAT, opens=((8, 12),))
+        by_person = collections.Counter()
+        for shift in row["shifts"]:
+            by_person[shift["p"]] += 1
+        self.assertTrue(row["shortDays"])
+        for entry in row["shortDays"]:
+            self.assertEqual(entry["want"], 4)
+            self.assertLess(entry["days"], 4)
+        # Nobody was pushed over their count to make it up.
+        for row_entry in row["shortDays"]:
+            self.assertGreater(row_entry["days"], 0)
+
+    def test_nobody_is_ever_given_more_days_than_their_count(self):
+        people = [
+            employee("one", [SERVICE], demands=("ba:jobdemand_fourdaysweek",)),
+        ]
+        row = plan([(1, REGISTER)], people, FLAT)
+        days = {s["d"] for s in row["shifts"]}
+        self.assertLessEqual(len(days), 4)
+
+
+class CurrentSecurityTest(unittest.TestCase):
+    """A guard on a locker is security, not service (item 8)."""
+
+    def test_a_locker_shift_is_counted_as_security(self):
+        shifts = [
+            {"wd": 1, "employeeId": "g", "itemInstanceId": 9,
+             "startingHour": 0, "endingHour": 12, "type": 1},
+        ]
+        row = plan(
+            [(1, REGISTER), (9, LOCKER)],
+            [employee("g", [GUARD, SERVICE])],
+            FLAT,
+            shifts=shifts,
+        )
+        self.assertEqual(row["current"]["security"], 1)
+        [now] = row["current"]["list"]
+        self.assertEqual(kind(now), "security")
 
 
 class HashSeedTest(unittest.TestCase):

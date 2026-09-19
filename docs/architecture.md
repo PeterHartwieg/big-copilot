@@ -76,9 +76,9 @@ this column is where to look when you change a key's shape — not a complete ca
 | `chains` | `_chains()` | `drawPortfolio` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
-| `hours` | `_hourly()` | `drawSite` |
+| `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
-| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | no reader yet — the site panel's roster block reads it |
+| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | no reader yet — the site panel's roster block reads it |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -106,6 +106,12 @@ Four keys have no reader, but only one of them is dead end to end:
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
 - `staffing` is unread *for now*: the roster is built and tested ahead of the site panel's
   roster block, which is the page that will read it. Nothing on the board draws it yet.
+
+`_hourly()` returns every trading site and flags each `reported`. `extract()` passes the
+whole list to `_staffing()` and only the reported ones to the `hours` key and
+`_hour_findings()`, so a shop too new to have been measured is planned — its cleaning and
+security cover and its hiring lines do not wait on a measurement — without the hour grid
+starting to draw an empty week for it.
 
 A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
 points into them by index rather than repeating an id: `s` a station, `p` a person or null.
