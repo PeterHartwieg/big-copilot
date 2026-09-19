@@ -180,8 +180,8 @@ test('only the lines somebody can be put on count as typed', async () => {
       const r = spRosterRow(key);
       const hire = r.shifts.find(s => s.p === null);
       const real = r.shifts.find(s => s.p !== null);
-      const ticks = new Set([spTickId(hire), spTickId(real), '3-0-9']);
-      return [spTyped(r.shifts.filter(s => s.p !== null), ticks), r.shifts.length];
+      const ticks = new Set([spTickId(r, hire), spTickId(r, real), 'nothing|like|a|line']);
+      return [spTyped(r, spTickableRows(r), ticks), r.shifts.length];
     }, KEY);
     assert.deepEqual(counted, [1, 42], 'the hiring line and the stale tick count for nothing');
   } finally { await page.close(); }
@@ -191,7 +191,7 @@ test('the counts are the plan against what the schedule holds today', async () =
   const page = await shop('full');
   try {
     const counts = await page.evaluate(key => spRosterCounts(spRosterRow(key)), KEY);
-    assert.deepEqual(counts, {plan: 42, now: 42, fragments: 42});
+    assert.deepEqual(counts, {plan: 42, tickable: 35, hire: 7, now: 42, fragments: 42});
   } finally { await page.close(); }
 });
 
@@ -319,6 +319,37 @@ test('a shift pointing at nobody real is dropped, never drawn as a hire', async 
   } finally { await page.close(); }
 });
 
+
+test('the tile, the ring and the card all size the same week', async () => {
+  // 42 lines, seven of them waiting on a hire. The tile used to render 42
+  // struck through against 42 while the ring beside it counted 35, and the
+  // card called that no saving at all.
+  const page = await shop('full');
+  try {
+    const tile = page.locator('#sp-roster .sp-ba > div').first();
+    const shown = (await tile.innerText()).replace(/\s+/g, '').trim();
+    assert.match(shown, /4235\+7hire/, shown);
+    assert.equal(await tile.locator('.sp-v s, .v s').innerText(), '42', 'struck through');
+    assert.match(await tile.getAttribute('data-read'),
+      /against <b>35<\/b> · 7 more lines the plan wants and has nobody for, waiting on a hire/);
+    assert.match(await page.locator('#sp-roster .sp-typed').innerText(), /0 of 35 typed/);
+    const badge = await page.evaluate(() => {
+      drawOptimizeStaffing();
+      return $('optimizeStaffingCard').querySelector('.soon').textContent;
+    });
+    assert.equal(badge, '\u22127 LINES', '42 scraps become 35 lines and one hire');
+  } finally { await page.close(); }
+});
+
+test('a shop with nothing to hire names no hiring lines on the tile', async () => {
+  const page = await shop('shut');
+  try {
+    const tile = page.locator('#sp-roster .sp-ba > div').first();
+    assert.doesNotMatch(await tile.innerText(), /hire/);
+    assert.doesNotMatch(await tile.getAttribute('data-read'), /waiting on a hire/);
+  } finally { await page.close(); }
+});
+
 test('the progress counts one set of lines, on the first draw and after a tick', async () => {
   // 42 lines, seven of them hiring lines: 35 to type. Counting the ring
   // against one denominator and the words against another put "35 of 42" next
@@ -346,7 +377,7 @@ test('a tick kept from a plan that has changed does not count', async () => {
       // Tick a line, then have the planner give it to nobody.
       const r = spRosterRow(key);
       const real = r.shifts.find(s => s.p !== null && s.k === 'security');
-      localStorage.setItem('ba_dash_roster:' + key, JSON.stringify([spTickId(real)]));
+      localStorage.setItem('ba_dash_roster:' + key, JSON.stringify([spTickId(r, real)]));
       real.p = null;
       drawSite();
       return [q('#sp-roster .sp-count').textContent,
@@ -419,7 +450,12 @@ test('the now/plan toggle swaps the plan for the fragments the game holds', asyn
     assert.equal(await page.locator(mon + '.sp-frag').count(), 6, 'six two-hour scraps');
     await page.evaluate(() => q('#sp-roster .sp-nowplan a[data-view="now"]').click());
     assert.match(await page.locator('#sp-roster .sp-gantt').getAttribute('class'), /sp-now/);
-    assert.match(await page.locator('#sp-roster .sp-ba').innerText(), /42/);
+    // The tile carries both weeks either way round, and the toggle changes
+    // neither: 42 scraps today, struck through, against 35 lines to enter.
+    const tile = (await page.locator('#sp-roster .sp-ba > div').first().innerText())
+      .replace(/\s+/g, '');
+    assert.match(tile, /4235\+7hire/, tile);
+    assert.match(await page.locator('#sp-roster .sp-nowplan a.sp-on').innerText(), /now/);
   } finally { await page.close(); }
 });
 
@@ -457,6 +493,69 @@ test('a name out of the save is text on the bar, never markup', async () => {
   } finally { await page.close(); }
 });
 
+
+// Tick one line, change one thing about it, and see whether the tick follows.
+// `edit` is given the row and the line and mutates the plan in place.
+async function reticked(edit){
+  const page = await shop('full');
+  try {
+    return await page.evaluate(([key, body]) => {
+      const r = spRosterRow(key);
+      const line = spTickableRows(r).find(s => s.k === undefined);
+      localStorage.setItem('ba_dash_roster:' + key, JSON.stringify([spTickId(r, line)]));
+      drawSite();
+      const before = $$('#sp-roster .sp-shift.sp-done').length;
+      // eslint-disable-next-line no-new-func
+      new Function('row', 'line', body)(r, line);
+      drawSite();
+      return [before, $$('#sp-roster .sp-shift.sp-done').length,
+        q('#sp-roster .sp-count').textContent];
+    }, [KEY, edit]);
+  } finally { await page.close(); }
+}
+
+test('a tick does not follow the line to somebody else', async () => {
+  // sol's case, halved: the same station at the same hours, handed over.
+  assert.deepEqual(await reticked(
+    'line.p = row.people.findIndex((_, k) => k !== line.p);'),
+    [1, 0, '0'], 'a shift somebody else works is not the shift that was typed');
+});
+
+test('a tick does not follow the line to a different length', async () => {
+  // The other half: the same person at the same station, kept two hours
+  // longer. The id used to be weekday-station-start, so this opened done.
+  assert.deepEqual(await reticked('line.t = line.t + 2;'),
+    [1, 0, '0'], 'a longer shift is a different line to type');
+});
+
+test('a tick does not follow the line to another weekday or another hour', async () => {
+  assert.deepEqual(await reticked('line.d = (line.d + 1) % 7;'), [1, 0, '0']);
+  assert.deepEqual(await reticked('line.f = line.f + 1;'), [1, 0, '0']);
+});
+
+test('a tick survives the people table being renumbered', async () => {
+  // Hiring one more cashier renumbers everybody after them. The line the
+  // player typed has not changed, so neither has its tick.
+  assert.deepEqual(await reticked(`
+    row.people.unshift({id: 'newhire', name: 'AARON NEW'});
+    row.shifts.forEach(s => { if(s.p !== null) s.p += 1; });
+    row.bench.forEach(b => { b.p += 1; });
+    row.shortHours.forEach(x => { x.p += 1; });
+    row.shortDays.forEach(x => { x.p += 1; });
+  `), [1, 1, '1'], 'the same line is still ticked');
+});
+
+test('a tick survives the stations table being renumbered', async () => {
+  // And buying one more register moves every station index after it.
+  assert.deepEqual(await reticked(`
+    row.stations.unshift({id: 'newpost', name: 'Cash register',
+      skill: 'ba:skill_customerservice', rate: 20});
+    row.shifts.forEach(s => { s.s += 1; });
+    row.current.list.forEach(s => { s.s += 1; });
+    row.roles.forEach(x => { x.stations = x.stations.map(k => k + 1); });
+  `), [1, 1, '1'], 'the same line is still ticked');
+});
+
 test('a tick is kept per site and survives the next draw', async () => {
   const page = await shop('full');
   try {
@@ -466,7 +565,7 @@ test('a tick is kept per site and survives the next draw', async () => {
     assert.match(await bar.getAttribute('class'), /sp-done/);
     assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '1');
     const stored = await page.evaluate(k => localStorage.getItem('ba_dash_roster:' + k), KEY);
-    assert.match(stored, /"1-\d+-\d+"/);
+    assert.match(stored, /"1\|/, 'the weekday, then the station and person by id');
     await page.evaluate(() => drawSite());
     assert.match(await bar.getAttribute('class'), /sp-done/, 'the tick came back');
     await page.evaluate(() => q('#sp-roster .sp-clear').click());
@@ -580,7 +679,7 @@ test('a row of nothing but edges still draws, and opens on a day', async () => {
         current: {shifts: 0, fragments: 0, cleaning: 0, security: 0, list: []},
       });
       drawSite();
-      return [$$('#sp-roster .sp-daytabs a.on').length, $$('#sp-roster .sp-day.on').length];
+      return [$$('#sp-roster .sp-daytabs a.sp-on').length, $$('#sp-roster .sp-day.sp-on').length];
     });
     assert.deepEqual(tabs, [1, 1]);
     assert.deepEqual(errors, []);
@@ -627,9 +726,40 @@ test('the Optimize staffing card opens the roster with most typing to save', asy
       const card = $('optimizeStaffingCard');
       return [card.querySelector('.soon').textContent, card.lastElementChild.textContent, card.dataset.site];
     });
-    assert.equal(shown[0], '−158 LINES');
-    assert.match(shown[1], /Big saving: 200 shifts become 42\./);
+    assert.equal(shown[0], '−165 LINES');
+    assert.match(shown[1], /Big saving: 200 shifts become 35\./);
     assert.equal(shown[2], 'b');
+  } finally { await page.close(); }
+});
+
+test('the card scores the saving on the lines somebody can be put on', async () => {
+  const page = await shop('full');
+  try {
+    const shown = await page.evaluate(() => {
+      // One shop, 42 planned lines, 7 of them waiting on a hire, against 42
+      // scraps in the game. The honest saving is 42 to 35.
+      drawOptimizeStaffing();
+      const card = $('optimizeStaffingCard');
+      return [card.querySelector('.soon').textContent, card.lastElementChild.textContent,
+];
+    });
+    assert.equal(shown[0], '−7 LINES');
+    assert.match(shown[1], /42 shifts become 35\./);
+    assert.doesNotMatch(shown[1], /become 42/);
+  } finally { await page.close(); }
+});
+
+test('the card sizes a plan with nothing to save on the same week', async () => {
+  const page = await shop('full');
+  try {
+    const shown = await page.evaluate(() => {
+      D.staffing[0].current = {shifts: 0, fragments: 0, cleaning: 0, security: 0, list: []};
+      drawOptimizeStaffing();
+      const card = $('optimizeStaffingCard');
+      return [card.querySelector('.soon').textContent, card.lastElementChild.textContent];
+    });
+    assert.equal(shown[0], '35 SHIFTS', 'not 42: seven of those cannot be entered yet');
+    assert.match(shown[1], /a week of 35 shifts to enter\./);
   } finally { await page.close(); }
 });
 
@@ -650,8 +780,8 @@ test('a player who never opened BizMan is offered the plan, not told they are un
       const card = $('optimizeStaffingCard');
       return [card.querySelector('.soon').textContent, card.lastElementChild.textContent, card.dataset.site];
     });
-    assert.equal(shown[0], '42 SHIFTS');
-    assert.match(shown[1], /Big shop: a week of 42 shifts to enter\./);
+    assert.equal(shown[0], '35 SHIFTS');
+    assert.match(shown[1], /Big shop: a week of 35 shifts to enter\./);
     assert.doesNotMatch(shown[1], /measured/);
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }

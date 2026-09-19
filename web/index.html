@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=0708f8b4d7">
+<link rel="stylesheet" href="community.css?v=5985f58c7a">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=0708f8b4d7">
+<link rel="stylesheet" href="fonts/fonts.css?v=5985f58c7a">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1590,7 +1590,10 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-daytabs a{position:relative;min-width:30px;text-align:center}
 .sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
 .sp-day{display:none}
-.sp-day.on{display:block}
+.sp-day.sp-on{display:block}
+/* The board's .seg styles its chosen option with a bare `on`; the roster's
+   two segmented controls carry their own so the modifier stays prefixed. */
+.sp-daytabs a.sp-on,.sp-nowplan a.sp-on{background:var(--ink);color:var(--ground)}
 .sp-grow{position:relative;display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center;min-height:38px}
 .sp-grow::before{content:"";grid-column:2/-1;grid-row:1;height:32px;border-radius:7px;background:var(--raised);opacity:.45}
 .sp-grow .lab{grid-column:1;grid-row:1;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3);cursor:default;overflow:hidden}
@@ -2620,8 +2623,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "0708f8b4d7";</script>
-<script>window.LEDGER_RELEASE = {"version":"0708f8b4d7","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "5985f58c7a";</script>
+<script>window.LEDGER_RELEASE = {"version":"5985f58c7a","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2690,8 +2693,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=0708f8b4d7"></script>
-<script src="community.js?v=0708f8b4d7"></script>
+<script src="app.js?v=5985f58c7a"></script>
+<script src="community.js?v=5985f58c7a"></script>
 
 <script>
 
@@ -4714,17 +4717,24 @@ const spOpenAt = (slots, h) => (slots || []).some(s => s[0] <= h && h < s[1]);
 /* One list of shifts per station per weekday, each in the order they run. `d`
    and `s` come out of a save, so a row pointing outside the tables is dropped
    rather than drawn against the wrong station. */
+/* Whether a row reaches the page at all. `p: null` is a line the plan wants
+   and has nobody for, which is a real state worth drawing. An index pointing
+   outside either table is not that: it is a row we cannot read, and drawing it
+   would put an hour against the wrong station, or tell the player nobody may
+   work an hour somebody probably does. */
+const spNobody = p => p === null || p === undefined;
+const spDrawn = (row, s) => s.d >= 0 && s.d < 7 && !!(row.stations || [])[s.s]
+  && (spNobody(s.p) || !!(row.people || [])[s.p]);
+/* And whether it is a line the player can go and type: one with somebody on
+   it. A hiring line is drawn, but there is nothing to enter for it yet. */
+const spTickableRows = row => (row.shifts || []).filter(
+  s => spDrawn(row, s) && !spNobody(s.p));
 function spRosterRows(row, list){
-  const people = row.people || [];
   const days = [...Array(7)].map(() => (row.stations || []).map(() => []));
   (list || []).forEach(s => {
     const day = days[s.d];
     if(!day || !Array.isArray(day[s.s])) return;
-    /* `p: null` is a line the plan wants and has nobody for, which is a real
-       state worth drawing. An index pointing outside the people table is not
-       that: it is a row we cannot read, and drawing it as a hiring line would
-       tell the player nobody may work an hour somebody probably does. */
-    if(s.p !== null && s.p !== undefined && !people[s.p]) return;
+    if(!spDrawn(row, s)) return;
     day[s.s].push(s);
   });
   days.forEach(day => day.forEach(shifts => shifts.sort((a, b) => a.f - b.f || a.t - b.t)));
@@ -4744,11 +4754,25 @@ function spSameDays(days){
     return first < d ? first : null;
   });
 }
-/* A shift's own coordinates: the weekday, the station and the hour it starts.
-   A plan that moves a shift simply drops its tick, which is the invalidation
-   the block wants -- a tick means "this line is in the game", and a line that
-   changed is not. */
-const spTickId = s => `${s.d}-${s.s}-${s.f}`;
+/* What a tick means: this exact line is entered in the game. So its identity
+   is the line the player typed -- the weekday, the station, the hours from and
+   to, and the person -- and nothing else. A plan that changes any of those has
+   changed the line, and the tick stops matching, which is the whole
+   invalidation the block needs: no fingerprint, no version, no migration.
+
+   The station and the person go in by their save ids rather than by their
+   index into this row's tables, because those tables are rebuilt every run:
+   buying one more register or hiring one more cashier renumbers everybody
+   after it, and a tick that followed the index would land on somebody else's
+   shift. An id may hold anything base64 does, so the parts are joined with a
+   character an id never contains. */
+const spTickId = (row, s) => [
+  s.d,
+  ((row.stations || [])[s.s] || {}).id,
+  s.f,
+  s.t,
+  ((row.people || [])[s.p] || {}).id,
+].join("|");
 /* The ticks are a convenience, kept per site in the browser. Storage can be
    missing or refuse to answer -- a private window, site data blocked, the
    board opened from a file -- and every path here ends with the block drawing
@@ -4766,16 +4790,30 @@ const spTicksWrite = (key, ticks) => {
   } catch(e){ /* nothing to do: the plan is still on the page */ }
 };
 /* How much of *this* plan is typed. A tick left over from an older plan
-   counts for nothing, so the ring never promises more than is there. */
-const spTyped = (shifts, ticks) => (shifts || []).reduce(
-  (n, s) => n + (ticks.has(spTickId(s)) ? 1 : 0), 0);
+   counts for nothing, so the ring never promises more than is there, and the
+   next write drops it. */
+const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
+  (n, s) => n + (ticks.has(spTickId(row, s)) ? 1 : 0), 0);
 /* What the week costs to type, against what is in the game now. `fragments`
-   is how much of what is there now is a two-hour scrap. */
-const spRosterCounts = row => ({
-  plan: (row.shifts || []).length,
-  now: (row.current || {}).shifts || 0,
-  fragments: (row.current || {}).fragments || 0,
-});
+   is how much of what is there now is a two-hour scrap.
+
+   `plan` is every line the planner produced and `tickable` is the ones with
+   somebody on them; the difference is `hire`, the lines waiting on somebody
+   being hired first. Only `tickable` is a week of typing, and it is the number
+   the tile, the ring and the Next-moves card all have to agree on -- a shop
+   with an unstaffed locker otherwise showed 42 struck through against 42 while
+   the ring beside it counted 35. */
+function spRosterCounts(row){
+  const drawn = (row.shifts || []).filter(s => spDrawn(row, s));
+  const tickable = drawn.filter(s => !spNobody(s.p)).length;
+  return {
+    plan: (row.shifts || []).length,
+    tickable,
+    hire: drawn.length - tickable,
+    now: (row.current || {}).shifts || 0,
+    fragments: (row.current || {}).fragments || 0,
+  };
+}
 
 /* Two letters and a number for a station, the way the player picks it out of
    BizMan's list: the initials of its name, numbered only where more than one
@@ -5251,7 +5289,7 @@ function spRosterDay(c, wd, on){
     (c.plan[wd][si] || []).forEach(s => { out += spShiftBar(c, s, st, kind); });
     out += `</div>`;
   });
-  return `<div class="sp-day${on ? " on" : ""}" data-d="${wd}">${out}</div>`;
+  return `<div class="sp-day${on ? " sp-on" : ""}" data-d="${wd}">${out}</div>`;
 }
 
 /* One shift. A line with nobody to give it to is a hiring line, not a
@@ -5272,7 +5310,7 @@ function spShiftBar(c, s, st, kind){
   else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
   const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
     + (benched ? spI("bench") : "");
-  const id = spTickId(s);
+  const id = spTickId(c.row, s);
   return `<button type="button" class="sp-shift${kind === "serve" ? "" : ` sp-${kind}`}${
     c.ticks.has(id) ? " sp-done" : ""}" style="${span}" data-p="${s.p}" data-tick="${attr(id)}" data-read="${
     attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${marks}${spEsc(who)}<small>${hrs}</small></button>`;
@@ -5362,8 +5400,8 @@ function spRosterBlock(b){
      progress -- and both halves of that progress, the first render and every
      retally after it, have to count the same set or the ring and the words
      disagree. `data-tickable` is that one number. */
-  c.tickable = c.plan.flat(2).filter(s => s.p !== null && s.p !== undefined);
-  const typed = spTyped(c.tickable, c.ticks);
+  c.tickable = spTickableRows(row);
+  const typed = spTyped(row, c.tickable, c.ticks);
   /* The week opens on the first day that has anything on it, so a shop shut
      on Sunday does not open on an empty grid. With nothing anywhere -- every
      row dropped as unreadable -- it opens on Monday rather than on no day at
@@ -5374,7 +5412,7 @@ function spRosterBlock(b){
     const read = copy === null
       ? `<b>${WEEK_FULL[wd]}</b> · ${c.plan[wd].reduce((n, s) => n + s.length, 0)} shifts`
       : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
-    return `<a href="#" class="${wd === first ? "on" : ""}" data-day="${wd}" data-read="${attr(read)}">${
+    return `<a href="#" class="${wd === first ? "sp-on" : ""}" data-day="${wd}" data-read="${attr(read)}">${
       copy === null ? "" : "<u></u>"}${WEEK_SHORT[wd].toUpperCase()}</a>`;
   }).join("");
   const hours = `<div class="sp-grow sp-needrow" style="min-height:0;margin:0"><span></span>${
@@ -5386,12 +5424,15 @@ function spRosterBlock(b){
       spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
     attr(row.key)}" data-tickable="${c.tickable.length}">
-    ${sechead("Roster", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="on" data-view="plan">plan</a></span>`,
+    ${sechead("Roster", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span>`,
       why: `A week to type into BizMan › Schedule: clear the schedule, then enter these. Shifts run as long as the game allows, 12 hours, and nobody is put inside a window they asked to keep free. Click a shift once it is typed; the ticks stay in this browser.`})}
     <div class="sp-ba">
       <div data-read="${attr(`Shifts to enter for the week: <b>${counts.now}</b> today${
-        counts.fragments ? `, ${counts.fragments} of them two hours long` : ""}, against <b>${counts.plan}</b>`)}"><span class="lab">Shifts / week</span><div class="v">${
-        spI("list")}<s>${counts.now}</s>${counts.plan}</div></div>
+        counts.fragments ? `, ${counts.fragments} of them two hours long` : ""}, against <b>${
+        counts.tickable}</b>${counts.hire
+          ? ` · ${counts.hire} more line${counts.hire === 1 ? "" : "s"} the plan wants and has nobody for, waiting on a hire` : ""}`)}"><span class="lab">Shifts / week</span><div class="v">${
+        spI("list")}<s>${counts.now}</s>${counts.tickable}${counts.hire
+          ? `<small style="font-size:12px;color:var(--warn)">+${counts.hire} hire</small>` : ""}</div></div>
       <div data-read="${attr(`<b>${fmt(cost.current)}</b> a week as the schedule stands, <b>${
         fmt(cost.weekly)}</b> for the plan, for the staff the save prices`)}"><span class="lab">Wages / week</span><div class="v">${
         spI("coin")}<s>${money(cost.current)}</s>${money(cost.weekly)}</div></div>
@@ -7350,11 +7391,16 @@ const spPickRoster = (rows, score) => rows.reduce((a, b) =>
 function spBestRoster(){
   const rows = spRosterPlans();
   if(!rows.length) return null;
-  const saved = r => (r.current || {}).shifts - r.shifts.length;
+  /* A week of typing is the lines somebody can be put on. Counting the hiring
+     lines in understated the saving at exactly the shop the card is for: a
+     fragmented store with an unstaffed locker goes from 42 scraps to 35 lines
+     and one post to hire for, and scoring on the raw 42 called that nothing. */
+  const week = r => spRosterCounts(r).tickable;
+  const saved = r => (r.current || {}).shifts - week(r);
   const shorter = rows.filter(r => saved(r) > 0);
   return shorter.length
     ? {row: spPickRoster(shorter, saved), saves: true}
-    : {row: spPickRoster(rows, r => r.shifts.length), saves: false};
+    : {row: spPickRoster(rows, week), saves: false};
 }
 function drawOptimizeStaffing(){
   const card = $("optimizeStaffingCard"); if(!card) return;
@@ -7372,13 +7418,14 @@ function drawOptimizeStaffing(){
     return;
   }
   const row = best.row;
+  const week = spRosterCounts(row).tickable;
   badge.className = "soon live";
   badge.textContent = best.saves
-    ? `\u2212${row.current.shifts - row.shifts.length} LINES`
-    : `${row.shifts.length} SHIFTS`;
+    ? `\u2212${row.current.shifts - week} LINES`
+    : `${week} SHIFTS`;
   text.textContent = best.saves
-    ? `${row.name}: ${row.current.shifts} shifts become ${row.shifts.length}.`
-    : `${row.name}: a week of ${row.shifts.length} shifts to enter.`;
+    ? `${row.name}: ${row.current.shifts} shifts become ${week}.`
+    : `${row.name}: a week of ${week} shifts to enter.`;
   card.dataset.site = row.key;
 }
 
@@ -12158,13 +12205,13 @@ const wireRoster = once(() => {
   on("click", ".sp-daytabs a", (a, e) => {
     e.preventDefault();
     const s = sec(a);
-    $$(".sp-daytabs a", s).forEach(x => x.classList.toggle("on", x === a));
-    $$(".sp-day", s).forEach(d => d.classList.toggle("on", d.dataset.d === a.dataset.day));
+    $$(".sp-daytabs a", s).forEach(x => x.classList.toggle("sp-on", x === a));
+    $$(".sp-day", s).forEach(d => d.classList.toggle("sp-on", d.dataset.d === a.dataset.day));
   });
   on("click", ".sp-nowplan a", (a, e) => {
     e.preventDefault();
     const s = sec(a);
-    $$(".sp-nowplan a", s).forEach(x => x.classList.toggle("on", x === a));
+    $$(".sp-nowplan a", s).forEach(x => x.classList.toggle("sp-on", x === a));
     const g = q(".sp-gantt", s);
     if(g) g.classList.toggle("sp-now", a.dataset.view === "now");
   });

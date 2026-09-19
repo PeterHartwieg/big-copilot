@@ -138,8 +138,18 @@ Next-moves card, through `spBestRoster()`.
 
 `shifts` carries the lines nobody at the site may legally work as well as the ones somebody
 can be put on: same row, `p: null`. The page draws those dashed and cannot tick them, so
-the progress counts a third number — the tickable lines — which `spRosterBlock()` works out
-once and puts on the section as `data-tickable` for the retally to read back.
+`spRosterCounts()` returns `{plan, tickable, hire, now, fragments}` and everything that
+means "the week to type" reads `tickable` — the *Shifts / week* tile, the ring (through
+`data-tickable`, which `spRosterBlock()` works out once for the retally to read back) and
+`spBestRoster()`, which both scores and sizes the Next-moves card on it. `spDrawn()` is the
+single rule for what reaches the page, shared by `spRosterRows()` and the counts, so the
+two cannot drift.
+
+A tick's id is the line the player typed — weekday, station id, `f`, `t`, person id — not
+the payload's indices, which are renumbered whenever the tables are rebuilt. That is the
+whole invalidation: a plan that changes any part of a line changes its id, the tick stops
+matching and the next write drops it. Nothing is migrated; an old-format tick simply never
+matches again.
 
 One ceiling and one role: a capped hour's cell carries `data-caps`, a space-separated list
 of `<kind>:<skill>` tokens (`door` alone for the building), and a cap chip's `data-show`

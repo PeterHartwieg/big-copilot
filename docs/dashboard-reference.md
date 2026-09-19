@@ -674,9 +674,11 @@ and dims the rest; clicking scrolls there.
   grid, one entry a role with a dot a person, and the staff demands this plan would fail.
   The toggle in the head swaps the plan for the schedule as it stands, so you can see what
   the typing replaces. Click a shift once you have entered it; the ticks are kept in this
-  browser, per shop, and a shift that moves in a later plan simply loses its tick. The
-  count beside the ring is the lines somebody can be put on; a line waiting on a hire is
-  not one of them.
+  browser, per shop, and a tick belongs to the line itself — the weekday, the station, the
+  hours and the person — so a plan that changes any of those has changed the line and the
+  tick stops counting. The week the block is about is the lines somebody can be put on: the
+  *Shifts / week* tile, the ring, and the *Optimize staffing* card on Today all show that
+  number, with the lines waiting on a hire named beside it rather than folded in.
   A shop with no hour reports yet still gets the block, because its cleaning and security
   cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
   two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the
