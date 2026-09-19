@@ -3679,6 +3679,13 @@ def _role_words(role: dict, office: bool) -> dict:
 KIND_ORDER = {"the building": 0, "staffing": 1, "registers": 2}
 
 
+def _limit_order(limit: tuple) -> tuple:
+    """Sort key for one ``(kind, skill)`` limit: people before posts, then the
+    skill, with the skill-less office role last, the way _in_order() sorts."""
+    kind, skill = limit
+    return (KIND_ORDER[kind], skill is None, str(skill))
+
+
 def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     """The two things an hourly grid can tell you that a daily total cannot.
 
@@ -3701,42 +3708,45 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # skill serves nobody until every role is manned, but only a role
         # holding the site's own minimum that hour is holding it back: hiring
         # into a role that is already faster than the slowest one buys nothing.
+        # An hour is filed under everything holding it at once, so the trade
+        # through it is priced once however many roles are tied on it.
         office = grid.get("office", False)
         roles = {role["skill"]: role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
         for wd, hour in sorted(_capped_cells(grid)):
             if door and door <= grid["staffed"][wd][hour]:
-                by_limit["the building", None][wd].add(hour)
+                by_limit[(("the building", None),)][wd].add(hour)
                 continue
             site_staffed = grid["staffed"][wd][hour]
-            at_min = [
-                r for r in roles.values() if r["staffed"][wd][hour] == site_staffed
-            ]
-            if at_min:
-                for role in at_min:
-                    # A role holding the minimum is short of people where it has
-                    # stations standing empty, and short of stations where every
-                    # one of them is manned. Both can be true of one hour at one
-                    # site, and then both are named: a gym with a spare board and
-                    # a single register is not fixed by hiring a trainer alone.
-                    kind = (
+            # A role holding the minimum is short of people where it has
+            # stations standing empty, and short of stations where every one of
+            # them is manned. Both can be true of one hour at one site, and then
+            # the hour carries both answers on one line: a gym with a spare
+            # board and a single manned register is fixed by neither alone, so
+            # neither alone is worth the money going through that hour.
+            here = tuple(sorted(
+                (
+                    (
                         "staffing"
-                        if role["staffed"][wd][hour] < role["counters"]
-                        else "registers"
+                        if r["staffed"][wd][hour] < r["counters"]
+                        else "registers",
+                        r["skill"],
                     )
-                    by_limit[kind, role["skill"]][wd].add(hour)
-                continue
-            # No role holds the minimum, so nothing but the slowest one's
-            # stations can be the ceiling, and another is what buys past it.
-            binding = min(
-                roles.values(), key=lambda r: (r["counters"], r["skill"] or "")
-            )
-            by_limit["registers", binding["skill"]][wd].add(hour)
+                    for r in roles.values()
+                    if r["staffed"][wd][hour] == site_staffed
+                ),
+                key=_limit_order,
+            ))
+            # The site's capacity is the minimum across its roles, so some role
+            # always stands at it and a capped hour always has one. The guard is
+            # defensive: a grid with no roles at all is never capped either.
+            if here:
+                by_limit[here][wd].add(hour)
 
-        for kind, skill in sorted(
-            by_limit, key=lambda k: (KIND_ORDER[k[0]], k[1] is None, str(k[1]))
+        for limits in sorted(
+            by_limit, key=lambda ks: tuple(_limit_order(k) for k in ks)
         ):
-            capped = {wd: sorted(hours) for wd, hours in by_limit[kind, skill].items()}
+            capped = {wd: sorted(hours) for wd, hours in by_limit[limits].items()}
             cells = [(wd, h) for wd in sorted(capped) for h in capped[wd]]
             ceilings = [grid["effective"][wd][h] for wd, h in cells]
             finding = {
@@ -3756,7 +3766,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     sum(grid["customers"][wd][h] for wd, h in cells) * basket / 7
                 ),
             }
-            if kind == "the building":
+            if limits[0][0] == "the building":
                 finding["limit"] = "the building"
                 finding["fix"] = (
                     "a bigger office or a second one nearby"
@@ -3764,11 +3774,26 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     else "a bigger site or a second shop nearby"
                 )
             else:
-                words = _role_words(roles[skill], office)
-                finding["limit"], finding["fix"] = (
-                    words["staffing"] if kind == "staffing" else words["posts"]
+                # One role reads exactly as it always has, which is what keeps
+                # a shop's and an office's alert ids. Roles tied on the same
+                # hours are joined, in the order they were sorted into, so the
+                # words and the id do not move between runs.
+                said = [
+                    (
+                        _role_words(roles[skill], office),
+                        "staffing" if kind == "staffing" else "posts",
+                    )
+                    for kind, skill in limits
+                ]
+                finding["limit"] = " and ".join(w[part][0] for w, part in said)
+                finding["fix"] = " and ".join(w[part][1] for w, part in said)
+                finding["limits"] = len(said)
+                default = "workstations" if office else "counters"
+                finding["noun"] = (
+                    said[0][0]["noun"]
+                    if len(said) == 1
+                    else " and ".join(w["noun"] or default for w, _ in said)
                 )
-                finding["noun"] = words["noun"]
             out.append(finding)
 
         # Overstaffing is a property of the roster that was on, so each role is
@@ -5556,7 +5581,8 @@ def _alerts(
                 f"{where} fill{'s' if len(group) == 1 else ''} "
                 f"the {noun} {when}, "
                 f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
-                f"ceiling. {limit if limit[:1].isupper() else limit.capitalize()} is the "
+                f"ceiling. {limit if limit[:1].isupper() else limit.capitalize()} "
+                f"{'are' if group[0].get('limits', 1) > 1 else 'is'} the "
                 f"limit, so the answer is {group[0]['fix']}{who}"
             )
         # One site can be at more than one ceiling, and the limit is what keeps

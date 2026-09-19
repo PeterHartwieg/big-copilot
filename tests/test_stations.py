@@ -350,10 +350,57 @@ class BindingRoleTests(unittest.TestCase):
                     for r in grid["roles"]}
         self.assertEqual(by_skill, {TRAINER: (20, 40), SERVICE: (20, 20)})
         findings = _hour_findings([grid], [site()], {})
-        self.assertEqual(sorted((f["limit"], f["fix"]) for f in findings), [
-            ("Gym Trainer staffing", "another Gym Trainer on those hours"),
-            ("registers", "another counter"),
-        ])
+        # One line, because fixing either alone moves nothing -- and because
+        # the trade through those hours is one sum, not one per role.
+        [finding] = findings
+        self.assertEqual(
+            (finding["limit"], finding["fix"], finding["noun"], finding["limits"]),
+            ("Gym Trainer staffing and registers",
+             "another Gym Trainer on those hours and another counter",
+             "fitness planning boards and counters", 2),
+        )
+
+    def test_a_tie_prices_its_hours_once_and_not_once_per_role(self):
+        """The same gym: 12 capped hours of 25 customers at a $12 basket.
+
+        Two lines would have said $514/day each for a site whose whole trade
+        through those hours is $514, inflating the materiality gate and the
+        "N smaller · $X/day" sum along with it.
+        """
+        items = [(1, BOARD), (2, BOARD), (3, REGISTER)]
+        crew = {"t": TRAINER, "c": SERVICE}
+        shifts = [shift("t", 1, 8, 20), shift("c", 3, 8, 20)]
+        hourly = {h: 25 if 8 <= h < 20 else 0 for h in range(24)}
+        grid = grid_of(building(items, shifts, hourly, 100), crew, _service_stations(NAMES))
+        findings = _hour_findings([grid], [site()], {})
+        whole = money(sum(25 for _ in range(12)) * 12.0 / 7)
+        self.assertEqual([f["hours"] for f in findings], [12])
+        self.assertEqual(sum(f["throughput"] for f in findings), whole)
+        business = _business(Save({}, {}, ""), NAMES,
+                             building([], [], {9: 1}, 100), (STREET, 3),
+                             {(STREET, 3): {"TotalSales": 1000}}, [], {}, 3)
+        lines = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], findings, [], 3, 0.0)
+                 ["lines"] if a["group"] == "atcap"]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(sum(a["worth"] for a in lines), whole)
+        self.assertIn("Gym Trainer staffing and registers are the limit", lines[0]["text"])
+        self.assertIn("fills the fitness planning boards and counters", lines[0]["text"])
+
+    def test_an_untied_site_keeps_the_numbers_it_had(self):
+        """Two boards, one trainer, no register: one role, one line, one sum."""
+        items = [(1, BOARD), (2, BOARD)]
+        crew = {"t": TRAINER}
+        shifts = [shift("t", 1, 8, 20)]
+        hourly = {h: 25 if 8 <= h < 20 else 0 for h in range(24)}
+        grid = grid_of(building(items, shifts, hourly, 100), crew, _service_stations(NAMES))
+        [finding] = _hour_findings([grid], [site()], {})
+        self.assertEqual(
+            (finding["limit"], finding["fix"], finding["noun"], finding["limits"]),
+            ("Gym Trainer staffing", "another Gym Trainer on those hours",
+             "fitness planning boards", 1),
+        )
+        self.assertEqual((finding["hours"], finding["throughput"]),
+                         (12, money(12 * 25 * 12.0 / 7)))  # customers through it, not capacity
 
     def test_a_role_above_the_minimum_is_still_left_out(self):
         """The same gym with the register manned twice over is one finding."""

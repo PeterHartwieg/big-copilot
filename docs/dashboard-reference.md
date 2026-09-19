@@ -353,11 +353,13 @@ answer is a bigger site or a second shop nearby (for an office, a bigger office 
 one). Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
-standing empty is short of people; one with every station manned is short of stations, and
-a gym with a spare board and a single register is told both. Where no role holds the
-minimum the slowest role's stations are the ceiling. Short of people and short of posts are
-two different answers, so they are two lines with two ids — "Gym Trainer staffing" against
-"fitness planning boards". The limit is the only thing the id hashes, which is why a
+standing empty is short of people; one with every station manned is short of stations. A
+gym with a spare board and a single manned register is told both, on one line — "Gym
+Trainer staffing and registers are the limit, so the answer is another Gym Trainer on those
+hours and another counter" — because fixing either alone moves nothing, and because the
+trade through an hour is one sum whatever is holding it. Where a role is short of people on
+some hours and short of stations on others, those are two lines with two ids, "Gym Trainer
+staffing" against "fitness planning boards". The limit is the only thing the id hashes, which is why a
 shop's "staffing" and "registers" and an office's "workstations" keep the ids they have
 always had and the player's silences survive. A shop's counters and
 an office's workstations keep the words they have always had — a register asks for another
