@@ -178,16 +178,42 @@ test('a big crew folds into one row a role, a dozen still read as pills', async 
 });
 
 test('a silent shop shows the five pre-flight checks in the order it needs them', async () => {
-  const page = await site({shop: {revenue: 0, notTrading: ['prices', 'stock', 'plan']}});
+  // Prices, stock and shelves are one chain in _alerts(): only the first of
+  // them can fail, and the ones behind it were never looked at.
+  const page = await site({shop: {revenue: 0, notTrading: ['prices', 'plan']}});
   try {
     const checks = await page.$$eval('#sitePanel .sp-pre [data-check]', els =>
       els.map(e => [e.dataset.check, e.className]));
     assert.deepEqual(checks, [
-      ['staff', 'ok'], ['prices', 'no'], ['stock', 'no'],
-      // Never checked: the alert stops at the first failure behind prices.
-      ['shelves', 'unk'], ['plan', 'no'],
+      ['staff', 'ok'], ['prices', 'no'],
+      // Never checked: the chain stops at prices.
+      ['stock', 'unk'], ['shelves', 'unk'], ['plan', 'no'],
     ]);
   } finally { await page.close(); }
+
+  const stock = await site({shop: {revenue: 0, notTrading: ['stock', 'plan']}});
+  try {
+    const checks = await stock.$$eval('#sitePanel .sp-pre [data-check]', els =>
+      els.map(e => [e.dataset.check, e.className]));
+    assert.deepEqual(checks, [
+      ['staff', 'ok'], ['prices', 'ok'], ['stock', 'no'], ['shelves', 'unk'], ['plan', 'no'],
+    ]);
+  } finally { await stock.close(); }
+
+  // Every check passed and the site simply has not booked a day yet.
+  const ready = await site({shop: {revenue: 0, notTrading: []}});
+  try {
+    const checks = await ready.$$eval('#sitePanel .sp-pre [data-check]', els => els.map(e => e.className));
+    assert.deepEqual(checks, ['ok', 'ok', 'ok', 'ok', 'ok']);
+  } finally { await ready.close(); }
+
+  // An older shop with a $0 day was never looked at by that finding, so it has
+  // no list and draws no checks — five green ticks would be a lie.
+  const old = await site({shop: {revenue: 0}});
+  try {
+    assert.equal(await old.locator('#sitePanel .sp-pre').count(), 0);
+    assert.equal(await old.locator('#sitePanel .sp-lamp.off').count(), 1);
+  } finally { await old.close(); }
 
   // An office has nothing to stock, shelve or deliver, and a trading site has
   // nothing to explain.
@@ -205,9 +231,12 @@ test('a silent shop shows the five pre-flight checks in the order it needs them'
   } finally { await trading.close(); }
 });
 
-// A fortnight of trading, and a grid to read hours off.
-const fortnight = (n = 16) => Array.from({length: n}, (_, i) =>
-  ({day: i + 1, profit: 100 + i, revenue: 1000 + i * 10, customers: 20 + i}));
+// The fixture's save was written on day 29, so a full fortnight behind it runs
+// days 15 to 28 — the same window _site_trends() compares.
+const TODAY = 29;
+const fortnight = (n = 16, last = TODAY - 1) => Array.from({length: n}, (_, i) =>
+  ({day: last - n + 1 + i, profit: 100 + i, revenue: 1000 + i * 10, customers: 20 + i}));
+const READY = [{key: KEY, ready: true, change: -0.1, last7: 700, prev7: 800}];
 const grid = (office, staffedAt) => {
   const rows = wd => Array.from({length: 24}, (_, h) => h === 12 ? staffedAt : 0);
   return [{
@@ -223,7 +252,7 @@ const grid = (office, staffedAt) => {
 test("the tiles carry the fortnight, the costs of the day and the ceilings", async () => {
   const page = await site({
     shop: {series: fortnight(), cogs: 400, profit: 200},
-    trends: [{key: KEY, ready: true, change: -0.1, last7: 700, prev7: 800}],
+    trends: READY,
     hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 3,
                     when: 'Fri 12-13', limit: 'the building', fix: 'a bigger site nearby',
                     cap: 50, capTop: 50, basket: 30, throughput: 900}],
@@ -258,14 +287,91 @@ test('a loss flags its tile, and a site with no trend draws a dashed line', asyn
 });
 
 test('two full weeks shade the chart with their own averages', async () => {
-  const page = await site({shop: {series: fortnight(20)}});
+  const page = await site({shop: {series: fortnight(20)}, trends: READY});
   try {
     const bands = await page.$$eval('#sp-profit .sp-band', els =>
       els.map(e => [e.classList.contains('last'), e.dataset.read]));
     assert.equal(bands.length, 2);
     assert.equal(bands[1][0], true);
-    for(const [, read] of bands) assert.match(read, /^<b>days \d+–\d+<\/b> \$/);
+    // The windows are day numbers, not positions: days 15-21 and 22-28.
+    assert.match(bands[0][1], /^<b>days 15–21<\/b> \$/);
+    assert.match(bands[1][1], /^<b>days 22–28<\/b> \$/);
     assert.equal(await page.locator('#sp-profit polyline[stroke-dasharray]').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('a gap in the series is not two weeks, however many entries there are', async () => {
+  // Days 1-7 and then 22-28: fourteen entries, one full week behind them.
+  const page = await site({
+    shop: {series: fortnight(7, 7).concat(fortnight(7, TODAY - 1))},
+    trends: READY,
+  });
+  try {
+    assert.equal(await page.locator('#sp-profit .sp-band').count(), 0);
+    assert.equal(await page.locator('#sp-profit polyline[stroke-dasharray]').count(), 1);
+  } finally { await page.close(); }
+});
+
+test('a trend with no week before it reads as a dash, not as no change', async () => {
+  const page = await site({shop: {series: fortnight()},
+                           trends: [{key: KEY, ready: true, change: null, last7: 700, prev7: 0}]});
+  try {
+    const chip = await page.locator('#sp-tiles .chip').first();
+    assert.equal((await chip.innerText()).trim(), '—');
+    assert.match(await chip.getAttribute('data-tip'), /took nothing to compare/);
+    assert.equal(await page.locator('#sp-tiles .chip svg').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('the ramp chip counts only while the site is still ramping up', async () => {
+  const ramping = await site({shop: {daysOpen: 9}});
+  try {
+    assert.equal((await ramping.locator('#sp-tiles .chip').first().innerText()).trim(), 'day 9 of 14');
+  } finally { await ramping.close(); }
+
+  // Old enough for a trend, but without the history behind it: no number to give.
+  const old = await site({shop: {daysOpen: 40}});
+  try {
+    const chip = old.locator('#sp-tiles .chip').first();
+    assert.equal((await chip.innerText()).trim(), '—');
+    assert.match(await chip.getAttribute('data-tip'), /No full fortnight/);
+    assert.ok(await chip.evaluate(e => e.classList.contains('none')));
+  } finally { await old.close(); }
+});
+
+test('every ceiling the busy hours ran into gets a chip and a lit icon', async () => {
+  const cap = (limit, fix) => ({kind: 'cap', key: KEY, site: 'HART. Gifts', office: false,
+    hours: 3, when: 'Fri 12-13', limit, fix, cap: 50, capTop: 50, basket: 30, throughput: 900});
+  const page = await site({
+    hours: grid(false, 3),
+    hourFindings: [cap('the building', 'a bigger site nearby'), cap('staffing', 'more service staff')],
+  });
+  try {
+    const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els => els.map(e => e.dataset.limit));
+    assert.deepEqual(chips, ['the building', 'staffing']);
+    // The door and the people are lit; the counters were never the limit.
+    const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
+      els.map(e => e.classList.contains('on')));
+    assert.deepEqual(ceil, [true, false, true]);
+  } finally { await page.close(); }
+});
+
+test('a name out of the save is text, in the row and in the read-out it feeds', async () => {
+  const hostile = '</b><img src=x onerror="window.__pwned=1">';
+  const page = await site({
+    shop: {people: Array.from({length: 13}, (_, i) =>
+      ({name: i ? `Person ${i}` : hostile, role: 'Customer service', absent: false, daily: 100}))},
+    alerts: [{id: 'a1', level: 'warn', site: 'HART. Gifts', siteKey: KEY, group: 'music',
+              text: `HART. Gifts: ${hostile} went missing. And ${hostile} too`, worth: null, unit: ''}],
+  });
+  try {
+    assert.equal(await page.locator('#sitePanel img').count(), 0);
+    // The read-out assigns data-read to innerHTML, so the escaping has to
+    // survive the trip through the attribute.
+    await page.hover('#sitePanel .sp-dot');
+    assert.equal(await page.locator('#sitePanel img').count(), 0);
+    assert.match(await page.locator('#sitePanel .sp-roster + .sp-readout').innerText(), /onerror/);
+    assert.equal(await page.evaluate(() => window.__pwned), undefined);
   } finally { await page.close(); }
 });
 

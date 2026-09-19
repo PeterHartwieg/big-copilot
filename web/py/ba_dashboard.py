@@ -1841,8 +1841,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                     "profit": money(s["TotalProfit"]),
                     "revenue": money(s["TotalSales"]),
                     # The same day's door count, so a site can draw a fortnight
-                    # of shoppers beside its fortnight of takings.
-                    "customers": customer_by_day.get(dayno, 0),
+                    # of shoppers beside its fortnight of takings. The order
+                    # history is shorter than the takings history, so a day it
+                    # no longer covers has no reading — None, never a zero.
+                    "customers": customer_by_day.get(dayno),
                 }
             )
 
@@ -6467,8 +6469,6 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 /* An hour with two or more on shift and capacity well above the customers seen. */
 .hc.slack{box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--info) 45%, transparent)}
 .hc.slack:hover{box-shadow:inset 0 0 0 1px var(--info),0 4px 14px #0007}
-.hourread{min-height:22px;margin-top:12px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
-.hourread b{color:var(--ink);font-weight:500}
 .crew{display:flex;flex-wrap:wrap;gap:8px}
 .person{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:20px;background:var(--surface);border:1px solid var(--rule-soft);font-size:12.5px;transition:transform .2s}
 .person:hover{transform:translateY(-2px)}
@@ -6493,6 +6493,13 @@ section:hover > .sechead .sp-ico{color:var(--accent);transform:rotate(-8deg) sca
 section:hover > .sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
 .sp-read{min-height:18px;margin-top:12px;font:500 12px/1.5 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sp-read b{color:var(--ink);font-weight:500}
+
+/* The panel's blocks are sections, and section{content-visibility:auto} clips
+   what an off-screen one paints outside its own box — the evidence outline and
+   the 80 line's label both sit there. */
+#sitePanel section{content-visibility:visible}
+/* The ramp chip, dashed rather than tinted; scoped, because .chip is global. */
+#sitePanel .chip.none{background:none;border:1px dashed var(--rule);color:var(--ink-3)}
 
 /* a finding lights the block that holds its evidence */
 #sitePanel [data-block]{transition:opacity .25s,outline-color .25s;outline:1px solid transparent;outline-offset:14px;border-radius:6px;scroll-margin-top:140px}
@@ -6562,6 +6569,7 @@ section:hover > .sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
 .sp-tread b{color:var(--ink);font-weight:500}
 .sp-spark{display:flex;align-items:flex-end;gap:3px;height:24px;margin-top:10px}
 .sp-spark i{flex:1;height:var(--v);border-radius:1.5px;background:var(--rule);transition:transform .15s;transform-origin:bottom}
+.sp-spark i.none{background:none;box-shadow:inset 0 0 0 1px var(--rule)}
 .sp-spark i.l{background:var(--ink-2)}
 .sp-spark.dn i.l{background:var(--neg)}
 .sp-spark.up i.l{background:var(--accent)}
@@ -7299,6 +7307,12 @@ const SP_ICON = {
   right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
 };
 const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SP_ICON[name]}</svg>` : "";
+/* Anything out of the save — a shop's name, an employee's, the game's own word
+   for a demand — is text, not markup, and has to be escaped before it is
+   composed into any of the panel's HTML. A read-out goes through two decodings
+   (attr() into the attribute, then dataset.read into innerHTML), so escaping
+   here and attr()-ing the composed string is what keeps it inert both times. */
+const spEsc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /* The same drawing wrapped so it sits on a text line. */
 const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
 /* The board's own two letters for each neighbourhood, filled in from the one
@@ -8435,6 +8449,8 @@ const ALERT_EVIDENCE = {
   staff: {block: "crew"},
   jobdemand: {block: "crew"},
   satisfaction: {block: "standards"},
+  /* The hit depends on the site, so SP_EVIDENCE_HIT decides it: the locker
+     while there is none, the roles once there is one. */
   uniform: {block: "standards", hit: "uniform"},
   bathroom: {block: "standards", hit: "bathroom"},
   toiletprivacy: {block: "standards", hit: "toiletprivacy"},
@@ -8965,10 +8981,12 @@ const spRankHtml = rank => rank.place === null
 /* This site's week on week, the limit its busiest hours ran into, and its
    wave, each one lookup a block reads. */
 const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
-const spBindingLimit = key => {
-  const f = (D.hourFindings || []).find(f => f.key === key && f.kind === "cap");
-  return f ? f.limit : null;
-};
+/* Every ceiling this site's busy hours ran into. _hour_findings() writes one
+   row per limit — a roster that runs one person at night and a full floor by
+   day is held by staffing then and by the door later — so the panel lights
+   each of them and draws a chip apiece. */
+const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
+const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
 const spHypeRow = key => {
   for(const wave of D.hypeExposure || []){
     const site = (wave.sites || []).find(s => s.key === key);
@@ -8981,9 +8999,11 @@ const spHypeRow = key => {
    (b.notTrading, the same list the not-trading finding reads out); grey was
    never checked, because the alert stops at the first of prices, stock and
    shelves that fails; green is in place. An office has nothing to stock,
-   shelve or deliver, so it shows two. */
+   shelve or deliver, so it shows two. Only a site the not-trading finding
+   looked at has the list at all, and an empty one means every check passed
+   and the site simply has not booked a day yet. */
 function spPreflight(b){
-  const failed = b.notTrading || [];
+  const failed = b.notTrading;
   const chain = ["prices", "stock", "shelves"];
   const stops = chain.findIndex(s => failed.includes(s));
   return ["staff", "prices", "stock", "shelves", "plan"]
@@ -9000,6 +9020,8 @@ const SP_CHECK_STATE = {ok: "", no: "missing: ", unk: "not checked yet: "};
 const SP_CHECK_ICON = {staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
 /* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
 const SP_PRIORITY = ["nice to have", "important", "critical"];
+/* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
+const SP_TREND_MIN = 14;
 /* What a demand is about, read off its own slug: when they work, what they
    want at the desk, what the company settles for everyone. */
 const spDemandIcon = slug => /insurance/.test(slug) ? "heart"
@@ -9007,11 +9029,19 @@ const spDemandIcon = slug => /insurance/.test(slug) ? "heart"
   : /clean|peaceful/.test(slug) ? "sparkle"
   : "desk";
 
-/* The fortnight the Profit section averages: the last seven days and the seven
-   before them, each as a daily average, and only when a full week is there. */
-const spSevens = series => {
-  const avg = days => days.length === 7 ? days.reduce((t, s) => t + s.profit, 0) / 7 : null;
-  return {last: avg(series.slice(-7)), prev: avg(series.slice(-14, -7))};
+/* The fortnight the Profit section averages, over the same day numbers
+   _site_trends() compares: days today-7 to today-1 against today-14 to
+   today-8. A series entry exists only for a day the board has a statement for,
+   so counting by position would happily call days 1-7 and 30-36 "two weeks". */
+const spSevens = (series, today) => {
+  const window = (from, to) => {
+    const days = series.filter(s => s.day >= from && s.day <= to);
+    return days.length === 7
+      ? {avg: days.reduce((t, s) => t + s.profit, 0) / 7,
+         at: series.indexOf(days[0]), to: series.indexOf(days[6])}
+      : null;
+  };
+  return {last: window(today - 7, today - 1), prev: window(today - 14, today - 8)};
 };
 
 /* The three bars a demand chip carries are the game's own priority, highest
@@ -9022,15 +9052,19 @@ const spPri = p => `<span class="sp-pri${p >= 2 ? " hi" : ""}">${
 /* The head line of a finding, and the row: severity dot, headline, amount, an
    arrow to its evidence, and the rest of the sentence folded under it. */
 let spFindsAll = false, spArrived = null;
-const spFindRow = a => {
+/* A group whose evidence depends on the site: the uniform finding is about the
+   locker while there is none, and about the roles once there is one. */
+const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
+const spFindRow = (a, b) => {
   const ev = ALERT_EVIDENCE[a.group] || {};
+  const hit = SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit;
   const {what, more} = splitFinding(a);
   return `<a class="sp-find ${SEV_KIND[a.level] || "opp"}${a.id === spArrived ? " arrived" : ""}" href="#${
     alertPage(a)}" data-id="${attr(a.id)}"${ev.block ? ` data-ev="${ev.block}"` : ""}${
-    ev.hit ? ` data-hit="${attr(ev.hit)}"` : ""}>
-    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[ev.block] || "alert")}</span><span class="what">${what}</span>
+    hit ? ` data-hit="${attr(hit)}"` : ""}>
+    <span class="mark"></span><span class="ev sp-i">${spIcon(SP_BLOCK_ICON[ev.block] || "alert")}</span><span class="what">${spEsc(what)}</span>
     <span class="amt">${findingAmount(a)}</span><span class="go">${spIcon("down")}</span>${
-    more ? `<span class="more">${more}</span>` : ""}</a>`;
+    more ? `<span class="more">${spEsc(more)}</span>` : ""}</a>`;
 };
 /* The drawing a finding wears is the one on the head of the block it points
    at, so the row and its evidence read as the same thing. */
@@ -9038,13 +9072,13 @@ const SP_BLOCK_ICON = {tiles: "alert", profit: "profit", week: "week", hours: "h
                        standards: "standards", pull: "magnet", shelves: "shelves", stock: "crate",
                        inputs: "pipe", lines: "gear"};
 const SP_FINDS_TOP = 4;
-const spFinds = finds => {
+const spFinds = (finds, b) => {
   if(!finds.length) return "";
   const shown = spFindsAll ? finds : finds.slice(0, SP_FINDS_TOP);
   const rest = finds.length - shown.length;
   /* The list itself carries no data-block: it must stay lit while one of its
      own rows dims everything else. */
-  return `<div class="sp-finds rv">${shown.map(spFindRow).join("")}</div>${
+  return `<div class="sp-finds rv">${shown.map(a => spFindRow(a, b)).join("")}</div>${
     rest > 0 ? `<p class="sp-findmore">${rest} more · <a class="link" href="#" data-allfinds>show all</a></p>` : ""}`;
 };
 
@@ -9088,7 +9122,10 @@ function spStandards(b){
       attr(label)}">${spIcon(SP_AMENITY_ICON[slug])}</span>`;
   };
   const roles = b.uniformGaps || [];
-  const lockerState = b.missingUniformLocker ? "miss" : unknown ? "unk" : "ok";
+  /* The locker is a thing in the room, not a score: the game does not need a
+     customer to have walked in to know whether one is installed. Only the
+     amenity lamps above go unknown. */
+  const lockerState = b.missingUniformLocker ? "miss" : "ok";
   /* Two rows, as the artboard draws them: what the shop offers customers, and
      under it what it dresses its staff in. */
   const lamps = `<div class="sp-lamprow">${
@@ -9110,7 +9147,7 @@ function spStandards(b){
     : `${asked} asked · <b>${asked - met} unmet</b>${roles.length ? ` · ${roles.length} role${roles.length === 1 ? "" : "s"} without a uniform` : ""}`;
   return `${eq}
     <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
-      `${r} <b>has no uniform set</b>`)}">${roleCode(r)}</span>`).join("")}</div></div></div>
+      `${spEsc(r)} <b>has no uniform set</b>`)}">${spEsc(roleCode(r))}</span>`).join("")}</div></div></div>
     <div class="sp-read sp-readout">${read}</div>`;
 }
 const SP_AMENITY_ICON = {bathroom: "toilet", toiletprivacy: "door", sink: "sink",
@@ -9132,7 +9169,7 @@ function spPull(b){
     <div class="sp-minis">
       <span data-read="${attr(`Security <b>${b.security}%</b>`)}">${spI("shield")}${b.security}%</span>
       <span data-read="${attr(`<b>${b.capacity}</b> shoppers fit inside at once`)}">${spI("person")}${b.capacity}</span></div>
-    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${hype.wave.hood} wave over this shop · <b>${
+    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${spEsc(hype.wave.hood)} wave over this shop · <b>${
         hype.site.share}%</b> of its takings rides on it · ends in ${hype.wave.daysLeft} day${
         hype.wave.daysLeft === 1 ? "" : "s"}${hype.wave.baseline ? "" : " · no baseline to measure it against"}`)}">${
       spI("wave")}
@@ -9154,9 +9191,9 @@ function spRoster(people, gaps){
   });
   return `<div data-readzone><div class="sp-roster">${roles.map(r => `
     <div class="sp-rrow">
-      <button type="button" class="sp-rbtn" aria-expanded="false"><i>${roleCode(r.role)}</i>${r.role}${spI("chev")}</button>
+      <button type="button" class="sp-rbtn" aria-expanded="false"><i>${spEsc(roleCode(r.role))}</i>${spEsc(r.role)}${spI("chev")}</button>
       <span class="sp-dots">${r.people.map((p, k) => `<i class="sp-dot${p.absent ? " off" : ""}" style="--k:${k}" data-read="${attr(
-        `<b>${p.name}</b> · ${p.role}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
+        `<b>${spEsc(p.name)}</b> · ${spEsc(p.role)}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
       <span class="sp-rcount"><b>${r.people.length}</b>${
         r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}${
         r.people.every(p => typeof p.daily === "number") ? ` · ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
@@ -9164,8 +9201,8 @@ function spRoster(people, gaps){
     </div>`).join("")}</div><div class="sp-read sp-readout">Hover a dot</div></div>`;
 }
 /* A person, with the shirt mark when nobody in their role has a uniform set. */
-const spPersonPill = (p, gaps) => `<span class="person${p.absent ? " off" : ""}"><i>${roleCode(p.role)}</i>${p.name}<small>${
-  p.role}${p.absent ? " · off today" : ""}</small>${
+const spPersonPill = (p, gaps) => `<span class="person${p.absent ? " off" : ""}"><i>${spEsc(roleCode(p.role))}</i>${spEsc(p.name)}<small>${
+  spEsc(p.role)}${p.absent ? " · off today" : ""}</small>${
   (gaps || []).includes(p.role) ? `<span class="sp-i" data-el="uniform" data-tip="No uniform set for this role">${spIcon("shirt")}</span>` : ""}</span>`;
 
 /* The tiles' second line ------------------------------------------------------
@@ -9175,14 +9212,19 @@ const spPersonPill = (p, gaps) => `<span class="person${p.absent ? " off" : ""}"
    one lit. Each reads out on the tile's own line rather than in a tooltip. */
 const spSpark = (series, key, money, tone) => {
   const days = series.slice(-14);
-  if(days.length < 2) return "";
-  const vals = days.map(d => d[key] || 0);
+  /* A day the save has no reading for draws a stub, not a zero: the customer
+     history is shorter than the takings history, so the older bars of the
+     customer spark are simply not known. */
+  const read = d => d[key] === null || d[key] === undefined;
+  const vals = days.filter(d => !read(d)).map(d => d[key]);
+  if(vals.length < 2) return "";
   const lo = Math.min(...vals), top = Math.max(...vals);
   return `<div data-readzone><div class="sp-spark ${tone || ""}">${days.map((d, k) => {
-    const v = vals[k];
-    return `<i class="${k >= days.length - 7 ? "l" : ""}" style="--v:${
-      (25 + (v - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(`day ${d.day} <b>${
-      money ? fmt(v) : Math.round(v).toLocaleString()}</b>`)}"></i>`;
+    const last7 = k >= days.length - 7;
+    if(read(d)) return `<i class="none" style="--v:4%" data-read="${attr(`day ${d.day} <b>no reading</b>`)}"></i>`;
+    return `<i class="${last7 ? "l" : ""}" style="--v:${
+      (25 + (d[key] - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(`day ${d.day} <b>${
+      money ? fmt(d[key]) : Math.round(d[key]).toLocaleString()}</b>`)}"></i>`;
   }).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
 /* How dark each cost sits in the bar: the big ones darkest, so the shape of a
@@ -9215,9 +9257,12 @@ function spDesks(grid){
     : `<span class="sp-m z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
   return {manned, html: `<div class="sp-mach">${squares}</div>`};
 }
-const spCeiling = (office, limit) => `<div class="sp-ceil">${
-  ["door", office ? "monitor" : "counter", "person"].map(k =>
-    `<span class="sp-i${k === SP_LIMIT_ICON[limit] ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
+const spCeiling = (office, limits) => {
+  const lit = limits.map(l => SP_LIMIT_ICON[l]);
+  return `<div class="sp-ceil">${
+    ["door", office ? "monitor" : "counter", "person"].map(k =>
+      `<span class="sp-i${lit.includes(k) ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
+};
 
 function drawSite(){
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
@@ -9242,18 +9287,18 @@ function drawSite(){
   const finds = sp ? spSiteFindings(b.key) : [];
   const rank = sp ? spRank(b.key) : null;
   const trend = sp ? spTrend(b.key) : null;
-  const limit = sp ? spBindingLimit(b.key) : null;
-  /* The two sentences the hour grid used to carry in its ?; on the shop and
-     office panel they are the two chips under the grid instead. */
-  const capNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind === "cap");
+  const limits = sp ? spBindingLimits(b.key) : [];
+  /* The sentences the hour grid used to carry in its ?; on the shop and office
+     panel they are the chips under the grid instead — one per ceiling the busy
+     hours ran into, and one for idle capacity. */
+  const capNotes = sp ? spCapNotes(b.key) : [];
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
-  const capSentence = capNote ? `At the ceiling ${capNote.hours} hours a week (${capNote.when}); ${capNote.limit} is the limit, so
-         the answer is ${capNote.fix}. ${fmt(capNote.throughput)}/day of trade goes through those
-         hours; the save records nothing about what is turned away above them.` : "";
+  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} is the limit, so
+         the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
+         hours; the save records nothing about what is turned away above them.`;
   const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.office ? "workstations are staffed" : "counters are on"} ${String(idleNote.from).padStart(2,"0")}:00-${
          String(idleNote.to).padStart(2,"0")}:00 on a ${idleNote.day} for ${idleNote.seen} customers an hour;
          ${idleNote.spare} staff-hours a week, about ${fmt(idleNote.worth)}/day of wages.` : "";
-  const notes = [capSentence, idleSentence].filter(Boolean);
 
   /* The costs behind the profit tile, on hover. */
   const costs = [
@@ -9270,16 +9315,26 @@ function drawSite(){
     : sp && office ? `${grid.stationCount}<small ${SMALL}>${grid.capHours ? `· ${grid.capHours} h/wk full` : ""}</small>`
     : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
     : `—<small ${SMALL}>no door cap${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
-  /* Week on week when two full weeks stand behind it, else how far into the
-     fortnight a trend needs this site is. 14 is TREND_MIN_DAYS in the Python. */
-  const trendChip = !sp ? "" : trend && trend.ready
-    ? chipHtml(trend.change < 0 ? "bad" : "dim", `${icon(trend.change < 0 ? "trend_dn" : "trend_up")}${pct(trend.change)}`,
-        `${compact(trend.last7)} this week against ${compact(trend.prev7)} the week before`)
-    : chipHtml("none", `day ${b.daysOpen} of 14`, "A trend needs two full weeks. The first days are a ramp, not a trend.");
+  /* Week on week when two full weeks stand behind it. A ready trend whose
+     previous week took nothing has no percentage to show, as wow() has it, so
+     it reads as a dash. Not ready: how far into the fortnight this site is
+     while it is still ramping up (SP_TREND_MIN mirrors the Python), and a
+     bare dashed chip once it is older than that but its history is not. */
+  const ready = trend && trend.ready;
+  const trendChip = !sp ? ""
+    : ready && trend.change !== null && trend.change !== undefined
+      ? chipHtml(trend.change < 0 ? "bad" : "dim", `${icon(trend.change < 0 ? "trend_dn" : "trend_up")}${pct(trend.change)}`,
+          `${compact(trend.last7)} this week against ${compact(trend.prev7)} the week before`)
+    : ready
+      ? chipHtml("none", "—", `${compact(trend.last7)} this week; the week before took nothing to compare it with`)
+    : b.daysOpen < SP_TREND_MIN
+      ? chipHtml("none", `day ${b.daysOpen} of ${SP_TREND_MIN}`,
+          "A trend needs two full weeks. The first days are a ramp, not a trend.")
+      : chipHtml("none", "—", "No full fortnight of trading history here yet");
   /* On the shop and office panel the tiles carry their own second line: two
      fortnight sparks, the cost bar that replaces the profit tooltip, and the
      ceilings. A day in the red flags the profit tile. */
-  const tone = trend && trend.ready ? (trend.change < 0 ? "dn" : "up") : "";
+  const tone = ready && trend.change ? (trend.change < 0 ? "dn" : "up") : "";
   const stats = `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
@@ -9290,8 +9345,8 @@ function drawSite(){
       sp && b.profit < 0 ? `<i class="sp-flag"></i>` : ""}<div class="v ${sign(b.profit)}">${fmt(b.profit)}${
       b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div>${
       sp ? spCostBar(costs, b.profit) : ""}</div>
-    <div class="sstat"${limit ? ` data-limit="${attr(limit)}"` : ""}><span class="lab">${capLabel}</span><div class="v">${capTile}</div>${
-      sp ? spCeiling(office, limit) : ""}</div>`;
+    <div class="sstat"><span class="lab">${capLabel}</span><div class="v">${capTile}</div>${
+      sp ? spCeiling(office, limits) : ""}</div>`;
 
   /* One pill a person, as on the canvas: the name, the role under it, dimmed
      when they are off today. A big site keeps to a dozen and a "+n more"
@@ -9306,17 +9361,19 @@ function drawSite(){
     : "";
   const uniformGaps = sp ? b.uniformGaps : null;
   const personPill = p => spPersonPill(p, uniformGaps);
-  const crew = !sp && people.length > CREW_MAX
-    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
+  /* The pills sit in a wrapping flex row; the folded roster is a grid of full
+     rows, so it replaces that row rather than becoming one item inside it. */
+  const folded = sp && people.length > CREW_MAX;
+  const pills = !sp && people.length > CREW_MAX
+    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${spEsc(p.name)} (${spEsc(p.role)}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
         people.length - CREW_MAX} more</span>`
-    : sp && people.length > CREW_MAX
-      ? spRoster(people, uniformGaps)
-      : people.length
-        ? people.map(personPill).join("")
-        : b.crew.length
-          ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${roleCode(c.role)}</i>${c.role}<small>${
-              c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
-          : `<span class="quiet">Nobody assigned.</span>`;
+    : people.length
+      ? people.map(personPill).join("")
+      : b.crew.length
+        ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${spEsc(roleCode(c.role))}</i>${spEsc(c.role)}<small>${
+            c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
+        : `<span class="quiet">Nobody assigned.</span>`;
+  const crew = folded ? spRoster(people, uniformGaps) : `<div class="crew">${pills}</div>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
      handed out at every checkout and the odd soda/coffee machine are amenities
@@ -9377,13 +9434,14 @@ function drawSite(){
     wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
   const demandChips = !sp ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
-    wants.map(d => `<span class="sp-dem" data-tip="${attr(`${d.demand} for ${d.count} · ${
+    wants.map(d => `<span class="sp-dem" data-el="demand" data-tip="${attr(`${spEsc(d.demand)} for ${d.count} · ${
       SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
-      spI(spDemandIcon(d.slug))}${d.demand} <b>×${d.count}</b>${spPri(d.priority)}${
-      d.company ? `<span class="sp-i" data-el="demand">${icon("company")}</span>` : ""}</span>`).join("")}${
+      spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
+      d.company ? `<span class="sp-i sp-co">${icon("company")}</span>` : ""}</span>`).join("")}${
+    /* The mark and the count; the sentence is the chip's tip, not the page's. */
     b.quitWarnings ? `<span class="sp-dem quit" data-el="quit" data-tip="${attr(`${
-      plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${spI("exit")}<b>${
-      b.quitWarnings}</b> will quit</span>` : ""}</div>` : "";
+      plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${
+      spI("exit")}<b>${b.quitWarnings}</b></span>` : ""}</div>` : "";
 
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
@@ -9392,42 +9450,46 @@ function drawSite(){
      its last seven days. */
   const headMarks = !sp ? "" : `
       <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
-      b.revenue ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
+      /* The checks belong to the not-trading finding, so they are drawn only
+         where that finding looked: a site young enough for _alerts() to have
+         written the list. An older silent shop has no list and no lamps. */
+      b.notTrading === undefined ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
         `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
           SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
-  /* The two hour chips: what the ceiling costs and what idle hours cost, where
-     the ? used to carry them. Hovering one picks its hours out of the grid. */
+  /* The hour chips: one per ceiling the busy hours ran into — the site can be
+     held by staffing at night and by its door by day — and one for idle
+     capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    (capNote ? `<span class="sp-hchip cap" data-show="cap" data-tip="${attr(capSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spI(SP_LIMIT_ICON[capNote.limit] || "door")}<b>${capNote.hours} h/wk</b> at the ceiling · ${capNote.when} · ${
-      fmt(capNote.throughput)}/day through it<span class="fix">${spI("right")}${capNote.fix}</span></span>` : "") +
+    capNotes.map(n => `<span class="sp-hchip cap" data-show="cap" data-limit="${attr(n.limit)}" data-tip="${
+      attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
+      spI(SP_LIMIT_ICON[n.limit] || "door")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
+      fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
     (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}<b>${idleNote.staff} on</b> ${
       String(idleNote.from).padStart(2,"0")}:00–${String(idleNote.to).padStart(2,"0")}:00 a ${idleNote.day} · ${fmt(idleNote.worth)}/day of wages</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
   const desks = sp && office && grid && grid.stationCount ? spDesks(grid) : null;
-  const sevens = sp ? spSevens(b.series) : null;
-  const profitRead = sevens && sevens.last !== null
-    ? `<b>${fmt(sevens.last)}</b>/day over the last 7${
-        sevens.prev !== null ? ` against <b>${fmt(sevens.prev)}</b>/day the week before` : ""}` : "";
-  /* The two weeks the chip above compares, shaded on the chart with their
-     daily averages across them. Under a fortnight there is no trend to shade,
-     and the line itself is dashed to say so. */
-  const n = b.series.length;
-  const bandRead = (from, to, avg) => `<b>days ${b.series[from].day}–${b.series[to].day}</b> ${fmt(avg)} a day`;
-  const profitChart = !sp ? {} : sevens && sevens.prev !== null && sevens.last !== null
-    ? {bands: [{from: n - 14, to: n - 8, avg: sevens.prev, cls: "", read: bandRead(n - 14, n - 8, sevens.prev)},
-               {from: n - 7, to: n - 1, avg: sevens.last, cls: "last", read: bandRead(n - 7, n - 1, sevens.last)}]}
-    : {dash: !(trend && trend.ready)};
-  const hourWhy = why => sp ? why : `${why}.${notes.length ? ` ${notes.map(n => n.replace(/\s+/g, " ").trim()).join(" ")}` : ""}`;
+  /* The two weeks the chip above compares, shaded on the chart with their own
+     daily averages: the same day numbers the trend uses, and only where the
+     trend is ready. Anything less and the line is dashed instead, because
+     there is no fortnight to read. */
+  const sevens = sp ? spSevens(b.series, D.meta.day) : null;
+  const bands = ready && sevens && sevens.last && sevens.prev ? sevens : null;
+  const profitRead = !bands ? ""
+    : `<b>${fmt(bands.last.avg)}</b>/day over the last 7 against <b>${fmt(bands.prev.avg)}</b>/day the week before`;
+  const bandRead = w => `<b>days ${b.series[w.at].day}–${b.series[w.to].day}</b> ${fmt(w.avg)} a day`;
+  const profitChart = !sp ? {} : bands
+    ? {bands: [{from: bands.prev.at, to: bands.prev.to, avg: bands.prev.avg, cls: "", read: bandRead(bands.prev)},
+               {from: bands.last.at, to: bands.last.to, avg: bands.last.avg, cls: "last", read: bandRead(bands.last)}]}
+    : {dash: true};
   $("sitePanel").innerHTML = `
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
       <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
-    ${spFinds(finds)}
+    ${spFinds(finds, b)}
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
@@ -9448,8 +9510,10 @@ function drawSite(){
         <div class="sp-read sp-readout">${desks.manned} of ${grid.stationCount} staffed at the busiest hour</div>
       </section>` : ""}
     </div>` : ""}
+    ${/* Only a shop and an office have an hourly grid, so this block is always
+          the shop and office one. */""}
     ${grid ? `<section class="sec rv" data-block="hours" id="sp-hours">
-      ${sechead(sp ? "Hours" : "Customers by hour", {icon: sp ? "hours" : null, why: hourWhy(`${
+      ${sechead("Hours", {icon: "hours", why: `${
         Math.min(...grid.weeks.filter(w => w))} week${
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
@@ -9457,14 +9521,14 @@ function drawSite(){
           ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
               grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
           : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
-        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}`)})}
-      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="${sp ? "sp-read sp-readout" : "hourread sp-readout"}" id="hourRead">Hover an hour</div></div>
+        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}`})}
+      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="sp-read sp-readout" id="hourRead">Hover an hour</div></div>
       ${hourChips}
     </section>` : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead("Crew", {icon: sp ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
-        <div class="crew">${crew}</div>${sp ? demandChips : demandNote}
+        ${crew}${sp ? demandChips : demandNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
         ${office ? sechead("Fees", {icon: sp ? "fees" : null}) : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up"})}

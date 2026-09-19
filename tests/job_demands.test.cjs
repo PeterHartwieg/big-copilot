@@ -55,21 +55,27 @@ test('a site lists its unmet staff demands as chips under the crew', async () =>
       text: e.textContent.replace(/\s+/g, ' ').trim(),
       priority: [...e.querySelectorAll('.sp-pri i')].map(i => i.classList.contains('on')),
       high: !!e.querySelector('.sp-pri.hi'),
-      company: !!e.querySelector('[data-el="demand"]'),
+      // The chip itself is the evidence a jobdemand finding points at; the
+      // company mark is the building drawing inside it.
+      evidence: e.dataset.el,
+      company: !!e.querySelector('.sp-co'),
       quit: e.dataset.el === 'quit',
       tip: e.getAttribute('data-tip'),
     })));
     // The priority bars are the game's own ranking, highest last; the company
     // demand is marked as settled somewhere else, and the quit warning is its
     // own chip.
+    // No sentence on the page: the exit mark and the count, and the words in
+    // the tip.
     assert.deepEqual(chips.map(c => c.text),
-                     ['Full-time ×1', 'Gold Health Insurance ×2', '1 will quit']);
+                     ['Full-time ×1', 'Gold Health Insurance ×2', '1']);
     assert.deepEqual(chips, [
-      {text: 'Full-time ×1', priority: [true, true, true], high: true, company: false,
-       quit: false, tip: 'Full-time for 1 · critical'},
-      {text: 'Gold Health Insurance ×2', priority: [true, true, false], high: false, company: true,
-       quit: false, tip: 'Gold Health Insurance for 2 · important · settled company-wide, not here'},
-      {text: '1 will quit', priority: [], high: false, company: false, quit: true,
+      {text: 'Full-time ×1', priority: [true, true, true], high: true, evidence: 'demand',
+       company: false, quit: false, tip: 'Full-time for 1 · critical'},
+      {text: 'Gold Health Insurance ×2', priority: [true, true, false], high: false, evidence: 'demand',
+       company: true, quit: false,
+       tip: 'Gold Health Insurance for 2 · important · settled company-wide, not here'},
+      {text: '1', priority: [], high: false, evidence: 'quit', company: false, quit: true,
        tip: '1 person here has warned they will quit'},
     ]);
   } finally { await page.close(); }

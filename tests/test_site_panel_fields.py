@@ -81,10 +81,15 @@ class SiteFieldTests(unittest.TestCase):
         b = self.business(save, record, history=self.history(6, 7))
         self.assertEqual([(s["day"], s["customers"]) for s in b["series"]], [(6, 60), (7, 70)])
 
-    def test_a_day_with_sales_but_no_door_count_reads_zero(self):
+    def test_a_day_the_order_history_no_longer_covers_has_no_door_count(self):
+        # The takings history runs 30 days, the order history a fortnight, so
+        # the older days have no reading. None, never a zero: the fortnight
+        # spark would otherwise draw a day of no customers that was never
+        # measured.
         save, record = self.build(orders=[{"dayNumber": 6, "totalCustomers": 0}])
-        b = self.business(save, record, history=self.history(6))
-        self.assertEqual([s["customers"] for s in b["series"]], [0])
+        b = self.business(save, record, history=self.history(5, 6))
+        self.assertEqual([(s["day"], s["customers"]) for s in b["series"]],
+                         [(5, None), (6, None)])
 
     # --- amenities ------------------------------------------------------
 
