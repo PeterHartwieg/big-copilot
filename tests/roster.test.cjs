@@ -109,18 +109,35 @@ async function shop(which = 'full', edit, boot){
  *  `current.list` rather than asserted beside it. */
 function sized(name, {staffed, hire, now}){
   const row = copy(ROWS.full);
-  const cycle = (from, n) => Array.from({length: n}, (_, k) =>
-    Object.assign({}, from[k % from.length], {d: k % 7}));
+  const posts = ROWS.full.stations;
   const staffedRows = ROWS.full.shifts.filter(x => x.p !== null);
   const hireRows = ROWS.full.shifts.filter(x => x.p === null);
+  const nowRows = ROWS.full.current.list;
+  /* Asking for more lines than the planner wrote means going round its week
+     again, and a second lap that changed nothing would hand back the lines it
+     already gave -- one tick for two rows, which is not a week anybody could
+     type. So each lap is the same week at its own copy of the furniture: a
+     bigger shop, with the hours, the weekdays and the people left exactly as
+     the planner set them. */
+  const laps = Math.max(
+    Math.ceil(staffed / staffedRows.length),
+    hire ? Math.ceil(hire / hireRows.length) : 0,
+    Math.ceil(now / nowRows.length));
+  row.stations = [].concat(...Array.from({length: laps}, (_, lap) =>
+    posts.map(st => Object.assign({}, st, {id: lap ? `${st.id}#${lap}` : st.id}))));
+  const cycle = (from, n) => Array.from({length: n}, (_, k) => Object.assign(
+    {}, from[k % from.length],
+    {s: from[k % from.length].s + Math.floor(k / from.length) * posts.length}));
   row.key = name;
   row.name = name;
   row.shifts = cycle(staffedRows, staffed).concat(cycle(hireRows, hire));
-  row.current.list = cycle(ROWS.full.current.list, now);
+  row.current.list = cycle(nowRows, now);
   row.current.shifts = row.current.list.length;
   row.current.fragments = row.current.list.length;
   return row;
 }
+const list0 = row => row.shifts.concat(row.current.list);
+const lineIds = list => list.map(s => `${s.d}|${s.s}|${s.f}|${s.t}|${s.p}`);
 
 
 const mon = '#sp-roster .sp-day[data-d="1"] ';
@@ -580,6 +597,75 @@ test('a tick survives the stations table being renumbered', async () => {
   `), [1, 1, '1'], 'the same line is still ticked');
 });
 
+
+test('two different lines never share one tick', async () => {
+  // A joined id is ambiguous about where one part ends: an item whose id
+  // happens to contain the separator can produce the same text as a different
+  // line, and ticking one would tick the other on the next draw.
+  const page = await shop('full', row => {
+    row.stations[0].id = 'x|8';
+    row.stations[1].id = 'x';
+    row.people[0].id = 'y';
+    row.people[1].id = '10|y';
+  });
+  try {
+    const ids = await page.evaluate(key => {
+      const r = spRosterRow(key);
+      return [spTickId(r, {d: 1, s: 0, f: 9, t: 10, p: 0}),
+        spTickId(r, {d: 1, s: 1, f: 8, t: 9, p: 1})];
+    }, KEY);
+    assert.notEqual(ids[0], ids[1], ids.join(' === '));
+    // And the page agrees: ticking one line leaves the other alone.
+    const marked = await page.evaluate(() => {
+      const bars = $$('#sp-roster button.sp-shift');
+      bars[0].click();
+      drawSite();
+      return $$('#sp-roster .sp-shift.sp-done').length;
+    });
+    assert.equal(marked, 1);
+  } finally { await page.close(); }
+});
+
+test('a line whose station or person the save does not name cannot be ticked', async () => {
+  // Two of those would share one empty id. The bars still show, because the
+  // hours are real and worth typing; they just carry no tick.
+  for(const [what, edit] of [
+    ['station', row => { row.stations[0].id = null; }],
+    ['person', row => { row.people[3].id = ''; }],
+  ]){
+    const page = await shop('full', edit);
+    try {
+      const state = await page.evaluate(() => {
+        const sec = q('#sp-roster');
+        const drawn = $$('.sp-shift', sec).length;
+        const ticky = $$('button.sp-shift', sec).length;
+        return [drawn, ticky, +sec.dataset.tickable,
+          q('.sp-typed', sec).textContent.replace(/\s+/g, ' ').trim(),
+          q('.sp-ba > div', sec).innerText.replace(/\s+/g, ''),
+          JSON.stringify(spRosterCounts(D.staffing[0]))];
+      });
+      const [drawn, ticky, tickable, typed, tile, counts] = state;
+      assert.ok(drawn > ticky, `${what}: every bar is still drawn`);
+      assert.equal(ticky, tickable, `${what}: the ring counts the buttons`);
+      assert.match(typed, new RegExp(`0 of ${tickable} typed`), what);
+      assert.ok(tile.includes(tickable + '+7hire'), `${what}: ${tile}`);
+      assert.equal(JSON.parse(counts).tickable, tickable, what);
+      assert.equal(JSON.parse(counts).hire, 7, `${what}: the hires are unchanged`);
+      // And the card sizes the same week the block does.
+      const badge = await page.evaluate(() => {
+        drawOptimizeStaffing();
+        return $('optimizeStaffingCard').querySelector('.soon').textContent;
+      });
+      assert.equal(badge, `\u2212${42 - tickable} LINES`, what);
+      assert.match(
+        await page.locator('#sp-roster .sp-shift:not(button):not(.sp-hire)')
+          .first().getAttribute('data-read'),
+        /no id to tick against/);
+    } finally { await page.close(); }
+  }
+});
+
+
 test('a tick is kept per site and survives the next draw', async () => {
   const page = await shop('full');
   try {
@@ -589,7 +675,7 @@ test('a tick is kept per site and survives the next draw', async () => {
     assert.match(await bar.getAttribute('class'), /sp-done/);
     assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '1');
     const stored = await page.evaluate(k => localStorage.getItem('ba_dash_roster:' + k), KEY);
-    assert.match(stored, /"1\|/, 'the weekday, then the station and person by id');
+    assert.match(stored, /\[1,/, 'the weekday, then the station and person by id');
     await page.evaluate(() => drawSite());
     assert.match(await bar.getAttribute('class'), /sp-done/, 'the tick came back');
     await page.evaluate(() => q('#sp-roster .sp-clear').click());
@@ -772,6 +858,14 @@ test('the card measures a saving in lines to enter, not in lines the plan drew',
       assert.equal(row.current.shifts, row.current.list.length);
       assert.equal(row.shifts.filter(s => s.p === null).length, hire);
       assert.equal(row.shifts.filter(s => s.p !== null).length, 70);
+      // No line may be another line over again: a duplicate would be one tick
+      // for two rows, which is not a week any planner could write.
+      for(const list of [row.shifts, row.current.list]){
+        const ids = lineIds(list);
+        assert.equal(new Set(ids).size, ids.length,
+          `${row.name}: ${ids.length - new Set(ids).size} repeated lines`);
+      }
+      for(const s of list0(row)) assert.ok(s.t - s.f <= 12 && s.t <= 24 && s.f >= 0, row.name);
     }
     const shown = await page.evaluate(rows => {
       D.staffing = rows;

@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=5985f58c7a">
+<link rel="stylesheet" href="community.css?v=999b6dffb2">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=5985f58c7a">
+<link rel="stylesheet" href="fonts/fonts.css?v=999b6dffb2">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2623,8 +2623,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "5985f58c7a";</script>
-<script>window.LEDGER_RELEASE = {"version":"5985f58c7a","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "999b6dffb2";</script>
+<script>window.LEDGER_RELEASE = {"version":"999b6dffb2","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2693,8 +2693,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=5985f58c7a"></script>
-<script src="community.js?v=5985f58c7a"></script>
+<script src="app.js?v=999b6dffb2"></script>
+<script src="community.js?v=999b6dffb2"></script>
 
 <script>
 
@@ -4725,10 +4725,16 @@ const spOpenAt = (slots, h) => (slots || []).some(s => s[0] <= h && h < s[1]);
 const spNobody = p => p === null || p === undefined;
 const spDrawn = (row, s) => s.d >= 0 && s.d < 7 && !!(row.stations || [])[s.s]
   && (spNobody(s.p) || !!(row.people || [])[s.p]);
-/* And whether it is a line the player can go and type: one with somebody on
-   it. A hiring line is drawn, but there is nothing to enter for it yet. */
-const spTickableRows = row => (row.shifts || []).filter(
-  s => spDrawn(row, s) && !spNobody(s.p));
+/* And whether it is a line the player can tick off: one with somebody on it,
+   at a station and for a person the save names. A hiring line is drawn but
+   there is nothing to enter for it yet, and a record with no id of its own has
+   nothing for a tick to be about -- its bar is drawn and can still be typed
+   into the game, it just cannot be marked done. */
+const spHasId = v => typeof v === "string" ? v !== "" : v !== null && v !== undefined;
+const spTickable = (row, s) => spDrawn(row, s) && !spNobody(s.p)
+  && spHasId(((row.stations || [])[s.s] || {}).id)
+  && spHasId(((row.people || [])[s.p] || {}).id);
+const spTickableRows = row => (row.shifts || []).filter(s => spTickable(row, s));
 function spRosterRows(row, list){
   const days = [...Array(7)].map(() => (row.stations || []).map(() => []));
   (list || []).forEach(s => {
@@ -4766,13 +4772,14 @@ function spSameDays(days){
    after it, and a tick that followed the index would land on somebody else's
    shift. An id may hold anything base64 does, so the parts are joined with a
    character an id never contains. */
-const spTickId = (row, s) => [
-  s.d,
-  ((row.stations || [])[s.s] || {}).id,
-  s.f,
-  s.t,
-  ((row.people || [])[s.p] || {}).id,
-].join("|");
+const spTickId = (row, s) => {
+  const post = ((row.stations || [])[s.s] || {}).id;
+  const who = ((row.people || [])[s.p] || {}).id;
+  /* No id, no tick: there is nothing here to tell this line apart from the
+     next one, and two of them would share whatever stood in for the missing
+     part. The bar is drawn anyway -- see spTickable(). */
+  return spHasId(post) && spHasId(who) ? JSON.stringify([s.d, post, s.f, s.t, who]) : null;
+};
 /* The ticks are a convenience, kept per site in the browser. Storage can be
    missing or refuse to answer -- a private window, site data blocked, the
    board opened from a file -- and every path here ends with the block drawing
@@ -4805,11 +4812,10 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
    the ring beside it counted 35. */
 function spRosterCounts(row){
   const drawn = (row.shifts || []).filter(s => spDrawn(row, s));
-  const tickable = drawn.filter(s => !spNobody(s.p)).length;
   return {
     plan: (row.shifts || []).length,
-    tickable,
-    hire: drawn.length - tickable,
+    tickable: drawn.filter(s => spTickable(row, s)).length,
+    hire: drawn.filter(s => spNobody(s.p)).length,
     now: (row.current || {}).shifts || 0,
     fragments: (row.current || {}).fragments || 0,
   };
@@ -5310,10 +5316,19 @@ function spShiftBar(c, s, st, kind){
   else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
   const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
     + (benched ? spI("bench") : "");
+  const body = `${marks}${spEsc(who)}<small>${hrs}</small>`;
+  const cls = `sp-shift${kind === "serve" ? "" : ` sp-${kind}`}`;
+  /* A station or a person the save gives no id to has nothing for a tick to
+     hang on, and two of them would share the same empty one. The line is real
+     and still worth typing, so it is drawn -- it simply cannot be marked. */
+  if(!spTickable(c.row, s))
+    return `<span class="${cls}" style="${span}" data-p="${s.p}" data-read="${attr(
+      `${read} · <b>no id to tick against</b>: type it, but the board cannot mark it done`
+      )}">${body}</span>`;
   const id = spTickId(c.row, s);
-  return `<button type="button" class="sp-shift${kind === "serve" ? "" : ` sp-${kind}`}${
+  return `<button type="button" class="${cls}${
     c.ticks.has(id) ? " sp-done" : ""}" style="${span}" data-p="${s.p}" data-tick="${attr(id)}" data-read="${
-    attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${marks}${spEsc(who)}<small>${hrs}</small></button>`;
+    attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${body}</button>`;
 }
 
 /* The headcount line: one entry a role, a dot a person, then the staff

@@ -146,7 +146,12 @@ single rule for what reaches the page, shared by `spRosterRows()` and the counts
 two cannot drift.
 
 A tick's id is the line the player typed — weekday, station id, `f`, `t`, person id — not
-the payload's indices, which are renumbered whenever the tables are rebuilt. That is the
+the payload's indices, which are renumbered whenever the tables are rebuilt. It is a JSON
+array rather than a joined string, because an id is a string out of a save and may contain
+whatever separator was picked; and a line whose station or person the save gives no id to
+is drawn but not tickable, because there would be nothing to tell it from the next such
+line. `spTickId()` returns null for one of those, and `spTickable()` keeps it out of the
+counts. That is the
 whole invalidation: a plan that changes any part of a line changes its id, the tick stops
 matching and the next write drops it. Nothing is migrated; an old-format tick simply never
 matches again.

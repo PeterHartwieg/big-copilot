@@ -10864,10 +10864,16 @@ const spOpenAt = (slots, h) => (slots || []).some(s => s[0] <= h && h < s[1]);
 const spNobody = p => p === null || p === undefined;
 const spDrawn = (row, s) => s.d >= 0 && s.d < 7 && !!(row.stations || [])[s.s]
   && (spNobody(s.p) || !!(row.people || [])[s.p]);
-/* And whether it is a line the player can go and type: one with somebody on
-   it. A hiring line is drawn, but there is nothing to enter for it yet. */
-const spTickableRows = row => (row.shifts || []).filter(
-  s => spDrawn(row, s) && !spNobody(s.p));
+/* And whether it is a line the player can tick off: one with somebody on it,
+   at a station and for a person the save names. A hiring line is drawn but
+   there is nothing to enter for it yet, and a record with no id of its own has
+   nothing for a tick to be about -- its bar is drawn and can still be typed
+   into the game, it just cannot be marked done. */
+const spHasId = v => typeof v === "string" ? v !== "" : v !== null && v !== undefined;
+const spTickable = (row, s) => spDrawn(row, s) && !spNobody(s.p)
+  && spHasId(((row.stations || [])[s.s] || {}).id)
+  && spHasId(((row.people || [])[s.p] || {}).id);
+const spTickableRows = row => (row.shifts || []).filter(s => spTickable(row, s));
 function spRosterRows(row, list){
   const days = [...Array(7)].map(() => (row.stations || []).map(() => []));
   (list || []).forEach(s => {
@@ -10905,13 +10911,14 @@ function spSameDays(days){
    after it, and a tick that followed the index would land on somebody else's
    shift. An id may hold anything base64 does, so the parts are joined with a
    character an id never contains. */
-const spTickId = (row, s) => [
-  s.d,
-  ((row.stations || [])[s.s] || {}).id,
-  s.f,
-  s.t,
-  ((row.people || [])[s.p] || {}).id,
-].join("|");
+const spTickId = (row, s) => {
+  const post = ((row.stations || [])[s.s] || {}).id;
+  const who = ((row.people || [])[s.p] || {}).id;
+  /* No id, no tick: there is nothing here to tell this line apart from the
+     next one, and two of them would share whatever stood in for the missing
+     part. The bar is drawn anyway -- see spTickable(). */
+  return spHasId(post) && spHasId(who) ? JSON.stringify([s.d, post, s.f, s.t, who]) : null;
+};
 /* The ticks are a convenience, kept per site in the browser. Storage can be
    missing or refuse to answer -- a private window, site data blocked, the
    board opened from a file -- and every path here ends with the block drawing
@@ -10944,11 +10951,10 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
    the ring beside it counted 35. */
 function spRosterCounts(row){
   const drawn = (row.shifts || []).filter(s => spDrawn(row, s));
-  const tickable = drawn.filter(s => !spNobody(s.p)).length;
   return {
     plan: (row.shifts || []).length,
-    tickable,
-    hire: drawn.length - tickable,
+    tickable: drawn.filter(s => spTickable(row, s)).length,
+    hire: drawn.filter(s => spNobody(s.p)).length,
     now: (row.current || {}).shifts || 0,
     fragments: (row.current || {}).fragments || 0,
   };
@@ -11449,10 +11455,19 @@ function spShiftBar(c, s, st, kind){
   else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
   const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
     + (benched ? spI("bench") : "");
+  const body = `${marks}${spEsc(who)}<small>${hrs}</small>`;
+  const cls = `sp-shift${kind === "serve" ? "" : ` sp-${kind}`}`;
+  /* A station or a person the save gives no id to has nothing for a tick to
+     hang on, and two of them would share the same empty one. The line is real
+     and still worth typing, so it is drawn -- it simply cannot be marked. */
+  if(!spTickable(c.row, s))
+    return `<span class="${cls}" style="${span}" data-p="${s.p}" data-read="${attr(
+      `${read} · <b>no id to tick against</b>: type it, but the board cannot mark it done`
+      )}">${body}</span>`;
   const id = spTickId(c.row, s);
-  return `<button type="button" class="sp-shift${kind === "serve" ? "" : ` sp-${kind}`}${
+  return `<button type="button" class="${cls}${
     c.ticks.has(id) ? " sp-done" : ""}" style="${span}" data-p="${s.p}" data-tick="${attr(id)}" data-read="${
-    attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${marks}${spEsc(who)}<small>${hrs}</small></button>`;
+    attr(read)}"><span class="sp-i sp-tick">${spIcon("tick")}</span>${body}</button>`;
 }
 
 /* The headcount line: one entry a role, a dot a person, then the staff
