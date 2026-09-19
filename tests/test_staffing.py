@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import unittest
+import unittest.mock
 
 import ba_dashboard
 from ba_dashboard import (
@@ -503,9 +504,18 @@ FLAT = {h: 15 for h in range(24)}  # 15 customers an hour, all day, every day
 # future game build adds fails the property test until somebody decides what the
 # roster builder should do with it.
 SCHEDULING = ("hours", "days", "daysoff", "noshift", "nocleaning")
+# The rest: what a person is given rather than when they work. The two lists
+# have to partition JOB_DEMANDS exactly, so a kind a future game build adds
+# belongs to neither and trips the guard below.
+NON_SCHEDULING = ("desk", "building", "insurance", "happiness", "clean")
 SCHEDULING_DEMANDS = [
     (slug,) for slug in sorted(JOB_DEMANDS) if JOB_DEMANDS[slug][0] in SCHEDULING
 ]
+
+
+def classified(table):
+    """Whether every kind in a demand table is one the roster builder knows."""
+    return {rule[0] for rule in table.values()} == set(SCHEDULING) | set(NON_SCHEDULING)
 
 
 # A roster row is d/s/f/t/p, plus k on anything but an ordinary serving shift,
@@ -568,12 +578,17 @@ class RosterRulesTest(unittest.TestCase):
     ]
 
     def test_the_fixture_covers_every_kind_that_bears_on_a_roster(self):
-        covered = {
-            JOB_DEMANDS[slug][0] for group in self.DEMANDS for slug in group
-        }
-        self.assertEqual(covered & set(self.SCHEDULING), set(self.SCHEDULING))
-        # And the other way round: no kind of JOB_DEMANDS is left unclassified.
-        self.assertTrue(set(self.SCHEDULING) <= {rule[0] for rule in JOB_DEMANDS.values()})
+        covered = {JOB_DEMANDS[slug][0] for group in self.DEMANDS for slug in group}
+        self.assertEqual(covered & set(SCHEDULING), set(SCHEDULING))
+
+    def test_every_kind_of_demand_is_classified(self):
+        self.assertTrue(classified(JOB_DEMANDS))
+
+    def test_a_kind_a_future_build_adds_trips_the_guard(self):
+        """The point of the two lists: an unclassified kind must not pass quietly."""
+        future = dict(JOB_DEMANDS)
+        future["ba:jobdemand_neveralone"] = ("nosolo", None, 1)
+        self.assertFalse(classified(future))
 
     def roster(self):
         items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
@@ -1137,16 +1152,20 @@ class ShortfallTest(unittest.TestCase):
             for i in range(7)
         ]
         row = plan([(1, REGISTER)], people, FLAT, opens=((8, 12),))
-        by_person = collections.Counter()
+        days_of = collections.defaultdict(set)
         for shift in row["shifts"]:
-            by_person[shift["p"]] += 1
+            days_of[shift["p"]].add(shift["d"])
         self.assertTrue(row["shortDays"])
+        listed = {entry["p"] for entry in row["shortDays"]}
         for entry in row["shortDays"]:
             self.assertEqual(entry["want"], 4)
             self.assertLess(entry["days"], 4)
-        # Nobody was pushed over their count to make it up.
-        for row_entry in row["shortDays"]:
-            self.assertGreater(row_entry["days"], 0)
+        # Nobody was pushed past their count to make it up, and anybody who did
+        # reach four is not on the list.
+        for person, days in days_of.items():
+            self.assertLessEqual(len(days), 4)
+            if len(days) == 4:
+                self.assertNotIn(person, listed)
 
     def test_nobody_is_ever_given_more_days_than_their_count(self):
         people = [
@@ -1174,6 +1193,99 @@ class CurrentSecurityTest(unittest.TestCase):
         self.assertEqual(row["current"]["security"], 1)
         [now] = row["current"]["list"]
         self.assertEqual(kind(now), "security")
+
+
+class ResidueMembershipTest(unittest.TestCase):
+    """A site's residue is a site's own people (review round 2, item 1)."""
+
+    def test_an_assigned_employee_given_no_day_at_all_is_in_shortdays(self):
+        # Forty people all demanding a four-day week and one register to work:
+        # most of them get nothing, and nothing is the worst case of not
+        # reaching four days rather than an absence of one.
+        people = [
+            employee(f"p{i:02d}", [SERVICE], demands=("ba:jobdemand_fourdaysweek",))
+            for i in range(40)
+        ]
+        row = plan([(1, REGISTER)], people, FLAT)
+        worked = {s["p"] for s in row["shifts"]}
+        idle = [r for r in row["shortDays"] if r["days"] == 0]
+        self.assertTrue(idle, "somebody with no day at all is still short of four")
+        self.assertEqual(idle[0]["want"], 4)
+        self.assertNotIn(idle[0]["p"], worked)
+        # Everybody the plan left short is listed, whether or not they worked.
+        self.assertEqual(len(row["shortDays"]), 40 - len(
+            [p for p in worked if p is not None
+             and sum(1 for s in row["shifts"] if s["p"] == p) >= 4]
+        ))
+
+    def sites_with_an_unplaceable_bench(self):
+        """Two shops, and one unassigned guard no shop has a locker for."""
+        return plan_sites(
+            [
+                dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
+                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+            ],
+            [
+                employee("here12", [SERVICE], number=12,
+                         demands=("ba:jobdemand_fulltime",)),
+                employee("here14", [SERVICE], number=14,
+                         demands=("ba:jobdemand_fulltime",)),
+                employee("spare", [GUARD], here=False,
+                         demands=("ba:jobdemand_fulltime",)),
+            ],
+        )
+
+    def test_a_bench_member_nobody_took_belongs_to_no_site(self):
+        rows = self.sites_with_an_unplaceable_bench()
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            named_here = {person["id"] for person in row["people"]}
+            self.assertNotIn("spare", named_here)
+            self.assertEqual(row["bench"], [])
+            for entry in row["shortHours"] + row["shortDays"]:
+                self.assertNotEqual(row["people"][entry["p"]]["id"], "spare")
+
+    def test_each_site_names_its_own_person_and_nobody_else(self):
+        first, second = self.sites_with_an_unplaceable_bench()
+        self.assertEqual([p["id"] for p in first["people"]], ["here12"])
+        self.assertEqual([p["id"] for p in second["people"]], ["here14"])
+        self.assertEqual(first["headcount"][SERVICE]["have"], 1)
+        self.assertEqual(second["headcount"][SERVICE]["have"], 1)
+        # The guard is on nobody's payroll here, so nobody is told to keep them
+        # busy and no hiring line counts them as cover they already have.
+        self.assertNotIn(GUARD, first["headcount"])
+
+
+class OddSaveTest(unittest.TestCase):
+    """Nothing about one site may take the whole board down (item 2)."""
+
+    def test_a_product_that_is_not_a_name_is_ignored(self):
+        row = plan(
+            [(1, REGISTER)],
+            [employee("a", [SERVICE])],
+            FLAT,
+            products=[{"not": "a name"}, 7, None, "ba:itemname_classiccheapmaleclothing"],
+        )
+        self.assertIsNotNone(row)
+        self.assertTrue(row["shifts"])
+
+    def test_a_site_that_cannot_be_planned_is_skipped_not_fatal(self):
+        specs = [
+            dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
+            dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+        ]
+        people = [employee("a", [SERVICE], number=12), employee("b", [SERVICE], number=14)]
+        real = ba_dashboard._plan_site
+
+        def explode(save, names, business, building, *args, **kw):
+            if business["key"].endswith("#12"):
+                raise ValueError("this site is broken")
+            return real(save, names, business, building, *args, **kw)
+
+        with unittest.mock.patch.object(ba_dashboard, "_plan_site", explode):
+            rows = plan_sites(specs, people)
+        self.assertEqual([r["key"] for r in rows], [site_key((STREET, 14))])
+        self.assertTrue(rows[0]["shifts"])
 
 
 class HashSeedTest(unittest.TestCase):

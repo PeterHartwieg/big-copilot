@@ -3773,8 +3773,16 @@ def _arrival_ceiling(
         return None
     ratios = curves["items"]
     primary = set(curve.get("p") or ())
+    # A save hands back whatever is in the list, and a product entry is not
+    # always the string it is supposed to be; an unhashable one would otherwise
+    # take the whole board down on the set test.
     initial = max(
-        (ratios.get(name, 0.0) for name in products if name in primary), default=0.0
+        (
+            ratios.get(name, 0.0)
+            for name in products
+            if isinstance(name, str) and name in primary
+        ),
+        default=0.0,
     ) * (sqm or 0)
     if initial <= 0:
         return None
@@ -4040,11 +4048,12 @@ def _can_work(person: dict, state: dict, slot: dict) -> bool:
 def _placement_rank(person: dict, state: dict, slot: dict) -> tuple:
     """Which of the eligible people takes this slot.
 
-    Furthest below their weekly minimum first, then continuity — already on this
-    station the day before or after, so the player types fewer distinct names —
-    then the cheaper wage, then the employee id. The last one is not cosmetic: a
-    roster that reshuffles names between two runs of the same save is unusable,
-    because the player is halfway through typing it.
+    In order: furthest below their weekly minimum; then somebody still short of
+    a four- or five-day week, for a day they are not already on; then continuity
+    — already on this station the day before or after, so the player types fewer
+    distinct names; then the cheaper wage; then the employee id. The last one is
+    not cosmetic: a roster that reshuffles names between two runs of the same
+    save is unusable, because the player is halfway through typing it.
     """
     floor = person["band"][0] if person["band"] else 0
     below = max(0.0, floor - state["hours"])
@@ -4497,8 +4506,15 @@ def _staffing(
     )
     out = []
     for business, building, grid in planned:
-        row = _plan_site(save, names, business, building, grid, people, bench,
-                         state, curves, table, base_promotion)
+        try:
+            row = _plan_site(save, names, business, building, grid, people, bench,
+                             state, curves, table, base_promotion)
+        except Exception:
+            # One odd site is one missing plan, not a blank board. Everything
+            # else on the page is already computed by the time this runs, and a
+            # site that cannot be planned is skipped in the same place on every
+            # run, so the payload stays the same twice over.
+            continue
         out.append(row)
         # Whoever this site drew off the bench now works here, so they leave it.
         taken = {p["id"] for p in row.pop("_took")}
@@ -4636,10 +4652,13 @@ def _plan_site(
 
     # Who the site has is settled now rather than before placement: a bench
     # member counts here only if this site is the one that drew them off it.
+    # One pass over the shifts, not one per person: the bench is every
+    # unassigned employee in the save, and this runs once per site.
+    worked = {shift["employee"] for shift in shifts}
     mine_now = {
         person["id"]
         for person in pool
-        if person["addr"] or any(s["employee"] == person["id"] for s in shifts)
+        if person["addr"] or person["id"] in worked
     }
     for skill, entry in headcount.items():
         entry["have"] = sum(
@@ -4659,21 +4678,26 @@ def _plan_site(
         entry["hireHours"] = entry["hire"] * FULL_TIME[0]
     short_hours, short_days = [], []
     for person in pool:
+        if person["id"] not in mine_now:
+            continue  # offered to this site and not taken: somebody else's
         mine = state[person["id"]]
         # Only the hours and days this site gave them: a bench member may have
         # been offered around, and another site's week is not this one's.
-        worked = mine["hours"] - before[person["id"]][0]
-        days = len(mine["days"]) - before[person["id"]][1]
-        if person["band"] and worked < person["band"][0]:
+        hours_here = mine["hours"] - before[person["id"]][0]
+        days_here = len(mine["days"]) - before[person["id"]][1]
+        if person["band"] and hours_here < person["band"][0]:
             short_hours.append(
-                {"employee": person["id"], "hours": worked, "min": person["band"][0]}
+                {"employee": person["id"], "hours": hours_here,
+                 "min": person["band"][0]}
             )
         # A four- or five-day week is exactly four or five, so somebody the plan
         # can only give three days to has an unmet demand just as surely as
-        # somebody under their hours. Nobody the plan never touched is listed.
-        if person["days"] is not None and days and days < person["days"]:
+        # somebody under their hours -- and so does somebody it gives no day at
+        # all, which is the worst case of the same thing rather than an absence
+        # of one.
+        if person["days"] is not None and days_here < person["days"]:
             short_days.append(
-                {"employee": person["id"], "days": days, "want": person["days"]}
+                {"employee": person["id"], "days": days_here, "want": person["days"]}
             )
     short_hours.sort(key=lambda r: (r["hours"] - r["min"], str(r["employee"])))
     short_days.sort(key=lambda r: (r["days"] - r["want"], str(r["employee"])))
@@ -4685,7 +4709,7 @@ def _plan_site(
     bench_rows = [
         {"employee": person["id"], "skill": _first_skill(person)}
         for person in bench
-        if any(s["employee"] == person["id"] for s in shifts)
+        if person["id"] in worked
     ]
 
     # Two lookup tables, so the many rows below can be indices rather than
@@ -4700,11 +4724,7 @@ def _plan_site(
     )
     return {
         # Who this site drew off the bench, for _staffing() to take off it.
-        "_took": [
-            person
-            for person in bench
-            if any(s["employee"] == person["id"] for s in shifts)
-        ],
+        "_took": [person for person in bench if person["id"] in worked],
         "key": grid["key"],
         "name": business["name"],
         "typeSlug": business["typeSlug"],

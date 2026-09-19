@@ -399,8 +399,13 @@ is a later change. What it holds, per retail site, and why each part is honest:
 the hour actually wants, with the basis it was worked out on. `measured` is the customers
 who came, on a weekday with two weeks behind it, in an hour that did not run into a
 ceiling. `censored` is an hour that came within 95% of what was available: the real demand
-is unknown and above it, so the estimate is what the role served plus one more of its
-stations, held down by the arrival ceiling, the door cap and the stations installed.
+is unknown and above it, so the estimate is what the **site** served that hour — its
+effective capacity, which is its slowest role with the door cap already applied — plus one
+more of *this* role's stations, then held down by this role's stations installed, the door
+cap and the arrival ceiling, and never dropped below what was measured. Starting from the
+role's own staffed capacity would ask a fast role to grow because a slow one held the hour
+back: a gym whose trainers can serve forty an hour but whose single register lets twenty
+through is short of registers, not of boards.
 `scaled` is a thin weekday read off the best measured one through the game's own day
 curve. `none` is a site too new to say anything about — and a site whose every weekday is
 thin gets no serving shifts at all, rather than a guess.
