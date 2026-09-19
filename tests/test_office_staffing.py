@@ -12,10 +12,10 @@ from ba_dashboard import (
     _hourly,
     _office_posts,
     _plural,
+    _service_wages,
     money,
 )
 from ba_save import Names, Save
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_web import ships  # noqa: E402
 
@@ -29,6 +29,12 @@ COMPUTER = "ba:itemname_computer"
 LAPTOP = "ba:itemname_laptop"
 REGISTER = "ba:itemname_cashregister"
 MONDAY = 1  # day % 7; days 1 and 8 give Monday two weeks of reports
+SECOND = "ba:street_secondavenue"
+
+
+def person(addr, skill, wage):
+    """One employee as extraction holds them: an address, a skill, a wage."""
+    return {"addr": addr, "skill": skill, "wage": wage}
 
 # The Computer Options page as the game writes it: the workstation it serves is
 # linked before the options and is not itself a computer.
@@ -104,8 +110,8 @@ class OfficeGridTests(unittest.TestCase):
         hourly = {h: (1 if h < 4 else 2 if h < 9 else 3 if h < 17 else 0) for h in range(24)}
         save = Save({}, {}, "")
         b = building(LAW, items, shifts, hourly, door=3)
-        [grid] = _hourly(save, [b], [site("office")], {REGISTER: 20},
-                         {COMPUTER, LAPTOP}, self.CREW)
+        [grid] = _hourly(save, [b], [site("office")], {REGISTER: (SERVICE, 20)},
+                         {COMPUTER, LAPTOP}, self.CREW, Names({SERVICE: "Customer Service"}))
         return grid
 
     def test_professionals_at_computers_are_the_capacity(self):
@@ -150,7 +156,13 @@ class OfficeGridTests(unittest.TestCase):
         hourly = {h: 2 if 9 <= h < 13 else 0 for h in range(24)}
         b = building(LAW, items, shifts, hourly, door=50)
         [grid] = _hourly(Save({}, {}, ""), [b], [site("office")], {}, {COMPUTER}, crew)
-        [idle] = _hour_findings([grid], [site("office")], {grid["key"]: 146.0})
+        # The wages come the way extraction builds them: the office's
+        # professionals under the key its one role looks up, the cleaner's
+        # under her own.
+        wages = _service_wages([person((SECOND, 10), LAWYER, 146.0),
+                                person((SECOND, 10), CLEANING, 90.0)],
+                               {grid["key"]: "office"})
+        [idle] = _hour_findings([grid], [site("office")], wages)
         self.assertEqual((idle["kind"], idle["staff"], idle["spare"]), ("idle", 6, 16))
         self.assertEqual(idle["worth"], money(16 * 146.0 / 7))
         self.assertTrue(idle["office"])
@@ -164,7 +176,8 @@ class ShopGridTests(unittest.TestCase):
         hourly = {h: 20 if 9 <= h < 17 else 0 for h in range(24)}
         b = building(SHOP, items, shifts, hourly, door=30, name="Mart")
         shop = site("retail", name="Mart", basket=12.0)
-        [grid] = _hourly(Save({}, {}, ""), [b], [shop], {REGISTER: 20}, {COMPUTER}, crew)
+        [grid] = _hourly(Save({}, {}, ""), [b], [shop], {REGISTER: (SERVICE, 20)},
+                         {COMPUTER}, crew, Names({SERVICE: "Customer Service"}))
         self.assertFalse(grid["office"])
         self.assertEqual((grid["counters"], grid["staffed"][MONDAY][10]), (20, 20))
         [finding] = _hour_findings([grid], [shop], {})

@@ -1199,7 +1199,12 @@ class CityMapView {
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
-    card.querySelector('.go2').hidden = !b;
+    /* The arrow opens the site panel. A business has always had one; a home
+       has one too now, and it is the only way in — a flat is in no picker. */
+    const go = card.querySelector('.go2');
+    go.hidden = !b && !home;
+    go.setAttribute('aria-label', b ? 'Open business details' : 'Open home details');
+    if(this.panel) go.dataset.tip = b ? 'Open business details' : 'Open home details';
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }
@@ -1311,7 +1316,10 @@ function openLocationMap(key, trigger){
   const b = mapBusinesses().get(key);
   const title = $('locationMapTitle');
   if(title){
-    const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address || '';
+    /* A flat you rent is the third thing with an address here: its own panel
+       carries a map pin, so a home key reaches this dialog too. */
+    const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address
+      || (D?.homes || []).find(h => h.key === key)?.address || '';
     title.textContent = b ? `${b.name.replace(/^\[\w+\]\s*/, '')} · ${address}` : address || 'Location map';
   }
   if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'), {panel:false});

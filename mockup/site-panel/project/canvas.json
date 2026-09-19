@@ -1,0 +1,131 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-19T12:00:00Z"
+ },
+ "title": "Big Copilot Site Panel",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 2630,
+   "title": "Shop",
+   "is_interactive": true
+  },
+  "NewShop.dc.html": {
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 1360,
+   "title": "Shop \u00b7 too new to judge",
+   "is_interactive": true
+  },
+  "Office.dc.html": {
+   "x": 0,
+   "y": 2990,
+   "w": 1440,
+   "h": 1750,
+   "title": "Office",
+   "is_interactive": true
+  },
+  "Warehouse.dc.html": {
+   "x": 1560,
+   "y": 2990,
+   "w": 1440,
+   "h": 1390,
+   "title": "Warehouse",
+   "is_interactive": true
+  },
+  "Factory.dc.html": {
+   "x": 0,
+   "y": 5100,
+   "w": 1440,
+   "h": 1690,
+   "title": "Factory",
+   "is_interactive": true
+  },
+  "Home.dc.html": {
+   "x": 1560,
+   "y": 5100,
+   "w": 1440,
+   "h": 580,
+   "title": "Home",
+   "is_interactive": true
+  },
+  "BigCrew.dc.html": {
+   "x": 1560,
+   "y": 6040,
+   "w": 1440,
+   "h": 790,
+   "title": "Crew \u00b7 a big roster",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "NewShop.dc.html",
+  "Office.dc.html",
+  "Warehouse.dc.html",
+  "Factory.dc.html",
+  "Home.dc.html",
+  "BigCrew.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": -250,
+   "w": 560,
+   "maxH": 190,
+   "text": "Hover a finding: the block holding its evidence lights, and the thing inside it pulses. Click and the page goes there. Every block reads out what is under the pointer on its own line, so the labels stay off the page. Try the lamps, the cost bar, the chips under the hour grid and the magnet. The chip by the name is its place by the last 7 days of profit. Roster: flip now and plan, step through the days, click a shift once it is typed, hover a person in Crew."
+  },
+  "try-newshop": {
+   "x": 1560,
+   "y": -250,
+   "w": 560,
+   "maxH": 190,
+   "text": "The honest states. Five pre-flight lamps in the head say why it is not trading; a grey one was never checked, because the alert stops at the first of prices, stock and shelves that fails. Nothing is ticked that the game never scored: dashed means unknown, never fine. No trend before two weeks; a wave with no baseline is hatched, not guessed."
+  },
+  "try-office": {
+   "x": 0,
+   "y": 2740,
+   "w": 560,
+   "maxH": 190,
+   "text": "Same skeleton, office words: clients, workstations, fees. No amenity lamps, because offices are never asked."
+  },
+  "try-warehouse": {
+   "x": 1560,
+   "y": 2740,
+   "w": 560,
+   "maxH": 190,
+   "text": "A warehouse is a pipe, so it reads as a week of trucks. Green is covered, red hatching is dry, the truck drives in to the day it lands. A struck truck is a paused import."
+  },
+  "try-factory": {
+   "x": 0,
+   "y": 4850,
+   "w": 560,
+   "maxH": 190,
+   "text": "Each square is a machine, filled by the share of the week someone is posted to it. Hover an input and the lines that eat it spin up."
+  },
+  "try-home": {
+   "x": 1560,
+   "y": 4850,
+   "w": 560,
+   "maxH": 190,
+   "text": "The save knows a home's address and rent; the building table adds its size. That is all there is, so that is all it shows. Hover the block."
+  },
+  "try-bigcrew": {
+   "x": 1560,
+   "y": 5790,
+   "w": 560,
+   "maxH": 190,
+   "text": "Past a dozen people the pills fold into one row a role and one dot a person, so 46 staff take the room 6 did. Hover a dot and it names itself on the line below; run the pointer along a row and the dots hop. Click a role to open its people as the usual pills. A hollow dot is off today."
+  }
+ },
+ "designSystems": []
+}

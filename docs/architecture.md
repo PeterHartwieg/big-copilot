@@ -65,7 +65,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `drawSite`, `drawRhythm`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
 | `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
-| `homes` | `_homes()` | `web/map.js` only: `CityMapView.update` |
+| `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
@@ -76,8 +76,9 @@ this column is where to look when you change a key's shape — not a complete ca
 | `chains` | `_chains()` | `drawPortfolio` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
-| `hours` | `_hourly()` | `drawSite` |
+| `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
+| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -100,9 +101,67 @@ Three indirect routes an agent would otherwise miss:
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 
-Three keys have no reader, but only one of them is dead end to end:
+Three keys have no reader, and only one of them is dead end to end:
 
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
+
+`_hourly()` returns every trading site and flags each `reported`. `extract()` passes the
+whole list to `_staffing()` and only the reported ones to the `hours` key and
+`_hour_findings()`, so a shop too new to have been measured is planned — its cleaning and
+security cover and its hiring lines do not wait on a measurement — without the hour grid
+starting to draw an empty week for it.
+
+A site the planner cannot plan still gets a row, `{key, name, typeSlug, failed: true}`
+and nothing else, so the page can say so rather than leave a hole where a shop was; a row
+without `failed` is a whole plan. Each site is planned against its own copy of the week and
+of the bench, written back only once its row is built, so a site that falls over leaves no
+phantom hours behind for the next one to hire around.
+
+A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
+points into them by index rather than repeating an id: `s` a station, `p` a person or null.
+A save's ids are 24 characters of base64 and a fragmented site has hundreds of shift rows
+between `shifts` and `current.list`, so on the reference save the tables take the key from
+210 KB to 90 KB. Those two lists, and only those two, use short keys — `d` weekday, `f` and
+`t` the hours a shift runs from and to, `k` the kind of duty, left off entirely on an
+ordinary serving shift. `roles[].stations` holds indices into the same `stations` table.
+
+The board reads all of it in one place, `spRosterBlock()` in `drawSite()`, which is reached
+only for a `retail` site — an office, a depot, a factory and a home have no row. It builds
+its rows through `spRosterRows()`, and the rest of the block is small pure helpers next to
+it: `spRosterMeasured()` (does any hour have a basis other than `none`), `spSameDays()`
+(which weekday is a copy of which), `spOpenAt()` (are the doors open that hour),
+`spNeedAt()` (the need strip's height and its least certain basis for one hour),
+`spTickId()`/`spTicksRead()`/`spTicksWrite()`/`spTyped()` (the player's own ticks, in
+`localStorage` under `ba_dash_roster:<site key>`, every access wrapped because a browser
+may refuse), and `spRosterCounts()`. `drawOptimizeStaffing()` reads the same key for the
+Next-moves card, through `spBestRoster()`.
+
+`shifts` carries the lines nobody at the site may legally work as well as the ones somebody
+can be put on: same row, `p: null`. The page draws those dashed and cannot tick them, so
+`spRosterCounts()` returns `{plan, tickable, hire, now, fragments}` and everything that
+means "the week to type" reads `tickable` — the *Shifts / week* tile, the ring (through
+`data-tickable`, which `spRosterBlock()` works out once for the retally to read back) and
+`spBestRoster()`, which both scores and sizes the Next-moves card on it. `spDrawn()` is the
+single rule for what reaches the page, shared by `spRosterRows()` and the counts, so the
+two cannot drift.
+
+A tick's id is the line the player typed — weekday, station id, `f`, `t`, person id — not
+the payload's indices, which are renumbered whenever the tables are rebuilt. It is a JSON
+array rather than a joined string, because an id is a string out of a save and may contain
+whatever separator was picked; and a line whose station or person the save gives no id to
+is drawn but not tickable, because there would be nothing to tell it from the next such
+line. `spTickId()` returns null for one of those, and `spTickable()` keeps it out of the
+counts. That is the
+whole invalidation: a plan that changes any part of a line changes its id, the tick stops
+matching and the next write drops it. Nothing is migrated; an old-format tick simply never
+matches again.
+
+One ceiling and one role: a capped hour's cell carries `data-caps`, a space-separated list
+of `<kind>:<skill>` tokens (`door` alone for the building), and a cap chip's `data-show`
+carries the same tokens, worked back out of the finding's own words by `spLimitShow()` and
+`spLimitRole()`. Hovering a chip lights the cells holding *every* token it names. Keying on
+the kind alone let two findings of one kind on two different roles light each other's
+hours, and a tie between people and posts light neither's.
 - `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
   binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
   from. Delete the payload key if you like; do not delete the function.
@@ -175,8 +234,8 @@ What `page_html()` produces, top of the file down:
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py` and `ba_buildings.json` into `web/py/`, and writes `web/py/gametext.json`
-from the installed locale — everything `stamp()` hashes has to be in place before
+`ba_dashboard.py`, `ba_buildings.json` and `ba_demand_curves.json` into `web/py/`, and
+writes `web/py/gametext.json` from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
@@ -288,8 +347,10 @@ Everything else it fetches is same-origin, from `web/py/`, carrying the page's b
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
-- `gametext.json` and `ba_buildings.json` — written into the virtual filesystem only when
-  the fetch succeeds, so a build missing either still boots and degrades instead.
+- `gametext.json`, `ba_buildings.json` and `ba_demand_curves.json` — written into the
+  virtual filesystem only when the fetch succeeds, so a build missing one still boots and
+  degrades instead: without the curves the board states no arrival ceiling, and every number
+  it does state still comes off the measured hour grid.
 
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a
