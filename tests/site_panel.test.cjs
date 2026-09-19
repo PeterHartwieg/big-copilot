@@ -682,9 +682,10 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
 
 // --- a home -----------------------------------------------------------------
 // A flat is the one address the panel draws that is not a business. It is
-// reached from its map card alone, so the picker never lists it.
+// reached from its map card alone, so the picker never lists it. Hell's Kitchen
+// is in the board's own HOOD_TAGS table, so the head's bullet reads HK.
 const HOME = {key: 'ba:street_bleeckerstreet#14', address: '14 Bleecker Street',
-              rent: 1150, m: 204, hood: 'Greenwich Village'};
+              rent: 1150, m: 204, hood: "Hell's Kitchen"};
 
 // Opens a home over the shop fixture, the way the map card does.
 async function home(row = HOME) {
@@ -706,12 +707,18 @@ test('a home draws its four tiles and none of the shop blocks', async () => {
     ]);
     // The head names the flat and its neighbourhood, with the hood's two letters.
     assert.equal(await page.textContent('#sitePanel .sitehead h2'), '14 Bleecker Street');
-    assert.match(await page.textContent('#sitePanel .sitehead .sub'), /^Home · Greenwich Village$/);
+    assert.equal(await page.textContent('#sitePanel .sitehead .bullet'), 'HK');
+    assert.match(await page.textContent('#sitePanel .sitehead .sub'), /^Home · Hell's Kitchen$/);
     // Nothing a shop draws belongs to a flat, and neither does the picker.
     for(const sel of ['#sp-tiles', '#sp-standards', '#sp-pull', '#sp-hours', '#sp-crew',
                       '#sp-shelves', '#sp-profit', '#sp-week', '#sp-stock', '.sp-find', '#sitePick'])
       assert.equal(await page.locator(`#sitePanel ${sel}`).count(), 0, sel);
     assert.equal(await page.locator('#sitePanel .sp-house svg').count(), 1);
+    // The lit windows carry their own modifier: an unscoped .sp-lit rule, which
+    // means "this block holds the evidence", must never light a window.
+    assert.equal(await page.locator('#sitePanel .sp-house .sp-win.sp-win-on').count(), 3);
+    assert.equal(await page.locator('#sitePanel .sp-house .sp-win.sp-win-late').count(), 2);
+    assert.equal(await page.locator('#sitePanel .sp-house .sp-lit').count(), 0);
     // Closing it puts the section back exactly as a business leaves it.
     await page.evaluate(() => closeSite());
     assert.equal(await page.locator('#secDetail').isHidden(), true);
@@ -727,6 +734,34 @@ test('a flat the building table does not carry reads as a dash, never a zero', a
     // No neighbourhood is no bullet and no second half of the line.
     assert.equal(await page.textContent('#sitePanel .sitehead .sub'), 'Home');
     assert.equal(await page.locator('#sitePanel .sitehead .bullet').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('the week is seven times the day the panel shows, to the dollar', async () => {
+  // A fractional rent rounded twice makes the two tiles disagree: $11 a day
+  // against $74 a week. The week is seven times the tile above it.
+  for(const [rent, day, week, perM] of [[10.5, '$11', '$77', '$0.05/day'],
+                                        [34.6, '$35', '$245', '$0.17/day']]) {
+    const page = await home({...HOME, rent});
+    try {
+      const tiles = await page.$$eval('#sitePanel .sp-hometiles .sstat .v', vs => vs.map(v => v.textContent));
+      assert.deepEqual(tiles, [day, week, '204m²', perM], `rent ${rent}`);
+    } finally { await page.close(); }
+  }
+});
+
+test('a key in both lists is the business: the flat never wins the fork', async () => {
+  // extract() bills an address as a residence or as a business and never as
+  // both, so this cannot happen today; the fork is ordered so that it cannot
+  // matter if it ever does.
+  const page = await site({homes: [{...HOME, key: KEY, address: 'Not the shop'}]});
+  try {
+    await page.evaluate(k => openSite(k, false), KEY);
+    assert.equal(await page.locator('#sitePanel .sp-house').count(), 0);
+    assert.equal(await page.locator('#sitePanel #sp-tiles').count(), 1);
+    // The shop's own head, rank chip and all, not the flat's address.
+    assert.match(await page.textContent('#sitePanel .sitehead h2'), /^HART\. Gifts\b/);
+    assert.doesNotMatch(await page.textContent('#sitePanel .sitehead'), /Not the shop/);
   } finally { await page.close(); }
 });
 

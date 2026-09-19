@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=ea90e4aca5">
+<link rel="stylesheet" href="community.css?v=f91635456c">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=ea90e4aca5">
+<link rel="stylesheet" href="fonts/fonts.css?v=f91635456c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1664,9 +1664,9 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .sp-house svg{width:100%;height:auto;overflow:visible}
 .sp-house .sp-wall{fill:var(--raised);stroke:var(--rule);stroke-width:1.5}
 .sp-house .sp-win{fill:var(--ground);stroke:var(--rule);stroke-width:1.2;transition:fill .35s}
-.sp-house .sp-win.sp-lit{fill:var(--warn)}
+.sp-house .sp-win.sp-win-on{fill:var(--warn)}
 .sp-house:hover .sp-win{fill:var(--warn)}
-.sp-house:hover .sp-win.sp-late{fill:var(--ground)}
+.sp-house:hover .sp-win.sp-win-late{fill:var(--ground)}
 .sp-house .sp-doorleaf{fill:var(--accent);transform-origin:183px 0;transform-box:fill-box;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
 .sp-house:hover .sp-doorleaf{transform:perspective(200px) scaleX(.55)}
 .sp-house .sp-moon{fill:var(--ink-2);transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
@@ -2544,8 +2544,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "ea90e4aca5";</script>
-<script>window.LEDGER_RELEASE = {"version":"ea90e4aca5","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
+<script>window.LEDGER_BUILD = "f91635456c";</script>
+<script>window.LEDGER_RELEASE = {"version":"f91635456c","latest":{"pr":50,"date":"2026-09-18","title":"Choose light or dark","summary":"The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system's."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2614,8 +2614,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=ea90e4aca5"></script>
-<script src="community.js?v=ea90e4aca5"></script>
+<script src="app.js?v=f91635456c"></script>
+<script src="community.js?v=f91635456c"></script>
 
 <script>
 
@@ -5020,12 +5020,12 @@ function spInputs(site){
    the panel is a drawing of the block beside the four figures the save and the
    building table between them can answer. The lit windows are decoration, not
    a reading; they are the same every night. */
-const SP_HOUSE_LIT = ["0,1", "2,0", "3,2"], SP_HOUSE_LATE = ["1,1", "2,2"];
+const SP_HOUSE_ON = ["0,1", "2,0", "3,2"], SP_HOUSE_LATE = ["1,1", "2,2"];
 function spHouse(){
   let wins = "";
   for(let r = 0; r < 4; r++) for(let c = 0; c < 3; c++){
     const at = `${r},${c}`;
-    const cls = SP_HOUSE_LIT.includes(at) ? "sp-win sp-lit" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-late" : "sp-win";
+    const cls = SP_HOUSE_ON.includes(at) ? "sp-win sp-win-on" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-win-late" : "sp-win";
     wins += `<rect class="${cls}" x="${130 + c * 40}" y="${48 + r * 34}" width="22" height="22" rx="2" style="transition-delay:${(r * 3 + c) * 45}ms"></rect>`;
   }
   return `<svg viewBox="0 0 360 230" role="img" aria-label="An apartment block at night">
@@ -5041,15 +5041,19 @@ function spHouse(){
     <path class="sp-ground" d="M20 210h320" fill="none"></path>
   </svg>`;
 }
-/* Rent is billed daily, so the week is the day seven times over. A floor the
-   building table does not carry is a dash, and the rent per square metre it
-   would divide is left out rather than guessed. */
+/* Rent is billed daily, so the week is the day seven times over — seven times
+   the day this panel shows, not seven times the cents behind it, or the two
+   tiles disagree with each other on a fractional rent. Per m² divides the
+   unrounded rent: it is a rate, not a second reading of the tile above it. A
+   floor the building table does not carry is a dash, and the rate it would
+   divide is left out rather than guessed. */
 function spHomePanel(home){
   const m = Number.isFinite(home.m) && home.m > 0 ? home.m : null;
   const rent = home.rent || 0;
+  const day = Math.round(rent);
   const code = HOOD_TAGS[home.hood] || "";
-  const tiles = spTile("Rent / day", fmt(rent))
-    + spTile("Rent / week", fmt(rent * 7))
+  const tiles = spTile("Rent / day", fmt(day))
+    + spTile("Rent / week", fmt(day * 7))
     + spTile("Size", m === null ? "—" : `${m.toLocaleString()}<small>m²</small>`)
     + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
   return `
@@ -5067,11 +5071,15 @@ function spHomePanel(home){
 
 function drawSite(){
   const sec = $("secDetail");
-  /* A home is not in D.businesses, so it is answered before the lookup that
-     would come back empty. */
-  const home = siteOpen ? spHome(siteKey) : null;
+  siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
+  const b = siteTab >= 0 ? D.businesses[siteTab] : null;
+  /* A flat is the one address that is not a business, so it is answered where
+     the business lookup came back empty — never before it. extract() bills an
+     address as a residence or as a business and never as both, but a key that
+     does turn up in both lists is a business: that is the panel with something
+     to say. */
+  const home = !b && siteOpen ? spHome(siteKey) : null;
   if(home){
-    siteTab = -1;
     sec.hidden = false;
     $("sitePanel").innerHTML = spHomePanel(home);
     $("sitePanel").classList.remove("sp-focus");
@@ -5079,8 +5087,6 @@ function drawSite(){
     wireTips(); wireReveal();
     return;
   }
-  siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
-  const b = siteTab >= 0 ? D.businesses[siteTab] : null;
   if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
   sec.hidden = false;
 
@@ -5091,8 +5097,7 @@ function drawSite(){
   /* An office sells billed hours, not goods: its line is a fee with nothing to
      stock or top up, and its registers are staffed computers. */
   const office = b.status === "office";
-  /* The shop and office panel; then the depot's and the factory's. A home
-     keeps the plainer panel it has today until its own is drawn. */
+  /* The shop and office panel; then the depot's and the factory's. */
   const kind = spKind(b);
   const sp = kind === "retail" || kind === "office";
   const dep = kind === "depot", fac = kind === "factory";

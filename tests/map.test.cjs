@@ -665,6 +665,26 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     // The arrow is the only way into a flat's panel: it is in no picker.
     assert.equal(await card.locator('.go2').isHidden(),false);
     assert.equal(await card.locator('.go2').getAttribute('aria-label'),'Open home details');
+    await card.locator('.go2').click();
+    assert.equal(await page.locator('#secDetail').evaluate(s=>!s.hidden),true);
+    assert.equal(await page.locator('#sitePanel .sp-house').count(),1);
+    const panel=await page.locator('#sitePanel').textContent();
+    assert.match(panel,new RegExp(home.address.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+    assert.deepEqual(await page.$$eval('#sitePanel .sp-hometiles .sstat .lab',ls=>ls.map(l=>l.textContent)),
+      ['Rent / day','Rent / week','Size','Per m²']);
+    // $34 a day is $238 a week; the flat is in no picker and in no portfolio row.
+    assert.match(panel,/\$34/);assert.match(panel,/\$238/);
+    assert.equal(await page.locator('#sitePanel #sitePick').count(),0);
+    await page.evaluate(()=>{closeSite();showPage('map');});await ready(page);
+    // The same arrow in the dialog map, which closes behind it.
+    await page.evaluate(key=>openLocationMap(key),home.key);await ready(page,'#cityMapOverlay');
+    await page.locator('#cityMapOverlay .site.in').waitFor();
+    await page.locator('#cityMapOverlay .site .go2').click();
+    assert.equal(await page.locator('#locationMapDialog').evaluate(d=>d.open),false);
+    assert.equal(await page.locator('#secDetail').evaluate(s=>!s.hidden),true);
+    assert.equal(await page.locator('#sitePanel .sp-house').count(),1);
+    await page.evaluate(()=>{closeSite();showPage('map');});await ready(page);
+    await pickRow(page,home.key);
     await page.locator('#cityMapPage .sev.lay.home').click();
     assert.equal((await matchKeys(page)).includes(home.key),false);
     assert.equal(await page.locator('#cityMapPage .sev.lay.home').getAttribute('aria-pressed'),'false');

@@ -6793,9 +6793,9 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .sp-house svg{width:100%;height:auto;overflow:visible}
 .sp-house .sp-wall{fill:var(--raised);stroke:var(--rule);stroke-width:1.5}
 .sp-house .sp-win{fill:var(--ground);stroke:var(--rule);stroke-width:1.2;transition:fill .35s}
-.sp-house .sp-win.sp-lit{fill:var(--warn)}
+.sp-house .sp-win.sp-win-on{fill:var(--warn)}
 .sp-house:hover .sp-win{fill:var(--warn)}
-.sp-house:hover .sp-win.sp-late{fill:var(--ground)}
+.sp-house:hover .sp-win.sp-win-late{fill:var(--ground)}
 .sp-house .sp-doorleaf{fill:var(--accent);transform-origin:183px 0;transform-box:fill-box;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
 .sp-house:hover .sp-doorleaf{transform:perspective(200px) scaleX(.55)}
 .sp-house .sp-moon{fill:var(--ink-2);transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
@@ -9641,12 +9641,12 @@ function spInputs(site){
    the panel is a drawing of the block beside the four figures the save and the
    building table between them can answer. The lit windows are decoration, not
    a reading; they are the same every night. */
-const SP_HOUSE_LIT = ["0,1", "2,0", "3,2"], SP_HOUSE_LATE = ["1,1", "2,2"];
+const SP_HOUSE_ON = ["0,1", "2,0", "3,2"], SP_HOUSE_LATE = ["1,1", "2,2"];
 function spHouse(){
   let wins = "";
   for(let r = 0; r < 4; r++) for(let c = 0; c < 3; c++){
     const at = `${r},${c}`;
-    const cls = SP_HOUSE_LIT.includes(at) ? "sp-win sp-lit" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-late" : "sp-win";
+    const cls = SP_HOUSE_ON.includes(at) ? "sp-win sp-win-on" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-win-late" : "sp-win";
     wins += `<rect class="${cls}" x="${130 + c * 40}" y="${48 + r * 34}" width="22" height="22" rx="2" style="transition-delay:${(r * 3 + c) * 45}ms"></rect>`;
   }
   return `<svg viewBox="0 0 360 230" role="img" aria-label="An apartment block at night">
@@ -9662,15 +9662,19 @@ function spHouse(){
     <path class="sp-ground" d="M20 210h320" fill="none"></path>
   </svg>`;
 }
-/* Rent is billed daily, so the week is the day seven times over. A floor the
-   building table does not carry is a dash, and the rent per square metre it
-   would divide is left out rather than guessed. */
+/* Rent is billed daily, so the week is the day seven times over — seven times
+   the day this panel shows, not seven times the cents behind it, or the two
+   tiles disagree with each other on a fractional rent. Per m² divides the
+   unrounded rent: it is a rate, not a second reading of the tile above it. A
+   floor the building table does not carry is a dash, and the rate it would
+   divide is left out rather than guessed. */
 function spHomePanel(home){
   const m = Number.isFinite(home.m) && home.m > 0 ? home.m : null;
   const rent = home.rent || 0;
+  const day = Math.round(rent);
   const code = HOOD_TAGS[home.hood] || "";
-  const tiles = spTile("Rent / day", fmt(rent))
-    + spTile("Rent / week", fmt(rent * 7))
+  const tiles = spTile("Rent / day", fmt(day))
+    + spTile("Rent / week", fmt(day * 7))
     + spTile("Size", m === null ? "—" : `${m.toLocaleString()}<small>m²</small>`)
     + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
   return `
@@ -9688,11 +9692,15 @@ function spHomePanel(home){
 
 function drawSite(){
   const sec = $("secDetail");
-  /* A home is not in D.businesses, so it is answered before the lookup that
-     would come back empty. */
-  const home = siteOpen ? spHome(siteKey) : null;
+  siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
+  const b = siteTab >= 0 ? D.businesses[siteTab] : null;
+  /* A flat is the one address that is not a business, so it is answered where
+     the business lookup came back empty — never before it. extract() bills an
+     address as a residence or as a business and never as both, but a key that
+     does turn up in both lists is a business: that is the panel with something
+     to say. */
+  const home = !b && siteOpen ? spHome(siteKey) : null;
   if(home){
-    siteTab = -1;
     sec.hidden = false;
     $("sitePanel").innerHTML = spHomePanel(home);
     $("sitePanel").classList.remove("sp-focus");
@@ -9700,8 +9708,6 @@ function drawSite(){
     wireTips(); wireReveal();
     return;
   }
-  siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
-  const b = siteTab >= 0 ? D.businesses[siteTab] : null;
   if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
   sec.hidden = false;
 
@@ -9712,8 +9718,7 @@ function drawSite(){
   /* An office sells billed hours, not goods: its line is a fee with nothing to
      stock or top up, and its registers are staffed computers. */
   const office = b.status === "office";
-  /* The shop and office panel; then the depot's and the factory's. A home
-     keeps the plainer panel it has today until its own is drawn. */
+  /* The shop and office panel; then the depot's and the factory's. */
   const kind = spKind(b);
   const sp = kind === "retail" || kind === "office";
   const dep = kind === "depot", fac = kind === "factory";
