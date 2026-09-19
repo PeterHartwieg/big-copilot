@@ -78,7 +78,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
-| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | no reader yet — the site panel's roster block reads it |
+| `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -101,11 +101,9 @@ Three indirect routes an agent would otherwise miss:
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 
-Four keys have no reader, but only one of them is dead end to end:
+Three keys have no reader, and only one of them is dead end to end:
 
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
-- `staffing` is unread *for now*: the roster is built and tested ahead of the site panel's
-  roster block, which is the page that will read it. Nothing on the board draws it yet.
 
 `_hourly()` returns every trading site and flags each `reported`. `extract()` passes the
 whole list to `_staffing()` and only the reported ones to the `hours` key and
@@ -126,6 +124,16 @@ between `shifts` and `current.list`, so on the reference save the tables take th
 210 KB to 90 KB. Those two lists, and only those two, use short keys — `d` weekday, `f` and
 `t` the hours a shift runs from and to, `k` the kind of duty, left off entirely on an
 ordinary serving shift. `roles[].stations` holds indices into the same `stations` table.
+
+The board reads all of it in one place, `spRosterBlock()` in `drawSite()`, which is reached
+only for a `retail` site — an office, a depot, a factory and a home have no row. It builds
+its rows through `spRosterRows()`, and the rest of the block is small pure helpers next to
+it: `spRosterMeasured()` (does any hour have a basis other than `none`), `spSameDays()`
+(which weekday is a copy of which), `spNeedAt()` (the need strip's height and its least
+certain basis for one hour), `spTickId()`/`spTicksRead()`/`spTicksWrite()`/`spTyped()` (the
+player's own ticks, in `localStorage` under `ba_dash_roster:<site key>`, every access
+wrapped because a browser may refuse), and `spRosterCounts()`. `drawOptimizeStaffing()`
+reads the same key for the Next-moves card, through `spBestRoster()`.
 - `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
   binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
   from. Delete the payload key if you like; do not delete the function.

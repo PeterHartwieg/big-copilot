@@ -392,8 +392,8 @@ with the wave's end date attached.
 
 ### The roster the board would type in
 
-Not drawn yet: the `staffing` payload key is built and tested, and the page that reads it
-is a later change. What it holds, per retail site, and why each part is honest:
+The *Roster* block on a shop's page draws this. What the `staffing` key holds, per retail
+site, and why each part is honest:
 
 **The need curve.** Per role, per weekday, per open hour, how many of that role's stations
 the hour actually wants, with the basis it was worked out on. `measured` is the customers
@@ -662,6 +662,19 @@ and dims the rest; clicking scrolls there.
 - **Hours.** The two things the grid can say that a daily total cannot are chips under it:
   what the ceiling costs, with the fix, and what idle hours cost. Hovering a chip picks
   its own hours out of the grid.
+- **Roster** (a shop). The week the board would type into BizMan, on the hour grid's own
+  24 columns: a strip of what the measured hours ask for, then one row a station with the
+  shifts to enter. A bar is a person and an hour range; a dashed one is a line nobody here
+  can legally work, counted in the hiring line below rather than given a name. The pin
+  marks a shift placed where it is because of somebody's demand, and the bench mark says
+  they have to be assigned to this shop in MyEmployees first. A day tab with a dash before
+  it is an earlier day again, people and all: copy the schedule and paste it. Under the
+  grid, one entry a role with a dot a person, and the staff demands this plan would fail.
+  The toggle in the head swaps the plan for the schedule as it stands, so you can see what
+  the typing replaces. Click a shift once you have entered it; the ticks are kept in this
+  browser, per shop, and a shift that moves in a later plan simply loses its tick.
+  Nothing is drawn for a shop with no measured weekday — see *The roster the board would
+  type in* above for why a guess would be worse than nothing.
 - **Crew.** What the staff here ask for and nobody has given them, each with how many hold
   it and the game's own priority as three bars; a company-wide demand is marked as settled
   somewhere else, and a quit warning is its own red chip. Past a dozen people the pills
