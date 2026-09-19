@@ -25,8 +25,11 @@ after(async () => { await browser?.close(); });
 
 const KEY = 'ba:street_secondavenue#10';
 const OTHER = 'ba:street_broadway#2';
-const finding = (id, group, site = 'HART. Gifts', siteKey = KEY, level = 'warn') =>
-  ({id, level, site, siteKey, group, text: `${site}: ${group} finding`, worth: null, unit: ''});
+// The shape _condense() really writes: `rank` and `subject` are popped there,
+// and what the panel points at travels as `ev`.
+const finding = (id, group, site = 'HART. Gifts', siteKey = KEY, level = 'warn', ev = null) =>
+  Object.assign({id, level, site, siteKey, group, text: `${site}: ${group} finding`,
+                 worth: null, unit: ''}, ev ? {ev} : {});
 
 // A shop panel, over a fixture whose every field the panel may read is filled
 // in. `shop` overrides the site that opens, `alerts` and `minor.rows` the two
@@ -398,7 +401,7 @@ test('an office draws its workstations where a shop draws its pull', async () =>
   try {
     assert.equal(await page.locator('#sp-pull').count(), 0);
     const squares = await page.$$eval('#sp-desks .sp-m', els =>
-      els.map(e => e.classList.contains('z')));
+      els.map(e => e.classList.contains('sp-z')));
     // Four workstations, three of them manned at the busiest hour.
     assert.deepEqual(squares, [false, false, false, true]);
     assert.match(await page.locator('#sp-desks .sp-readout').innerText(), /3 of 4 staffed/);
@@ -466,6 +469,9 @@ const deadRow = {s: 0, item: 'Napkins', slug: 'napkins', stock: 5000, perWeek: 0
 // Tokens are a one-to-one encoding of the item's own label, so the test spells
 // them the way the panel does rather than hand-rolling a second rule.
 const tok = s => 'sp-' + s.replace(/[^A-Za-z0-9-]/g, c => '_' + c.codePointAt(0).toString(16) + '_');
+// A line is keyed on its slug, a machine on its list position.
+const slugTok = slug => tok('s-' + slug);
+const slotTok = slot => tok('m-' + slot);
 
 const railOf = page => page.$$eval('#sp-stock tbody tr', rows => rows.map(r => ({
   el: r.dataset.el,
@@ -498,14 +504,14 @@ test('a depot draws its week of trucks, and no hour grid', async () => {
     assert.equal(await page.locator('#sp-stock').count(), 1);
     assert.deepEqual(await railOf(page), [
       // Soda: one whole day covered, dry until the truck on the fifth cell.
-      {el: `${tok('Soda')} short`, cells: ['sp-c', 'sp-d', 'sp-d', 'sp-d', 'sp-c', 'sp-c', 'sp-c'],
+      {el: `${slugTok('soda')} short`, cells: ['sp-c', 'sp-d', 'sp-d', 'sp-d', 'sp-c', 'sp-c', 'sp-c'],
        trucks: [{d: '4', held: false, early: false}], zzz: false},
       // A paused contract's truck is struck through and nothing behind it fills.
-      {el: `${tok('Cheap Gift')} paused`,
+      {el: `${slugTok('cheapgift')} paused`,
        cells: ['sp-c', 'sp-c', 'sp-d', 'sp-d', 'sp-d', 'sp-d', 'sp-d'],
        trucks: [{d: '5', held: true, early: false}], zzz: false},
       // Nothing draws on the napkins, so there is no cover to run out.
-      {el: `${tok('Napkins')} dead`, cells: Array(7).fill(''), trucks: [], zzz: true},
+      {el: `${slugTok('napkins')} dead`, cells: Array(7).fill(''), trucks: [], zzz: true},
     ]);
     // One row a site that draws on the depot, and the tile that counts them.
     assert.equal(await page.locator('#sp-feeds .sp-feed').count(), 1);
@@ -559,6 +565,33 @@ test('the truck the cover is measured against is the one the rail draws', async 
   } finally { await page.close(); }
 });
 
+test('a delivery beyond the seven days still leaves the week dry', async () => {
+  // Day 29, two days of cover, the order due on day 40: those five days are
+  // dry before a delivery the rail has no room to draw.
+  const far = await site({shop: DEPOT, supply: {day: 29, imports: [importRow({
+    cover: 2, coverFit: 'short', runsOut: 'Monday', catchUp: 900,
+    arrives: 40, coverageUntil: 40})]}});
+  try {
+    const [row] = await railOf(far);
+    assert.deepEqual(row.cells, ['sp-c', 'sp-c', 'sp-d', 'sp-d', 'sp-d', 'sp-d', 'sp-d']);
+    assert.deepEqual(row.trucks, []);
+  } finally { await far.close(); }
+
+  // A line nothing delivers at all is a different thing: what happens after
+  // the cover runs out is unknown, not dry.
+  const own = await site({
+    shop: {...DEPOT, lines: [
+      {item: 'Burger', slug: 'burger', units: 800, rate: 0, price: 1, revenue: 0, soldPerDay: 0}]},
+    supply: {day: 29, shops: [{s: 1, item: 'Burger', slug: 'burger', sold: 400, peakSold: 400,
+      peakDay: 'Friday', target: 500, pressure: 80, stock: 10, from: 0, level: 'ok'}]},
+  });
+  try {
+    const [row] = await railOf(own);
+    assert.deepEqual(row.cells, ['sp-c', 'sp-c', '', '', '', '', '']);
+    assert.deepEqual(row.trucks, []);
+  } finally { await own.close(); }
+});
+
 test('an item token tells names apart that a slug would run together', async () => {
   const page = await site();
   try {
@@ -576,20 +609,17 @@ test('a depot finding pulses the line it is about', async () => {
   const page = await site({
     shop: DEPOT,
     supply: {day: 29, imports: [importRow()], idle: [deadRow]},
-    alerts: [{id: 'd1', level: 'critical', site: 'HART. Depot', siteKey: KEY, group: 'shortfall',
-              subject: 'Soda', text: 'HART. Depot: Soda runs dry Tuesday', worth: null, unit: ''},
-             {id: 'd2', level: 'info', site: 'HART. Depot', siteKey: KEY, group: 'dead',
-              subject: 'Napkins', text: 'HART. Depot: 5,000 Napkins held with nothing moving out',
-              worth: null, unit: ''}],
+    alerts: [finding('d1', 'shortfall', 'HART. Depot', KEY, 'critical', {slug: 'soda'}),
+             finding('d2', 'dead', 'HART. Depot', KEY, 'info', {slug: 'napkins'})],
   });
   try {
     // Stock standing still is a shelf on a shop and a line on a depot.
     const rows = await page.$$eval('#sitePanel .sp-find', rs =>
       rs.map(r => [r.dataset.id, r.dataset.ev, r.dataset.hit]));
-    assert.deepEqual(rows, [['d1', 'stock', tok('Soda')], ['d2', 'stock', tok('Napkins')]]);
+    assert.deepEqual(rows, [['d1', 'stock', slugTok('soda')], ['d2', 'stock', slugTok('napkins')]]);
     await page.hover('.sp-find[data-id="d2"]');
     const hit = await page.$$eval('#sp-stock .sp-hit', els => els.map(e => e.dataset.el));
-    assert.deepEqual(hit, [`${tok('Napkins')} dead`]);
+    assert.deepEqual(hit, [`${slugTok('napkins')} dead`]);
   } finally { await page.close(); }
 });
 
@@ -643,19 +673,19 @@ test('a factory fills each machine square by the week it is rostered', async () 
       stop: !!r.querySelector('.sp-belt.sp-stop'),
     })));
     assert.deepEqual(lines, [
-      {line: tok('burger'), fill: ['100%', '100%'], mark: ['sp-m', 'sp-m'],
-       slots: [tok('machine 1'), tok('machine 2')], stop: false},
+      {line: slugTok('burger'), fill: ['100%', '100%'], mark: ['sp-m', 'sp-m'],
+       slots: [slotTok(1), slotTok(2)], stop: false},
       // 144 of 168 hours rostered: the square is 86% full.
-      {line: tok('wine'), fill: ['86%'], mark: ['sp-m'], slots: [tok('machine 3')], stop: false},
+      {line: slugTok('wine'), fill: ['86%'], mark: ['sp-m'], slots: [slotTok(3)], stop: false},
       // A machine running a recipe the board cannot name keeps its picker.
-      {line: 'sp-unnamed-0', fill: [''], mark: ['sp-m sp-q'], slots: [tok('machine 4')], stop: false},
+      {line: 'sp-unnamed-0', fill: [''], mark: ['sp-m sp-q'], slots: [slotTok(4)], stop: false},
       // One with no recipe at all is staffed, rented, and making nothing.
-      {line: 'sp-unnamed-1', fill: [''], mark: ['sp-m z'], slots: [tok('machine 5')], stop: true},
+      {line: 'sp-unnamed-1', fill: [''], mark: ['sp-m sp-z'], slots: [slotTok(5)], stop: true},
     ]);
     assert.equal(await page.locator('#sp-lines select.linepick').count(), 1);
     assert.equal(await page.locator('#sp-lines .sp-pile').count(), 1);
     // The read-out names the machine and the hours behind the fill.
-    await page.hover(`#sp-lines .sp-line[data-line="${tok('wine')}"] .sp-m`);
+    await page.hover(`#sp-lines .sp-line[data-line="${slugTok('wine')}"] .sp-m`);
     assert.match(await page.locator('#sp-lines .sp-readout').innerText(),
       /Machine 3 · 144 of 168 h rostered: nobody on it on Sundays/);
   } finally { await page.close(); }
@@ -681,50 +711,73 @@ test('hovering a factory input lights the lines that draw on it', async () => {
     const rows = await page.$$eval('#sp-inputs tbody tr', rs =>
       rs.map(r => [r.dataset.lines, r.dataset.el, r.dataset.read]));
     assert.deepEqual(rows, [
-      [tok('burger'), `${tok('Ground Beef')} target`,
+      [slugTok('burger'), `${slugTok('gb')} target`,
        'Tops up to <b>8,000</b>, the machines eat <b>9,600</b>'],
-      [tok('wine'), tok('Grapes'), 'In step'],
+      [slugTok('wine'), slugTok('grapes'), 'In step'],
     ]);
     await page.hover('#sp-inputs tbody tr:first-child');
     const lit = await page.$$eval('#sp-lines .sp-line.sp-on', els => els.map(e => e.dataset.line));
-    assert.deepEqual(lit, [tok('burger')]);
+    assert.deepEqual(lit, [slugTok('burger')]);
     assert.equal(await page.locator('#sp-lines .sp-lines.sp-dim').count(), 1);
     // The top-up that has to be raised says what to set it to.
     assert.match(await page.locator('#sp-inputs .sp-up.bad').innerText(), /8,000\s*9,600/);
   } finally { await page.close(); }
 });
 
-test('every finding on a depot and a factory points at a block that is there', async () => {
+test('every finding on a depot and a factory points at a block and a row that are there', async () => {
   // A depot and a factory are both `support` sites, so the import, idle-stock
-  // and staffing findings can all carry one of their keys.
+  // and staffing findings can all carry one of their keys. `satisfaction` is
+  // a shop's alone and neither of them draws its block.
   const groups = ['notrading', 'loss', 'trend', 'staff', 'jobdemand', 'dead', 'target',
-                  'shortfall', 'order', 'paused', 'feed', 'unnamed', 'unset'];
-  const alerts = groups.map((g, i) => ({id: `g${i}`, level: 'warn', site: 'HART. Depot',
-    siteKey: KEY, group: g, subject: 'Soda', text: `HART. Depot: ${g} finding`,
-    worth: null, unit: ''}));
+                  'shortfall', 'order', 'paused', 'feed', 'unnamed', 'unset', 'satisfaction'];
+  // What each group carries as its evidence, in the shape _alerts() writes it.
+  // The depot holds "Soda"; the factory eats "gb" and makes "burger".
+  const evOf = kind => ({
+    staff: {slot: 3, slug: kind === 'factory' ? 'wine' : null},
+    dead: {slug: kind === 'factory' ? 'burger' : 'soda'},
+    target: {slug: kind === 'factory' ? 'gb' : 'soda'},
+    shortfall: {slug: kind === 'factory' ? 'gb' : 'soda'},
+    order: {slug: kind === 'factory' ? 'gb' : 'soda'},
+    paused: {slug: kind === 'factory' ? 'gb' : 'soda'},
+    // _feed_notes re-keys an import finding to the depot that imports it, and
+    // the slug is the only thing that joins the recipe's label to the depot's.
+    feed: {slug: kind === 'factory' ? 'gb' : 'soda'},
+  });
   for (const [kind, shop, supply] of [
     ['depot', DEPOT, {day: 29, imports: [importRow()], idle: [deadRow]}],
     ['factory', FACTORY, {day: 29, factories: factories()}],
   ]) {
+    const ev = evOf(kind);
+    const alerts = groups.map((g, i) =>
+      finding(`g${i}`, g, 'HART. Site', KEY, 'warn', ev[g] || null));
     const page = await site({shop, supply, alerts, minor: []});
     try {
       await page.click('[data-allfinds]');
       const rows = await page.$$eval('#sitePanel .sp-find', rs =>
-        rs.map(r => [r.dataset.id, r.dataset.ev || null]));
+        rs.map(r => [r.dataset.id, r.dataset.ev || null, r.dataset.hit || null]));
       const blocks = await page.$$eval('#sitePanel [data-block]', bs => bs.map(x => x.dataset.block));
-      for (const [id, ev] of rows)
-        if (ev) assert.ok(blocks.includes(ev), `${kind}: ${id} points at ${ev}, which is drawn`);
+      for (const [id, block, hit] of rows) {
+        if (block) assert.ok(blocks.includes(block), `${kind}: ${id} points at ${block}, which is drawn`);
+        // A hit that matches nothing is a dimmed page and no pulse at all.
+        for (const t of (hit || '').split(' ').filter(Boolean))
+          assert.ok(await page.locator(`#sitePanel [data-el~="${t}"]`).count() > 0,
+            `${kind}: ${id} pulses ${t}, which is on the page`);
+      }
       // And the ones that belong somewhere else on this kind land there.
       const at = g => rows[groups.indexOf(g)][1];
       assert.equal(at('trend'), 'tiles');
       assert.equal(at('shortfall'), kind === 'depot' ? 'stock' : 'inputs');
       assert.equal(at('feed'), kind === 'depot' ? 'stock' : 'inputs');
       assert.equal(at('staff'), kind === 'depot' ? 'crew' : 'lines');
+      // Stock standing still is a line on a depot; at a factory it follows
+      // the goods — an input it eats, or something it makes.
       assert.equal(at('dead'), kind === 'depot' ? 'stock' : 'lines');
-      // A group whose block this kind does not draw points nowhere at all,
-      // rather than dimming the page and scrolling to nothing.
-      assert.equal(at(kind === 'depot' ? 'unnamed' : 'notrading') === 'tiles' ? 'tiles'
-        : at(kind === 'depot' ? 'unnamed' : 'notrading'), kind === 'depot' ? null : 'tiles');
+      assert.equal(at('target'), kind === 'depot' ? 'stock' : 'inputs');
+      // A group neither kind draws points nowhere at all, rather than dimming
+      // the page and scrolling to nothing.
+      assert.equal(at('satisfaction'), null);
+      assert.equal(at(kind === 'depot' ? 'unnamed' : 'notrading'),
+        kind === 'depot' ? null : 'tiles');
     } finally { await page.close(); }
   }
 });
@@ -733,29 +786,25 @@ test("a factory's own findings pulse the machine and the line they name", async 
   const page = await site({
     shop: FACTORY, supply: {day: 29, factories: factories()},
     alerts: [
-      {id: 'f1', level: 'critical', site: 'HART. Works', siteKey: KEY, group: 'staff',
-       subject: 'Bottle of Wine at position 3', worth: null, unit: '',
-       text: 'HART. Works: Bottle of Wine machine at list position 3 is staffed 144 of 168 hours'},
-      {id: 'f2', level: 'warn', site: 'HART. Works', siteKey: KEY, group: 'unnamed',
-       subject: 'Food Workstation #4', worth: null, unit: '',
-       text: 'HART. Works: 1 machine at Food Workstation #4 runs a recipe without usable details'},
-      {id: 'f3', level: 'critical', site: 'HART. Works', siteKey: KEY, group: 'unset',
-       subject: 'Bottled Goods Workstation #5', worth: null, unit: '',
-       text: 'HART. Works: 1 machine at Bottled Goods Workstation #5 has no recipe set'},
+      finding('f1', 'staff', 'HART. Works', KEY, 'critical', {slot: 3, slug: 'wine'}),
+      // A machine the board cannot read names a workstation, not an item, so
+      // these two keep the fixed marks their rows carry.
+      finding('f2', 'unnamed', 'HART. Works', KEY, 'warn'),
+      finding('f3', 'unset', 'HART. Works', KEY, 'critical'),
     ],
   });
   try {
     const rows = await page.$$eval('#sitePanel .sp-find', rs =>
       rs.map(r => [r.dataset.id, r.dataset.ev, r.dataset.hit]));
     assert.deepEqual(rows, [
-      // A staffing finding names a list position, not an item.
-      ['f1', 'lines', tok('machine 3')],
+      // A staffing finding names a list position as well as its line.
+      ['f1', 'lines', `${slugTok('wine')} ${slotTok(3)}`],
       ['f2', 'lines', 'unnamed'],
       ['f3', 'lines', 'unset'],
     ]);
     await page.hover('.sp-find[data-id="f1"]');
     assert.deepEqual(await page.$$eval('#sp-lines .sp-hit', els => els.map(e => e.dataset.el)),
-      [tok('machine 3')]);
+      [slugTok('wine'), slotTok(3)]);
     await page.hover('.sp-find[data-id="f3"]');
     assert.deepEqual(await page.$$eval('#sp-lines .sp-hit', els => els.map(e => e.dataset.el)),
       ['unset']);
@@ -812,12 +861,12 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
     })));
     // 14,200 on hand against 4,100 a day is 3.5 days, and the factory that
     // makes the soup is not what tops this line up.
-    assert.equal(rows[0].el, tok('Tomatoes'));
+    assert.equal(rows[0].el, slugTok('tomato'));
     assert.equal(rows[0].read, '<b>3.5</b> days on hand');
     assert.equal(rows[0].cells.at(-1), '1');
     assert.equal(rows[0].zzz, false);
     // Nothing draws on the napkins, so there is no cover and no truck.
-    assert.equal(rows[1].el, `${tok('Napkins')} dead`);
+    assert.equal(rows[1].el, `${slugTok('napkins')} dead`);
     assert.equal(rows[1].zzz, true);
     assert.equal(rows[1].cells.at(-2), '—');
     // The Thinnest tile reads the same row, not only the imported lines.
@@ -844,25 +893,35 @@ test('a depot line made in this company names the factory that makes it', async 
   } finally { await page.close(); }
 });
 
-test('a line the player names here is named on the factory panel too', async () => {
+test('naming a line on the factory panel redraws it named', async () => {
   const page = await site({
     shop: FACTORY,
     plan: {recipes: [{slug: 'pizza', item: 'Pizza', out: 40,
                       ingredients: [{slug: 'dough', item: 'Dough', per: 2}]}]},
     supply: {day: 29, factories: factories({sites: [
       {...FACTORY_SITE, lines: [], needs: [], unnamed: [FACTORY_SITE.unnamed[0]]}]})},
-    names: {r9: 'pizza'},
   });
   try {
-    // The panel reads the overlaid view, so the choice kept in this browser
-    // shows here the same way it shows on the Supply page.
+    // Nothing is named yet: one machine, no output the board can put a figure to.
+    assert.equal(await page.locator('#sp-lines select.linepick').count(), 1);
+    assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Made / day'}).innerText(), /—/);
+    assert.equal(await page.locator('#sp-inputs tbody tr').count(), 0);
+
+    await page.selectOption('#sp-lines select.linepick', {label: 'Pizza'});
+
+    // nameLine() keeps the choice and redraws the open site, so the line is
+    // named here the same way it is on the Supply page.
     const lines = await page.$$eval('#sp-lines .sp-line:not(.sp-head)', rows =>
       rows.map(r => r.textContent.replace(/\s+/g, ' ').trim()));
     assert.equal(lines.length, 1);
     assert.match(lines[0], /^Pizza\s*Food Workstation · #4/);
     assert.equal(await page.locator('#sp-lines select.linepick').count(), 0);
-    // And its input followed it in.
+    // Its input followed it in, and its output is a figure now.
     assert.match(await page.locator('#sp-inputs tbody tr').first().innerText(), /Dough/);
+    assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Made / day'}).innerText(),
+      /960\s*of 960 rated/);
+    // And the choice really went to the store the Supply page reads.
+    assert.deepEqual(await page.evaluate(() => localNames()), {r9: 'pizza'});
   } finally { await page.close(); }
 });
 
@@ -887,6 +946,19 @@ test('an empty depot and an unreadable factory still draw', async () => {
     assert.equal((await holes.locator('#sp-inputs .quiet').innerText()).trim(), 'No inputs');
     assert.equal(await holes.locator('#sp-tiles .sstat').count(), 4);
   } finally { await holes.close(); }
+
+  // A machine listed among the gaps is not fully rostered by definition, so
+  // one whose hours did not come through is unknown, never a full square.
+  const noHours = await site({shop: FACTORY, supply: {day: 29, factories: factories({sites: [
+    {...FACTORY_SITE, unnamed: [], needs: [], lines: [{...FACTORY_SITE.lines[0],
+      slots: [1], machines: 1, gaps: [{slot: 1, off: 'Sunday'}]}]}]})}});
+  try {
+    const square = noHours.locator('#sp-lines .sp-m').first();
+    assert.equal(await square.getAttribute('class'), 'sp-m sp-q');
+    assert.match(await square.getAttribute('data-read'),
+      /^Machine 1 · hours <b>not known<\/b>: nobody on it Sunday$/);
+    assert.equal(await square.evaluate(e => e.style.getPropertyValue('--h')), '');
+  } finally { await noHours.close(); }
 
   // _factories() hands back `sites: []` when nothing could be read at all, and
   // a factory with no row of its own is a depot as far as the fork is concerned.

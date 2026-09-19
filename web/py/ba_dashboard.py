@@ -4937,6 +4937,7 @@ def _finding(
     subject: str = "",
     worth=None,
     always: bool = False,
+    ev: dict | None = None,
 ) -> dict:
     """One row of the list.
 
@@ -4945,6 +4946,12 @@ def _finding(
     the key where there is one, so a renamed business keeps its silences and
     two shops that share a name never share a finding. The page navigates by
     the key too, so it never opens a namesake.
+
+    `ev` is what the site panel needs to point at the row this finding is
+    about, once `rank` and `subject` have been dropped by _condense(): the
+    item's `slug`, or a machine's list position as `slot`. It is left off
+    entirely where the panel has a fixed mark to pulse instead, because it
+    travels in every payload.
     """
     return {
         "level": level,
@@ -4958,6 +4965,7 @@ def _finding(
         "id": _alert_id(group, key or site, subject),
         "siteKey": key,
         "always": always,
+        **({"ev": ev} if ev else {}),
     }
 
 
@@ -4982,9 +4990,11 @@ def _alerts(
     """
     found = []
 
-    def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False, key=None):
+    def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
+             key=None, ev=None):
         found.append(
-            _finding(level, site, group, text, key=key, rank=rank, subject=subject, worth=worth, always=always)
+            _finding(level, site, group, text, key=key, rank=rank, subject=subject,
+                     worth=worth, always=always, ev=ev)
         )
 
     planned = {link["to"] for link in supply["graph"]["links"]}
@@ -5289,6 +5299,7 @@ def _alerts(
                 -row["stock"],
                 row["item"],
                 key=key,
+                ev={"slug": row["slug"]},
             )
         elif row["level"] == "critical":
             note(
@@ -5300,6 +5311,7 @@ def _alerts(
                 -row["pressure"],
                 row["item"],
                 key=key,
+                ev={"slug": row["slug"]},
             )
 
     # A depot only runs dry if it cannot reach the next delivery by more than a
@@ -5321,6 +5333,7 @@ def _alerts(
                 row["cover"],
                 row["item"],
                 key=key,
+                ev={"slug": row["slug"]},
             )
         elif row["reason"] == "shortfall":
             note(
@@ -5332,6 +5345,7 @@ def _alerts(
                 row["cover"],
                 row["item"],
                 key=key,
+                ev={"slug": row["slug"]},
             )
         else:
             note(
@@ -5349,6 +5363,7 @@ def _alerts(
                 row["cover"],
                 row["item"],
                 key=key,
+                ev={"slug": row["slug"]},
             )
 
     # --- what the hour-by-hour grid says that a daily total cannot
@@ -5489,6 +5504,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
                         "critical" if share < STAFF_CRITICAL else "warn",
                         business["name"], "staff", text,
                         key=business["key"], rank=machine["hours"], subject=subject,
+                        ev={"slot": machine["slot"], "slug": line.get("slug")},
                     )
                 )
     return notes
@@ -5576,6 +5592,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                 _finding(
                     row["level"], where, "feed", text,
                     key=key, rank=-row["perDay"], subject=row["item"],
+                    ev={"slug": row["slug"]},
                 )
             )
     return notes
@@ -5609,6 +5626,7 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
                     "info", name, "dead",
                     f"{row['stock']:,} {row['item']} held with nothing moving out",
                     key=key, rank=-row["stock"], subject=row["item"], worth=worth,
+                    ev={"slug": row["slug"]},
                 )
             )
 
@@ -5645,6 +5663,11 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
             _finding(
                 "info", site, "target", text,
                 key=one["key"] if one else None, rank=-stock, subject=items[0], worth=worth,
+                # One target set too high can span several shops; the panel can
+                # only point at a row when a single site owns the finding, and
+                # the row it points at is the one the sentence names.
+                ev={"slug": next(r["slug"] for r in rows if r["item"] == items[0])}
+                if one else None,
             )
         )
     return notes
@@ -5695,6 +5718,9 @@ def _condense(found: list, gate: float) -> dict:
                 # where it is alone.
                 "id": _alert_id("summary", group, where),
                 "always": any(r["always"] for r in rows),
+                # A merged line reads out the worst of its rows, so it points
+                # at that row's evidence.
+                **({"ev": worst["ev"]} if worst.get("ev") else {}),
             }
         )
 
@@ -6723,8 +6749,8 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-m{position:relative;width:32px;height:32px;border-radius:8px;background:var(--raised);overflow:hidden;display:grid;place-items:center;color:var(--on-accent);cursor:default}
 .sp-m::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--h,100%);background:var(--accent)}
 .sp-m svg{position:relative;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.sp-m.z{background:none;border:1px dashed var(--rule);color:var(--ink-3)}
-.sp-m.z::before{display:none}
+.sp-m.sp-z{background:none;border:1px dashed var(--rule);color:var(--ink-3);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.06em}
+.sp-m.sp-z::before{display:none}
 
 /* a depot's week: seven days of cover, with the truck on the day it lands */
 .sp-rail{position:relative;display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;height:28px;align-items:end;padding-bottom:4px;box-sizing:border-box;vertical-align:middle}
@@ -6766,7 +6792,7 @@ tr:hover .sp-zz{animation:sp-zz 1.2s ease-in-out infinite}
 .sp-line .sp-n small{display:block;font-size:10.5px;color:var(--ink-3)}
 .sp-lines.sp-dim .sp-line:not(.sp-on):not(.sp-head){opacity:.3}
 .sp-line .sp-mach{gap:6px}
-.sp-line:hover .sp-m:not(.sp-q):not(.z) svg,.sp-line.sp-on .sp-m:not(.sp-q):not(.z) svg{animation:sp-spin 2.4s linear infinite}
+.sp-line:hover .sp-m:not(.sp-q):not(.sp-z) svg,.sp-line.sp-on .sp-m:not(.sp-q):not(.sp-z) svg{animation:sp-spin 2.4s linear infinite}
 @keyframes sp-spin{to{transform:rotate(360deg)}}
 .sp-m.sp-q{background:none;box-sizing:border-box;border:1px dashed var(--warn);color:var(--warn);font:600 14px/1 "IBM Plex Mono",monospace}
 .sp-m.sp-q::before{display:none}
@@ -7393,6 +7419,12 @@ const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
    "A B" stay apart, and a name in any script keeps a token of its own. */
 const spTok = s => "sp-" + String(s ?? "").replace(/[^A-Za-z0-9-]/g,
   ch => "_" + ch.codePointAt(0).toString(16) + "_");
+/* The three namespaces never meet: a line is keyed on its slug where it has
+   one and on its label only where it has none, and a machine on its list
+   position. */
+const spSlugTok = slug => spTok("s-" + slug);
+const spSlotTok = slot => spTok("m-" + slot);
+const spKeyTok = (slug, item) => slug ? spSlugTok(slug) : spTok("i-" + item);
 /* The board's own two letters for each neighbourhood, filled in from the one
    table Python keeps. A place it does not name wears no pill. */
 const HOOD_TAGS = /*__HOOD_TAGS__*/{};
@@ -9024,8 +9056,9 @@ const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length 
 /* --- the site panel's own vocabulary -----------------------------------------
    The lookups its blocks read, the findings about the one site that is open,
    and the wiring that makes a block read out what is under the pointer. The
-   panel forks on a kind: a shop and an office draw all of it, the other kinds
-   keep the plainer panel they have today. */
+   panel forks on a kind: a shop, an office, a depot and a factory each draw
+   their own blocks and no others, and a home keeps the plainer panel it has
+   until its own is drawn. */
 
 /* Which panel this site draws: a shop, an office, a factory (it has a line in
    the factory table), a depot (any other support or overhead site) or a home. */
@@ -9180,32 +9213,32 @@ const SP_EVIDENCE_KIND = {
   factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
             feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
 };
-/* Groups whose evidence is one row of a table rather than a fixed mark: the
-   finding's subject is the item's own label, and every such row carries its
-   token. `unnamed`, `unset` and `staff` name a workstation or a machine
-   instead, so they keep their own hits. */
-const SP_EVIDENCE_ITEM = ["shortfall", "order", "paused", "dead", "target", "feed",
-                          "outruns", "unplanned"];
-/* Mirrors the subject _staff_notes() writes: "<line> at position <slot>". The
-   machine squares carry the same slot token. */
-const spStaffHit = subject => {
-  const m = /\bat position (\d+)\s*$/.exec(String(subject || ""));
-  return m ? spTok("machine " + m[1]) : "";
-};
 /* The block a finding points at on the open kind of panel, and the things
-   inside it to pulse. */
+   inside it to pulse. What it is about comes off the finding's own `ev` — the
+   item's slug, a machine's list position — because _condense() drops `rank`
+   and `subject` from every row before the payload is written, and a label
+   would be the wrong key anyway: a recipe's "Bag of Tomatoes" is the depot's
+   "Tomatoes", and only the slug says they are the same goods. */
+const SP_ROW_BLOCKS = ["stock", "lines", "inputs", "shelves"];
 function spEvidence(a, b, kind){
   const ev = ALERT_EVIDENCE[a.group] || {};
+  const about = a.ev || {};
   let block = (SP_EVIDENCE_KIND[kind] || {})[a.group] || ev.block;
   /* A factory eats some items and makes others; the finding follows its own. */
-  if(kind === "factory" && (a.group === "dead" || a.group === "target") && a.subject){
+  if(kind === "factory" && (a.group === "dead" || a.group === "target") && about.slug){
     const site = spFactorySite();
-    if(site && (site.needs || []).some(n => n.item === a.subject)) block = "inputs";
+    if(site && (site.needs || []).some(n => n.slug === about.slug)) block = "inputs";
   }
   if(!(SP_BLOCKS[kind] || []).includes(block)) block = null;
-  const hit = [SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit,
-               SP_EVIDENCE_ITEM.includes(a.group) && a.subject ? spTok(a.subject) : "",
-               a.group === "staff" && kind === "factory" ? spStaffHit(a.subject) : ""]
+  /* An item and a machine are only rows of the blocks that draw rows: the
+     same finding on a shop's Crew block has nothing there to pulse. */
+  const rows = SP_ROW_BLOCKS.includes(block);
+  /* Whatever is pulsed sits inside the block; with no block there is nothing
+     on the page to point at. */
+  const hit = !block ? "" : [
+    SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit,
+    rows && about.slug ? spSlugTok(about.slug) : "",
+    block === "lines" && Number.isFinite(about.slot) ? spSlotTok(about.slot) : ""]
     .filter(Boolean).join(" ");
   return {block, hit};
 }
@@ -9410,7 +9443,7 @@ function spDesks(grid){
   const manned = best ? Math.min(grid.stationCount, Math.round(grid.staffed[best.wd][best.h] / grid.postRate)) : 0;
   const squares = [...Array(grid.stationCount).keys()].map(k => k < manned
     ? `<span class="sp-m" style="--h:100%" data-read="${attr(`Workstation ${k + 1} · <b>staffed</b> at the busiest hour`)}">${spIcon("monitor")}</span>`
-    : `<span class="sp-m z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
+    : `<span class="sp-m sp-z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
   return {manned, html: `<div class="sp-mach">${squares}</div>`};
 }
 const spCeiling = (office, limits) => {
@@ -9441,15 +9474,17 @@ const SP_DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
    the delivery lands. A line nothing draws on has no cover to run out and
    sleeps instead.
 
-   A paused contract is tested first: it keeps the delivery day it had when it
-   was stopped, so its truck is usually in the past and there is no day for the
-   dry run to end on — every day past the cover is dry. Without a delivery at
-   all the days past the cover are simply unknown, not dry: nothing says when
-   the line is topped up again. */
-function spRail(cover, truck, held, dead, early){
+   Whether the days past the cover are dry is a different question from where
+   the truck sits. A paused contract keeps the delivery day it had when it was
+   stopped, and an order can be due beyond the seven days the rail draws:
+   either way the line is dry to the end of the week, with no truck on it.
+   Without any delivery at all — a line made in-house, or bought off plan —
+   those days are unknown rather than dry: nothing says when it is topped up
+   again. */
+function spRail(cover, truck, held, dead, early, known){
   if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz">zzz</span>`;
   const c = Math.max(0, Math.min(SP_RAIL_DAYS, Math.floor(cover || 0)));
-  const end = held ? SP_RAIL_DAYS : truck === null ? c : truck;
+  const end = truck === null ? (held || known ? SP_RAIL_DAYS : c) : held ? SP_RAIL_DAYS : truck;
   const cells = [...Array(SP_RAIL_DAYS).keys()].map(k =>
     `<i class="${k < c || (!held && truck !== null && k >= truck) ? "sp-c" : k < end ? "sp-d" : ""}"></i>`).join("");
   const lorry = (d, cls, tip) => `<span class="sp-trk${cls}" style="--d:${d}" data-tip="${attr(tip)}">${spIcon("truck")}</span>`;
@@ -9543,10 +9578,15 @@ function spStockRows(b){
        projected through — the last upcoming drop, not necessarily the first —
        so that is the truck the rail puts them beside. Where an earlier drop
        falls in the week too it rides along, quietly, as what it is. */
-    const truck = spTruckDay(Number.isFinite(r.coverageUntil) ? r.coverageUntil : r.arrives, today);
+    const due = Number.isFinite(r.coverageUntil) ? r.coverageUntil : r.arrives;
+    const truck = spTruckDay(due, today);
     const first = spTruckDay(r.arrives, today);
     const early = !r.paused && first !== null && first !== truck ? first : null;
-    const el = [spTok(r.item), r.paused ? "paused" : "", r.coverFit === "short" ? "short" : "",
+    /* A delivery is coming even when it lands past the seven days the rail
+       draws, and the days before it are still dry. */
+    const known = !r.paused && Number.isFinite(due) && Number.isFinite(today) && due >= today;
+    const el = [spKeyTok(r.slug, r.item), r.paused ? "paused" : "",
+                r.coverFit === "short" ? "short" : "",
                 r.orderFit === "short" || r.orderFit === "tight" ? "order" : ""].filter(Boolean);
     const act = r.paused
       ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
@@ -9571,15 +9611,15 @@ function spStockRows(b){
     rows.push({item: r.item, hand: r.stock, draw: spNum(r.perDay),
                cover: r.paused || !Number.isFinite(r.cover) ? null : r.cover,
                short: r.coverFit === "short",
-               rail: spRail(r.cover, truck, r.paused, false, early), act, order,
+               rail: spRail(r.cover, truck, r.paused, false, early, known), act, order,
                feeds: draw.sites, el, read});
   });
   (supply.idle || []).filter(r => r.s === siteTab).filter(take).forEach(r => {
     rows.push({
       item: r.item, hand: r.stock, draw: r.perWeek ? spNum(r.perWeek / 7) : "—",
-      rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, r.dead, null),
+      rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, r.dead, null, false),
       act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
-      el: [spTok(r.item), r.dead ? "dead" : "target"],
+      el: [spKeyTok(r.slug, r.item), r.dead ? "dead" : "target"],
       read: r.dead ? "<b>Nothing draws</b> on these" : `<b>${spNum(r.weeks)}</b> weeks on hand`,
     });
   });
@@ -9595,10 +9635,10 @@ function spStockRows(b){
     rows.push({
       item: l.item, hand: l.units, draw: draw.perDay ? spNum(draw.perDay) : "—",
       cover: draw.perDay ? cover : null, short: !!draw.perDay && cover < 1,
-      rail: spRail(cover, null, false, !draw.perDay, null),
+      rail: spRail(cover, null, false, !draw.perDay, null, false),
       act: "", feeds: draw.sites,
       order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
-      el: [spTok(l.item), draw.perDay ? "" : "dead"].filter(Boolean),
+      el: [spKeyTok(l.slug, l.item), draw.perDay ? "" : "dead"].filter(Boolean),
       read: !draw.perDay ? "<b>Nothing draws</b> on these"
         : cover >= SP_RAIL_DAYS ? "Covered through the week"
         : `<b>${cover.toFixed(1)}</b> days on hand`,
@@ -9634,11 +9674,16 @@ function spMachines(count, gaps, slots){
     : [...Array(Math.max(Number.isFinite(count) ? count : 0, 0)).keys()].map(k => k + 1));
   return `<div class="sp-mach">${posts.map((slot, k) => {
     const gap = bySlot.get(slot) || (slots && slots.length ? null : (gaps || [])[k]);
-    const hours = gap && Number.isFinite(gap.hours) ? gap.hours : SP_STAFF_HOURS;
-    return `<span class="sp-m" style="--h:${Math.round(hours / SP_STAFF_HOURS * 100)}%" data-el="${
-      attr(spTok("machine " + slot))}" data-read="${attr(
-      `Machine ${spEsc(slot)} · <b>${hours} of ${SP_STAFF_HOURS} h</b> rostered${
-        gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`)}">${spIcon("gear")}</span>`;
+    /* A machine listed among the gaps is not fully rostered by definition, so
+       one whose hours did not come through is unknown, never full. */
+    const hours = gap ? gap.hours : SP_STAFF_HOURS;
+    const read = `Machine ${spEsc(slot)} · ${Number.isFinite(hours)
+      ? `<b>${hours} of ${SP_STAFF_HOURS} h</b> rostered` : `hours <b>not known</b>`}${
+      gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`;
+    return Number.isFinite(hours)
+      ? `<span class="sp-m" style="--h:${Math.round(hours / SP_STAFF_HOURS * 100)}%" data-el="${
+          attr(spSlotTok(slot))}" data-read="${attr(read)}">${spIcon("gear")}</span>`
+      : `<span class="sp-m sp-q" data-el="${attr(spSlotTok(slot))}" data-read="${attr(read)}">?</span>`;
   }).join("")}</div>`;
 }
 const SP_LINE_HEAD = `<div class="sp-line sp-head"><span>Line</span><span>Machines</span><span></span>${
@@ -9652,7 +9697,7 @@ function spLines(site){
   let html = SP_LINE_HEAD;
   (site.lines || []).forEach(l => {
     const stop = !l.atRoster || (l.missing || []).length;
-    html += `<div class="sp-line" data-line="${attr(spTok(l.slug || l.item))}" data-el="${attr(spTok(l.item))}">
+    html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spKeyTok(l.slug, l.item))}">
       <div>${spEsc(l.item)}<span class="sub">${where(l)}</span></div>
       ${spMachines(l.machines, l.gaps, l.slots)}
       <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
@@ -9665,7 +9710,7 @@ function spLines(site){
     const idle = u.idle;
     const mach = `<div class="sp-mach">${(u.slots && u.slots.length ? u.slots
       : [...Array(Math.max(Number.isFinite(u.machines) ? u.machines : 0, 0)).keys()].map(i => i + 1)).map(slot =>
-      `<span class="sp-m ${idle ? "z" : "sp-q"}" data-el="${attr(spTok("machine " + slot))}" data-read="${attr(idle
+      `<span class="sp-m ${idle ? "sp-z" : "sp-q"}" data-el="${attr(spSlotTok(slot))}" data-read="${attr(idle
         ? `Machine ${spEsc(slot)} · staffed and rented, <b>making nothing</b>`
         : `Machine ${spEsc(slot)} · running a recipe <b>the board cannot name</b>`)}">${idle ? "zz" : "?"}</span>`).join("")}</div>`;
     /* The picker is offered on the same terms the Supply page offers it: a
@@ -9707,12 +9752,13 @@ function spNeedRead(n){
 function spNeedLines(site, n){
   return (n.lines || []).map(item => {
     const line = (site.lines || []).find(l => l.item === item);
-    return spTok((line && line.slug) || item);
+    return spKeyTok(line && line.slug, item);
   }).join(" ");
 }
 function spInputs(site){
   return (site.needs || []).map(n => {
-    const el = [spTok(n.item), SP_NEED_EL[n.status] || "", n.stalled ? "stalled" : ""].filter(Boolean);
+    const el = [spKeyTok(n.slug, n.item), SP_NEED_EL[n.status] || "",
+                n.stalled ? "stalled" : ""].filter(Boolean);
     const top = n.directImport
       ? (Number.isFinite(n.importWeekly) ? `${spNum(n.importWeekly)}<small>/wk</small>` : "—")
       : !n.target ? `<span class="sp-noplan">${spIcon("route")}no plan</span>`
@@ -9885,7 +9931,7 @@ function drawSite(){
            a chip, not a dash, because it is a fix the player still owes. */
         const over = sp && t && t.target && t.peakSold > t.target;
         const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
-        return `<tr data-el="${attr(spTok(l.item))}${over ? " outruns" : ""}">
+        return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>

@@ -34,7 +34,8 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertIsNone(_scheduled_import_gap(0, 100, [1] * 7, 10,
                           [{"day": 12, "amount": 100}, {"day": 12, "amount": 600}], .5))
 
-    def build(self, contracts, *, routed=False, rid=RID, with_recipes=True, target=300):
+    def build(self, contracts, *, routed=False, rid=RID, with_recipes=True, target=300,
+              shop=False):
         save = SaveStub([[rid]], hours=24)
         save.address = lambda value: value
         save.root.update(Hour=12, Minute=0, importPartnerships=contracts,
@@ -53,6 +54,13 @@ class ImportRoutesTests(unittest.TestCase):
                        "rate": 0, "price": 1}],
         } for address, name, kind in [(("factory", 0), "Factory", "factory"),
                                     (("depot", 1), "WH Import Hub", "warehouse")]]
+        if shop:
+            # A retail site with something selling, so _supply() builds a shop row.
+            businesses.append({
+                "key": site_key(("shop", 2)), "name": "Bar", "code": "", "neighbourhood": "",
+                "type": "bar", "typeSlug": "bar", "status": "retail",
+                "lines": [{"slug": BEER, "item": "Beer", "units": 40, "rate": 12, "price": 5}],
+            })
         recipes = {BEER: {
             "slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
             "ingredients": [{"slug": WATER, "item": "Water", "per": 10}],
@@ -95,12 +103,15 @@ class ImportRoutesTests(unittest.TestCase):
     def test_a_supply_row_carries_the_slug_its_label_cannot_be_matched_on(self):
         """A recipe's label for an input is not the depot line's label, so the
         rows the site panel joins carry the slug the chain reconciles them on."""
-        data = self.build([contract(1000, last=1000)], routed=True)
+        data = self.build([contract(1000, last=1000)], routed=True, shop=True)
         row = next(r for r in data["supply"]["imports"] if r["s"] == 1)
         self.assertEqual(row["slug"], WATER)
         self.assertNotEqual(row["slug"], row["item"])
-        for shop in data["supply"]["shops"]:
-            self.assertIn("slug", shop)
+        shops = data["supply"]["shops"]
+        self.assertTrue(shops, "the fixture holds a shop with something selling")
+        for shop in shops:
+            self.assertEqual(shop["slug"], BEER)
+            self.assertNotEqual(shop["slug"], shop["item"])
 
     def test_direct_factory_import_covers_input_without_daily_topup(self):
         need = self.need(self.build([contract(2000, last=2000, destination=("factory", 0))]))
