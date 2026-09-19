@@ -9853,9 +9853,9 @@ function drawSite(){
   const sp = kind === "retail" || kind === "office";
   const dep = kind === "depot", fac = kind === "factory";
   /* A depot and a factory carry their own tiles and no shelves at all, so the
-     shop and office blocks are not composed for them: it would be wasted
-     work, and the rows they register would let a finding point at a table
-     that is not on the page. */
+     shop and office blocks are not composed for them. This only saves the
+     work: what keeps a finding from pointing into a block that is not there
+     is spPruneHits(), which reads the finished markup. */
   const shelved = !dep && !fac;
   /* Only a shop and an office are measured hour by hour, so the grid never
      belongs to the other kinds. */
@@ -12390,8 +12390,12 @@ const wireSiteFinds = once(() => {
     panel.classList.toggle("sp-focus", lit);
     const blk = f.dataset.ev && q(`[data-block="${f.dataset.ev}"]`, panel);
     if(blk) blk.classList.toggle("sp-lit", lit);
+    /* Inside the block that is lit, the same host spPruneHits() checked
+       against: a factory makes Dough on one line and eats it on another, and
+       only the one the finding is about should pulse — the other sits in a
+       block this row has just dimmed. */
     (f.dataset.hit || "").split(" ").filter(Boolean).forEach(h =>
-      $$(`[data-el~="${h}"]`, panel).forEach(el => el.classList.toggle("sp-hit", lit)));
+      $$(`[data-el~="${h}"]`, blk || panel).forEach(el => el.classList.toggle("sp-hit", lit)));
   };
   onEnter(".sp-find", f => hits(f, true));
   onLeave(".sp-find", f => hits(f, false));

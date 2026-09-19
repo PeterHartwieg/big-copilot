@@ -1116,6 +1116,32 @@ test('a token from a block this kind does not draw is not a hit', async () => {
   } finally { await page.close(); }
 });
 
+test('the same goods on two blocks pulse only in the one the finding names', async () => {
+  // This factory makes Dough on one line and eats it on another, so the token
+  // is a row of Lines and a row of Inputs at once. The finding is about the
+  // input, and Lines is a block it has just dimmed.
+  const page = await site({
+    shop: FACTORY,
+    supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, unnamed: [],
+      lines: [{...FACTORY_SITE.lines[0], item: 'Dough', slug: 'dough'},
+              FACTORY_SITE.lines[1]],
+      needs: [{...FACTORY_SITE.needs[0], item: 'Dough', slug: 'dough'}]}]})},
+    alerts: [finding('d1', 'feed', 'HART. Works', KEY, 'critical', {slug: 'dough'})],
+  });
+  try {
+    const row = await page.$eval('#sitePanel .sp-find', r => [r.dataset.ev, r.dataset.hit]);
+    assert.deepEqual(row, ['inputs', slugTok('dough')]);
+    // Both blocks carry a row under that token.
+    assert.equal(await page.locator(`#sp-lines [data-el~="${slugTok('dough')}"]`).count(), 1);
+    assert.equal(await page.locator(`#sp-inputs [data-el~="${slugTok('dough')}"]`).count(), 1);
+    await page.hover('#sitePanel .sp-find');
+    // Only the one inside the lit block pulses.
+    const lit = await page.$$eval('#sitePanel .sp-hit', els =>
+      els.map(e => e.closest('[data-block]').dataset.block));
+    assert.deepEqual(lit, ['inputs']);
+  } finally { await page.close(); }
+});
+
 test('the same goods on a shelf and on a line are told apart by their block', async () => {
   // The token is the same; only the block the finding sends the reader to
   // decides whether it is a row there.
