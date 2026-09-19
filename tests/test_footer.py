@@ -34,13 +34,20 @@ class Footer(unittest.TestCase):
     def test_the_two_homes_do_not_share_an_id(self):
         # Both footers are in the site's page until the board replaces the
         # landing, so anything they both carry has to be a class or a data
-        # attribute. The board fills #footFile and #footBuild, and the landing
-        # has neither; the landing owns #helpLink.
+        # attribute. The board fills #footBuild, which the landing
+        # lacks; the landing owns #helpLink.
         landing = set(re.findall(r'id="([^"]+)"', footer_html(landing=True, site=True)))
         board = set(re.findall(r'id="([^"]+)"', footer_html(site=True)))
         self.assertEqual(landing & board, set())
         self.assertIn("helpLink", landing)
-        self.assertLessEqual({"footFile", "footBuild"}, board)
+        self.assertIn("footBuild", board)
+
+    def test_only_the_cli_page_names_the_save_in_its_footer(self):
+        # The site's source strip already carries the file and when it was saved;
+        # the CLI's dashboard.html has no strip, so its footer is the one place.
+        self.assertIn('id="footFile"', footer_html())
+        self.assertNotIn('id="footFile"', footer_html(site=True))
+        self.assertNotIn('id="footFile"', footer_html(landing=True, site=True))
 
     def test_the_vote_card_ships_hidden(self):
         # community.js reveals it; nothing else may, or the CLI's dashboard.html

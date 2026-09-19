@@ -66,7 +66,7 @@ COLOPHON = (
 )
 
 # The footer, built once and placed twice. `landing=True` adds the landing's own
-# "Where saves live" toggle and leaves out the two ids the board's script fills
+# "Where saves live" toggle and leaves out the ids the board's script fills
 # (#footFile, #footBuild), because both footers are in the one document until the
 # board replaces the landing and ids may not be shared.
 #
@@ -106,7 +106,9 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
              if landing else "")
     # The board's script writes the save's name and the game build into these two.
     # The landing has no save yet, so it states the build the page was checked on.
-    file_slot = "" if landing else '<span class="sf-meta" id="footFile"></span>'
+    # On the site the source strip under the masthead already names the save, so
+    # only the CLI's page, which has no strip, repeats it down here.
+    file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>')
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
@@ -9769,9 +9771,11 @@ function drawFindLocation(){
 
 function drawFooter(){
   const m = D.meta;
-  const f = $("footFile");
-  f.textContent = `${m.source} · saved ${m.saved}`;
-  f.dataset.tip = `Board built ${m.generated}`;
+  const f = $("footFile");  // the CLI's page only: the site names the save in its source strip
+  if(f){
+    f.textContent = `${m.source} · saved ${m.saved}`;
+    f.dataset.tip = `Board built ${m.generated}`;
+  }
   $("footBuild").textContent = `Game build ${m.build}`;
 }
 
