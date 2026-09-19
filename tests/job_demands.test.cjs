@@ -81,6 +81,19 @@ test('a site lists its unmet staff demands as chips under the crew', async () =>
   } finally { await page.close(); }
 });
 
+test("an ampersand in a demand's own name reads as one, on the chip and in its tip", async () => {
+  // A tip is set as textContent, so it takes attr() and no markup escaping;
+  // escaping it twice would put "&amp;" in front of the player.
+  const page = await site([
+    {slug: 'ba:jobdemand_nomornings', demand: 'R & R time', count: 3, priority: 0, company: false},
+  ]);
+  try {
+    const chip = page.locator('#sitePanel .sp-dem').first();
+    assert.equal((await chip.innerText()).replace(/\s+/g, ' ').trim(), 'R & R time ×3');
+    assert.equal(await chip.getAttribute('data-tip'), 'R & R time for 3 · nice to have');
+  } finally { await page.close(); }
+});
+
 test('a site with every demand met says nothing', async () => {
   const page = await site([]);
   try {

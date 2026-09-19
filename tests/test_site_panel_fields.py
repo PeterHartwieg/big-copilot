@@ -85,11 +85,12 @@ class SiteFieldTests(unittest.TestCase):
         # The takings history runs 30 days, the order history a fortnight, so
         # the older days have no reading. None, never a zero: the fortnight
         # spark would otherwise draw a day of no customers that was never
-        # measured.
+        # measured. A day the history does hold keeps its own zero, which is a
+        # measurement like any other.
         save, record = self.build(orders=[{"dayNumber": 6, "totalCustomers": 0}])
         b = self.business(save, record, history=self.history(5, 6))
         self.assertEqual([(s["day"], s["customers"]) for s in b["series"]],
-                         [(5, None), (6, None)])
+                         [(5, None), (6, 0)])
 
     # --- amenities ------------------------------------------------------
 
