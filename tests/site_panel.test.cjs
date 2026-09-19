@@ -91,7 +91,10 @@ test('the findings here are the ones about this site, and each lights its block'
     const rows = await page.$$eval('#sitePanel .sp-find', rows =>
       rows.map(r => ({id: r.dataset.id, ev: r.dataset.ev, hit: r.dataset.hit || null})));
     assert.deepEqual(rows, [
-      {id: 'a1', ev: 'shelves', hit: 'outruns'},
+      // This fixture stocks nothing, so there is no shelf row to pulse: the
+      // block is still worth scrolling to, and the hit is dropped rather than
+      // dimming the page for nothing.
+      {id: 'a1', ev: 'shelves', hit: null},
       {id: 'a3', ev: 'standards', hit: 'music'},
       // The counted-away list under the findings is read too.
       {id: 'a5', ev: 'hours', hit: null},
@@ -760,10 +763,11 @@ test('every finding on a depot and a factory points at a block and a row that ar
       const blocks = await page.$$eval('#sitePanel [data-block]', bs => bs.map(x => x.dataset.block));
       for (const [id, block, hit] of rows) {
         if (block) assert.ok(blocks.includes(block), `${kind}: ${id} points at ${block}, which is drawn`);
-        // A hit that matches nothing is a dimmed page and no pulse at all.
+        // A hit has to sit inside the block the row scrolls to: elsewhere on
+        // the page is a dimmed panel and a pulse the reader never sees.
         for (const t of (hit || '').split(' ').filter(Boolean))
-          assert.ok(await page.locator(`#sitePanel [data-el~="${t}"]`).count() > 0,
-            `${kind}: ${id} pulses ${t}, which is on the page`);
+          assert.ok(await page.locator(`[data-block="${block}"] [data-el~="${t}"]`).count() > 0,
+            `${kind}: ${id} pulses ${t}, which is inside ${block}`);
       }
       // And the ones that belong somewhere else on this kind land there.
       const at = g => rows[groups.indexOf(g)][1];
@@ -1060,15 +1064,101 @@ test('a finding whose row the panel did not draw carries no hit at all', async (
   // Nothing on this depot knows the slug: no import, no idle pile, no holding
   // and no factory drawing it from here. The block is still worth scrolling
   // to; a pulse that lands on nothing would only dim the page.
-  const page = await site({
+  const depot = await site({
     shop: DEPOT,
     supply: {day: 29, imports: [importRow()], idle: [deadRow]},
-    alerts: [finding('x1', 'feed', 'HART. Depot', KEY, 'warn', {slug: 'nowhere'}),
-             finding('x2', 'staff', 'HART. Works', KEY, 'warn', {slot: 99})],
+    alerts: [finding('x1', 'feed', 'HART. Depot', KEY, 'warn', {slug: 'nowhere'})],
   });
   try {
+    const rows = await depot.$$eval('#sitePanel .sp-find', rs =>
+      rs.map(r => [r.dataset.id, r.dataset.ev || null, r.dataset.hit || null]));
+    assert.deepEqual(rows, [['x1', 'stock', null]]);
+  } finally { await depot.close(); }
+
+  // A machine position no square on this factory's Lines carries.
+  const works = await site({
+    shop: FACTORY,
+    supply: {day: 29, factories: factories()},
+    alerts: [finding('x2', 'staff', 'HART. Works', KEY, 'warn', {slot: 99, slug: 'wine'}),
+             finding('x3', 'staff', 'HART. Works', KEY, 'warn', {slot: 3, slug: 'nowhere'})],
+  });
+  try {
+    const rows = await works.$$eval('#sitePanel .sp-find', rs =>
+      rs.map(r => [r.dataset.id, r.dataset.ev || null, r.dataset.hit || null]));
+    // Each keeps the half of its evidence the Lines block really holds.
+    assert.deepEqual(rows, [['x2', 'lines', slugTok('wine')],
+                            ['x3', 'lines', slotTok(3)]]);
+  } finally { await works.close(); }
+});
+
+test('a token from a block this kind does not draw is not a hit', async () => {
+  // A factory whose own holding lists Soda, which none of its lines makes and
+  // none of its inputs eats. The shelves table that would carry that row is
+  // not composed for a factory at all, so the finding keeps its block and
+  // drops the pulse rather than dimming the page for nothing.
+  const page = await site({
+    shop: {...FACTORY, lines: [
+      {item: 'Soda', slug: 'soda', units: 1, rate: 0, price: 1, revenue: 0, soldPerDay: 0}]},
+    supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, unnamed: []}]})},
+    alerts: [finding('s1', 'dead', 'HART. Works', KEY, 'info', {slug: 'soda'}),
+             // And one that does name a line the factory makes.
+             finding('s2', 'dead', 'HART. Works', KEY, 'info', {slug: 'burger'})],
+  });
+  try {
+    assert.equal(await page.locator('#sp-shelves').count(), 0);
     const rows = await page.$$eval('#sitePanel .sp-find', rs =>
       rs.map(r => [r.dataset.id, r.dataset.ev || null, r.dataset.hit || null]));
-    assert.deepEqual(rows, [['x1', 'stock', null], ['x2', 'crew', null]]);
+    assert.deepEqual(rows, [['s1', 'lines', null], ['s2', 'lines', slugTok('burger')]]);
+    await page.hover('.sp-find[data-id="s1"]');
+    assert.equal(await page.locator('#sitePanel .sp-hit').count(), 0);
+    await page.hover('.sp-find[data-id="s2"]');
+    assert.equal(await page.locator('#sp-lines .sp-hit').count(), 1);
   } finally { await page.close(); }
+});
+
+test('the same goods on a shelf and on a line are told apart by their block', async () => {
+  // The token is the same; only the block the finding sends the reader to
+  // decides whether it is a row there.
+  const page = await site({
+    shop: {...FACTORY, status: 'retail', type: 'Gift Shop', revenue: 900, customers: 30,
+           lines: [{item: 'Burger', slug: 'burger', units: 5, rate: 2, price: 3,
+                    revenue: 6, soldPerDay: 2}]},
+    supply: {day: 29, shops: [], factories: factories({sites: []})},
+    alerts: [finding('r1', 'dead', 'HART. Shop', KEY, 'info', {slug: 'burger'})],
+  });
+  try {
+    const row = await page.$eval('#sitePanel .sp-find', r => [r.dataset.ev, r.dataset.hit]);
+    assert.deepEqual(row, ['shelves', slugTok('burger')]);
+    await page.hover('#sitePanel .sp-find');
+    assert.equal(await page.locator('#sp-shelves .sp-hit').count(), 1);
+  } finally { await page.close(); }
+});
+
+test('the zero-stock row says why there is none of it, not always "no import"', async () => {
+  // _supply() builds its import rows from what a site holds, so a contract
+  // signed before its first delivery has a live order and no row on the floor.
+  const need = over => ({...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
+                         perDay: 4100, lines: ['Burger'], from: 0, target: 0, ...over});
+  const cases = [
+    [{status: 'import', level: 'warn', importWeekly: 8000}, /8,000\s*\/wk/,
+     /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
+    [{status: 'paused', level: 'critical', importWeekly: 0}, /paused/,
+     /Import <b>paused<\/b>; <b>nothing<\/b> on hand/],
+    [{status: 'noimport', level: 'warn', importWeekly: null}, /no import/,
+     /<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day is drawn from here/],
+  ];
+  for (const [over, order, read] of cases) {
+    const page = await site({
+      shop: {...DEPOT, lines: []},
+      supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, s: 1, unnamed: [],
+        lines: [FACTORY_SITE.lines[0]], needs: [need(over)]}]})},
+    });
+    try {
+      const row = page.locator('#sp-stock tbody tr').first();
+      assert.match((await row.innerText()).replace(/\s+/g, ' '), order, over.status);
+      assert.match(await row.getAttribute('data-read'), read, over.status);
+      // Whatever the reason, nothing on hand still reads in red.
+      assert.equal(await row.locator('.sp-red').innerText(), '0');
+    } finally { await page.close(); }
+  }
 });

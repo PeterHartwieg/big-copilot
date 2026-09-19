@@ -7414,8 +7414,6 @@ const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="tr
 const spEsc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /* The same drawing wrapped so it sits on a text line. */
 const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
-/* One token an item, so a finding about it pulses the row that carries it: a
-   supply finding's subject is the item's own name. */
 /* Every character that is not a letter, a digit or a hyphen becomes a
    delimited hex escape, so the token is whitespace-free, safe inside a
    data-el~= selector, and one-to-one with the identity it encodes: "A+B" and
@@ -7428,11 +7426,22 @@ const spTok = s => "sp-" + String(s ?? "").replace(/[^A-Za-z0-9-]/g,
 const spSlugTok = slug => spTok("s-" + slug);
 const spSlotTok = slot => spTok("m-" + slot);
 const spKeyTok = (slug, item) => slug ? spSlugTok(slug) : spTok("i-" + item);
-/* Every row token the open panel drew. A finding is composed after the blocks
-   it points at, so it can ask whether the row it names is really there rather
-   than dimming the page for a pulse that lands on nothing. */
-let spRowToks = new Set();
-const spRow = tok => { spRowToks.add(tok); return tok; };
+/* What a finding points at has to be inside the block it sends the reader to,
+   and the rows are composed in the same pass as the findings, so the check is
+   made against the finished markup rather than against a register every row
+   has to remember to sign. A token with nothing behind it is dropped; the
+   block, still worth scrolling to, is kept. Two blocks can key the same goods
+   on the same token — a shop's shelves and a factory's lines — so the search
+   is inside the named block, never across the panel. */
+function spPruneHits(panel){
+  $$(".sp-find[data-hit]", panel).forEach(f => {
+    const host = f.dataset.ev ? q(`[data-block="${f.dataset.ev}"]`, panel) : null;
+    const kept = (f.dataset.hit || "").split(" ").filter(Boolean)
+      .filter(tok => host && q(`[data-el~="${tok}"]`, host));
+    if(kept.length) f.dataset.hit = kept.join(" ");
+    else f.removeAttribute("data-hit");
+  });
+}
 /* The board's own two letters for each neighbourhood, filled in from the one
    table Python keeps. A place it does not name wears no pill. */
 const HOOD_TAGS = /*__HOOD_TAGS__*/{};
@@ -9227,7 +9236,6 @@ const SP_EVIDENCE_KIND = {
    and `subject` from every row before the payload is written, and a label
    would be the wrong key anyway: a recipe's "Bag of Tomatoes" is the depot's
    "Tomatoes", and only the slug says they are the same goods. */
-const SP_ROW_BLOCKS = ["stock", "lines", "inputs", "shelves"];
 function spEvidence(a, b, kind){
   const ev = ALERT_EVIDENCE[a.group] || {};
   const about = a.ev || {};
@@ -9240,15 +9248,13 @@ function spEvidence(a, b, kind){
   if(!(SP_BLOCKS[kind] || []).includes(block)) block = null;
   /* An item and a machine are only rows of the blocks that draw rows: the
      same finding on a shop's Crew block has nothing there to pulse. */
-  const rows = SP_ROW_BLOCKS.includes(block);
   /* Whatever is pulsed sits inside the block; with no block there is nothing
-     on the page to point at. A row token is only worth carrying if the block
-     drew that row: better the block alone than a pulse that lands nowhere. */
-  const drew = tok => spRowToks.has(tok) ? tok : "";
+     to point at. These are candidates — spPruneHits() drops the ones the
+     block turns out not to hold. */
   const hit = !block ? "" : [
     SP_EVIDENCE_HIT[a.group] ? SP_EVIDENCE_HIT[a.group](b) : ev.hit,
-    rows && about.slug ? drew(spSlugTok(about.slug)) : "",
-    block === "lines" && Number.isFinite(about.slot) ? drew(spSlotTok(about.slot)) : ""]
+    about.slug ? spSlugTok(about.slug) : "",
+    Number.isFinite(about.slot) ? spSlotTok(about.slot) : ""]
     .filter(Boolean).join(" ");
   return {block, hit};
 }
@@ -9595,7 +9601,7 @@ function spStockRows(b){
     /* A delivery is coming even when it lands past the seven days the rail
        draws, and the days before it are still dry. */
     const known = !r.paused && Number.isFinite(due) && Number.isFinite(today) && due >= today;
-    const el = [spRow(spKeyTok(r.slug, r.item)), r.paused ? "paused" : "",
+    const el = [spKeyTok(r.slug, r.item), r.paused ? "paused" : "",
                 r.coverFit === "short" ? "short" : "",
                 r.orderFit === "short" || r.orderFit === "tight" ? "order" : ""].filter(Boolean);
     const act = r.paused
@@ -9629,7 +9635,7 @@ function spStockRows(b){
       item: r.item, hand: r.stock, draw: r.perWeek ? spNum(r.perWeek / 7) : "—",
       rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, r.dead, null, false),
       act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
-      el: [spRow(spKeyTok(r.slug, r.item)), r.dead ? "dead" : "target"],
+      el: [spKeyTok(r.slug, r.item), r.dead ? "dead" : "target"],
       read: r.dead ? "<b>Nothing draws</b> on these" : `<b>${spNum(r.weeks)}</b> weeks on hand`,
     });
   });
@@ -9648,7 +9654,7 @@ function spStockRows(b){
       rail: spRail(cover, null, false, !draw.perDay, null, false),
       act: "", feeds: draw.sites,
       order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
-      el: [spRow(spKeyTok(l.slug, l.item)), draw.perDay ? "" : "dead"].filter(Boolean),
+      el: [spKeyTok(l.slug, l.item), draw.perDay ? "" : "dead"].filter(Boolean),
       read: !draw.perDay ? "<b>Nothing draws</b> on these"
         : cover >= SP_RAIL_DAYS ? "Covered through the week"
         : `<b>${cover.toFixed(1)}</b> days on hand`,
@@ -9663,13 +9669,26 @@ function spStockRows(b){
     if(n.from !== siteTab || !(n.perDay > 0)) return;
     if(!take({slug: n.slug, item: n.item})) return;
     const draw = spItemDraw(n.slug, n.item);
+    const perDay = draw.perDay || n.perDay;
+    /* Why there is none of it here is the need's own verdict, not something
+       to assume: _supply() builds its import rows from what a site holds, so
+       a contract signed before its first delivery has a live weekly order and
+       no row on the floor to carry it. */
+    const importing = Number.isFinite(n.importWeekly) && n.importWeekly > 0;
+    const order = n.status === "paused"
+      ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
+      : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>/wk</small>`
+      : `<span class="sp-noplan">${spIcon("route")}no import</span>`;
+    const read = n.status === "paused"
+      ? `Import <b>paused</b>; <b>nothing</b> on hand`
+      : importing
+        ? `<b>${spNum(n.importWeekly)}</b> a week is on order; <b>nothing</b> on hand yet`
+        : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
     rows.push({
-      item: n.item, hand: 0, draw: spNum(draw.perDay || n.perDay),
-      rail: spRail(0, null, false, false, null, false),
+      item: n.item, hand: 0, draw: spNum(perDay),
+      rail: spRail(0, null, n.status === "paused", false, null, importing),
       act: "", feeds: draw.sites, cover: 0, short: true,
-      order: `<span class="sp-noplan">${spIcon("route")}no import</span>`,
-      el: [spRow(spKeyTok(n.slug, n.item))],
-      read: `<b>Nothing on hand</b>; <b>${spNum(draw.perDay || n.perDay)}</b>/day is drawn from here`,
+      order, el: [spKeyTok(n.slug, n.item)], read,
     });
   }));
   rows.sort((x, y) => (y.feeds || 0) - (x.feeds || 0));
@@ -9710,8 +9729,8 @@ function spMachines(count, gaps, slots){
       gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`;
     return Number.isFinite(hours)
       ? `<span class="sp-m" style="--h:${Math.round(hours / SP_STAFF_HOURS * 100)}%" data-el="${
-          attr(spRow(spSlotTok(slot)))}" data-read="${attr(read)}">${spIcon("gear")}</span>`
-      : `<span class="sp-m sp-u" data-el="${attr(spRow(spSlotTok(slot)))}" data-read="${attr(read)}"></span>`;
+          attr(spSlotTok(slot))}" data-read="${attr(read)}">${spIcon("gear")}</span>`
+      : `<span class="sp-m sp-u" data-el="${attr(spSlotTok(slot))}" data-read="${attr(read)}"></span>`;
   }).join("")}</div>`;
 }
 const SP_LINE_HEAD = `<div class="sp-line sp-head"><span>Line</span><span>Machines</span><span></span>${
@@ -9725,7 +9744,7 @@ function spLines(site){
   let html = SP_LINE_HEAD;
   (site.lines || []).forEach(l => {
     const stop = !l.atRoster || (l.missing || []).length;
-    html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spRow(spKeyTok(l.slug, l.item)))}">
+    html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spKeyTok(l.slug, l.item))}">
       <div>${spEsc(l.item)}<span class="sub">${where(l)}</span></div>
       ${spMachines(l.machines, l.gaps, l.slots)}
       <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
@@ -9738,7 +9757,7 @@ function spLines(site){
     const idle = u.idle;
     const mach = `<div class="sp-mach">${(u.slots && u.slots.length ? u.slots
       : [...Array(Math.max(Number.isFinite(u.machines) ? u.machines : 0, 0)).keys()].map(i => i + 1)).map(slot =>
-      `<span class="sp-m ${idle ? "sp-z" : "sp-q"}" data-el="${attr(spRow(spSlotTok(slot)))}" data-read="${attr(idle
+      `<span class="sp-m ${idle ? "sp-z" : "sp-q"}" data-el="${attr(spSlotTok(slot))}" data-read="${attr(idle
         ? `Machine ${spEsc(slot)} · staffed and rented, <b>making nothing</b>`
         : `Machine ${spEsc(slot)} · running a recipe <b>the board cannot name</b>`)}">${idle ? "zz" : "?"}</span>`).join("")}</div>`;
     /* The picker is offered on the same terms the Supply page offers it: a
@@ -9785,7 +9804,7 @@ function spNeedLines(site, n){
 }
 function spInputs(site){
   return (site.needs || []).map(n => {
-    const el = [spRow(spKeyTok(n.slug, n.item)), SP_NEED_EL[n.status] || "",
+    const el = [spKeyTok(n.slug, n.item), SP_NEED_EL[n.status] || "",
                 n.stalled ? "stalled" : ""].filter(Boolean);
     const top = n.directImport
       ? (Number.isFinite(n.importWeekly) ? `${spNum(n.importWeekly)}<small>/wk</small>` : "—")
@@ -9806,7 +9825,6 @@ function spInputs(site){
 
 function drawSite(){
   spViewCache = null;
-  spRowToks = new Set();
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
   const b = siteTab >= 0 ? D.businesses[siteTab] : null;
   const sec = $("secDetail");
@@ -9825,6 +9843,11 @@ function drawSite(){
   const kind = spKind(b);
   const sp = kind === "retail" || kind === "office";
   const dep = kind === "depot", fac = kind === "factory";
+  /* A depot and a factory carry their own tiles and no shelves at all, so the
+     shop and office blocks are not composed for them: it would be wasted
+     work, and the rows they register would let a finding point at a table
+     that is not on the page. */
+  const shelved = !dep && !fac;
   /* Only a shop and an office are measured hour by hour, so the grid never
      belongs to the other kinds. */
   const grid = sp ? (D.hours || []).find(h => h.key === b.key) : null;
@@ -9882,7 +9905,8 @@ function drawSite(){
      fortnight sparks, the cost bar that replaces the profit tooltip, and the
      ceilings. A day in the red flags the profit tile. */
   const tone = ready && trend.change ? (trend.change < 0 ? "dn" : "up") : "";
-  const stats = `
+  /* A depot and a factory carry their own tiles inside spBody. */
+  const stats = !shelved ? "" : `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
     <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
@@ -9928,21 +9952,25 @@ function drawSite(){
      handed out at every checkout and the odd soda/coffee machine are amenities
      the save logs as sales too, at a sliver of what the real lines move. They
      stay out of the main table and fold into a "show more" rather than
-     vanishing outright. */
-  const shelvesAll = b.lines.filter(l => l.rate > 0 || l.units > 0);
+     vanishing outright.
+
+     A depot and a factory draw no shelves, so none of this is composed for
+     them: `shelved` is what says so. */
+  const shelvesAll = shelved ? b.lines.filter(l => l.rate > 0 || l.units > 0) : [];
   const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
-  const shelves = office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
+  const shelves = !shelved ? []
+    : office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
     const p = Math.round(t.pressure);
     return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
   };
-  const products = office ? (shelves.length ? `
+  const products = !shelved ? "" : office ? (shelves.length ? `
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr>
@@ -9960,7 +9988,7 @@ function drawSite(){
            a chip, not a dash, because it is a fix the player still owes. */
         const over = sp && t && t.target && t.peakSold > t.target;
         const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
-        return `<tr data-el="${attr(spRow(spKeyTok(l.slug, l.item)))}${over ? " outruns" : ""}">
+        return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
@@ -9971,7 +9999,7 @@ function drawSite(){
           <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
           <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString()}</span>` : l.units.toLocaleString()}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
-  const shelfMore = !office && sideShelves.length ? `
+  const shelfMore = shelved && !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
       showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
 
@@ -10201,6 +10229,7 @@ function drawSite(){
           : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
       </section>
     </div>`}`;
+  spPruneHits($("sitePanel"));
   /* A redraw leaves no block lit, so the dimming a hovered finding switched on
      has to come off with the markup it dimmed. */
   $("sitePanel").classList.remove("sp-focus");
