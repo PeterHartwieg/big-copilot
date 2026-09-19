@@ -673,8 +673,14 @@ and dims the rest; clicking scrolls there.
   The toggle in the head swaps the plan for the schedule as it stands, so you can see what
   the typing replaces. Click a shift once you have entered it; the ticks are kept in this
   browser, per shop, and a shift that moves in a later plan simply loses its tick.
-  Nothing is drawn for a shop with no measured weekday — see *The roster the board would
-  type in* above for why a guess would be worse than nothing.
+  A shop with no hour reports yet still gets the block, because its cleaning and security
+  cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
+  two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the
+  board can save anybody. Its serving rows are empty, its need strip is a dashed line
+  rather than a number, and a *Not measured* chip says serving shifts arrive once the shop
+  has two weeks of hour reports. The empty state is only for a site with nothing planned
+  at all, or one the planner could not read. See *The roster the board would type in*
+  above for why a guess from the arrival ceiling would be worse than nothing.
 - **Crew.** What the staff here ask for and nobody has given them, each with how many hold
   it and the game's own priority as three bars; a company-wide demand is marked as settled
   somewhere else, and a quit warning is its own red chip. Past a dozen people the pills

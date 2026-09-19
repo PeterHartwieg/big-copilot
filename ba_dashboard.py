@@ -8110,6 +8110,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* the idle swatch matches the grid's own idle ring, which is the --info one */
 .sp-hchip.idle .sp-sw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--info) 45%,transparent)}
 .sp-hchip.idle .sp-i{color:var(--info)}
+.sp-hchip.unmeas{border-style:dashed;color:var(--ink-3)}
 .sp-hchip .fix{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
 
 /* crew: what the staff here ask for, and a roster too big for pills */
@@ -8165,6 +8166,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-grow.need{min-height:30px;align-items:end;margin-bottom:4px}
 .sp-grow.need::before{display:none}
 .sp-grow.need .lab{align-self:end;padding-bottom:2px}
+.sp-grow.need.unmeas::before{display:block;grid-column:2/-1;grid-row:1;align-self:end;height:0;background:none;opacity:1;border-top:1px dashed var(--rule);border-radius:0}
 .sp-grow.shut::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:.6}
 .sp-need{grid-row:1;height:calc(var(--n)*8px);border-radius:2px;background:var(--ink-2);transition:transform .15s;transform-origin:bottom;cursor:default}
 .sp-need:hover{transform:scaleY(1.2)}
@@ -11128,21 +11130,27 @@ function spRosterNone(row){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
   const rows = stations.map((st, k) => `<div class="sp-grow"><span class="lab">${spEsc(codes[k])}</span></div>`).join("");
+  const failed = !!(row && row.failed);
   return `<section class="sec rv" data-block="roster" id="sp-roster">
-    ${sechead("Roster", {icon: "roster", why: row && row.failed
+    ${sechead("Roster", {icon: "roster", why: failed
       ? `This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.`
-      : `A roster is cut from measured hours. This shop has none yet, and the game's own arrival ceiling over-predicts a shop like it fourfold, so nothing is suggested.`})}
+      : `A roster is cut from measured hours, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
     <div class="chartbox sp-gantt none">${rows}</div>
-    <div class="sp-read">${row && row.failed ? "Plan unavailable" : "No measured weekday yet"}</div>
+    <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to roster"}</div>
   </section>`;
 }
 
 /* One weekday of the grid: the need strip, then a row per station carrying
    this week's plan and, behind it, the fragments the schedule holds today. */
 function spRosterDay(c, wd, on){
-  let out = `<div class="sp-grow need"><span class="lab" data-read="${attr(
-    `Stations the measured hours ask for, ${WEEK_FULL[wd]}`)}">${spI("person")}</span>`;
-  for(let h = 0; h < 24; h++){
+  /* Nothing measured means no bar at all, not a bar of zero and certainly not
+     one cut from the arrival ceiling. The strip keeps its lane so the rows
+     below still line up against the hours, and the chip beside it says why it
+     is empty. */
+  let out = `<div class="sp-grow need${c.measured ? "" : " unmeas"}"><span class="lab" data-read="${attr(
+    c.measured ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
+      : `No hour reports for this shop yet, so nothing is asked for`)}">${spI("person")}</span>`;
+  for(let h = 0; c.measured && h < 24; h++){
     const need = spNeedAt(c.row, wd, h);
     if(!need) continue;
     const read = `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> ${need.n} station${
@@ -11244,7 +11252,12 @@ function spShortChips(c, rows, words){
 
 function spRosterBlock(b){
   const row = spRosterRow(b.key);
-  if(!row || row.failed || !spRosterMeasured(row)) return spRosterNone(row);
+  /* A week with nothing in it is the only empty state. A shop too new to have
+     been measured still has cleaning and security cover to type -- and that is
+     where the block earns its keep, because an unmeasured shop is exactly the
+     one whose schedule is 182 two-hour scraps -- so it gets the whole block
+     with the need strip in its not-measured state, rather than nothing. */
+  if(!row || row.failed || !(row.shifts || []).length) return spRosterNone(row);
   const stations = row.stations || [], people = row.people || [];
   const placed = {};
   (row.placed || []).forEach(r => { (placed[r.p] = placed[r.p] || []).push(r); });
@@ -11256,6 +11269,7 @@ function spRosterBlock(b){
     now: spRosterRows(row, (row.current || {}).list),
     ticks: spTicksRead(row.key),
     name: p => (people[p] || {}).name || "?",
+    measured: spRosterMeasured(row),
   };
   const counts = spRosterCounts(row);
   const same = spSameDays(c.plan);
@@ -11300,6 +11314,12 @@ function spRosterBlock(b){
         ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>clear ticks</a></div>
     </div>
     <div class="sp-steps">${steps}<span class="seg sp-daytabs" style="margin-left:auto">${tabs}</span></div>
+    ${c.measured ? "" : `<div class="sp-hchips" style="margin:0 0 10px"><span class="sp-hchip unmeas" data-tip="${
+      attr(`Serving shifts are cut from measured hours, and this shop has none yet: they arrive once it has two weeks of hour reports. The cleaning and security cover below does not wait on a measurement.`)}">${
+      /* No swatch: the cap and idle chips carry one because they pick their own
+         cells out of the grid, and this chip is about cells that are not
+         there. Beside the step buttons an empty square reads as a checkbox. */
+      spI("person")}Not measured</span></div>`}
     <div class="chartbox sp-gantt">${hours}${
       HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
     ${spRosterCount(c)}
@@ -13077,13 +13097,15 @@ function drawFindLocation(){
    "Most to gain" is lines of typing saved -- the shifts the schedule holds
    today against the shifts the plan asks for -- because that is the whole
    point of the block: a fragmented shop is 182 rows of dragging, and the plan
-   is 65. Only a site whose plan rests on measured hours can be offered; a
+   is 65. An unmeasured shop counts too, and usually wins: its plan is cover
+   shifts alone, but replacing 182 scraps with 14 of them is the largest saving
+   on the board. Only a site with a plan at all can be offered; a
    board built before the feature has no staffing payload and the card says
    nothing it cannot know. Ties go to the name, so the card does not move
    between runs of the same save. */
 function spBestRoster(){
-  const rows = (D.staffing || []).filter(r => !r.failed && spRosterMeasured(r)
-    && (r.current || {}).shifts > (r.shifts || []).length);
+  const rows = (D.staffing || []).filter(r => !r.failed && (r.shifts || []).length
+    && (r.current || {}).shifts > r.shifts.length);
   if(!rows.length) return null;
   const saved = r => r.current.shifts - r.shifts.length;
   return rows.reduce((a, b) => saved(b) > saved(a) || (saved(b) === saved(a) && b.name < a.name) ? b : a);

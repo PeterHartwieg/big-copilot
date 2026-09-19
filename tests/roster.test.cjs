@@ -120,6 +120,30 @@ function row(over = {}){
   }, over);
 }
 
+// The three clothing stores on the reference save look like this: no hour
+// reports at all, so no serving shifts, but two cleaning stations covered every
+// open hour -- 14 shifts against a schedule of 182 two-hour scraps. There is no
+// `serve` entry in `headcount` either, because nothing was planned for it.
+const NONE = Array.from({length: 7}, () => Array(24).fill('none'));
+function coverOnly(){
+  const out = [];
+  for(let d = 0; d < 7; d++){
+    out.push({d, s: 2, f: 0, t: 12, p: 1, k: 'clean'});
+    out.push({d, s: 2, f: 12, t: 24, p: 0, k: 'clean'});
+  }
+  return {
+    basis: {[SERVE]: NONE},
+    need: {[SERVE]: Array.from({length: 7}, () => Array(24).fill(0))},
+    shifts: out,
+    placed: [], bench: [], shortDays: [],
+    headcount: {
+      'ba:skill_cleaning': {kind: 'clean', needed: 168, min: 4, max: 5, have: 12, spare: 8, hire: 0, hireHours: 0},
+      'ba:skill_securityguard': {kind: 'security', needed: 168, min: 4, max: 5, have: 0, spare: 0, hire: 4, hireHours: 120},
+    },
+    current: {shifts: 182, fragments: 147, cleaning: 57, security: 0, list: current()},
+  };
+}
+
 // The business the panel opens, with a Crew list overlapping the roster's.
 function business(){
   return {
@@ -421,14 +445,55 @@ test('the block draws and ticks without storage of any kind', async () => {
 
 // --- the states the payload can be in ---------------------------------------
 
-test('a shop with no measured weekday gets the empty state, not a guess', async () => {
-  const none = Array.from({length: 7}, () => Array(24).fill('none'));
-  const page = await shop({basis: {[SERVE]: none}});
+test('an unmeasured shop with cover to type gets the whole block, not the empty state', async () => {
+  const page = await shop(coverOnly());
+  try {
+    // The point of the block for these shops: 182 scraps become 14 shifts, and
+    // every one of them is a line to type and tick.
+    assert.equal(await page.locator('#sp-roster button.sp-shift').count(), 14);
+    assert.match(await page.locator('#sp-roster .sp-ba').innerText(), /182/);
+    assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '0');
+    assert.equal(await page.locator('#sp-roster .sp-daytabs a').count(), 7);
+    assert.equal(await page.locator('#sp-roster .sp-nowplan a').count(), 2);
+    assert.equal(await page.locator('#sp-roster .sp-read.sp-readout').innerText(), 'Hover a shift');
+    // The security locker nobody staffs is still money not being spent yet.
+    assert.match(await page.locator('#sp-roster .sp-hc').innerText(), /\+120 h\/wk/);
+  } finally { await page.close(); }
+});
+
+test('an unmeasured need strip is empty and says so in two words, inventing no number', async () => {
+  const page = await shop(coverOnly());
+  try {
+    assert.equal(await page.locator('#sp-roster .sp-need').count(), 0, 'no bar is a guess');
+    assert.equal(await page.locator('#sp-roster .sp-grow.need.unmeas').count(), 7);
+    const chip = page.locator('#sp-roster .sp-hchip.unmeas');
+    assert.equal(await chip.innerText(), 'Not measured');
+    assert.match(await chip.getAttribute('data-tip'), /two weeks of hour reports/);
+    // The serving counters keep their rows, with nothing in them.
+    const mon = '#sp-roster .sp-day[data-d="1"] ';
+    assert.equal(await page.locator(mon + '.sp-grow').count(), 5, 'the strip and four stations');
+    assert.equal(await page.locator(mon + '.sp-grow:nth-child(2) .sp-shift').count(), 0);
+    // _staffing() writes 0 alongside every `none`, so this cannot arrive from a
+    // save; the strip refuses a number it has no basis for even so, because a
+    // drawn bar is a claim the shop was measured.
+    const drawn = await page.evaluate(() => {
+      D.staffing[0].need['ba:skill_customerservice'] =
+        Array.from({length: 7}, () => Array(24).fill(3));
+      drawSite();
+      return $$('#sp-roster .sp-need').length;
+    });
+    assert.equal(drawn, 0);
+  } finally { await page.close(); }
+});
+
+test('a shop with nothing at all to roster gets the empty state', async () => {
+  const page = await shop({basis: {[SERVE]: NONE}, shifts: []});
   try {
     assert.equal(await page.locator('#sp-roster .sp-shift').count(), 0);
-    assert.equal(await page.locator('#sp-roster .sp-read').innerText(), 'No measured weekday yet');
+    assert.equal(await page.locator('#sp-roster .sp-read').innerText(), 'Nothing to roster');
+    assert.equal(await page.locator('#sp-roster .sp-daytabs').count(), 0);
     assert.match(await page.locator('#sp-roster .sechead .why').getAttribute('data-tip'),
-      /arrival ceiling over-predicts a shop like it fourfold/);
+      /arrival ceiling over-predicts a shop like this fourfold/);
     assert.equal(await page.locator('#sp-roster .sp-gantt .sp-grow').count(), 4,
       'the stations are still named');
   } finally { await page.close(); }
@@ -521,11 +586,15 @@ test('the Optimize staffing card opens the roster with most typing to save', asy
   const page = await shop({}, null);
   try {
     const shown = await page.evaluate(() => {
+      const none = Array.from({length: 7}, () => Array(24).fill('none'));
       D.staffing = [
         Object.assign({}, D.staffing[0], {key: 'a', name: 'Small saving',
           current: Object.assign({}, D.staffing[0].current, {shifts: 25})}),
         Object.assign({}, D.staffing[0], {key: 'b', name: 'Big saving'}),
         Object.assign({}, D.staffing[0], {key: 'c', name: 'Cannot be planned', failed: true}),
+        // Nothing to roster at all: no saving to offer, however many shifts
+        // the schedule holds.
+        Object.assign({}, D.staffing[0], {key: 'd', name: 'Nothing planned', shifts: []}),
       ];
       drawOptimizeStaffing();
       const card = $('optimizeStaffingCard');
@@ -534,6 +603,23 @@ test('the Optimize staffing card opens the roster with most typing to save', asy
     assert.equal(shown[0], '−56 LINES');
     assert.match(shown[1], /Big saving: 72 shifts become 16\./);
     assert.equal(shown[2], 'b');
+  } finally { await page.close(); }
+});
+
+test('an unmeasured shop is exactly the one the card should offer', async () => {
+  const page = await shop({}, null);
+  try {
+    // Cover shifts alone, but 182 scraps down to 14 is the biggest week of
+    // typing the board can save anybody.
+    const shown = await page.evaluate(cover => {
+      D.staffing = [Object.assign({}, D.staffing[0], {key: 'measured', name: 'Measured shop'}),
+        Object.assign({}, D.staffing[0], cover, {key: 'new', name: 'Brand new shop'})];
+      drawOptimizeStaffing();
+      const card = $('optimizeStaffingCard');
+      return [card.querySelector('.soon').textContent, card.dataset.site];
+    }, coverOnly());
+    assert.equal(shown[0], '−168 LINES');
+    assert.equal(shown[1], 'new');
   } finally { await page.close(); }
 });
 
