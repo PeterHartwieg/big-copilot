@@ -7,8 +7,8 @@ need, and the list of pre-flight checks a silent site fails.
 import unittest
 
 from ba_dashboard import (
-    AMENITY_DEMANDS, NEW_SITE_DAYS, OFFICE_TYPES, RETAIL_TYPES, _alerts, _business,
-    _staff, site_key,
+    AMENITY_DEMANDS, NEW_SITE_DAYS, OFFICE_TYPES, RETAIL_TYPES, _alert_id, _alerts,
+    _business, _staff, site_key,
 )
 from ba_save import Names, Save
 
@@ -164,3 +164,143 @@ class SiteFieldTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- what a finding carries for the site panel to point at -------------------
+
+DEPOT_KEY = site_key(("ba:street_firstavenue", 1))
+WORKS_KEY = site_key(("ba:street_pierroad", 9))
+SODA = "ba:itemname_soda"
+BEEF = "ba:itemname_groundbeef"
+
+
+def stub(key, name, status, **over):
+    """The fields _alerts() reads off a business, and nothing else."""
+    return {
+        "key": key, "name": name, "status": status, "typeSlug": "",
+        "revenue": 0.0, "profit": 0.0, "opened": 1, "rent": 100.0, "staff": 1,
+        "customers": 0, "costCentre": True, "lines": [], "crew": [],
+        "satisfaction": {"overall": None}, "staffDemands": [], "quitWarnings": 0,
+        "promotion": None, "missingUniformLocker": False, "uniformGaps": [],
+        "missingAmenities": [], "traffic": 0, "marketingIndex": 0,
+        **over,
+    }
+
+
+class FindingEvidenceTests(unittest.TestCase):
+    """_condense() drops `rank` and `subject`, so the row the site panel pulses
+    has to survive as `ev` — the item's slug, or a machine's list position."""
+
+    businesses = [stub(DEPOT_KEY, "HART. Depot", "support"),
+                  stub(WORKS_KEY, "HART. Works", "support")]
+
+    def supply(self):
+        imports = [{
+            "s": 0, "item": "Soda", "slug": SODA, "stock": 200, "perDay": 1000,
+            "basis": "shipped", "peakDay": "Friday", "peakPerDay": 1100, "cover": 1.0,
+            "stockCover": 1.0, "daysOnHand": 1.0, "runsOut": "Tuesday", "weekly": 500,
+            "lastWeek": 500, "weekNeed": 7000, "orderFit": "short", "coverFit": "short",
+            "due": 4.0, "shortBy": 3.0, "catchUp": 2400, "coverageUntil": 12,
+            "paused": False, "arrives": 12, "from": "Acme", "level": "critical",
+            "reason": "order",
+        }]
+        idle = [{"s": 0, "item": "Napkins", "slug": "ba:itemname_napkins", "stock": 5000,
+                 "perWeek": 0, "weeks": None, "target": 0, "price": 0.0, "value": "$0",
+                 "dead": True, "level": "warn"}]
+        need = {
+            "item": "Bag of Tomatoes", "slug": BEEF, "perDay": 9600, "perWeek": 67200,
+            "lines": ["Burger"], "target": 0, "raiseTarget": None, "raiseImport": None,
+            "dailyNeed": 9600, "arrives": 0, "known": True, "stock": 0, "from": 0,
+            "directImport": False, "stalled": False, "waitingOn": [], "importWeekly": None,
+            "importPaused": False, "depotNeed": 67200, "depotStock": 0, "staffedShare": 1.0,
+            "madeAt": [], "importSite": 0, "status": "unplanned", "level": "critical",
+        }
+        # An import sized wrong is one finding about the depot, however many
+        # factories draw on it: _feed_notes() re-keys it to the import site,
+        # and the recipe's label for the goods is not that depot's label.
+        offsite = {**need, "item": "Fizzy Drink", "slug": SODA, "status": "noimport",
+                   "level": "warn", "importWeekly": None, "depotNeed": 7000}
+        needs = [need, offsite]
+        lines = [{"rid": "r1", "item": "Burger", "slug": "ba:itemname_burger",
+                  "workstation": "Food Workstation", "slots": [3], "machines": 1,
+                  "rate": 200, "makes": 4800, "ships": 0, "stock": 0, "missing": [],
+                  "gaps": [{"slot": 3, "hours": 100, "off": "on Sundays"}]}]
+        return {
+            "graph": {"links": []}, "shops": [], "imports": imports, "idle": idle,
+            "factories": {"sites": [{"s": 1, "machines": 1, "lines": lines, "unnamed": [],
+                                     "needs": needs, "targets": {}, "known": True,
+                                     "arrivals": {}}]},
+        }
+
+    def all_rows(self, supply=None):
+        result = _alerts(list(self.businesses), supply or self.supply(),
+                         [], [], [], [], [], 20, 0.0)
+        return result["lines"] + result["minor"]["rows"]
+
+    def rows(self, supply=None):
+        return {row["group"]: row for row in self.all_rows(supply)}
+
+    def one(self, group, key):
+        return next(r for r in self.all_rows()
+                    if r["group"] == group and r["siteKey"] == key)
+
+    def test_every_group_the_panel_pulses_by_row_carries_its_slug(self):
+        rows = self.rows()
+        for group, slug in (("order", SODA), ("dead", "ba:itemname_napkins")):
+            self.assertIn(group, rows, f"{group} is in the fixture's findings")
+            self.assertEqual(rows[group]["ev"], {"slug": slug})
+        own = self.one("feed", WORKS_KEY)
+        self.assertEqual(own["ev"], {"slug": BEEF})
+        # A recipe's label for an input is not the depot line's label, so the
+        # slug is the only thing the panel can join on.
+        self.assertNotIn("Tomatoes", own["ev"]["slug"])
+
+    def test_an_import_finding_re_keyed_to_the_depot_carries_the_depots_slug(self):
+        offsite = self.one("feed", DEPOT_KEY)
+        # The sentence says "Fizzy Drink"; the depot's line is "Soda". Only the
+        # slug joins the two, so that is what travels.
+        self.assertIn("Fizzy Drink", offsite["text"])
+        self.assertEqual(offsite["ev"], {"slug": SODA})
+
+    def test_a_staffing_finding_carries_the_machines_list_position(self):
+        self.assertEqual(self.rows()["staff"]["ev"],
+                         {"slot": 3, "slug": "ba:itemname_burger"})
+
+    def test_the_evidence_never_reaches_the_page_as_subject_or_rank(self):
+        for row in self.rows().values():
+            self.assertNotIn("subject", row)
+            self.assertNotIn("rank", row)
+
+    def test_a_group_with_a_fixed_mark_carries_no_evidence_at_all(self):
+        # unnamed and unset name a workstation, not an item: the panel has its
+        # own mark for them, so nothing rides along in the payload.
+        supply = self.supply()
+        supply["factories"]["sites"][0]["unnamed"] = [
+            {"rid": None, "workstation": "Food Workstation", "slots": [4], "machines": 1,
+             "idle": True, "candidates": [], "hoursWeek": 168, "fullWeek": 168, "gaps": []}]
+        result = _alerts(list(self.businesses), supply, [], [], [], [], [], 20, 0.0)
+        unset = next(r for r in result["lines"] + result["minor"]["rows"]
+                     if r["group"] == "unset")
+        self.assertNotIn("ev", unset)
+
+    def test_the_evidence_does_not_change_a_findings_id(self):
+        # The id hashes the group, the site key and the subject, none of which
+        # the new field touches: a silenced finding stays silenced.
+        self.assertEqual(self.one("order", DEPOT_KEY)["id"],
+                         _alert_id("order", DEPOT_KEY, "Soda"))
+        self.assertEqual(self.one("feed", WORKS_KEY)["id"],
+                         _alert_id("feed", WORKS_KEY, "Bag of Tomatoes"))
+
+    def test_a_merged_line_points_at_the_worst_of_its_rows(self):
+        # Three of a kind at one site condense into one line, which reads out
+        # the worst row and so points at that row's evidence.
+        supply = self.supply()
+        base = supply["imports"][0]
+        supply["imports"] = [
+            {**base, "item": name, "slug": f"ba:itemname_{name.lower()}", "cover": cover}
+            for name, cover in (("Soda", 3.0), ("Juice", 1.0), ("Water", 2.0))]
+        result = _alerts(list(self.businesses), supply, [], [], [], [], [], 20, 0.0)
+        merged = next(r for r in result["lines"] + result["minor"]["rows"]
+                      if r["group"] == "order")
+        self.assertIn("{n} weekly orders".format(n=3)[:3], merged["text"])
+        self.assertEqual(merged["ev"], {"slug": "ba:itemname_juice"})

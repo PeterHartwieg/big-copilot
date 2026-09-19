@@ -579,7 +579,17 @@ attention here* list, and each finding pulses the line it is about.
   with what leaves a day.
 - **Stock.** One row a line, with the next seven days beside it, left to right from
   today: a filled cell is a day covered, red hatching is a day dry, and the truck sits on
-  the day the delivery lands. A paused contract strikes its truck through. A line nothing
+  the day the delivery lands. Where two suppliers deliver in the same week the loaded
+  truck is the later one, because that is the delivery the cover, the run-out day and the
+  catch-up quantity are measured against; the earlier drop rides along faintly. A paused
+  contract is dry from the day its cover ends, and keeps the delivery day it was stopped
+  on — usually behind today, so there is no truck at all; where there is one, it is
+  struck through. An order due beyond those seven days hatches the rest of the week the
+  same way, with no truck to draw, while a line nothing delivers at all leaves those cells
+  blank rather than hatched: what happens after its cover runs out is not known. A line
+  this depot is expected to hold and holds none of — a factory input routed from here with
+  no standing import — gets a row of its own, nothing on hand in red, so its absence reads
+  as plainly as a shortage. A line nothing
   draws on sleeps instead of showing cover, because there is nothing for it to run out
   against. The column beside the rail is what to do about it — the units to bring in by
   hand before the shelf empties, or the order to raise — and the *Weekly order* column
@@ -597,7 +607,9 @@ the figure is what the lines make at the roster, with the rated output beside it
 - **Lines.** One row a line: the recipe, the workstation and machine numbers, and a
   square a machine, filled by the share of the week it is rostered. A machine running a
   recipe the board cannot name keeps the picker that names it, the same one the Supply
-  page carries; a machine with no recipe at all is drawn as asleep, and its belt stops.
+  page carries, and wears a `?`; a machine with no recipe at all is drawn as asleep, and
+  its belt stops. A square with no fill and no mark is one whose roster could not be read
+  — not one standing idle.
 - **Inputs.** What the machines eat at full rate, against the daily top-up set to feed
   them, what arrived and what is on hand. A top-up too small for the line says what to
   raise it to; an input on no plan says so rather than reading as a zero, and an arrival
