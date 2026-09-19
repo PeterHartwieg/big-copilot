@@ -113,9 +113,15 @@
     document.querySelectorAll("[data-vote-card]").forEach((card) => { card.hidden = !available; });
   }
 
+  // Its own flag, not presence.receivedAt: that one is cleared by every failure,
+  // so two dropped beats in a row would have read as "this copy has no API" on a
+  // site that had been answering all along.
+  let everAnswered = false;
+
   function settle(ok, count, nextIn, retryAfterMs) {
     const now = Date.now();
     if (ok) {
+      everAnswered = true;
       syncVoteCard(true);
       presence.count = count;
       presence.receivedAt = now;  // display staleness runs on local receipt time
@@ -123,11 +129,12 @@
       // nextHeartbeatIn is a delay, not an epoch: due = receipt + delay.
       presence.nextDue = now + clamp(nextIn * 1000, MIN_DUE_MS, MAX_DUE_MS) + Math.random() * JITTER_MS;
     } else {
-      // Two failures with no good answer in between: no API behind this copy.
-      // One is a blip, and the first beat goes out at enterBoard(), the busiest
-      // moment of the page; hiding on it would pull a card the reader can
-      // already see, for the whole minute the backoff waits.
-      if (!presence.receivedAt && presence.failures >= 1) syncVoteCard(false);
+      // Two failures, and nothing has ever answered: no API behind this copy.
+      // One failure is a blip, and the first beat goes out at enterBoard(), the
+      // busiest moment of the page; hiding on it would pull a card the reader
+      // can already see, for the whole minute the backoff waits. A copy that
+      // has answered before keeps its card through any number of failures.
+      if (!everAnswered && presence.failures >= 1) syncVoteCard(false);
       presence.count = null;
       presence.receivedAt = null;
       presence.failures++;
@@ -360,8 +367,6 @@
       row.button.textContent = "Vote";
     }
   }
-
-  /* --- the controls --------------------------------------------------------- */
 
   /* --- entry points ---------------------------------------------------------- */
 

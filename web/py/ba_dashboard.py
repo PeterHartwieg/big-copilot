@@ -57,7 +57,7 @@ SUBREDDIT_URL = "https://www.reddit.com/r/bigambitions/"
 GAME_NAME = "Big Ambitions"
 GAME_MAKER = "Hovgaard Games"
 GAME_URL = "https://store.steampowered.com/app/1331550/Big_Ambitions/"
-GAME_MAKER_URL = "https://www.bigambitionsgame.com/"
+GAME_MAKER_URL = "https://hovgaard.com/"
 # This board is a fan project: it reads saves and is not the game's, so it says so
 # once in every footer, and again in the site's Impressum.
 COLOPHON = (
@@ -113,10 +113,11 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
   <div class="sf-in">
     <div class="sf-rule"><span class="sf-orb"></span></div>
     <div class="sf-cards">
-      <!-- Ships hidden and is revealed by community.js, which the CLI's
-           dashboard.html never loads; that file hides it again once heartbeats
-           have failed without one ever succeeding, which is what a copy with no
-           /api/community behind it looks like. Do not make this wait for the API
+      <!-- Ships hidden, and only community.js reveals it. The CLI's
+           dashboard.html never loads that file, so there the card simply stays
+           hidden; a copy served from web/ with no /api/community behind it gets
+           it revealed and then hidden again, once heartbeats have failed with
+           none ever having answered. Do not make this wait for the API
            before showing: the landing sends no request until the reader asks for
            one, and that silence is a promise the privacy notice makes.
            Marked by attribute, not id: the landing's footer and the board's are
@@ -142,7 +143,8 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         <a class="sf-cta sf-line" href="{DONATE_URL}" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>Donate via PayPal</a>
       </div>
     </div>
-    <nav class="sf-cols" aria-label="About Big Copilot">
+    <div class="sf-cols">
+      <nav class="sf-nav" aria-label="About Big Copilot">
       <div class="sf-col">
         <h2 class="sf-head">Big Copilot</h2>
         {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
@@ -159,18 +161,19 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         {_sf_out(GAME_URL, "Steam store page")}
         {_sf_out(GAME_MAKER_URL, GAME_MAKER)}
       </div>
+      </nav>
       <!-- Marked by attribute rather than id, and wired by the board script for
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHead{'L' if landing else ''}">Theme</h2>
         <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
-          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false" title="Match system"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
-          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false" title="Light"><span class="sf-sr">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
-          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false" title="Dark"><span class="sf-sr">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false"><span class="sf-sr">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
         </div>
       </div>
-    </nav>
+    </div>
     <div class="sf-base">
       <div class="sf-who">
         <span class="sf-mark"><span class="sf-dot"></span>Big Copilot</span>
@@ -6561,7 +6564,8 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .sf-cta.sf-fill:hover{filter:brightness(1.08);color:var(--on-accent)}
 .sf-cta.sf-line{background:transparent;color:var(--accent)}
 .sf-cta.sf-line:hover{background:var(--accent-soft);color:var(--accent)}
-.sf-cols{display:flex;flex-wrap:wrap;gap:24px 88px;margin-top:40px}
+.sf-cols{display:flex;flex-wrap:wrap;justify-content:space-between;gap:24px 48px;margin-top:40px}
+.sf-nav{display:flex;flex-wrap:wrap;gap:24px 88px}
 .sf-col{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
 .sf-head{margin:0;font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
 .sf-link{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);text-decoration:none}
@@ -6569,17 +6573,19 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .sf-btn{padding:0;border:0;background:none;font:inherit;font-size:14px;cursor:pointer}
 .sf-ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 /* The theme control keeps the right edge of the row, as on the canvas. */
-.sf-theme{margin-left:auto;align-items:flex-end}
+.sf-theme{align-items:flex-end}
 .sf-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:999px;background:var(--surface)}
 .sf-segbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
   border:0;border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer}
 .sf-segbtn:hover{color:var(--ink)}
-.sf-segbtn[aria-pressed="true"]{background:var(--raised);color:var(--accent);box-shadow:inset 0 0 0 1px var(--rule)}
+.sf-segbtn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.sf-segbtn[aria-pressed="true"] .sf-ic{stroke-width:2.1}
+.sf-segbtn[aria-pressed="true"]:hover{color:var(--on-accent);filter:brightness(1.08)}
 /* The label each button carries for a screen reader; title= alone is not read
    reliably, and the icons have none of their own. */
 .sf-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .sf-ext{color:var(--ink-2)}
-.sitefoot :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.sitefoot :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .sf-base{display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap;
   margin-top:40px;padding-top:16px;border-top:1px solid var(--rule-soft)}
 .sf-who{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
@@ -6588,21 +6594,27 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .sf-said{font-size:12px;line-height:1.6;color:var(--ink-2)}
 .sf-legal{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap;
   font:400 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.04em;color:var(--ink-2)}
-.sf-legal a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule)}
+.sf-legal a{display:inline-flex;align-items:center;color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule)}
 .sf-legal a:hover{color:var(--ink)}
 .sf-meta:empty{display:none}
 @keyframes sfbeat{0%,100%{transform:scale(1)}40%{transform:scale(1.22)}}
 @keyframes sfnudge{0%,100%{transform:translateY(0)}40%{transform:translateY(-3px)}}
 @media (prefers-reduced-motion:reduce){.sf-card,.sf-beat,.sf-nudge{animation:none!important;transition:none}}
-/* The phone artboard: cards stack, the columns pair up, the base unstacks. */
-@media (max-width:720px){
+/* The phone artboard, at the brief's ~640px: cards stack, the columns pair
+   up, the base unstacks. */
+@media (max-width:640px){
   .sf-cards{flex-direction:column}
-  .sf-card{flex-direction:column;align-items:stretch;gap:16px}
+  /* The 320px basis is a width while the cards sit in a row. Once they stack it
+     becomes their height, which left a third of each card empty. */
+  .sf-card{flex:0 0 auto;flex-direction:column;align-items:stretch;gap:16px}
   .sf-cta{width:100%}
-  .sf-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px}
-  .sf-theme{margin-left:0;align-items:flex-start}
+  /* The nav keeps a box of its own rather than display:contents, which can
+     drop the landmark from the accessibility tree; the switch sits under it. */
+  .sf-cols{flex-direction:column;gap:20px}
+  .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
+  .sf-theme{align-items:flex-start}
   .sf-segbtn{width:44px;height:44px}
-  .sf-link{min-height:44px}
+  .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
   .sf-who{flex-direction:column;align-items:flex-start;gap:8px}
 }

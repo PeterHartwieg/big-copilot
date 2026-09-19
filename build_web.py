@@ -70,7 +70,8 @@ GOOGLE_FONTS = (
 # One set of controls, two homes.
 #
 # The landing is a screen you leave: the wordmark, one sentence, the drop zone,
-# the folder button, a footer line. When a save loads, app.js moves the source
+# the folder button, and the site footer, which ba_dashboard.py builds for both
+# this screen and the board. When a save loads, app.js moves the source
 # strip into the slot the template leaves empty under the masthead, the rarer
 # controls into the strip's More menu, and drops the landing. The elements
 # below carry ids; app.js knows which slot each one belongs to in each mode.
@@ -283,7 +284,6 @@ details.help[open] summary::after{content:"\2013"}
    own footer rather than being carried over from the landing. */
 .menu-foot{border-top:1px solid var(--rule);margin-top:4px;padding:12px 10px 4px;display:flex;font-size:11px}
 .foot-links{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
-.foot-links .lg-text{color:var(--ink-2)}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
 <aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>

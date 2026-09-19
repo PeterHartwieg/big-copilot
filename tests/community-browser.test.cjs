@@ -220,6 +220,26 @@ test('a copy with no API loses the vote card, but one bad beat does not', async 
     'no API behind this copy: stop offering a vote that cannot be cast');
 });
 
+test('a site that has answered keeps its vote card through a run of failures', async t => {
+  const {page,state,loadSave} = await setup(t);
+  await loadSave(page); await online(page).waitFor();
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true);
+
+  // presence.receivedAt is cleared by every failure, so it never meant "has
+  // ever answered". Two dropped beats used to read as "no API behind this copy"
+  // on a site that had been answering all along.
+  state.failPresence = true;
+  for (const wait of [3600000, 100000, 200000]) {
+    const beat = page.waitForResponse('**/api/community/presence');
+    await page.clock.fastForward(wait);
+    await beat;
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve,50)));
+  }
+  await page.getByText('Online count unavailable',{exact:true}).waitFor();
+  assert.equal(await page.locator('[data-vote-card]').first().isVisible(),true,
+    'the API answered once; a run of blips is not a copy without one');
+});
+
 test('a heartbeat whose settling throws still leaves the schedule running, without a page error', async t => {
   const {page,state,loadSave} = await setup(t);
   await loadSave(page); await online(page).waitFor();

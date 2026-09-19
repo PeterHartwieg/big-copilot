@@ -121,7 +121,7 @@ already go through it.
 
 ## Template placeholders
 
-`TEMPLATE` carries thirteen tokens. All thirteen are substituted by `render()`, but the
+`TEMPLATE` carries fourteen tokens. All fourteen are substituted by `render()`, but the
 text for two of them is supplied by the caller.
 
 | Token | Filled with |
@@ -132,6 +132,7 @@ text for two of them is supplied by the caller.
 | `<!--__BANNER__-->` | `render()`'s `banner=` argument. `build_web.py` passes its `BANNER` (the landing screen); the local page passes nothing |
 | `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `page_html()` passes a filled-in `BEFORE_SCRIPT`; the local page passes nothing |
 | `<!--__CHANGELOG__-->` | `render()`, from `web/changelog.json`, newest first |
+| `<!--__FOOTER__-->` | `render()`, from `footer_html(site=...)`. The same function fills the landing's footer inside `BANNER`, so the two cannot drift; `render()`'s `site=` argument decides whether the legal links ride along, and only `build_web.py` passes it |
 | `/*__MAP_CSS__*/` | `render()`, from `web/map.css` |
 | `/*__MAP_SCRIPT__*/` | `render()`, from `web/map.js` |
 | `/*__MAP_PAYLOAD__*/` | `render()`, from `web/maps/locations.json` plus the base64 background — only for a standalone export (`data`, not `live`, not `map_external`) |
@@ -146,8 +147,8 @@ the navigation (`PAGES` tests for `showWikiRoute`). `web/map.js` and `web/map.cs
 opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
-`__UPDATE_SCRIPT__`, `__BUILD__`, `__REPO__`, `__ISSUES__`, `__DONATE__`, `__ICON_FOLDER__`,
-`__ICON_MORE__`. Those are substituted inside `BANNER` and
+`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_MORE__`. Those are
+substituted inside `BANNER` and
 `BEFORE_SCRIPT` before either string reaches `render()`, so they never appear in `TEMPLATE`.
 
 ## Assembly order of `web/index.html`

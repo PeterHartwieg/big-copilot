@@ -49,7 +49,10 @@ class Footer(unittest.TestCase):
             with self.subTest(name):
                 card = re.search(r'<div class="sf-card" data-vote-card([^>]*)>', markup)
                 self.assertIsNotNone(card)
-                self.assertIn("hidden", card.group(1))
+                # The boolean attribute itself. A substring test passes for
+                # aria-hidden="true", which does not hide anything, and the CLI
+                # would ship a vote card it cannot cast.
+                self.assertRegex(card.group(1), r"(?:^|\s)hidden(?:\s|$)")
 
     def test_the_landing_states_the_build_it_was_checked_on(self):
         # It has no save yet, so it cannot be told one the way the board is.
