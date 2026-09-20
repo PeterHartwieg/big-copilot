@@ -972,23 +972,34 @@ test('a figure the plan does not change is not struck through against itself', a
 
 test('a cover-only plan does not offer to let the shop\u2019s cashiers go', async () => {
   const page = await shop('fresh', row => {
-    // Nobody the plan can use: on a real save every serving employee of an
-    // unmeasured shop lands here, and each was named with "post them to a site
-    // with the hours, or let them go" behind it.
-    row.shortHours = [{p: 2, hours: 0, min: 30}];
-    row.shortDays = [{p: 2, days: 0, want: 4}];
+    /* The two kinds a half-planned shop leaves short, in the shape the planner
+       writes them (tests/test_staffing.py pins `planned` against a save):
+       S0 is a cashier this cover plan could never have used, and CLEAN1 is
+       short of their thirty in a role it did work out. */
+    row.shortHours = [{p: 2, hours: 0, min: 30, planned: false},
+      {p: 0, hours: 12, min: 30, planned: true}];
+    row.shortDays = [{p: 2, days: 0, want: 4, planned: false}];
   });
   try {
     const hc = page.locator('#sp-roster .sp-hc');
-    assert.match(await hc.innerText(), /1 waiting on the shop\u2019s first measured week/);
-    assert.doesNotMatch(await hc.innerText(), /0\/30 h/);
-    const read = await hc.locator('.sp-new').last().getAttribute('data-read');
-    assert.match(read, /no serving hours to hand out/);
-    // Not "none of them is spare": a guard with no shifts in a cover week the
-    // plan did work out really is spare, and stands in this group too.
-    assert.match(read, /no telling yet who is really spare/);
-    assert.doesNotMatch(read, /let them go/);
-    assert.match(read, /S0/, 'and it still names who');
+    const text = await hc.innerText();
+    // The cashier is not named, offered around or let go: one chip, and the
+    // reason is the board's, not theirs.
+    assert.match(text, /1 waiting on the shop’s first measured week/);
+    assert.doesNotMatch(text, /S0 <?0\/30 h/);
+    /* Read by what they say rather than by position: the headcount line's own
+       entries wear the same class when a locker is new spending. */
+    const reads = await hc.locator('.sp-new').evaluateAll(
+      els => els.map(e => e.dataset.read));
+    const group = reads.find(r => /holds no role it could plan/.test(r)) || "";
+    assert.ok(group, 'the waiting chip is there');
+    assert.match(group, /Nothing to do about it here/);
+    assert.doesNotMatch(group, /let them go/);
+    assert.match(group, /S0/, 'and it still names who');
+    // The cleaner keeps the chip that tells the player what to do.
+    assert.match(text, /CLEAN1 12\/30 h/);
+    assert.ok(reads.some(r => /their demand asks for 30/.test(r)),
+      'and the cleaner keeps the answer the player can act on');
   } finally { await page.close(); }
 });
 

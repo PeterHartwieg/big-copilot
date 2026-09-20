@@ -972,6 +972,35 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(row["cost"]["current"], 520.0)
         self.assertEqual(row["cost"]["currentCover"], 480.0)
 
+    def test_a_short_week_says_whether_the_plan_could_have_used_them(self):
+        """`planned` on a shop that can only be half planned.
+
+        With no measured hour there are serving staff the plan could never have
+        given a shift to, and cover staff it really did plan around. Only the
+        second is somebody the player can act on, and the page cannot tell them
+        apart from the roster alone.
+        """
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [
+                employee("p0", [SERVICE], demands=("ba:jobdemand_fulltime",)),
+                employee("c0", [CLEANING], demands=("ba:jobdemand_fulltime",)),
+            ],
+            FLAT,
+            weeks=0,
+            opens=((8, 12),),
+        )
+        by_name = {row["people"][r["p"]]["name"]: r for r in row["shortHours"]}
+        self.assertEqual(set(by_name), {"P0", "C0"})
+        # The cleaner works the 28 hours there are and is short of thirty: a
+        # week in a role this plan did work out.
+        self.assertTrue(by_name["C0"]["planned"])
+        self.assertEqual(by_name["C0"]["hours"], 28)
+        # The cashier holds nothing the plan covers, so their empty week says
+        # nothing about them at all.
+        self.assertFalse(by_name["P0"]["planned"])
+        self.assertEqual(by_name["P0"]["hours"], 0)
+
     def test_the_measure_block_says_how_far_off_a_week_of_its_own_is(self):
         row = self.row()
         # Two weeks of reports: every weekday is at the mark, and the mark is

@@ -5390,10 +5390,20 @@ def _plan_site(
         # been offered around, and another site's week is not this one's.
         hours_here = mine["hours"] - before[person["id"]][0]
         days_here = len(mine["days"]) - before[person["id"]][1]
+        # Whether this plan could have used them at all. A site with no measured
+        # hour plans its cleaning and security cover and nothing else, so a
+        # cashier left with no week there is short because the board cannot read
+        # the shop yet, while a cleaner is short in a role it really did plan.
+        # Only the second is somebody to act on, and the page cannot tell them
+        # apart from the roster alone.
+        planned = any(
+            _usable(person, skill, entry["kind"])
+            for skill, entry in headcount.items()
+        )
         if person["band"] and hours_here < person["band"][0]:
             short_hours.append(
                 {"employee": person["id"], "hours": hours_here,
-                 "min": person["band"][0]}
+                 "min": person["band"][0], "planned": planned}
             )
         # A four- or five-day week is exactly four or five, so somebody the plan
         # can only give three days to has an unmet demand just as surely as
@@ -5402,7 +5412,8 @@ def _plan_site(
         # of one.
         if person["days"] is not None and days_here < person["days"]:
             short_days.append(
-                {"employee": person["id"], "days": days_here, "want": person["days"]}
+                {"employee": person["id"], "days": days_here,
+                 "want": person["days"], "planned": planned}
             )
     short_hours.sort(key=lambda r: (r["hours"] - r["min"], str(r["employee"])))
     short_days.sort(key=lambda r: (r["days"] - r["want"], str(r["employee"])))
@@ -5489,11 +5500,13 @@ def _plan_site(
         "shifts": [_shift_row(s, table) for s in shifts],
         "headcount": {skill: headcount[skill] for skill in _in_order(headcount)},
         "shortHours": [
-            {"p": table["person"][r["employee"]], "hours": r["hours"], "min": r["min"]}
+            {"p": table["person"][r["employee"]], "hours": r["hours"],
+             "min": r["min"], "planned": r["planned"]}
             for r in short_hours
         ],
         "shortDays": [
-            {"p": table["person"][r["employee"]], "days": r["days"], "want": r["want"]}
+            {"p": table["person"][r["employee"]], "days": r["days"],
+             "want": r["want"], "planned": r["planned"]}
             for r in short_days
         ],
         "placed": [
@@ -12232,38 +12245,55 @@ function spRosterCount(c){
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
       dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
   }).join("");
-  /* A cover-only plan has one answer for everybody it leaves short, and it is
-     not any of the ones below: see spShortNew(). */
-  if(!c.measured) return `<div class="sp-hc">${out}${spShortNew(c)}</div>`;
   /* Nobody works two businesses, so a week short here is short full stop. Which
      answer that calls for depends on whether they work here at all: somebody
      the plan gives nothing is a person to post elsewhere, but somebody on a
      partial week is covering hours that would go uncovered if the player took
      the advice meant for the first. */
-  out += spShortChips(c, c.row.shortHours, r => [`${r.hours}`, `${r.min} h`,
+  const hoursWords = r => [`${r.hours}`, `${r.min} h`,
     `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours ? `${r.hours} hour${
       r.hours === 1 ? "" : "s"}` : "no hours"} here; their demand asks for ${r.min}. ${r.hours
       ? `They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach ${r.min} — moving them would only uncover the hours they do work`
-      : `This site has no week for them: post them to a site with the hours, or let them go`}`]);
-  out += spShortChips(c, c.row.shortDays, r => [`${r.days}`, `${r.want} days`,
+      : `This site has no week for them: post them to a site with the hours, or let them go`}`];
+  const daysWords = r => [`${r.days}`, `${r.want} days`,
     `<b>${spEsc(c.name(r.p))}</b> works ${r.days ? `${r.days} day${
       r.days === 1 ? "" : "s"}` : "no days"} here; their demand asks for ${r.want}, and the game counts exactly that — not at least. ${r.days
       ? `The plan could not share this week's shifts into ${r.want} days for them`
-      : `This site has no week for them: post them to a site with the days, or let them go`}`]);
+      : `This site has no week for them: post them to a site with the days, or let them go`}`];
+  /* On a shop with no measured hour those answers are only right for somebody
+     the plan could have used: a guard with no shifts in a cover week it really
+     did work out is spare, and "post them elsewhere, or let them go" is what to
+     do about it. For the rest -- the crew of a role the board cannot read yet
+     -- the same words would charge the board's own ignorance to the player, so
+     they are one chip that says so. */
+  if(!c.measured){
+    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned), hoursWords);
+    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned), daysWords);
+    return `<div class="sp-hc">${out}${spShortNew(c)}</div>`;
+  }
+  out += spShortChips(c, c.row.shortHours, hoursWords);
+  out += spShortChips(c, c.row.shortDays, daysWords);
   return `<div class="sp-hc">${out}</div>`;
 }
 
 /* The one chip a cover-only plan gets in place of those. With no measured
-   hour there are no serving shifts to hand out, so everybody the plan leaves
-   short is short for that single reason, and none of them is spare: a shop
-   five days old was naming seventeen cashiers one by one, each with "post
-   them to a site with the hours, or let them go" behind it. */
+   hour there are no serving shifts to hand out, so the plan leaves most of a
+   shop's crew with nothing and none of the answers above fits: a shop five
+   days old was naming seventeen cashiers one by one, each with "post them to
+   a site with the hours, or let them go" behind it.
+
+   Only the ones no role here could have used: a guard with no hours in a
+   cover week the plan really did work out is spare, and keeps the chip of
+   their own that says so. */
 function spShortNew(c){
-  const short = [...(c.row.shortHours || []), ...(c.row.shortDays || [])];
+  const short = [...(c.row.shortHours || []), ...(c.row.shortDays || [])]
+    .filter(r => !r.planned);
   const names = [...new Set(short.map(r => c.name(r.p)))];
   if(!names.length) return "";
   return `<span class="sp-new" tabindex="0" data-read="${attr(
-    `<b>${names.length} of the staff here ${names.length === 1 ? "has" : "have"} no week in this plan</b>: it covers cleaning and security only, so there are no serving hours to hand out and no telling yet who is really spare. Their week arrives with the shop’s first measured one · ${
+    `<b>${names.length} of the staff here ${names.length === 1 ? "has" : "have"} no week in this plan</b>: it covers cleaning and security only, and ${
+      names.length === 1 ? "this one holds" : "these hold"} no role it could plan, so ${
+      names.length === 1 ? "their" : "their"} week waits on the shop’s first measured one. Nothing to do about it here · ${
       names.map(spEsc).join(", ")}`)}">${spI("clock")}<span>${
     names.length} waiting on the shop’s first measured week</span></span>`;
 }

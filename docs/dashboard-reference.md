@@ -742,9 +742,11 @@ and dims the rest; clicking scrolls there.
   schedule* for exactly that reason, and every number beside it compares cover with cover:
   the *Cover shifts / week* and *Wages / week* tiles, and the *Optimize staffing* card's
   saving, are all measured against the cleaning and security shifts in the game, never
-  against the whole schedule. Everybody such a plan leaves short of their hours is short
-  for that one reason, so they are one chip saying so rather than a list of people to move
-  or let go. The empty state is only for a site with nothing planned at all, or one the
+  against the whole schedule. Whom such a plan leaves short splits in two: somebody it could have
+  used — a cleaner on a short cover week — keeps the chip that says what to do about them,
+  while the crew of a role it cannot plan at all are one chip that says their week waits on
+  the shop's first measured one. `planned` on each `shortHours` and `shortDays` row is which
+  of the two it is: whether any role this plan covered is one that person could work. The empty state is only for a site with nothing planned at all, or one the
   planner could not read. See *The roster the board would type in* above for why a guess
   from the arrival ceiling would be worse than nothing.
 - **Crew.** What the staff here ask for and nobody has given them, each with how many hold
