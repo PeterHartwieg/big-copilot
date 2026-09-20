@@ -4377,6 +4377,13 @@ def _current_roster(save: Save, building: dict, stations: dict) -> dict:
     return {
         "shifts": len(rows),
         "fragments": fragments,
+        # And how many of those scraps are on the cover side, counted here
+        # beside the rest rather than walked again on the page: this list is the
+        # longest on the row, and the page reads these counts several times a
+        # draw.
+        "coverFragments": sum(
+            1 for r in rows if r["kind"] != "serve" and r["to"] - r["from"] <= 2
+        ),
         "cleaning": sum(1 for r in rows if r["kind"] == "clean"),
         "security": sum(1 for r in rows if r["kind"] == "security"),
         "list": rows,
@@ -5552,6 +5559,7 @@ def _plan_site(
         "current": {
             "shifts": current["shifts"],
             "fragments": current["fragments"],
+            "coverFragments": current["coverFragments"],
             "cleaning": current["cleaning"],
             "security": current["security"],
             "list": [_shift_row(r, table) for r in current["list"]],
@@ -5561,13 +5569,11 @@ def _plan_site(
         # week. The game files one hour report per trading day, and a weekday's
         # hours are only read once HOUR_WEEKS_THIN of that weekday are on file,
         # so a shop needs a fortnight of trading before its serving shifts can
-        # be cut from anything. `days` is the reports the save holds, `weekdays`
-        # the weekdays already at the mark, and `open` how long the doors have
-        # been open, which is not the same number: a shop shut half the week
-        # files fewer reports than it has days.
+        # be cut from anything. `days` is the reports the save holds and `open`
+        # how long the doors have been open, which is not the same number: a
+        # shop shut half the week files fewer reports than it has days.
         "measure": {
             "days": sum(grid["weeks"]),
-            "weekdays": sum(1 for w in grid["weeks"] if w >= HOUR_WEEKS_THIN),
             "need": HOUR_WEEKS_THIN,
             "open": business.get("daysOpen"),
         },
@@ -8925,7 +8931,11 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-need.sp-cens{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px);box-shadow:inset 0 0 0 1px var(--neg)}
 .sp-need.sp-scaled{background:none;box-shadow:inset 0 0 0 1px var(--ink-3)}
 .sp-shift{grid-row:1;z-index:1;height:32px;min-width:0;border-radius:7px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);color:var(--ink);display:flex;align-items:center;gap:7px;padding:0 10px;font:500 12.5px/1 Archivo,sans-serif;white-space:nowrap;overflow:hidden;cursor:pointer;transition:opacity .3s,transform .35s cubic-bezier(.34,1.56,.64,1),outline-color .15s;outline:1.5px solid transparent;outline-offset:1px;transform-origin:left;box-sizing:border-box;text-align:left}
-.sp-shift small{margin-left:auto;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+/* The hours are the half of a bar the player is typing into the game, so they
+   are the half that survives a bar too narrow for both: the name gives way
+   first, whether it is somebody's or the words "anticipated hire". */
+.sp-shift .sp-lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-shift small{margin-left:auto;flex:none;padding-left:6px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
 .sp-shift .sp-i svg{width:12px;height:12px}
 .sp-shift.sp-clean,.sp-shift.sp-security{background:var(--raised);border-color:var(--rule)}
 .sp-shift.sp-hire{background:none;border:1px dashed var(--warn);color:var(--warn);cursor:default}
@@ -11669,7 +11679,7 @@ function spRosterCounts(row){
     fragments: cur.fragments || 0,
     /* And how much of that half is a two-hour scrap: the same thing `fragments`
        says about the whole schedule, for the tile that compares cover alone. */
-    coverFragments: (cur.list || []).filter(s => s.k && s.t - s.f <= 2).length,
+    coverFragments: cur.coverFragments || 0,
   };
 }
 /* Whether this plan is cleaning and security and nothing else. Read off the
@@ -12118,13 +12128,13 @@ function spRosterDay(c, wd, on){
      one cut from the arrival ceiling. The strip keeps its lane so the rows
      below still line up against the hours, and the chip beside it says why it
      is empty. */
-  /* An empty strip is an unknown, not a zero, and the words have to say which:
-     a shop with one report on file has not measured this weekday, which is not
-     the same as nobody coming. The note above the grid counts the reports; this
-     says what their absence means here. */
-  let out = `<div class="sp-grow sp-needrow${c.measured ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
-    c.measured ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
-      : `Not enough hour reports to read this weekday yet, so nothing is asked for`)}">${spI("person")}</span>`;
+  /* An empty strip is an unknown or a nothing, and the words have to say
+     which: a shop with one report on file has not measured this weekday, and a
+     shop measured all fortnight may simply have served nobody. Either way the
+     lane keeps its dashed baseline so the rows below still line up, and the
+     label says which of the two it is. The note above the grid counts the
+     reports. */
+  const cells = [];
   const slots = (c.row.open || [])[wd] || [];
   for(let h = 0; c.measured && h < 24; h++){
     /* The doors decide before the measurement does. A weekday with two
@@ -12136,10 +12146,15 @@ function spRosterDay(c, wd, on){
     if(!need) continue;
     const read = `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> ${need.n} station${
       need.n === 1 ? "" : "s"}${SP_BASIS_READ[need.basis] || ""}`;
-    out += `<i class="sp-need ${SP_BASIS_CLASS[need.basis] || ""}" style="grid-column:${h + 2};--n:${
-      need.n}" data-read="${attr(read)}"></i>`;
+    cells.push(`<i class="sp-need ${SP_BASIS_CLASS[need.basis] || ""}" style="grid-column:${h + 2};--n:${
+      need.n}" data-read="${attr(read)}"></i>`);
   }
-  out += `</div>`;
+  let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
+    cells.length ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
+      : c.measured
+        ? `Measured, and these hours ask for nobody on the serving stations`
+        : `Not enough hour reports to read this weekday yet, so nothing is asked for`)}">${
+    spI("person")}</span>${cells.join("")}</div>`;
   /* The hours the doors are shut, marked once and reused down the lanes: a
      two-slot day used to paint the whole 00-24 lane as trading. */
   let shutMarks = "", run = null;
@@ -12178,7 +12193,7 @@ function spShiftBar(c, s, st, kind){
   if(s.p === null || s.p === undefined)
     return `<span class="sp-shift sp-hire" style="${span}" data-read="${attr(
       `<b>${when}</b> · <b>anticipated hire</b>: the week wants this shift and nobody here can work it. Hire for it — the post is counted below — and it becomes a line to type.`
-      )}">anticipated hire<small>${hrs}</small></span>`;
+      )}"><span class="sp-lbl">anticipated hire</span><small>${hrs}</small></span>`;
   const who = c.people[s.p].name || "?";
   const why = (c.placed[s.p] || []).find(r => r.wd === s.d && r.from < s.t && r.to > s.f);
   const benched = c.bench.has(s.p);
@@ -12187,7 +12202,7 @@ function spShiftBar(c, s, st, kind){
   else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
   const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
     + (benched ? spI("bench") : "");
-  const body = `${marks}${spEsc(who)}<small>${hrs}</small>`;
+  const body = `${marks}<span class="sp-lbl">${spEsc(who)}</span><small>${hrs}</small>`;
   const cls = `sp-shift${kind === "serve" ? "" : ` sp-${kind}`}`;
   /* A station or a person the save gives no id to has nothing for a tick to
      hang on, and two of them would share the same empty one. The line is real
@@ -12279,11 +12294,14 @@ function spRosterCount(c){
      -- the same words would charge the board's own ignorance to the player, so
      they are one chip that says so. */
   if(c.cover){
-    /* `planned === false` and not `!planned`: a row that does not say is a row
-       the page knows nothing about, and the chip that names somebody is the
-       one that loses the least by being wrong. */
-    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned !== false), hoursWords);
-    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned !== false), daysWords);
+    /* Three answers, because a row can say three things. `planned` true is
+       somebody this plan really could have used, and the chips above are the
+       right advice for them. `planned` false is somebody it could not, and
+       spShortNew() says so. A row that says neither -- an older payload than
+       this board -- is not put in either bucket: the named chip offers to let
+       people go, and the board will not do that on a guess. */
+    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned === true), hoursWords);
+    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned === true), daysWords);
     return `<div class="sp-hc">${out}${spShortNew(c)}</div>`;
   }
   out += spShortChips(c, c.row.shortHours, hoursWords);
@@ -12311,9 +12329,13 @@ function spShortNew(c){
   if(!names.length) return "";
   return `<span class="sp-new" tabindex="0" data-read="${attr(
     `<b>${names.length} of the staff here ${names.length === 1 ? "has" : "have"} no week in this plan</b>: it covers cleaning and security only, and ${
-      names.length === 1 ? "this one holds" : "these hold"} no role it could plan, so their week waits on the shop’s first measured one. Nothing to do about it here · ${
+      names.length === 1 ? "this one holds" : "these hold"} no role it could plan${
+      c.measured
+        ? `. The hours this shop has served ask for nobody on the stations they could work, so their week arrives with its first customers`
+        : `, so their week waits on the shop’s first measured one`}. Nothing to do about it here · ${
       names.map(spEsc).join(", ")}`)}">${spI("clock")}<span>${
-    names.length} waiting on the shop’s first measured week</span></span>`;
+    names.length} ${c.measured ? "with no week in this plan"
+      : `waiting on the shop’s first measured week`}</span></span>`;
 }
 
 /* The first three of a demand the plan would fail, then a count of the rest:
@@ -12347,7 +12369,7 @@ function spRosterNew(c, counts){
      would be the board telling the player to wait for something that is not
      coming. A shop that has been measured and still gets no serving line is a
      third thing again: its hours are known and they ask for nobody. */
-  const fresh = m.open === undefined || m.open <= need * 7;
+  const fresh = m.open == null || m.open <= need * 7;
   const kept = counts.now - counts.nowCover;
   /* How new and how measured, or nothing: a row that does not say has not said
      the shop is new, and the note must not answer for it. */
@@ -12355,10 +12377,6 @@ function spRosterNew(c, counts){
   const seen = m.days === undefined ? ""
     : `${age ? ", " : "This shop has "}${
       m.days ? plural(m.days, "hour report") : "no hour reports"} on file`;
-  /* And how much of the week can be read already, which is the part a player
-     watching for their roster actually waits on. */
-  const far = m.weekdays
-    ? ` ${m.weekdays} of the seven weekdays can be read so far.` : "";
   /* The lines to type, and the ones there is nobody to type yet: a shop with
      no staff at all had twenty-one hiring lines under the words "0 lines". */
   const lines = counts.tickable
@@ -12367,25 +12385,29 @@ function spRosterNew(c, counts){
     : `${plural(counts.hire, "line")}, every one of them waiting on a hire`;
   const cover = `${c.measured ? "This week is" : "Until then this is"} <b>cleaning and security cover only</b>: ${
     lines}${counts.nowCover ? `, against the ${counts.nowCover} in the game` : ""}. The registers stay yours to set.`;
-  /* Three states, and the wrong words for any of them cost the player a week
-     of their own typing: shifts the plan cannot replace, a schedule the plan
-     replaces whole, and no schedule at all. */
+  /* Four states, and the wrong words for any of them cost the player a week of
+     their own typing: shifts the plan cannot replace, a plan that cannot be
+     entered yet, a schedule the plan replaces whole, and no schedule at all. */
   const care = kept
     ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game ${
       kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
       kept === 1 ? "it" : "them"} back: delete the cleaning and security shifts and enter these in their place.`
-    : counts.now
-      ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back.`
-      : `Nothing is scheduled here yet, so there is nothing to lose by clearing.`;
+    : counts.now && !counts.tickable
+      ? `<b>Hire before you clear.</b> Every line here waits on somebody, so clearing the schedule now would leave the shop with neither the cover it has nor the week below.`
+      : counts.now
+        ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back${
+          counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
+            counts.hire === 1 ? "is" : "are"} made` : ""}.`
+        : `Nothing is scheduled here yet, so there is nothing to lose by clearing.`;
   /* Three states, three labels and three reasons: measured and asking for
      nobody, too new to be read yet, and old enough but never traded. */
   const label = c.measured ? "Cover only"
-    : m.open === undefined ? "Not measured"
+    : m.open == null ? "Not measured"
     : fresh ? "New shop" : "Never measured";
   const why = c.measured
-    ? `The hours this shop has served ask for nobody on its serving stations, so there is no serving shift to suggest.`
+    ? `The hours this shop has served ask for nobody on its serving stations, so there is no serving shift to suggest. Its own week arrives with its first customers.`
     : `${age || seen ? `${age}${seen}. ` : ""}A weekday’s hours are only read once the save holds ${
-      need} reports of that same weekday, so a shop’s own week arrives after about a fortnight of trading.${far}`;
+      need} reports of that same weekday, so a shop’s own week arrives after about a fortnight of trading.`;
   return `<div class="sp-note${kept ? " sp-care" : ""}">
     <span class="lab">${spI("person")}${label}</span>
     <span>${why}</span>
@@ -12429,6 +12451,10 @@ function spRosterBlock(b){
      exactly where they are. The planner writes currentCover for every row it
      writes cost for. */
   const againstCost = c.cover ? cost.currentCover : cost.current;
+  /* A figure the row does not carry is unknown. Falling back to the whole
+     schedule's bill would be the lie currentCover exists to stop, and $NaN is
+     not an improvement on it, so the tile says nothing instead. */
+  const costKnown = Number.isFinite(againstCost);
   const keptWords = kept
     ? ` · the ${plural(kept, "serving shift")} in the game ${
       kept === 1 ? "is" : "are"} not in this plan and stay${kept === 1 ? "s" : ""} as ${
@@ -12439,11 +12465,17 @@ function spRosterBlock(b){
      198 cover hours, re-cut into 42 shifts, cost the same wages -- the old one
      is left out and the read-out says they match. */
   const spWas = (was, now) => was === now ? "" : `<s>${was}</s>`;
+  /* Wages are struck through on the figures rather than on what they render
+     as: at $1,600 against $2,400 both read "$2k", and dropping the strike
+     would say they match when the tooltip beside it says they do not. */
+  const wasCost = (was, now) => Math.round(was) === Math.round(now)
+    ? "" : `<s>${money(was)}</s>`;
   /* Two wage bills of nothing are not "the same bill either way": a shop with
      no schedule and nobody hired has no bill to compare. The test is on the
      figures rather than on what they render as, because money() rounds to
      whole thousands and would call $1,600 and $2,400 the same bill. */
-  const sameCost = !!cost.weekly && Math.round(againstCost) === Math.round(cost.weekly);
+  const sameCost = costKnown && !!cost.weekly
+    && Math.round(againstCost) === Math.round(cost.weekly);
   const same = spSameDays(c.plan);
   /* What the player can actually tick: the lines that reach the page with
      somebody on them. A hiring line has nobody to enter yet, and a row the
@@ -12462,20 +12494,34 @@ function spRosterBlock(b){
     const copy = same[wd];
     /* Copy and paste is the whole day, so it is only a shortcut where the plan
        is the whole day too. On a shop whose serving shifts the board is asking
-       the player to keep, pasting over them would undo the warning above. */
+       the player to keep, pasting over them would undo the warning above -- and
+       on one whose every line waits on a hire there is nothing to copy yet. */
     const read = copy === null
       ? `<b>${WEEK_FULL[wd]}</b> · ${c.plan[wd].reduce((n, s) => n + s.length, 0)} shifts`
       : kept
         ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}, people and all — but copy schedule pastes the whole day, and this shop’s serving shifts are not in the plan: enter these by hand`
-        : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
+        : !counts.tickable
+          ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}, people and all — something to copy and paste once there is somebody on it`
+          : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
     return `<a href="#" class="${wd === first ? "sp-on" : ""}" data-day="${wd}" data-read="${attr(read)}">${
       copy === null ? "" : "<u></u>"}${WEEK_SHORT[wd].toUpperCase()}</a>`;
   }).join("");
   const hours = `<div class="sp-grow sp-needrow" style="min-height:0;margin:0"><span></span>${
     [...Array(24).keys()].map(h => `<div class="hh" style="grid-column:${h + 2}">${h % 3 === 0 ? h : ""}</div>`).join("")}</div>`;
-  const steps = `<button type="button" class="sp-step"><span class="sp-box">${spIcon("tick")}</span>${kept
-    ? `Clear the cleaning and security shifts<small>BizMan › Schedule · leave the rest</small>`
-    : `Clear entire schedule<small>BizMan › Schedule</small>`}</button>`
+  /* Clearing comes first because the plan replaces what is there -- unless
+     there is nothing yet to replace it with. A week whose every line waits on
+     a hire would have the player delete working cover and type nothing, so
+     there the hiring is the step and the clearing waits for it. */
+  const step = (label, sub) => `<button type="button" class="sp-step"><span class="sp-box">${
+    spIcon("tick")}</span>${label}<small>${sub}</small></button>`;
+  const hireFirst = counts.hire && !counts.tickable && counts.now;
+  const steps = (hireFirst
+    ? step(`Hire for ${plural(counts.hire, "post")} first`,
+      `MyEmployees · nothing below can be entered yet`)
+    : step(kept ? `Clear the cleaning and security shifts` : `Clear entire schedule`,
+      `BizMan › Schedule${kept ? ` · leave the rest` : ""}`)
+    + (counts.hire ? step(`Hire for ${plural(counts.hire, "post")}`,
+      `MyEmployees · then enter the dashed shifts`) : ""))
     + (row.bench || []).map(r => `<button type="button" class="sp-step" data-p="${r.p}"><span class="sp-box">${
       spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
@@ -12503,14 +12549,16 @@ function spRosterBlock(b){
         keptWords}`)}"><span class="lab">${c.cover ? "Cover shifts" : "Shifts"} / week</span><div class="v">${
         spI("list")}${spWas(against, counts.tickable)}${counts.tickable}${counts.hire
           ? `<small style="font-size:12px;color:var(--warn)">+${plural(counts.hire, "anticipated hire")}</small>` : ""}</div></div>
-      <div tabindex="0" data-read="${attr(`<b>${fmt(againstCost)}</b> a week for the ${
-        c.cover ? "cleaning and security shifts as they stand" : "schedule as it stands"}, <b>${
+      <div tabindex="0" data-read="${attr(`${costKnown
+        ? `<b>${fmt(againstCost)}</b> a week for the ${
+          c.cover ? "cleaning and security shifts as they stand" : "schedule as it stands"}`
+        : `What the shifts this plan replaces cost is not in this board’s figures`}, <b>${
         fmt(cost.weekly)}</b> for the plan, for the staff the save prices${counts.hire
           ? ` · the ${plural(counts.hire, "anticipated hire")} ${counts.hire === 1 ? "is" : "are"} not priced: nobody is on ${
             counts.hire === 1 ? "it" : "them"} yet` : ""}${sameCost
           ? ` · the same bill either way: what the plan saves here is typing, not wages` : ""}${
         keptWords}`)}"><span class="lab">Wages / week</span><div class="v">${
-        spI("coin")}${spWas(money(againstCost), money(cost.weekly))}${
+        spI("coin")}${costKnown ? wasCost(againstCost, cost.weekly) : ""}${
         counts.hire && !cost.weekly ? "—" : money(cost.weekly)}</div></div>
       <div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> bought to keep shifts whole, of the <b>${
         slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
@@ -14529,7 +14577,9 @@ function drawOptimizeStaffing(){
     ? (measured
         ? `${row.name}: ${counts.now} shifts become ${week}.`
         : `${row.name}: ${counts.nowCover} cleaning and security shifts become ${
-            week}, and its registers wait on the shop\u2019s first measured week.`)
+            week}, and ${spRosterMeasured(row)
+              ? `its measured hours ask for nobody at the registers`
+              : `its registers wait on the shop\u2019s first measured week`}.`)
     : (measured
         ? `${row.name}: a week of ${lines} shifts to enter${
           hiring ? `, every one of them waiting on a hire` : ""}.`

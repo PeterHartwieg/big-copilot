@@ -436,15 +436,16 @@ The rest of the board is unaffected, and so is every other site's plan: each is 
 against its own copy of everybody's week, and a site that fails commits none of it.
 
 **How far off a week of its own is.** `measure` carries `days`, the hour reports the save
-holds for the site; `weekdays`, how many weekdays already have enough of them; `need`, how
-many of one weekday it takes (the same two weeks the need curve reads a weekday by); and
-`open`, days since the doors opened. It is how the page tells a shop with nothing worth
+holds for the site; `need`, how many of one weekday it takes before that weekday can be
+read (the same two weeks the need curve reads a weekday by); and `open`, days since the
+doors opened. It is how the page tells a shop with nothing worth
 changing from one that opened last week, and it is the only place the countdown is
 written down.
 
 **What the plan replaces, priced.** `cost.current` is the whole schedule's weekly wage
 bill and `cost.currentCover` the part of it the plan would really replace — the cleaning
-and security shifts alone. On a measured shop the two questions have the same answer,
+and security shifts alone; `current.coverFragments` counts the two-hour scraps on that same
+side, as `current.fragments` does for the whole schedule. On a measured shop the two questions have the same answer,
 because the plan replaces the whole week. On an unmeasured one they do not, and quoting
 the first would promise a saving made of serving shifts nobody is replacing.
 
@@ -731,14 +732,18 @@ and dims the rest; clicking scrolls there.
   a player arriving from the *Optimize staffing* card knows what they are looking at and
   that the ticks change nothing in the save.
 
-  A shop with no hour reports yet still gets the block, because its cleaning and security
-  cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
-  two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the
-  board can save anybody. Its serving rows are empty and its need strip is a dashed line
-  rather than a number. Under the lead it gets a **new-shop note**: how long
+  A shop whose plan holds no serving shift at all still gets the block, because its
+  cleaning and security cover does not wait on anything — and it is exactly the shop whose
+  schedule is 182 two-hour scraps, so the 14 shifts that replace them are the biggest week
+  of typing the board can save anybody. What the block may say there is decided by the plan
+  and not by the readings: a shop measured for a fortnight that served nobody has a basis
+  for every hour and still gets cover alone, and it needs the same care as one that has
+  never been measured. Its serving rows are empty and its need strip is a dashed line
+  rather than a number. Under the lead it gets a **note** — headed *New shop*, *Never
+  measured* or *Cover only*, which is the measured shop whose hours ask for nobody: how long
   the doors have been open and how many hour reports are on file, that a weekday's hours
-  are only read once two reports of that weekday are in, that the week below is cleaning
-  and security cover alone — and, where the game already holds serving shifts, that
+  are only read once two reports of that weekday are in (or, on a *Cover only* shop, that
+  its hours ask for nobody), that the week below is cleaning and security cover alone — and, where the game already holds serving shifts, that
   clearing the whole schedule would delete shifts nothing here can put back. The first
   step button says *Clear the cleaning and security shifts* rather than *Clear entire
   schedule* for exactly that reason, and every number beside it compares cover with cover:

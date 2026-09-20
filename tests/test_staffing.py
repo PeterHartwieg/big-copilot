@@ -937,6 +937,39 @@ class PayloadTest(unittest.TestCase):
         posts = [s["id"] for s in row["stations"]]
         self.assertEqual(len(posts), len(set(posts)), "no station is listed twice")
 
+    def test_the_cover_scraps_are_counted_beside_the_rest(self):
+        """`coverFragments`: the two-hour pieces on the side the plan replaces."""
+        shifts = [
+            # Two cleaning scraps and one long serving shift.
+            {"wd": 1, "employeeId": "p1", "itemInstanceId": 8,
+             "startingHour": 0, "endingHour": 2, "type": 0},
+            {"wd": 2, "employeeId": "p1", "itemInstanceId": 8,
+             "startingHour": 0, "endingHour": 2, "type": 0},
+            {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
+             "startingHour": 8, "endingHour": 20, "type": 1},
+        ]
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(4)],
+            FLAT,
+            shifts=shifts,
+        )
+        self.assertEqual(row["current"]["fragments"], 2)
+        self.assertEqual(row["current"]["coverFragments"], 2)
+
+    def test_a_serving_scrap_is_not_a_cover_scrap(self):
+        shifts = [
+            {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
+             "startingHour": 8, "endingHour": 10, "type": 1},
+        ]
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(4)],
+            FLAT,
+            shifts=shifts,
+        )
+        self.assertEqual((row["current"]["fragments"], row["current"]["coverFragments"]), (1, 0))
+
     def test_the_current_roster_is_listed_for_the_now_and_plan_toggle(self):
         shifts = [
             {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
@@ -1013,11 +1046,9 @@ class PayloadTest(unittest.TestCase):
 
     def test_the_measure_block_says_how_far_off_a_week_of_its_own_is(self):
         row = self.row()
-        # Two weeks of reports: every weekday is at the mark, and the mark is
-        # the same HOUR_WEEKS_THIN the need curve reads a weekday by.
-        self.assertEqual(
-            row["measure"], {"days": 14, "weekdays": 7, "need": 2, "open": 14}
-        )
+        # Two weeks of reports, and the mark is the same HOUR_WEEKS_THIN the
+        # need curve reads a weekday by.
+        self.assertEqual(row["measure"], {"days": 14, "need": 2, "open": 14})
 
     def test_a_shop_with_no_reports_counts_none_rather_than_dropping_the_block(self):
         row = plan(
@@ -1027,15 +1058,18 @@ class PayloadTest(unittest.TestCase):
             weeks=0,
         )
         self.assertEqual(row["measure"]["days"], 0)
-        self.assertEqual(row["measure"]["weekdays"], 0)
         # And the row is still a plan: its cleaning cover does not wait on a
         # measurement, which is the whole reason the page has to say why the
         # serving rows are empty.
         self.assertTrue(row["shifts"])
 
-    def test_a_thin_week_is_counted_but_is_not_at_the_mark(self):
+    def test_a_thin_week_is_counted_even_though_it_reads_nothing(self):
         row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT, weeks=1)
-        self.assertEqual((row["measure"]["days"], row["measure"]["weekdays"]), (7, 0))
+        # Seven reports, one of each weekday, and not one of them enough on its
+        # own: the shop has traded and still cannot be read.
+        self.assertEqual(row["measure"]["days"], 7)
+        self.assertTrue(all(b == "none" for days in row["basis"].values()
+                            for day in days for b in day))
 
     def test_the_bench_needs_a_myemployees_step_first(self):
         row = plan(

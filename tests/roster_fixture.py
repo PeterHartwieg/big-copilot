@@ -33,11 +33,15 @@ pinned   every person on the counters holds a scheduling demand, so every
          shift they are given is one the plan placed because of it: the pin.
 quiet    a shop measured in every hour and asked for by nobody: two weeks of
          reports, every one of them zero customers, so its basis is `measured`
-         throughout and its plan is still cover alone. The block has to be as
+         throughout and its plan is still cover alone. Its cashier is full time
+         and there is nothing here for them, which is not the same as waiting
+         to be measured. The block has to be as
          careful here as with a shop that has never been measured, and only the
          plan says so.
-nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day
-         and a crew of one cashier. Its cover is four hires for hours that would
+nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day,
+         a crew of one cashier, and that cashier already mopping in the game.
+         Every line of its plan waits on a hire, so clearing what is there
+         would leave the shop with neither. Its cover is four hires for hours that would
          pay three people a full week, which is the one place the headcount
          band and the hiring line disagree on purpose.
 shut     the two-slot weekday: open 08-12 and 14-20 on Friday, shut on Sunday,
@@ -187,14 +191,21 @@ def quiet_row():
     than whether the shop was measured.
     """
     scraps = [
-        {"wd": wd, "employeeId": "p0", "itemInstanceId": 1,
-         "startingHour": h, "endingHour": h + 2, "type": 1}
+        {"wd": wd, "employeeId": who, "itemInstanceId": post,
+         "startingHour": h, "endingHour": h + 2,
+         "type": 1 if post == 1 else 0}
         for wd in range(7)
+        for who, post in (("p0", 1), ("c0", 8))
         for h in range(8, 20, 2)
     ]
     return plan(
         [(1, REGISTER), (8, CLEAN_STATION)],
-        [employee("p0", [SERVICE]), employee("c0", [CLEANING])],
+        [
+            # Full time, and nothing here the plan can give them: the shop is
+            # measured, so this is not somebody waiting to be measured.
+            employee("p0", [SERVICE], demands=("ba:jobdemand_fulltime",)),
+            employee("c0", [CLEANING]),
+        ],
         {h: 0 for h in range(24)},
         shifts=scraps,
     )
@@ -207,12 +218,22 @@ def uncovered_row():
     take two of in a day, so it takes four people. The board has to say that
     without looking like it is contradicting itself.
     """
+    # The cashier is mopping, which the game allows and the plan will not do.
+    # So there is cover in the game, and not one line of the plan that anybody
+    # can be put on: clearing it would leave the shop with neither.
+    scraps = [
+        {"wd": wd, "employeeId": "p0", "itemInstanceId": 8,
+         "startingHour": h, "endingHour": h + 2, "type": 0}
+        for wd in range(7)
+        for h in range(8, 24, 2)
+    ]
     return plan(
         [(1, REGISTER), (8, CLEAN_STATION)],
         [employee("p0", [SERVICE])],
         BUSY,
         weeks=0,
         opens=((8, 24),),
+        shifts=scraps,
     )
 
 

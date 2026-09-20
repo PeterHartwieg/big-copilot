@@ -949,7 +949,7 @@ test('a measured shop whose hours ask for nobody is still a cover-only plan', as
   } finally { await page.close(); }
 });
 
-test('the Today card sizes that shop on its cover shifts too', async () => {
+test('the Today card sizes that shop on its cover shifts, and names the reason', async () => {
   const page = await shop('quiet');
   try {
     const shown = await page.evaluate(() => {
@@ -958,11 +958,70 @@ test('the Today card sizes that shop on its cover shifts too', async () => {
       return {what: card.querySelector('.what').textContent,
         counts: spRosterCounts(D.staffing[0])};
     });
-    // 42 serving scraps in the game, and a plan that replaces none of them.
-    assert.equal(shown.counts.now, 42);
-    assert.equal(shown.counts.nowCover, 0);
-    assert.match(shown.what, /cleaning and security shifts to enter/);
-    assert.doesNotMatch(shown.what, /42 shifts become/);
+    const {now, nowCover, tickable} = shown.counts;
+    // Half the schedule is serving scraps the plan replaces none of.
+    assert.ok(now > nowCover && nowCover > 0);
+    assert.match(shown.what, new RegExp(
+      `${nowCover} cleaning and security shifts become ${tickable}`));
+    assert.doesNotMatch(shown.what, new RegExp(`${now} shifts become`));
+    // And this shop has been measured: it is not waiting for a fortnight it
+    // has already had.
+    assert.match(shown.what, /its measured hours ask for nobody at the registers/);
+    assert.doesNotMatch(shown.what, /wait on the shop\u2019s first measured week/);
+  } finally { await page.close(); }
+});
+
+test('the waiting chip on that shop does not tell them to wait either', async () => {
+  const page = await shop('quiet');
+  try {
+    const short = await page.evaluate(() => D.staffing[0].shortHours);
+    assert.equal(short.length, 1);
+    assert.equal(short[0].planned, false, 'a full-time cashier the plan cannot use');
+    const hc = page.locator('#sp-roster .sp-hc');
+    assert.match(await hc.innerText(), /1 with no week in this plan/);
+    assert.doesNotMatch(await hc.innerText(), /first measured week/);
+    const reads = await hc.locator('.sp-new').evaluateAll(els => els.map(e => e.dataset.read));
+    const group = reads.find(r => /no role it could plan/.test(r)) || "";
+    assert.match(group, /ask for nobody on the stations they could work/);
+    assert.doesNotMatch(group, /waits on the shop\u2019s first measured one/);
+  } finally { await page.close(); }
+});
+
+test('a week that is all anticipated hires does not bless clearing the cover there is', async () => {
+  const page = await shop('nobody');
+  try {
+    const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
+    // Cover in the game, done by the one person the plan may not put on it,
+    // and not a line anybody can be entered on.
+    assert.equal(counts.tickable, 0);
+    assert.ok(counts.hire > 0 && counts.nowCover > 0);
+    assert.equal(counts.now, counts.nowCover, 'nothing here but cover');
+    const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
+      b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
+    assert.match(steps[0], new RegExp(`^Hire for ${counts.hire} posts first`));
+    assert.ok(!steps.some(s => /^Clear/.test(s)), steps.join(' | '));
+    const note = await page.locator('#sp-roster .sp-note').innerText();
+    assert.match(note, /Hire before you clear/);
+    assert.doesNotMatch(note, /nothing to lose by clearing/);
+    assert.doesNotMatch(note, /loses nothing this week does not put back/);
+  } finally { await page.close(); }
+});
+
+test('a cover bill the row does not carry is left unsaid, not rendered as NaN', async () => {
+  const page = await shop('fresh', row => {
+    // A row from a board built before the field existed. It must not fall back
+    // to the whole schedule's bill, and it must not print $NaN either.
+    delete row.cost.currentCover;
+  });
+  try {
+    const wages = page.locator('#sp-roster .sp-ba > div').nth(1);
+    const shown = await wages.locator('.v').innerText();
+    assert.doesNotMatch(shown, /NaN/);
+    assert.equal(await wages.locator('s').count(), 0, 'nothing to strike through');
+    const read = await wages.getAttribute('data-read');
+    assert.doesNotMatch(read, /NaN/);
+    assert.match(read, /not in this board\u2019s figures/);
+    assert.doesNotMatch(read, /the same bill either way/);
   } finally { await page.close(); }
 });
 
@@ -987,6 +1046,12 @@ test('the tiles on a cover-only plan compare cover with cover', async () => {
     assert.equal(await tiles.nth(0).locator('s').innerText(), '28');
     const read = await tiles.nth(0).getAttribute('data-read');
     assert.match(read, /Cleaning and security shifts to enter/);
+    // The scraps counted are the ones on the side the plan replaces: 28
+    // cleaning pieces of two hours, not the 56 the whole schedule holds.
+    const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
+    assert.equal(counts.coverFragments, 28);
+    assert.equal(counts.fragments, 56);
+    assert.match(read, /28 of them two hours long/);
     assert.match(read, /28 serving shifts in the game are not in this plan/);
     const wages = await tiles.nth(1).getAttribute('data-read');
     assert.match(wages, /for the cleaning and security shifts as they stand/);
@@ -1028,8 +1093,13 @@ test('two bills that only round to the same figure are not the same bill', async
   });
   try {
     const wages = page.locator('#sp-roster .sp-ba > div').nth(1);
-    assert.equal(await wages.locator('s').count(), 0, 'nothing legible to strike out');
+    // Both read "$2k", and the strike-through is still drawn: no strike is how
+    // this tile says two figures match, and these do not.
+    assert.equal(await wages.locator('s').innerText(), '$2k');
+    assert.equal(await wages.locator('.v').innerText(), '$2k$2k');
     assert.doesNotMatch(await wages.getAttribute('data-read'), /the same bill either way/);
+    assert.match(await wages.getAttribute('data-read'), /\$1,600/);
+    assert.match(await wages.getAttribute('data-read'), /\$2,400/);
   } finally { await page.close(); }
 });
 
@@ -1320,17 +1390,17 @@ test('a plan nobody can be put on yet is still sized as a plan', async () => {
 });
 
 test('a saving nobody could type is not offered as one', async () => {
-  const page = await shop('nobody', row => {
-    // Thirty cover scraps in the game and not one line of the plan that can be
-    // entered: "30 shifts become 0" is a shop left uncovered, not a week saved.
-    row.current = Object.assign({}, row.current, {shifts: 30, cleaning: 30, security: 0});
-  });
+  // The fixture's own cover scraps, and not one line of the plan that can be
+  // entered: "56 shifts become 0" is a shop left uncovered, not a week saved.
+  const page = await shop('nobody');
   try {
     const shown = await page.evaluate(() => {
       drawOptimizeStaffing();
       const card = $('optimizeStaffingCard');
-      return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent];
+      return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent,
+        spRosterCounts(D.staffing[0]).nowCover];
     });
+    assert.ok(shown[2] > 0, 'there is cover in the game to lose');
     assert.doesNotMatch(shown[0], /LINES/);
     assert.match(shown[0], /SHIFTS$/);
     assert.doesNotMatch(shown[1], /become 0/);
