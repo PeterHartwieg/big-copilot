@@ -435,6 +435,19 @@ schedule or stations the planner chokes on gets a row carrying `failed` and its 
 The rest of the board is unaffected, and so is every other site's plan: each is worked out
 against its own copy of everybody's week, and a site that fails commits none of it.
 
+**How far off a week of its own is.** `measure` carries `days`, the hour reports the save
+holds for the site; `weekdays`, how many weekdays already have enough of them; `need`, how
+many of one weekday it takes (the same two weeks the need curve reads a weekday by); and
+`open`, days since the doors opened. It is how the page tells a shop with nothing worth
+changing from one that opened last week, and it is the only place the countdown is
+written down.
+
+**What the plan replaces, priced.** `cost.current` is the whole schedule's weekly wage
+bill and `cost.currentCover` the part of it the plan would really replace — the cleaning
+and security shifts alone. On a measured shop the two questions have the same answer,
+because the plan replaces the whole week. On an unmeasured one they do not, and quoting
+the first would promise a saving made of serving shifts nobody is replacing.
+
 **Two tables, and indices into them.** A site's row lists its `stations` and its `people`
 once each, and every shift, hiring note and placement below points at them by position
 rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`
@@ -712,14 +725,28 @@ and dims the rest; clicking scrolls there.
   tick stops counting. The week the block is about is the lines somebody can be put on: the
   *Shifts / week* tile, the ring, and the *Optimize staffing* card on Today all show that
   number, with the lines waiting on a hire named beside it rather than folded in.
+  The block leads with a line naming the shop and saying what the week below is for, so
+  a player arriving from the *Optimize staffing* card knows what they are looking at and
+  that the ticks change nothing in the save.
+
   A shop with no hour reports yet still gets the block, because its cleaning and security
   cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
   two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the
-  board can save anybody. Its serving rows are empty, its need strip is a dashed line
-  rather than a number, and a *Not measured* chip says serving shifts arrive once the shop
-  has two weeks of hour reports. The empty state is only for a site with nothing planned
-  at all, or one the planner could not read. See *The roster the board would type in*
-  above for why a guess from the arrival ceiling would be worse than nothing.
+  board can save anybody. Its serving rows are empty and its need strip is a dashed line
+  rather than a number. In place of the plan's lead it gets a **new-shop note**: how long
+  the doors have been open and how many hour reports are on file, that a weekday's hours
+  are only read once two reports of that weekday are in, that the week below is cleaning
+  and security cover alone — and, where the game already holds serving shifts, that
+  clearing the whole schedule would delete shifts nothing here can put back. The first
+  step button says *Clear the cleaning and security shifts* rather than *Clear entire
+  schedule* for exactly that reason, and every number beside it compares cover with cover:
+  the *Cover shifts / week* and *Wages / week* tiles, and the *Optimize staffing* card's
+  saving, are all measured against the cleaning and security shifts in the game, never
+  against the whole schedule. Everybody such a plan leaves short of their hours is short
+  for that one reason, so they are one chip saying so rather than a list of people to move
+  or let go. The empty state is only for a site with nothing planned at all, or one the
+  planner could not read. See *The roster the board would type in* above for why a guess
+  from the arrival ceiling would be worse than nothing.
 - **Crew.** What the staff here ask for and nobody has given them, each with how many hold
   it and the game's own priority as three bars; a company-wide demand is marked as settled
   somewhere else, and a quit warning is its own red chip. Past a dozen people the pills

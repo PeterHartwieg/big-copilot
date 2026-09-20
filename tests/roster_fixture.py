@@ -21,8 +21,17 @@ full     a measured shop: two counters, a cleaning station and a security
 cover    a shop that has never reported an hour: no serving shifts can be cut
          from nothing, but its cleaning station is covered every open hour, so
          it has a week worth typing and a strip with nothing on it.
+fresh    the same, with a schedule already in the game: half of it serving
+         shifts the plan cannot replace and half of it cleaning scraps it can,
+         which is what a shop five days old really looks like. Its cover roles
+         each want 56 hours a week, so each needs two people and has a full
+         week for only one of them.
 pinned   every person on the counters holds a scheduling demand, so every
          shift they are given is one the plan placed because of it: the pin.
+nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day
+         and a crew of one cashier. Its cover is four hires for hours that would
+         pay three people a full week, which is the one place the headcount
+         band and the hiring line disagree on purpose.
 shut     the two-slot weekday: open 08-12 and 14-20 on Friday, shut on Sunday,
          so the hour in the middle is the doors closed rather than trade
          dipping and nothing may be rostered into it.
@@ -122,6 +131,50 @@ def cover_row():
     return plan(items, people, BUSY, weeks=0)
 
 
+def fresh_row():
+    """Never measured, and already staffed: the shop the board can half plan.
+
+    A week of two-hour scraps is in the game, half of them on a register and
+    half on the cleaning station. The plan replaces the cleaning and security
+    half and cannot touch the other, which is the case every number on the
+    block has to be careful about. Open eight hours a day, so each cover role
+    wants 56 hours: two people by the 50-hour ceiling, a full week for one.
+    """
+    people = [employee(f"s{i}", [SERVICE]) for i in range(3)]
+    people += [employee("clean1", [CLEANING]), employee("guard1", [GUARD])]
+    items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
+    scraps = [
+        {
+            "wd": wd,
+            "employeeId": "s0" if post == 1 else "clean1",
+            "itemInstanceId": post,
+            "startingHour": h,
+            "endingHour": h + 2,
+            "type": 1 if post == 1 else 0,
+        }
+        for wd in range(7)
+        for post in (1, 8)
+        for h in range(8, 16, 2)
+    ]
+    return plan(items, people, BUSY, weeks=0, opens=((8, 16),), shifts=scraps)
+
+
+def uncovered_row():
+    """A cleaning station with nobody who may work it, on a 16-hour day.
+
+    112 station-hours: three full weeks' worth, but fourteen shifts nobody may
+    take two of in a day, so it takes four people. The board has to say that
+    without looking like it is contradicting itself.
+    """
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [employee("p0", [SERVICE])],
+        BUSY,
+        weeks=0,
+        opens=((8, 24),),
+    )
+
+
 def shut_row():
     """Two opening slots on a Friday, and a Sunday the shop never opens."""
     # Cleaners of their own: a customer service employee is never put on a
@@ -145,6 +198,8 @@ def rows():
         "full": full_row(),
         "pinned": pinned_row(),
         "cover": cover_row(),
+        "fresh": fresh_row(),
+        "nobody": uncovered_row(),
         "shut": shut_row(),
     }
 

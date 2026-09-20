@@ -461,7 +461,7 @@ def registration(
     }
 
 
-def business(status="retail", number=NUMBER):
+def business(status="retail", number=NUMBER, days_open=14):
     return {
         "key": site_key((STREET, number)),
         "name": f"HART. Test {number}",
@@ -469,6 +469,7 @@ def business(status="retail", number=NUMBER):
         "typeSlug": SHOP,
         "basket": 20.0,
         "promotion": 0,
+        "daysOpen": days_open,
         "lines": [],
     }
 
@@ -902,7 +903,7 @@ class PayloadTest(unittest.TestCase):
                 "key", "name", "typeSlug", "open", "stations", "people",
                 "roles", "need", "basis", "ceiling", "shifts", "headcount",
                 "shortHours", "shortDays", "placed", "bench", "slack", "cost",
-                "current",
+                "current", "measure",
             },
         )
 
@@ -950,6 +951,52 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(kind(serving), "serve")
         self.assertEqual((where(row, serving), named(row, serving)), (1, "P0"))
         self.assertEqual((where(row, cleaning), named(row, cleaning)), (8, "P1"))
+
+    def test_the_cover_wage_is_the_part_of_the_bill_the_plan_replaces(self):
+        """A plan that only covers cleaning and security is only cheaper than that.
+
+        On a shop with no measured hour the serving shifts in the game stay
+        where they are, so pricing the plan against the whole wage bill would
+        promise a saving made of shifts nobody is replacing.
+        """
+        shifts = [
+            {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
+             "startingHour": 8, "endingHour": 10, "type": 1},
+            {"wd": 1, "employeeId": "p1", "itemInstanceId": 8,
+             "startingHour": 0, "endingHour": 24, "type": 0},
+        ]
+        items = [(1, REGISTER), (8, CLEAN_STATION)]
+        people = [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(4)]
+        row = plan(items, people, FLAT, shifts=shifts)
+        # 2 hours on the register and 24 on the cleaning station, at 20 an hour.
+        self.assertEqual(row["cost"]["current"], 520.0)
+        self.assertEqual(row["cost"]["currentCover"], 480.0)
+
+    def test_the_measure_block_says_how_far_off_a_week_of_its_own_is(self):
+        row = self.row()
+        # Two weeks of reports: every weekday is at the mark, and the mark is
+        # the same HOUR_WEEKS_THIN the need curve reads a weekday by.
+        self.assertEqual(
+            row["measure"], {"days": 14, "weekdays": 7, "need": 2, "open": 14}
+        )
+
+    def test_a_shop_with_no_reports_counts_none_rather_than_dropping_the_block(self):
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [employee("c0", [CLEANING])],
+            FLAT,
+            weeks=0,
+        )
+        self.assertEqual(row["measure"]["days"], 0)
+        self.assertEqual(row["measure"]["weekdays"], 0)
+        # And the row is still a plan: its cleaning cover does not wait on a
+        # measurement, which is the whole reason the page has to say why the
+        # serving rows are empty.
+        self.assertTrue(row["shifts"])
+
+    def test_a_thin_week_is_counted_but_is_not_at_the_mark(self):
+        row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT, weeks=1)
+        self.assertEqual((row["measure"]["days"], row["measure"]["weekdays"]), (7, 0))
 
     def test_the_bench_needs_a_myemployees_step_first(self):
         row = plan(

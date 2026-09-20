@@ -291,7 +291,7 @@ three of them. Each page is a `div.page` that `showPage()` unhides.
 
 | Page (`id`) | Host element | Drawn by |
 | --- | --- | --- |
-| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` (the "Find a location" card's live count); the other "Next moves" cards are static markup |
+| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` and `drawOptimizeStaffing` (each card's live count, its sentence about this save and the line naming where it goes); the "Plan imports" card is static markup |
 | Company (`company`) | `pageCompany` | one view at a time — see below |
 | Supply (`supply`) | `pageSupply` | one view at a time — see below |
 | Growth (`growth`) | `pageGrowth` | one view at a time — see below |

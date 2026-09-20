@@ -873,7 +873,7 @@ test('the Today card counts the vacant retail units and names the best-trafficke
   try{
     await page.evaluate(() => { drawFindLocation(); wireCards(); });
     assert.equal(await page.locator('#findLocationCard .soon').textContent(), '3 VACANT');
-    assert.equal(await page.locator('#findLocationCard > span:last-child').textContent(),
+    assert.equal(await page.locator('#findLocationCard .what').textContent(),
       `3 vacant retail units right now. Best foot traffic: ${at(HK[0]).address}, Hell's Kitchen (60).`);
     await page.locator('#findLocationCard').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
@@ -890,7 +890,7 @@ test('a board built before premises keeps the card and the plain map', async () 
   try{
     await page.evaluate(() => { drawFindLocation(); wireCards(); });
     assert.equal(await page.locator('#findLocationCard .soon').textContent(), 'SOON');
-    assert.doesNotMatch(await page.locator('#findLocationCard > span:last-child').textContent(), /\d/);
+    assert.doesNotMatch(await page.locator('#findLocationCard .what').textContent(), /\d/);
     await openMap(page);
     assert.equal(await page.locator(chip).count(), 0);
     assert.equal(await page.locator('#cityMapPage .layers.moff, #cityMapPage .layers').first().isVisible(), true);
