@@ -362,6 +362,14 @@ divided by the band gives the answer the player most wants:
 with 21 Customer Service staff and 336 station-hours needs 7; the other 14 cannot
 be given a legal week no matter how the shifts fall.
 
+**And the headcount is the objective, not a note beside the plan.** An employee
+is posted to one building, so nobody's thirty hours can be made up next door:
+`ceil(total / 50)` people on full weeks is the whole aim, and the rest are people
+to post elsewhere. `headcount.spare` counts them — the people this site holds and
+gives no shift at all — read off the finished plan rather than as `have - min`,
+because the plan needs a person more than `min` wherever a day's cap or a demand
+splits the week, and the number beside the roster has to be the roster's.
+
 **Decided: one summary line per role per site**, not a line per uncovered slot —
 *"hire 3 more Customer Service to fill this plan"*, *"2 security guards, for two
 lockers nobody staffs"*, *"14 Customer Service here have no hours in this plan"*.
@@ -378,22 +386,138 @@ has only `18–06` on a 24-hour site, so they take the night shift before the
 unconstrained staff do.** Placing them last is what makes a schedule
 unsatisfiable.
 
-Tie-breaks within a slot, in order: furthest below their weekly minimum; already
-on that station on an adjacent day (continuity — fewer distinct names to type);
-lower wage; employee id. The last one is not cosmetic — a roster that reshuffles
-names between two runs of the same save is unusable, because the player is
-halfway through typing it.
+Tie-breaks within a slot, in the player's own order of priority:
+
+1. **Already on this roster.** One more name is one more person the site owes
+   thirty hours to, so nobody new is started while somebody already on it can
+   legally take the slot. Which name gets started matters as much as how many,
+   so two keys settle that: **the least flexible person first** — counted
+   against this site's own roles, so the only person who can work the cleaning
+   station is not spent on a register while that station turns into hiring
+   lines — and then **the most room left in their band**, so a part-timer does
+   not start a week one full-timer could carry alone. Both used to fall through
+   to the employee id, and a locker read `hire 4` or `hire 3` depending on who
+   the save happened to list first.
+2. **Whose minimum is still at stake, emptiest week first.** A full-timer under
+   thirty goes before a part-timer already past their ten, and two people under
+   theirs rise towards it together rather than one being stranded. Levelling
+   across *everybody* — which is what "furthest below their minimum" did before
+   — gave nine full-timers 18 hours each and nine failed demands where 168
+   station-hours are four full weeks.
+3. **Then the other demands**: a day they are not already on, for somebody short
+   of a four- or five-day week. The rest are not ranked at all — blackout
+   windows, free weekends and cleaning are tested in step d's eligibility and
+   never traded away.
+4. **Then the longest shifts**, which need no rank: step b already cuts the
+   fewest shifts a run allows, and the 14-hour day is an eligibility test.
+
+Then continuity — already on that station on an adjacent day, so there are fewer
+distinct names to type — the site's own staff before a bench member, lower wage,
+employee id. The last one is not cosmetic: a roster that reshuffles names between
+two runs of the same save is unusable, because the player is halfway through
+typing it.
+
+**d2. Settle what the fill leaves owing, in hours and then in days.**
+
+*The hours.* Filling a week one person at a time leaves the remainder on whoever
+was rostered last: 168 station-hours in twelve-hour pieces come out 48, 48, 48
+and 24, and that 24 is a full-time demand failed by six hours. It is the same
+fourteen lines with a name moved, so one shift comes off the fullest week and it
+is 48, 48, 36, 36. Where whole shifts cannot do it — 60 station-hours will not
+give two people thirty each in twelve-hour pieces — one shift is cut instead,
+and it is 30 and 30 over six lines.
+
+*The days.* `fourdaysweek` and `fivedaysweek` ask to be assigned **exactly** that
+many days: `DaysWorkingPerWeek.Fulfilled()` fails on `!=`, not on `>`, so three
+days breaks a four-day demand as surely as five does. Four twelve-hour days is 48
+hours and fits; five is 60 and does not, so on a site open long enough to cut
+twelve-hour shifts a five-day week cannot be built out of them at all. Rather
+than fail the demand, a day is **shared**: the person takes the tail of somebody
+else's shift on a day they were not working, and that somebody keeps the head, so
+no day is ever moved off a donor who needs it.
+
+**It is an exchange, not a gift**, because in the ordinary case neither side has
+anything spare. Somebody on four twelve-hour days is at 48 hours with two to
+spare, and the hours pass above leaves everybody else sitting exactly *on* their
+floor, so a rule that asked donors for spare hours found none. Instead the taker
+hands a piece of a day they are keeping to the donor, and takes the new day in
+return: giving the hours straight back is the one trade that needs neither of them
+to have room going in. Seven twelve-hour days cannot give two people five days
+each without sharing three of them, which is ten lines instead of seven: the third
+priority paying for the second.
+
+The donor is asked first for that reason, but they cannot always take the hours —
+a guard has no use for a register's — so **any other person already working here,
+and not still owed days themselves**, may take the compensation instead. That
+branch was removed once, on a measurement that turned out to be a property of the
+generator rather than of the code: on shops built for the shape it serves, two
+registers and long doors and a crew of five-day contracts, dropping it costs three
+day demands a thousand shops.
+
+**A week can also change hands entire.** Which name gets started is settled before
+anybody has an hour, so the rank can only compare contracts and wages there; on a
+site holding one week's work that lets a cheaper person with no hours demand take
+all of it while a full-timer beside them is reported 0 of 30. After the hours are
+settled, such a week is handed over whole — but only where every line is one the
+taker may work and the total lands inside their band and meets their day count, so
+the shop with too few hours to fill a band keeps its own answer. The giver may
+hold a day count they were meeting, and lose it: an *Important* demand spent to
+settle a *Critical* one, and refusing the trade costs more hours demands than it
+saves day demands. It is one move, not a trade: the whole week changes hands, and
+what follows about legs and copies belongs to the day exchange above. Their hours barely move; only
+the shape of the week does. Both legs are tried against copies of the two weeks
+and written only if the whole exchange is legal, so a day that turns out not to
+fit costs nothing: handing the hours over first and finding out afterwards left
+the week a line shorter and the demand no nearer met. The weekly ceiling is the
+one rule not asked leg by leg — an exchange moves hours both ways, so a donor
+sitting on their ceiling would be refused the very compensation that makes room
+for them — and it is checked on the finished weeks instead.
+
+**The hours are settled the same way, and all at once.** Moving whatever a donor
+could spare and seeing how far it got left people with a scrap of a line *and* a
+failed demand: 60 pieces under four hours across 400 shops, and in 43 of them the
+person was still short at the end of it. So one person's whole sequence of moves
+is planned against copies and written only if it actually reaches their floor.
+
+Four rules keep all of it honest. Only somebody **already on this roster** is
+topped up — giving hours to somebody the plan used for nothing would add a name,
+and a name is another person owed thirty hours. Nobody ends an exchange under
+their own minimum, over their ceiling or past their day count, and no donor ever
+loses a day their own demand asks for, so no shortfall is traded for another. **A
+day is never bought with a scrap**: `MIN_SPLIT`, four hours, at both ends of any
+shift the day pass cuts, and a demand that could only be met with less is
+reported unmet instead. The hours pass is the one place that may go below it, and
+only downwards to what is still owed: the hours band is the game's *Critical*
+demand where a day count is merely *Important*, so a week left two hours short
+fails something worse than a short line. It takes four hours even where fewer
+would do, wherever the donor can spare them. And a week that cannot be made up at all is left alone: 56 station-hours
+will not give two people thirty each however the shifts move.
 
 **e. Report the residue, never break a demand.** Slots with no eligible person
 roll up into the role's hiring total (step c), never into a violated demand. A
 person left below their band's minimum is reported (`shortHours`), because that
-is a real `jobdemand` warning the player is about to earn, and the fix is usually
-to move them to another site rather than to bend the roster.
+is a real `jobdemand` warning the player is about to earn. **The answer forks on
+whether they work here at all**, and the page has to say which: somebody the plan
+gives *nothing* is a person to post to a site that has the hours, or to let go,
+because this one has no week for them; somebody on a *partial* week is covering
+hours that would go uncovered if they were moved, and the honest line is that
+there is nothing left here to give them. Telling the player to move or fire the
+second kind is advice that costs them the cover they have.
 
 **f. Cleaning and security.** One person per station for every open hour, cut the
 same way, placed **after** the serving stations so neither ever steals a person
 from a queue. Their hours count towards the placed person's weekly band like any
 other shift.
+
+**Decided: a customer service employee is never put on a cleaning station.** The
+game allows it and the board's own model says it works, so this is the one rule in
+the placer that is a policy rather than a game rule, and it is named as such in
+`_can_work()`. A register standing empty while the person who could be on it mops
+costs more than a cleaner's wage. Cleaning that only servers could do becomes a
+hiring line instead, which is the honest answer: hire a cleaner. `headcount.have`
+counts the same way, or the line would read "3 here" beside a plan that hires two.
+The locker is not covered by the rule — a guard shift is a post, not a roaming
+duty — and `nocleaning`, the game's own demand, is separate and still enforced.
 
 ### Cost
 
@@ -476,7 +600,10 @@ lies.
   output is a hiring line.
 - **Not everyone has a contract demand.** 225 of 227 on `HART. YT` demand
   full-time, but a person without an hours demand has no band and the plan must
-  not invent one.
+  not invent one: they are never reported short. Full time's 50 hours still cap
+  what the plan hands them, because filling one person before starting the next
+  has to stop somewhere — uncapped, the one cleaner at a shop open around the
+  clock was given 84 hours, twelve a day for seven days.
 - **Multi-role types are a minimum, not a sum** (section 3).
 - **Determinism.** Iterate sets through `_in_order()`, break every tie explicitly.
 - **Clearing wipes more than registers.** Security guard lockers and cleaning

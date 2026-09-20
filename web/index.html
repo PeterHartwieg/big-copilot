@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=298f704e58">
+<link rel="stylesheet" href="community.css?v=16494a1ac2">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=298f704e58">
+<link rel="stylesheet" href="fonts/fonts.css?v=16494a1ac2">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2625,8 +2625,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "298f704e58";</script>
-<script>window.LEDGER_RELEASE = {"version":"298f704e58","latest":{"pr":58,"date":"2026-09-19","title":"A page for every site, and a roster you can type in","summary":"Every site's page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get a Roster: the week cut into long shifts up to the game's 12-hour limit, people placed where their schedule demands hold, cleaning and security covered, how many to hire for each role, and lines you tick off as you enter them in BizMan; the Optimize staffing card on Today opens the shop where it saves the most typing. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so."}};</script>
+<script>window.LEDGER_BUILD = "16494a1ac2";</script>
+<script>window.LEDGER_RELEASE = {"version":"16494a1ac2","latest":{"pr":58,"date":"2026-09-19","title":"A page for every site, and a roster you can type in","summary":"Every site's page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get a Roster: the week cut into long shifts up to the game's 12-hour limit, people placed where their schedule demands hold, cleaning and security covered, how many to hire for each role, and lines you tick off as you enter them in BizMan; the Optimize staffing card on Today opens the shop where it saves the most typing. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2695,8 +2695,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=298f704e58"></script>
-<script src="community.js?v=298f704e58"></script>
+<script src="app.js?v=16494a1ac2"></script>
+<script src="community.js?v=16494a1ac2"></script>
 
 <script>
 
@@ -5357,19 +5357,36 @@ function spRosterCount(c){
     const label = labelOf(skill);
     const bench = benchOf(skill), have = Math.max(0, (h.have || 0) - bench);
     const isNew = h.kind === "security" && h.hire;
-    const words = [`${have}`, bench ? `${bench} bench` : "", h.hire ? `hire ${h.hire}` : ""].filter(Boolean).join(" · ");
+    const words = [`${have}`, bench ? `${bench} bench` : "",
+      h.hire ? `hire ${h.hire}` : "", h.spare ? `${h.spare} spare` : ""].filter(Boolean).join(" · ");
+    /* `spare` is the people here this week has no hours for. It earns a word of
+       its own because an employee works one business: the plan cannot hand them
+       a few hours and leave another site to make up their thirty, so the answer
+       is to post them somewhere that has the hours or to let them go. */
     const read = `${spEsc(label)} · ${h.needed} station-hour${h.needed === 1 ? "" : "s"} want ${
       h.min} to ${h.max} people · <b>${have} here${bench ? `, ${bench} from the bench` : ""}${
-      h.hire ? `, ${h.hire} to hire` : ""}</b>${isNew
+      h.hire ? `, ${h.hire} to hire` : ""}</b>${h.spare
+        ? ` · <b>${h.spare} with no hours in this plan</b>: this site has no week for them` : ""}${isNew
         ? ` · <b>${h.hireHours} h a week of new spending</b>: nobody covers this locker today` : ""}`;
     return `<span${isNew ? ` class="sp-new"` : ""} data-read="${attr(read)}"><span class="sp-code">${
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
       dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
   }).join("");
+  /* Nobody works two businesses, so a week short here is short full stop. Which
+     answer that calls for depends on whether they work here at all: somebody
+     the plan gives nothing is a person to post elsewhere, but somebody on a
+     partial week is covering hours that would go uncovered if the player took
+     the advice meant for the first. */
   out += spShortChips(c, c.row.shortHours, r => [`${r.hours}`, `${r.min} h`,
-    `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours} hours; their demand asks for ${r.min}. The usual answer is another site, not a longer week here`]);
+    `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours ? `${r.hours} hour${
+      r.hours === 1 ? "" : "s"}` : "no hours"} here; their demand asks for ${r.min}. ${r.hours
+      ? `They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach ${r.min} — moving them would only uncover the hours they do work`
+      : `This site has no week for them: post them to a site with the hours, or let them go`}`]);
   out += spShortChips(c, c.row.shortDays, r => [`${r.days}`, `${r.want} days`,
-    `<b>${spEsc(c.name(r.p))}</b> works ${r.days} days here; their demand asks for ${r.want}. The usual answer is another site, not a longer week here`]);
+    `<b>${spEsc(c.name(r.p))}</b> works ${r.days ? `${r.days} day${
+      r.days === 1 ? "" : "s"}` : "no days"} here; their demand asks for ${r.want}, and the game counts exactly that — not at least. ${r.days
+      ? `The plan could not share this week's shifts into ${r.want} days for them`
+      : `This site has no week for them: post them to a site with the days, or let them go`}`]);
   return `<div class="sp-hc">${out}</div>`;
 }
 
