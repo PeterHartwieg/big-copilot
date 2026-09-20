@@ -12423,8 +12423,9 @@ function spRosterNew(c, counts){
       ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game ${
         kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
         kept === 1 ? "it" : "them"} back: delete the cleaning and security shifts and enter these in their place${
-        counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
-          counts.hire === 1 ? "is" : "are"} made — until then the hours those dashed bars cover would stand empty` : ""}.`
+        counts.hire ? `; the ${plural(counts.hire, "dashed line")} below ${
+          counts.hire === 1 ? "waits on its hire" : "wait on their hires"}, and the hours ${
+          counts.hire === 1 ? "it covers stand" : "they cover stand"} empty until then` : ""}.`
       : counts.now
         ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back${
           counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
@@ -12539,7 +12540,8 @@ function spRosterBlock(b){
     const read = copy === null
       ? `<b>${WEEK_FULL[wd]}</b> · ${c.plan[wd].reduce((n, s) => n + s.length, 0)} shifts`
       : kept
-        ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}, people and all — but copy schedule pastes the whole day, and this shop’s serving shifts are not in the plan: enter these by hand`
+        ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}${
+          dayStaffed(wd) ? `, people and all` : ""} — but copy schedule pastes the whole day, and this shop’s serving shifts are not in the plan: enter these by hand`
         : !dayStaffed(wd)
           ? `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]} — something to copy and paste once there is somebody on it`
           : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
@@ -12593,11 +12595,11 @@ function spRosterBlock(b){
            schedule's, or the cleaning and security half of it. */
         ""}${(c.cover ? counts.coverFragments : counts.fragments)
           ? `, ${c.cover ? counts.coverFragments : counts.fragments} of them two hours long` : ""}, against <b>${
-        counts.tickable}</b>${counts.hire
+        counts.staffed}</b>${counts.hire
           ? ` · ${plural(counts.hire, "anticipated hire")}: ${
             counts.hire === 1 ? "a line the week wants" : "lines the week wants"} and has nobody for, drawn in the grid without a name` : ""}${
         keptWords}`)}"><span class="lab">${c.cover ? "Cover shifts" : "Shifts"} / week</span><div class="v">${
-        spI("list")}${spWas(against, counts.tickable)}${counts.tickable}${counts.hire
+        spI("list")}${spWas(against, counts.staffed)}${counts.staffed}${counts.hire
           ? `<small style="font-size:12px;color:var(--warn)">+${plural(counts.hire, "anticipated hire")}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
         ? `<b>${fmt(againstCost)}</b> a week for the ${
@@ -12614,7 +12616,13 @@ function spRosterBlock(b){
         slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
         slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
         Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>
-      <div class="sp-typed"><span class="sp-ring" style="--p:${
+      ${/* The ring counts the narrower set: a line whose station or person the
+            save does not name is a line to type and not a line the board can
+            mark, so it is in the week above and not in the progress here. */""}
+      <div class="sp-typed"${counts.staffed > c.tickable.length ? ` data-read="${attr(
+        `<b>${typed}</b> of the ${c.tickable.length} lines the board can mark · ${
+          counts.staffed - c.tickable.length} more ${
+          counts.staffed - c.tickable.length === 1 ? "is a line" : "are lines"} to type that it cannot: the save gives their station or their person no id to tick against`)}"` : ""}><span class="sp-ring" style="--p:${
         c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
         typed}</b> of ${c.tickable.length} typed</span>${
         /* Nothing to clear until something is ticked, and the line has no room
@@ -14554,13 +14562,13 @@ function drawFindLocation(){
    of the same save. */
 const spRosterPlans = () => (D.staffing || []).filter(
   r => !r.failed && (r.shifts || []).length);
-/* The week the card sizes a plan by. Usually the lines somebody can be put on,
+/* The week the card sizes a plan by. Usually the lines with somebody on them,
    but a shop with no staff at all is twenty-one lines waiting on hires, and
    calling that "a week of 0 shifts to enter" sizes the one plan on the board
    that is all of the work at none of it. */
 const spCardWeek = row => {
   const counts = spRosterCounts(row);
-  return counts.tickable || counts.hire;
+  return counts.staffed || counts.hire;
 };
 const spPickRoster = (rows, score) => rows.reduce((a, b) =>
   score(b) > score(a) || (score(b) === score(a) && b.name < a.name) ? b : a);
@@ -14571,7 +14579,7 @@ function spBestRoster(){
      lines in understated the saving at exactly the shop the card is for: a
      fragmented store with an unstaffed locker goes from 42 scraps to 35 lines
      and one post to hire for, and scoring on the raw 42 called that nothing. */
-  const week = r => spRosterCounts(r).tickable;
+  const week = r => spRosterCounts(r).staffed;
   /* Like against like: a plan that replaces the whole schedule is measured
      against the whole schedule, and one that plans only cover is measured
      against the cover shifts alone. See spRosterNow(). */
@@ -14610,7 +14618,7 @@ function drawOptimizeStaffing(){
   }
   const row = best.row;
   const counts = spRosterCounts(row);
-  const week = counts.tickable;
+  const week = counts.staffed;
   const lines = spCardWeek(row);
   const hiring = !week && counts.hire;
   /* A shop with no hour reports of its own is compared on the shifts this plan

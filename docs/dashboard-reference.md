@@ -726,9 +726,11 @@ and dims the rest; clicking scrolls there.
   the typing replaces. Click a shift once you have entered it; the ticks are kept in this
   browser, per shop, and a tick belongs to the line itself — the weekday, the station, the
   hours and the person — so a plan that changes any of those has changed the line and the
-  tick stops counting. The week the block is about is the lines somebody can be put on: the
-  *Shifts / week* tile, the ring, and the *Optimize staffing* card on Today all show that
-  number, with the lines waiting on a hire named beside it rather than folded in.
+  tick stops counting. The week the block is about is the lines with somebody on them: the
+  *Shifts / week* tile and the *Optimize staffing* card on Today both show that number,
+  with the anticipated hires named beside it rather than folded in. The ring counts the
+  narrower set the board can mark — a line whose station or person the save gives no id is
+  one to type and not one to tick — and says so where the two differ.
   The block leads with a line naming the shop and saying what the week below is for, so
   a player arriving from the *Optimize staffing* card knows what they are looking at and
   that the ticks change nothing in the save.

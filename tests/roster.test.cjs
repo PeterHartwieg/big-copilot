@@ -701,18 +701,23 @@ test('a line whose station or person the save does not name cannot be ticked', a
           JSON.stringify(spRosterCounts(D.staffing[0]))];
       });
       const [drawn, ticky, tickable, typed, tile, counts] = state;
+      const staffed = JSON.parse(counts).staffed;
       assert.ok(drawn > ticky, `${what}: every bar is still drawn`);
       assert.equal(ticky, tickable, `${what}: the ring counts the buttons`);
       assert.match(typed, new RegExp(`0 of ${tickable} typed`), what);
-      assert.ok(tile.includes(tickable + '+16anticipatedhires'), `${what}: ${tile}`);
-      assert.equal(JSON.parse(counts).tickable, tickable, what);
+      /* The week is the lines with somebody on them; the ring is the narrower
+         set the board can mark, and the line beside it says so. */
+      assert.ok(staffed > tickable, `${what}: a line to type that cannot be ticked`);
+      assert.ok(tile.includes(staffed + '+16anticipatedhires'), `${what}: ${tile}`);
       assert.equal(JSON.parse(counts).hire, 16, `${what}: the hires are unchanged`);
+      assert.match(await page.locator('#sp-roster .sp-typed').getAttribute('data-read'),
+        new RegExp(`of the ${tickable} lines the board can mark`), what);
       // And the card sizes the same week the block does.
       const badge = await page.evaluate(() => {
         drawOptimizeStaffing();
         return $('optimizeStaffingCard').querySelector('.soon').textContent;
       });
-      assert.equal(badge, `\u2212${42 - tickable} LINES`, what);
+      assert.equal(badge, `\u2212${42 - staffed} LINES`, what);
       assert.match(
         await page.locator('#sp-roster .sp-shift:not(button):not(.sp-hire)')
           .first().getAttribute('data-read'),
@@ -1026,6 +1031,9 @@ test('a week that is all anticipated hires does not bless clearing the cover the
     assert.match(note, /Hire before you clear/);
     assert.doesNotMatch(note, /nothing to lose by clearing/);
     assert.doesNotMatch(note, /loses nothing this week does not put back/);
+    // And the tiles offer no saving either, on this shop as on the other.
+    assert.equal(await page.locator('#sp-roster .sp-ba > div').first().locator('s').count(), 0);
+    assert.equal(await page.locator('#sp-roster .sp-ba > div').nth(1).locator('s').count(), 0);
   } finally { await page.close(); }
 });
 
@@ -1233,6 +1241,8 @@ test('a repeated day on a cover-only plan is not offered as copy and paste', asy
       .evaluateAll(tabs => tabs.map(a => a.dataset.read));
     const repeats = reads.filter(r => /the same cover as/.test(r));
     assert.ok(repeats.length, 'the fixture does repeat a day');
+    // And no dash either: the mark is the offer of the paste.
+    assert.equal(await page.locator('#sp-roster .sp-daytabs a u').count(), 0);
     for(const r of repeats){
       // BizMan pastes the whole day, and the serving shifts this shop keeps
       // are in that day: the shortcut would undo the warning above the grid.
@@ -1266,38 +1276,34 @@ test('lines the board cannot mark are still lines to enter, everywhere it counts
     assert.match(note, new RegExp(`cover only: ${counts.staffed} lines`));
     assert.doesNotMatch(note, /every one of them waiting on a hire/);
     assert.doesNotMatch(note, /Hire before you clear/);
-    // And the tile does not strike a saving through against a zero.
+    // The tile counts the same week, and its saving is a real one.
     const tile = page.locator('#sp-roster .sp-ba > div').first();
-    assert.equal(await tile.locator('s').count(), 0);
+    assert.match(await tile.innerText(), new RegExp(`${counts.nowCover}${counts.staffed}`));
+    assert.equal(await tile.locator('s').innerText(), String(counts.nowCover));
+    // And the ring says why it counts fewer.
+    assert.match(await page.locator('#sp-roster .sp-typed').innerText(), /0 of 0 typed/);
+    assert.match(await page.locator('#sp-roster .sp-typed').getAttribute('data-read'),
+      /lines to type that it cannot/);
   } finally { await page.close(); }
 });
 
 test('a shop with serving shifts and no line to enter is told to hire, not to clear', async () => {
-  const page = await shop('nobody', row => {
-    /* The same cashier on the till as well as the mop: serving shifts the plan
-       does not replace, over cover it cannot type yet. Cloned from the rows the
-       planner wrote, onto this row's own register, so the list and the count
-       still agree. */
-    const till = row.stations.findIndex(s => s.skill === 'ba:skill_customerservice');
-    const serving = row.current.list.slice(0, 7).map(s => {
-      const one = Object.assign({}, s, {s: till});
-      delete one.k;
-      return one;
-    });
-    row.current.list = row.current.list.concat(serving);
-    row.current.shifts += serving.length;
-    row.current.fragments += serving.length;
-  });
+  // The cashier on the till as well as the mop: serving shifts the plan keeps,
+  // over cover it cannot type yet, straight out of the planner.
+  const page = await shop('halfmop');
   try {
     const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
     assert.equal(counts.staffed, 0);
-    assert.ok(counts.now - counts.nowCover > 0, 'serving shifts the plan keeps');
+    const kept = counts.now - counts.nowCover;
+    assert.ok(kept > 0, 'serving shifts the plan keeps');
     const note = await page.locator('#sp-roster .sp-note').innerText();
     // The dangerous sentence is the one that used to win here.
     assert.match(note, /Hire before you clear/);
     assert.doesNotMatch(note, /delete the cleaning and security shifts and enter these/);
     // And it still says what happens to the serving shifts.
-    assert.match(note, /7 serving shifts in the game are not in this plan either/);
+    assert.match(note, new RegExp(`${kept} serving shifts in the game are not in this plan either`));
+    // Nor is any day offered for pasting over them.
+    assert.equal(await page.locator('#sp-roster .sp-daytabs a u').count(), 0);
     assert.equal(await page.locator('#sp-roster .sp-note.sp-care').count(), 1);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
@@ -1320,6 +1326,20 @@ test('a weekday of its own that could not be read says so, on a shop that was', 
       wd => q(`#sp-roster .sp-day[data-d="${wd}"] .sp-needrow .lab`).dataset.read));
     assert.match(reads[3], /Not enough hour reports to read this weekday yet/);
     for(const wd of [1, 2, 4, 5, 6, 0]) assert.match(reads[wd], /Measured, and these hours ask for nobody/);
+  } finally { await page.close(); }
+});
+
+test('a weekday read off another one does not claim to have been measured itself', async () => {
+  const page = await shop('quiet', row => {
+    // A thin weekday the day curve did scale: its hours are a reading of
+    // another weekday, which is not the same as a reading of this one.
+    Object.values(row.basis).forEach(days => { days[3] = days[3].map(() => 'scaled'); });
+  });
+  try {
+    const read = await page.evaluate(
+      () => q('#sp-roster .sp-day[data-d="3"] .sp-needrow .lab').dataset.read);
+    assert.match(read, /Read off the best measured weekday through the game\u2019s day curve/);
+    assert.doesNotMatch(read, /^Measured/);
   } finally { await page.close(); }
 });
 

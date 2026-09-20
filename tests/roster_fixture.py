@@ -10,7 +10,7 @@ the JSON off stdout.
 
 Synthetic saves only. `python -m tests.roster_fixture` prints them.
 
-Four sites, each a state the block has to draw:
+Eight sites, each a state the block has to draw:
 
 full     a measured shop: two counters, a cleaning station and a security
          locker, and a schedule already in the game as two-hour scraps. One

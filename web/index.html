@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=59fb7d2cf3">
+<link rel="stylesheet" href="community.css?v=2176945b0a">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=59fb7d2cf3">
+<link rel="stylesheet" href="fonts/fonts.css?v=2176945b0a">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2653,8 +2653,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "59fb7d2cf3";</script>
-<script>window.LEDGER_RELEASE = {"version":"59fb7d2cf3","latest":{"pr":58,"date":"2026-09-19","title":"A page for every site, and a roster you can type in","summary":"Every site's page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get a Roster: the week cut into long shifts up to the game's 12-hour limit, people placed where their schedule demands hold, cleaning and security covered, how many to hire for each role, and lines you tick off as you enter them in BizMan; the Optimize staffing card on Today opens the shop where it saves the most typing. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so."}};</script>
+<script>window.LEDGER_BUILD = "2176945b0a";</script>
+<script>window.LEDGER_RELEASE = {"version":"2176945b0a","latest":{"pr":58,"date":"2026-09-19","title":"A page for every site, and a roster you can type in","summary":"Every site's page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get a Roster: the week cut into long shifts up to the game's 12-hour limit, people placed where their schedule demands hold, cleaning and security covered, how many to hire for each role, and lines you tick off as you enter them in BizMan; the Optimize staffing card on Today opens the shop where it saves the most typing. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2723,8 +2723,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=59fb7d2cf3"></script>
-<script src="community.js?v=59fb7d2cf3"></script>
+<script src="app.js?v=2176945b0a"></script>
+<script src="community.js?v=2176945b0a"></script>
 
 <script>
 
@@ -5628,8 +5628,9 @@ function spRosterNew(c, counts){
       ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game ${
         kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
         kept === 1 ? "it" : "them"} back: delete the cleaning and security shifts and enter these in their place${
-        counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
-          counts.hire === 1 ? "is" : "are"} made — until then the hours those dashed bars cover would stand empty` : ""}.`
+        counts.hire ? `; the ${plural(counts.hire, "dashed line")} below ${
+          counts.hire === 1 ? "waits on its hire" : "wait on their hires"}, and the hours ${
+          counts.hire === 1 ? "it covers stand" : "they cover stand"} empty until then` : ""}.`
       : counts.now
         ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back${
           counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
@@ -5744,7 +5745,8 @@ function spRosterBlock(b){
     const read = copy === null
       ? `<b>${WEEK_FULL[wd]}</b> · ${c.plan[wd].reduce((n, s) => n + s.length, 0)} shifts`
       : kept
-        ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}, people and all — but copy schedule pastes the whole day, and this shop’s serving shifts are not in the plan: enter these by hand`
+        ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}${
+          dayStaffed(wd) ? `, people and all` : ""} — but copy schedule pastes the whole day, and this shop’s serving shifts are not in the plan: enter these by hand`
         : !dayStaffed(wd)
           ? `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]} — something to copy and paste once there is somebody on it`
           : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
@@ -5798,11 +5800,11 @@ function spRosterBlock(b){
            schedule's, or the cleaning and security half of it. */
         ""}${(c.cover ? counts.coverFragments : counts.fragments)
           ? `, ${c.cover ? counts.coverFragments : counts.fragments} of them two hours long` : ""}, against <b>${
-        counts.tickable}</b>${counts.hire
+        counts.staffed}</b>${counts.hire
           ? ` · ${plural(counts.hire, "anticipated hire")}: ${
             counts.hire === 1 ? "a line the week wants" : "lines the week wants"} and has nobody for, drawn in the grid without a name` : ""}${
         keptWords}`)}"><span class="lab">${c.cover ? "Cover shifts" : "Shifts"} / week</span><div class="v">${
-        spI("list")}${spWas(against, counts.tickable)}${counts.tickable}${counts.hire
+        spI("list")}${spWas(against, counts.staffed)}${counts.staffed}${counts.hire
           ? `<small style="font-size:12px;color:var(--warn)">+${plural(counts.hire, "anticipated hire")}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
         ? `<b>${fmt(againstCost)}</b> a week for the ${
@@ -5819,7 +5821,13 @@ function spRosterBlock(b){
         slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
         slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
         Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>
-      <div class="sp-typed"><span class="sp-ring" style="--p:${
+      ${/* The ring counts the narrower set: a line whose station or person the
+            save does not name is a line to type and not a line the board can
+            mark, so it is in the week above and not in the progress here. */""}
+      <div class="sp-typed"${counts.staffed > c.tickable.length ? ` data-read="${attr(
+        `<b>${typed}</b> of the ${c.tickable.length} lines the board can mark · ${
+          counts.staffed - c.tickable.length} more ${
+          counts.staffed - c.tickable.length === 1 ? "is a line" : "are lines"} to type that it cannot: the save gives their station or their person no id to tick against`)}"` : ""}><span class="sp-ring" style="--p:${
         c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
         typed}</b> of ${c.tickable.length} typed</span>${
         /* Nothing to clear until something is ticked, and the line has no room
@@ -7759,13 +7767,13 @@ function drawFindLocation(){
    of the same save. */
 const spRosterPlans = () => (D.staffing || []).filter(
   r => !r.failed && (r.shifts || []).length);
-/* The week the card sizes a plan by. Usually the lines somebody can be put on,
+/* The week the card sizes a plan by. Usually the lines with somebody on them,
    but a shop with no staff at all is twenty-one lines waiting on hires, and
    calling that "a week of 0 shifts to enter" sizes the one plan on the board
    that is all of the work at none of it. */
 const spCardWeek = row => {
   const counts = spRosterCounts(row);
-  return counts.tickable || counts.hire;
+  return counts.staffed || counts.hire;
 };
 const spPickRoster = (rows, score) => rows.reduce((a, b) =>
   score(b) > score(a) || (score(b) === score(a) && b.name < a.name) ? b : a);
@@ -7776,7 +7784,7 @@ function spBestRoster(){
      lines in understated the saving at exactly the shop the card is for: a
      fragmented store with an unstaffed locker goes from 42 scraps to 35 lines
      and one post to hire for, and scoring on the raw 42 called that nothing. */
-  const week = r => spRosterCounts(r).tickable;
+  const week = r => spRosterCounts(r).staffed;
   /* Like against like: a plan that replaces the whole schedule is measured
      against the whole schedule, and one that plans only cover is measured
      against the cover shifts alone. See spRosterNow(). */
@@ -7815,7 +7823,7 @@ function drawOptimizeStaffing(){
   }
   const row = best.row;
   const counts = spRosterCounts(row);
-  const week = counts.tickable;
+  const week = counts.staffed;
   const lines = spCardWeek(row);
   const hiring = !week && counts.hire;
   /* A shop with no hour reports of its own is compared on the shifts this plan
