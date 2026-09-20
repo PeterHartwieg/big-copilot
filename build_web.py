@@ -329,6 +329,7 @@ details.help[open] summary::after{content:"\2013"}
     <summary>Where is my save?</summary>
     <div class="help-content">
       <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
+      <p>If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
       <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
