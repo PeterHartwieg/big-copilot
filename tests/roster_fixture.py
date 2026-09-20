@@ -38,6 +38,9 @@ quiet    a shop measured in every hour and asked for by nobody: two weeks of
          to be measured. The block has to be as
          careful here as with a shop that has never been measured, and only the
          plan says so.
+halfmop  the same shop with its cashier on the till as well as the mop: serving
+         shifts the plan does not replace, over cover it cannot type yet, which
+         is the state where the block must not tell anybody to clear anything.
 nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day,
          a crew of one cashier, and that cashier already mopping in the game.
          Every line of its plan waits on a hire, so clearing what is there
@@ -183,6 +186,31 @@ def fresh_row():
                 days_open=5)
 
 
+def halfmop_row():
+    """`nobody`, with the cashier also working the till.
+
+    So the schedule holds serving shifts the plan keeps and cover it cannot
+    replace yet: both of the block's warnings are true at once, and the one
+    about hiring has to win.
+    """
+    scraps = [
+        {"wd": wd, "employeeId": "p0", "itemInstanceId": post,
+         "startingHour": h, "endingHour": h + 2,
+         "type": 1 if post == 1 else 0}
+        for wd in range(7)
+        for post, hours in ((1, range(8, 16, 2)), (8, range(8, 24, 2)))
+        for h in hours
+    ]
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [employee("p0", [SERVICE])],
+        BUSY,
+        weeks=0,
+        opens=((8, 24),),
+        shifts=scraps,
+    )
+
+
 def quiet_row():
     """Measured everywhere, and the measurement asks for nobody.
 
@@ -263,6 +291,7 @@ def rows():
         "fresh": fresh_row(),
         "nobody": uncovered_row(),
         "quiet": quiet_row(),
+        "halfmop": halfmop_row(),
         "shut": shut_row(),
     }
 

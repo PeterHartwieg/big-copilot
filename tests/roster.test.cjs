@@ -1201,6 +1201,31 @@ test('an unfilled line is named as a line, and priced as nothing it can price', 
   } finally { await page.close(); }
 });
 
+test('a day with nobody on it is not offered for copying, whatever the rest of the week has', async () => {
+  const page = await shop('full', row => {
+    /* Tuesday and Wednesday with nobody on them: the planner writes a line
+       with `p: null` wherever nobody here may legally work it, and a day of
+       them is a day with nothing to copy, in a week that has plenty. */
+    row.shifts = row.shifts.map(s => s.d === 2 || s.d === 3
+      ? Object.assign({}, s, {p: null}) : s);
+  });
+  try {
+    const days = await page.evaluate(() => HOUR_ROWS.map(wd => ({
+      wd,
+      staffed: spRosterRows(D.staffing[0], D.staffing[0].shifts)[wd]
+        .some(shifts => shifts.some(s => s.p !== null && s.p !== undefined)),
+      dash: !!q(`#sp-roster .sp-daytabs a[data-day="${wd}"] u`),
+      read: q(`#sp-roster .sp-daytabs a[data-day="${wd}"]`).dataset.read,
+    })));
+    assert.ok(days.some(d => d.staffed) && days.some(d => !d.staffed),
+      JSON.stringify(days.map(d => d.staffed)));
+    for(const d of days){
+      if(d.dash) assert.ok(d.staffed, `${d.wd} offers a copy of nobody: ${d.read}`);
+      if(!d.staffed) assert.doesNotMatch(d.read, /copy schedule, paste schedule/);
+    }
+  } finally { await page.close(); }
+});
+
 test('a repeated day on a cover-only plan is not offered as copy and paste', async () => {
   const page = await shop('fresh');
   try {
@@ -1226,6 +1251,27 @@ test('a measured shop still gets the copy-and-paste shortcut', async () => {
   } finally { await page.close(); }
 });
 
+test('lines the board cannot mark are still lines to enter, everywhere it counts them', async () => {
+  const page = await shop('fresh', row => {
+    // A station the save gives no id to: the bars are drawn and worth typing,
+    // and nothing can be ticked against them.
+    row.stations = row.stations.map(s => Object.assign({}, s, {id: ""}));
+  });
+  try {
+    const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
+    assert.equal(counts.tickable, 0, 'nothing the board can mark');
+    assert.ok(counts.staffed > 0, 'and a week to type all the same');
+    // The note counts the week, not the ticks, and does not call it all hires.
+    const note = await page.locator('#sp-roster .sp-note').innerText();
+    assert.match(note, new RegExp(`cover only: ${counts.staffed} lines`));
+    assert.doesNotMatch(note, /every one of them waiting on a hire/);
+    assert.doesNotMatch(note, /Hire before you clear/);
+    // And the tile does not strike a saving through against a zero.
+    const tile = page.locator('#sp-roster .sp-ba > div').first();
+    assert.equal(await tile.locator('s').count(), 0);
+  } finally { await page.close(); }
+});
+
 test('a shop with serving shifts and no line to enter is told to hire, not to clear', async () => {
   const page = await shop('nobody', row => {
     /* The same cashier on the till as well as the mop: serving shifts the plan
@@ -1240,6 +1286,7 @@ test('a shop with serving shifts and no line to enter is told to hire, not to cl
     });
     row.current.list = row.current.list.concat(serving);
     row.current.shifts += serving.length;
+    row.current.fragments += serving.length;
   });
   try {
     const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
@@ -1261,6 +1308,21 @@ test('a shop with serving shifts and no line to enter is told to hire, not to cl
   } finally { await page.close(); }
 });
 
+test('a weekday of its own that could not be read says so, on a shop that was', async () => {
+  const page = await shop('quiet', row => {
+    /* Measured everywhere but Wednesday, whose own basis the day curve could
+       not scale: the shop has been read and this weekday has not. */
+    Object.values(row.basis).forEach(days => { days[3] = days[3].map(() => 'none'); });
+  });
+  try {
+    // By weekday, not by the order the tabs run in.
+    const reads = await page.evaluate(() => [0, 1, 2, 3, 4, 5, 6].map(
+      wd => q(`#sp-roster .sp-day[data-d="${wd}"] .sp-needrow .lab`).dataset.read));
+    assert.match(reads[3], /Not enough hour reports to read this weekday yet/);
+    for(const wd of [1, 2, 4, 5, 6, 0]) assert.match(reads[wd], /Measured, and these hours ask for nobody/);
+  } finally { await page.close(); }
+});
+
 test('the need strip on a shop measured at nothing says so, lane by lane', async () => {
   const page = await shop('quiet');
   try {
@@ -1279,19 +1341,26 @@ test('the need strip on a shop measured at nothing says so, lane by lane', async
 });
 
 test('a bar too narrow for both keeps its hours and loses the name', async () => {
-  const page = await shop('full');
+  // The two-slot weekday: an 08-12 bar is four columns of a phone's grid, and
+  // a name and an hour range together do not fit in it.
+  const page = await shop('shut');
   try {
     await page.setViewportSize({width: 400, height: 900});
     /* Nothing inside a page the harness never opened has a width. drawChart()
        is stubbed for the same reason as in the landing test: no history. */
     await page.evaluate(() => { drawChart = () => {}; showPage('company'); });
-    const bar = page.locator(mon + 'button.sp-shift').first();
+    const bar = page.locator('#sp-roster .sp-day.sp-on button.sp-shift').first();
     const box = await bar.evaluate(el => ({
       wide: el.clientWidth,
       hours: el.querySelector('small').getBoundingClientRect().width,
       label: el.querySelector('.sp-lbl').getBoundingClientRect().width,
+      wants: el.querySelector('.sp-lbl').scrollWidth,
       text: el.querySelector('small').textContent,
     }));
+    // Narrow enough that the CSS has to do the work: the name's own text is
+    // wider than the room left once the hours have theirs.
+    assert.ok(box.wide > 0 && box.wide < 200, `a narrow bar: ${JSON.stringify(box)}`);
+    assert.ok(box.wants > box.label, `the name is being cut: ${JSON.stringify(box)}`);
     // The hours survive whole; the name gives way around them.
     assert.ok(box.hours > 20, `the hours are what the player types: ${JSON.stringify(box)}`);
     assert.match(box.text, /^\d\d\u2013\d\d$/);

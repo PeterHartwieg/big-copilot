@@ -747,9 +747,8 @@ and dims the rest; clicking scrolls there.
   its hours ask for nobody), that the week below is cleaning and security cover alone
   — and, where the game already holds serving shifts, that clearing the whole schedule
   would delete shifts nothing here can put back. Where no line can be entered yet, the
-  hiring comes first and there is no clearing step at all. The first
-  step button says *Clear the cleaning and security shifts* rather than *Clear entire
-  schedule* for exactly that reason, and every number beside it compares cover with cover:
+  hiring comes first and there is no clearing step at all. The clearing step says *Clear the cleaning and security shifts* rather than *Clear
+  entire schedule* for exactly that reason, and every number beside it compares cover with cover:
   the *Cover shifts / week* and *Wages / week* tiles, and the *Optimize staffing* card's
   saving, are all measured against the cleaning and security shifts in the game, never
   against the whole schedule. Whom such a plan leaves short splits in two: somebody it could have
