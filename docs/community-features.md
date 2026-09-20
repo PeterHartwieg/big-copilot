@@ -1,10 +1,14 @@
 # Community features
 
 The hosted dashboard shows an approximate online count and lets visitors vote for
-the **Optimize staffing** and **Time to break even** ideas (Find a location shipped on
-15 September 2026 and left the ballot).
-Time to break even would estimate how many in-game days each business needs to
-earn back its setup costs, based on its net profit. The count means
+the **Time to break even**, **Supply chain for factories not running 24/7** and
+**Multilingual support** ideas (Find a location shipped on 15 September 2026 and
+Optimize staffing on 20 September 2026; both left the ballot). Time to break even
+would estimate how many in-game days each business needs to earn back its setup
+costs, based on its net profit; the factory idea would plan production and orders
+from the hours machines are actually staffed rather than a full day and night; and
+multilingual support would put the board's own wording into other languages. The
+count means
 dashboard tabs seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.
 The count paints into the masthead's live status, replacing the "In browser"
@@ -76,7 +80,9 @@ while static Copilot assets remain usable. Test locally without real saves or IP
 
 Edit `server/features.json` and deploy. Keep IDs stable while a feature remains in
 the poll; changing an ID creates a new voting identity and deletes the old ID's votes
-at the next daily cleanup. Removing an option stops new votes for it, and the next
+at the next daily cleanup. That rotation is also how a poll's count is reset without
+touching the database: `time-to-break-even` became `break-even-time` on 20 September
+2026 to clear its votes while the idea stayed on the ballot. Removing an option stops new votes for it, and the next
 cleanup deletes its rows. Titles and descriptions can
 change without resetting votes. No administration interface is required.
 

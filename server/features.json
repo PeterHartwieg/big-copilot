@@ -1,12 +1,17 @@
 [
   {
-    "id": "optimize-staffing",
-    "title": "Optimize staffing",
-    "description": "Hours built from your customer count: registers, building capacity and the schedule each person asked for."
-  },
-  {
-    "id": "time-to-break-even",
+    "id": "break-even-time",
     "title": "Time to break even",
     "description": "Estimate how many in-game days each business needs to earn back its setup costs, based on its net profit."
+  },
+  {
+    "id": "factory-supply-part-time",
+    "title": "Supply chain for factories not running 24/7",
+    "description": "Production and order plans that count the hours your machines are actually staffed, instead of a full day and night."
+  },
+  {
+    "id": "multilingual-support",
+    "title": "Multilingual support",
+    "description": "The board's own wording in other languages, with names read from the language file your game runs in."
   }
 ]
