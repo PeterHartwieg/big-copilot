@@ -7540,7 +7540,7 @@ def _alerts(
         ceiling = f"{cap}/h" if cap == top else f"{cap}-{top}/h"
         if limit == "the building":
             text = (
-                f"{where} {subject} at the {cap}/h door cap {when}, {per_week} hours a "
+                f"{where} {subject} at the {cap}/h building capacity {when}, {per_week} hours a "
                 f"week at the ceiling with ${worth:,.0f}/day of trade going through it. "
                 f"The building is the limit, so the answer is {group[0]['fix']}{who}"
             )
@@ -7723,7 +7723,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
             elif status == "staffing":
                 text = (
                     f"{row['item']} arrives at {row['arrives']:,}/day against {row['perDay']:,} "
-                    f"the machines could eat; the roster runs them {round(row['staffedShare'] * 100)}% "
+                    f"the machines could eat; staffing runs them {round(row['staffedShare'] * 100)}% "
                     f"of the week"
                 )
             elif status == "import" and row["raiseImport"]:
@@ -9325,11 +9325,11 @@ body:has(#changelogDialog[open]){overflow:hidden}
          wireCards(). -->
     <section class="sec rv" id="secMoves">
       <div class="sechead"><h2>Next moves</h2>
-        <span class="why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens the Roster on the shop with the most typing to save, a week to enter in BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
       <div class="moves">
         <a class="move rv" href="#secLogistics" id="planImportsCard"><span class="soon">CHECKLIST</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span class="what">Plan weekly orders and get a checklist of settings to enter in-game.</span><span class="go">Opens the change checklist</span></a>
-        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span class="what">Shifts from the hour grid: registers, door caps and who is off today.</span><span class="go">Opens the shop&#39;s Roster</span></a>
-        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span class="what">Free buildings ranked by demand, rivals and the door cap you would get.</span><span class="go">Opens the finder on the map</span></a>
+        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
+        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go">Opens the finder on the map</span></a>
       </div>
     </section>
   </div>
@@ -11586,6 +11586,31 @@ const spTickable = (row, s) => spDrawn(row, s) && !spNobody(s.p)
   && spHasId(((row.stations || [])[s.s] || {}).id)
   && spHasId(((row.people || [])[s.p] || {}).id);
 const spTickableRows = row => (row.shifts || []).filter(s => spTickable(row, s));
+/* Hours, not blocks: the week as the game counts it, on both sides of every
+   comparison here. How many blocks those hours come in is a separate question
+   -- it is the dragging, not the week. */
+const spHoursOf = list => (list || []).reduce((n, s) => n + Math.max(0, s.t - s.f), 0);
+/* The hours a plan asks for: the ones somebody can be put on, or -- on a shop
+   whose every block waits on a hire -- the hours it wants and has nobody for.
+   The two are never added, because a week half of which cannot be set yet is
+   not a week the player can act on. */
+const spPlanHours = row => {
+  const drawn = (row.shifts || []).filter(s => spDrawn(row, s));
+  const on = drawn.filter(s => !spNobody(s.p));
+  return spHoursOf(on.length ? on : drawn);
+};
+/* People to hire, which is not the number of nameless entries in the grid.
+   The planner sizes a hire at the game's own full-time week, 30 to 50 hours,
+   so fourteen unnamed entries can be three people. */
+const spPlanPosts = row => Object.values(row.headcount || {}).reduce(
+  (n, h) => n + (h.hire || 0), 0) || spRosterCounts(row).hire;
+/* What a skill is called on the page. A serving role has its own label; a
+   cleaning station and a security locker are not roles, so they are named by
+   the station itself. */
+const spSkillLabel = (row, stations, skill) =>
+  ((row.roles || []).find(r => r.skill === skill) || {}).label
+  || ((stations || []).find(st => st.skill === skill) || {}).name
+  || String(skill).split("_").pop();
 function spRosterRows(row, list){
   const days = [...Array(7)].map(() => (row.stations || []).map(() => []));
   (list || []).forEach(s => {
@@ -12125,11 +12150,11 @@ function spRosterNone(row){
   const rows = stations.map((st, k) => `<div class="sp-grow"><span class="lab">${spEsc(codes[k])}</span></div>`).join("");
   const failed = !!(row && row.failed);
   return `<section class="sec rv" data-block="roster" id="sp-roster">
-    ${sechead("Roster", {icon: "roster", why: failed
+    ${sechead("Staffing", {icon: "roster", why: failed
       ? `This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.`
-      : `A roster is cut from measured hours, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
+      : `A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
-    <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to roster"}</div>
+    <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to schedule"}</div>
   </section>`;
 }
 
@@ -12177,7 +12202,7 @@ function spRosterDay(c, wd, on){
       : readDay === "measured"
         ? `Measured, and these hours ask for nobody on the serving stations`
         : readDay === "scaled"
-          ? `Read off the best measured weekday through the game’s day curve, and it asks for nobody here`
+          ? `Read off the best measured weekday through the game's day curve, and it asks for nobody here`
           : `Not enough hour reports to read this weekday yet, so nothing is asked for`)}">${
     spI("person")}</span>${cells.join("")}</div>`;
   /* The hours the doors are shut, marked once and reused down the lanes: a
@@ -12193,9 +12218,13 @@ function spRosterDay(c, wd, on){
   }
   c.stations.forEach((st, si) => {
     const kind = spStationKind(c.row, st);
-    out += `<div class="sp-grow${slots.length ? "" : " sp-shut"}"><span class="lab" tabindex="0" data-read="${attr(
-      `${spEsc(st.name || "?")}${st.rate ? ` · serves ${st.rate} an hour` : " · covered every open hour"}`)}">${
-      spEsc(c.codes[si])}</span>${shutMarks}`;
+    /* The lane is labelled with two letters and a number, which says nothing
+       on its own, so the station's own name is on the label both ways: as a
+       tooltip under the pointer and in the read-out for a keyboard. */
+    const what = `${spEsc(st.name || "?")}${
+      st.rate ? ` · serves ${st.rate} an hour` : " · covered every open hour"}`;
+    out += `<div class="sp-grow${slots.length ? "" : " sp-shut"}"><span class="lab" tabindex="0" data-tip="${
+      attr(what)}" data-read="${attr(what)}">${spEsc(c.codes[si])}</span>${shutMarks}`;
     /* The schedule as it stands, behind the plan: one block a fragment, so
        the toggle shows what typing this week actually replaces. */
     (c.now[wd][si] || []).forEach((s, k) => {
@@ -12217,8 +12246,8 @@ function spShiftBar(c, s, st, kind){
   const when = `${WEEK_SHORT[s.d]} ${hrs} · ${spEsc(st.name || "?")}`;
   if(s.p === null || s.p === undefined)
     return `<span class="sp-shift sp-hire" style="${span}" data-read="${attr(
-      `<b>${when}</b> · <b>anticipated hire</b>: the week wants this shift and nobody here can work it. Hire for it — the post is counted below — and it becomes a line to type.`
-      )}"><span class="sp-lbl">anticipated hire</span><small>${hrs}</small></span>`;
+      `<b>${when}</b> · <b>nobody to work it</b>. The week wants these hours and no one here can take them. Hire for this station, counted below, and this becomes an entry to set.`
+      )}"><span class="sp-lbl">to hire</span><small>${hrs}</small></span>`;
   const who = c.people[s.p].name || "?";
   const why = (c.placed[s.p] || []).find(r => r.wd === s.d && r.from < s.t && r.to > s.f);
   const benched = c.bench.has(s.p);
@@ -12234,7 +12263,7 @@ function spShiftBar(c, s, st, kind){
      and still worth typing, so it is drawn -- it simply cannot be marked. */
   if(!spTickable(c.row, s))
     return `<span class="${cls}" style="${span}" data-p="${s.p}" data-read="${attr(
-      `${read} · <b>no id to tick against</b>: type it, but the board cannot mark it done`
+      `${read} · <b>no id to tick against</b>: set it in the game, but the board cannot mark it done`
       )}">${body}</span>`;
   const id = spTickId(c.row, s);
   return `<button type="button" class="${cls}${
@@ -12257,8 +12286,7 @@ function spRosterCount(c){
     r => (r.skills || [r.skill]).includes(skill)).length;
   /* A serving role names itself; cleaning and security are not roles in the
      payload, so they are named by the furniture they cover. */
-  const labelOf = skill => ((c.row.roles || []).find(r => r.skill === skill) || {}).label
-    || (c.stations.find(st => st.skill === skill) || {}).name || String(skill).split("_").pop();
+  const labelOf = skill => spSkillLabel(c.row, c.stations, skill);
   const skills = Object.keys(c.row.headcount || {});
   const codes = spNameCodes(skills.map(labelOf));
   let out = skills.map((skill, si) => {
@@ -12287,13 +12315,14 @@ function spRosterCount(c){
        people are needed for hours that would pay three of them a full week.
        Side by side with nothing said, "want 3 people ... 4 to hire" reads as
        the board contradicting itself. */
-    const read = `${spEsc(label)} · ${h.needed} station-hour${h.needed === 1 ? "" : "s"} want ${
+    const read = `${spEsc(label)} · ${h.needed} hour${h.needed === 1 ? "" : "s"} a week to cover, which takes ${
       band} · <b>${have} here${bench ? `, ${bench} from the bench` : ""}${
       h.hire ? `, ${h.hire} to hire` : ""}</b>${h.hire > h.max && h.max >= h.min
-        ? `: more people than those hours would pay a full week, because nobody may work two of these shifts in a day` : ""}${h.spare
+        ? `: more people than those hours would pay a full week, because nobody may work more than twelve hours in a day` : ""}${h.spare
         ? ` · <b>${h.spare} with no hours in this plan</b>: this site has no week for them` : ""}${isNew
-        ? ` · <b>${h.hireHours} h a week of new spending</b>: nobody covers this locker today` : ""}`;
-    return `<span${isNew ? ` class="sp-new"` : ""} tabindex="0" data-read="${attr(read)}"><span class="sp-code">${
+        ? ` · <b>${h.hireHours} h a week of new wages</b>, the least a full-time hire may be given: nobody covers this locker today` : ""}`;
+    return `<span${isNew ? ` class="sp-new"` : ""} tabindex="0" data-tip="${attr(spEsc(label))}" data-read="${
+      attr(read)}"><span class="sp-code">${
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
       dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
   }).join("");
@@ -12305,12 +12334,12 @@ function spRosterCount(c){
   const hoursWords = r => [`${r.hours}`, `${r.min} h`,
     `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours ? `${r.hours} hour${
       r.hours === 1 ? "" : "s"}` : "no hours"} here; their demand asks for ${r.min}. ${r.hours
-      ? `They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach ${r.min} — moving them would only uncover the hours they do work`
+      ? `They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach ${r.min}. Moving them would only uncover the hours they do work`
       : `This site has no week for them: post them to a site with the hours, or let them go`}`];
   const daysWords = r => [`${r.days}`, `${r.want} days`,
     `<b>${spEsc(c.name(r.p))}</b> works ${r.days ? `${r.days} day${
-      r.days === 1 ? "" : "s"}` : "no days"} here; their demand asks for ${r.want}, and the game counts exactly that — not at least. ${r.days
-      ? `The plan could not share this week's shifts into ${r.want} days for them`
+      r.days === 1 ? "" : "s"}` : "no days"} here; their demand asks for ${r.want}, and the game counts exactly that, not at least. ${r.days
+      ? `The plan could not share this week's hours into ${r.want} days for them`
       : `This site has no week for them: post them to a site with the days, or let them go`}`];
   /* On a shop with no measured hour those answers are only right for somebody
      the plan could have used: a guard with no shifts in a cover week it really
@@ -12357,10 +12386,10 @@ function spShortNew(c){
       names.length === 1 ? "this one holds" : "these hold"} no role it could plan${
       c.measured
         ? `. The hours this shop has served ask for nobody on the stations they could work, so their week arrives with its first customers`
-        : `, so their week waits on the shop’s first measured one`}. Nothing to do about it here · ${
+        : `, so their week waits on the shop's first measured one`}. Nothing to do about it here · ${
       names.map(spEsc).join(", ")}`)}">${spI("clock")}<span>${
     names.length} ${c.measured ? "with no week in this plan"
-      : `waiting on the shop’s first measured week`}</span></span>`;
+      : `waiting on the shop's first measured week`}</span></span>`;
 }
 
 /* The first three of a demand the plan would fail, then a count of the rest:
@@ -12405,9 +12434,9 @@ function spRosterNew(c, counts){
   /* The lines to type, and the ones there is nobody to type yet: a shop with
      no staff at all had twenty-one hiring lines under the words "0 lines". */
   const lines = counts.staffed
-    ? `${plural(counts.staffed, "line")}${counts.hire
+    ? `${plural(counts.staffed, "entry", "entries")}${counts.hire
         ? `, and ${counts.hire} more waiting on a hire` : ""}`
-    : `${plural(counts.hire, "line")}, every one of them waiting on a hire`;
+    : `${plural(counts.hire, "entry", "entries")}, every one of them waiting on a hire`;
   const cover = `${c.measured ? "This week is" : "Until then this is"} <b>cleaning and security cover only</b>: ${
     lines}${counts.nowCover ? `, against the ${counts.nowCover} in the game` : ""}. The registers stay yours to set.`;
   /* Four states, and the wrong words for any of them cost the player a week of
@@ -12416,24 +12445,24 @@ function spRosterNew(c, counts){
      delete anything for. Then shifts the plan cannot replace, then a schedule
      it replaces whole, then no schedule at all. */
   const care = counts.now && !counts.staffed
-    ? `<b>Hire before you clear.</b> Every line here waits on somebody, so clearing the schedule now would leave the shop with ${
+    ? `<b>Hire before you clear.</b> Every entry here waits on somebody, so clearing the schedule now would leave the shop with ${
       counts.nowCover ? `neither the cover it has nor the week below` : `nothing at all`}.${
-      kept ? ` The ${plural(kept, "serving shift")} in the game ${
+      kept ? ` The ${plural(kept, "serving entry", "serving entries")} in the game ${
         kept === 1 ? "is" : "are"} not in this plan either, and ${
         kept === 1 ? "it stays" : "they stay"} where ${kept === 1 ? "it is" : "they are"}.` : ""}`
     : kept
-      ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game ${
+      ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving entry", "serving entries")} in the game ${
         kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
         kept === 1 ? "it" : "them"} back${counts.hire
-          ? `. Delete the cleaning and security shifts the solid lines replace and enter those, and leave what is under the ${
-            plural(counts.hire, "dashed line")} where it is until ${
+          ? `. Delete the cleaning and security hours the solid entries replace and set those, and leave what is under the ${
+            plural(counts.hire, "dashed entry", "dashed entries")} where it is until ${
             counts.hire === 1 ? "its hire is" : "their hires are"} made: nothing here can cover ${
             counts.hire === 1 ? "that hour" : "those hours"} yet`
-          : `: delete the cleaning and security shifts and enter these in their place`}.`
+          : `: delete the cleaning and security hours and set these instead`}.`
       : counts.now
         ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back${
-          counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
-            counts.hire === 1 ? "is" : "are"} made` : ""}.`
+          counts.hire ? `, once the ${plural(spPlanPosts(c.row), "hire")} ${
+            spPlanPosts(c.row) === 1 ? "is" : "are"} made` : ""}.`
         : `Nothing is scheduled here yet, so there is nothing to lose by clearing.`;
   /* Three states, three labels and three reasons: measured and asking for
      nobody, too new to be read yet, and old enough but never traded. */
@@ -12441,9 +12470,9 @@ function spRosterNew(c, counts){
     : m.open == null ? "Not measured"
     : fresh ? "New shop" : "Never measured";
   const why = c.measured
-    ? `The hours this shop has served ask for nobody on its serving stations, so there is no serving shift to suggest. Its own week arrives with its first customers.`
-    : `${age || seen ? `${age}${seen}. ` : ""}A weekday’s hours are only read once the save holds ${
-      need} reports of that same weekday, so a shop’s own week arrives after about a fortnight of trading.`;
+    ? `The hours this shop has served ask for nobody on its serving stations, so there are no serving hours to suggest. Its own week arrives with its first customers.`
+    : `${age || seen ? `${age}${seen}. ` : ""}A weekday's hours are only read once the save holds ${
+      need} reports of that same weekday, so a shop's own week arrives after about a fortnight of trading. Staff every station for those two weeks, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing, and an hour that ran at its ceiling only says how many customers the shop turned away.`;
   /* The border marks a note the player has to read before they touch the
      game's own schedule, which is either of the two warnings above. */
   const care_ = kept || (counts.now && !counts.staffed);
@@ -12485,6 +12514,16 @@ function spRosterBlock(b){
   c.cover = spCoverOnly(row);
   const kept = c.cover ? counts.now - counts.nowCover : 0;
   const against = c.cover ? counts.nowCover : counts.now;
+  /* The same two sides in hours, which is what the player is really setting:
+     a schedule is dragged out in hours and days, and the block count beside
+     them is only how much of that dragging the plan saves. */
+  const drawnHere = (row.shifts || []).filter(s => spDrawn(row, s));
+  const planHours = spHoursOf(drawnHere.filter(s => !spNobody(s.p)));
+  /* Counted off the rows the counts above are counted off -- the whole
+     schedule, or its cleaning and security half -- so the hours and the
+     blocks beside them are about the same week. */
+  const nowList = (row.current || {}).list || [];
+  const againstHours = spHoursOf(c.cover ? nowList.filter(s => !!s.k) : nowList);
   /* Never cost.current on an unmeasured shop, not even as a fallback: that is
      the whole schedule's bill, and half of it is shifts this plan leaves
      exactly where they are. The planner writes currentCover for every row it
@@ -12495,7 +12534,7 @@ function spRosterBlock(b){
      not an improvement on it, so the tile says nothing instead. */
   const costKnown = Number.isFinite(againstCost);
   const keptWords = kept
-    ? ` · the ${plural(kept, "serving shift")} in the game ${
+    ? ` · the ${plural(kept, "serving entry", "serving entries")} in the game ${
       kept === 1 ? "is" : "are"} not in this plan and stay${kept === 1 ? "s" : ""} as ${
       kept === 1 ? "it is" : "they are"}`
     : "";
@@ -12506,7 +12545,7 @@ function spRosterBlock(b){
   /* Nothing is struck through where the figure beside it is nothing: on a week
      whose every line waits on a hire, "56" struck out beside "0" offers the
      saving the note under it is warning the player away from. */
-  const spWas = (was, now) => was === now || !now ? "" : `<s>${was}</s>`;
+  const spWas = (was, now) => was === now || !now ? "" : `<s>${was} h</s>`;
   /* Wages are struck through on the figures rather than on what they render
      as: at $1,600 against $2,400 both read "$2k", and dropping the strike
      would say they match when the tooltip beside it says they do not. */
@@ -12542,12 +12581,12 @@ function spRosterBlock(b){
        the player to keep, pasting over them would undo the warning above -- and
        on one whose every line waits on a hire there is nothing to copy yet. */
     const read = copy === null
-      ? `<b>${WEEK_FULL[wd]}</b> · ${c.plan[wd].reduce((n, s) => n + s.length, 0)} shifts`
+      ? `<b>${WEEK_FULL[wd]}</b> · ${plural(c.plan[wd].reduce((n, s) => n + s.length, 0), "entry", "entries")}`
       : kept
         ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}${
-          dayStaffed(wd) ? `, people and all` : ""} — but copy schedule pastes the whole day, and this shop’s serving shifts are not in the plan: enter these by hand`
+          dayStaffed(wd) ? `, people and all` : ""}. Copy schedule pastes the whole day, and this shop's serving hours are not in the plan, so set these by hand`
         : !dayStaffed(wd)
-          ? `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]} — something to copy and paste once there is somebody on it`
+          ? `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}. Something to copy and paste once there is somebody on it`
           : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
     /* The dash is the offer of a copy and a paste of the whole day, so it
        waits until there is a line on the day to copy -- and stays away
@@ -12566,15 +12605,23 @@ function spRosterBlock(b){
 
      The hiring line counts people, not bars: the headcount below is what the
      player acts on, and fourteen twelve-hour shifts are four people. */
-  const step = (label, sub) => `<button type="button" class="sp-step"><span class="sp-box">${
+  const step = (label, sub, tip) => `<button type="button" class="sp-step"${
+    tip ? ` data-tip="${attr(tip)}"` : ""}><span class="sp-box">${
     spIcon("tick")}</span>${label}<small>${sub}</small></button>`;
-  const posts = Object.values(row.headcount || {}).reduce((n, h) => n + (h.hire || 0), 0)
-    || counts.hire;
+  const posts = spPlanPosts(row);
+  /* Which station each hire is for. "3 posts" named nothing the player could
+     go and look at, and the hires are sized at the game's full-time week
+     rather than at the hours drawn without a name. */
+  const hireFor = Object.keys(row.headcount || {})
+    .filter(skill => (row.headcount[skill] || {}).hire)
+    .map(skill => `${row.headcount[skill].hire} for the ${
+      spEsc(spSkillLabel(row, c.stations, skill))}`).join(", ");
   const hireStep = counts.hire
-    ? step(`Hire for ${plural(posts, "post")}`, `MyEmployees · before the schedule is typed`)
+    ? step(`Hire ${plural(posts, "person", "people")}`, `MyEmployees · before you set the week`,
+      `${hireFor}. A full-time employee works 30 to 50 hours a week, so each hire adds at least 30 hours of wages.`)
     : "";
   const clearStep = counts.staffed
-    ? step(kept ? `Clear the cleaning and security shifts` : `Clear entire schedule`,
+    ? step(kept ? `Clear the cleaning and security hours` : `Clear entire schedule`,
       `BizMan › Schedule${kept ? ` · leave the rest` : ""}`)
     : "";
   const steps = (counts.hire && counts.now ? hireStep + clearStep : clearStep + hireStep)
@@ -12582,41 +12629,47 @@ function spRosterBlock(b){
       spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
     attr(row.key)}" data-tickable="${c.tickable.length}">
-    ${sechead("Roster", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span>`,
-      why: `A week to type into BizMan › Schedule, one day tab at a time. Shifts run as long as the game allows, 12 hours, and nobody is put inside a window they asked to keep free. Click a shift once it is typed; the ticks stay in this browser and change nothing in the save.`})}
+    ${sechead("Staffing", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span>`,
+      why: `A week to copy into BizMan › Schedule, one day at a time. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save. The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`})}
     ${/* What the block is, in plain words, and which shop it is about. Both
           were a hover away: the Optimize staffing card lands here with the
           shop's own heading scrolled off the top, and a player who has never
           seen the block has no reason to think the bars are something they
           type into the game rather than something the board has already
           done. */""}
-    <p class="sp-lead"><b>${spEsc(shortName(b))}</b> · the week to type into <b>BizMan › Schedule</b>, one day tab at a time. Click each shift here as it goes into the game: the ticks are your own place marker, kept in this browser, and nothing here changes the save.</p>
+    <p class="sp-lead"><b>${spEsc(shortName(b))}</b> · the week to copy into <b>BizMan › Schedule</b>, one day at a time. One entry is one person at one station for a run of hours. Tick each one here as you set it in the game. The ticks are your own place marker, kept in this browser, and nothing here changes the save.</p>
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
-      <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security shifts" : "Shifts"
-        } to enter for the week: <b>${against}</b> today${
+      <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security hours" : "Hours"
+        } to set for the week: <b>${planHours} h</b> in ${plural(counts.staffed, "entry", "entries")}, against <b>${
+        againstHours} h</b> in ${plural(against, "entry", "entries")} today${
         /* The scraps on the side of the schedule this plan replaces: the whole
            schedule's, or the cleaning and security half of it. */
         ""}${(c.cover ? counts.coverFragments : counts.fragments)
-          ? `, ${c.cover ? counts.coverFragments : counts.fragments} of them two hours long` : ""}, against <b>${
-        counts.staffed}</b>${counts.hire
-          ? ` · ${plural(counts.hire, "anticipated hire")}: ${
-            counts.hire === 1 ? "a line the week wants" : "lines the week wants"} and has nobody for, drawn in the grid without a name` : ""}${
-        keptWords}`)}"><span class="lab">${c.cover ? "Cover shifts" : "Shifts"} / week</span><div class="v">${
-        spI("list")}${spWas(against, counts.staffed)}${counts.staffed}${counts.hire
-          ? `<small style="font-size:12px;color:var(--warn)">+${plural(counts.hire, "anticipated hire")}</small>` : ""}</div></div>
+          ? `, ${c.cover ? counts.coverFragments : counts.fragments} of them two hours long` : ""}${counts.hire
+          ? ` · ${plural(posts, "person", "people")} to hire for the ${plural(counts.hire, "entry", "entries")} drawn without a name, at 30 hours a week or more each` : ""}${
+        keptWords}`)}"><span class="lab">${c.cover ? "Cover hours" : "Hours"} / week</span><div class="v">${
+        spI("list")}${spWas(againstHours, planHours)}${planHours}<small style="font-size:12px;color:var(--ink-3)"> h</small>${
+        /* The hours are the week; the blocks beside them are the dragging,
+           and on a cover week re-cut from the same hours they are the whole
+           of what the plan saves -- so they keep their own strike rather than
+           living in the read-out alone. */
+        counts.staffed ? `<small style="font-size:12px;color:var(--ink-3)">${
+          against === counts.staffed ? "" : `<s>${against}</s> `}${
+          plural(counts.staffed, "entry", "entries")}</small>` : ""}${counts.hire
+          ? `<small style="font-size:12px;color:var(--warn)">+${posts} to hire</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
         ? `<b>${fmt(againstCost)}</b> a week for the ${
-          c.cover ? "cleaning and security shifts as they stand" : "schedule as it stands"}, `
-        : `What the shifts this plan replaces cost is not in this board’s figures. `}<b>${
+          c.cover ? "cleaning and security hours as they stand" : "schedule as it stands"}, `
+        : `What the hours this plan replaces cost is not in this board's figures. `}<b>${
         fmt(cost.weekly)}</b> for the plan, for the staff the save prices${counts.hire
-          ? ` · the ${plural(counts.hire, "anticipated hire")} ${counts.hire === 1 ? "is" : "are"} not priced: nobody is on ${
-            counts.hire === 1 ? "it" : "them"} yet` : ""}${sameCost
-          ? ` · the same bill either way: what the plan saves here is typing, not wages` : ""}${
+          ? ` · the ${plural(posts, "person", "people")} still to hire ${posts === 1 ? "is" : "are"} not priced, because nobody is on ${
+            counts.hire === 1 ? "that entry" : "those entries"} yet` : ""}${sameCost
+          ? ` · the same bill either way: what the plan saves here is setup work, not wages` : ""}${
         keptWords}`)}"><span class="lab">Wages / week</span><div class="v">${
         spI("coin")}${costKnown ? wasCost(againstCost, cost.weekly) : ""}${
         counts.hire && !cost.weekly ? "—" : money(cost.weekly)}</div></div>
-      <div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> bought to keep shifts whole, of the <b>${
+      <div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> bought to keep the hours in one run, of the <b>${
         slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
         slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
         Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>
@@ -12627,11 +12680,11 @@ function spRosterBlock(b){
             figure beside it and does not redraw the block, so a number in here
             would be the one thing on the widget that never changed. */""}
       <div class="sp-typed"${counts.staffed > c.tickable.length ? ` tabindex="0" data-read="${attr(
-        `The ring counts the ${c.tickable.length} lines the board can mark · ${
+        `The ring counts the ${c.tickable.length} entries the board can mark · ${
           counts.staffed - c.tickable.length} more ${
-          counts.staffed - c.tickable.length === 1 ? "is a line" : "are lines"} to type that it cannot: the save gives their station or their person no id to tick against`)}"` : ""}><span class="sp-ring" style="--p:${
+          counts.staffed - c.tickable.length === 1 ? "is an entry" : "are entries"} to set that it cannot: the save gives their station or their person no id to tick against`)}"` : ""}><span class="sp-ring" style="--p:${
         c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
-        typed}</b> of ${c.tickable.length} typed</span>${
+        typed}</b> of ${c.tickable.length} copied</span>${
         /* Nothing to clear until something is ticked, and the line has no room
            to carry a dead link across every site that has never been typed. */
         ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>clear ticks</a></div>
@@ -12640,7 +12693,7 @@ function spRosterBlock(b){
     <div class="chartbox sp-gantt">${hours}${
       HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
     ${spRosterCount(c)}
-    <div class="sp-read sp-readout">Hover a shift</div>
+    <div class="sp-read sp-readout">Hover an entry</div>
   </section>`;
 }
 
@@ -13139,11 +13192,11 @@ function drawSite(){
     : "No costs recorded yesterday.";
   /* An office is not held by a door but by the workstations it has, so its
      fourth tile counts those instead. */
-  const capLabel = sp && office ? "Workstations" : "Door cap";
+  const capLabel = sp && office ? "Workstations" : "Building capacity";
   const capTile = !grid ? "—"
     : sp && office ? `${grid.stationCount}<small ${SMALL}>${grid.capHours ? `· ${grid.capHours} h/wk full` : ""}</small>`
     : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
-    : `—<small ${SMALL}>no door cap${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
+    : `—<small ${SMALL}>no building capacity${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
   /* Week on week when two full weeks stand behind it. A ready trend whose
      previous week took nothing has no percentage to show, as wow() has it, so
      it reads as a dash. Not ready: how far into the fortnight this site is
@@ -13407,7 +13460,7 @@ function drawSite(){
       ${spTile("Cost / day", costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
     </div>
     <section class="sec rv" data-block="lines" id="sp-lines" data-readzone>
-      ${sechead("Lines", {icon: "gear", why: `A machine runs only while someone is posted to it. The fill of each square is the share of the week it is rostered.${
+      ${sechead("Lines", {icon: "gear", why: `A machine runs only while someone is posted to it. The fill of each square is the share of the week it is staffed.${
         blind ? " A machine running a recipe the board cannot name is in none of the totals; name it here and it joins them." : ""}${
         lines.length || unnamed.length ? "" : " No machine could be read at this site."}`})}
       ${lines.length || unnamed.length ? `<div class="scrollx">${spLines(site)}</div>`
@@ -13473,7 +13526,7 @@ function drawSite(){
             : grid.roles && grid.roles[0] && grid.roles[0].noun
               ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
               : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
-        grid.door ? `, ${grid.door}/h door cap` : ", no door cap"}`})}
+        grid.door ? `, ${grid.door}/h building capacity` : ", no building capacity"}`})}
       <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="sp-read sp-readout" id="hourRead">Hover an hour</div></div>
       ${hourChips}
     </section>` : ""}
@@ -14541,7 +14594,7 @@ function drawFindLocation(){
     badge.className = "soon";
     badge.textContent = D.premises ? "NONE FREE" : "SOON";
     text.textContent = D.premises ? "No vacant retail unit in the city right now."
-      : "Free buildings ranked by demand, rivals and the door cap you would get.";
+      : "Free buildings ranked by demand, rivals and the building capacity you would get.";
     return;
   }
   const best = vacant.reduce((a, b) => b.traffic > a.traffic ? b : a);
@@ -14612,8 +14665,8 @@ function drawOptimizeStaffing(){
     badge.className = "soon";
     badge.textContent = D.staffing ? "NO PLAN" : "SOON";
     text.textContent = D.staffing
-      ? "No shop has been measured long enough to cut a roster from yet."
-      : "Shifts from the hour grid: registers, door caps and who is off today.";
+      ? "No shop has been measured long enough to plan a week for yet."
+      : "Hours built from your customer count: registers, building capacity and the schedule each person asked for.";
     /* Both arms open the site list: with no plan to point at, wireCards() has
        no site to open, and the line exists because the card used to be vague
        about exactly this. */
@@ -14632,7 +14685,7 @@ function drawOptimizeStaffing(){
      "108 shifts become 65" and stops has described a schedule the player
      cannot finish until four more people are on the books. */
   const alsoHire = !hiring && counts.hire
-    ? `, with ${counts.hire} more waiting on a hire` : "";
+    ? `, and ${plural(spPlanPosts(row), "person", "people")} to hire` : "";
   /* A shop with no hour reports of its own is compared on the shifts this plan
      would really replace, and says why: its registers are not in the plan, so
      they are not in the number beside it either. Against its whole schedule
@@ -14641,21 +14694,21 @@ function drawOptimizeStaffing(){
   const measured = !spCoverOnly(row);
   badge.className = "soon live";
   badge.textContent = best.saves
-    ? `\u2212${spRosterNow(row) - week} LINES`
-    : `${lines} SHIFTS`;
+    ? `\u2212${spRosterNow(row) - week} ENTRIES`
+    : `${spPlanHours(row)} HOURS`;
   text.textContent = best.saves
     ? (measured
-        ? `${row.name}: ${counts.now} shifts become ${week}${alsoHire}.`
-        : `${row.name}: ${counts.nowCover} cleaning and security shifts become ${
+        ? `${row.name}: ${counts.now} entries become ${week}${alsoHire}.`
+        : `${row.name}: ${counts.nowCover} cleaning and security entries become ${
             week}${alsoHire}, and ${spRosterMeasured(row)
               ? `its measured hours ask for nobody at the registers`
               : `its registers wait on the shop\u2019s first measured week`}.`)
     : (measured
-        ? `${row.name}: a week of ${lines} shifts to enter${
+        ? `${row.name}: a week of ${spPlanHours(row)} hours to set, in ${plural(lines, "entry", "entries")}${
           hiring ? `, every one of them waiting on a hire` : alsoHire}.`
-        : `${row.name}: a week of ${lines} cleaning and security shifts to enter${
+        : `${row.name}: a week of ${spPlanHours(row)} cleaning and security hours to set, in ${plural(lines, "entry", "entries")}${
           hiring ? `, every one of them waiting on a hire` : alsoHire}.`);
-  go.textContent = `Opens ${row.name} \u203a Roster`;
+  go.textContent = `Opens ${row.name} \u203a Staffing`;
   card.dataset.site = row.key;
 }
 

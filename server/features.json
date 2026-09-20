@@ -2,7 +2,7 @@
   {
     "id": "optimize-staffing",
     "title": "Optimize staffing",
-    "description": "Shifts from the hour grid: registers, door caps and who is off today."
+    "description": "Hours built from your customer count: registers, building capacity and the schedule each person asked for."
   },
   {
     "id": "time-to-break-even",

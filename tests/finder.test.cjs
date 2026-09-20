@@ -147,7 +147,7 @@ test('any address carries its facts: what it is, what it costs and whether it is
     await page.locator('#cityMapPage .site.in').waitFor();
     assert.equal(await page.locator('#cityMapPage .site .st').textContent(), 'Vacant · for rent');
     assert.deepEqual(await facts(page),
-      ['OwnerThe city', 'RenterNobody', 'Retail C225 m²', 'Foot traffic60', 'Door cap30',
+      ['OwnerThe city', 'RenterNobody', 'Retail C225 m²', 'Foot traffic60', 'Building capacity30',
        'Est. rent / day$140', 'Deposit$840']);
     assert.equal(await page.locator('#cityMapPage .site .fit').isVisible(), false);
     // A rival's building names the business and its type.
@@ -158,7 +158,7 @@ test('any address carries its facts: what it is, what it costs and whether it is
     await page.evaluate(key => cityMapPage.select(key), HK[3]);
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site .st').textContent === 'Residential');
     assert.deepEqual(await facts(page),
-      ['Owner—', 'RenterNobody', 'Residential B90 m²', 'Foot traffic50', 'Door cap—',
+      ['Owner—', 'RenterNobody', 'Residential B90 m²', 'Foot traffic50', 'Building capacity—',
        'Est. rent / day—', 'Deposit—']);
     // The card takes its two letters from the board's own table, not from the
     // neighbourhood's initials, so it reads the same as the list's rows.
@@ -194,7 +194,7 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .places .filters').evaluate(
       f => f.nextElementSibling.classList.contains('list')), true);
     assert.deepEqual(await page.$$eval('#cityMapPage .filters .lab', l => l.map(x => x.textContent)),
-      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Cap', 'Traffic', 'Saved']);
+      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Capacity', 'Traffic', 'Saved']);
     // The "ranked by…" line is gone; the formula lives in the ? alone.
     assert.equal(await page.locator('#cityMapPage .fnote').count(), 0);
     assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), /÷ 100/);
@@ -489,7 +489,7 @@ test('a saved search comes back in one click, for every character and after a re
     const mine = page.locator(`${saved} [data-saved="Small offices"]`);
     assert.equal(await mine.getAttribute('aria-pressed'), 'true');
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.saved), 'Small offices');
-    assert.match(await mine.getAttribute('data-tip'), /^Office · To rent · .+ · cap ≥ 5 · by score$/);
+    assert.match(await mine.getAttribute('data-tip'), /^Office · To rent · .+ · capacity ≥ 5 · by score$/);
     // Any change to the filters, and the chip is no longer what is on screen.
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     assert.equal(await mine.getAttribute('aria-pressed'), 'false');

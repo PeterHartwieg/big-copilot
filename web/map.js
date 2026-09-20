@@ -375,8 +375,8 @@ class CityMapView {
       ${row('Where', hoods)}
       ${row('Size', `<label class="fchip num">min<input type="number" min="0" data-f="minM2" value="0" aria-label="Smallest floor area in square metres"><b>m²</b></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxM2" value="0" aria-label="Largest floor area in square metres"><b>m²</b></label>`)}
-      ${row('Cap', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest door cap"></label>
-        <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest door cap"></label>`)}
+      ${row('Capacity', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest building capacity"></label>
+        <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest building capacity"></label>`)}
       ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
       ${row('Saved', `<span class="fsaved" role="group" aria-label="Saved searches"><span class="fsaved-list"></span><span class="fsaved-new">
         <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="Name for this search"></label>
@@ -594,7 +594,7 @@ class CityMapView {
     return [`${FINDER_CATS.find(([c]) => c === f.cat)?.[1]}${type ? `: ${type}` : ""}`,
       FINDER_SHOWS.find(([k]) => k === f.show)?.[1],
       f.hoods ? f.hoods.map(hoodTag).join(" ") || "no neighbourhood" : "every neighbourhood",
-      finderRange("m²", f.minM2, f.maxM2), finderRange("cap", f.minCap, f.maxCap),
+      finderRange("m²", f.minM2, f.maxM2), finderRange("capacity", f.minCap, f.maxCap),
       f.minTraffic ? `traffic ≥ ${f.minTraffic}` : "",
       // For sale is always cheapest first, so only a ranked list names its sort.
       f.show === "sale" ? "" : `by ${FINDER_SORT_NAMES[f.sort] || f.sort}`].filter(Boolean).join(" · ");
@@ -801,7 +801,7 @@ class CityMapView {
       + `<span class="wide">Renter<b>${this.renterOf(b)}</b></span>`
       + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
-      + `<span>Door cap<b>${mapText(capText(b.cap))}</b></span>`
+      + `<span>Building capacity<b>${mapText(capText(b.cap))}</b></span>`
       + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
       + `<span>Deposit<b>${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</b></span>`;
     // Only a candidate reads as one: your own shop keeps its business numbers.
