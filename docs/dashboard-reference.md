@@ -445,9 +445,10 @@ written down.
 **What the plan replaces, priced.** `cost.current` is the whole schedule's weekly wage
 bill and `cost.currentCover` the part of it the plan would really replace — the cleaning
 and security shifts alone; `current.coverFragments` counts the two-hour scraps on that same
-side, as `current.fragments` does for the whole schedule. On a measured shop the two questions have the same answer,
-because the plan replaces the whole week. On an unmeasured one they do not, and quoting
-the first would promise a saving made of serving shifts nobody is replacing.
+side, as `current.fragments` does for the whole schedule. Where the plan holds serving
+shifts the two questions have the same answer, because it replaces the whole week. Where it
+is cover alone they do not, and quoting the first would promise a saving made of serving
+shifts nobody is replacing.
 
 **Two tables, and indices into them.** A site's row lists its `stations` and its `people`
 once each, and every shift, hiring note and placement below points at them by position
@@ -743,8 +744,10 @@ and dims the rest; clicking scrolls there.
   measured* or *Cover only*, which is the measured shop whose hours ask for nobody: how long
   the doors have been open and how many hour reports are on file, that a weekday's hours
   are only read once two reports of that weekday are in (or, on a *Cover only* shop, that
-  its hours ask for nobody), that the week below is cleaning and security cover alone — and, where the game already holds serving shifts, that
-  clearing the whole schedule would delete shifts nothing here can put back. The first
+  its hours ask for nobody), that the week below is cleaning and security cover alone
+  — and, where the game already holds serving shifts, that clearing the whole schedule
+  would delete shifts nothing here can put back. Where no line can be entered yet, the
+  hiring comes first and there is no clearing step at all. The first
   step button says *Clear the cleaning and security shifts* rather than *Clear entire
   schedule* for exactly that reason, and every number beside it compares cover with cover:
   the *Cover shifts / week* and *Wages / week* tiles, and the *Optimize staffing* card's
@@ -753,8 +756,9 @@ and dims the rest; clicking scrolls there.
   used — a cleaner on a short cover week — keeps the chip that says what to do about them,
   while the crew of a role it cannot plan at all are one chip that says their week waits on
   the shop's first measured one. `planned` on each `shortHours` and `shortDays` row is which
-  of the two it is: whether any role this plan covered is one that person could work. The empty state is only for a site with nothing planned at all, or one the
-  planner could not read. See *The roster the board would type in* above for why a guess
+  of the two it is: whether any role this plan covered is one that person could work.
+  The empty state is only for a site with nothing planned at all, or one the planner
+  could not read. See *The roster the board would type in* above for why a guess
   from the arrival ceiling would be worse than nothing.
 - **Crew.** What the staff here ask for and nobody has given them, each with how many hold
   it and the game's own priority as three bars; a company-wide demand is marked as settled
