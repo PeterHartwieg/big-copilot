@@ -109,7 +109,7 @@ test('an office reads its grid as staffed workstations, with the finding and its
   const page = await site('office');
   try {
     const tip = await hourTip(page);
-    assert.match(tip, /3 workstations, each billing 1 customer an hour when staffed, 50\/h door cap/);
+    assert.match(tip, /3 workstations, each billing 1 customer an hour when staffed, 50\/h building capacity/);
     assert.doesNotMatch(tip, /register capacity|counter/);
     // The ceiling sentence moved out of the ? into the chip under the grid.
     const cap = await capChip(page);
@@ -139,7 +139,7 @@ test('a shop keeps its registers and shelves', async () => {
   const page = await site('retail');
   try {
     const tip = await hourTip(page);
-    assert.match(tip, /3 register capacity across 3 counters, 50\/h door cap/);
+    assert.match(tip, /3 register capacity across 3 counters, 50\/h building capacity/);
     const read = await page.locator('#sitePanel .hc.cap').first().getAttribute('data-read');
     assert.match(read, /3 of 3 register capacity on/);
     const panel = await page.locator('#sitePanel').innerText();
@@ -167,7 +167,7 @@ test('a theatre counts furniture and capacity as two numbers, never as one', asy
   const page = await theatre();
   try {
     const tip = await hourTip(page);
-    assert.match(tip, /3 roles, the slowest 50 an hour, no door cap/);
+    assert.match(tip, /3 roles, the slowest 50 an hour, no building capacity/);
     assert.doesNotMatch(tip, /register capacity/);
     // 12:00: one projection booth of two is manned, and one booth is 25/h.
     // The old wording said "25 of 25 projection booths", which is neither.

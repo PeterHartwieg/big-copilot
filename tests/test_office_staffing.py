@@ -282,7 +282,7 @@ class OfficeAlertTextTests(unittest.TestCase):
                  self.cap(firm["key"], firm["name"], True, limit="the building", cap=3, top=3)]
         lines = [a for a in alerts([firm], hours) if a["group"] == "atcap"]
         self.assertEqual(len({a["id"] for a in lines}), 2)
-        self.assertTrue(any("at the 3/h door cap" in a["text"] for a in lines))
+        self.assertTrue(any("at the 3/h building capacity" in a["text"] for a in lines))
 
     def test_idle_office_staff_are_workstations(self):
         firm = business(staff=[LAWYER_PERSON])
