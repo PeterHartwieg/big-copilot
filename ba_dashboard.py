@@ -11655,12 +11655,14 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
 /* What the week costs to type, against what is in the game now. `fragments`
    is how much of what is there now is a two-hour scrap.
 
-   `plan` is every line the planner produced and `tickable` is the ones with
+   `plan` is every line the planner produced and `staffed` is the ones with
    somebody on them; the difference is `hire`, the lines waiting on somebody
-   being hired first. Only `tickable` is a week of typing, and it is the number
-   the tile, the ring and the Next-moves card all have to agree on -- a shop
-   with an unstaffed locker otherwise showed 42 struck through against 42 while
-   the ring beside it counted 35. */
+   being hired first. `staffed` is the week of typing, and it is the number the
+   tile and the Next-moves card have to agree on -- a shop with an unstaffed
+   locker otherwise showed 42 struck through against 42 while the ring beside
+   it counted 35. `tickable` is narrower again and belongs to the ring alone:
+   it drops a line whose station or person the save gives no id to, which is a
+   line to type and not a line the board can mark. */
 function spRosterCounts(row){
   const drawn = (row.shifts || []).filter(s => spDrawn(row, s));
   const hire = drawn.filter(s => spNobody(s.p)).length;
@@ -12422,10 +12424,12 @@ function spRosterNew(c, counts){
     : kept
       ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game ${
         kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
-        kept === 1 ? "it" : "them"} back: delete the cleaning and security shifts and enter these in their place${
-        counts.hire ? `; the ${plural(counts.hire, "dashed line")} below ${
-          counts.hire === 1 ? "waits on its hire" : "wait on their hires"}, and the hours ${
-          counts.hire === 1 ? "it covers stand" : "they cover stand"} empty until then` : ""}.`
+        kept === 1 ? "it" : "them"} back${counts.hire
+          ? `. Delete the cleaning and security shifts the solid lines replace and enter those, and leave what is under the ${
+            plural(counts.hire, "dashed line")} where it is until ${
+            counts.hire === 1 ? "its hire is" : "their hires are"} made: nothing here can cover ${
+            counts.hire === 1 ? "that hour" : "those hours"} yet`
+          : `: delete the cleaning and security shifts and enter these in their place`}.`
       : counts.now
         ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back${
           counts.hire ? `, once the ${plural(counts.hire, "anticipated hire")} ${
@@ -12619,8 +12623,11 @@ function spRosterBlock(b){
       ${/* The ring counts the narrower set: a line whose station or person the
             save does not name is a line to type and not a line the board can
             mark, so it is in the week above and not in the progress here. */""}
-      <div class="sp-typed"${counts.staffed > c.tickable.length ? ` data-read="${attr(
-        `<b>${typed}</b> of the ${c.tickable.length} lines the board can mark · ${
+      ${/* No live count in the read-out: retally() moves the ring and the
+            figure beside it and does not redraw the block, so a number in here
+            would be the one thing on the widget that never changed. */""}
+      <div class="sp-typed"${counts.staffed > c.tickable.length ? ` tabindex="0" data-read="${attr(
+        `The ring counts the ${c.tickable.length} lines the board can mark · ${
           counts.staffed - c.tickable.length} more ${
           counts.staffed - c.tickable.length === 1 ? "is a line" : "are lines"} to type that it cannot: the save gives their station or their person no id to tick against`)}"` : ""}><span class="sp-ring" style="--p:${
         c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
@@ -14621,6 +14628,11 @@ function drawOptimizeStaffing(){
   const week = counts.staffed;
   const lines = spCardWeek(row);
   const hiring = !week && counts.hire;
+  /* The hires belong beside the week wherever it is quoted: a card that says
+     "108 shifts become 65" and stops has described a schedule the player
+     cannot finish until four more people are on the books. */
+  const alsoHire = !hiring && counts.hire
+    ? `, with ${counts.hire} more waiting on a hire` : "";
   /* A shop with no hour reports of its own is compared on the shifts this plan
      would really replace, and says why: its registers are not in the plan, so
      they are not in the number beside it either. Against its whole schedule
@@ -14633,16 +14645,16 @@ function drawOptimizeStaffing(){
     : `${lines} SHIFTS`;
   text.textContent = best.saves
     ? (measured
-        ? `${row.name}: ${counts.now} shifts become ${week}.`
+        ? `${row.name}: ${counts.now} shifts become ${week}${alsoHire}.`
         : `${row.name}: ${counts.nowCover} cleaning and security shifts become ${
-            week}, and ${spRosterMeasured(row)
+            week}${alsoHire}, and ${spRosterMeasured(row)
               ? `its measured hours ask for nobody at the registers`
               : `its registers wait on the shop\u2019s first measured week`}.`)
     : (measured
         ? `${row.name}: a week of ${lines} shifts to enter${
-          hiring ? `, every one of them waiting on a hire` : ""}.`
+          hiring ? `, every one of them waiting on a hire` : alsoHire}.`
         : `${row.name}: a week of ${lines} cleaning and security shifts to enter${
-          hiring ? `, every one of them waiting on a hire` : ""}.`);
+          hiring ? `, every one of them waiting on a hire` : alsoHire}.`);
   go.textContent = `Opens ${row.name} \u203a Roster`;
   card.dataset.site = row.key;
 }

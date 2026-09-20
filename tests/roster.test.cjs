@@ -2,7 +2,7 @@
 // drawn from the `staffing` payload key.
 //
 // Nothing here invents a payload. Every row comes out of the real planner:
-// tests/roster_fixture.py builds four synthetic saves and runs `_staffing()`
+// tests/roster_fixture.py builds eight synthetic saves and runs `_staffing()`
 // over them, and this suite runs that module once and reads the rows off its
 // stdout. A hand-written fixture drifts from what the Python emits — a
 // `current.shifts` that does not match `current.list`, a `hireHours` that is
@@ -711,7 +711,7 @@ test('a line whose station or person the save does not name cannot be ticked', a
       assert.ok(tile.includes(staffed + '+16anticipatedhires'), `${what}: ${tile}`);
       assert.equal(JSON.parse(counts).hire, 16, `${what}: the hires are unchanged`);
       assert.match(await page.locator('#sp-roster .sp-typed').getAttribute('data-read'),
-        new RegExp(`of the ${tickable} lines the board can mark`), what);
+        new RegExp(`The ring counts the ${tickable} lines the board can mark`), what);
       // And the card sizes the same week the block does.
       const badge = await page.evaluate(() => {
         drawOptimizeStaffing();
@@ -1302,8 +1302,13 @@ test('a shop with serving shifts and no line to enter is told to hire, not to cl
     assert.doesNotMatch(note, /delete the cleaning and security shifts and enter these/);
     // And it still says what happens to the serving shifts.
     assert.match(note, new RegExp(`${kept} serving shifts in the game are not in this plan either`));
-    // Nor is any day offered for pasting over them.
+    // Nor is any day offered for pasting over them -- and a day with nobody on
+    // it is not "the same as" another one "people and all" either.
     assert.equal(await page.locator('#sp-roster .sp-daytabs a u').count(), 0);
+    const tabs = await page.locator('#sp-roster .sp-daytabs a')
+      .evaluateAll(a => a.map(x => x.dataset.read));
+    for(const read of tabs.filter(r => /the same cover as/.test(r)))
+      assert.doesNotMatch(read, /people and all/);
     assert.equal(await page.locator('#sp-roster .sp-note.sp-care').count(), 1);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
@@ -1472,7 +1477,7 @@ test('the Optimize staffing card opens the roster with most typing to save', asy
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent, card.dataset.site];
     });
     assert.equal(shown[0], '−174 LINES');
-    assert.match(shown[1], /Big saving: 200 shifts become 26\./);
+    assert.match(shown[1], /Big saving: 200 shifts become 26, with 16 more waiting on a hire\./);
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
 });
@@ -1512,7 +1517,7 @@ test('the card measures a saving in lines to enter, not in lines the plan drew',
     }, [a, b]);
     assert.equal(shown[3], '[70,70]', 'both plans are 70 lines to enter');
     assert.equal(shown[0], '\u221230 LINES');
-    assert.match(shown[1], /shop-a: 100 shifts become 70\./);
+    assert.match(shown[1], /shop-a: 100 shifts become 70, with 30 more waiting on a hire\./);
     assert.equal(shown[2], 'shop-a', 'not shop-b, which saves ten');
   } finally { await page.close(); }
 });
@@ -1530,7 +1535,7 @@ test('the card scores the saving on the lines somebody can be put on', async () 
 ];
     });
     assert.equal(shown[0], '−16 LINES');
-    assert.match(shown[1], /42 shifts become 26\./);
+    assert.match(shown[1], /42 shifts become 26, with 16 more waiting on a hire\./);
     assert.doesNotMatch(shown[1], /become 42/);
   } finally { await page.close(); }
 });
@@ -1545,7 +1550,7 @@ test('the card sizes a plan with nothing to save on the same week', async () => 
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent];
     });
     assert.equal(shown[0], '26 SHIFTS', 'not 42: sixteen of those cannot be entered yet');
-    assert.match(shown[1], /a week of 26 shifts to enter\./);
+    assert.match(shown[1], /a week of 26 shifts to enter, with 16 more waiting on a hire\./);
   } finally { await page.close(); }
 });
 
@@ -1567,7 +1572,7 @@ test('a player who never opened BizMan is offered the plan, not told they are un
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent, card.dataset.site];
     });
     assert.equal(shown[0], '26 SHIFTS');
-    assert.match(shown[1], /Big shop: a week of 26 shifts to enter\./);
+    assert.match(shown[1], /Big shop: a week of 26 shifts to enter, with 16 more waiting on a hire\./);
     assert.doesNotMatch(shown[1], /measured/);
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
@@ -1632,6 +1637,36 @@ test('the Today card sizes a cover-only plan on the cover shifts alone', async (
     assert.doesNotMatch(shown.what, new RegExp(`${now} shifts become`));
     assert.match(shown.what, /registers wait on the shop\u2019s first measured week/);
     assert.match(shown.go, /\u203a Roster$/);
+  } finally { await page.close(); }
+});
+
+test('a plan half of which waits on hires says what to delete and what to leave', async () => {
+  const page = await shop('fresh');
+  try {
+    const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
+    assert.ok(counts.staffed > 0 && counts.hire > 0, JSON.stringify(counts));
+    const note = await page.locator('#sp-roster .sp-note').innerText();
+    // Not "delete the cleaning and security shifts and enter these": half of
+    // "these" is dashed, and the hours under them would stand bare.
+    assert.match(note, /Delete the cleaning and security shifts the solid lines replace/);
+    assert.match(note, new RegExp(`leave what is under the ${counts.hire} dashed line`));
+    assert.doesNotMatch(note, /enter these in their place/);
+  } finally { await page.close(); }
+});
+
+test('a week with hires in it says so on the card as well as in the block', async () => {
+  const page = await shop('full');
+  try {
+    const shown = await page.evaluate(() => {
+      const counts = spRosterCounts(D.staffing[0]);
+      drawOptimizeStaffing();
+      return {counts, what: $('optimizeStaffingCard').querySelector('.what').textContent};
+    });
+    // 26 lines to type and 16 more nobody can be put on yet: a card that
+    // stopped at 26 would describe a week the player cannot finish.
+    assert.ok(shown.counts.staffed > 0 && shown.counts.hire > 0);
+    assert.match(shown.what, new RegExp(
+      `become ${shown.counts.staffed}, with ${shown.counts.hire} more waiting on a hire`));
   } finally { await page.close(); }
 });
 
