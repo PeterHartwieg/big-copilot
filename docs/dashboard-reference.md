@@ -435,6 +435,21 @@ schedule or stations the planner chokes on gets a row carrying `failed` and its 
 The rest of the board is unaffected, and so is every other site's plan: each is worked out
 against its own copy of everybody's week, and a site that fails commits none of it.
 
+**How far off a week of its own is.** `measure` carries `days`, the hour reports the save
+holds for the site; `need`, how many of one weekday it takes before that weekday can be
+read (the same two weeks the need curve reads a weekday by); and `open`, days since the
+doors opened. It is how the page tells a shop with nothing worth
+changing from one that opened last week, and it is the only place the countdown is
+written down.
+
+**What the plan replaces, priced.** `cost.current` is the whole schedule's weekly wage
+bill and `cost.currentCover` the part of it the plan would really replace — the cleaning
+and security shifts alone; `current.coverFragments` counts the two-hour scraps on that same
+side, as `current.fragments` does for the whole schedule. Where the plan holds serving
+shifts the two questions have the same answer, because it replaces the whole week. Where it
+is cover alone they do not, and quoting the first would promise a saving made of serving
+shifts nobody is replacing.
+
 **Two tables, and indices into them.** A site's row lists its `stations` and its `people`
 once each, and every shift, hiring note and placement below points at them by position
 rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`
@@ -697,8 +712,10 @@ and dims the rest; clicking scrolls there.
   its own hours out of the grid.
 - **Roster** (a shop). The week the board would type into BizMan, on the hour grid's own
   24 columns: a strip of what the measured hours ask for, then one row a station with the
-  shifts to enter. A bar is a person and an hour range; a dashed one is a line nobody here
-  can legally work, drawn where its hours fall and counted once in the hiring line below.
+  shifts to enter. A bar is a person and an hour range; a dashed one is an **anticipated hire** —
+  a shift the week wants that nobody here can legally work — drawn where its hours fall,
+  carrying no name because there is nobody on it yet, and counted once in the hiring line
+  below.
   Hours the doors are shut are marked out of every lane, so a weekday with two opening
   slots does not read as trading straight through the middle. The pin
   marks a shift placed where it is because of somebody's demand, and the bench mark says
@@ -709,17 +726,41 @@ and dims the rest; clicking scrolls there.
   the typing replaces. Click a shift once you have entered it; the ticks are kept in this
   browser, per shop, and a tick belongs to the line itself — the weekday, the station, the
   hours and the person — so a plan that changes any of those has changed the line and the
-  tick stops counting. The week the block is about is the lines somebody can be put on: the
-  *Shifts / week* tile, the ring, and the *Optimize staffing* card on Today all show that
-  number, with the lines waiting on a hire named beside it rather than folded in.
-  A shop with no hour reports yet still gets the block, because its cleaning and security
-  cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
-  two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the
-  board can save anybody. Its serving rows are empty, its need strip is a dashed line
-  rather than a number, and a *Not measured* chip says serving shifts arrive once the shop
-  has two weeks of hour reports. The empty state is only for a site with nothing planned
-  at all, or one the planner could not read. See *The roster the board would type in*
-  above for why a guess from the arrival ceiling would be worse than nothing.
+  tick stops counting. The week the block is about is the lines with somebody on them: the
+  *Shifts / week* tile and the *Optimize staffing* card on Today both show that number,
+  with the anticipated hires named beside it rather than folded in. The ring counts the
+  narrower set the board can mark — a line whose station or person the save gives no id is
+  one to type and not one to tick — and says so where the two differ.
+  The block leads with a line naming the shop and saying what the week below is for, so
+  a player arriving from the *Optimize staffing* card knows what they are looking at and
+  that the ticks change nothing in the save.
+
+  A shop whose plan holds no serving shift at all still gets the block, because its
+  cleaning and security cover does not wait on anything — and it is exactly the shop whose
+  schedule is 182 two-hour scraps, so the 14 shifts that replace them are the biggest week
+  of typing the board can save anybody. What the block may say there is decided by the plan
+  and not by the readings: a shop measured for a fortnight that served nobody has a basis
+  for every hour and still gets cover alone, and it needs the same care as one that has
+  never been measured. Its serving rows are empty and its need strip is a dashed line
+  rather than a number. Under the lead it gets a **note** — headed *New shop*, *Never
+  measured* or *Cover only*, which is the measured shop whose hours ask for nobody: how long
+  the doors have been open and how many hour reports are on file, that a weekday's hours
+  are only read once two reports of that weekday are in (or, on a *Cover only* shop, that
+  its hours ask for nobody), that the week below is cleaning and security cover alone
+  — and, where the game already holds serving shifts, that clearing the whole schedule
+  would delete shifts nothing here can put back. Where no line can be entered yet, the
+  hiring comes first and there is no clearing step at all. The clearing step says *Clear the cleaning and security shifts* rather than *Clear
+  entire schedule* for exactly that reason, and every number beside it compares cover with cover:
+  the *Cover shifts / week* and *Wages / week* tiles, and the *Optimize staffing* card's
+  saving, are all measured against the cleaning and security shifts in the game, never
+  against the whole schedule. Whom such a plan leaves short splits in two: somebody it could have
+  used — a cleaner on a short cover week — keeps the chip that says what to do about them,
+  while the crew of a role it cannot plan at all are one chip that says their week waits on
+  the shop's first measured one. `planned` on each `shortHours` and `shortDays` row is which
+  of the two it is: whether any role this plan covered is one that person could work.
+  The empty state is only for a site with nothing planned at all, or one the planner
+  could not read. See *The roster the board would type in* above for why a guess
+  from the arrival ceiling would be worse than nothing.
 - **Crew.** What the staff here ask for and nobody has given them, each with how many hold
   it and the game's own priority as three bars; a company-wide demand is marked as settled
   somewhere else, and a quit warning is its own red chip. Past a dozen people the pills

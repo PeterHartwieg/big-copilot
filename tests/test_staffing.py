@@ -461,7 +461,7 @@ def registration(
     }
 
 
-def business(status="retail", number=NUMBER):
+def business(status="retail", number=NUMBER, days_open=14):
     return {
         "key": site_key((STREET, number)),
         "name": f"HART. Test {number}",
@@ -469,12 +469,20 @@ def business(status="retail", number=NUMBER):
         "typeSlug": SHOP,
         "basket": 20.0,
         "promotion": 0,
+        "daysOpen": days_open,
         "lines": [],
     }
 
 
 def plan_sites(specs, employees, status="retail"):
-    """Several rented sites and one staff list, planned together."""
+    """Several rented sites and one staff list, planned together.
+
+    A spec may carry `days_open`, which belongs to the business rather than to
+    the registration: it is how long the doors have been open, and the page
+    calls a shop new by it.
+    """
+    specs = [dict(spec) for spec in specs]
+    opened = [spec.pop("days_open", 14) for spec in specs]
     regs = [registration(**spec) for spec in specs]
     save = Save(
         {
@@ -486,7 +494,10 @@ def plan_sites(specs, employees, status="retail"):
         {},
         "test.hsg",
     )
-    sites = [business(status, reg["StreetNumber"]) for reg in regs]
+    sites = [
+        business(status, reg["StreetNumber"], days)
+        for reg, days in zip(regs, opened)
+    ]
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
     grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
@@ -902,7 +913,7 @@ class PayloadTest(unittest.TestCase):
                 "key", "name", "typeSlug", "open", "stations", "people",
                 "roles", "need", "basis", "ceiling", "shifts", "headcount",
                 "shortHours", "shortDays", "placed", "bench", "slack", "cost",
-                "current",
+                "current", "measure",
             },
         )
 
@@ -925,6 +936,39 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)), "nobody is listed twice")
         posts = [s["id"] for s in row["stations"]]
         self.assertEqual(len(posts), len(set(posts)), "no station is listed twice")
+
+    def test_the_cover_scraps_are_counted_beside_the_rest(self):
+        """`coverFragments`: the two-hour pieces on the side the plan replaces."""
+        shifts = [
+            # Two cleaning scraps and one long serving shift.
+            {"wd": 1, "employeeId": "p1", "itemInstanceId": 8,
+             "startingHour": 0, "endingHour": 2, "type": 0},
+            {"wd": 2, "employeeId": "p1", "itemInstanceId": 8,
+             "startingHour": 0, "endingHour": 2, "type": 0},
+            {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
+             "startingHour": 8, "endingHour": 20, "type": 1},
+        ]
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(4)],
+            FLAT,
+            shifts=shifts,
+        )
+        self.assertEqual(row["current"]["fragments"], 2)
+        self.assertEqual(row["current"]["coverFragments"], 2)
+
+    def test_a_serving_scrap_is_not_a_cover_scrap(self):
+        shifts = [
+            {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
+             "startingHour": 8, "endingHour": 10, "type": 1},
+        ]
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(4)],
+            FLAT,
+            shifts=shifts,
+        )
+        self.assertEqual((row["current"]["fragments"], row["current"]["coverFragments"]), (1, 0))
 
     def test_the_current_roster_is_listed_for_the_now_and_plan_toggle(self):
         shifts = [
@@ -950,6 +994,82 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(kind(serving), "serve")
         self.assertEqual((where(row, serving), named(row, serving)), (1, "P0"))
         self.assertEqual((where(row, cleaning), named(row, cleaning)), (8, "P1"))
+
+    def test_the_cover_wage_is_the_part_of_the_bill_the_plan_replaces(self):
+        """A plan that only covers cleaning and security is only cheaper than that.
+
+        On a shop with no measured hour the serving shifts in the game stay
+        where they are, so pricing the plan against the whole wage bill would
+        promise a saving made of shifts nobody is replacing.
+        """
+        shifts = [
+            {"wd": 1, "employeeId": "p0", "itemInstanceId": 1,
+             "startingHour": 8, "endingHour": 10, "type": 1},
+            {"wd": 1, "employeeId": "p1", "itemInstanceId": 8,
+             "startingHour": 0, "endingHour": 24, "type": 0},
+        ]
+        items = [(1, REGISTER), (8, CLEAN_STATION)]
+        people = [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(4)]
+        row = plan(items, people, FLAT, shifts=shifts)
+        # 2 hours on the register and 24 on the cleaning station, at 20 an hour.
+        self.assertEqual(row["cost"]["current"], 520.0)
+        self.assertEqual(row["cost"]["currentCover"], 480.0)
+
+    def test_a_short_week_says_whether_the_plan_could_have_used_them(self):
+        """`planned` on a shop that can only be half planned.
+
+        With no measured hour there are serving staff the plan could never have
+        given a shift to, and cover staff it really did plan around. Only the
+        second is somebody the player can act on, and the page cannot tell them
+        apart from the roster alone.
+        """
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [
+                employee("p0", [SERVICE], demands=("ba:jobdemand_fulltime",)),
+                employee("c0", [CLEANING], demands=("ba:jobdemand_fulltime",)),
+            ],
+            FLAT,
+            weeks=0,
+            opens=((8, 12),),
+        )
+        by_name = {row["people"][r["p"]]["name"]: r for r in row["shortHours"]}
+        self.assertEqual(set(by_name), {"P0", "C0"})
+        # The cleaner works the 28 hours there are and is short of thirty: a
+        # week in a role this plan did work out.
+        self.assertTrue(by_name["C0"]["planned"])
+        self.assertEqual(by_name["C0"]["hours"], 28)
+        # The cashier holds nothing the plan covers, so their empty week says
+        # nothing about them at all.
+        self.assertFalse(by_name["P0"]["planned"])
+        self.assertEqual(by_name["P0"]["hours"], 0)
+
+    def test_the_measure_block_says_how_far_off_a_week_of_its_own_is(self):
+        row = self.row()
+        # Two weeks of reports, and the mark is the same HOUR_WEEKS_THIN the
+        # need curve reads a weekday by.
+        self.assertEqual(row["measure"], {"days": 14, "need": 2, "open": 14})
+
+    def test_a_shop_with_no_reports_counts_none_rather_than_dropping_the_block(self):
+        row = plan(
+            [(1, REGISTER), (8, CLEAN_STATION)],
+            [employee("c0", [CLEANING])],
+            FLAT,
+            weeks=0,
+        )
+        self.assertEqual(row["measure"]["days"], 0)
+        # And the row is still a plan: its cleaning cover does not wait on a
+        # measurement, which is the whole reason the page has to say why the
+        # serving rows are empty.
+        self.assertTrue(row["shifts"])
+
+    def test_a_thin_week_is_counted_even_though_it_reads_nothing(self):
+        row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT, weeks=1)
+        # Seven reports, one of each weekday, and not one of them enough on its
+        # own: the shop has traded and still cannot be read.
+        self.assertEqual(row["measure"]["days"], 7)
+        self.assertTrue(all(b == "none" for days in row["basis"].values()
+                            for day in days for b in day))
 
     def test_the_bench_needs_a_myemployees_step_first(self):
         row = plan(

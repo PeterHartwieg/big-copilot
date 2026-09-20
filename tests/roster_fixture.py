@@ -10,7 +10,7 @@ the JSON off stdout.
 
 Synthetic saves only. `python -m tests.roster_fixture` prints them.
 
-Four sites, each a state the block has to draw:
+Eight sites, each a state the block has to draw:
 
 full     a measured shop: two counters, a cleaning station and a security
          locker, and a schedule already in the game as two-hour scraps. One
@@ -21,8 +21,32 @@ full     a measured shop: two counters, a cleaning station and a security
 cover    a shop that has never reported an hour: no serving shifts can be cut
          from nothing, but its cleaning station is covered every open hour, so
          it has a week worth typing and a strip with nothing on it.
+fresh    the same, five days open, with a schedule already in the game: half
+         of it serving shifts the plan cannot replace and half of it cleaning
+         scraps it can, which is what a shop five days old really looks like.
+         Everybody here is full time, so the planner writes both kinds of short
+         week: the cashiers it could never have used, and the second cleaner it
+         could and had no hours left for. Its cover roles
+         each want 56 hours a week, so each needs two people and has a full
+         week for only one of them.
 pinned   every person on the counters holds a scheduling demand, so every
          shift they are given is one the plan placed because of it: the pin.
+quiet    a shop measured in every hour and asked for by nobody: two weeks of
+         reports, every one of them zero customers, so its basis is `measured`
+         throughout and its plan is still cover alone. Its cashier is full time
+         and there is nothing here for them, which is not the same as waiting
+         to be measured. The block has to be as
+         careful here as with a shop that has never been measured, and only the
+         plan says so.
+halfmop  the same shop with its cashier on the till as well as the mop: serving
+         shifts the plan does not replace, over cover it cannot type yet, which
+         is the state where the block must not tell anybody to clear anything.
+nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day,
+         a crew of one cashier, and that cashier already mopping in the game.
+         Every line of its plan waits on a hire, so clearing what is there
+         would leave the shop with neither. Its cover is four hires for hours that would
+         pay three people a full week, which is the one place the headcount
+         band and the hiring line disagree on purpose.
 shut     the two-slot weekday: open 08-12 and 14-20 on Friday, shut on Sunday,
          so the hour in the middle is the doors closed rather than trade
          dipping and nothing may be rostered into it.
@@ -122,6 +146,125 @@ def cover_row():
     return plan(items, people, BUSY, weeks=0)
 
 
+def fresh_row():
+    """Never measured, and already staffed: the shop the board can half plan.
+
+    A week of two-hour scraps is in the game, half of them on a register and
+    half on the cleaning station. The plan replaces the cleaning and security
+    half and cannot touch the other, which is the case every number on the
+    block has to be careful about. Open eight hours a day, so each cover role
+    wants 56 hours: two people by the 50-hour ceiling, a full week for one.
+    """
+    # Full-time contracts all round, so the planner writes the short weeks the
+     # block has to explain: the cashiers get nothing at all, because no role
+     # here can be planned for them, and the second cleaner gets what is left
+     # of a 56-hour week after the first one's fifty.
+    people = [
+        employee(f"s{i}", [SERVICE], demands=("ba:jobdemand_fulltime",))
+        for i in range(3)
+    ]
+    people += [
+        employee("clean1", [CLEANING], demands=("ba:jobdemand_fulltime",)),
+        employee("clean2", [CLEANING], demands=("ba:jobdemand_fulltime",)),
+        employee("guard1", [GUARD], demands=("ba:jobdemand_fulltime",)),
+    ]
+    items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
+    scraps = [
+        {
+            "wd": wd,
+            "employeeId": "s0" if post == 1 else "clean1",
+            "itemInstanceId": post,
+            "startingHour": h,
+            "endingHour": h + 2,
+            "type": 1 if post == 1 else 0,
+        }
+        for wd in range(7)
+        for post in (1, 8)
+        for h in range(8, 16, 2)
+    ]
+    return plan(items, people, BUSY, weeks=0, opens=((8, 16),), shifts=scraps,
+                days_open=5)
+
+
+def halfmop_row():
+    """`nobody`, with the cashier also working the till.
+
+    So the schedule holds serving shifts the plan keeps and cover it cannot
+    replace yet: both of the block's warnings are true at once, and the one
+    about hiring has to win.
+    """
+    scraps = [
+        {"wd": wd, "employeeId": "p0", "itemInstanceId": post,
+         "startingHour": h, "endingHour": h + 2,
+         "type": 1 if post == 1 else 0}
+        for wd in range(7)
+        for post, hours in ((1, range(8, 16, 2)), (8, range(8, 24, 2)))
+        for h in hours
+    ]
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [employee("p0", [SERVICE])],
+        BUSY,
+        weeks=0,
+        opens=((8, 24),),
+        shifts=scraps,
+    )
+
+
+def quiet_row():
+    """Measured everywhere, and the measurement asks for nobody.
+
+    `spRosterMeasured()` is true of this shop and there is not one serving
+    shift in its plan, which is why the block reads what the plan covers rather
+    than whether the shop was measured.
+    """
+    scraps = [
+        {"wd": wd, "employeeId": who, "itemInstanceId": post,
+         "startingHour": h, "endingHour": h + 2,
+         "type": 1 if post == 1 else 0}
+        for wd in range(7)
+        for who, post in (("p0", 1), ("c0", 8))
+        for h in range(8, 20, 2)
+    ]
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [
+            # Full time, and nothing here the plan can give them: the shop is
+            # measured, so this is not somebody waiting to be measured.
+            employee("p0", [SERVICE], demands=("ba:jobdemand_fulltime",)),
+            employee("c0", [CLEANING]),
+        ],
+        {h: 0 for h in range(24)},
+        shifts=scraps,
+    )
+
+
+def uncovered_row():
+    """A cleaning station with nobody who may work it, on a 16-hour day.
+
+    112 station-hours: three full weeks' worth, but fourteen shifts nobody may
+    take two of in a day, so it takes four people. The board has to say that
+    without looking like it is contradicting itself.
+    """
+    # The cashier is mopping, which the game allows and the plan will not do.
+    # So there is cover in the game, and not one line of the plan that anybody
+    # can be put on: clearing it would leave the shop with neither.
+    scraps = [
+        {"wd": wd, "employeeId": "p0", "itemInstanceId": 8,
+         "startingHour": h, "endingHour": h + 2, "type": 0}
+        for wd in range(7)
+        for h in range(8, 24, 2)
+    ]
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [employee("p0", [SERVICE])],
+        BUSY,
+        weeks=0,
+        opens=((8, 24),),
+        shifts=scraps,
+    )
+
+
 def shut_row():
     """Two opening slots on a Friday, and a Sunday the shop never opens."""
     # Cleaners of their own: a customer service employee is never put on a
@@ -145,6 +288,10 @@ def rows():
         "full": full_row(),
         "pinned": pinned_row(),
         "cover": cover_row(),
+        "fresh": fresh_row(),
+        "nobody": uncovered_row(),
+        "quiet": quiet_row(),
+        "halfmop": halfmop_row(),
         "shut": shut_row(),
     }
 
