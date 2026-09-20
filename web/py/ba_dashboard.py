@@ -8846,7 +8846,6 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* the idle swatch matches the grid's own idle ring, which is the --info one */
 .sp-hchip.idle .sp-sw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--info) 45%,transparent)}
 .sp-hchip.idle .sp-i{color:var(--info)}
-.sp-hchip.sp-unmeas{border-style:dashed;color:var(--ink-3)}
 .sp-hchip .fix{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
 
 /* crew: what the staff here ask for, and a roster too big for pills */
@@ -11668,13 +11667,24 @@ function spRosterCounts(row){
        saving of shifts the player still has to work out for themselves. */
     nowCover: (cur.cleaning || 0) + (cur.security || 0),
     fragments: cur.fragments || 0,
+    /* And how much of that half is a two-hour scrap: the same thing `fragments`
+       says about the whole schedule, for the tile that compares cover alone. */
+    coverFragments: (cur.list || []).filter(s => s.k && s.t - s.f <= 2).length,
   };
 }
+/* Whether this plan is cleaning and security and nothing else. Read off the
+   plan rather than off the readings, because the two can disagree: a shop that
+   traded a fortnight and served nobody is `measured` in every hour and still
+   gets no serving line, and on that shop every sentence below -- what to
+   clear, what the numbers compare, whether a day may be pasted -- has to be
+   the careful one. A serving shift is the one that carries no kind; see
+   _shift_row(). */
+const spCoverOnly = row => !(row.shifts || []).some(s => !s.k);
 /* What a plan is honestly measured against: the whole schedule where it
-   replaces the whole schedule, the cover shifts alone where cover is all of it
-   the board can cut. */
-const spRosterNow = row => spRosterMeasured(row)
-  ? spRosterCounts(row).now : spRosterCounts(row).nowCover;
+   replaces the whole schedule, the cover shifts alone where cover is all of
+   it. */
+const spRosterNow = row => spCoverOnly(row)
+  ? spRosterCounts(row).nowCover : spRosterCounts(row).now;
 
 /* Two letters and a number for a station, the way the player picks it out of
    BizMan's list: the initials of its name, numbered only where more than one
@@ -12157,16 +12167,18 @@ function spRosterDay(c, wd, on){
   return `<div class="sp-day${on ? " sp-on" : ""}" data-d="${wd}">${out}</div>`;
 }
 
-/* One shift. A line with nobody to give it to is a hiring line, not a
-   shift: it is drawn dashed and cannot be ticked off, because there is
-   nothing to type yet. */
+/* One shift. A line with nobody to give it to is an anticipated hire: it is
+   part of the week the plan wants, drawn dashed and in its own hours with no
+   name on it, and it cannot be ticked off because there is nobody to enter
+   into the game for it yet. */
 function spShiftBar(c, s, st, kind){
   const span = `grid-column:${s.f + 2}/${s.t + 2}`;
   const hrs = `${String(s.f).padStart(2, "0")}–${String(s.t).padStart(2, "0")}`;
   const when = `${WEEK_SHORT[s.d]} ${hrs} · ${spEsc(st.name || "?")}`;
   if(s.p === null || s.p === undefined)
     return `<span class="sp-shift sp-hire" style="${span}" data-read="${attr(
-      `<b>${when}</b> · <b>nobody to give it to</b>: counted in the hire below`)}">hire<small>${hrs}</small></span>`;
+      `<b>${when}</b> · <b>anticipated hire</b>: the week wants this shift and nobody here can work it. Hire for it — the post is counted below — and it becomes a line to type.`
+      )}">anticipated hire<small>${hrs}</small></span>`;
   const who = c.people[s.p].name || "?";
   const why = (c.placed[s.p] || []).find(r => r.wd === s.d && r.from < s.t && r.to > s.f);
   const benched = c.bench.has(s.p);
@@ -12266,9 +12278,12 @@ function spRosterCount(c){
      do about it. For the rest -- the crew of a role the board cannot read yet
      -- the same words would charge the board's own ignorance to the player, so
      they are one chip that says so. */
-  if(!c.measured){
-    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned), hoursWords);
-    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned), daysWords);
+  if(c.cover){
+    /* `planned === false` and not `!planned`: a row that does not say is a row
+       the page knows nothing about, and the chip that names somebody is the
+       one that loses the least by being wrong. */
+    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned !== false), hoursWords);
+    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned !== false), daysWords);
     return `<div class="sp-hc">${out}${spShortNew(c)}</div>`;
   }
   out += spShortChips(c, c.row.shortHours, hoursWords);
@@ -12287,13 +12302,16 @@ function spRosterCount(c){
    their own that says so. */
 function spShortNew(c){
   const short = [...(c.row.shortHours || []), ...(c.row.shortDays || [])]
-    .filter(r => !r.planned);
-  const names = [...new Set(short.map(r => c.name(r.p)))];
+    .filter(r => r.planned === false);
+  /* Counted by who they are, not by what they are called: two cashiers with
+     the same name are two people, and this number has to agree with the Crew
+     list. The set is only here to stop somebody short of both their hours and
+     their days being counted twice. */
+  const names = [...new Set(short.map(r => r.p))].map(p => c.name(p));
   if(!names.length) return "";
   return `<span class="sp-new" tabindex="0" data-read="${attr(
     `<b>${names.length} of the staff here ${names.length === 1 ? "has" : "have"} no week in this plan</b>: it covers cleaning and security only, and ${
-      names.length === 1 ? "this one holds" : "these hold"} no role it could plan, so ${
-      names.length === 1 ? "their" : "their"} week waits on the shop’s first measured one. Nothing to do about it here · ${
+      names.length === 1 ? "this one holds" : "these hold"} no role it could plan, so their week waits on the shop’s first measured one. Nothing to do about it here · ${
       names.map(spEsc).join(", ")}`)}">${spI("clock")}<span>${
     names.length} waiting on the shop’s first measured week</span></span>`;
 }
@@ -12327,32 +12345,50 @@ function spRosterNew(c, counts){
   /* A shop is new until it has had the time to be measured; past that, one
      with no reports is simply a shop that has not traded, and calling it new
      would be the board telling the player to wait for something that is not
-     coming. */
+     coming. A shop that has been measured and still gets no serving line is a
+     third thing again: its hours are known and they ask for nobody. */
   const fresh = m.open === undefined || m.open <= need * 7;
   const kept = counts.now - counts.nowCover;
-  const age = m.open ? `Open ${plural(m.open, "day")}` : "No trading behind it";
+  /* How new and how measured, or nothing: a row that does not say has not said
+     the shop is new, and the note must not answer for it. */
+  const age = m.open ? `Open ${plural(m.open, "day")}` : "";
   const seen = m.days === undefined ? ""
-    : `, ${m.days ? plural(m.days, "hour report") : "no hour reports"} on file`;
+    : `${age ? ", " : "This shop has "}${
+      m.days ? plural(m.days, "hour report") : "no hour reports"} on file`;
+  /* And how much of the week can be read already, which is the part a player
+     watching for their roster actually waits on. */
+  const far = m.weekdays
+    ? ` ${m.weekdays} of the seven weekdays can be read so far.` : "";
   /* The lines to type, and the ones there is nobody to type yet: a shop with
      no staff at all had twenty-one hiring lines under the words "0 lines". */
   const lines = counts.tickable
     ? `${plural(counts.tickable, "line")}${counts.hire
         ? `, and ${counts.hire} more waiting on a hire` : ""}`
     : `${plural(counts.hire, "line")}, every one of them waiting on a hire`;
-  const cover = `Until then this is <b>cleaning and security cover only</b>: ${lines}${counts.nowCover
-      ? `, against the ${counts.nowCover} in the game` : ""}. The registers stay yours to set.`;
+  const cover = `${c.measured ? "This week is" : "Until then this is"} <b>cleaning and security cover only</b>: ${
+    lines}${counts.nowCover ? `, against the ${counts.nowCover} in the game` : ""}. The registers stay yours to set.`;
   /* Three states, and the wrong words for any of them cost the player a week
      of their own typing: shifts the plan cannot replace, a schedule the plan
      replaces whole, and no schedule at all. */
   const care = kept
-    ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game are not in this plan, and nothing here can put them back: delete the cleaning and security shifts and enter these in their place.`
+    ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving shift")} in the game ${
+      kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
+      kept === 1 ? "it" : "them"} back: delete the cleaning and security shifts and enter these in their place.`
     : counts.now
       ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back.`
       : `Nothing is scheduled here yet, so there is nothing to lose by clearing.`;
+  /* Three states, three labels and three reasons: measured and asking for
+     nobody, too new to be read yet, and old enough but never traded. */
+  const label = c.measured ? "Cover only"
+    : m.open === undefined ? "Not measured"
+    : fresh ? "New shop" : "Never measured";
+  const why = c.measured
+    ? `The hours this shop has served ask for nobody on its serving stations, so there is no serving shift to suggest.`
+    : `${age || seen ? `${age}${seen}. ` : ""}A weekday’s hours are only read once the save holds ${
+      need} reports of that same weekday, so a shop’s own week arrives after about a fortnight of trading.${far}`;
   return `<div class="sp-note${kept ? " sp-care" : ""}">
-    <span class="lab">${spI("person")}${fresh ? "New shop" : "Never measured"}</span>
-    <span>${age}${seen}. A weekday’s hours are only read once the save holds ${
-      need} reports of that same weekday, so a shop’s own week arrives after about a fortnight of trading.</span>
+    <span class="lab">${spI("person")}${label}</span>
+    <span>${why}</span>
     <span>${cover} ${care}</span></div>`;
 }
 
@@ -12381,15 +12417,22 @@ function spRosterBlock(b){
   const slack = row.slack || {};
   const cost = row.cost || {};
   /* What the plan really replaces, and what it leaves exactly where it is. A
-     measured shop's plan is the whole week. An unmeasured shop's is the
-     cleaning and security cover alone, and the serving shifts already in the
-     game stay -- so they belong on neither side of any number here, and the
-     first step is not "clear the schedule". */
-  const kept = c.measured ? 0 : counts.now - counts.nowCover;
-  const against = c.measured ? counts.now : counts.nowCover;
-  const againstCost = c.measured ? cost.current : (cost.currentCover ?? cost.current);
+     plan with serving shifts in it is the whole week. A cover-only plan leaves
+     the serving shifts already in the game exactly where they are -- so they
+     belong on neither side of any number here, and the first step is not
+     "clear the schedule". */
+  c.cover = spCoverOnly(row);
+  const kept = c.cover ? counts.now - counts.nowCover : 0;
+  const against = c.cover ? counts.nowCover : counts.now;
+  /* Never cost.current on an unmeasured shop, not even as a fallback: that is
+     the whole schedule's bill, and half of it is shifts this plan leaves
+     exactly where they are. The planner writes currentCover for every row it
+     writes cost for. */
+  const againstCost = c.cover ? cost.currentCover : cost.current;
   const keptWords = kept
-    ? ` · the ${kept} serving shift${kept === 1 ? "" : "s"} in the game are not in this plan and stay as they are`
+    ? ` · the ${plural(kept, "serving shift")} in the game ${
+      kept === 1 ? "is" : "are"} not in this plan and stay${kept === 1 ? "s" : ""} as ${
+      kept === 1 ? "it is" : "they are"}`
     : "";
   /* A number struck out beside the same number reads as a fault in the board.
      Where the plan lands on the figure the schedule already has -- the same
@@ -12397,8 +12440,10 @@ function spRosterBlock(b){
      is left out and the read-out says they match. */
   const spWas = (was, now) => was === now ? "" : `<s>${was}</s>`;
   /* Two wage bills of nothing are not "the same bill either way": a shop with
-     no schedule and nobody hired has no bill to compare. */
-  const sameCost = !!cost.weekly && money(againstCost) === money(cost.weekly);
+     no schedule and nobody hired has no bill to compare. The test is on the
+     figures rather than on what they render as, because money() rounds to
+     whole thousands and would call $1,600 and $2,400 the same bill. */
+  const sameCost = !!cost.weekly && Math.round(againstCost) === Math.round(cost.weekly);
   const same = spSameDays(c.plan);
   /* What the player can actually tick: the lines that reach the page with
      somebody on them. A hiring line has nobody to enter yet, and a row the
@@ -12444,20 +12489,24 @@ function spRosterBlock(b){
           type into the game rather than something the board has already
           done. */""}
     <p class="sp-lead"><b>${spEsc(shortName(b))}</b> · the week to type into <b>BizMan › Schedule</b>, one day tab at a time. Click each shift here as it goes into the game: the ticks are your own place marker, kept in this browser, and nothing here changes the save.</p>
-    ${c.measured ? "" : spRosterNew(c, counts)}
+    ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
-      <div tabindex="0" data-read="${attr(`${c.measured ? "Shifts" : "Cleaning and security shifts"
+      <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security shifts" : "Shifts"
         } to enter for the week: <b>${against}</b> today${
-        c.measured && counts.fragments ? `, ${counts.fragments} of them two hours long` : ""}, against <b>${
+        /* The scraps on the side of the schedule this plan replaces: the whole
+           schedule's, or the cleaning and security half of it. */
+        ""}${(c.cover ? counts.coverFragments : counts.fragments)
+          ? `, ${c.cover ? counts.coverFragments : counts.fragments} of them two hours long` : ""}, against <b>${
         counts.tickable}</b>${counts.hire
-          ? ` · ${counts.hire} more line${counts.hire === 1 ? "" : "s"} the plan wants and has nobody for, waiting on a hire` : ""}${
-        keptWords}`)}"><span class="lab">${c.measured ? "Shifts" : "Cover shifts"} / week</span><div class="v">${
+          ? ` · ${plural(counts.hire, "anticipated hire")}: ${
+            counts.hire === 1 ? "a line the week wants" : "lines the week wants"} and has nobody for, drawn in the grid without a name` : ""}${
+        keptWords}`)}"><span class="lab">${c.cover ? "Cover shifts" : "Shifts"} / week</span><div class="v">${
         spI("list")}${spWas(against, counts.tickable)}${counts.tickable}${counts.hire
-          ? `<small style="font-size:12px;color:var(--warn)">+${counts.hire} unfilled</small>` : ""}</div></div>
+          ? `<small style="font-size:12px;color:var(--warn)">+${plural(counts.hire, "anticipated hire")}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`<b>${fmt(againstCost)}</b> a week for the ${
-        c.measured ? "schedule as it stands" : "cleaning and security shifts as they stand"}, <b>${
+        c.cover ? "cleaning and security shifts as they stand" : "schedule as it stands"}, <b>${
         fmt(cost.weekly)}</b> for the plan, for the staff the save prices${counts.hire
-          ? ` · the ${counts.hire} unfilled line${counts.hire === 1 ? " is" : "s are"} not priced: nobody is on ${
+          ? ` · the ${plural(counts.hire, "anticipated hire")} ${counts.hire === 1 ? "is" : "are"} not priced: nobody is on ${
             counts.hire === 1 ? "it" : "them"} yet` : ""}${sameCost
           ? ` · the same bill either way: what the plan saves here is typing, not wages` : ""}${
         keptWords}`)}"><span class="lab">Wages / week</span><div class="v">${
@@ -14407,6 +14456,14 @@ function drawFindLocation(){
    of the same save. */
 const spRosterPlans = () => (D.staffing || []).filter(
   r => !r.failed && (r.shifts || []).length);
+/* The week the card sizes a plan by. Usually the lines somebody can be put on,
+   but a shop with no staff at all is twenty-one lines waiting on hires, and
+   calling that "a week of 0 shifts to enter" sizes the one plan on the board
+   that is all of the work at none of it. */
+const spCardWeek = row => {
+  const counts = spRosterCounts(row);
+  return counts.tickable || counts.hire;
+};
 const spPickRoster = (rows, score) => rows.reduce((a, b) =>
   score(b) > score(a) || (score(b) === score(a) && b.name < a.name) ? b : a);
 function spBestRoster(){
@@ -14421,10 +14478,14 @@ function spBestRoster(){
      against the whole schedule, and one that plans only cover is measured
      against the cover shifts alone. See spRosterNow(). */
   const saved = r => spRosterNow(r) - week(r);
-  const shorter = rows.filter(r => saved(r) > 0);
+  /* And a saving has to be something the player can actually type. A shop
+     whose every line waits on a hire would otherwise be offered as thirty
+     shifts becoming none, which is a shop left uncovered rather than a week
+     saved; it belongs with the plans the card sizes instead. */
+  const shorter = rows.filter(r => saved(r) > 0 && week(r));
   return shorter.length
     ? {row: spPickRoster(shorter, saved), saves: true}
-    : {row: spPickRoster(rows, week), saves: false};
+    : {row: spPickRoster(rows, spCardWeek), saves: false};
 }
 function drawOptimizeStaffing(){
   const card = $("optimizeStaffingCard"); if(!card) return;
@@ -14440,7 +14501,10 @@ function drawOptimizeStaffing(){
     text.textContent = D.staffing
       ? "No shop has been measured long enough to cut a roster from yet."
       : "Shifts from the hour grid: registers, door caps and who is off today.";
-    go.textContent = D.staffing ? "Opens the sites" : "Opens the shop\u2019s Roster";
+    /* Both arms open the site list: with no plan to point at, wireCards() has
+       no site to open, and the line exists because the card used to be vague
+       about exactly this. */
+    go.textContent = "Opens the sites";
     /* Nothing to open: a live reload that leaves no usable plan must not keep
        sending the player to the site the last one named. */
     delete card.dataset.site;
@@ -14449,24 +14513,28 @@ function drawOptimizeStaffing(){
   const row = best.row;
   const counts = spRosterCounts(row);
   const week = counts.tickable;
+  const lines = spCardWeek(row);
+  const hiring = !week && counts.hire;
   /* A shop with no hour reports of its own is compared on the shifts this plan
      would really replace, and says why: its registers are not in the plan, so
      they are not in the number beside it either. Against its whole schedule
      the card read "444 shifts become 42", which is 246 register shifts the
      player would lose and the board could not put back. */
-  const measured = spRosterMeasured(row);
+  const measured = !spCoverOnly(row);
   badge.className = "soon live";
   badge.textContent = best.saves
     ? `\u2212${spRosterNow(row) - week} LINES`
-    : `${week} SHIFTS`;
+    : `${lines} SHIFTS`;
   text.textContent = best.saves
     ? (measured
         ? `${row.name}: ${counts.now} shifts become ${week}.`
         : `${row.name}: ${counts.nowCover} cleaning and security shifts become ${
             week}, and its registers wait on the shop\u2019s first measured week.`)
     : (measured
-        ? `${row.name}: a week of ${week} shifts to enter.`
-        : `${row.name}: a week of ${week} cleaning and security shifts to enter.`);
+        ? `${row.name}: a week of ${lines} shifts to enter${
+          hiring ? `, every one of them waiting on a hire` : ""}.`
+        : `${row.name}: a week of ${lines} cleaning and security shifts to enter${
+          hiring ? `, every one of them waiting on a hire` : ""}.`);
   go.textContent = `Opens ${row.name} \u203a Roster`;
   card.dataset.site = row.key;
 }

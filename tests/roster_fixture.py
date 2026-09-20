@@ -21,13 +21,21 @@ full     a measured shop: two counters, a cleaning station and a security
 cover    a shop that has never reported an hour: no serving shifts can be cut
          from nothing, but its cleaning station is covered every open hour, so
          it has a week worth typing and a strip with nothing on it.
-fresh    the same, with a schedule already in the game: half of it serving
-         shifts the plan cannot replace and half of it cleaning scraps it can,
-         which is what a shop five days old really looks like. Its cover roles
+fresh    the same, five days open, with a schedule already in the game: half
+         of it serving shifts the plan cannot replace and half of it cleaning
+         scraps it can, which is what a shop five days old really looks like.
+         Everybody here is full time, so the planner writes both kinds of short
+         week: the cashiers it could never have used, and the second cleaner it
+         could and had no hours left for. Its cover roles
          each want 56 hours a week, so each needs two people and has a full
          week for only one of them.
 pinned   every person on the counters holds a scheduling demand, so every
          shift they are given is one the plan placed because of it: the pin.
+quiet    a shop measured in every hour and asked for by nobody: two weeks of
+         reports, every one of them zero customers, so its basis is `measured`
+         throughout and its plan is still cover alone. The block has to be as
+         careful here as with a shop that has never been measured, and only the
+         plan says so.
 nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day
          and a crew of one cashier. Its cover is four hires for hours that would
          pay three people a full week, which is the one place the headcount
@@ -140,8 +148,19 @@ def fresh_row():
     block has to be careful about. Open eight hours a day, so each cover role
     wants 56 hours: two people by the 50-hour ceiling, a full week for one.
     """
-    people = [employee(f"s{i}", [SERVICE]) for i in range(3)]
-    people += [employee("clean1", [CLEANING]), employee("guard1", [GUARD])]
+    # Full-time contracts all round, so the planner writes the short weeks the
+     # block has to explain: the cashiers get nothing at all, because no role
+     # here can be planned for them, and the second cleaner gets what is left
+     # of a 56-hour week after the first one's fifty.
+    people = [
+        employee(f"s{i}", [SERVICE], demands=("ba:jobdemand_fulltime",))
+        for i in range(3)
+    ]
+    people += [
+        employee("clean1", [CLEANING], demands=("ba:jobdemand_fulltime",)),
+        employee("clean2", [CLEANING], demands=("ba:jobdemand_fulltime",)),
+        employee("guard1", [GUARD], demands=("ba:jobdemand_fulltime",)),
+    ]
     items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
     scraps = [
         {
@@ -156,7 +175,29 @@ def fresh_row():
         for post in (1, 8)
         for h in range(8, 16, 2)
     ]
-    return plan(items, people, BUSY, weeks=0, opens=((8, 16),), shifts=scraps)
+    return plan(items, people, BUSY, weeks=0, opens=((8, 16),), shifts=scraps,
+                days_open=5)
+
+
+def quiet_row():
+    """Measured everywhere, and the measurement asks for nobody.
+
+    `spRosterMeasured()` is true of this shop and there is not one serving
+    shift in its plan, which is why the block reads what the plan covers rather
+    than whether the shop was measured.
+    """
+    scraps = [
+        {"wd": wd, "employeeId": "p0", "itemInstanceId": 1,
+         "startingHour": h, "endingHour": h + 2, "type": 1}
+        for wd in range(7)
+        for h in range(8, 20, 2)
+    ]
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [employee("p0", [SERVICE]), employee("c0", [CLEANING])],
+        {h: 0 for h in range(24)},
+        shifts=scraps,
+    )
 
 
 def uncovered_row():
@@ -200,6 +241,7 @@ def rows():
         "cover": cover_row(),
         "fresh": fresh_row(),
         "nobody": uncovered_row(),
+        "quiet": quiet_row(),
         "shut": shut_row(),
     }
 

@@ -710,8 +710,10 @@ and dims the rest; clicking scrolls there.
   its own hours out of the grid.
 - **Roster** (a shop). The week the board would type into BizMan, on the hour grid's own
   24 columns: a strip of what the measured hours ask for, then one row a station with the
-  shifts to enter. A bar is a person and an hour range; a dashed one is a line nobody here
-  can legally work, drawn where its hours fall and counted once in the hiring line below.
+  shifts to enter. A bar is a person and an hour range; a dashed one is an **anticipated hire** —
+  a shift the week wants that nobody here can legally work — drawn where its hours fall,
+  carrying no name because there is nobody on it yet, and counted once in the hiring line
+  below.
   Hours the doors are shut are marked out of every lane, so a weekday with two opening
   slots does not read as trading straight through the middle. The pin
   marks a shift placed where it is because of somebody's demand, and the bench mark says
@@ -733,7 +735,7 @@ and dims the rest; clicking scrolls there.
   cover does not wait on a measurement — and it is exactly the shop whose schedule is 182
   two-hour scraps, so the 14 shifts that replace them are the biggest week of typing the
   board can save anybody. Its serving rows are empty and its need strip is a dashed line
-  rather than a number. In place of the plan's lead it gets a **new-shop note**: how long
+  rather than a number. Under the lead it gets a **new-shop note**: how long
   the doors have been open and how many hour reports are on file, that a weekday's hours
   are only read once two reports of that weekday are in, that the week below is cleaning
   and security cover alone — and, where the game already holds serving shifts, that

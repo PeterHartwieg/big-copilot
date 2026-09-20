@@ -475,7 +475,14 @@ def business(status="retail", number=NUMBER, days_open=14):
 
 
 def plan_sites(specs, employees, status="retail"):
-    """Several rented sites and one staff list, planned together."""
+    """Several rented sites and one staff list, planned together.
+
+    A spec may carry `days_open`, which belongs to the business rather than to
+    the registration: it is how long the doors have been open, and the page
+    calls a shop new by it.
+    """
+    specs = [dict(spec) for spec in specs]
+    opened = [spec.pop("days_open", 14) for spec in specs]
     regs = [registration(**spec) for spec in specs]
     save = Save(
         {
@@ -487,7 +494,10 @@ def plan_sites(specs, employees, status="retail"):
         {},
         "test.hsg",
     )
-    sites = [business(status, reg["StreetNumber"]) for reg in regs]
+    sites = [
+        business(status, reg["StreetNumber"], days)
+        for reg, days in zip(regs, opened)
+    ]
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
     grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
