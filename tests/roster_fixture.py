@@ -74,8 +74,10 @@ def full_row():
         # Somebody the plan has to work around rather than refuse.
         employee("noaft", [SERVICE], demands=("ba:jobdemand_noafternoons",)),
         # Two skills, and on the bench: `have` counts them under both, so the
-        # page has to take them off both.
-        employee("bench", [SERVICE, CLEANING], here=False),
+        # page has to take them off both. Cleaning and Security, because a
+        # customer service employee is never put on a cleaning station and a
+        # bench member who could not be used would not be drawn at all.
+        employee("bench", [CLEANING, GUARD], here=False),
         employee("clean1", [CLEANING]),
         employee("guard1", [GUARD]),
         # Somebody whose contract asks for four days, and more full-timers
@@ -84,7 +86,7 @@ def full_row():
         employee("part1", [SERVICE], demands=("ba:jobdemand_fourdaysweek",)),
     ] + [
         employee(f"full{i}", [SERVICE], demands=("ba:jobdemand_fulltime",))
-        for i in range(1, 7)
+        for i in range(1, 10)
     ]
     items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)]
     return plan(items, people, BUSY, shifts=fragments())
@@ -101,7 +103,7 @@ def pinned_row():
         employee("free1", [SERVICE], demands=("ba:jobdemand_freeweekends",)),
         employee("free2", [SERVICE], demands=("ba:jobdemand_freeweekends",)),
         employee("noaft", [SERVICE], demands=("ba:jobdemand_noafternoons",)),
-        employee("bench", [SERVICE, CLEANING], here=False),
+        employee("bench", [CLEANING, GUARD], here=False),
         employee("clean1", [CLEANING]),
         employee("guard1", [GUARD]),
         employee("full1", [SERVICE], demands=("ba:jobdemand_fulltime",)),
@@ -122,7 +124,10 @@ def cover_row():
 
 def shut_row():
     """Two opening slots on a Friday, and a Sunday the shop never opens."""
-    people = [employee(f"p{i}", [SERVICE, CLEANING]) for i in range(6)]
+    # Cleaners of their own: a customer service employee is never put on a
+    # cleaning station, and this is the shop the page draws with nothing to hire.
+    people = [employee(f"p{i}", [SERVICE]) for i in range(6)]
+    people += [employee(f"c{i}", [CLEANING]) for i in range(3)]
     items = [(1, REGISTER), (8, CLEAN_STATION)]
     # One site per weekday shape is not possible in one registration, so the
     # whole week takes the two-slot day and Sunday is simply shut.

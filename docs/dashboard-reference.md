@@ -443,18 +443,51 @@ and the current schedule's `current.list` — share one compact row: `d` weekday
 is left off an ordinary serving shift.
 
 **The people.** Everyone assigned to the site, plus anyone hired and not yet posted
-anywhere; candidates are applicants, not staff. Slots are filled most-constrained-first, so
+anywhere; candidates are applicants, not staff. **A customer service employee is never
+put on a cleaning station**, even though the game allows it: a register standing empty
+while the person who could be on it mops costs more than a cleaner's wage, so cleaning
+that only servers could do is a hiring line, and `headcount` counts it that way too. Slots are filled most-constrained-first, so
 somebody who wants no evenings takes the shift they can work before the unconstrained staff
 take it. No shift ever breaks a demand: a slot nobody may legally work becomes a hiring line
 instead, one total per role — and a security locker nobody staffs is real new spending
-rather than another shift, which is why `headcount` says which kind each line is. Anyone
-left under their weekly minimum is named in `shortHours` — including anyone the plan finds
-no work for at all, who is the most short of the lot — and anyone whose four- or five-day
-week the plan cannot fill is named in `shortDays`. Both are staff demands the player is
-about to fail, and the usual fix is to move somebody to another site rather than to bend
-the roster. A hiring line counts people, not hours: four uncovered twelve-hour weekend
-shifts are 48 hours but need two hires, because nobody may work two of them on the same
-day.
+rather than another shift, which is why `headcount` says which kind each line is. A hiring
+line counts people, not hours: four uncovered twelve-hour weekend shifts are 48 hours but
+need two hires, because nobody may work two of them on the same day.
+
+**Everybody rostered gets a full week, because nobody works two businesses.** An employee is
+posted to one building, so the thirty hours full time asks for have to come from that site
+or from nowhere. The plan therefore fills a week one person at a time — nobody new is
+started while somebody already on the roster can legally take the shift, and among those the
+hours go to the emptiest week, so they cross thirty together instead of one of them being
+stranded under it. Levelling the hours over everyone was the old behaviour and the wrong
+answer: 168 station-hours across nine full-timers is four people on 36 to 48 hours, not nine
+on 18 and nine failed demands. Nobody is given more than 50 hours either, full time's own
+ceiling, even where the save gives them no hours demand to cap them. Whoever the
+fill still leaves short is topped up from the fullest week on the roster — usually the
+same lines with a name moved, and where whole shifts cannot do it, one shift cut in two,
+which is a line more to type — as long as the donor stays at or above their own minimum
+and keeps the days their demand asks for. It is all or nothing: a week the plan cannot
+actually get to its minimum is left exactly as it stands rather than part-filled, because a
+scrap of a line beside a demand that still fails is worse than the shortfall said plainly.
+56 station-hours will not give two people thirty each however they move, so that shop stays
+at 48 and 8. What is left over is
+said rather than shared out: `headcount.spare` counts the people the site holds who are given
+no shift at all, anyone under their weekly minimum is named in `shortHours` — the ones with
+nothing at all are the most short of the lot — and anyone whose four- or five-day week
+cannot be filled is named in `shortDays`. Those are demands the player is about to fail, and
+what to do about it depends on whether they work here at all. Somebody given nothing is a
+person to post to a site that has the hours, or to let go. Somebody on a partial week is
+covering hours that would go uncovered if they were moved, so the honest line is that this
+site has nothing left to give them — a longer week here is not on offer, and neither is half
+a week at each of two shops.
+
+**A week can change hands whole.** Which name the plan starts is decided before anybody has
+an hour, so a cheaper person with no hours demand can end up holding a week a full-timer
+beside them needed. Once the hours are settled that week is handed over entire where it fits
+the other's band and day count — and where it does not, it stays where it is, because leaving
+somebody spare is an answer the player can act on and a partial week is not. The giver may
+hold a day count they were meeting and lose it: that is the game's *Important* spent to
+settle its *Critical*.
 
 **Somebody hired and not yet posted anywhere belongs to one building.** The bench is
 offered to each site in turn, and the first site to give a bench member hours keeps them:
