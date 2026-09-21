@@ -193,19 +193,27 @@ class ImportRoutesTests(unittest.TestCase):
 
     def test_factory_panel_judges_the_daily_topup_itself(self):
         """A top-up too small for a day is short whatever the depot's import is
-        doing, and whatever else lands at the factory."""
+        doing, and beside an import to the factory that covers only part of it."""
         for orders in ([contract(9000, active=False)], [contract(700)],
-                       [contract(2000, destination=("factory", 0))]):
+                       [contract(840, destination=("factory", 0)), contract(900)]):
             with self.subTest(orders=orders):
                 data = self.build(orders, routed=True, target=100)
                 row = self.held(data)
                 self.assertEqual((row["cadence"], row["provision"], row["fit"]), ("daily", 100, "short"))
                 self.assertEqual((self.node(data)["short"], self.node(data)["unsupplied"]), (1, 0))
 
+    def test_factory_panel_judges_a_covering_import_on_its_week_beside_a_route(self):
+        """As the factory view does: a fill-to target ships nothing while the
+        week's import holds, so the import is the refill that counts."""
+        row = self.held(self.build([contract(2000, destination=("factory", 0))],
+                                   routed=True, target=100))
+        self.assertEqual((row["cadence"], row["provision"], row["fit"]), ("weekly", 2000, "ok"))
+
     def test_factory_panel_keeps_its_own_imports_verdict_beside_a_daily_route(self):
         data = self.build([contract(2000, destination=("factory", 0))], routed=True, second=True)
         row = self.held(data)
-        self.assertEqual((row["cadence"], row["provision"], row["fit"]), ("daily", 300, "short"))
+        self.assertEqual((row["cadence"], row["provision"], row["cycleNeed"], row["fit"]),
+                         ("weekly", 2000, 3360, "short"))
 
     def test_factory_panel_counts_measured_onward_draw_once(self):
         order = [contract(2000, destination=("factory", 0))]
@@ -214,21 +222,27 @@ class ImportRoutesTests(unittest.TestCase):
         # More leaves than the plan knows of: own machines plus the measured draw.
         self.assertEqual(self.held(self.build(order, second=True, shipped=500))["cycleNeed"], 5180)
 
-    def test_factory_panel_leaves_an_imported_output_to_its_depot_row(self):
-        beer = {"importAddress": ("pier", 1), "isActive": True, "nextDeliveryDay": 14,
-                "products": [{"itemName": BEER, "amount": 100, "amountOrderedLastWeek": 700,
-                              "assignedWarehouse": ("factory", 0)}]}
-        row = self.held(self.build([beer], made=True), "Beer")
-        self.assertFalse(row["made"])
-        self.assertEqual((row["cadence"], row["provision"]), ("weekly", 100))
+    def test_factory_panel_leaves_an_imported_output_to_its_import(self):
+        """An output also imported is not "made here", even in its first week,
+        before any order history gives it a depot row."""
+        for last in (700, 0):
+            with self.subTest(last_week=last):
+                beer = {"importAddress": ("pier", 1), "isActive": True, "nextDeliveryDay": 14,
+                        "products": [{"itemName": BEER, "amount": 100, "amountOrderedLastWeek": last,
+                                      "assignedWarehouse": ("factory", 0)}]}
+                row = self.held(self.build([beer], made=True), "Beer")
+                self.assertFalse(row["made"])
+                if last:
+                    self.assertEqual((row["cadence"], row["provision"]), ("weekly", 100))
 
-    def test_factory_panel_counts_a_daily_route_as_the_next_refill(self):
-        data = self.build([contract(2000, destination=("factory", 0))], routed=True, target=300)
-        row = self.held(data)
-        self.assertEqual((row["cadence"], row["need"], row["provision"], row["fit"]),
-                         ("daily", 240, 300, "ok"))
-        self.assertFalse(row["low"])
-        self.assertEqual(self.node(data)["low"], 0)
+    def test_factory_panel_takes_a_daily_route_as_a_floor_under_the_week(self):
+        """A holding short of the drop is not low while a route tops it up to a day."""
+        order = contract(2000, destination=("factory", 0))
+        order["nextDeliveryDay"] = 17  # 6.5 days of 240 is 1560, over the 1000 held
+        routed = self.held(self.build([order], routed=True, target=300))
+        self.assertEqual((routed["cadence"], routed["need"], routed["fit"]), ("weekly", 1560, "ok"))
+        self.assertFalse(routed["low"])
+        self.assertTrue(self.held(self.build([order]))["low"])
 
     def test_factory_panel_names_a_paused_direct_import(self):
         row = self.held(self.build([contract(2000, active=False, destination=("factory", 0))]))

@@ -2953,24 +2953,23 @@ def _supply(
             if (feed and not feed["target"] and not feed["directImport"]
                     and index[business["key"]] in feed["madeAt"]):
                 feed = None
-            made = not (feed or shop or depot) and own in made_here
+            # Made here, unless something else claims the row: a shelf, a depot
+            # line, or an import of it, even one with no week behind it yet.
+            made = not (feed or shop or depot) and own not in imports and own in made_here
             fit = why = None
+            backed = False
             if shop:
                 need = shop["peakSold"]
                 provision = shop["target"]
                 # A shelf is refilled daily, so a day's peak is the whole test.
                 cycle_need, cadence = need, "daily"
-            elif feed and feed["target"]:
-                # Topped up each morning, whatever else arrives: the next refill
-                # is tomorrow's round, so a day of the machines is the test, with
-                # the factory view's slack. A depot's import is judged on the
-                # depot; an import landing here as well still has to cover what
-                # it feeds.
+            elif feed and feed["target"] and not feed["directImport"]:
+                # Topped up each morning: the next refill is tomorrow's round, so
+                # a day of the machines is the test, with the factory view's
+                # slack. The depot's import is judged on the depot.
                 need, provision = feed["perDay"], feed["target"]
                 cycle_need, cadence = need, "daily"
                 fit = "short" if provision < feed["dailyNeed"] * (1 - FEED_SLACK) else "ok"
-                if feed["directImport"]:
-                    fit = max(fit, feed["importFit"] or "ok", key=FIT_ORDER.index)
             elif feed and feed["directImport"]:
                 # Imported straight to the factory: the week's order has to feed
                 # the machines here, the factories topped up from here, and
@@ -2990,6 +2989,13 @@ def _supply(
                 need = round(per_day * due)
                 provision = feed["directWeekly"] or 0
                 cycle_need, cadence = round(per_day * 7), "weekly"
+                # A target only fills up to its level, so beside an import that
+                # covers the week it ships nothing until stock runs down; one
+                # that covers a day is a floor under the week, and the holding
+                # cannot run dry before the drop.
+                backed = bool(
+                    feed["target"] and feed["target"] >= feed["dailyNeed"] * (1 - FEED_SLACK)
+                )
                 if feed["importPaused"]:
                     fit, why = "short", "paused"
                 else:
@@ -3049,7 +3055,7 @@ def _supply(
                     # Only worth flagging where the next refill is days away. A
                     # half-empty shelf at teatime is tomorrow morning's business.
                     "low": bool(
-                        cadence == "weekly" and need and line["units"] < need
+                        cadence == "weekly" and need and line["units"] < need and not backed
                     ),
                 }
             )
@@ -3061,7 +3067,9 @@ def _supply(
         entry["tight"] = sum(1 for i in entry["items"] if i["fit"] == "tight")
         entry["low"] = sum(1 for i in entry["items"] if i["low"])
         # Of the short, those with no order at all: no plan, or a paused import.
-        entry["unsupplied"] = sum(1 for i in entry["items"] if i.get("why"))
+        entry["unsupplied"] = sum(
+            1 for i in entry["items"] if i.get("why") in ("paused", "unplanned")
+        )
         entry["stock"] = sum(i["stock"] for i in entry["items"])
 
     for entry in nodes.values():
@@ -9443,7 +9451,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
 
     <section class="sec rv" id="secFlow" data-sub="map">
-      <div class="sechead"><h2>How goods move</h2><span class="why" tabindex="0" data-tip="Solid pipes are daily distribution, dashed ones weekly imports, a red one a paused import; width is volume. Hover a pipe and its cargo moves. Click a site to keep only its pipes lit and to see what it holds below. An amber dot is an order running tight or a holding below what its week needs, a red one an order too small."><i>?</i></span></div>
+      <div class="sechead"><h2>How goods move</h2><span class="why" tabindex="0" data-tip="Solid pipes are daily distribution, dashed ones weekly imports, a red one a paused import; width is volume. Hover a pipe and its cargo moves. Click a site to keep only its pipes lit and to see what it holds below. An amber dot is an order running tight or a holding below what its week needs, a red one an order too small or an input nothing brings in."><i>?</i></span></div>
       <div class="chartbox" style="padding:18px 24px 24px"><svg class="flow" id="flow"></svg></div>
       <div class="sec" id="flowDetail"></div>
     </section>
