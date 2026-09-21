@@ -12715,8 +12715,8 @@ function spRosterBlock(b){
         keptWords}`)}"><span class="lab">Wages / week</span><div class="v">${
         spI("coin")}${costKnown ? wasCost(againstCost, cost.weekly) : ""}${
         counts.hire && !cost.weekly ? "—" : money(cost.weekly)}</div></div>
-      ${!slack.hours ? "" : `<div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> bought to keep the hours in one run, of the <b>${
-        slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
+      ${!slack.hours ? "" : `<div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> overstaffed: somebody kept on through a quiet gap, so their day stays one entry instead of two. The plan allows up to <b>${
+        slack.budget} h</b>${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Overstaffed hours</span><div class="v" style="font-size:14px">${
         slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
         Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>`}
       ${/* The ring counts the narrower set: a line whose station or person the
