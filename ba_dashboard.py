@@ -798,6 +798,7 @@ T_95 = {2: 12.71, 3: 4.30, 4: 3.18, 5: 2.78, 6: 2.57, 7: 2.45, 8: 2.36, 9: 2.31}
 # knowing but not worth an alarm.
 FIT_NOISE = 0.01
 FIT_TIGHT = 0.05
+FIT_ORDER = ["ok", "tight", "short"]  # a verdict's severity, mildest first
 FIT_FLOOR = 5  # units, so tiny lines are not judged on fractions
 # A holding that empties a few hours before its delivery is an order sized to
 # consumption, which is what a well set-up chain looks like.
@@ -2952,7 +2953,7 @@ def _supply(
             if (feed and not feed["target"] and not feed["directImport"]
                     and index[business["key"]] in feed["madeAt"]):
                 feed = None
-            made = not feed and own in made_here
+            made = not (feed or shop or depot) and own in made_here
             fit = why = None
             if shop:
                 need = shop["peakSold"]
@@ -2961,11 +2962,15 @@ def _supply(
                 cycle_need, cadence = need, "daily"
             elif feed and feed["target"]:
                 # Topped up each morning, whatever else arrives: the next refill
-                # is tomorrow's round, so a day of the machines is the test. The
-                # depot's own import is judged on the depot, not here.
+                # is tomorrow's round, so a day of the machines is the test, with
+                # the factory view's slack. A depot's import is judged on the
+                # depot; an import landing here as well still has to cover what
+                # it feeds.
                 need, provision = feed["perDay"], feed["target"]
                 cycle_need, cadence = need, "daily"
-                fit = "short" if feed["status"] == "target" else "ok"
+                fit = "short" if provision < feed["dailyNeed"] * (1 - FEED_SLACK) else "ok"
+                if feed["directImport"]:
+                    fit = max(fit, feed["importFit"] or "ok", key=FIT_ORDER.index)
             elif feed and feed["directImport"]:
                 # Imported straight to the factory: the week's order has to feed
                 # the machines here, the factories topped up from here, and
@@ -2978,6 +2983,9 @@ def _supply(
                     if supply and supply["weekly"] else 0.0
                 ) or 7.0
                 onward = depot["perDay"] if depot and depot["basis"] != "order" else 0
+                # The larger, not the sum: the measured draw already carries the
+                # top-ups to other factories that depotNeed plans for. A starved
+                # neighbour makes this an underestimate.
                 per_day = max(feed["depotNeed"] / 7, feed["perDay"] + onward)
                 need = round(per_day * due)
                 provision = feed["directWeekly"] or 0
@@ -2985,13 +2993,15 @@ def _supply(
                 if feed["importPaused"]:
                     fit, why = "short", "paused"
                 else:
+                    # Past the order's own need, measured onward draw can only
+                    # make the week longer, never shorter.
                     fit = max(feed["importFit"] or "ok", _fit(cycle_need, provision),
-                              key=["ok", "tight", "short"].index)
+                              key=FIT_ORDER.index)
             elif feed:
                 # Neither imported here nor topped up: nothing brings it in.
                 need, provision = feed["perDay"], 0
                 cycle_need, cadence = need, "daily"
-                fit, why = ("short", "unplanned") if feed["status"] == "unplanned" else ("ok", None)
+                fit, why = "short", "unplanned"
             elif depot:
                 need = round(depot["perDay"] * max(depot_days, 0.0) * factor)
                 provision = depot["weekly"]
@@ -3050,12 +3060,15 @@ def _supply(
         entry["short"] = sum(1 for i in entry["items"] if i["fit"] == "short")
         entry["tight"] = sum(1 for i in entry["items"] if i["fit"] == "tight")
         entry["low"] = sum(1 for i in entry["items"] if i["low"])
+        # Of the short, those with no order at all: no plan, or a paused import.
+        entry["unsupplied"] = sum(1 for i in entry["items"] if i.get("why"))
         entry["stock"] = sum(i["stock"] for i in entry["items"])
 
     for entry in nodes.values():
         entry.setdefault("tight", 0)
         entry.setdefault("short", 0)
         entry.setdefault("low", 0)
+        entry.setdefault("unsupplied", 0)
         entry.setdefault("stock", 0)
 
     # A site earns a place on the diagram by being on a plan or by holding
@@ -10146,7 +10159,7 @@ function drawFlow(){
   const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
   Object.values(at).forEach(({x, y, node}) => {
     const hood = node.tag, tx = x + (hood ? 44 : 12);
-    const flag = node.short ? ["badd", `${plural(node.short, "order")} too small`]
+    const flag = node.short ? ["badd", flowShortText(node)]
       : node.tight ? ["warnd", `${plural(node.tight, "order")} running tight`]
       : node.low ? ["warnd", `${plural(node.low, "holding")} below what the week needs`] : null;
     boxes.push(`<g class="node" data-id="${attr(node.id)}">
@@ -10162,6 +10175,16 @@ function drawFlow(){
   svg.style.width = "100%"; svg.style.height = height + "px";
   svg.innerHTML = heads.concat(pipes, boxes, dots, cargo).join("");
   drawFlowDetail();
+}
+
+/* What a site's short rows come to: orders too small, and inputs with no
+   order at all (no plan, or a paused import), which are short for another
+   reason and say so. */
+function flowShortText(node){
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+  const none = node.unsupplied || 0, small = node.short - none;
+  return [small ? `${plural(small, "order")} too small` : "",
+    none ? `${plural(none, "input")} not supplied` : ""].filter(Boolean).join(", ");
 }
 
 const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
@@ -10194,7 +10217,7 @@ function drawFlowDetail(){
        <span class="sub" style="display:inline">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
          i.cycleNeed.toLocaleString()}, ${(i.cycleNeed - i.provision).toLocaleString()} more</span>`;
   const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
-  const flags = (node.short ? chipHtml("bad", `${plural(node.short, "order")} too small`) : "")
+  const flags = (node.short ? chipHtml("bad", flowShortText(node)) : "")
     + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
   host.innerHTML = `
     ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}) + mapButton(node.id.replace(/^import:/,""),node.name),
