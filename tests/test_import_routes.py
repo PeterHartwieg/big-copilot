@@ -234,11 +234,17 @@ class ImportRoutesTests(unittest.TestCase):
                 self.assertFalse(row["made"])
                 self.assertEqual((row["cadence"], row["provision"]), ("weekly", 100))
 
-    def test_factory_panel_keeps_made_here_beside_a_paused_import_of_the_output(self):
-        beer = {"importAddress": ("pier", 1), "isActive": False, "nextDeliveryDay": 14,
-                "products": [{"itemName": BEER, "amount": 100, "amountOrderedLastWeek": 0,
-                              "assignedWarehouse": ("factory", 0)}]}
-        self.assertTrue(self.held(self.build([beer], made=True), "Beer")["made"])
+    def test_factory_panel_keeps_made_here_beside_a_dead_import_of_the_output(self):
+        """A paused or zeroed contract is no refill, whatever last week ordered."""
+        for active, amount, last in ((False, 100, 0), (False, 100, 700), (True, 0, 700)):
+            with self.subTest(active=active, amount=amount, last_week=last):
+                beer = {"importAddress": ("pier", 1), "isActive": active, "nextDeliveryDay": 14,
+                        "products": [{"itemName": BEER, "amount": amount,
+                                      "amountOrderedLastWeek": last,
+                                      "assignedWarehouse": ("factory", 0)}]}
+                row = self.held(self.build([beer], made=True), "Beer")
+                self.assertTrue(row["made"])
+                self.assertFalse(row["low"])
 
     def test_factory_panel_takes_a_daily_route_as_a_floor_under_the_week(self):
         """A holding short of the drop is not low while a route tops it up to a day."""
