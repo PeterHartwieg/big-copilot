@@ -182,7 +182,7 @@ The map button beside a building opens a zoomed location overlay without leaving
 your current page. Close it or press Escape to return. Map highlights update when
 you switch layers or load another save; the map does not show simulated deliveries.
 
-## Troubleshooting and contributing
+## Troubleshooting
 
 The website's community controls show an approximate count of dashboard browsers
 active within the last ten minutes and a vote on upcoming features. Each feature
@@ -202,8 +202,20 @@ Trend history is stored per character: in browser storage for the website, or in
 `market_history.json` beside the local output. **Forget history** clears the browser
 record. Keep a backup of the local file if you want to preserve accumulated trends.
 
-For build instructions, tests and the source-file map, see
-[Contributing](docs/contributing.md).
+## Contributing
+
+Contributions are welcome: fixes, features, docs and tests.
+
+- Open a [pull request](https://github.com/PeterHartwieg/big-copilot/pulls)
+  for each focused change. Explain what changed and why.
+- For substantial features or UI changes, share a mockup or prototype in an
+  issue or draft PR and discuss it before completing the implementation.
+- Run relevant tests and list the results in your PR. Include screenshots for UI changes.
+- AI-written code is welcome: run code review agents, address their findings
+  and check the result yourself. Summarize the review in your PR.
+
+See the [contribution guide](docs/contributing.md) for build instructions, tests
+and the source-file map.
 
 ## Licence
 
