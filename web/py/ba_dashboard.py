@@ -8887,15 +8887,31 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-ring{width:30px;height:30px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--rule) 0);display:grid;place-items:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .sp-ring::after{content:"";width:22px;height:22px;border-radius:50%;background:var(--ground)}
 .sp-ring.sp-bump{transform:scale(1.25)}
-/* the block's own first line: what it is, which shop, and what to do with it */
-.sp-lead{margin:0 0 14px;max-width:80ch;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
-.sp-lead b{color:var(--ink);font-weight:500}
 /* a shop with no hours yet: read before touching the game's own schedule */
-.sp-note{margin:0 0 14px;padding:12px 14px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column;gap:7px;max-width:80ch;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.sp-note{margin:0 0 18px;padding:10px 14px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.sp-note p{margin:0}
+.sp-note .sp-nsum{flex:0 1 auto}
+.sp-nmore{flex:0 0 100%}
 .sp-note .lab{display:inline-flex;align-items:center;gap:7px;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .sp-note b{color:var(--ink);font-weight:600}
 .sp-note.sp-care{border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
-.sp-note.sp-care .lab,.sp-note.sp-care .sp-i{color:var(--warn)}
+.sp-note.sp-care .lab,.sp-note.sp-care .lab .sp-i{color:var(--warn)}
+/* how new and how measured, on one line */
+.sp-nhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+.sp-nhead .sp-nage{font:500 11px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-wk{display:grid;grid-template-columns:repeat(7,14px);gap:4px;cursor:default}
+.sp-wk>span{display:flex;flex-direction:column-reverse;align-items:center;gap:3px;font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-wk i{display:block;width:12px;height:4px;border-radius:2px;background:var(--rule)}
+.sp-wk i.on{background:var(--ink-2)}
+.sp-wk>span.full{color:var(--ink)}
+.sp-wk>span.full i.on{background:var(--accent)}
+.sp-note .sp-nwarn{display:grid;grid-template-columns:15px 1fr;gap:9px;align-items:start;padding:8px 10px;border-radius:7px;background:color-mix(in srgb,var(--warn) 10%,transparent);color:var(--ink)}
+.sp-nwarn .sp-i{margin-top:2px;color:var(--warn)}
+.sp-nmore summary{width:fit-content;cursor:pointer;font:500 11px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-nmore summary:hover{color:var(--ink)}
+.sp-nrows{display:flex;flex-direction:column;gap:8px;margin:10px 0 2px;padding:0;list-style:none}
+.sp-nrows li{display:grid;grid-template-columns:15px 1fr;gap:10px;align-items:start}
+.sp-nrows li .sp-i{margin-top:2px;color:var(--ink-3)}
 /* arrived here from Today: one ring, then out of the way */
 @keyframes sp-arrive{from{box-shadow:0 0 0 2px var(--accent)}to{box-shadow:0 0 0 2px transparent}}
 #sp-roster.sp-arrived{border-radius:12px;animation:sp-arrive 2.4s ease-out}
@@ -12469,17 +12485,52 @@ function spRosterNew(c, counts){
   const label = c.measured ? "Cover only"
     : m.open == null ? "Not measured"
     : fresh ? "New shop" : "Never measured";
+  /* Each row opens on the words that carry it, so the bold alone reads as the
+     whole note: when the shop's own week arrives, what to do until then, what
+     the plan below is, and what clearing would cost. */
   const why = c.measured
-    ? `The hours this shop has served ask for nobody on its serving stations, so there are no serving hours to suggest. Its own week arrives with its first customers.`
-    : `${age || seen ? `${age}${seen}. ` : ""}A weekday's hours are only read once the save holds ${
-      need} reports of that same weekday, so a shop's own week arrives after about a fortnight of trading. Staff every station for those two weeks, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing, and an hour that ran at its ceiling only says how many customers the shop turned away.`;
+    ? [["clock", `<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.`]]
+    : [["clock", `<b>Its own week arrives after about a fortnight of trading.</b> A weekday's hours are only read once the save holds ${
+        need} reports of that same weekday.`],
+       ["crew", `<b>Staff every station for those two weeks</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.`]];
   /* The border marks a note the player has to read before they touch the
      game's own schedule, which is either of the two warnings above. */
   const care_ = kept || (counts.now && !counts.staffed);
+  const rows = why.concat([["list", cover], [care_ ? "alert" : "tick", care]])
+    .map(([ico, text]) => `<li>${spI(ico)}<span>${text}</span></li>`).join("");
+  /* What stays on the page: what the plan is, and the one thing not to do. The
+     reasons and the longer instructions fold away under them, because a note
+     that has to be read in full is a note that is not read. */
+  const sum = c.measured
+    ? `No serving hours to suggest yet, so this plan is <b>cleaning and security only</b>.`
+    : `Until this shop has about two weeks of hour reports, the plan is <b>cleaning and security only</b>.`;
+  const head = counts.now && !counts.staffed
+    ? `<b>Hire before you clear.</b> Every entry here waits on somebody.`
+    : kept
+      ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving entry", "serving entries")} in the game ${
+        kept === 1 ? "is" : "are"} not in this plan.`
+      : "";
   return `<div class="sp-note${care_ ? " sp-care" : ""}">
-    <span class="lab">${spI("person")}${label}</span>
-    <span>${why}</span>
-    <span>${cover} ${care}</span></div>`;
+    <div class="sp-nhead"><span class="lab">${spI("person")}${label}</span>${
+      !c.measured && (age || seen) ? `<span class="sp-nage">${age}${seen}</span>` : ""}${
+      c.measured ? "" : spRosterWeekdays(c.row.key, need)}</div>
+    <p class="sp-nsum">${sum}</p>${head ? `
+    <p class="sp-nwarn">${spI("alert")}<span>${head}</span></p>` : ""}
+    <details class="sp-nmore"><summary>Why, and what to do</summary><ul class="sp-nrows">${rows}</ul></details></div>`;
+}
+
+/* The fortnight, drawn: a weekday is read once it has `need` hour reports, so
+   each one gets that many pips and lights them as its reports arrive. Off the
+   hour grid's own `weeks`, and nothing at all for a shop the grid does not
+   carry: the count beside the label has already said how many there are. */
+function spRosterWeekdays(key, need){
+  const grid = (D.hours || []).find(h => h.key === key);
+  if(!grid || !Array.isArray(grid.weeks)) return "";
+  const read = HOUR_ROWS.filter(wd => grid.weeks[wd] >= need).length;
+  return `<div class="sp-wk" role="img" data-tip="${attr(`${read} of 7 weekdays at ${plural(need, "report")}. A weekday's hours are read once it has ${need}.`)}" aria-label="${attr(
+    HOUR_ROWS.map(wd => `${WEEK_FULL[wd]} ${grid.weeks[wd] || 0} of ${need}`).join(", "))}">${
+    HOUR_ROWS.map(wd => `<span${grid.weeks[wd] >= need ? ` class="full"` : ""}>${WEEK_SHORT[wd][0]}${
+      [...Array(need).keys()].map(k => `<i${k < (grid.weeks[wd] || 0) ? ` class="on"` : ""}></i>`).join("")}</span>`).join("")}</div>`;
 }
 
 function spRosterBlock(b){
@@ -12629,15 +12680,10 @@ function spRosterBlock(b){
       spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
     attr(row.key)}" data-tickable="${c.tickable.length}">
-    ${sechead("Staffing", {icon: "roster", aside: `<span class="seg sp-nowplan"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span>`,
-      why: `A week to copy into BizMan › Schedule, one day at a time. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save. The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`})}
-    ${/* What the block is, in plain words, and which shop it is about. Both
-          were a hover away: the Optimize staffing card lands here with the
-          shop's own heading scrolled off the top, and a player who has never
-          seen the block has no reason to think the bars are something they
-          type into the game rather than something the board has already
-          done. */""}
-    <p class="sp-lead"><b>${spEsc(shortName(b))}</b> · the week to copy into <b>BizMan › Schedule</b>, one day at a time. One entry is one person at one station for a run of hours. Tick each one here as you set it in the game. The ticks are your own place marker, kept in this browser, and nothing here changes the save.</p>
+    ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
+      why: `A week to copy into BizMan › Schedule, one day at a time. One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save. The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`})}
+    ${/* Which shop it is about rides in the heading: the Optimize staffing
+          card lands here with the shop's own heading scrolled off the top. */""}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
       <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security hours" : "Hours"
@@ -12669,10 +12715,10 @@ function spRosterBlock(b){
         keptWords}`)}"><span class="lab">Wages / week</span><div class="v">${
         spI("coin")}${costKnown ? wasCost(againstCost, cost.weekly) : ""}${
         counts.hire && !cost.weekly ? "—" : money(cost.weekly)}</div></div>
-      <div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> bought to keep the hours in one run, of the <b>${
+      ${!slack.hours ? "" : `<div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> bought to keep the hours in one run, of the <b>${
         slack.budget} h</b> allowed${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Slack</span><div class="v" style="font-size:14px">${
         slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
-        Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>
+        Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>`}
       ${/* The ring counts the narrower set: a line whose station or person the
             save does not name is a line to type and not a line the board can
             mark, so it is in the week above and not in the progress here. */""}
@@ -12689,7 +12735,9 @@ function spRosterBlock(b){
            to carry a dead link across every site that has never been typed. */
         ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>clear ticks</a></div>
     </div>
-    <div class="sp-steps">${steps}<span class="seg sp-daytabs" style="margin-left:auto">${tabs}</span></div>
+    ${/* The switch sits on the week it switches: up in the heading it changed
+          a grid that had often scrolled off the bottom of the screen. */""}
+    <div class="sp-steps">${steps}<span class="seg sp-nowplan" style="margin-left:auto"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span><span class="seg sp-daytabs">${tabs}</span></div>
     <div class="chartbox sp-gantt">${hours}${
       HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
     ${spRosterCount(c)}

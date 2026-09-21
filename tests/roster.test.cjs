@@ -925,6 +925,31 @@ test('the note says how new the shop is, what the plan covers, and what not to c
   } finally { await page.close(); }
 });
 
+test('a new shop draws its fortnight off the hour grid, and nothing without one', async () => {
+  const page = await shop('fresh');
+  try {
+    // The harness hands the page no hour grid, so the note counts in words alone.
+    assert.equal(await page.locator('#sp-roster .sp-wk').count(), 0);
+    const drawn = await page.evaluate(() => {
+      // Sunday first, as the grid keeps them: Monday read, Tuesday half way.
+      D.hours = [{key: D.staffing[0].key, weeks: [0, 2, 1, 0, 0, 0, 0]}];
+      // The block alone: a grid of nothing but `weeks` is not one the Hours
+      // block above it could draw.
+      const box = document.createElement('div');
+      box.innerHTML = spRosterBlock(D.businesses[0]);
+      return {
+        days: $$('.sp-wk > span', box).map(d => [d.className, $$('i.on', d).length]),
+        words: q('.sp-wk', box).dataset.tip,
+      };
+    });
+    assert.deepEqual(drawn.days.slice(0, 2), [['full', 2], ['', 1]]);
+    assert.deepEqual(drawn.days.slice(2), Array(5).fill(['', 0]));
+    assert.match(drawn.words, /^1 of 7 weekdays at 2 reports/);
+    // The warning is its own row, not the tail of a paragraph.
+    assert.match(await page.locator('#sp-roster .sp-nwarn').innerText(), /^Do not clear the whole schedule/);
+  } finally { await page.close(); }
+});
+
 test('with nothing scheduled yet the note says there is nothing to lose', async () => {
   const page = await shop('cover');
   try {
@@ -1067,14 +1092,16 @@ test('a cover bill the row does not carry is left unsaid, not rendered as NaN', 
   } finally { await page.close(); }
 });
 
-test('a measured shop gets the lead and no note at all', async () => {
+test('a measured shop gets its name in the heading and no note at all', async () => {
   const page = await shop('full');
   try {
     assert.equal(await page.locator('#sp-roster .sp-note').count(), 0);
-    const lead = await page.locator('#sp-roster .sp-lead').innerText();
-    assert.match(lead, /HART\. Test 12/, 'the shop the block is about, at the top of it');
-    assert.match(lead, /BizMan \u203a Schedule/);
-    assert.match(lead, /nothing here changes the save/);
+    assert.match(await page.locator('#sp-roster .sechead .quiet').innerText(), /HART\. Test 12/,
+      'the shop the block is about, at the top of it');
+    // What the block is for stays a hover away, on the heading's own note.
+    const why = await page.locator('#sp-roster .sechead [data-tip]').getAttribute('data-tip');
+    assert.match(why, /BizMan \u203a Schedule/);
+    assert.match(why, /change nothing in the save/);
   } finally { await page.close(); }
 });
 
