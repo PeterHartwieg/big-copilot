@@ -35,8 +35,8 @@ class ImportRoutesTests(unittest.TestCase):
                           [{"day": 12, "amount": 100}, {"day": 12, "amount": 600}], .5))
 
     def build(self, contracts, *, routed=False, rid=RID, with_recipes=True, target=300,
-              shop=False, made=False):
-        save = SaveStub([[rid]], hours=24)
+              shop=False, made=False, second=False):
+        save = SaveStub([[rid], [rid]] if second else [[rid]], hours=24)
         save.address = lambda value: value
         save.root.update(Hour=12, Minute=0, importPartnerships=contracts,
                          logisticsManagerPlans=[])
@@ -47,13 +47,22 @@ class ImportRoutesTests(unittest.TestCase):
                     "stockTargets": [{"itemName": WATER, "targetAmount": target}],
                 }],
             }]
+        if second:
+            # A second factory topped up each morning from the first.
+            save.root["logisticsManagerPlans"].append({
+                "targetAddress": ("factory", 0), "destinations": [{
+                    "deliveryTargetAddress": ("factory", 1),
+                    "stockTargets": [{"itemName": WATER, "targetAmount": 300}],
+                }],
+            })
         businesses = [{
             "key": site_key(address), "name": name, "code": "", "neighbourhood": "",
             "type": kind, "typeSlug": kind, "status": "support",
             "lines": [{"slug": WATER, "item": "Water", "units": 1000,
                        "rate": 0, "price": 1}],
         } for address, name, kind in [(("factory", 0), "Factory", "factory"),
-                                    (("depot", 1), "WH Import Hub", "warehouse")]]
+                                    (("depot", 1), "WH Import Hub", "warehouse")]
+                                   + ([(("factory", 1), "Factory 2", "factory")] if second else [])]
         if made:
             businesses[0]["lines"].append({"slug": BEER, "item": "Beer", "units": 500,
                                            "rate": 0, "price": 5})
@@ -163,6 +172,54 @@ class ImportRoutesTests(unittest.TestCase):
         row = self.held(self.build([contract(2000, destination=("factory", 0))], made=True), "Beer")
         self.assertTrue(row["made"])
         self.assertEqual((row["need"], row["provision"], row["fit"]), (0, 0, "ok"))
+
+    def node(self, data, key="factory#0"):
+        return next(n for n in data["supply"]["graph"]["nodes"] if n["id"] == key)
+
+    def test_factory_panel_does_not_borrow_the_depots_import_verdict(self):
+        """A factory topped up each morning is judged on its top-up; a short or
+        paused import at the depot behind it belongs to the depot."""
+        for order in (contract(700), contract(9000, active=False)):
+            with self.subTest(active=order["isActive"]):
+                data = self.build([order], routed=True, target=300)
+                row = self.held(data)
+                self.assertEqual((row["cadence"], row["provision"], row["fit"]), ("daily", 300, "ok"))
+                self.assertEqual(self.node(data)["short"], 0)
+
+    def test_factory_panel_counts_a_daily_route_as_the_next_refill(self):
+        data = self.build([contract(2000, destination=("factory", 0))], routed=True, target=300)
+        row = self.held(data)
+        self.assertEqual((row["cadence"], row["need"], row["provision"], row["fit"]),
+                         ("daily", 240, 300, "ok"))
+        self.assertFalse(row["low"])
+        self.assertEqual(self.node(data)["low"], 0)
+
+    def test_factory_panel_names_a_paused_direct_import(self):
+        row = self.held(self.build([contract(2000, active=False, destination=("factory", 0))]))
+        self.assertEqual((row["provision"], row["fit"], row["why"]), (0, "short", "paused"))
+        self.assertEqual(row["need"], 1680)  # nothing due, so a whole week
+
+    def test_factory_panel_takes_a_drop_due_today_as_a_week_away(self):
+        order = contract(2000, destination=("factory", 0))
+        order["nextDeliveryDay"] = 10
+        row = self.held(self.build([order]))
+        self.assertEqual((row["need"], row["cycleNeed"]), (1680, 1680))
+
+    def test_factory_panel_marks_a_direct_import_just_under_the_week_tight(self):
+        row = self.held(self.build([contract(1600, destination=("factory", 0))]))
+        self.assertEqual(row["fit"], "tight")
+
+    def test_factory_panel_names_an_input_with_no_plan(self):
+        row = self.held(self.build([]))
+        self.assertEqual((row["fit"], row["why"]), ("short", "unplanned"))
+
+    def test_factory_panel_counts_the_factories_it_tops_up(self):
+        """An import to one factory that also feeds another has to cover both."""
+        data = self.build([contract(2000, destination=("factory", 0))], second=True)
+        row = self.held(data)
+        self.assertEqual((row["cycleNeed"], row["provision"], row["fit"]), (3360, 2000, "short"))
+        self.assertEqual(row["need"], 1680)  # 3.5 days of 480
+        self.assertEqual(self.node(data)["short"], 1)
 
     def test_new_contract_is_visible_in_goods_graph_without_a_delivery(self):
         data = self.build([contract(126000)])
