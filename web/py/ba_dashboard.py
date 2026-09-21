@@ -2957,8 +2957,10 @@ def _supply(
             # line, or a live import of it, even one with no week behind it yet.
             # A paused or zeroed contract claims nothing, and the depot row its
             # history leaves behind is no refill of something made on the spot.
+            # An intermediate eaten here keeps it: its feed row reads the
+            # measured onward draw from it.
             ordered = (imports.get(own) or {}).get("weekly", 0)
-            if own in made_here and not ordered:
+            if own in made_here and not ordered and not feed:
                 depot = None
             made = not (feed or shop or depot or ordered) and own in made_here
             fit = why = None

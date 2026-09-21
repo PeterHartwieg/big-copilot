@@ -35,7 +35,7 @@ class ImportRoutesTests(unittest.TestCase):
                           [{"day": 12, "amount": 100}, {"day": 12, "amount": 600}], .5))
 
     def build(self, contracts, *, routed=False, rid=RID, with_recipes=True, target=300,
-              shop=False, made=False, second=False, shipped=0):
+              shop=False, made=False, second=False, shipped=0, made_units=500):
         save = SaveStub([[rid], [rid]] if second else [[rid]], hours=24)
         if shipped:
             # Three completed rounds of water leaving the first factory.
@@ -69,7 +69,7 @@ class ImportRoutesTests(unittest.TestCase):
                                     (("depot", 1), "WH Import Hub", "warehouse")]
                                    + ([(("factory", 1), "Factory 2", "factory")] if second else [])]
         if made:
-            businesses[0]["lines"].append({"slug": BEER, "item": "Beer", "units": 500,
+            businesses[0]["lines"].append({"slug": BEER, "item": "Beer", "units": made_units,
                                            "rate": 0, "price": 5})
         if shop:
             # A retail site with something selling, so _supply() builds a shop row.
@@ -233,6 +233,9 @@ class ImportRoutesTests(unittest.TestCase):
                 row = self.held(self.build([beer], made=True), "Beer")
                 self.assertFalse(row["made"])
                 self.assertEqual((row["cadence"], row["provision"]), ("weekly", 100))
+        # First week, nothing on the floor yet: the order still shows.
+        row = self.held(self.build([beer], made=True, made_units=0), "Beer")
+        self.assertEqual((row["stock"], row["cadence"], row["provision"]), (0, "weekly", 100))
 
     def test_factory_panel_keeps_made_here_beside_a_dead_import_of_the_output(self):
         """A paused or zeroed contract is no refill, whatever last week ordered."""
