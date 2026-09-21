@@ -35,7 +35,7 @@ class ImportRoutesTests(unittest.TestCase):
                           [{"day": 12, "amount": 100}, {"day": 12, "amount": 600}], .5))
 
     def build(self, contracts, *, routed=False, rid=RID, with_recipes=True, target=300,
-              shop=False):
+              shop=False, made=False):
         save = SaveStub([[rid]], hours=24)
         save.address = lambda value: value
         save.root.update(Hour=12, Minute=0, importPartnerships=contracts,
@@ -54,6 +54,9 @@ class ImportRoutesTests(unittest.TestCase):
                        "rate": 0, "price": 1}],
         } for address, name, kind in [(("factory", 0), "Factory", "factory"),
                                     (("depot", 1), "WH Import Hub", "warehouse")]]
+        if made:
+            businesses[0]["lines"].append({"slug": BEER, "item": "Beer", "units": 500,
+                                           "rate": 0, "price": 5})
         if shop:
             # A retail site with something selling, so _supply() builds a shop row.
             businesses.append({
@@ -129,6 +132,37 @@ class ImportRoutesTests(unittest.TestCase):
 
     def test_unplanned_input_stays_unplanned(self):
         self.assertEqual(self.need(self.build([]))["status"], "unplanned")
+
+    def held(self, data, item="Water"):
+        node = next(n for n in data["supply"]["graph"]["nodes"] if n["id"] == "factory#0")
+        return next(i for i in node["items"] if i["item"] == item)
+
+    def test_factory_panel_holds_direct_import_against_the_machines_week(self):
+        row = self.held(self.build([contract(2000, last=2000, destination=("factory", 0))]))
+        self.assertEqual((row["cadence"], row["provision"], row["cycleNeed"]), ("weekly", 2000, 1680))
+        # Day 10 at noon, delivery on day 14: 3.5 days of 240 a day.
+        self.assertEqual(row["need"], 840)
+        self.assertEqual(row["fit"], "ok")
+        self.assertFalse(row["made"])
+
+    def test_factory_panel_flags_a_direct_import_too_small_for_the_week(self):
+        row = self.held(self.build([contract(700, destination=("factory", 0))]))
+        self.assertEqual((row["provision"], row["fit"]), (700, "short"))
+
+    def test_factory_panel_holds_a_daily_topup_against_a_day_of_machines(self):
+        row = self.held(self.build([contract(126000)], routed=True, target=300))
+        self.assertEqual((row["cadence"], row["need"], row["provision"], row["fit"]),
+                         ("daily", 240, 300, "ok"))
+        row = self.held(self.build([contract(126000)], routed=True, target=100))
+        self.assertEqual(row["fit"], "short")
+
+    def test_factory_panel_marks_an_unfed_input_short(self):
+        self.assertEqual(self.held(self.build([]))["fit"], "short")
+
+    def test_factory_panel_names_its_own_output_as_made_here(self):
+        row = self.held(self.build([contract(2000, destination=("factory", 0))], made=True), "Beer")
+        self.assertTrue(row["made"])
+        self.assertEqual((row["need"], row["provision"], row["fit"]), (0, 0, "ok"))
 
     def test_new_contract_is_visible_in_goods_graph_without_a_delivery(self):
         data = self.build([contract(126000)])

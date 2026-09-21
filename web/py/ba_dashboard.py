@@ -2927,6 +2927,14 @@ def _supply(
     depot_need = collections.defaultdict(dict)
     for row in import_rows:
         depot_need[businesses[row["s"]]["key"]][row["item"]] = row
+    # A factory's inputs are judged by the factory view against what its
+    # machines eat; its outputs are made on the spot and need no refill.
+    feed_need, made_here = {}, set()
+    for site in factories.get("sites", []):
+        key = businesses[site["s"]]["key"]
+        made_here |= {(key, line["slug"]) for line in site["lines"]}
+        for row in site["needs"]:
+            feed_need[(key, row["slug"])] = row
 
     for business in businesses:
         entry = nodes.get(business["key"])
@@ -2937,10 +2945,28 @@ def _supply(
         for line in business["lines"]:
             shop = shop_need[business["key"]].get(line["item"])
             depot = depot_need[business["key"]].get(line["item"])
+            feed = feed_need.get((business["key"], line["slug"]))
+            made = not feed and (business["key"], line["slug"]) in made_here
             if shop:
                 need = shop["peakSold"]
                 provision = shop["target"]
                 # A shelf is refilled daily, so a day's peak is the whole test.
+                cycle_need, cadence = need, "daily"
+            elif feed and feed["directImport"]:
+                # Imported straight to the factory: the week's order has to
+                # feed the machines for the week. Machines run flat, so the
+                # hours to the drop need no weekday walk.
+                supply = imports.get((business["key"], line["slug"]))
+                due = (
+                    max(supply["arrives"] - day - spent_today, 0.0)
+                    if supply and supply["weekly"] else 7.0
+                )
+                need = round(feed["perDay"] * due)
+                provision = feed["directWeekly"] or 0
+                cycle_need, cadence = feed["perWeek"], "weekly"
+            elif feed:
+                # Topped up each morning from a depot: a day's run is the test.
+                need, provision = feed["perDay"], feed["target"]
                 cycle_need, cadence = need, "daily"
             elif depot:
                 need = round(depot["perDay"] * max(depot_days, 0.0) * factor)
@@ -2948,6 +2974,9 @@ def _supply(
                 # The order arrives weekly, so it has to cover a week — comparing
                 # it with the days left until the next one would flatter it.
                 cycle_need, cadence = round(depot["perDay"] * 7), "weekly"
+            elif made:
+                need = provision = cycle_need = 0
+                cadence = "made"
             else:
                 out = draw(business["key"], line["item"])
                 if out <= 0 and line["units"] <= 0:
@@ -2966,7 +2995,18 @@ def _supply(
                 continue
             # A depot line already carries its verdict, weekday-walked and
             # withheld where no draw has been measured; do not second-guess it.
-            fit = depot["orderFit"] if depot else _fit(cycle_need, provision)
+            if feed:
+                # The factory view's verdict, so the two pages agree. Only its
+                # sizing verdicts belong here: a thin week of arrivals is a
+                # delivery question, not whether the order covers a cycle.
+                fit = {"unplanned": "short", "target": "short", "paused": "short"}.get(
+                    feed["status"],
+                    (feed["importFit"] or "ok") if feed["status"] == "import" else "ok",
+                )
+            elif depot:
+                fit = depot["orderFit"]
+            else:
+                fit = _fit(cycle_need, provision)
             entry["items"].append(
                 {
                     "item": line["item"],
@@ -2975,6 +3015,7 @@ def _supply(
                     "cycleNeed": cycle_need,
                     "provision": provision,
                     "cadence": cadence,
+                    "made": made,
                     "fit": fit,
                     "short": fit == "short",
                     # Only worth flagging where the next refill is days away. A
@@ -10126,7 +10167,8 @@ function drawFlowDetail(){
     <tbody>${links.length ? links.map(l => `<tr><td class="l">${named(other(l))}${
         l.paused ? ` ${chipHtml("bad", "paused")}` : ""}</td><td>${l.perDay.toLocaleString()}</td></tr>`).join("")
       : `<tr><td class="l quiet" colspan="2">${empty}</td></tr>`}</tbody></table>`;
-  const fitCell = i => i.fit === "ok"
+  const fitCell = i => i.made ? chipHtml("dim", "made here", "Made on site; nothing refills it")
+    : i.fit === "ok"
     ? (i.low ? chipHtml("warn", "below need", "Holds less than it needs before the next delivery") : chipHtml("ok", "covered"))
     : `${chipHtml(i.fit === "short" ? "bad" : "warn", i.fit === "short" ? "order too small" : "tight")}
        <span class="sub" style="display:inline">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
