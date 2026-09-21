@@ -798,6 +798,7 @@ T_95 = {2: 12.71, 3: 4.30, 4: 3.18, 5: 2.78, 6: 2.57, 7: 2.45, 8: 2.36, 9: 2.31}
 # knowing but not worth an alarm.
 FIT_NOISE = 0.01
 FIT_TIGHT = 0.05
+FIT_ORDER = ["ok", "tight", "short"]  # a verdict's severity, mildest first
 FIT_FLOOR = 5  # units, so tiny lines are not judged on fractions
 # A holding that empties a few hours before its delivery is an order sized to
 # consumption, which is what a well set-up chain looks like.
@@ -2927,6 +2928,14 @@ def _supply(
     depot_need = collections.defaultdict(dict)
     for row in import_rows:
         depot_need[businesses[row["s"]]["key"]][row["item"]] = row
+    # A factory's inputs are judged by the factory view against what its
+    # machines eat; its outputs are made on the spot and need no refill.
+    feed_need, made_here = {}, set()
+    for site in factories.get("sites", []):
+        key = businesses[site["s"]]["key"]
+        made_here |= {(key, line["slug"]) for line in site["lines"]}
+        for row in site["needs"]:
+            feed_need[(key, row["slug"])] = row
 
     for business in businesses:
         entry = nodes.get(business["key"])
@@ -2937,17 +2946,89 @@ def _supply(
         for line in business["lines"]:
             shop = shop_need[business["key"]].get(line["item"])
             depot = depot_need[business["key"]].get(line["item"])
+            own = (business["key"], line["slug"])
+            feed = feed_need.get(own)
+            # An input a line here makes for another, with no route bringing
+            # it in, is made on the spot rather than missing a plan.
+            if (feed and not feed["target"] and not feed["directImport"]
+                    and index[business["key"]] in feed["madeAt"]):
+                feed = None
+            # Made here, unless something else claims the row: a shelf, a depot
+            # line, or a live import of it, even one with no week behind it yet.
+            # A paused or zeroed contract claims nothing, and the depot row its
+            # history leaves behind is no refill of something made on the spot.
+            # An intermediate eaten here keeps it: its feed row reads the
+            # measured onward draw from it.
+            ordered = (imports.get(own) or {}).get("weekly", 0)
+            if own in made_here and not ordered and not feed:
+                depot = None
+            made = not (feed or shop or depot or ordered) and own in made_here
+            fit = why = None
+            backed = False
             if shop:
                 need = shop["peakSold"]
                 provision = shop["target"]
                 # A shelf is refilled daily, so a day's peak is the whole test.
                 cycle_need, cadence = need, "daily"
+            elif feed and feed["target"] and not feed["directImport"]:
+                # Topped up each morning: the next refill is tomorrow's round, so
+                # a day of the machines is the test, with the factory view's
+                # slack. The depot's import is judged on the depot.
+                need, provision = feed["perDay"], feed["target"]
+                cycle_need, cadence = need, "daily"
+                fit = "short" if provision < feed["dailyNeed"] * (1 - FEED_SLACK) else "ok"
+            elif feed and feed["directImport"]:
+                # Imported straight to the factory: the week's order has to feed
+                # the machines here, the factories topped up from here, and
+                # anything measured leaving onward. Machines run flat, so the
+                # hours to the drop need no weekday walk. A drop due now leaves
+                # the next one a week out, as for a depot.
+                supply = imports.get(own)
+                due = (
+                    max(supply["arrives"] - day - spent_today, 0.0)
+                    if supply and supply["weekly"] else 0.0
+                ) or 7.0
+                onward = depot["perDay"] if depot and depot["basis"] != "order" else 0
+                # The larger, not the sum: the measured draw already carries the
+                # top-ups to other factories that depotNeed plans for. A starved
+                # neighbour makes this an underestimate.
+                per_day = max(feed["depotNeed"] / 7, feed["perDay"] + onward)
+                need = round(per_day * due)
+                provision = feed["directWeekly"] or 0
+                cycle_need, cadence = round(per_day * 7), "weekly"
+                # A target only fills up to its level, so beside an import that
+                # covers the week it ships nothing until stock runs down; one
+                # that covers a day of everything drawn here is a floor under the
+                # week, and the holding cannot run dry before the drop.
+                backed = bool(
+                    feed["target"] and feed["target"] >= per_day * (1 - FEED_SLACK)
+                )
+                if feed["importPaused"]:
+                    fit, why = "short", "paused"
+                else:
+                    # Past the order's own need, measured onward draw can only
+                    # make the week longer, never shorter.
+                    fit = max(feed["importFit"] or "ok", _fit(cycle_need, provision),
+                              key=FIT_ORDER.index)
+            elif feed:
+                # Neither imported here nor topped up: nothing brings it in.
+                need, provision = feed["perDay"], 0
+                cycle_need, cadence = need, "daily"
+                fit, why = "short", "unplanned"
             elif depot:
                 need = round(depot["perDay"] * max(depot_days, 0.0) * factor)
                 provision = depot["weekly"]
                 # The order arrives weekly, so it has to cover a week — comparing
                 # it with the days left until the next one would flatter it.
                 cycle_need, cadence = round(depot["perDay"] * 7), "weekly"
+            elif made:
+                need = provision = cycle_need = 0
+                cadence = "made"
+            elif ordered and own in made_here:
+                # An output made here and imported too, before any draw or order
+                # history gives it a depot row: the order is known, the need not.
+                need = cycle_need = 0
+                provision, cadence = ordered, "weekly"
             else:
                 out = draw(business["key"], line["item"])
                 if out <= 0 and line["units"] <= 0:
@@ -2962,11 +3043,15 @@ def _supply(
                 )
                 need = round(out * factor)
                 provision, cycle_need, cadence = target, need, "daily"
-            if not need and not line["units"]:
+            if not need and not line["units"] and not provision:
                 continue
-            # A depot line already carries its verdict, weekday-walked and
-            # withheld where no draw has been measured; do not second-guess it.
-            fit = depot["orderFit"] if depot else _fit(cycle_need, provision)
+            # A factory input carries the verdict set above, which follows the
+            # factory view's sizing checks: a thin week of arrivals is a
+            # delivery question, not whether the order covers a cycle. A depot
+            # line already carries its verdict, weekday-walked and withheld
+            # where no draw has been measured; do not second-guess it.
+            if fit is None:
+                fit = depot["orderFit"] if depot else _fit(cycle_need, provision)
             entry["items"].append(
                 {
                     "item": line["item"],
@@ -2975,12 +3060,14 @@ def _supply(
                     "cycleNeed": cycle_need,
                     "provision": provision,
                     "cadence": cadence,
+                    "made": made,
+                    "why": why,
                     "fit": fit,
                     "short": fit == "short",
                     # Only worth flagging where the next refill is days away. A
                     # half-empty shelf at teatime is tomorrow morning's business.
                     "low": bool(
-                        cadence == "weekly" and need and line["units"] < need
+                        cadence == "weekly" and need and line["units"] < need and not backed
                     ),
                 }
             )
@@ -2991,12 +3078,17 @@ def _supply(
         entry["short"] = sum(1 for i in entry["items"] if i["fit"] == "short")
         entry["tight"] = sum(1 for i in entry["items"] if i["fit"] == "tight")
         entry["low"] = sum(1 for i in entry["items"] if i["low"])
+        # Of the short, those with no order at all: no plan, or a paused import.
+        entry["unsupplied"] = sum(
+            1 for i in entry["items"] if i.get("why") in ("paused", "unplanned")
+        )
         entry["stock"] = sum(i["stock"] for i in entry["items"])
 
     for entry in nodes.values():
         entry.setdefault("tight", 0)
         entry.setdefault("short", 0)
         entry.setdefault("low", 0)
+        entry.setdefault("unsupplied", 0)
         entry.setdefault("stock", 0)
 
     # A site earns a place on the diagram by being on a plan or by holding
@@ -9371,7 +9463,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
 
     <section class="sec rv" id="secFlow" data-sub="map">
-      <div class="sechead"><h2>How goods move</h2><span class="why" tabindex="0" data-tip="Solid pipes are daily distribution, dashed ones weekly imports, a red one a paused import; width is volume. Hover a pipe and its cargo moves. Click a site to keep only its pipes lit and to see what it holds below. An amber dot is an order running tight or a holding below what its week needs, a red one an order too small."><i>?</i></span></div>
+      <div class="sechead"><h2>How goods move</h2><span class="why" tabindex="0" data-tip="Solid pipes are daily distribution, dashed ones weekly imports, a red one a paused import; width is volume. Hover a pipe and its cargo moves. Click a site to keep only its pipes lit and to see what it holds below. An amber dot is an order running tight or a holding below what its week needs, a red one an order too small or an input nothing brings in."><i>?</i></span></div>
       <div class="chartbox" style="padding:18px 24px 24px"><svg class="flow" id="flow"></svg></div>
       <div class="sec" id="flowDetail"></div>
     </section>
@@ -10087,7 +10179,7 @@ function drawFlow(){
   const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
   Object.values(at).forEach(({x, y, node}) => {
     const hood = node.tag, tx = x + (hood ? 44 : 12);
-    const flag = node.short ? ["badd", `${plural(node.short, "order")} too small`]
+    const flag = node.short ? ["badd", flowShortText(node)]
       : node.tight ? ["warnd", `${plural(node.tight, "order")} running tight`]
       : node.low ? ["warnd", `${plural(node.low, "holding")} below what the week needs`] : null;
     boxes.push(`<g class="node" data-id="${attr(node.id)}">
@@ -10103,6 +10195,16 @@ function drawFlow(){
   svg.style.width = "100%"; svg.style.height = height + "px";
   svg.innerHTML = heads.concat(pipes, boxes, dots, cargo).join("");
   drawFlowDetail();
+}
+
+/* What a site's short rows come to: orders too small, and inputs with no
+   order at all (no plan, or a paused import), which are short for another
+   reason and say so. */
+function flowShortText(node){
+  const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+  const none = node.unsupplied || 0, small = node.short - none;
+  return [small ? `${plural(small, "order")} too small` : "",
+    none ? `${plural(none, "input")} not supplied` : ""].filter(Boolean).join(", ");
 }
 
 const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
@@ -10126,13 +10228,16 @@ function drawFlowDetail(){
     <tbody>${links.length ? links.map(l => `<tr><td class="l">${named(other(l))}${
         l.paused ? ` ${chipHtml("bad", "paused")}` : ""}</td><td>${l.perDay.toLocaleString()}</td></tr>`).join("")
       : `<tr><td class="l quiet" colspan="2">${empty}</td></tr>`}</tbody></table>`;
-  const fitCell = i => i.fit === "ok"
+  const fitCell = i => i.made ? chipHtml("dim", "made here", "Made on site; nothing refills it")
+    : i.why === "unplanned" ? chipHtml("bad", "no plan", "Nothing is set up to bring this in")
+    : i.why === "paused" ? chipHtml("bad", "import paused")
+    : i.fit === "ok"
     ? (i.low ? chipHtml("warn", "below need", "Holds less than it needs before the next delivery") : chipHtml("ok", "covered"))
     : `${chipHtml(i.fit === "short" ? "bad" : "warn", i.fit === "short" ? "order too small" : "tight")}
        <span class="sub" style="display:inline">a ${i.cadence === "weekly" ? "week" : "day"} takes ${
          i.cycleNeed.toLocaleString()}, ${(i.cycleNeed - i.provision).toLocaleString()} more</span>`;
   const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
-  const flags = (node.short ? chipHtml("bad", `${plural(node.short, "order")} too small`) : "")
+  const flags = (node.short ? chipHtml("bad", flowShortText(node)) : "")
     + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
   host.innerHTML = `
     ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}) + mapButton(node.id.replace(/^import:/,""),node.name),
