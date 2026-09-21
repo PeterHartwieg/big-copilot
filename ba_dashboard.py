@@ -2954,8 +2954,10 @@ def _supply(
                     and index[business["key"]] in feed["madeAt"]):
                 feed = None
             # Made here, unless something else claims the row: a shelf, a depot
-            # line, or an import of it, even one with no week behind it yet.
-            made = not (feed or shop or depot) and own not in imports and own in made_here
+            # line, or a live import of it, even one with no week behind it yet.
+            # A paused or zeroed contract claims nothing.
+            ordered = (imports.get(own) or {}).get("weekly", 0)
+            made = not (feed or shop or depot or ordered) and own in made_here
             fit = why = None
             backed = False
             if shop:
@@ -2991,10 +2993,10 @@ def _supply(
                 cycle_need, cadence = round(per_day * 7), "weekly"
                 # A target only fills up to its level, so beside an import that
                 # covers the week it ships nothing until stock runs down; one
-                # that covers a day is a floor under the week, and the holding
-                # cannot run dry before the drop.
+                # that covers a day of everything drawn here is a floor under the
+                # week, and the holding cannot run dry before the drop.
                 backed = bool(
-                    feed["target"] and feed["target"] >= feed["dailyNeed"] * (1 - FEED_SLACK)
+                    feed["target"] and feed["target"] >= per_day * (1 - FEED_SLACK)
                 )
                 if feed["importPaused"]:
                     fit, why = "short", "paused"
@@ -3017,6 +3019,11 @@ def _supply(
             elif made:
                 need = provision = cycle_need = 0
                 cadence = "made"
+            elif ordered and own in made_here:
+                # An output made here and imported too, before any draw or order
+                # history gives it a depot row: the order is known, the need not.
+                need = cycle_need = 0
+                provision, cadence = ordered, "weekly"
             else:
                 out = draw(business["key"], line["item"])
                 if out <= 0 and line["units"] <= 0:

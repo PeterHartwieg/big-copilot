@@ -232,8 +232,13 @@ class ImportRoutesTests(unittest.TestCase):
                                       "assignedWarehouse": ("factory", 0)}]}
                 row = self.held(self.build([beer], made=True), "Beer")
                 self.assertFalse(row["made"])
-                if last:
-                    self.assertEqual((row["cadence"], row["provision"]), ("weekly", 100))
+                self.assertEqual((row["cadence"], row["provision"]), ("weekly", 100))
+
+    def test_factory_panel_keeps_made_here_beside_a_paused_import_of_the_output(self):
+        beer = {"importAddress": ("pier", 1), "isActive": False, "nextDeliveryDay": 14,
+                "products": [{"itemName": BEER, "amount": 100, "amountOrderedLastWeek": 0,
+                              "assignedWarehouse": ("factory", 0)}]}
+        self.assertTrue(self.held(self.build([beer], made=True), "Beer")["made"])
 
     def test_factory_panel_takes_a_daily_route_as_a_floor_under_the_week(self):
         """A holding short of the drop is not low while a route tops it up to a day."""
@@ -243,6 +248,17 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertEqual((routed["cadence"], routed["need"], routed["fit"]), ("weekly", 1560, "ok"))
         self.assertFalse(routed["low"])
         self.assertTrue(self.held(self.build([order]))["low"])
+        # Under a day, the route is no floor.
+        self.assertTrue(self.held(self.build([order], routed=True, target=100))["low"])
+
+    def test_factory_panel_sizes_the_floor_to_everything_drawn_here(self):
+        """A route covering this factory's day is no floor once it also tops up
+        another: the holding drains at both factories' rate."""
+        order = contract(4000, destination=("factory", 0))
+        order["nextDeliveryDay"] = 17
+        row = self.held(self.build([order], routed=True, target=300, second=True))
+        self.assertEqual((row["need"], row["cycleNeed"], row["fit"]), (3120, 3360, "ok"))
+        self.assertTrue(row["low"])
 
     def test_factory_panel_names_a_paused_direct_import(self):
         row = self.held(self.build([contract(2000, active=False, destination=("factory", 0))]))
