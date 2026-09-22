@@ -15,8 +15,10 @@ namespace BigCopilotLink
         private static readonly ConcurrentQueue<Action> Queue = new ConcurrentQueue<Action>();
 
         // Enqueue after Uninstall would park the closure, and whatever it holds,
-        // in this static field until the next city load; refuse it instead.
-        private static volatile bool Installed;
+        // in this static field until the next city load; refuse it instead. The
+        // gate makes the check and the push one step against Uninstall's drain.
+        private static readonly object Gate = new object();
+        private static bool Installed;
 
         private Action _intervalCallback;
         private float _intervalSeconds;
@@ -31,7 +33,7 @@ namespace BigCopilotLink
             {
             }
 
-            Installed = true;
+            lock (Gate) Installed = true;
             var go = new GameObject("BigCopilotLink.MainThreadDispatcher");
             go.hideFlags = HideFlags.HideAndDontSave;
             DontDestroyOnLoad(go);
@@ -40,13 +42,16 @@ namespace BigCopilotLink
 
         public void Uninstall()
         {
-            Installed = false;
             _intervalCallback = null;
             // Nothing queued may run without a city, and a queued publish would
             // hold the player's bytes in a static field until the next load.
-            Action stale;
-            while (Queue.TryDequeue(out stale))
+            lock (Gate)
             {
+                Installed = false;
+                Action stale;
+                while (Queue.TryDequeue(out stale))
+                {
+                }
             }
             Destroy(gameObject);
         }
@@ -59,11 +64,15 @@ namespace BigCopilotLink
             _accumulated = seconds;
         }
 
-        /// <summary>Queues work for the next frame; dropped when no city is loaded.</summary>
-        public static void Enqueue(Action action)
+        /// <summary>Queues work for the next frame. False, and nothing queued, when no city is loaded.</summary>
+        public static bool Enqueue(Action action)
         {
-            if (!Installed) return;
-            Queue.Enqueue(action);
+            lock (Gate)
+            {
+                if (!Installed) return false;
+                Queue.Enqueue(action);
+                return true;
+            }
         }
 
         /// <summary>
@@ -75,7 +84,7 @@ namespace BigCopilotLink
         public static Task<T> RunOnMainThread<T>(Func<T> func)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-            Queue.Enqueue(() =>
+            var queued = Enqueue(() =>
             {
                 try
                 {
@@ -86,6 +95,9 @@ namespace BigCopilotLink
                     tcs.SetException(e);
                 }
             });
+            // No city: the caller gets a faulted task at once, not one that never
+            // completes (and never a refresh run against a later city).
+            if (!queued) tcs.SetException(new InvalidOperationException("no city is loaded"));
             return tcs.Task;
         }
 

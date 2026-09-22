@@ -73,6 +73,38 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.assertIn("version 2", str(caught.exception))
         self.assertIn("version 1", str(caught.exception))
 
+    def test_the_board_only_builds_from_bytes_its_own_link_downloaded(self):
+        """Board._refresh in link mode: a stale file, the first stamp, a rename."""
+        seen = []
+        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
+        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.safe_extract = lambda path, names, history: (
+            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+        ba_dashboard.render = lambda data, live=False: "<html>"
+        try:
+            out = os.path.join(self.out, "board.html")
+            # A game-link.hsg left behind by an earlier session, and a mod that
+            # has not produced a stamp yet: nothing builds.
+            with open(os.path.join(self.out, "game-link.hsg"), "wb") as fh:
+                fh.write(b"stale")
+            self.mock.stamp = ""  # the mock's state before its first refresh
+            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            self.assertFalse(board.refresh(settle=False))
+            self.assertEqual(seen, [])
+            # The mock's first stamp: one build, from the downloaded bytes.
+            self.mock.refresh(force=True)
+            self.assertTrue(board.refresh(settle=False))
+            self.assertEqual(len(seen), 1)
+            self.assertEqual(seen[0], board.link.path)
+            # Nothing new from the mod: no rebuild.
+            self.assertFalse(board.refresh(settle=False))
+            # A renamed line rebuilds from the same bytes without a new stamp.
+            board.name_line("rid", "beer")
+            self.assertEqual(len(seen), 2)
+            self.assertEqual(seen[1], board.link.path)
+        finally:
+            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+
     def test_a_save_name_after_the_flag_is_refused(self):
         with self.assertRaises(SystemExit) as caught:
             ba_dashboard.GameLink("Hart", self.dir.name)

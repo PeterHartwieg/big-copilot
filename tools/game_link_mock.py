@@ -170,7 +170,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._other_method()
 
     def do_HEAD(self):
-        self._other_method()
+        # A HEAD answer carries no body, or the next request on a kept-alive
+        # connection reads the leftover bytes as its status line.
+        status = 405 if self._route() in ("/", "/health", "/save", "/refresh") else 404
+        self.send_response(status)
+        self.send_header("Content-Length", "0")
+        self._cors()
+        self.end_headers()
 
     def do_TRACE(self):
         self._other_method()

@@ -102,9 +102,6 @@ namespace BigCopilotLink
         /// <summary>The first refresh after the city loads.</summary>
         private const int FirstRefreshSeconds = 5;
 
-        /// <summary>Two save-completed edges this close together are one save.</summary>
-        private const int SameSaveSeconds = 5;
-
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         // One immutable snapshot, swapped as a whole: a reader on the HTTP thread
@@ -176,14 +173,15 @@ namespace BigCopilotLink
             // calls only File, GZipStream, the Odin serializer and Debug). Sampling
             // once a second can miss the first on a fast save; the second stays
             // down until the game marks another change. The two edges of one save
-            // can land on different ticks, so a save seen in the last few seconds
-            // is the same save, not a second trigger.
+            // can land on different ticks; the second then asks for a refresh the
+            // throttle refuses, and the pending retry runs it when the window
+            // lifts. One spare serialization per save is the price of never
+            // dropping a real second save that close behind.
             var saving = SaveGameManager.SavingGameInProgress;
             var hasChanges = SaveGameManager.HasChangesSinceLastSave();
-            var edge = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
+            var gameSaveCompleted = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
             _lastSavingInProgress = saving;
             _lastHadChanges = hasChanges;
-            var gameSaveCompleted = edge && (now - _lastGameSaveSeen).TotalSeconds > SameSaveSeconds;
             if (gameSaveCompleted) _lastGameSaveSeen = now;
 
             var firstDue = !_firstRefreshTriggered &&
@@ -313,14 +311,16 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// A crash leaves an uncompressed copy behind; anything older than a minute
-        /// in the folder belongs to no running compress and goes. Main thread.
+        /// A crash leaves an uncompressed copy behind, the player's whole company in
+        /// the cache. A compress reads its file within seconds of writing it, so
+        /// anything older than ten minutes belongs to no running compress and goes.
+        /// Main thread, once per city load.
         /// </summary>
         private static void SweepStaleTempFiles(string folder)
         {
             try
             {
-                var cutoff = DateTime.UtcNow.AddMinutes(-1);
+                var cutoff = DateTime.UtcNow.AddMinutes(-10);
                 foreach (var file in Directory.GetFiles(folder, "live-*.bin"))
                 {
                     if (File.GetLastWriteTimeUtc(file) < cutoff) File.Delete(file);

@@ -293,12 +293,19 @@ namespace BigCopilotLink
                     WriteJson(context, 503, "{\"error\":\"main_thread_unavailable\"}");
                     return;
                 }
-                else
+                else if (task.Wait(MainThreadTimeoutMs))
                 {
                     // The pump took it on the boundary: a refresh really started, and
                     // the ordinary answer is the true one.
-                    task.Wait();
                     result = task.Result;
+                }
+                else
+                {
+                    // Started, and still not back after another ten seconds: the main
+                    // thread is stuck inside the serialize. The one listener thread
+                    // must not stay stuck with it; the client is told what is true,
+                    // that a refresh began, and polls /health for its stamp.
+                    result = RefreshResult.Started();
                 }
             }
             catch (Exception e)

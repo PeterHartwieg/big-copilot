@@ -592,7 +592,7 @@
         if (gen !== sourceGen) return;
         // A build that failed keeps its own reason, and the stamp behind it:
         // the next check reads the same bytes again rather than skipping them.
-        if (strip.tone !== "bad") lastLinkStamp = file.linkStamp;
+        if (strip.tone !== "bad") { lastLinkStamp = file.linkStamp; linkGone = false; }
       }
     }
     lastCheck = Date.now();

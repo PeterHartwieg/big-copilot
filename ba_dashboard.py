@@ -16555,10 +16555,12 @@ class GameLink:
         self.company = ""
 
     def _call(self, route: str, method: str = "GET", headers: dict | None = None):
-        req = urllib.request.Request(
-            self.url + route, method=method, headers=headers or {}
-        )
         try:
+            # Request() is what raises ValueError for an address urllib cannot
+            # use, so it belongs inside the try with the call.
+            req = urllib.request.Request(
+                self.url + route, method=method, headers=headers or {}
+            )
             with urllib.request.urlopen(req, timeout=self.TIMEOUT) as res:
                 return res.status, dict(res.headers), res.read()
         except urllib.error.HTTPError as err:

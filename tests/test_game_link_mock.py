@@ -85,8 +85,10 @@ class MockContract(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], ["/health", "/save", "/refresh"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
-        for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh")):
+        for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
             self.assertEqual(call(self.url + route, method)[0], 405, f"{method} {route}")
+        status, _, body = call(self.url + "/health", "HEAD")
+        self.assertEqual((status, body), (405, b""), "a HEAD answer carries no body")
 
     def test_cors_only_for_the_allowlist(self):
         for origin in ("https://bigcopilot.com", "http://127.0.0.1:8770", "http://localhost:8080"):
