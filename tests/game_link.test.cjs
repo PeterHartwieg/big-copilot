@@ -115,6 +115,76 @@ test('a link that answers nothing reads as the game not running', async () => {
   assert.equal(h.seen.calls.length, 3, 'every spelling was tried before giving up');
 });
 
+// Chrome's loopback permission, as navigator.permissions reports it: one
+// state per name, and a name the browser does not know throws.
+const permissions = (states) => ({
+  permissions: {query: async ({name}) => {
+    if (!(name in states)) throw new TypeError(`unknown permission ${name}`);
+    return {state: states[name]};
+  }},
+});
+
+test('an open permission prompt gets a long wait and a strip that says so', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const delays = [];
+  h.context.setTimeout = (fn, ms) => { delays.push(ms); return 0; };
+  h.context.navigator = permissions({'loopback-network': 'prompt', 'local-network-access': 'prompt'});
+  h.context.location = {hash: '', hostname: 'bigcopilot.com'};
+  h.run('linkUrl = "http://127.0.0.1:8322"; attempt = {gen: 1}');
+  await h.run('linkFetch("/health")');
+  assert.deepEqual(delays, [90000], 'the fetch waits for the player, not five seconds');
+  assert.deepEqual(h.seen.states.at(-1),
+    ['busy', 'Allow Big Copilot to reach the game', 'your browser is asking, at the top of the window']);
+});
+
+test('a granted permission, or a browser that knows none, keeps the five-second timeout', async () => {
+  for (const states of [{'loopback-network': 'granted', 'local-network-access': 'prompt'}, {}]) {
+    const h = harness({routes: {health: HEALTH}});
+    const delays = [];
+    h.context.setTimeout = (fn, ms) => { delays.push(ms); return 0; };
+    h.context.navigator = permissions(states);
+    h.context.location = {hash: '', hostname: 'bigcopilot.com'};
+    h.run('linkUrl = "http://127.0.0.1:8322"; attempt = {gen: 1}');
+    await h.run('linkFetch("/health")');
+    assert.deepEqual(delays, [5000]);
+    assert.equal(h.seen.states.length, 0, 'nothing to ask, nothing said');
+  }
+});
+
+test('a page served from this machine is never told to wait for a prompt', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const delays = [];
+  h.context.setTimeout = (fn, ms) => { delays.push(ms); return 0; };
+  h.context.navigator = permissions({'loopback-network': 'prompt'});
+  h.context.location = {hash: '', hostname: 'localhost'};
+  h.run('linkUrl = "http://127.0.0.1:8322"; attempt = {gen: 1}');
+  await h.run('linkFetch("/health")');
+  assert.deepEqual(delays, [5000]);
+});
+
+test('a blocked site is named as blocked, not as a closed game', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  h.context.navigator = permissions({'loopback-network': 'denied'});
+  h.context.location = {hash: '', hostname: 'bigcopilot.com'};
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Linking to the game")');
+  assert.equal(h.seen.calls.length, 0, 'no fetch the browser will refuse anyway');
+  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not reach the game', 'http://127.0.0.1:8322']);
+  assert.equal(h.seen.notes.at(-1)[1], 'Your browser is blocking this site from reaching the game.');
+  assert.match(h.seen.notes.at(-1)[2], /site settings/);
+});
+
+test('a Block answered under the prompt reads as blocked once the fetch fails', async () => {
+  const h = harness();
+  const states = {'loopback-network': 'prompt'};
+  h.context.navigator = permissions(states);
+  h.context.location = {hash: '', hostname: 'bigcopilot.com'};
+  h.context.fetch = async () => { states['loopback-network'] = 'denied'; throw new TypeError('Failed to fetch'); };
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
+  assert.equal(err.message, 'Your browser is blocking this site from reaching the game.');
+});
+
 test('an unreachable game leaves the bad state, the install note and the link', async () => {
   const h = harness();
   h.run('linkUrl = "http://127.0.0.1:8322"');
