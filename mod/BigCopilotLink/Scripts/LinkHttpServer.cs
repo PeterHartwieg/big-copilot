@@ -136,6 +136,15 @@ namespace BigCopilotLink
                 return;
             }
 
+            if (method == "HEAD")
+            {
+                // A HEAD answer carries no body, or a kept-alive client reads the
+                // leftover bytes as its next status line. 405 on the known paths.
+                var known = path == "" || path == "/health" || path == "/save" || path == "/refresh";
+                WriteNoBody(context, known ? 405 : 404);
+                return;
+            }
+
             switch (path)
             {
                 case "":

@@ -533,6 +533,7 @@
     try { health = await (await linkFetch("/health")).json(); }
     catch (err) { linkDown(gen, err); return; }
     if (gen !== sourceGen) return;
+    linkGone = false;  // the game answered: whatever the watcher said is over
     if (health.schemaVersion !== 1) {
       finishAttempt(gen);
       state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
@@ -592,7 +593,7 @@
         if (gen !== sourceGen) return;
         // A build that failed keeps its own reason, and the stamp behind it:
         // the next check reads the same bytes again rather than skipping them.
-        if (strip.tone !== "bad") { lastLinkStamp = file.linkStamp; linkGone = false; }
+        if (strip.tone !== "bad") lastLinkStamp = file.linkStamp;
       }
     }
     lastCheck = Date.now();

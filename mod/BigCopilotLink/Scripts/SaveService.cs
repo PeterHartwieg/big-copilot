@@ -382,6 +382,8 @@ namespace BigCopilotLink
                 // never pair new bytes with an old stamp. A city unloaded meanwhile
                 // (Clear ran) gets nothing: the bytes would outlive the game.
                 var next = new Snapshot(gz, stamp, day, iso);
+                // A refused enqueue means the city unloaded: Clear() already reset
+                // Busy and dropped the bytes, so there is nothing left to publish.
                 MainThreadDispatcher.Enqueue(delegate
                 {
                     if (_cleared) return;
