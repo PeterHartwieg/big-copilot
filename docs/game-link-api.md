@@ -21,18 +21,26 @@ treats it as "the game is not running or no save is loaded".
 
 ## What the mod serves
 
-The mod does not model the game. It asks the game to serialize itself with the call
-the game's own save uses, `SaveGameSerializationHelper.SerializeBinaryData(path,
-SaveGameManager.Current, compressed)`, and serves the resulting bytes: a `.hsg`
-exactly as the game would write it. Clients feed those bytes
-to `ba_save.py` unchanged.
+The mod does not model the game. It serializes `SaveGameManager.Current` the way the
+game's own save does — `SaveGameSerializationHelper.SerializeBinaryData` is the
+template, not a call the mod makes — and serves the resulting bytes: a `.hsg` as the
+game would write it, except that a walk on the worker thread can mix two moments a
+few hundred milliseconds apart (the game keeps running under it). Clients feed those
+bytes to `ba_save.py` unchanged.
 
-The serializer keeps a static `SerializationContext`, shared with the game's own save
-thread, so the mod serializes on the main thread (uncompressed, about 185 ms on a
-5 MB save) only while `SavingGameInProgress` is false, and gzips the bytes on its
-own thread afterwards with `SaveGameSerializationHelper.CompressBytes`. The main
-thread cannot start a game save while it is busy serializing, so the two never share
-the context.
+The mod serializes on a worker thread of its own, with a private
+`SerializationContext` configured like the game's helper — the same policy
+(`Player.SaveSystem.SaveGameSerializationPolicy`), the same error policy
+(`ErrorHandlingPolicy.ThrowOnErrors`) and `DataFormat.Binary` — so the bytes are
+what `SerializeBinaryData` would write. The game keeps running meanwhile. The same
+thread gzips the result with `SaveGameSerializationHelper.CompressBytes`. A walk
+that throws because the game changed state keeps the previous bytes and retries; two
+failed walks with nothing served between them fall back to serializing on the main
+thread for this city session, with one more try for the worker after ten refreshes
+the fallback ran (one more throw sends it back). A building load, when its option is
+on, serializes on the main thread, under the black screen; one that finds a refresh
+already in flight is run once the fifteen-second window lifts instead, on whichever
+path is on.
 
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
@@ -42,18 +50,23 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 
 - once, a few seconds after the city loads;
 - on the frame the player enters or leaves a building (option "Refresh when a
-  building loads", default on): the screen is black between the fade-out and the
+  building loads", **off** by default, a backup: the hourly and game-save refreshes
+  make it redundant): the screen is black between the fade-out and the
   fade-in, so the serialize is not seen, and this trigger alone may pass the
-  fifteen-second window below;
+  fifteen-second window below (a refresh already in flight still blocks it; the
+  refresh then runs once the window lifts);
 - after any game save completes, so the served bytes are never older than the
   player's own save;
 - on `POST /refresh`;
 - as a floor, every 5 real minutes while attached;
 - on every change of the in-game hour, with the option "Refresh every game hour",
-  which is off by default: at normal speed that is a stall every minute of play.
+  which is **on** by default: while the worker path holds, it costs nothing visible.
 
-Every serialize is a stall of the game's main thread for as long as it takes, about
-185 ms for a 5 MB save; the mod logs `serialized in N ms` on each one.
+A serialize takes a few hundred milliseconds of a worker thread on a 5 MB save, plus
+the gzip on the same thread (`busy` covers both), and is not a stall; the mod logs
+`serialized in N ms on a worker thread (<trigger>)` on each one,
+or `… on the main thread …` for a building load (with that option on) and after it
+has fallen back.
 
 **Attached** means a client fetched `/health` in the last 120 seconds. When nothing is
 attached the mod refreshes only on the first trigger after a client returns, so an
@@ -62,7 +75,7 @@ installed mod costs a player nothing while the board is closed.
 A refresh is skipped, and the previous bytes kept, while `SaveGameManager.SavingGameInProgress`
 is true or `SaveGameManager.CanSave()` is false (interior designer, placement mode, the
 casino boat). Refreshes never overlap: one in flight at a time, at most one every 15
-seconds.
+seconds, except that a building load may pass that window (never an in-flight one).
 
 ## Endpoints
 
@@ -125,13 +138,19 @@ the mod sees it. Browsers' `fetch` and Python's `urllib` send it; curl does not,
   `/health` until `stamp` changes and `busy` is false, then fetches `/save`. The mod
   answers within about three seconds: when the game's main thread has not taken the
   request by then (mid-load, a long frame) it is still accepted and runs when the
-  thread is free, so a 202 can precede the refresh by a moment. Clients time out a call
+  thread is free, so a 202 can precede the refresh by a moment. A walk that fails
+  after the 202 (the game changed state under it) keeps the previous stamp; the mod
+  retries once the fifteen-second window lifts, so the stamp can move only fifteen to
+  about thirty seconds later (one window per failed walk; after the second failure
+  the main thread takes it). The clients' wait allows that. Clients time out a call
   after five seconds; the mod never holds one longer than that.
 - `429 {"error": "throttled", "retryAfter": <seconds>}` inside the 15-second window
   or while one is in flight; the client waits and polls `/health` as above.
 - `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino" | "other"}`
   when the game refuses; the client shows the reason and keeps the last bytes.
-  `"other"` is `CanSave()` false for a reason the mod cannot name.
+  `"other"` is `CanSave()` false for a reason the mod cannot name, no loaded game
+  instance, or the mod itself failing to start the refresh (a thread that would not
+  start, a main-thread walk that threw); the failed starts are in the log.
 - `503 {"error": "main_thread_unavailable"}` when the mod could not hand the request to
   the game at all (no city is loaded any more). No refresh started. The client says the
   mod did not take the request and keeps the last bytes; it is not "the game is not running".

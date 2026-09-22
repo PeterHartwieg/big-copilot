@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Threading;
-using UnityEngine;
 
 namespace BigCopilotLink
 {
@@ -28,26 +27,41 @@ namespace BigCopilotLink
         /// <summary>One of the reasons docs/game-link-api.md names, when the game refuses.</summary>
         public readonly string Reason;
 
-        private RefreshResult(RefreshOutcome outcome, int retryAfterSeconds, string reason)
+        /// <summary>
+        /// True when the refresh got past the guards and did work before failing (a
+        /// walk that threw, a thread that would not start), as opposed to being
+        /// refused before it began. A refused refresh may stay pending and try again
+        /// next tick; an attempted one gets exactly one retry, from FailedStart.
+        /// </summary>
+        public readonly bool Attempted;
+
+        private RefreshResult(RefreshOutcome outcome, int retryAfterSeconds, string reason, bool attempted)
         {
             Outcome = outcome;
             RetryAfterSeconds = retryAfterSeconds;
             Reason = reason;
+            Attempted = attempted;
         }
 
         public static RefreshResult Started()
         {
-            return new RefreshResult(RefreshOutcome.Started, 0, null);
+            return new RefreshResult(RefreshOutcome.Started, 0, null, false);
         }
 
         public static RefreshResult Throttled(int retryAfterSeconds)
         {
-            return new RefreshResult(RefreshOutcome.Throttled, retryAfterSeconds, null);
+            return new RefreshResult(RefreshOutcome.Throttled, retryAfterSeconds, null, false);
         }
 
         public static RefreshResult CannotSave(string reason)
         {
-            return new RefreshResult(RefreshOutcome.CannotSave, 0, reason);
+            return new RefreshResult(RefreshOutcome.CannotSave, 0, reason, false);
+        }
+
+        /// <summary>Attempted and failed: answers as "other", and asks for no more than one retry.</summary>
+        public static RefreshResult Failed()
+        {
+            return new RefreshResult(RefreshOutcome.CannotSave, 0, "other", true);
         }
     }
 
@@ -84,12 +98,16 @@ namespace BigCopilotLink
     /// <summary>
     /// Owns the served bytes and decides when to make new ones.
     ///
-    /// The serializer keeps a static SerializationContext that the game's own save
-    /// thread uses, so the uncompressed write happens on the main thread while
-    /// SavingGameInProgress is false: the game cannot start a save while our call is
-    /// on the main thread, so the two never share the context. Compressing is
-    /// stateless and runs on its own thread; the finished bytes come back through the
-    /// dispatcher.
+    /// The serialize and the gzip both run on one worker thread of their own, walking
+    /// the live game with a private SerializationContext; the main thread only decides
+    /// when, and captures the in-game clock before the walk starts. A walk that throws
+    /// because the game changed state under it is retried once, and after two failed
+    /// walks with nothing served between them this city session falls back to
+    /// serializing on the main thread, where nothing moves under the walk, until ten
+    /// such refreshes have run and the worker is tried again (one more throw sends it
+    /// back). A building load, with its option on (off by default), walks on the main
+    /// thread: the screen is black there and the load is rewriting the state. The
+    /// finished bytes come back through the dispatcher as one immutable Snapshot.
     /// </summary>
     public sealed class SaveService
     {
@@ -120,7 +138,26 @@ namespace BigCopilotLink
         private bool _lastHadChanges;
         private bool _pendingAfterAttach;
         private bool _firstRefreshTriggered;
-        private string _tempPath;
+        // The worker-thread walk reads live state the main thread keeps changing; a walk
+        // that throws is one failure. Two in a row and this city session goes back to
+        // the main-thread path: a stall, but bytes that always arrive. After ten
+        // main-thread refreshes the worker gets one more chance, so a bad minute does
+        // not cost a whole evening; one more failure and it is back to the main thread.
+        private int _backgroundFailures;
+        private bool _backgroundSerialize = true;
+        private int _fallbackRuns;
+        // True from the re-probe until the worker serves once: on that chance a single
+        // throw is enough to fall back again, whatever else was served meanwhile.
+        private bool _reprobing;
+        private const int BackgroundFailuresBeforeFallback = 2;
+        private const int FallbackRunsBeforeReprobe = 10;
+        // A failed walk asks for one more try when the throttle window lifts. Any
+        // refresh that starts spends it, whatever asked for that refresh.
+        private bool _retryPending;
+        // The uncompressed size of the last refresh, so the next stream is allocated
+        // once instead of doubling its way up through the large-object heap. Written by
+        // the worker, read by the next one; a stale value costs one extra growth step.
+        private volatile int _lastRawLength;
 
         /// <summary>
         /// The last refresh as one object: the gzipped .hsg, its stamp ("" before
@@ -134,50 +171,54 @@ namespace BigCopilotLink
 
         /// <summary>
         /// Forget the bytes on unload — they are the player's whole company. Main
-        /// thread only. A compress still running publishes nothing afterwards, and
-        /// the uncompressed temporary file goes with the bytes. A /save already past
-        /// taking the snapshot finishes writing it; no new reader gets it.
+        /// thread only. A serialize or compress still running publishes nothing
+        /// afterwards. A /save already past taking the snapshot finishes writing it;
+        /// no new reader gets it.
         /// </summary>
         public void Clear()
         {
             _cleared = true;
             _current = Snapshot.None;
             _busy = false;
-            DeleteTempFile();
         }
 
-        private bool _lastLoading;
         private bool _lastInside;
         private bool _insideKnown;
 
         /// <summary>
-        /// Main thread, every frame. Two moments the player already sees as a
-        /// pause, so a serialize there costs nothing visible: the first frame of
-        /// the city's loading spinner (CityManager.DelayEnterBuilding), and the
-        /// frame on which the player's inside/outside state flips. Entering and
-        /// leaving a building both fade the screen to black, load, and fade back
+        /// Main thread, every frame. One moment the player already sees as a pause,
+        /// so a serialize there costs nothing visible: the frame on which the
+        /// player's inside/outside state flips. Entering and leaving a building both
+        /// fade the screen to black, load, and fade back
         /// (BuildingManager.EnterBuildingCoroutine, ExitFromBuildingCoroutine);
-        /// IsInsideBuilding changes under the black, so the stall lands there.
-        /// These pass the fifteen-second window. Only while a client is attached.
+        /// IsInsideBuilding changes under the black, so whatever a serialize costs
+        /// lands there. The city's loading spinner is not an edge of its own: it
+        /// rises only for CityManager.DelayEnterBuilding, whose entry flips too, and
+        /// a second walk under the same black bought nothing. This passes the
+        /// fifteen-second window. Only while a client is attached, and only with the
+        /// building-load option on, which is off by default: the hourly and game-save
+        /// refreshes make it a backup.
         /// </summary>
         public void FrameOnMainThread(bool attached, bool onBuildingLoad)
         {
-            var loading = global::LoadingSpinner.isLoading;
-            var spinnerRising = loading && !_lastLoading;
-            _lastLoading = loading;
-
             var inside = global::BuildingManager.IsInsideBuilding;
             var flipped = _insideKnown && inside != _lastInside;
             _lastInside = inside;
             _insideKnown = true;
 
-            if (!(spinnerRising || flipped) || !onBuildingLoad) return;
+            if (!flipped || !onBuildingLoad) return;
             if (!attached)
             {
                 _pendingAfterAttach = true;
                 return;
             }
-            TryStartRefresh(flipped ? (inside ? "enter" : "leave") : "loading", true);
+            // Refused (a refresh in flight, the game saving, a state that cannot
+            // save, no game instance): the state after the load is still worth
+            // having, so the pump runs it as the next attach refresh, on whichever
+            // path is on, once the window lifts. An attempt that failed has its one
+            // retry already.
+            var result = TryStartRefresh(inside ? "enter" : "leave", true);
+            if (result.Outcome != RefreshOutcome.Started && !result.Attempted) _pendingAfterAttach = true;
         }
 
         /// <summary>
@@ -203,12 +244,12 @@ namespace BigCopilotLink
 
             // A completed game save shows as either edge: SavingGameInProgress
             // falling, or HasChangesSinceLastSave falling (Save() clears it last;
-            // SerializeBinaryData, which this mod calls, does not touch it: its IL
-            // calls only File, GZipStream, the Odin serializer and Debug). Sampling
-            // once a second can miss the first on a fast save; the second stays
-            // down until the game marks another change. The two edges of one save
-            // can land on different ticks; the second then asks for a refresh the
-            // throttle refuses, and the pending retry runs it when the window
+            // SerializeBinaryData, which the game's helper calls, does not touch it:
+            // its IL calls only File, GZipStream, the Odin serializer and Debug).
+            // Sampling once a second can miss the first on a fast save; the second
+            // stays down until the game marks another change. The two edges of one
+            // save can land on different ticks; the second then asks for a refresh
+            // the throttle refuses, and the pending retry runs it when the window
             // lifts. One spare serialization per save is the price of never
             // dropping a real second save that close behind.
             var saving = SaveGameManager.SavingGameInProgress;
@@ -250,16 +291,21 @@ namespace BigCopilotLink
 
             if (trigger == null)
             {
-                if (!_pendingAfterAttach) return;
-                trigger = "attach";
+                if (_retryPending) trigger = "retry";
+                else if (_pendingAfterAttach) trigger = "attach";
+                else return;
             }
 
-            // A refresh that comes back throttled or refused stays pending, so the
-            // next tick tries again: without this a client that attached inside the
+            // A refresh that comes back throttled or refused stays pending, so the next
+            // tick tries again: without this a client that attached inside the
             // throttle window, or during placement mode, would wait for the floor.
-            // The retry is a few property reads a second, nothing more.
+            // The retry is a few property reads a second, nothing more. A start clears
+            // both flags inside TryStartRefresh; a retry that does not start is still
+            // set, and any other trigger that is refused becomes pending. One that was
+            // attempted and failed is not re-pended: FailedStart gave it its one retry,
+            // and a failure that outlasts that waits for the floor.
             var result = TryStartRefresh(trigger);
-            _pendingAfterAttach = result.Outcome != RefreshOutcome.Started;
+            if (result.Outcome != RefreshOutcome.Started && !result.Attempted && trigger != "retry") _pendingAfterAttach = true;
         }
 
         /// <summary>
@@ -271,8 +317,8 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// Main thread only. A trigger whose stall is hidden anyway (a building load
-        /// screen) may pass the fifteen-second window; nothing passes Busy.
+        /// Main thread only. A trigger whose stall is hidden anyway (a building load)
+        /// may pass the fifteen-second window; nothing passes Busy.
         /// </summary>
         public RefreshResult TryStartRefresh(string trigger, bool pastWindow)
         {
@@ -290,58 +336,93 @@ namespace BigCopilotLink
             var instance = SaveGameManager.Current;
             if (instance == null) return RefreshResult.CannotSave("other");
 
-            string tempPath;
-            try
-            {
-                tempPath = PrepareTempPath();
-            }
-            catch (Exception e)
-            {
-                LinkMod.LogError("could not prepare the temporary file: " + e);
-                return RefreshResult.CannotSave("other");
-            }
-
-            // Captured here because the compress thread may not touch the game; the
+            // Captured here because the worker threads may not touch the game; the
             // same clock as /health and the hour trigger.
             var day = TimeHelper.CurrentDay;
             var hour = TimeHelper.CurrentHour;
 
             _busy = true;
             _lastRefreshStarted = DateTime.UtcNow;
+            // Whatever asked, this refresh answers it: a retry left set here would buy a
+            // second serialize nothing wants once the window lifts. A start that fails
+            // below (FailedStart) gives one retry back, never a loop of them.
+            var wasRetry = trigger == "retry";
+            _retryPending = false;
+            _pendingAfterAttach = false;
 
-            bool written;
+            // A trigger past the window is a building load: the frame is black and the
+            // load coroutine is rewriting the very state a walk would read, so that
+            // refresh runs on the main thread, where the stall is hidden and the bytes
+            // are certain. It also keeps those failures out of the worker's count.
+            if (_backgroundSerialize && !pastWindow)
+            {
+                // The whole job on its own thread: walk, gzip, publish. Its own
+                // thread, not the pool: the listener's handlers share the pool and a
+                // flood of them must not hold Busy hostage. BelowNormal, so it never
+                // competes with the frame.
+                try
+                {
+                    var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger); });
+                    worker.Name = "BigCopilotLink.Serialize";
+                    worker.IsBackground = true;
+                    worker.Priority = ThreadPriority.BelowNormal;
+                    worker.Start();
+                }
+                catch (Exception e)
+                {
+                    // No thread means nothing will ever clear Busy; clear it here.
+                    return FailedStart("could not start the serialize thread (" + trigger + "): " + e, wasRetry);
+                }
+                return RefreshResult.Started();
+            }
+
+            // The walk on the main thread, where nothing moves under it: a building
+            // load, or the fallback after the worker failed twice.
+            byte[] raw;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                written = SaveGameSerializationHelper.SerializeBinaryData(tempPath, instance, false);
+                raw = SerializeToBytes(instance);
             }
             catch (Exception e)
             {
-                _busy = false;
-                DeleteTempFile();
-                LinkMod.LogError("serializing the game failed (" + trigger + "): " + e);
-                return RefreshResult.CannotSave("other");
+                return FailedStart("serializing the game failed on the main thread (" + trigger + "): " + e, wasRetry);
             }
 
-            if (!written)
+            // Counts toward the re-probe only when the fallback chose this thread, not
+            // when a building load did (a building load takes it even with the
+            // worker path on).
+            var fallbackRun = !_backgroundSerialize && !pastWindow;
+            try
             {
-                _busy = false;
-                DeleteTempFile();
-                LinkMod.LogWarn("the game declined to serialize (" + trigger + "); keeping the previous bytes.");
-                return RefreshResult.CannotSave("other");
+                LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
+                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun, wasRetry); });
+                compressor.Name = "BigCopilotLink.Compress";
+                compressor.IsBackground = true;
+                compressor.Priority = ThreadPriority.BelowNormal;
+                compressor.Start();
             }
-
-            // The stall this cost the game, in the log: the number a late-game save
-            // needs before the triggers can be judged.
-            LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms (" + trigger + ")");
-
-            // Its own thread, not the pool: the listener's handlers share the pool,
-            // and a flood of them must not hold the compress, and so Busy, hostage.
-            var worker = new Thread(delegate () { CompressOnWorkerThread(tempPath, day, hour); });
-            worker.Name = "BigCopilotLink.Compress";
-            worker.IsBackground = true;
-            worker.Start();
+            catch (Exception e)
+            {
+                return FailedStart("could not start the compress thread (" + trigger + "): " + e, wasRetry);
+            }
             return RefreshResult.Started();
+        }
+
+        /// <summary>
+        /// Main thread only: a refresh that got past the guards and then could not
+        /// start. Busy goes back down (nothing else will lower it) and one retry is
+        /// given back unless this was the retry; whatever else was pending stays
+        /// spent, so a persistent failure waits for the floor instead of looping
+        /// through the window. The result says it was attempted, so no caller
+        /// re-pends it either.
+        /// </summary>
+        private RefreshResult FailedStart(string message, bool wasRetry)
+        {
+            _busy = false;
+            _retryPending = !wasRetry;
+            LinkMod.LogError(message);
+            return RefreshResult.Failed();
         }
 
         // SaveGameManager.CanSave() is private static on build 3680 (verified on the
@@ -374,8 +455,8 @@ namespace BigCopilotLink
 
         /// <summary>
         /// Which of the three states CanSave() names, when we can tell. Qualified from
-        /// the global namespace because "using UnityEngine" also brings a "UI" into
-        /// scope, and these are the game's.
+        /// the global namespace so that nothing a later using brings in (UnityEngine
+        /// has a UI namespace) can shadow the game's.
         /// </summary>
         private static string RefusalReason()
         {
@@ -385,82 +466,95 @@ namespace BigCopilotLink
             return "other";
         }
 
-        /// <summary>Main thread only: Application.temporaryCachePath is a Unity API.</summary>
-        private string PrepareTempPath()
+        /// <summary>
+        /// The bytes of the uncompressed .hsg, produced the way
+        /// SaveGameSerializationHelper.SerializeBinaryData produces them (its IL, build
+        /// 3680): a fresh context with the game's own SaveGameSerializationPolicy and
+        /// ThrowOnErrors, internal references reset, DataFormat.Binary. A private
+        /// context, not the helper's static one, so a game save that starts on the main
+        /// thread mid-walk (SavingGameInProgress is checked once, when the refresh
+        /// starts) shares no per-walk state with this call. What the two walks do share
+        /// are OdinSerializer's process-wide caches, and those take a lock: in the
+        /// shipped OdinSerializer.dll FormatterLocator.GetFormatter, Serializer.Get,
+        /// FormatterUtilities.GetSerializableMembers, DefaultSerializationBinder,
+        /// SerializationPolicies and FormatterEmitter all enter a Monitor (verified by
+        /// IL scan, 22 Sep 2026). Any thread: Odin walks fields only and touches no
+        /// Unity API for this graph.
+        /// </summary>
+        private byte[] SerializeToBytes(GameInstance instance)
         {
-            if (_tempPath == null)
+            var context = new OdinSerializer.SerializationContext();
+            context.Config.SerializationPolicy = new Player.SaveSystem.SaveGameSerializationPolicy();
+            context.Config.DebugContext.ErrorHandlingPolicy = OdinSerializer.ErrorHandlingPolicy.ThrowOnErrors;
+            context.ResetInternalReferences();
+            var capacity = _lastRawLength > 0 ? _lastRawLength + _lastRawLength / 16 : 0;
+            using (var stream = new MemoryStream(capacity))
             {
-                var folder = Path.Combine(Application.temporaryCachePath, "BigCopilotLink");
-                Directory.CreateDirectory(folder);
-                // One file per service: a compress still finishing for the city
-                // that was just unloaded must never read or delete this city's.
-                _tempPath = Path.Combine(folder, "live-" + Guid.NewGuid().ToString("N") + ".bin");
-                SweepStaleTempFiles(folder);
+                OdinSerializer.SerializationUtility.SerializeValue<GameInstance>(instance, stream, OdinSerializer.DataFormat.Binary, context);
+                _lastRawLength = (int)stream.Length;
+                return stream.ToArray();
             }
-            DeleteTempFile();
-            return _tempPath;
         }
 
         /// <summary>
-        /// A crash leaves an uncompressed copy behind, the player's whole company in
-        /// the cache. A compress reads its file within seconds of writing it, so
-        /// anything older than ten minutes belongs to no running compress and goes.
-        /// Main thread, once per city load.
+        /// Its own thread. Walks the live game with a private context, gzips the result
+        /// and publishes it. The main thread keeps playing meanwhile, so the snapshot can
+        /// mix two moments a few hundred milliseconds apart (accepted: a dashboard
+        /// tolerates that), and a collection that changed under the walk makes
+        /// OdinSerializer throw: that is caught, the previous bytes stay, and the main
+        /// thread is told so it can retry or fall back.
         /// </summary>
-        private static void SweepStaleTempFiles(string folder)
+        private void SerializeAndCompressOnWorkerThread(GameInstance instance, int day, int hour, string trigger)
         {
+            byte[] raw;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                var cutoff = DateTime.UtcNow.AddMinutes(-10);
-                foreach (var file in Directory.GetFiles(folder, "live-*.bin"))
-                {
-                    if (File.GetLastWriteTimeUtc(file) < cutoff) File.Delete(file);
-                }
+                raw = SerializeToBytes(instance);
+                LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on a worker thread (" + trigger + ")");
             }
             catch (Exception e)
             {
-                LinkMod.LogWarn("could not sweep old temporary files: " + e.Message);
+                LinkMod.LogWarn("background serialize failed (" + trigger + "): " + e.GetType().Name + ": " + e.Message);
+                // Counters and the retry flag are the main thread's, like the publish.
+                MainThreadDispatcher.Enqueue(delegate { OnBackgroundFailure(); });
+                return;
+            }
+            // The city may have unloaded during the walk; the gzip is the longer half
+            // of the job and its result would be thrown away at the publish.
+            if (_cleared) return;
+            CompressAndPublishOnWorkerThread(raw, day, hour, true, false, trigger == "retry");
+        }
+
+        /// <summary>Main thread only, through the dispatcher.</summary>
+        private void OnBackgroundFailure()
+        {
+            _busy = false;
+            if (_cleared) return;
+            _backgroundFailures++;
+            _retryPending = true;
+            if ((_backgroundFailures >= BackgroundFailuresBeforeFallback || _reprobing) && _backgroundSerialize)
+            {
+                var why = _reprobing
+                    ? "the worker thread failed again on its second chance"
+                    : BackgroundFailuresBeforeFallback.ToString(CultureInfo.InvariantCulture) + " background serializes in a row failed";
+                _backgroundSerialize = false;
+                _reprobing = false;
+                _fallbackRuns = 0;
+                LinkMod.LogWarn(why + "; serializing on the main thread; the worker gets another chance after " +
+                                FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " fallback refreshes.");
             }
         }
 
         /// <summary>
-        /// The uncompressed copy is the player's whole company: every path that
-        /// stops short of the gzip step removes it. Any thread; File is not Unity.
+        /// Its own thread, or the tail of the serialize thread. Gzips the bytes the
+        /// walk produced, with the game's own stateless call, and hands the result
+        /// back.
         /// </summary>
-        private void DeleteTempFile()
-        {
-            var path = _tempPath;
-            if (path == null) return;
-            try
-            {
-                if (File.Exists(path)) File.Delete(path);
-            }
-            catch (Exception e)
-            {
-                LinkMod.LogWarn("could not delete the temporary file: " + e.Message);
-            }
-        }
-
-        /// <summary>
-        /// Its own thread. Reads the uncompressed stream the main thread just wrote,
-        /// gzips it with the game's own call, and hands the result back.
-        /// </summary>
-        private void CompressOnWorkerThread(string tempPath, int day, int hour)
+        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun, bool wasRetry)
         {
             try
             {
-                byte[] raw;
-                try
-                {
-                    raw = File.ReadAllBytes(tempPath);
-                }
-                finally
-                {
-                    // The uncompressed copy is the player's whole company; do not
-                    // leave it lying in the cache any longer than the gzip step needs.
-                    DeleteTempFile();
-                }
-
                 var gz = SaveGameSerializationHelper.CompressBytes(raw);
                 if (gz == null) throw new InvalidOperationException("CompressBytes returned null");
 
@@ -482,13 +576,30 @@ namespace BigCopilotLink
                     if (_cleared) return;
                     _current = next;
                     _busy = false;
+                    // Any published refresh ends the failure streak: "two in a row"
+                    // means two failed walks with nothing served between them. A
+                    // worker success also ends its re-probe.
+                    _backgroundFailures = 0;
+                    if (fromWorker) _reprobing = false;
+                    if (!fromWorker && fallbackRun && !_backgroundSerialize && ++_fallbackRuns >= FallbackRunsBeforeReprobe)
+                    {
+                        // Enough stalls: give the worker one more chance; on it a
+                        // single throw ends it (the _reprobing flag, not the count,
+                        // which any publish resets).
+                        _backgroundSerialize = true;
+                        _reprobing = true;
+                        _fallbackRuns = 0;
+                        LinkMod.LogInfo("trying the worker thread again after " + FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " fallback refreshes.");
+                    }
                 });
             }
             catch (Exception e)
             {
                 LinkMod.LogError("compressing the save failed: " + e);
-                // The flag is the main thread's to write, like the publish.
-                MainThreadDispatcher.Enqueue(delegate { _busy = false; });
+                // The flag is the main thread's to write, like the publish; the bytes
+                // are lost, so the pump retries once the window lifts, unless this
+                // was the retry: a gzip that fails twice waits for the floor.
+                MainThreadDispatcher.Enqueue(delegate { _busy = false; _retryPending = !wasRetry; });
             }
         }
     }
