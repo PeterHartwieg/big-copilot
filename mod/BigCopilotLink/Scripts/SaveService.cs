@@ -147,26 +147,37 @@ namespace BigCopilotLink
         }
 
         private bool _lastLoading;
+        private bool _lastInside;
+        private bool _insideKnown;
 
         /// <summary>
-        /// Main thread, every frame. The building load screen (LoadingSpinner, shown
-        /// by CityManager.DelayEnterBuilding) is a stall the player already sees,
-        /// so a serialize on its first frame costs nothing visible: the cheapest
-        /// moment there is for fresh bytes, and it passes the fifteen-second window.
-        /// Only while a client is attached; leaving a building shows no screen.
+        /// Main thread, every frame. Two moments the player already sees as a
+        /// pause, so a serialize there costs nothing visible: the first frame of
+        /// the city's loading spinner (CityManager.DelayEnterBuilding), and the
+        /// frame on which the player's inside/outside state flips. Entering and
+        /// leaving a building both fade the screen to black, load, and fade back
+        /// (BuildingManager.EnterBuildingCoroutine, ExitFromBuildingCoroutine);
+        /// IsInsideBuilding changes under the black, so the stall lands there.
+        /// These pass the fifteen-second window. Only while a client is attached.
         /// </summary>
         public void FrameOnMainThread(bool attached, bool onBuildingLoad)
         {
             var loading = global::LoadingSpinner.isLoading;
-            var rising = loading && !_lastLoading;
+            var spinnerRising = loading && !_lastLoading;
             _lastLoading = loading;
-            if (!rising || !onBuildingLoad) return;
+
+            var inside = global::BuildingManager.IsInsideBuilding;
+            var flipped = _insideKnown && inside != _lastInside;
+            _lastInside = inside;
+            _insideKnown = true;
+
+            if (!(spinnerRising || flipped) || !onBuildingLoad) return;
             if (!attached)
             {
                 _pendingAfterAttach = true;
                 return;
             }
-            TryStartRefresh("building", true);
+            TryStartRefresh(flipped ? (inside ? "enter" : "leave") : "loading", true);
         }
 
         /// <summary>

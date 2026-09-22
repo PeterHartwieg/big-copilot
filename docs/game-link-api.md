@@ -41,9 +41,10 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 ### When the mod refreshes
 
 - once, a few seconds after the city loads;
-- when a building's load screen appears (option "Refresh when a building loads",
-  default on): the player already sees a stall there, so the serialize is free, and
-  this trigger alone may pass the fifteen-second window below;
+- on the frame the player enters or leaves a building (option "Refresh when a
+  building loads", default on): the screen is black between the fade-out and the
+  fade-in, so the serialize is not seen, and this trigger alone may pass the
+  fifteen-second window below;
 - after any game save completes, so the served bytes are never older than the
   player's own save;
 - on `POST /refresh`;
