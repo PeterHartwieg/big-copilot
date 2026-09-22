@@ -80,6 +80,10 @@ GOOGLE_FONTS = (
 # from it; anything this shell invents is prefixed lg- so it cannot collide
 # with the board's stylesheet.
 ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>'
+# The chain link for "Link to the game": the one button on the landing that
+# leads to no file at all, but to the mod serving the running game.
+ICON_LINK = ('<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>'
+             '<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>')
 ICON_MORE = '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>'
 
 BANNER = r"""<style>
@@ -306,6 +310,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <div class="row rv" id="entryRow">
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">__ICON_FOLDER__Choose the folder</button>
+    <button type="button" class="btn" id="linkBtn" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play.">__ICON_LINK__Link to the game</button>
     <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
   <div class="save-location rv" id="saveLocation">
@@ -331,6 +336,7 @@ details.help[open] summary::after{content:"\2013"}
       <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
       <p>If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
       <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
+      <p><b>Linked to the game.</b> With the Big Copilot Link mod enabled (Steam Workshop), click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
@@ -359,7 +365,7 @@ details.help[open] summary::after{content:"\2013"}
       <div class="menu-heading">Save source</div>
       <div id="menuSourceSlot"></div>
       <button type="button" class="lg-btn lg-watch" id="watchBtn" hidden>Watch</button>
-      <p class="menu-hint">Pick a character or one save above and the board follows it. Or drop a .hsg save anywhere.</p>
+      <p class="menu-hint">Pick a character or one save above and the board follows it, or link to the running game. Or drop a .hsg save anywhere.</p>
       <div class="menu-divider"></div>
       <div id="menuChipSlot"></div>
       <p class="menu-hint" id="menuChipHint"></p>
@@ -368,7 +374,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("<!--__FOOTER__-->", footer_html(landing=True, site=True))
+""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_LINK__", ICON_LINK).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("<!--__FOOTER__-->", footer_html(landing=True, site=True))
 
 # Everything the page fetches, together with the build inputs that shape it:
 # build_web.py itself, and the wiki generator (code, authored wording and
