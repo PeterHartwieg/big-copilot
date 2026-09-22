@@ -441,7 +441,8 @@ test('an incompatible mod answering an Update is refused inside the poll, not af
 });
 
 test('a health object with no version is the port, not "version undefined"', async () => {
-  const h = harness({routes: {health: {status: 'ok'}}});
+  // (not `status`: the harness reads that key as an HTTP status)
+  const h = harness({routes: {health: {hello: 'world'}}});
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
   assert.match(h.seen.notes.at(-1)[1], /not with the Big Copilot Link mod's health/);
