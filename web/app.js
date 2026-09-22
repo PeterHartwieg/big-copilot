@@ -423,6 +423,7 @@
   let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
   let linkHealth = null;  // the /health body behind those bytes, for the strip
   let linkGone = false;   // the watcher has said the game went away
+  let linkNotReady = 0;   // the watcher's checks in a row that were never health
   let linkSpace = null;   // the targetAddressSpace this browser accepted, "" for none
   // Every wait the link takes. Tests swap this rather than sleep.
   let linkWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -549,7 +550,9 @@
     if (health === NOT_READY || health.schemaVersion === 1) return false;
     finishAttempt(gen);
     state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
-    note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+    note("bad", health.schemaVersion === undefined
+      ? "That address answers, but not with the Big Copilot Link mod's health. Is another program on that port?"
+      : `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
     return true;
   }
 
@@ -703,6 +706,9 @@
     const started = Date.now();
     const deadline = started + 45000;
     let health = null;
+    // The refresh was answered by something: the mod is there as surely as
+    // one health answer would show. What a 202 does not prove is that health
+    // follows, so a run of never-health after it is still bounded at thirty.
     let sawHealth = false;
     while (Date.now() < (sawHealth ? deadline : started + 30000)) {
       try { health = await readHealth(); }
@@ -747,9 +753,19 @@
     if (gen !== sourceGen) return;
     if (wasGone && strip.tone === "ok") note("");
     lastCheck = Date.now();  // the button's "checked HH:MM", per check, like the folder's
+    // The CLI's rule, on the watcher: ten checks in a row that were never
+    // health mean the port is held by something else, said once under the
+    // board that stays; one health answer counts from zero again.
+    if (health === NOT_READY) {
+      if (++linkNotReady === 10 && strip.tone === "ok") {
+        note("warn", "That address no longer answers as the Big Copilot Link mod.", "Is another program on that port? Check the port in the mod's options, then click Update.");
+      }
+      return;
+    }
+    linkNotReady = 0;
     if (document.hidden || busy || attempt) return;
-    // Not ready, another version, unreadable, nothing yet, or mid-refresh:
-    // nothing to build from. The next tick, or Update, looks again.
+    // Another version, nothing yet, or mid-refresh: nothing to build from.
+    // The next tick, or Update, looks again.
     if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
     if (health.stamp !== lastLinkStamp) await loadFromLink("Reading the game", gen);
   }

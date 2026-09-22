@@ -440,6 +440,27 @@ test('an incompatible mod answering an Update is refused inside the poll, not af
   assert.equal(h.waits.length, 0);
 });
 
+test('a health object with no version is the port, not "version undefined"', async () => {
+  const h = harness({routes: {health: {status: 'ok'}}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.match(h.seen.notes.at(-1)[1], /not with the Big Copilot Link mod's health/);
+  assert.ok(!/undefined/.test(h.seen.notes.at(-1)[1]));
+});
+
+test('the watcher names a port taken over after ten checks, once, and counts from zero on health', async () => {
+  let healthy = false;
+  const h = harness({routes: {health: () => (healthy ? HEALTH : reply(503, {error: 'x'}))}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  for (let i = 0; i < 12; i++) await h.run('checkFolder()');
+  const warns = h.seen.notes.filter((n) => n[0] === 'warn');
+  assert.equal(warns.length, 1);
+  assert.match(warns[0][1], /no longer answers as the Big Copilot Link mod/);
+  healthy = true;
+  await h.run('checkFolder()');
+  assert.equal(h.run('linkNotReady'), 0);
+});
+
 test('#link= only moves the port on this machine', () => {
   const h = harness();
   h.context.location.hash = '#link=http://127.0.0.1:8323';

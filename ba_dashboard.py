@@ -16604,6 +16604,12 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
+        if version is None:
+            # A JSON object with no version in it is not the mod's health at all.
+            raise SystemExit(
+                f"{self.url} answers with something that is not the Big Copilot "
+                "Link mod's health; is another program on that port?"
+            )
         if version != self.SCHEMA:
             raise SystemExit(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
@@ -17092,7 +17098,9 @@ def main() -> None:
         f"board checked on {VERIFIED_BUILD})"
     )
     if link is not None and link.stale:
-        print(f"  {link.stale}; this is the state it last served", flush=True)
+        # Two lines: the reason is a sentence of its own, sometimes a question.
+        print(f"  {link.stale}", flush=True)
+        print("  the board shows the state the mod last served", flush=True)
     worth = f"{k['netWorth']:>14,.0f}" if k["netWorth"] is not None else "   not reported"
     print(f"  cash {k['cash']:>14,.0f}   net worth {worth}")
     print(f"  profit yesterday {k['profitYesterday']:>+11,.0f}   7-day avg {k['profitAvg7']:>+11,.0f}")

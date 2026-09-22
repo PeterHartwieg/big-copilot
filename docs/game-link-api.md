@@ -189,8 +189,10 @@ unverified.
    is no JSON object, means the mod is there and not ready (or something else held the
    port for a moment) and is waited out like `busy`, for a bounded time (the page
    thirty seconds, the CLI ten answers), after which the client says the address
-   answers but not as the mod. On a health object, if `schemaVersion` is unknown, stop
-   and say which version this client needs.
+   answers but not as the mod; a wait in which any answer was health blames the save
+   the mod has not produced, never the port. On a health object with no
+   `schemaVersion`, say the same about the port; with one this client does not know,
+   stop and say which version it needs.
 3. If `stamp` differs from the stamp of the board on screen and `busy` is false,
    `GET /save` with `If-None-Match` and build from the bytes.
 4. Update means `POST /refresh`, then step 1 until the stamp moves.
