@@ -78,7 +78,8 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertIn("not as the Big Copilot Link mod", str(caught.exception))
         finally:
             self.game._call = real
-        self.assertIsNone(self.game.poll(), "a real answer after that counts from zero")
+        self.assertIsNotNone(self.game.poll(), "a real answer after that is read as ever")
+        self.assertEqual(self.game.not_ready, 0, "and the count starts from zero")
 
     def test_a_busy_game_polls_to_nothing(self):
         self.mock.busy = True
