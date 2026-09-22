@@ -46,8 +46,10 @@ Mac build path with its three SDK workarounds. Roughly 300 lines, all Peter's.
 GameInstance instance, bool compressed)` writes GZip over the OdinSerializer binary
 that `ba_save.py` reads (the reader's docstring calls it Easy Save 3; the wire format
 is the same one, and every save on disk was written by this call). `SaveGameManager.Save()`
-calls it on a background `SaveGameThreadWrapper` thread against
-`SaveGameManager.Current` directly, with no copy, and the feedback form
+calls it on the main thread (`SerializeSaveGame` is a plain call; only the gzip,
+`CompressSaveGame`, runs on its "SaveGame Compress Thread"), against
+`SaveGameManager.Current` directly, with no copy (corrected 22 September 2026 from
+the IL), and the feedback form
 (`SavegameFeedbackData.AddToForm`) calls it on the main thread. Both are precedents the
 mod copies. Guards: `SaveGameManager.SavingGameInProgress`, `CanSave()` (false inside
 the interior designer, placement mode, the casino boat), `HasChangesSinceLastSave()`.

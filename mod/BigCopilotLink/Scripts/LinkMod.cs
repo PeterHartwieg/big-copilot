@@ -54,9 +54,10 @@ namespace BigCopilotLink
         // Written by the options panel, read by the pump and the listener. Volatile
         // rather than locked: a stale read costs one second, a torn read cannot happen.
         private volatile bool _enabled = true;
-        // Off by default: an hourly serialize is a stall every game hour, a
-        // minute of play at normal speed. The building load screen hides its own.
-        private volatile bool _hourly = false;
+        // On by default: the serialize runs on a worker thread, so an hourly refresh
+        // costs the player nothing they can see. Should the worker path fall back to
+        // the main thread (SaveService logs it), each hourly refresh is a stall again.
+        private volatile bool _hourly = true;
         private volatile bool _onBuildingLoad = true;
         private volatile int _portIndex;
 

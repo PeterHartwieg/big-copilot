@@ -34,8 +34,35 @@ Mod Builder.
   mod icon on the Load Game screen ("Saved with Mods", listing the mods), and the
   game's bug reporting is off for it. `/health` then reports the company as
   "<name> (Modded)". No achievement text mentions mods (build 3680).
-- The uncompressed copy the serializer writes lives in the game's temporary cache and
-  is deleted as soon as it has been gzipped.
+- **Nothing on disk.** The mod writes nothing to disk: the bytes are produced in
+  memory and only ever leave the process over the loopback listener.
+
+## How a refresh runs
+
+The main thread checks the guards (nothing saving, `CanSave()`, a loaded city) and
+captures the in-game clock, then hands the whole job to a worker thread of its own.
+That thread walks `SaveGameManager.Current` with a private `SerializationContext`
+configured like the game's own helper — the policy
+`Player.SaveSystem.SaveGameSerializationPolicy`, the error policy
+`ErrorHandlingPolicy.ThrowOnErrors`, `DataFormat.Binary` — so the bytes are what the
+game's `SerializeBinaryData` would write, and gzips them with the game's
+`CompressBytes`. The game's own save serializes on the main thread (verified in the
+IL of build 3680), so the mod is walking a graph the main thread is still changing: a
+snapshot can therefore mix two moments a few hundred milliseconds apart, which a
+dashboard tolerates, and a collection that changed under the walk makes
+OdinSerializer throw. That walk keeps the previous bytes and retries once the
+fifteen-second window lifts; two consecutive failures switch the session to
+serializing on the main thread, where nothing moves under the walk — a stall per
+refresh, logged as `… on the main thread`.
+
+The log lines:
+
+```
+serialized in 231 ms on a worker thread (first)
+serialized in 229 ms on the main thread (hour)
+background serialize failed (hour): InvalidOperationException: …
+2 background serializes in a row failed; serializing on the main thread for the rest of this session.
+```
 
 ## Build and install (in the SDK's Unity project)
 
@@ -122,8 +149,9 @@ curl http://127.0.0.1:8322/health
 Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.1.0","source":"game",…}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
-on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`). Every line the
-mod writes carries the `[BigCopilotLink]` prefix, so filter on it.
+on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
+seconds later, `[BigCopilotLink] serialized in N ms on a worker thread (first)`.
+Every line the mod writes carries the `[BigCopilotLink]` prefix, so filter on it.
 
 `stamp` is `""` for the first few seconds. Once it is not, the bytes are there:
 
@@ -155,7 +183,7 @@ In the game's mod options, under **Big Copilot Link**:
 | Serve the game to Big Copilot | on | Off stops the listener; the mod stays loaded and costs nothing. |
 | Port | 8322 | 8322–8325. 8321 belongs to the MCP bridge and 8765 to the Companion mod. Changing it restarts the listener. |
 | Refresh when a building loads | on | Entering or leaving a building fades the screen to black while the game loads the other side; the serialize runs under that black, so it costs nothing you can see. |
-| Refresh every game hour | off | On, the game stalls for the serialize (about 185 ms on a 5 MB save, more late game) every game hour, a minute of play at normal speed. The other triggers stay: a completed game save, a building load, `POST /refresh`, and a five-minute floor. |
+| Refresh every game hour | on | The refresh runs on a worker thread, so it costs nothing you can see. If the mod has fallen back to the main thread (see the log), it is a short stall every game hour, a minute of play at normal speed; switch it off here. The other triggers stay: a completed game save, a building load, `POST /refresh`, and a five-minute floor. |
 | Copy address | — | Puts `http://127.0.0.1:<port>/` on the clipboard. |
 
 Nothing refreshes unless something fetched `/health` in the last 120 seconds, so an
@@ -170,7 +198,8 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `SaveGameManager.Current` (static `GameInstance`), fields `Day`, `Hour`, `Minute`, `Money`, `characterId`, `SaveGameName`, `buildNumberAtLastSave` | health, the serialize |
 | `SaveGameManager.SavingGameInProgress`, `HasChangesSinceLastSave()` | the save-completed edges; the second dereferences the player and throws once on exit to desktop, which the pump swallows |
 | `SaveGameManager.CanSave()` | **private static**: called by reflection, looked up once; falls back to the four public states below |
-| `SaveGameSerializationHelper.SerializeBinaryData(string, GameInstance, bool)`, `CompressBytes(byte[])` | the bytes |
+| `OdinSerializer.SerializationUtility.SerializeValue<GameInstance>(instance, stream, DataFormat.Binary, context)` with a private `SerializationContext` (policy `Player.SaveSystem.SaveGameSerializationPolicy`, error policy `ErrorHandlingPolicy.ThrowOnErrors`) | the bytes, as `SaveGameSerializationHelper.SerializeBinaryData` makes them |
+| `SaveGameSerializationHelper.CompressBytes(byte[])` | the gzip |
 | `TimeHelper.CurrentDay/CurrentHour/CurrentMinute` | the clock |
 | `GameVersion.GetCurrent().buildNumber` | `build`; `GetBuildVersionString()` is **private** |
 | `UI.InteriorDesigner.InteriorDesignerUI.IsOpen`, `BigAmbitions.PlacementSystem.PlacementSystem.IsInPlacementMode`, `CasinoBoatManager.IsOnCasinoBoat`, `PlayerActivity.PlayerActivityUI.IsPanelOpen` | the refusal reason, and the fallback when `CanSave` is not found |

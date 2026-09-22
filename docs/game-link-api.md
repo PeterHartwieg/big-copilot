@@ -21,18 +21,21 @@ treats it as "the game is not running or no save is loaded".
 
 ## What the mod serves
 
-The mod does not model the game. It asks the game to serialize itself with the call
-the game's own save uses, `SaveGameSerializationHelper.SerializeBinaryData(path,
-SaveGameManager.Current, compressed)`, and serves the resulting bytes: a `.hsg`
+The mod does not model the game. It serializes `SaveGameManager.Current` the way the
+game's own save does — `SaveGameSerializationHelper.SerializeBinaryData` is the
+template, not a call the mod makes — and serves the resulting bytes: a `.hsg`
 exactly as the game would write it. Clients feed those bytes
 to `ba_save.py` unchanged.
 
-The serializer keeps a static `SerializationContext`, shared with the game's own save
-thread, so the mod serializes on the main thread (uncompressed, about 185 ms on a
-5 MB save) only while `SavingGameInProgress` is false, and gzips the bytes on its
-own thread afterwards with `SaveGameSerializationHelper.CompressBytes`. The main
-thread cannot start a game save while it is busy serializing, so the two never share
-the context.
+The mod serializes on a worker thread of its own, with a private
+`SerializationContext` configured like the game's helper — the same policy
+(`Player.SaveSystem.SaveGameSerializationPolicy`), the same error policy
+(`ErrorHandlingPolicy.ThrowOnErrors`) and `DataFormat.Binary` — so the bytes are
+what `SerializeBinaryData` would write. The game keeps running meanwhile. The same
+thread gzips the result with `SaveGameSerializationHelper.CompressBytes`. A walk
+that throws because the game changed state keeps the previous bytes and retries; two
+consecutive failures fall back to serializing on the main thread for the rest of the
+session.
 
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
@@ -50,10 +53,11 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 - on `POST /refresh`;
 - as a floor, every 5 real minutes while attached;
 - on every change of the in-game hour, with the option "Refresh every game hour",
-  which is off by default: at normal speed that is a stall every minute of play.
+  which is **on** by default: while the worker path holds, it costs nothing visible.
 
-Every serialize is a stall of the game's main thread for as long as it takes, about
-185 ms for a 5 MB save; the mod logs `serialized in N ms` on each one.
+A serialize takes about 200 to 500 ms of a worker thread on a 5 MB save and is not a
+stall; the mod logs `serialized in N ms on a worker thread (<trigger>)` on each one,
+or `… on the main thread …` after it has fallen back.
 
 **Attached** means a client fetched `/health` in the last 120 seconds. When nothing is
 attached the mod refreshes only on the first trigger after a client returns, so an
