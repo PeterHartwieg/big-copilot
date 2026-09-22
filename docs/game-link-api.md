@@ -197,7 +197,9 @@ unverified.
    `GET /save` with `If-None-Match` and build from the bytes.
 4. Update means `POST /refresh`, then step 1 until the stamp moves.
 5. Watching means step 1 every 30 seconds while the page is visible, which also keeps
-   the mod attached.
+   the mod attached. A watcher that meets ten answers in a row that were never health,
+   or a health object that is not this client's version, says so once under the board
+   it keeps, and withdraws that the moment a health answer of its version arrives.
 
 ## The mock
 

@@ -554,10 +554,14 @@
   function wrongVersion(health, gen) {
     if (health === NOT_READY || health.schemaVersion === 1) return false;
     finishAttempt(gen);
-    state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
-    note("bad", health.schemaVersion === undefined
-      ? "That address answers, but not with the Big Copilot Link mod's health. Is another program on that port?"
-      : `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+    if (health.schemaVersion == null) {
+      // A JSON object with no version in it is not the mod's health at all.
+      state("bad", "That address does not answer as the Big Copilot Link mod", linkUrl);
+      note("bad", "It answers, but not with the mod's health. Is another program on that port?", "Check the port in the mod's options, then click Update.", true);
+    } else {
+      state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
+      note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+    }
     return true;
   }
 
@@ -747,6 +751,7 @@
     // board that stays, and the next answer clears it.
     const gen = sourceGen;
     const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
+    const wasSaid = linkPortSaid;  // readHealth clears it on a health answer
     let health;
     try { health = await readHealth(); }
     catch (err) {
@@ -760,7 +765,9 @@
       return;
     }
     if (gen !== sourceGen) return;
-    if (wasGone && strip.tone === "ok") note("");
+    // The game is back, or the port answers as the mod again: whichever note
+    // the watcher left is withdrawn, even when the stamp has not moved.
+    if ((wasGone || (wasSaid && health !== NOT_READY)) && strip.tone === "ok") note("");
     lastCheck = Date.now();  // the button's "checked HH:MM", per check, like the folder's
     // The CLI's rule, on the watcher: ten checks in a row that were never
     // health mean the port is held by something else, said once under the
@@ -773,10 +780,23 @@
       }
       return;
     }
+    if (health.schemaVersion !== 1) {
+      // A JSON object that is not this page's health: another program on the
+      // port, or a mod of another version. Said once, under the board that
+      // stays; Update gives the full refusal.
+      if (!linkPortSaid && strip.tone === "ok") {
+        linkPortSaid = true;
+        note("warn", health.schemaVersion == null
+          ? "That address no longer answers as the Big Copilot Link mod."
+          : `The mod now speaks version ${health.schemaVersion}; this page needs version 1.`,
+          "Click Update for the details.");
+      }
+      return;
+    }
     if (document.hidden || busy || attempt) return;
-    // Another version, nothing yet, or mid-refresh: nothing to build from.
-    // The next tick, or Update, looks again.
-    if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
+    // Nothing yet, or mid-refresh: nothing to build from. The next tick, or
+    // Update, looks again.
+    if (!health.stamp || health.busy) return;
     if (health.stamp !== lastLinkStamp) await loadFromLink("Reading the game", gen);
   }
 

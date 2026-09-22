@@ -443,11 +443,14 @@ test('an incompatible mod answering an Update is refused inside the poll, not af
 
 test('a health object with no version is the port, not "version undefined"', async () => {
   // (not `status`: the harness reads that key as an HTTP status)
-  const h = harness({routes: {health: {hello: 'world'}}});
-  h.run('linkUrl = "http://127.0.0.1:8322"');
-  await h.run('loadFromLink("Reading the game")');
-  assert.match(h.seen.notes.at(-1)[1], /not with the Big Copilot Link mod's health/);
-  assert.ok(!/undefined/.test(h.seen.notes.at(-1)[1]));
+  for (const body of [{hello: 'world'}, {schemaVersion: null}]) {
+    const h = harness({routes: {health: body}});
+    h.run('linkUrl = "http://127.0.0.1:8322"');
+    await h.run('loadFromLink("Reading the game")');
+    assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod', JSON.stringify(body));
+    assert.match(h.seen.notes.at(-1)[1], /not with the mod's health/);
+    assert.ok(!/undefined|null/.test(h.seen.notes.at(-1)[1]));
+  }
 });
 
 test('the watcher names a port taken over after ten checks, once, and counts from zero on health', async () => {
@@ -491,6 +494,35 @@ test('the takeover count does not leak into a relink, and a disconnect does not 
   await h.run('checkFolder()');
   warns = h.seen.notes.filter((n) => /no longer answers/.test(n[1]));
   assert.equal(warns.length, 2, 'said again after the game came back and the port was still not the mod');
+});
+
+test('the takeover note is withdrawn when the port answers as the mod again, stamp or no stamp', async () => {
+  let mode = 'notready';
+  const h = harness({routes: {health: () => (mode === 'health' ? {...HEALTH, stamp: 's1'} : reply(503, {error: 'x'}))}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  for (let i = 0; i < 10; i++) await h.run('checkFolder()');
+  assert.match(h.seen.notes.at(-1)[1], /no longer answers/);
+  mode = 'health';
+  await h.run('checkFolder()');
+  assert.deepEqual(h.seen.notes.at(-1), [''], 'withdrawn although the stamp did not move');
+  assert.equal(h.seen.builds.length, 0);
+});
+
+test('the watcher says once when a foreign object or another version answers, and withdraws it on health', async () => {
+  let body = {hello: 'world'};
+  const h = harness({routes: {health: () => body}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  await h.run('checkFolder()');
+  await h.run('checkFolder()');
+  let warns = h.seen.notes.filter((n) => n[0] === 'warn');
+  assert.equal(warns.length, 1);
+  assert.match(warns[0][1], /no longer answers as the Big Copilot Link mod/);
+  body = {...HEALTH, stamp: 's1'};
+  await h.run('checkFolder()');
+  assert.deepEqual(h.seen.notes.at(-1), ['']);
+  body = {...HEALTH, schemaVersion: 2, stamp: 's1'};
+  await h.run('checkFolder()');
+  assert.match(h.seen.notes.at(-1)[1], /version 2/);
 });
 
 test('#link= only moves the port on this machine', () => {
