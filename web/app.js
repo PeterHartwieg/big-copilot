@@ -531,10 +531,6 @@
     await loadFromLink("Linking to the game", gen);
   }
 
-  // One /health answer as the page reads it. A status other than 200 means
-  // the mod is there and not ready: only a 200 says what version it speaks,
-  // so that answer is marked and waited out rather than judged. A 200 whose
-  // body is no object is an answer this page cannot read, and says so.
   // The one answer this page makes up, for anything that is not a 200 with a
   // JSON object in it: the mod is there and not ready, or something else is
   // on the port for a moment. Compared by identity, so a foreign service

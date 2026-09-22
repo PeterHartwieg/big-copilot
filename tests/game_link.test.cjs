@@ -420,6 +420,7 @@ test('a 200 /health with no object in it is not ready, and names the port after 
     await h.run('loadFromLink("Reading the game")');
     assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod', JSON.stringify(body));
     assert.ok(!h.seen.states.some((s) => /do not match/.test(s[1])), 'never a version refusal');
+    assert.ok(h.waits.length > 0, 'waited out like busy, not refused on the first answer');
   }
 });
 
