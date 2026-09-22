@@ -64,7 +64,8 @@ function harness({routes = {}} = {}) {
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
     state(tone, head, meta) { seen.states.push([tone, head, meta]); strip.tone = tone; },
-    note(...args) { seen.notes.push(args); },
+    noted: {tone: '', text: '', sub: ''},
+    note(...args) { seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || ''; },
     stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
@@ -535,14 +536,35 @@ test('an Update that reads health of this version re-arms the port note of the w
   }});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
   for (let i = 0; i < 10; i++) await h.run('checkFolder()');
-  assert.equal(h.run('linkPortSaid'), true);
+  assert.match(h.context.noted.text, /no longer answers/);
   mode = 'health';
   await h.run('update()');
-  assert.equal(h.run('linkPortSaid'), false, 'cleared by the health the Update read');
+  assert.ok(!/no longer answers/.test(h.context.noted.text), 'the build replaced the note');
   mode = 'notready';
   h.run('strip.tone = "ok"');
   for (let i = 0; i < 10; i++) await h.run('checkFolder()');
   assert.equal(h.seen.notes.filter((n) => /no longer answers/.test(n[1])).length, 2, 'said again');
+});
+
+test('a note the player earned another way does not silence the watcher, and the note stands while the condition holds', async () => {
+  let body = {hello: 'world'};
+  const h = harness({routes: {health: () => body, refresh: reply(404, {error: 'not_found'})}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  await h.run('checkFolder()');
+  assert.match(h.context.noted.text, /no longer answers/);
+  await h.run('checkFolder()');
+  assert.match(h.context.noted.text, /no longer answers/, 'still up, not withdrawn while the condition holds');
+  assert.equal(h.seen.notes.filter((n) => /no longer answers/.test(n[1])).length, 1, 'and not said twice');
+  // The player follows the advice; Update's refusal replaces the note.
+  await h.run('update()');
+  assert.match(h.context.noted.text, /did not take the refresh/);
+  h.run('strip.tone = "ok"');
+  await h.run('checkFolder()');
+  assert.match(h.context.noted.text, /no longer answers/, 'said again once the other note is gone');
+  // A version-2 mod on the port replaces the wording.
+  body = {...HEALTH, schemaVersion: 2, stamp: 's1'};
+  await h.run('checkFolder()');
+  assert.match(h.context.noted.text, /version 2/);
 });
 
 test('#link= only moves the port on this machine', () => {

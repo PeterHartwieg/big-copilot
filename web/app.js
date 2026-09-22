@@ -424,7 +424,11 @@
   let linkHealth = null;  // the /health body behind those bytes, for the strip
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
-  let linkPortSaid = false;  // the watcher has said the port no longer answers as the mod
+  // The watcher's own notes about the port, recognised on screen: it says one
+  // when none of them is up, and withdraws one when the port answers as the
+  // mod again. No flag to fall out of step with whatever else wrote a note.
+  const PORT_NOTE = /^(That address no longer answers as the Big Copilot Link mod\.|The mod now speaks version )/;
+  const portNoteUp = () => PORT_NOTE.test(noted.text);
   let linkSpace = null;   // the targetAddressSpace this browser accepted, "" for none
   // Every wait the link takes. Tests swap this rather than sleep.
   let linkWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -508,7 +512,6 @@
     linkHealth = null;
     linkGone = false;
     linkNotReady = 0;
-    linkPortSaid = false;
     try { localStorage.removeItem(LINK_KEY); } catch (e) {}
   }
 
@@ -521,7 +524,6 @@
     linkHealth = null;
     linkGone = false;
     linkNotReady = 0;
-    linkPortSaid = false;
     stored.set(LINK_KEY, linkUrl);
     dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
     savePicker.hidden = true;
@@ -552,13 +554,7 @@
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
   function wrongVersion(health, gen) {
-    if (health === NOT_READY) return false;
-    if (health.schemaVersion === 1) {
-      // A health answer of this version, from whichever caller: whatever the
-      // watcher said about the port is over, and may be said again later.
-      linkPortSaid = false;
-      return false;
-    }
+    if (health === NOT_READY || health.schemaVersion === 1) return false;
     finishAttempt(gen);
     if (health.schemaVersion == null) {
       // A JSON object with no version in it is not the mod's health at all.
@@ -757,14 +753,12 @@
     // board that stays, and the next answer clears it.
     const gen = sourceGen;
     const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
-    const wasSaid = linkPortSaid;  // cleared below, on a health answer of this version
     let health;
     try { health = await readHealth(); }
     catch (err) {
       if (gen !== sourceGen) return;
-      // Whatever was said about the port is replaced by the gone note, and
-      // is said again after the game is back if the port is still not the mod.
-      linkPortSaid = false;
+      // The gone note replaces whatever was said about the port; that is said
+      // again after the game is back if the port is still not the mod.
       if (linkGone || strip.tone !== "ok") return;
       linkGone = true;
       note("warn", "The game is not reachable; the board shows its last state.", "It reconnects on its own when the game is back.");
@@ -778,29 +772,24 @@
     // board that stays; one health answer counts from zero again.
     if (health === NOT_READY) {
       linkNotReady++;
-      if (linkNotReady >= 10 && !linkPortSaid && strip.tone === "ok") {
-        linkPortSaid = true;
+      if (linkNotReady >= 10 && !portNoteUp() && strip.tone === "ok") {
         note("warn", "That address no longer answers as the Big Copilot Link mod.", "Is another program on that port? Check the port in the mod's options, then click Update.");
       }
       return;
     }
     if (health.schemaVersion !== 1) {
       // A JSON object that is not this page's health: another program on the
-      // port, or a mod of another version. Said once, under the board that
-      // stays; Update gives the full refusal.
-      if (!linkPortSaid && strip.tone === "ok") {
-        linkPortSaid = true;
-        note("warn", health.schemaVersion == null
-          ? "That address no longer answers as the Big Copilot Link mod."
-          : `The mod now speaks version ${health.schemaVersion}; this page needs version 1.`,
-          "Click Update for the details.");
-      }
+      // port, or a mod of another version. Said while no such note is up,
+      // under the board that stays; Update gives the full refusal.
+      const text = health.schemaVersion == null
+        ? "That address no longer answers as the Big Copilot Link mod."
+        : `The mod now speaks version ${health.schemaVersion}; this page needs version 1.`;
+      if (noted.text !== text && strip.tone === "ok") note("warn", text, "Click Update for the details.");
       return;
     }
     // The port answers as the mod again: whatever the watcher said about it
     // is withdrawn, even when the stamp has not moved.
-    linkPortSaid = false;
-    if (wasSaid && strip.tone === "ok") note("");
+    if (portNoteUp() && strip.tone === "ok") note("");
     if (document.hidden || busy || attempt) return;
     // Nothing yet, or mid-refresh: nothing to build from. The next tick, or
     // Update, looks again.
