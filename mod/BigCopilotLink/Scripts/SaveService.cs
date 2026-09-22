@@ -135,7 +135,8 @@ namespace BigCopilotLink
         /// <summary>
         /// Forget the bytes on unload — they are the player's whole company. Main
         /// thread only. A compress still running publishes nothing afterwards, and
-        /// the uncompressed temporary file goes with the bytes.
+        /// the uncompressed temporary file goes with the bytes. A /save already past
+        /// taking the snapshot finishes writing it; no new reader gets it.
         /// </summary>
         public void Clear()
         {

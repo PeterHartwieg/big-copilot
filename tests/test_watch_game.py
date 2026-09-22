@@ -63,13 +63,22 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.assertEqual(self.game.stamp, self.mock.stamp)
 
     def test_a_health_that_is_not_200_is_not_a_schema_mismatch(self):
-        """Some other status on /health means not ready, never a version refusal."""
+        """Some other status on /health means not ready, never a version refusal.
+
+        Ten of them in a row is another program on the port, and is said so
+        as an outage the watch loop prints once, not as a version mismatch.
+        """
         real = self.game._call
         self.game._call = lambda route, method="GET", headers=None: (503, {}, b'{"error":"x"}')
         try:
-            self.assertIsNone(self.game.poll())
+            for _ in range(9):
+                self.assertIsNone(self.game.poll())
+            with self.assertRaises(ba_dashboard.LinkUnavailable) as caught:
+                self.game.poll()
+            self.assertIn("not as the Big Copilot Link mod", str(caught.exception))
         finally:
             self.game._call = real
+        self.assertIsNone(self.game.poll(), "a real answer after that counts from zero")
 
     def test_a_busy_game_polls_to_nothing(self):
         self.mock.busy = True

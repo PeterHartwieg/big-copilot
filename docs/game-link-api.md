@@ -185,7 +185,9 @@ unverified.
 
 1. `GET /health`. A connection error means the game is not there: say so, keep the
    last board, retry on the next poll or on Update.
-2. If `schemaVersion` is unknown, stop and say which version this client needs.
+2. Only a `200` is judged: any other status on `/health` means the mod is there and
+   not ready, and is waited out like `busy`. On a `200`, if `schemaVersion` is unknown,
+   or the body is no JSON object, stop and say which version this client needs.
 3. If `stamp` differs from the stamp of the board on screen and `busy` is false,
    `GET /save` with `If-None-Match` and build from the bytes.
 4. Update means `POST /refresh`, then step 1 until the stamp moves.

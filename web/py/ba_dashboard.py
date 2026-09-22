@@ -16554,6 +16554,7 @@ class GameLink:
         self.character = ""
         self.company = ""
         self.stale = False  # why wait_for_save() returned older bytes than it asked for, or False
+        self.not_ready = 0  # /health answers in a row that were not a 200
 
     def _call(self, route: str, method: str = "GET", headers: dict | None = None):
         try:
@@ -16584,7 +16585,16 @@ class GameLink:
         if status != 200:
             # Answered, but not with health: the mod is there and not ready.
             # The next poll asks again; only a 200 says what version it speaks.
+            # Ten in a row is something else on that port, and is said so.
+            self.not_ready += 1
+            if self.not_ready >= 10:
+                self.not_ready = 0
+                raise LinkUnavailable(
+                    f"{self.url} answers, but not as the Big Copilot Link mod; "
+                    "is another program on that port?"
+                )
             return None
+        self.not_ready = 0
         try:
             health = json.loads(body or b"{}")
         except ValueError:

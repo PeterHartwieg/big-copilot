@@ -685,7 +685,7 @@
     const deadline = Date.now() + 45000;
     let health = null;
     while (Date.now() < deadline) {
-      try { health = await (await linkFetch("/health")).json(); }
+      try { health = await readHealth(); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (health.stamp && health.stamp !== before && !health.busy) break;
@@ -710,7 +710,7 @@
     const gen = sourceGen;
     const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
     let health;
-    try { health = await (await linkFetch("/health")).json(); }
+    try { health = await readHealth(); }
     catch (err) {
       if (gen !== sourceGen || linkGone || strip.tone !== "ok") return;
       linkGone = true;
@@ -721,6 +721,8 @@
     if (wasGone && strip.tone === "ok") note("");
     lastCheck = Date.now();  // the button's "checked HH:MM", per check, like the folder's
     if (document.hidden || busy || attempt) return;
+    // Not ready, another version, unreadable, nothing yet, or mid-refresh:
+    // nothing to build from. The next tick, or Update, looks again.
     if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
     if (health.stamp !== lastLinkStamp) await loadFromLink("Reading the game", gen);
   }
