@@ -368,9 +368,11 @@ test('any answer from the mod ends the gone note, a refusal included', async () 
 
 test('a /health that is not 200 is waited out, never read as a version mismatch', async () => {
   let asked = 0;
+  // A 503, then a 204 that a browser would call ok: neither is a health answer.
   const h = harness({
     routes: {
-      health: () => (++asked < 3 ? reply(503, {error: 'too_many_requests'}) : {...HEALTH, stamp: 's7'}),
+      health: () => (asked++ === 0 ? reply(503, {error: 'too_many_requests'})
+        : asked === 2 ? reply(204, null) : {...HEALTH, stamp: 's7'}),
       save: reply(200, null, {'X-Game-Link-Stamp': 's7'}),
     },
   });
@@ -389,11 +391,21 @@ test('an incompatible mod that is busy is refused at once, not after the wait', 
 });
 
 test('a 200 /health with no object in it is said to be unreadable', async () => {
-  const h = harness({routes: {health: reply(200, null)}});
-  h.run('linkUrl = "http://127.0.0.1:8322"');
-  await h.run('loadFromLink("Reading the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match');
-  assert.match(h.seen.notes.at(-1)[1], /not one this page can read/);
+  for (const body of [null, [1, 2], 'x']) {
+    const h = harness({routes: {health: reply(200, body)}});
+    h.run('linkUrl = "http://127.0.0.1:8322"');
+    await h.run('loadFromLink("Reading the game")');
+    assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match', JSON.stringify(body));
+    assert.match(h.seen.notes.at(-1)[1], /not one this page can read/);
+  }
+});
+
+test('an incompatible mod answering an Update is refused inside the poll, not after 45 seconds', async () => {
+  const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: {...HEALTH, schemaVersion: 3}}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
+  await h.run('update()');
+  assert.match(h.seen.notes.at(-1)[1], /version 3/);
+  assert.equal(h.waits.length, 0);
 });
 
 test('#link= only moves the port on this machine', () => {

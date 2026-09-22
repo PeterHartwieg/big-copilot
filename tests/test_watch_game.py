@@ -76,6 +76,8 @@ class GameLinkAgainstMock(unittest.TestCase):
             with self.assertRaises(ba_dashboard.LinkUnavailable) as caught:
                 self.game.poll()
             self.assertIn("not as the Big Copilot Link mod", str(caught.exception))
+            with self.assertRaises(ba_dashboard.LinkUnavailable):
+                self.game.poll()  # still the same outage, not a quiet None
         finally:
             self.game._call = real
         self.assertIsNotNone(self.game.poll(), "a real answer after that is read as ever")

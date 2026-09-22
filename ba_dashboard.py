@@ -16588,7 +16588,8 @@ class GameLink:
             # Ten in a row is something else on that port, and is said so.
             self.not_ready += 1
             if self.not_ready >= 10:
-                self.not_ready = 0
+                # Every poll from here on, until a 200: the outage is one outage,
+                # and the watch loop must not see it end between two of them.
                 raise LinkUnavailable(
                     f"{self.url} answers, but not as the Big Copilot Link mod; "
                     "is another program on that port?"

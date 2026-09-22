@@ -531,10 +531,10 @@
   // body is no object is an answer this page cannot read, and says so.
   async function readHealth() {
     const res = await linkFetch("/health");
-    if (!res.ok) return {stamp: "", busy: true, notReady: true};
+    if (res.status !== 200) return {stamp: "", busy: true, notReady: true};
     let body = null;
     try { body = await res.json(); } catch (e) {}
-    return body && typeof body === "object" ? body : {stamp: "", busy: false, unreadable: true};
+    return body && typeof body === "object" && !Array.isArray(body) ? body : {stamp: "", busy: false, unreadable: true};
   }
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
@@ -688,6 +688,7 @@
       try { health = await readHealth(); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
+      if (wrongVersion(health, gen)) return;
       if (health.stamp && health.stamp !== before && !health.busy) break;
       health = null;
       state("busy", "Waiting for the game to serialize its state", linkUrl);
