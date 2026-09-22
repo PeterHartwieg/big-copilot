@@ -16569,8 +16569,8 @@ class GameLink:
             return err.code, dict(err.headers), err.read()
         except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
             raise LinkUnavailable(
-                "waiting for the game: start it with the Big Copilot Link mod "
-                "enabled and load a save"
+                "the game link did not answer; start the game with the Big Copilot "
+                "Link mod enabled and load a save"
             ) from exc
 
     def poll(self) -> str | None:
@@ -16647,14 +16647,10 @@ class GameLink:
                 # The game went away mid-wait, or the port stopped answering as
                 # the mod. Bytes already downloaded in this call are still a
                 # board; only an empty-handed wait surfaces it. The reason is
-                # the exception's own, so a wrong service is not called a
-                # game that went away.
+                # the exception's own, whichever it was.
                 if path is None:
                     raise
-                self.stale = (
-                    str(exc) if "not as the Big Copilot Link mod" in str(exc)
-                    else "the game went away before the refresh landed"
-                )
+                self.stale = str(exc)
                 return path
             if got is not None:
                 path = got

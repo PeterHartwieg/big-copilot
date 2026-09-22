@@ -423,11 +423,13 @@ test('a 200 /health with no object in it is not ready, and names the port after 
   }
 });
 
-test('an Update accepted by something that never answers as the mod names the port', async () => {
+test('an Update accepted by something that never answers as the mod names the port, in thirty seconds', async () => {
   const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: reply(503, {error: 'x'})}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
   assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
+  const waited = h.waits.reduce((a, b) => a + b, 0);
+  assert.ok(waited <= 30000, `waited ${waited} ms; the bound for never-health is thirty seconds`);
 });
 
 test('an incompatible mod answering an Update is refused inside the poll, not after 45 seconds', async () => {

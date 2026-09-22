@@ -178,7 +178,7 @@ class GameLinkAgainstMock(unittest.TestCase):
         path = self.game.wait_for_save(seconds=10)
         self.assertIsNotNone(path)
         self.assertEqual(self.game.stamp, before)
-        self.assertIn("went away", self.game.stale)
+        self.assertIn("did not answer", self.game.stale)
         # tearDown's stop() on the already stopped server returns at once.
 
     def test_wait_for_save_names_a_port_that_stopped_answering_as_the_mod(self):

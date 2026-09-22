@@ -697,10 +697,14 @@
     }
     // The mod serializes at its own pace; its health fields say when the
     // stamp has moved and the bytes are worth fetching.
-    const deadline = Date.now() + 45000;
+    // Forty-five seconds for a slow serialize; thirty for answers that were
+    // never health, the same bound as the first read's, so a wrong service on
+    // the port is named in the same time whichever way the page met it.
+    const started = Date.now();
+    const deadline = started + 45000;
     let health = null;
     let sawHealth = false;
-    while (Date.now() < deadline) {
+    while (Date.now() < (sawHealth ? deadline : started + 30000)) {
       try { health = await readHealth(); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
