@@ -119,7 +119,8 @@ way.
   configured like the game's helper (as built: no temporary file, and the game
   itself does not walk on a thread, so the tearing risk is the mod's alone; a walk
   that throws is retried, two failures fall back to the main thread).
-- Automatic refresh: when a building's load screen appears (the stall is hidden there),
+- Automatic refresh: when a building's load screen appears (the stall is hidden
+  there; as built, an option that is off by default),
   on any game save completing, every five minutes as a floor, and on the in-game hour
   change as an option that is on by default now that the walk is off the main thread
   (as built). Idle when no client has polled

@@ -65,7 +65,8 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 A serialize takes a few hundred milliseconds of a worker thread on a 5 MB save, plus
 the gzip on the same thread (`busy` covers both), and is not a stall; the mod logs
 `serialized in N ms on a worker thread (<trigger>)` on each one,
-or `… on the main thread …` for a building load and after it has fallen back.
+or `… on the main thread …` for a building load (with that option on) and after it
+has fallen back.
 
 **Attached** means a client fetched `/health` in the last 120 seconds. When nothing is
 attached the mod refreshes only on the first trigger after a client returns, so an

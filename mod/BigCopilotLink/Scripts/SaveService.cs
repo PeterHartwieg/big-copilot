@@ -195,7 +195,9 @@ namespace BigCopilotLink
         /// lands there. The city's loading spinner is not an edge of its own: it
         /// rises only for CityManager.DelayEnterBuilding, whose entry flips too, and
         /// a second walk under the same black bought nothing. This passes the
-        /// fifteen-second window. Only while a client is attached.
+        /// fifteen-second window. Only while a client is attached, and only with the
+        /// building-load option on, which is off by default: the hourly and game-save
+        /// refreshes make it a backup.
         /// </summary>
         public void FrameOnMainThread(bool attached, bool onBuildingLoad)
         {
