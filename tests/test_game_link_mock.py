@@ -87,8 +87,22 @@ class MockContract(unittest.TestCase):
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
             self.assertEqual(call(self.url + route, method)[0], 405, f"{method} {route}")
-        status, _, body = call(self.url + "/health", "HEAD")
-        self.assertEqual((status, body), (405, b""), "a HEAD answer carries no body")
+        # A HEAD answer must leave nothing on the wire: the next request on the
+        # same kept-alive connection has to parse cleanly.
+        import http.client
+        host, port = self.url[len("http://"):].split(":")
+        conn = http.client.HTTPConnection(host, int(port), timeout=5)
+        try:
+            conn.request("HEAD", "/health")
+            head = conn.getresponse()
+            self.assertEqual(head.status, 405)
+            self.assertEqual(head.read(), b"")
+            conn.request("GET", "/health")
+            after = conn.getresponse()
+            self.assertEqual(after.status, 200)
+            self.assertEqual(json.loads(after.read())["source"], "mock")
+        finally:
+            conn.close()
 
     def test_cors_only_for_the_allowlist(self):
         for origin in ("https://bigcopilot.com", "http://127.0.0.1:8770", "http://localhost:8080"):

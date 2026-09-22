@@ -17,8 +17,11 @@ namespace BigCopilotLink
     /// </summary>
     public sealed class LinkHttpServer
     {
-        /// <summary>How long a wedged main thread may hold up a /refresh request.</summary>
-        private const int MainThreadTimeoutMs = 10000;
+        /// <summary>
+        /// How long /refresh waits for the main thread before answering "accepted"
+        /// anyway. Clients abort a call after five seconds; this stays well inside.
+        /// </summary>
+        private const int MainThreadWaitMs = 3000;
 
         private const string ExposeHeaders =
             "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character";
@@ -275,41 +278,28 @@ namespace BigCopilotLink
         {
             var stampBefore = _saves.Current.Stamp;
             var saves = _saves;
-            var request = new RefreshRequest();
 
             RefreshResult result;
             try
             {
-                var task = MainThreadDispatcher.RunOnMainThread(() => request.Run(saves));
-                if (task.Wait(MainThreadTimeoutMs))
+                var task = MainThreadDispatcher.RunOnMainThread(() => saves.TryStartRefresh("request"));
+                if (task.Wait(MainThreadWaitMs))
                 {
-                    result = task.Result;
-                }
-                else if (request.Cancel())
-                {
-                    // Nothing dequeued our work in ten seconds: the game is wedged or
-                    // mid-load. The queued work is now a no-op, so "no refresh
-                    // started" is true when the client reads it.
-                    WriteJson(context, 503, "{\"error\":\"main_thread_unavailable\"}");
-                    return;
-                }
-                else if (task.Wait(MainThreadTimeoutMs))
-                {
-                    // The pump took it on the boundary: a refresh really started, and
-                    // the ordinary answer is the true one.
                     result = task.Result;
                 }
                 else
                 {
-                    // Started, and still not back after another ten seconds: the main
-                    // thread is stuck inside the serialize. The one listener thread
-                    // must not stay stuck with it; the client is told what is true,
-                    // that a refresh began, and polls /health for its stamp.
+                    // The main thread has not taken it yet: mid-load, or a long frame.
+                    // The request stays queued and runs when the thread is free; the
+                    // throttle folds it into any refresh that ran meanwhile. Clients
+                    // abort a call after five seconds, so the answer has to come now:
+                    // accepted, and the stamp to watch /health for.
                     result = RefreshResult.Started();
                 }
             }
             catch (Exception e)
             {
+                // A faulted task: no city is loaded (the dispatcher refused the work).
                 LinkMod.LogError("refresh request failed on the main thread: " + e);
                 WriteJson(context, 503, "{\"error\":\"main_thread_unavailable\"}");
                 return;
@@ -343,40 +333,6 @@ namespace BigCopilotLink
             accepted.Prop("stamp", stampBefore);
             accepted.EndObject();
             WriteJson(context, 202, accepted.ToString());
-        }
-
-        /// <summary>
-        /// A /refresh in flight between the HTTP thread and the main thread. The lock
-        /// makes "the pump took it" and "the listener gave up" exclusive, so the
-        /// client is never told that nothing started when something did.
-        /// </summary>
-        private sealed class RefreshRequest
-        {
-            private readonly object _gate = new object();
-            private bool _started;
-            private bool _cancelled;
-
-            /// <summary>Main thread: the work, unless the listener gave up first.</summary>
-            public RefreshResult Run(SaveService saves)
-            {
-                lock (_gate)
-                {
-                    if (_cancelled) return RefreshResult.Throttled(1);
-                    _started = true;
-                }
-                return saves.TryStartRefresh("request");
-            }
-
-            /// <summary>HTTP thread: true when cancelled in time, false when the work had begun.</summary>
-            public bool Cancel()
-            {
-                lock (_gate)
-                {
-                    if (_started) return false;
-                    _cancelled = true;
-                    return true;
-                }
-            }
         }
 
         // ---- writing -------------------------------------------------------------

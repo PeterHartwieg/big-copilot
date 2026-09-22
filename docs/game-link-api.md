@@ -111,14 +111,18 @@ the fetch) as the file time.
 Asks for a refresh now. No body.
 
 - `202 {"accepted": true, "stamp": "<stamp before this refresh>"}`. The client polls
-  `/health` until `stamp` changes and `busy` is false, then fetches `/save`.
+  `/health` until `stamp` changes and `busy` is false, then fetches `/save`. The mod
+  answers within about three seconds: when the game's main thread has not taken the
+  request by then (mid-load, a long frame) it is still accepted and runs when the
+  thread is free, so a 202 can precede the refresh by a moment. Clients time out a call
+  after five seconds; the mod never holds one longer than that.
 - `429 {"error": "throttled", "retryAfter": <seconds>}` inside the 15-second window
   or while one is in flight; the client waits and polls `/health` as above.
 - `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino" | "other"}`
   when the game refuses; the client shows the reason and keeps the last bytes.
   `"other"` is `CanSave()` false for a reason the mod cannot name.
-- `503 {"error": "main_thread_unavailable"}` when the game's main thread did not take the
-  request within ten seconds (mid-load, or frozen). No refresh started. The client says the
+- `503 {"error": "main_thread_unavailable"}` when the mod could not hand the request to
+  the game at all (no city is loaded any more). No refresh started. The client says the
   mod did not take the request and keeps the last bytes; it is not "the game is not running".
 
 Every JSON answer, `/health` included, carries `Cache-Control: no-store`: a cached
