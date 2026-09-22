@@ -34,12 +34,24 @@ class PrivacyPromises(unittest.TestCase):
                 self.assertNotIn("fonts.googleapis.com", text)
 
     def test_scripts_fetch_only_from_this_site(self):
+        # The game link (docs/game-link-api.md) is the one sanctioned
+        # exception: at the player's own click, app.js reads the running
+        # game from the Big Copilot Link mod on the player's loopback. The
+        # data goes to the machine it came from, so no third party sees it;
+        # the mod answers CORS for this site and for loopback origins only.
+        # Anything else a script names is still a broken promise.
+        loopback = {"127.0.0.1", "localhost"}
         for name in SCRIPTS:
             with self.subTest(name=name):
                 text = (WEB / name).read_text(encoding="utf-8")
                 # The SVG namespace in map.js is an identifier, never fetched.
-                hosts = set(re.findall(r"https?://([^/\"'`\s]+)", text)) - {"www.w3.org"}
-                self.assertEqual(hosts, set(), f"{name} names another host")
+                hosts = {host.split(":")[0] for host in re.findall(r"https?://([^/\"'`\s]+)", text)}
+                hosts -= {"www.w3.org"}
+                if name == "app.js":
+                    self.assertTrue(hosts, "app.js should still name the game link's loopback")
+                    self.assertLessEqual(hosts, loopback, "app.js names a host that is not loopback")
+                else:
+                    self.assertEqual(hosts, set(), f"{name} names another host")
 
     def test_pyodide_is_served_from_this_site(self):
         worker = (WEB / "worker.js").read_text(encoding="utf-8")

@@ -23,6 +23,11 @@
  * gives the same handle. Elsewhere the folder button is a plain directory
  * input, which is a snapshot: Update reopens the picker.
  *
+ * A third way in needs no folder at all: the Big Copilot Link mod serves the
+ * running game's own save bytes on loopback HTTP, and "Link to the game"
+ * points the board at it. The base URL is remembered in localStorage and the
+ * bytes are read like any save; see the game-link section below.
+ *
  * Which save. By default the newest .hsg anywhere under the folder, which is
  * the game's own idea of "continue". The save menu narrows that: to one
  * character's folder (its newest save, so autosaves keep flowing) or to one
@@ -269,7 +274,7 @@
     const bad = strip.tone === "bad";
     const restoring = !board && attempt && attempt.restoring && strip.tone === "busy";
     const landing = $("landing");
-    if (landing) landing.classList.toggle("lg-resume", !!dirHandle);
+    if (landing) landing.classList.toggle("lg-resume", !!(dirHandle || linkUrl));
     const led = $("srcLed");
     led.className = "led" + (strip.tone === "busy" ? " busy" : bad ? " err" : strip.tone === "ok" ? "" : " lg-dim");
     const st = $("srcStatus");
@@ -283,10 +288,11 @@
     if (watchTimer && strip.tone === "ok") meta += " · watching";
     $("srcMeta").textContent = restoring ? "" : meta;
     const btn = $("updateBtn");
-    btn.disabled = !!readerError || !!attempt || busy || !(dirHandle || lastFile);
+    btn.disabled = !!readerError || !!attempt || busy || !(dirHandle || lastFile || linkUrl);
     const opens = !board && dirHandle && !lastFile;
     btn.textContent = opens ? (pick.dir || pick.name ? "Open chosen save" : "Open newest save") : "Update";
     btn.classList.toggle("primary", opens);
+    btn.title = linkUrl ? "Ask the game for its current state" : "Read the newest save from the chosen folder again";
     $("recoverBtn").hidden = !(bad && noted.recover);
     $("reloadBtn").hidden = !readerError;
     // On the landing the strip only shows when it has something to say: a
@@ -323,9 +329,11 @@
       row.appendChild($("srcStrip"));
       $("sourceNote").appendChild($("srcNote"));
       $("srcActions").appendChild($("boardControls").content.cloneNode(true));
+      const lb = $("linkBtn");
       fb.className = "lg-btn"; fb.textContent = "Choose save folder";
+      if (lb) { lb.className = "lg-btn"; lb.textContent = "Link to the game"; }
       sp.className = "lg-btn lg-pick"; $("savePickText").textContent = "One save file";
-      $("menuSourceSlot").append(savePicker, fb, sp);
+      $("menuSourceSlot").append(savePicker, fb, ...(lb ? [lb] : []), sp);
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
       $("menuChipSlot").appendChild($("localeChip"));
@@ -347,20 +355,27 @@
       $("landing").remove();
     } else {
       const ret = !!dirHandle;
+      const lb = $("linkBtn");
       sp.className = "link lg-pick";
       if (ret) {
         // A remembered folder: the strip carries the actions as the design
-        // draws them: Open newest save, Change folder, one file.
+        // draws them: Open newest save, Change folder, one file. The link
+        // rides along, so a folder player can still switch to the game.
         fb.className = "btn2"; fb.textContent = "Change folder";
+        if (lb) { lb.className = "btn2"; lb.textContent = "Link to the game"; }
         $("savePickText").textContent = "one file";
         $("srcActions").append(savePicker, fb, sp);
+        if (lb) $("srcActions").append(lb);
         $("entryRow").hidden = true;
         // Keep the restore message ahead of the platform-specific folder help.
         if ($("saveLocation")) $("srcSlot").after($("saveLocation"));
       } else {
         fb.className = "btn"; fb.innerHTML = ICON_FOLDER + "Choose the folder";
         $("savePickText").textContent = "or one save file";
-        $("entryRow").append(fb, sp);
+        // The link button keeps its place between the two, as the landing
+        // lays them out; a page without it (a cached older one) loses only
+        // the button, never the row.
+        $("entryRow").append(...(lb ? [fb, lb, sp] : [fb, sp]));
         $("srcActions").prepend(savePicker);
         $("entryRow").hidden = false;
       }
@@ -394,6 +409,252 @@
     if (focusLeaves && document.activeElement === document.body) $("nav").querySelector("a.on").focus();
   }
 
+  /* --- the game link (docs/game-link-api.md) ---------------------------- */
+  // The Big Copilot Link mod (Steam Workshop) serves the running game's own
+  // save bytes on loopback HTTP; docs/game-link-api.md is the contract. The
+  // bytes are a normal .hsg, so once they are here everything is the folder
+  // path's: only where they come from is different. One watcher, two sources,
+  // in checkFolder(): the folder's scan, or the link's /health.
+  const LINK_KEY = "ledger_link";
+  const LINK_POLL_MS = 1000;
+  let linkUrl = null;     // the mod's base URL while the link is the source
+  let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
+  let linkHealth = null;  // the /health body behind those bytes, for the strip
+  let linkSpace = null;   // the targetAddressSpace this browser accepted, "" for none
+  // Every wait the link takes. Tests swap this rather than sleep.
+  let linkWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // The mod's default port. #link=http://127.0.0.1:8323 in the address moves
+  // it, for the player running a second install; there is no UI on purpose.
+  function linkBase() {
+    const given = /[#&]link=([^&]+)/.exec(location.hash || "");
+    return given ? decodeURIComponent(given[1]) : "http://127.0.0.1:8322";
+  }
+
+  async function linkFetch(path, init) {
+    // A public page's fetch to loopback is a site permission in Chrome and
+    // Edge, and the call has to name the address space: "loopback" from
+    // Chrome 145, "local" in the builds before that know it, and a browser
+    // that knows neither throws the unknown value back as a TypeError. The
+    // spelling that works is remembered, so the player answers the prompt
+    // once, not once per call. No credentials, ever.
+    const spaces = linkSpace === null ? ["loopback", "local", ""] : [linkSpace];
+    for (const space of spaces) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const options = Object.assign({credentials: "omit"}, init, {signal: controller.signal});
+      if (space) options.targetAddressSpace = space;
+      let res;
+      try {
+        res = await fetch(linkUrl + path, options);
+      } catch (err) {
+        clearTimeout(timer);
+        // Only an unknown annotation is worth spelling another way; a
+        // refused connection, or our own timeout, is an answer about the
+        // game and not about this call's options. The name, not instanceof:
+        // the error can come from another realm than this script's.
+        if (err.name === "TypeError" && space && linkSpace === null) continue;
+        throw new Error("The game is not running, or the Big Copilot Link mod is not installed.");
+      }
+      clearTimeout(timer);
+      linkSpace = space;
+      return res;
+    }
+    throw new Error("The game is not running, or the Big Copilot Link mod is not installed.");
+  }
+
+  function linkLine(health, extra) {
+    const h = health || {};
+    // minute is a float in the game; the strip shows a clock, not a fraction.
+    const at = `${String(h.hour ?? 0).padStart(2, "0")}:${String(Math.floor(h.minute ?? 0)).padStart(2, "0")}`;
+    $("srcStrip").title = linkUrl || "";
+    return `${h.company || company} · day ${h.day ?? "?"}, ${at} · game link${extra ? ` · ${extra}` : ""}`;
+  }
+
+  function linkDown(gen, err) {
+    // The shared bad state: the game is closed, the mod is off, or the
+    // browser refused the loopback request. linkUrl stays set, so Update
+    // and the watcher keep retrying.
+    if (gen !== sourceGen) return;
+    finishAttempt(gen);
+    state("bad", "Could not reach the game", linkUrl);
+    note("bad", err.message, "Start the game with the mod enabled and load a save, then click Update.", true);
+  }
+
+  function dropLink() {
+    // A folder or a file chosen by hand replaces the link as the source, and
+    // that choice is remembered too, so the link must not come back on the
+    // next visit. The reverse is not cleared: the folder handle stays in
+    // IndexedDB, and choosing it again is one click, not one picker trip.
+    linkUrl = null;
+    try { localStorage.removeItem(LINK_KEY); } catch (e) {}
+  }
+
+  async function linkToGame() {
+    const gen = supersede();
+    linkUrl = linkBase();
+    stored.set(LINK_KEY, linkUrl);
+    dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
+    savePicker.hidden = true;
+    closeSavePicker();
+    lastEntries = null;
+    if (!onBoard()) place();
+    await loadFromLink("Linking to the game", gen);
+  }
+
+  async function loadFromLink(why, gen) {
+    if (gen === undefined) gen = sourceGen;
+    if (!startAttempt(gen)) return;
+    note("");
+    state("busy", why, linkUrl);
+    let health;
+    try { health = await (await linkFetch("/health")).json(); }
+    catch (err) { linkDown(gen, err); return; }
+    if (gen !== sourceGen) return;
+    if (health.schemaVersion !== 1) {
+      finishAttempt(gen);
+      state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
+      note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+      return;
+    }
+    // The mod serializes on the game's main thread and only while the game
+    // is not saving, so a first refresh can take a moment to land.
+    if (health.stamp === "" || health.busy) {
+      const deadline = Date.now() + 30000;
+      while (health.stamp === "" || health.busy) {
+        state("busy", "Waiting for the game to serialize its state", linkUrl);
+        if (Date.now() >= deadline) {
+          finishAttempt(gen);
+          state("bad", "The game has not produced a save yet", linkUrl);
+          note("bad", "The mod has had nothing to serve for 30 seconds. Load a save in the game, then click Update.", "", true);
+          return;
+        }
+        await linkWait(LINK_POLL_MS);
+        if (gen !== sourceGen) return;
+        try { health = await (await linkFetch("/health")).json(); }
+        catch (err) { linkDown(gen, err); return; }
+        if (gen !== sourceGen) return;
+      }
+    }
+    if (health.stamp === lastLinkStamp && onBoard()) {
+      finishAttempt(gen);
+      state("ok", "No newer state from the game", linkLine(health));
+    } else {
+      let res;
+      try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}}); }
+      catch (err) { linkDown(gen, err); return; }
+      if (gen !== sourceGen) return;
+      if (res.status === 304) {  // a newer stamp was announced and then overtaken
+        finishAttempt(gen);
+        state("ok", "No newer state from the game", linkLine(health));
+      } else {
+        const bytes = await res.arrayBuffer();
+        if (gen !== sourceGen) return;
+        // linkHealth now, not after the build: the strip's line while the
+        // bytes are read should be the day they carry.
+        linkHealth = health;
+        const file = new File([bytes], `${health.character}-live.hsg`,
+          {lastModified: Date.parse(health.refreshedAt) || Date.now()});
+        file.linkStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
+        await buildFrom(file, "", gen);
+        if (gen !== sourceGen) return;
+        // A build that failed keeps its own reason, and the stamp behind it:
+        // the next check reads the same bytes again rather than skipping them.
+        if (strip.tone !== "bad") lastLinkStamp = file.linkStamp;
+      }
+    }
+    lastCheck = Date.now();
+    armWatch();  // polling /health is also what keeps the mod attached
+  }
+
+  const LINK_REFUSE = {
+    saving: "The game is saving right now",
+    placement: "The game cannot save while you are placing items",
+    interior: "The game cannot save while the interior designer is open",
+    casino: "The game cannot save on the casino boat",
+    other: "The game cannot save right now",
+  };
+
+  async function refreshFromGame() {
+    // Update in linked mode: ask the mod to serialize now, watch the stamp
+    // move, then read. A refusal keeps the board -- the game's own next save
+    // brings the bytes anyway.
+    const gen = sourceGen;
+    if (!startAttempt(gen)) return;  // one Update at a time, like the folder's
+    state("busy", "Asking the game for its current state", linkUrl);
+    let res;
+    try { res = await linkFetch("/refresh", {method: "POST"}); }
+    catch (err) { linkDown(gen, err); return; }
+    if (gen !== sourceGen) return;
+    let before = lastLinkStamp;
+    if (res.status === 409) {
+      let reason = "other";
+      try { reason = (await res.json()).reason || "other"; } catch (e) {}
+      finishAttempt(gen);
+      // Only a board the link built says "up to date": a folder board has no
+      // game state to name, and its own line is still true.
+      if (lastLinkStamp) state("ok", "Up to date", linkLine(linkHealth));
+      note("warn", `${LINK_REFUSE[reason] || LINK_REFUSE.other}. Try Update again in a moment.`);
+      return;
+    } else if (res.status === 429) {
+      // Throttled covers two cases: a refresh in flight, whose stamp will
+      // move on its own, and the quiet window after one, where nothing
+      // will. Wait it out, then ask once more; a second refusal means a
+      // refresh really is in flight and the poll below catches its stamp.
+      let retryAfter = 5;
+      try { retryAfter = (await res.json()).retryAfter || 5; } catch (e) {}
+      const wait = Math.min(20, Math.max(1, retryAfter));
+      state("busy", "The game is already serializing", `${linkUrl} · waiting ${wait} s`);
+      await linkWait(wait * 1000);
+      if (gen !== sourceGen) return;
+      let again;
+      try { again = await linkFetch("/refresh", {method: "POST"}); }
+      catch (err) { linkDown(gen, err); return; }
+      if (gen !== sourceGen) return;
+      if (again.status === 202) {
+        try { before = (await again.json()).stamp || lastLinkStamp; } catch (e) {}
+      }
+    } else if (res.status === 202) {
+      try { before = (await res.json()).stamp || lastLinkStamp; } catch (e) {}
+    } else {
+      linkDown(gen, new Error(`The mod answered ${res.status} to a refresh.`));
+      return;
+    }
+    // The mod serializes at its own pace; its health fields say when the
+    // stamp has moved and the bytes are worth fetching.
+    const deadline = Date.now() + 45000;
+    let health = null;
+    while (Date.now() < deadline) {
+      try { health = await (await linkFetch("/health")).json(); }
+      catch (err) { linkDown(gen, err); return; }
+      if (gen !== sourceGen) return;
+      if (health.stamp && health.stamp !== before && !health.busy) break;
+      health = null;
+      state("busy", "Waiting for the game to serialize its state", linkUrl);
+      await linkWait(LINK_POLL_MS);
+      if (gen !== sourceGen) return;
+    }
+    if (!health) {
+      finishAttempt(gen);
+      state("bad", "The game did not finish serializing", linkUrl);
+      note("bad", "No new state from the mod in 45 seconds. Try Update again.", "", true);
+      return;
+    }
+    await loadFromLink("Reading the game", gen);
+  }
+
+  async function checkLink() {
+    // The watcher's link half: a quiet /health, and a build only when the
+    // game has moved on. A dead link is said by the next Update, not here.
+    const gen = sourceGen;
+    let health;
+    try { health = await (await linkFetch("/health")).json(); }
+    catch (err) { return; }
+    if (gen !== sourceGen || document.hidden || busy || attempt) return;
+    if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
+    if (health.stamp !== lastLinkStamp) await loadFromLink("Reading the game", gen);
+  }
+
   /* --- building ----------------------------------------------------------- */
   async function buildFrom(file, dir, gen) {
     if (gen === undefined) gen = sourceGen;
@@ -404,8 +665,11 @@
     busy = true;
     lastFile = file;
     lastFileGen = gen;
+    // Linked bytes carry their stamp: the strip names the game's state and
+    // not the generated file name.
+    const line = (extra) => (file.linkStamp ? linkLine(linkHealth, extra) : fileLine(file, extra));
     note("");
-    state("busy", `Reading ${file.name}`, fileLine(file));
+    state("busy", `Reading ${file.name}`, line());
     const t = performance.now();
     try {
       const bytes = await file.arrayBuffer();
@@ -424,7 +688,7 @@
       note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
       enterBoard();
-      state("ok", "Up to date", fileLine(file, `built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
+      state("ok", "Up to date", line(`built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
     } catch (err) {
       if (gen !== sourceGen) return;
       busy = false;
@@ -793,6 +1057,7 @@
     if (gen !== sourceGen) return;
     dirHandle = handle;
     handles.set("saves", handle);
+    dropLink();  // a folder chosen here replaces the game link as the source
     if (!onBoard()) place();
     await loadFromHandle(handle, why);
   }
@@ -813,6 +1078,10 @@
 
   async function update() {
     if (busy || attempt || readerError) return;
+    if (linkUrl) {
+      await refreshFromGame();
+      return;
+    }
     if (dirHandle) {
       const handle = dirHandle, gen = sourceGen;
       try {
@@ -838,7 +1107,11 @@
 
   /* --- watching the folder ---------------------------------------------- */
   async function checkFolder() {
-    if (document.hidden || watchChecking || !dirHandle || busy || attempt || readerError) return;
+    if (document.hidden || watchChecking || busy || attempt || readerError) return;
+    // One watcher, two sources. typeof rather than a bare read, so the
+    // sliced tests can run this function without the link's names.
+    if (typeof linkUrl === "string" && linkUrl) { await checkLink(); return; }
+    if (!dirHandle) return;
     watchChecking = true;
     const gen = sourceGen, handle = dirHandle;
     try {
@@ -864,7 +1137,7 @@
     syncWatchBtn();
   }
   function armWatch() {
-    if (watching && dirHandle && !watchTimer) watchTimer = setInterval(checkFolder, WATCH_MS);
+    if (watching && (dirHandle || linkUrl) && !watchTimer) watchTimer = setInterval(checkFolder, WATCH_MS);
     syncWatchBtn();
   }
   function stopWatch() {
@@ -1170,6 +1443,7 @@
       if (gen === undefined) gen = supersede();  // a new set of files, whatever its shape
       else if (gen !== sourceGen) return;        // superseded during the walk
       dirHandle = null; // A manual file/snapshot must not be replaced by the old watcher.
+      dropLink();       // and a folder or file chosen here replaces the game link
       if (!onBoard()) place();
       if (!startAttempt(gen)) return;
       state("busy", "Opening the selected save…");
@@ -1239,6 +1513,7 @@
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
+    $("linkBtn").addEventListener("click", linkToGame);
     $("recoverBtn").addEventListener("click", pickFolder);
     $("reloadBtn").addEventListener("click", () => location.reload());
     $("savePickLabel").addEventListener("keydown", (e) => {
@@ -1280,6 +1555,18 @@
     wireLanding();
     if (!startAttempt(resumeGen)) return;
     state("busy", "Checking for a previous save…");
+    // A game link chosen on an earlier visit outranks the folder it set
+    // aside: choosing a folder forgets the link, so a stored link is always
+    // the source picked last. A probe that fails leaves the bad state and
+    // its note on screen; Update retries it and the folder button takes over.
+    const rememberedLink = stored.get(LINK_KEY);
+    if (rememberedLink) {
+      linkUrl = rememberedLink;
+      place();
+      paintStrip();
+      await loadFromLink("Opening the game link", resumeGen);
+      return;
+    }
     const rememberedHandle = canHandle ? await handles.get("saves") : null;
     if (resumeGen !== sourceGen) return;
     dirHandle = rememberedHandle;
