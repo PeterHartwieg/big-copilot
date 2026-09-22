@@ -124,9 +124,24 @@ class GameLinkAgainstMock(unittest.TestCase):
 
     def test_wait_for_save_falls_through_on_a_throttle(self):
         """Inside the window the mod refuses; the bytes it serves are read as they are."""
+        self.assertEqual(self.game.refresh()[0], 429, "setUp's read left the mock inside its window")
         path = self.game.wait_for_save(seconds=5)
         self.assertIsNotNone(path)
         self.assertEqual(self.game.stamp, self.mock.stamp)
+        self.assertFalse(self.game.stale)
+
+    def test_wait_for_save_keeps_the_bytes_it_has_when_the_game_goes_away(self):
+        """A 202 whose refresh never lands, then the listener stops: the older bytes, marked stale."""
+        before = self.mock.stamp
+        self.game.refresh = lambda: (202, {"accepted": True, "stamp": before})
+        import threading
+        threading.Timer(1.5, self.server.stop).start()
+        path = self.game.wait_for_save(seconds=10)
+        self.assertIsNotNone(path)
+        self.assertEqual(self.game.stamp, before)
+        self.assertTrue(self.game.stale)
+        # tearDown stops a server; shutdown() on one never started would wait forever.
+        self.server = game_link_mock.MockServer(self.mock, port=0).start(follow=False)
 
     def test_a_save_name_after_the_flag_is_refused(self):
         with self.assertRaises(SystemExit) as caught:

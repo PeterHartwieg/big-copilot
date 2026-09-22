@@ -16553,6 +16553,7 @@ class GameLink:
         self.stamp = ""  # the stamp of the bytes last downloaded
         self.character = ""
         self.company = ""
+        self.stale = False  # wait_for_save() returned older bytes than it asked for
 
     def _call(self, route: str, method: str = "GET", headers: dict | None = None):
         try:
@@ -16616,19 +16617,29 @@ class GameLink:
         mod with nothing to serve inside the deadline comes back None. A
         LinkUnavailable from the refresh surfaces.
         """
+        self.stale = False
         status, body = self.refresh()
         superseded = body.get("stamp") if status == 202 else None
         deadline = time.monotonic() + seconds
         path = None
         while True:
-            got = self.poll()
+            try:
+                got = self.poll()
+            except LinkUnavailable:
+                # The game went away mid-wait. Bytes already downloaded in this
+                # call are still a board; only an empty-handed wait surfaces it.
+                if path is None:
+                    raise
+                self.stale = True
+                return path
             if got is not None:
                 path = got
                 if superseded is None or self.stamp != superseded:
                     return path
             if time.monotonic() >= deadline:
                 # The requested refresh never landed; the bytes that did are
-                # still the game's state, only a little older.
+                # still the game's state, only a little older. The caller says so.
+                self.stale = path is not None
                 return path
             time.sleep(1)
 
@@ -16636,9 +16647,11 @@ class GameLink:
         """Ask the mod to serialize the game now; /refresh's status and body."""
         status, _, body = self._call("/refresh", method="POST")
         try:
-            return status, json.loads(body or b"{}")
+            parsed = json.loads(body or b"{}")
         except ValueError:
-            return status, {}
+            parsed = {}
+        # Some other local service on that port answers JSON that is no object.
+        return status, parsed if isinstance(parsed, dict) else {}
 
 
 class Board:
@@ -17044,6 +17057,12 @@ def main() -> None:
                 "and try again"
             )
         source_name = "the game link"
+        if link.stale:
+            print(
+                "  the mod did not finish the refresh in time; this is the state it "
+                "last served",
+                flush=True,
+            )
     else:
         path = newest_under(target)
         source_name = os.path.basename(path)

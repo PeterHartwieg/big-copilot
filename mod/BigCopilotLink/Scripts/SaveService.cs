@@ -275,7 +275,12 @@ namespace BigCopilotLink
                 return RefreshResult.CannotSave("other");
             }
 
-            ThreadPool.QueueUserWorkItem(delegate { CompressOnPoolThread(tempPath, day, hour); });
+            // Its own thread, not the pool: the listener's handlers share the pool,
+            // and a flood of them must not hold the compress, and so Busy, hostage.
+            var worker = new Thread(delegate () { CompressOnPoolThread(tempPath, day, hour); });
+            worker.Name = "BigCopilotLink.Compress";
+            worker.IsBackground = true;
+            worker.Start();
             return RefreshResult.Started();
         }
 

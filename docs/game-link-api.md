@@ -61,7 +61,7 @@ seconds.
 ### `GET /health`
 
 Cheap. Reads only fields the main-thread pump caches once a second; never touches game
-state from the HTTP thread.
+state from the listener's threads.
 
 ```json
 {

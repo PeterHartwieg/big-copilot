@@ -9,11 +9,11 @@ using System.Threading.Tasks;
 namespace BigCopilotLink
 {
     /// <summary>
-    /// Loopback-only HTTP listener on a background thread, serving the contract in
-    /// docs/game-link-api.md. Handlers touch nothing but the volatile fields of
-    /// HealthState and SaveService — never Unity, never the game. The one thing that
-    /// has to reach the game, POST /refresh, goes through MainThreadDispatcher and
-    /// waits with a timeout.
+    /// Loopback-only HTTP listener: one accept thread, each request handled on a pool
+    /// thread, serving the contract in docs/game-link-api.md. Handlers touch nothing
+    /// but the volatile fields of HealthState and the immutable Snapshot — never
+    /// Unity, never the game. The one thing that has to reach the game, POST
+    /// /refresh, goes through MainThreadDispatcher and waits with a timeout.
     /// </summary>
     public sealed class LinkHttpServer
     {
@@ -44,9 +44,13 @@ namespace BigCopilotLink
         private readonly int _port;
         private readonly SaveService _saves;
         private readonly HealthState _health;
+        /// <summary>Requests handled at once; more than this and a caller gets a quick 503.</summary>
+        private const int MaxInFlight = 8;
+
         private HttpListener _listener;
         private Thread _thread;
         private volatile bool _running;
+        private int _inFlight;
 
         public LinkHttpServer(int port, SaveService saves, HealthState health)
         {
@@ -89,6 +93,11 @@ namespace BigCopilotLink
                 // Already shutting down; nothing useful to do.
             }
             if (_thread != null) _thread.Join(1000);
+            // Handlers run on pool threads; give the ones in flight a moment to
+            // finish (a /refresh may sit in its three-second wait) so unload does
+            // not clear the snapshot under a /save mid-write.
+            var until = DateTime.UtcNow.AddSeconds(4);
+            while (Volatile.Read(ref _inFlight) > 0 && DateTime.UtcNow < until) Thread.Sleep(20);
             _listener = null;
             _thread = null;
         }
@@ -111,18 +120,38 @@ namespace BigCopilotLink
                 // three seconds for the main thread, and a second caller must
                 // not queue behind it past its own five-second timeout. Handlers
                 // touch only volatile fields and the dispatcher, so they may run
-                // side by side.
-                var captured = context;
+                // side by side. A cap keeps a flood of callers from parking the
+                // pool: the compress runs on its own thread, not the pool, but
+                // the listener should not be the one thing left running either.
+                if (Interlocked.Increment(ref _inFlight) > MaxInFlight)
+                {
+                    Interlocked.Decrement(ref _inFlight);
+                    try
+                    {
+                        WriteJson(context, 503, "{\"error\":\"too_many_requests\"}");
+                    }
+                    catch (Exception)
+                    {
+                        TryAbort(context);
+                    }
+                    continue;
+                }
                 ThreadPool.QueueUserWorkItem(delegate
                 {
                     try
                     {
-                        Handle(captured);
+                        Handle(context);
                     }
                     catch (Exception e)
                     {
-                        LinkMod.LogError("request failed: " + e);
-                        TryAbort(captured);
+                        // A listener closed under a handler (city unload, a port
+                        // change) is the normal end of that request, not an error.
+                        if (_running) LinkMod.LogError("request failed: " + e);
+                        TryAbort(context);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _inFlight);
                     }
                 });
             }
