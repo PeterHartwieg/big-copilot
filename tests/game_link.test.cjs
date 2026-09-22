@@ -476,12 +476,12 @@ test('the takeover count does not leak into a relink, and a disconnect does not 
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
   for (let i = 0; i < 9; i++) await h.run('checkFolder()');
   assert.equal(h.run('linkNotReady'), 9);
-  // A relink to another port starts from nothing.
-  mode = 'health';
+  // A relink to another port starts from nothing: the port stays not ready
+  // through the relink, so only linkToGame's own reset can bring the count
+  // to zero (readHealth resets it on a health answer, and there is none).
   h.context.location.hash = '#link=http://127.0.0.1:8323';
   await h.run('linkToGame()');
-  assert.equal(h.run('linkNotReady'), 0);
-  mode = 'notready';
+  assert.equal(h.run('linkNotReady'), 0, 'linkToGame itself reset the count');
   h.run('strip.tone = "ok"');
   await h.run('checkFolder()');
   assert.equal(h.seen.notes.filter((n) => n[0] === 'warn').length, 0, 'one check on the new port says nothing');
