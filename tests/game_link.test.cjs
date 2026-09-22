@@ -398,6 +398,14 @@ test('a port that never answers as the mod is named after the wait, not blamed o
   assert.match(h.seen.notes.at(-1)[1], /another program on that port/);
 });
 
+test('a port that answered as the mod once is not blamed when it stops answering as it', async () => {
+  let asked = 0;
+  const h = harness({routes: {health: () => (asked++ === 0 ? {...HEALTH, stamp: '', busy: true} : reply(503, {error: 'x'}))}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.states.at(-1)[1], 'The game has not produced a save yet');
+});
+
 test('a foreign 200 that copies the not-ready shape is still judged', async () => {
   const h = harness({routes: {health: {stamp: '', busy: true, notReady: true}}});
   h.run('linkUrl = "http://127.0.0.1:8322"');

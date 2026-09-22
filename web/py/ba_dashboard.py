@@ -16643,12 +16643,18 @@ class GameLink:
         while True:
             try:
                 got = self.poll()
-            except LinkUnavailable:
-                # The game went away mid-wait. Bytes already downloaded in this
-                # call are still a board; only an empty-handed wait surfaces it.
+            except LinkUnavailable as exc:
+                # The game went away mid-wait, or the port stopped answering as
+                # the mod. Bytes already downloaded in this call are still a
+                # board; only an empty-handed wait surfaces it. The reason is
+                # the exception's own, so a wrong service is not called a
+                # game that went away.
                 if path is None:
                     raise
-                self.stale = "the game went away before the refresh landed"
+                self.stale = (
+                    str(exc) if "not as the Big Copilot Link mod" in str(exc)
+                    else "the game went away before the refresh landed"
+                )
                 return path
             if got is not None:
                 path = got

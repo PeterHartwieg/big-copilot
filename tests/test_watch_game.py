@@ -177,6 +177,27 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.assertIn("went away", self.game.stale)
         # tearDown's stop() on the already stopped server returns at once.
 
+    def test_wait_for_save_names_a_port_that_stopped_answering_as_the_mod(self):
+        """Bytes in hand, then ten non-health answers: the stale reason is the port, not the game."""
+        before = self.mock.stamp
+        self.game.refresh = lambda: (202, {"accepted": True, "stamp": before})
+        real = self.game._call
+        calls = {"n": 0}
+
+        def flaky(route, method="GET", headers=None):
+            calls["n"] += 1
+            if calls["n"] <= 2:  # the first /health and /save succeed
+                return real(route, method, headers)
+            return (503, {}, b'{"error":"x"}')
+
+        self.game._call = flaky
+        try:
+            path = self.game.wait_for_save(seconds=30)
+        finally:
+            self.game._call = real
+        self.assertIsNotNone(path)
+        self.assertIn("not as the Big Copilot Link mod", self.game.stale)
+
     def test_a_save_name_after_the_flag_is_refused(self):
         with self.assertRaises(SystemExit) as caught:
             ba_dashboard.GameLink("Hart", self.dir.name)

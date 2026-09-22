@@ -566,11 +566,14 @@
     // is not saving, so a first refresh can take a moment to land.
     if (health.stamp === "" || health.busy) {
       const deadline = Date.now() + 30000;
+      // The port is blamed only when nothing it said in the whole wait was
+      // health: one real answer, busy or empty, means the mod is there.
+      let sawHealth = health !== NOT_READY;
       while (health.stamp === "" || health.busy) {
         state("busy", "Waiting for the game to serialize its state", linkUrl);
         if (Date.now() >= deadline) {
           finishAttempt(gen);
-          if (health === NOT_READY) {
+          if (!sawHealth) {
             // Thirty seconds of answers that were never health: not the mod.
             state("bad", "That address does not answer as the Big Copilot Link mod", linkUrl);
             note("bad", "It answers, but never with the mod's health. Is another program on that port?", "Check the port in the mod's options, then click Update.", true);
@@ -585,6 +588,7 @@
         try { health = await readHealth(); }
         catch (err) { linkDown(gen, err); return; }
         if (gen !== sourceGen) return;
+        if (health !== NOT_READY) sawHealth = true;
         // Judged on every real answer: an incompatible mod that is also busy
         // is refused now, not after thirty seconds of waiting.
         if (wrongVersion(health, gen)) return;
