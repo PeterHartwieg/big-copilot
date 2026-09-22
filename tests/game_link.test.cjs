@@ -25,6 +25,7 @@ const HEALTH = {
 
 const reply = (status, body, headers = {}) => ({
   status,
+  ok: status >= 200 && status < 300,
   headers: {get: (name) => (name in headers ? headers[name] : null)},
   json: async () => body,
   arrayBuffer: async () => new ArrayBuffer(8),
@@ -47,7 +48,7 @@ function harness({routes = {}} = {}) {
   const remembered = {};
   const waits = [];
   const context = vm.createContext({
-    setTimeout: () => 0, clearTimeout: () => {}, AbortController,
+    setTimeout: () => 0, clearTimeout: () => {}, AbortController, URL,
     Date: Clock,
     File: class {
       constructor(parts, name, options) { this.parts = parts; this.name = name; Object.assign(this, options || {}); }
@@ -56,7 +57,7 @@ function harness({routes = {}} = {}) {
     __advance: (ms) => { clock.now += ms; },
     document: {hidden: false},
     location: {hash: ''},
-    localStorage: {getItem: () => null, setItem() {}, removeItem() {}},
+    localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
     $: el, strip,
     company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null,
@@ -68,6 +69,7 @@ function harness({routes = {}} = {}) {
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
     closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {},
+    idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
     startAttempt: () => true, finishAttempt() {},
     async buildFrom(file) { seen.builds.push(file); },
     async scanHandle() { return []; },
@@ -272,4 +274,84 @@ test('choosing a folder clears the link, and the next visit opens the folder', a
   assert.equal(h.run('linkUrl'), null);
   assert.equal(h.remembered.ledger_link === undefined || h.remembered.ledger_link === '', true,
     'nothing is left under the key');
+});
+
+test('linking again after a folder reads the game even on the same stamp', async () => {
+  const h = harness({
+    routes: {health: HEALTH, save: reply(200, null, {'X-Game-Link-Stamp': HEALTH.stamp})},
+  });
+  // A board built from this stamp, then a folder took over, then the link again.
+  h.run(`linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = ${JSON.stringify(HEALTH.stamp)}`);
+  h.run('dropLink()');
+  assert.equal(h.run('lastLinkStamp'), '', 'dropping the link forgets the stamp');
+  await h.run('linkToGame()');
+  assert.equal(h.seen.builds.length, 1, 'the same stamp is read again for the new source');
+});
+
+test('a refusal before any link build leaves the idle state, not a spinner', async () => {
+  const h = harness({routes: {refresh: reply(409, {error: 'cannot_save', reason: 'interior'})}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = ""');
+  await h.run('update()');
+  assert.deepEqual(h.seen.states.at(-1), ['idle']);
+  assert.match(h.seen.notes.at(-1)[1], /interior designer/);
+});
+
+test('a throttle followed by a refusal reports the refusal', async () => {
+  let asked = 0;
+  const h = harness({
+    routes: {
+      refresh: () => (++asked === 1
+        ? reply(429, {error: 'throttled', retryAfter: 3})
+        : reply(409, {error: 'cannot_save', reason: 'placement'})),
+      health: HEALTH,
+    },
+  });
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
+  await h.run('update()');
+  assert.equal(asked, 2);
+  assert.match(h.seen.notes.at(-1)[1], /placing items/);
+  assert.equal(h.seen.builds.length, 0);
+});
+
+test('a mod that did not take the refresh is not reported as absent', async () => {
+  const h = harness({routes: {refresh: reply(503, {error: 'main_thread_unavailable'}), health: HEALTH}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
+  await h.run('update()');
+  assert.equal(h.seen.states.at(-1)[0], 'ok');
+  assert.match(h.seen.notes.at(-1)[1], /did not take the refresh \(answered 503\)/);
+});
+
+test('a save answered with an error names the error, not a parse failure', async () => {
+  const h = harness({routes: {health: {...HEALTH, stamp: 's9'}, save: reply(503, {error: 'no_save_yet'})}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not read the game', 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], /503 \(no_save_yet\)/);
+  assert.equal(h.seen.builds.length, 0);
+});
+
+test('the linked watcher says once when the game goes away, and clears it when it is back', async () => {
+  let up = false;
+  const h = harness({routes: {health: () => { if (!up) throw new TypeError('Failed to fetch'); return HEALTH; }}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  await h.run('checkFolder()');
+  await h.run('checkFolder()');
+  const warns = h.seen.notes.filter((n) => n[0] === 'warn');
+  assert.equal(warns.length, 1, 'said once');
+  assert.match(warns[0][1], /not reachable/);
+  up = true;
+  await h.run('checkFolder()');
+  assert.deepEqual(h.seen.notes.at(-1), [''], 'cleared when the game answers again');
+});
+
+test('#link= only moves the port on this machine', () => {
+  const h = harness();
+  h.context.location.hash = '#link=http://127.0.0.1:8323';
+  assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8323');
+  h.context.location.hash = '#link=http://localhost:8325/';
+  assert.equal(h.run('linkBase()'), 'http://localhost:8325');
+  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url']) {
+    h.context.location.hash = bad;
+    assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8322', bad);
+  }
 });

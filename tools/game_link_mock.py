@@ -53,15 +53,16 @@ class Link:
         self.last_refresh = 0.0
         self.busy = False
         self._mtime = None
+        self._last_seconds = 0
         self.refresh(force=True)
 
     def refresh(self, force: bool = False) -> tuple[int, dict]:
         """Re-read the file. Returns the status and body /refresh would answer."""
         with self.lock:
             now = time.monotonic()
-            if self.refuse:
+            if self.refuse and not force:
                 return 409, {"error": "cannot_save", "reason": self.refuse}
-            if not force and (self.throttle or now - self.last_refresh < REFRESH_WINDOW):
+            if not force and (self.busy or self.throttle or now - self.last_refresh < REFRESH_WINDOW):
                 wait = REFRESH_WINDOW if self.throttle else int(REFRESH_WINDOW - (now - self.last_refresh)) + 1
                 return 429, {"error": "throttled", "retryAfter": wait}
             before = self.stamp
@@ -77,7 +78,11 @@ class Link:
         with self.lock:
             self.data = data
             self._mtime = mtime
-            self.stamp = f"{self.day}-{self.hour}-{int(time.time())}-{len(data)}"
+            # The contract's shape, kept distinct even inside one second: the
+            # stamp is opaque, but two refreshes must never share one.
+            seconds = max(int(time.time()), self._last_seconds + 1)
+            self._last_seconds = seconds
+            self.stamp = f"{self.day}-{self.hour}-{seconds}"
             self.refreshed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             self.last_refresh = now
             self.busy = False
@@ -151,6 +156,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif route == "/save":
             self._save()
         elif route == "/refresh":
+            self._json(405, {"error": "method_not_allowed"})
+        else:
+            self._not_found()
+
+    def do_PUT(self):
+        self._other_method()
+
+    def do_DELETE(self):
+        self._other_method()
+
+    def do_PATCH(self):
+        self._other_method()
+
+    def _other_method(self):
+        if self._route() in ("/", "/health", "/save", "/refresh"):
             self._json(405, {"error": "method_not_allowed"})
         else:
             self._not_found()

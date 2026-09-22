@@ -52,6 +52,36 @@ namespace BigCopilotLink
     }
 
     /// <summary>
+    /// One refresh, immutable: what /save serves and what /health reports about it.
+    /// </summary>
+    public sealed class Snapshot
+    {
+        public static readonly Snapshot None = new Snapshot(Array.Empty<byte>(), "", 0, null);
+
+        /// <summary>The gzipped .hsg; empty before the first refresh.</summary>
+        public readonly byte[] Bytes;
+
+        /// <summary>Opaque; "" before the first refresh.</summary>
+        public readonly string Stamp;
+
+        /// <summary>The in-game day the bytes were taken on.</summary>
+        public readonly int Day;
+
+        /// <summary>ISO-8601 UTC, or null before the first refresh.</summary>
+        public readonly string RefreshedAtUtcIso;
+
+        public Snapshot(byte[] bytes, string stamp, int day, string refreshedAtUtcIso)
+        {
+            Bytes = bytes;
+            Stamp = stamp;
+            Day = day;
+            RefreshedAtUtcIso = refreshedAtUtcIso;
+        }
+
+        public bool IsEmpty { get { return Stamp.Length == 0; } }
+    }
+
+    /// <summary>
     /// Owns the served bytes and decides when to make new ones.
     ///
     /// The serializer keeps a static SerializationContext that the game's own save
@@ -74,12 +104,12 @@ namespace BigCopilotLink
 
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        // Read by the HTTP thread, written on the main thread.
-        private volatile byte[] _bytes = Array.Empty<byte>();
-        private volatile string _stamp = "";
-        private volatile int _stampDay;
-        private volatile string _refreshedAtUtcIso;
+        // One immutable snapshot, swapped as a whole: a reader on the HTTP thread
+        // takes the reference once and everything it holds belongs together.
+        private volatile Snapshot _current = Snapshot.None;
         private volatile bool _busy;
+        // Set by Clear(): a compress that finishes after unload publishes nothing.
+        private volatile bool _cleared;
 
         // Main thread only.
         private readonly DateTime _loadedAtUtc = DateTime.UtcNow;
@@ -88,21 +118,17 @@ namespace BigCopilotLink
         private DateTime _lastGameSaveSeen = DateTime.MinValue;
         private int _lastHourSeen = -1;
         private bool _lastSavingInProgress;
+        private bool _lastHadChanges;
         private bool _pendingAfterAttach;
         private bool _firstRefreshTriggered;
         private string _tempPath;
 
-        /// <summary>The gzipped .hsg of the last refresh. Copy the reference once, then use it.</summary>
-        public byte[] Bytes { get { return _bytes; } }
-
-        /// <summary>Opaque; "" until the first refresh has finished.</summary>
-        public string Stamp { get { return _stamp; } }
-
-        /// <summary>The in-game day the served bytes were taken on.</summary>
-        public int StampDay { get { return _stampDay; } }
-
-        /// <summary>ISO-8601 UTC, or null before the first refresh.</summary>
-        public string RefreshedAtUtcIso { get { return _refreshedAtUtcIso; } }
+        /// <summary>
+        /// The last refresh as one object: the gzipped .hsg, its stamp ("" before
+        /// the first refresh), the in-game day it was taken on and when. Take the
+        /// reference once; every field on it belongs to the same refresh.
+        /// </summary>
+        public Snapshot Current { get { return _current; } }
 
         /// <summary>True while a refresh is in flight.</summary>
         public bool Busy { get { return _busy; } }
@@ -114,14 +140,17 @@ namespace BigCopilotLink
         /// </summary>
         public DateTime LastGameSaveSeenUtc { get { return _lastGameSaveSeen; } }
 
-        /// <summary>Forget the bytes on unload — they are the player's whole company.</summary>
+        /// <summary>
+        /// Forget the bytes on unload — they are the player's whole company. Main
+        /// thread only. A compress still running publishes nothing afterwards, and
+        /// the uncompressed temporary file goes with the bytes.
+        /// </summary>
         public void Clear()
         {
-            _bytes = Array.Empty<byte>();
-            _stamp = "";
-            _stampDay = 0;
-            _refreshedAtUtcIso = null;
+            _cleared = true;
+            _current = Snapshot.None;
             _busy = false;
+            DeleteTempFile();
         }
 
         /// <summary>
@@ -133,26 +162,34 @@ namespace BigCopilotLink
         public void PumpOnMainThread(bool attached, bool hourly)
         {
             var now = DateTime.UtcNow;
-            var instance = SaveGameManager.Current;
 
             // The hour is followed whether or not anything is attached, so returning to
             // an idle game does not look like an hour change that never happened.
+            // TimeHelper is the clock /health reports too, null-safe over Current.
             var hourChanged = false;
-            if (instance != null)
+            if (SaveGameManager.Current != null)
             {
-                var hour = instance.Hour;
+                var hour = TimeHelper.CurrentHour;
                 hourChanged = _lastHourSeen >= 0 && hour != _lastHourSeen;
                 _lastHourSeen = hour;
             }
 
+            // A completed game save shows as either edge: SavingGameInProgress
+            // falling, or HasChangesSinceLastSave falling (Save() clears it last).
+            // Sampling once a second can miss the first on a fast save; the second
+            // stays down until the game marks another change.
             var saving = SaveGameManager.SavingGameInProgress;
-            var gameSaveCompleted = _lastSavingInProgress && !saving;
+            var hasChanges = SaveGameManager.HasChangesSinceLastSave();
+            var gameSaveCompleted = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
             _lastSavingInProgress = saving;
+            _lastHadChanges = hasChanges;
             if (gameSaveCompleted) _lastGameSaveSeen = now;
 
             var firstDue = !_firstRefreshTriggered &&
                            (now - _loadedAtUtc).TotalSeconds >= FirstRefreshSeconds;
-            var floorDue = (now - _lastRefreshStarted).TotalMinutes >= FloorMinutes;
+            // The floor counts from the first refresh, not from the city load.
+            var floorDue = _firstRefreshTriggered &&
+                           (now - _lastRefreshStarted).TotalMinutes >= FloorMinutes;
 
             string trigger = null;
             if (firstDue) trigger = "first";
@@ -212,9 +249,10 @@ namespace BigCopilotLink
                 return RefreshResult.CannotSave("other");
             }
 
-            // Captured here because the pool thread may not touch the game.
-            var day = instance.Day;
-            var hour = instance.Hour;
+            // Captured here because the pool thread may not touch the game; the
+            // same clock as /health and the hour trigger.
+            var day = TimeHelper.CurrentDay;
+            var hour = TimeHelper.CurrentHour;
 
             _busy = true;
             _lastRefreshStarted = DateTime.UtcNow;
@@ -227,6 +265,7 @@ namespace BigCopilotLink
             catch (Exception e)
             {
                 _busy = false;
+                DeleteTempFile();
                 LinkMod.LogError("serializing the game failed (" + trigger + "): " + e);
                 return RefreshResult.CannotSave("other");
             }
@@ -234,6 +273,7 @@ namespace BigCopilotLink
             if (!written)
             {
                 _busy = false;
+                DeleteTempFile();
                 LinkMod.LogWarn("the game declined to serialize (" + trigger + "); keeping the previous bytes.");
                 return RefreshResult.CannotSave("other");
             }
@@ -264,8 +304,26 @@ namespace BigCopilotLink
                 Directory.CreateDirectory(folder);
                 _tempPath = Path.Combine(folder, "live.bin");
             }
-            if (File.Exists(_tempPath)) File.Delete(_tempPath);
+            DeleteTempFile();
             return _tempPath;
+        }
+
+        /// <summary>
+        /// The uncompressed copy is the player's whole company: every path that
+        /// stops short of the gzip step removes it. Any thread; File is not Unity.
+        /// </summary>
+        private void DeleteTempFile()
+        {
+            var path = _tempPath;
+            if (path == null) return;
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception e)
+            {
+                LinkMod.LogWarn("could not delete the temporary file: " + e.Message);
+            }
         }
 
         /// <summary>
@@ -276,17 +334,16 @@ namespace BigCopilotLink
         {
             try
             {
-                var raw = File.ReadAllBytes(tempPath);
-
-                // The uncompressed copy is the player's whole company; do not leave it
-                // lying in the cache any longer than the gzip step needs.
+                byte[] raw;
                 try
                 {
-                    File.Delete(tempPath);
+                    raw = File.ReadAllBytes(tempPath);
                 }
-                catch (Exception e)
+                finally
                 {
-                    LinkMod.LogWarn("could not delete the temporary file: " + e.Message);
+                    // The uncompressed copy is the player's whole company; do not
+                    // leave it lying in the cache any longer than the gzip step needs.
+                    DeleteTempFile();
                 }
 
                 var gz = SaveGameSerializationHelper.CompressBytes(raw);
@@ -299,23 +356,22 @@ namespace BigCopilotLink
                             unixSeconds.ToString(CultureInfo.InvariantCulture);
                 var iso = now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
-                // The order is load-bearing: the stamp is written last, so a reader
-                // that sees the same stamp before and after reading the rest knows the
-                // rest belongs to that stamp. LinkHttpServer relies on it to serve
-                // /save without ever mixing two saves.
+                // One reference swap publishes everything at once, so a reader can
+                // never pair new bytes with an old stamp. A city unloaded meanwhile
+                // (Clear ran) gets nothing: the bytes would outlive the game.
+                var next = new Snapshot(gz, stamp, day, iso);
                 MainThreadDispatcher.Enqueue(delegate
                 {
-                    _bytes = gz;
-                    _stampDay = day;
-                    _refreshedAtUtcIso = iso;
-                    _stamp = stamp;
+                    if (_cleared) return;
+                    _current = next;
                     _busy = false;
                 });
             }
             catch (Exception e)
             {
                 LinkMod.LogError("compressing the save failed: " + e);
-                _busy = false;
+                // The flag is the main thread's to write, like the publish.
+                MainThreadDispatcher.Enqueue(delegate { _busy = false; });
             }
         }
     }

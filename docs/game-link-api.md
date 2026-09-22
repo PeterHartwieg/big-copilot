@@ -117,6 +117,12 @@ Asks for a refresh now. No body.
 - `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino" | "other"}`
   when the game refuses; the client shows the reason and keeps the last bytes.
   `"other"` is `CanSave()` false for a reason the mod cannot name.
+- `503 {"error": "main_thread_unavailable"}` when the game's main thread did not take the
+  request within ten seconds (mid-load, or frozen). No refresh started. The client says the
+  mod did not take the request and keeps the last bytes; it is not "the game is not running".
+
+Every JSON answer, `/health` included, carries `Cache-Control: no-store`: a cached
+`/health` would hide a moved stamp.
 
 ### Anything else
 

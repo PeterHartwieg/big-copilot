@@ -223,38 +223,27 @@ namespace BigCopilotLink
             w.PropFloat("minute", _health.Minute);
             w.PropFloat("cash", _health.Cash);
 
-            var stamp = _saves.Stamp;
-            var bytes = _saves.Bytes;
-            w.Prop("stamp", stamp);
+            var snap = _saves.Current;
+            w.Prop("stamp", snap.Stamp);
             w.Prop("busy", _saves.Busy);
-            w.Prop("size", stamp.Length == 0 || bytes == null ? 0 : bytes.Length);
+            w.Prop("size", snap.IsEmpty ? 0 : snap.Bytes.Length);
 
-            var refreshedAt = _saves.RefreshedAtUtcIso;
-            if (refreshedAt == null) w.PropNull("refreshedAt");
-            else w.Prop("refreshedAt", refreshedAt);
+            if (snap.RefreshedAtUtcIso == null) w.PropNull("refreshedAt");
+            else w.Prop("refreshedAt", snap.RefreshedAtUtcIso);
             w.EndObject();
             return w.ToString();
         }
 
         private void HandleSave(HttpListenerContext context)
         {
-            string stamp;
-            byte[] bytes;
-            int day;
+            // One reference, taken once: the bytes, the stamp and the day on it
+            // are the same refresh whatever the main thread publishes meanwhile.
+            var snap = _saves.Current;
+            var stamp = snap.Stamp;
+            var bytes = snap.Bytes;
+            var day = snap.Day;
 
-            // SaveService publishes a refresh by writing the stamp last. Seeing the
-            // same stamp either side of the other reads is what makes these three
-            // one save rather than two.
-            var attempt = 0;
-            do
-            {
-                stamp = _saves.Stamp;
-                bytes = _saves.Bytes;
-                day = _saves.StampDay;
-                attempt++;
-            } while (stamp != _saves.Stamp && attempt < 4);
-
-            if (stamp.Length == 0 || bytes == null || bytes.Length == 0)
+            if (snap.IsEmpty || bytes == null || bytes.Length == 0)
             {
                 WriteJson(context, 503, "{\"error\":\"no_save_yet\"}");
                 return;
@@ -284,17 +273,22 @@ namespace BigCopilotLink
 
         private void HandleRefresh(HttpListenerContext context)
         {
-            var stampBefore = _saves.Stamp;
+            var stampBefore = _saves.Current.Stamp;
             var saves = _saves;
+            var request = new RefreshRequest();
 
             RefreshResult result;
             try
             {
-                var task = MainThreadDispatcher.RunOnMainThread(() => saves.TryStartRefresh("request"));
+                var task = MainThreadDispatcher.RunOnMainThread(() =>
+                    request.Cancelled ? RefreshResult.Throttled(1) : saves.TryStartRefresh("request"));
                 if (!task.Wait(MainThreadTimeoutMs))
                 {
                     // Nothing dequeued our work in ten seconds: the game is wedged or
-                    // mid-load. Say so rather than holding the listener open.
+                    // mid-load. Say so rather than holding the listener open, and make
+                    // the queued work a no-op when it finally runs: the client was told
+                    // that no refresh started.
+                    request.Cancelled = true;
                     WriteJson(context, 503, "{\"error\":\"main_thread_unavailable\"}");
                     return;
                 }
@@ -337,6 +331,12 @@ namespace BigCopilotLink
             WriteJson(context, 202, accepted.ToString());
         }
 
+        /// <summary>A /refresh in flight between the HTTP thread and the main thread.</summary>
+        private sealed class RefreshRequest
+        {
+            public volatile bool Cancelled;
+        }
+
         // ---- writing -------------------------------------------------------------
 
         private static void WriteJson(HttpListenerContext context, int status, string json)
@@ -346,6 +346,8 @@ namespace BigCopilotLink
             response.StatusCode = status;
             response.ContentType = "application/json";
             response.ContentEncoding = Encoding.UTF8;
+            // A cached /health would hide a moved stamp from both clients.
+            response.AddHeader("Cache-Control", "no-store");
             response.ContentLength64 = bytes.Length;
             response.OutputStream.Write(bytes, 0, bytes.Length);
             response.OutputStream.Close();

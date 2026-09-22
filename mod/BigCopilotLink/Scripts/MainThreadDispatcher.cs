@@ -36,6 +36,12 @@ namespace BigCopilotLink
         public void Uninstall()
         {
             _intervalCallback = null;
+            // Nothing queued may run without a city, and a queued publish would
+            // hold the player's bytes in a static field until the next load.
+            Action stale;
+            while (Queue.TryDequeue(out stale))
+            {
+            }
             Destroy(gameObject);
         }
 

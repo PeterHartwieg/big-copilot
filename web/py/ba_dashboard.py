@@ -16595,6 +16595,27 @@ class GameLink:
         self.company = health.get("company") or ""
         return self.path
 
+    def wait_for_save(self, seconds: float = 45.0) -> str | None:
+        """Ask the mod for fresh bytes and poll until they arrive, or time out.
+
+        The one-shot build's way in: a refresh is requested, and poll() is
+        tried every second until it hands over a path. A refusal or a throttle
+        is not an error here, the bytes already served are read instead; only
+        a mod with nothing to serve at all comes back None.
+        """
+        try:
+            self.refresh()
+        except LinkUnavailable:
+            raise
+        deadline = time.monotonic() + seconds
+        while True:
+            path = self.poll()
+            if path is not None:
+                return path
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(1)
+
     def refresh(self) -> tuple[int, dict]:
         """Ask the mod to serialize the game now; /refresh's status and body."""
         status, _, body = self._call("/refresh", method="POST")
@@ -16646,10 +16667,14 @@ class Board:
     def _refresh(self, settle: bool) -> bool:
         if self.link is not None:
             # The link has no folder to scan: the mod says when its bytes have
-            # moved, and its stamp is the whole fingerprint.
+            # moved, and its stamp is the whole fingerprint. A cleared
+            # fingerprint (the player named a line) rebuilds from the bytes
+            # already downloaded, since the mod has nothing newer to say.
             path = self.link.poll()
             if path is None:
-                return False
+                if self._fingerprint is not None or not os.path.exists(self.link.path):
+                    return False
+                path = self.link.path
             mark = self.link.stamp
             if mark == self._fingerprint:
                 return False
@@ -16918,7 +16943,10 @@ def main() -> None:
         "--port", type=int, default=8770, help="port for the local server in watch mode"
     )
     ap.add_argument(
-        "--interval", type=int, default=5, help="seconds between save-file checks"
+        "--interval",
+        type=int,
+        default=None,
+        help="seconds between checks: 5 for a save folder, 30 for the game link",
     )
     ap.add_argument(
         "--no-open", action="store_true", help="with --watch, do not open a browser"
@@ -16930,7 +16958,8 @@ def main() -> None:
         default=None,
         metavar="URL",
         help="read the running game through the Big Copilot Link mod instead of a "
-        "save folder; URL defaults to http://127.0.0.1:8322",
+        "save folder; URL defaults to http://127.0.0.1:8322. The bytes are kept "
+        "as game-link.hsg beside the output file",
     )
     ap.add_argument(
         "--backfill",
@@ -16938,6 +16967,13 @@ def main() -> None:
         help="seed demand history from every save on disk, then build",
     )
     args = ap.parse_args()
+
+    if args.game and (args.list or args.save):
+        raise SystemExit(
+            "--game reads the running game; it does not combine with --list or a "
+            "save or character name"
+        )
+    interval = args.interval if args.interval is not None else (30 if args.game else 5)
 
     if args.list:
         if not args.save:
@@ -16975,12 +17011,12 @@ def main() -> None:
         print(f"  merged {recorded} snapshots into {os.path.basename(history)}")
 
     if args.watch:
-        watch(target, out, args.port, args.interval, not args.no_open, link)
+        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link)
         return
 
     if link is not None:
         try:
-            path = link.poll()
+            path = link.wait_for_save()
         except LinkUnavailable as exc:
             raise SystemExit(str(exc)) from None
         if path is None:

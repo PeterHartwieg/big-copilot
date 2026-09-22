@@ -428,9 +428,20 @@
 
   // The mod's default port. #link=http://127.0.0.1:8323 in the address moves
   // it, for the player running a second install; there is no UI on purpose.
+  const LINK_DEFAULT = "http://127.0.0.1:8322";
   function linkBase() {
     const given = /[#&]link=([^&]+)/.exec(location.hash || "");
-    return given ? decodeURIComponent(given[1]) : "http://127.0.0.1:8322";
+    if (!given) return LINK_DEFAULT;
+    // Only this machine: the bytes are the player's whole company, and a
+    // link in a pasted address must never point the page at someone else.
+    try {
+      const url = new URL(decodeURIComponent(given[1]));
+      const host = url.hostname.replace(/^\[|\]$/g, "");
+      if (url.protocol === "http:" && (host === "127.0.0.1" || host === "localhost" || host === "::1")) {
+        return url.origin;
+      }
+    } catch (e) {}
+    return LINK_DEFAULT;
   }
 
   async function linkFetch(path, init) {
@@ -489,12 +500,18 @@
     // next visit. The reverse is not cleared: the folder handle stays in
     // IndexedDB, and choosing it again is one click, not one picker trip.
     linkUrl = null;
+    lastLinkStamp = "";
+    linkHealth = null;
     try { localStorage.removeItem(LINK_KEY); } catch (e) {}
   }
 
   async function linkToGame() {
     const gen = supersede();
     linkUrl = linkBase();
+    // A board built from a folder or an earlier link is not this link's: the
+    // first stamp the mod answers has to be read, whatever it is.
+    lastLinkStamp = "";
+    linkHealth = null;
     stored.set(LINK_KEY, linkUrl);
     dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
     savePicker.hidden = true;
@@ -549,6 +566,16 @@
       if (res.status === 304) {  // a newer stamp was announced and then overtaken
         finishAttempt(gen);
         state("ok", "No newer state from the game", linkLine(health));
+      } else if (!res.ok) {
+        // 503 no_save_yet when the city unloaded between the two calls, or a
+        // wrong address answering with anything: the reason, not a parse error.
+        let why = `The mod answered ${res.status} for the save.`;
+        try { const body = await res.json(); if (body && body.error) why = `The mod answered ${res.status} (${body.error}) for the save.`; } catch (e) {}
+        if (gen !== sourceGen) return;
+        finishAttempt(gen);
+        state("bad", "Could not read the game", linkUrl);
+        note("bad", why, "Load a save in the game, then click Update.", true);
+        return;
       } else {
         const bytes = await res.arrayBuffer();
         if (gen !== sourceGen) return;
@@ -584,42 +611,48 @@
     const gen = sourceGen;
     if (!startAttempt(gen)) return;  // one Update at a time, like the folder's
     state("busy", "Asking the game for its current state", linkUrl);
-    let res;
-    try { res = await linkFetch("/refresh", {method: "POST"}); }
-    catch (err) { linkDown(gen, err); return; }
-    if (gen !== sourceGen) return;
+    // Throttled (429) covers two cases: a refresh in flight, whose stamp
+    // will move on its own, and the quiet window after one, where nothing
+    // will. So a throttle is waited out and the request made once more;
+    // whatever the second answer is, it is handled like the first, and a
+    // second throttle means a refresh really is in flight.
     let before = lastLinkStamp;
-    if (res.status === 409) {
-      let reason = "other";
-      try { reason = (await res.json()).reason || "other"; } catch (e) {}
-      finishAttempt(gen);
-      // Only a board the link built says "up to date": a folder board has no
-      // game state to name, and its own line is still true.
-      if (lastLinkStamp) state("ok", "Up to date", linkLine(linkHealth));
-      note("warn", `${LINK_REFUSE[reason] || LINK_REFUSE.other}. Try Update again in a moment.`);
-      return;
-    } else if (res.status === 429) {
-      // Throttled covers two cases: a refresh in flight, whose stamp will
-      // move on its own, and the quiet window after one, where nothing
-      // will. Wait it out, then ask once more; a second refusal means a
-      // refresh really is in flight and the poll below catches its stamp.
-      let retryAfter = 5;
-      try { retryAfter = (await res.json()).retryAfter || 5; } catch (e) {}
-      const wait = Math.min(20, Math.max(1, retryAfter));
-      state("busy", "The game is already serializing", `${linkUrl} · waiting ${wait} s`);
-      await linkWait(wait * 1000);
-      if (gen !== sourceGen) return;
-      let again;
-      try { again = await linkFetch("/refresh", {method: "POST"}); }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let res;
+      try { res = await linkFetch("/refresh", {method: "POST"}); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
-      if (again.status === 202) {
-        try { before = (await again.json()).stamp || lastLinkStamp; } catch (e) {}
+      if (res.status === 202) {
+        try { before = (await res.json()).stamp || lastLinkStamp; } catch (e) {}
+        break;
       }
-    } else if (res.status === 202) {
-      try { before = (await res.json()).stamp || lastLinkStamp; } catch (e) {}
-    } else {
-      linkDown(gen, new Error(`The mod answered ${res.status} to a refresh.`));
+      if (res.status === 409) {
+        let reason = "other";
+        try { reason = (await res.json()).reason || "other"; } catch (e) {}
+        finishAttempt(gen);
+        // Only a board the link built says "up to date": a folder board has no
+        // game state to name, and its own line is still true.
+        if (lastLinkStamp) state("ok", "Up to date", linkLine(linkHealth));
+        else idleState();
+        note("warn", `${LINK_REFUSE[reason] || LINK_REFUSE.other}. Try Update again in a moment.`);
+        return;
+      }
+      if (res.status === 429) {
+        if (attempt === 1) break;  // in flight: the poll below catches its stamp
+        let retryAfter = 5;
+        try { retryAfter = (await res.json()).retryAfter || 5; } catch (e) {}
+        const wait = Math.min(20, Math.max(1, retryAfter));
+        state("busy", "The game is already serializing", `${linkUrl} · waiting ${wait} s`);
+        await linkWait(wait * 1000);
+        if (gen !== sourceGen) return;
+        continue;
+      }
+      // 503 main_thread_unavailable, or anything else: the mod is there but
+      // did not take the request. Not "the game is not running".
+      finishAttempt(gen);
+      if (lastLinkStamp) state("ok", "Up to date", linkLine(linkHealth));
+      else idleState();
+      note("warn", `The mod did not take the refresh (answered ${res.status}). Try Update again in a moment.`);
       return;
     }
     // The mod serializes at its own pace; its health fields say when the
@@ -645,14 +678,23 @@
     await loadFromLink("Reading the game", gen);
   }
 
+  let linkGone = false;  // the watcher has said the game went away
   async function checkLink() {
     // The watcher's link half: a quiet /health, and a build only when the
-    // game has moved on. A dead link is said by the next Update, not here.
+    // game has moved on. A game that went away is said once, under the
+    // board that stays, and the next answer clears it.
     const gen = sourceGen;
     let health;
     try { health = await (await linkFetch("/health")).json(); }
-    catch (err) { return; }
-    if (gen !== sourceGen || document.hidden || busy || attempt) return;
+    catch (err) {
+      if (gen !== sourceGen || linkGone || strip.tone !== "ok") return;
+      linkGone = true;
+      note("warn", "The game is not reachable; the board shows its last state.", "It reconnects on its own when the game is back.");
+      return;
+    }
+    if (gen !== sourceGen) return;
+    if (linkGone) { linkGone = false; if (strip.tone === "ok") note(""); }
+    if (document.hidden || busy || attempt) return;
     if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
     if (health.stamp !== lastLinkStamp) await loadFromLink("Reading the game", gen);
   }
@@ -1112,7 +1154,13 @@
     if (document.hidden || watchChecking || busy || attempt || readerError) return;
     // One watcher, two sources. typeof rather than a bare read, so the
     // sliced tests can run this function without the link's names.
-    if (typeof linkUrl === "string" && linkUrl) { await checkLink(); return; }
+    if (typeof linkUrl === "string" && linkUrl) {
+      // The same guard as the folder's: a visibility change and the interval
+      // must not both start a check of the same stamp.
+      watchChecking = true;
+      try { await checkLink(); } finally { watchChecking = false; }
+      return;
+    }
     if (!dirHandle) return;
     watchChecking = true;
     const gen = sourceGen, handle = dirHandle;
@@ -1151,11 +1199,12 @@
     paintStrip();
     const b = $("watchBtn");
     if (!b) return;
-    b.hidden = !(canHandle && dirHandle);
+    b.hidden = !((canHandle && dirHandle) || linkUrl);
     const on = !!watchTimer;
     b.dataset.on = String(on);
     const at = lastCheck ? new Date(lastCheck).toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}) : "";
-    b.textContent = on ? `Watching the folder${at ? " · checked " + at : ""}` : "Watch the folder";
+    const what = linkUrl ? "the game" : "the folder";
+    b.textContent = on ? `Watching ${what}${at ? " · checked " + at : ""}` : `Watch ${what}`;
     b.title = on
       ? "Checking the folder every 30 seconds; the board rebuilds when the game writes a newer save. Click to pause."
       : "Check the folder every 30 seconds and rebuild on every autosave.";
@@ -1515,7 +1564,7 @@
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
-    $("linkBtn").addEventListener("click", linkToGame);
+    if ($("linkBtn")) $("linkBtn").addEventListener("click", linkToGame);
     $("recoverBtn").addEventListener("click", pickFolder);
     $("reloadBtn").addEventListener("click", () => location.reload());
     $("savePickLabel").addEventListener("keydown", (e) => {
