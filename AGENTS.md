@@ -33,6 +33,10 @@ Everything else:
   payload key from `_premises()` in `ba_dashboard.py`
 - community API: `server/`, `migrations/`, `web/community.js`
 - changelog: `web/changelog.json`
+- game link: the wire contract is `docs/game-link-api.md`; the mod is `mod/BigCopilotLink/`
+  (C#, built only inside the modding SDK's Unity project, never here); the mock that
+  serves the contract from a save on disk is `tools/game_link_mock.py`; the clients are
+  the third source in `web/app.js` and `--game` in `ba_dashboard.py`
 
 ## Sources and generated files
 
@@ -62,6 +66,8 @@ side and rebuild — the rebuild is the resolution.
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
+| `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
+| `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |
 
 `python build_web.py --check` verifies that `web/` matches the sources without needing the
 installed game; run it when you cannot rebuild.

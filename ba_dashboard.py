@@ -6,9 +6,12 @@
     python ba_dashboard.py "Costy Co"               # a character or save by name
     python ba_dashboard.py -o board.html            # choose the output file
     python ba_dashboard.py --watch                  # serve it and follow the save
+    python ba_dashboard.py --game                   # the running game, through the link mod
 
 The dashboard is a single self-contained HTML file. In watch mode it is also served
-from 127.0.0.1 and refreshes itself whenever the game writes a new save.
+from 127.0.0.1 and refreshes itself whenever the game writes a new save. --game
+reads the running game itself through the Big Copilot Link mod
+(docs/game-link-api.md) instead of a save folder.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import collections
 import datetime as dt
 import fractions
 import hashlib
+import http.client
 import http.server
 import json
 import math
@@ -28,6 +32,8 @@ import sys
 import threading
 import time
 import traceback
+import urllib.error
+import urllib.request
 import webbrowser
 from html import escape as html_escape
 
@@ -16514,11 +16520,168 @@ def yield_to_the_game() -> bool:
         return False
 
 
+class LinkUnavailable(Exception):
+    """The game link did not answer: the game is closed or between cities."""
+
+
+class GameLink:
+    """The running game's save, served by the Big Copilot Link mod.
+
+    docs/game-link-api.md is the contract; this is the watcher's client of it.
+    urllib only, with 5-second timeouts: the link shares the machine with the
+    game, so a stalled call must never hold the watch loop. poll() downloads
+    a save only when /health shows a stamp this board has not built from, so
+    an idle game costs nothing.
+
+    LinkUnavailable is a normal answer, not a crash: the listener lives only
+    while a city is loaded, so the watch loop reports it once and carries on.
+    """
+
+    SCHEMA = 1  # the schema version this client speaks; see the contract
+    TIMEOUT = 5
+
+    def __init__(self, url: str, out_dir: str):
+        # --game takes a URL and nothing else; argparse would otherwise hand a
+        # save name typed after the flag to urllib, which raises ValueError.
+        if not re.match(r"^https?://", url or ""):
+            raise SystemExit(
+                f"--game takes the mod's address (default http://127.0.0.1:8322), "
+                f"not {url!r}; a save or character name does not combine with it"
+            )
+        self.url = url.rstrip("/")
+        self.path = os.path.join(out_dir, "game-link.hsg")
+        self.stamp = ""  # the stamp of the bytes last downloaded
+        self.character = ""
+        self.company = ""
+        self.stale = False  # why wait_for_save() returned older bytes than it asked for, or False
+        self.not_ready = 0  # /health answers in a row that were no health object (any status)
+
+    def _call(self, route: str, method: str = "GET", headers: dict | None = None):
+        try:
+            # Request() is what raises ValueError for an address urllib cannot
+            # use, so it belongs inside the try with the call.
+            req = urllib.request.Request(
+                self.url + route, method=method, headers=headers or {}
+            )
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as res:
+                return res.status, dict(res.headers), res.read()
+        except urllib.error.HTTPError as err:
+            return err.code, dict(err.headers), err.read()
+        except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
+            raise LinkUnavailable(
+                "the game link did not answer; start the game with the Big Copilot "
+                "Link mod enabled and load a save"
+            ) from exc
+
+    def poll(self) -> str | None:
+        """The path of a freshly downloaded game-link.hsg, else None.
+
+        Keeps the last stamp it built from and sends it as If-None-Match, so
+        a game that has moved on costs one /health and nothing more.
+        Raises LinkUnavailable while the game is not there and SystemExit
+        when the mod speaks a schema version this board does not know.
+        """
+        status, _, body = self._call("/health")
+        health = None
+        if status == 200 and body:
+            try:
+                health = json.loads(body)
+            except ValueError:
+                health = None
+        if not isinstance(health, dict) or health.get("schemaVersion") is None:
+            # Answered, but not with health: a status other than 200 (the mod is
+            # there and not ready), or a 200 that is no health object, or one
+            # with no version in it (something else on that port for a moment).
+            # The next poll asks again; only a health object with a version says
+            # what it speaks. Ten in a row is an outage, said once by the watch
+            # loop and raised on every poll until a health answer, so it never
+            # looks over between two polls, and one stray answer never stops
+            # the watcher for good.
+            self.not_ready += 1
+            if self.not_ready >= 10:
+                raise LinkUnavailable(
+                    f"{self.url} answers, but not as the Big Copilot Link mod; "
+                    "is another program on that port?"
+                )
+            return None
+        self.not_ready = 0
+        version = health.get("schemaVersion")
+        if version != self.SCHEMA:
+            raise SystemExit(
+                f"the Big Copilot Link mod speaks schema version {version}; this "
+                f"board needs version {self.SCHEMA}. Update the mod or the board"
+            )
+        stamp = health.get("stamp") or ""
+        if not stamp or stamp == self.stamp or health.get("busy"):
+            return None
+        headers = {"If-None-Match": f'"{self.stamp}"'} if self.stamp else {}
+        status, res_headers, data = self._call("/save", headers=headers)
+        if status != 200:  # 503 no_save_yet, or a race the next poll settles
+            return None
+        with open(self.path, "wb") as fh:
+            fh.write(data)
+        self.stamp = res_headers.get("X-Game-Link-Stamp") or stamp
+        self.character = res_headers.get("X-Game-Link-Character") or health.get("character") or ""
+        self.company = health.get("company") or ""
+        return self.path
+
+    def wait_for_save(self, seconds: float = 45.0) -> str | None:
+        """Ask the mod for fresh bytes and poll until they arrive, or time out.
+
+        The one-shot build's way in: a refresh is requested, and poll() is
+        tried every second until it hands over a path. An accepted refresh
+        (202) is waited for: the bytes must carry a stamp newer than the one
+        the mod named, or the build would show the state before the request.
+        A refusal or a throttle is not an error here: this link has downloaded
+        nothing yet, so poll() takes whatever the mod already serves. Only a
+        mod with nothing to serve inside the deadline comes back None. A
+        LinkUnavailable from the refresh surfaces.
+        """
+        self.stale = False
+        status, body = self.refresh()
+        superseded = body.get("stamp") if status == 202 else None
+        deadline = time.monotonic() + seconds
+        path = None
+        while True:
+            try:
+                got = self.poll()
+            except LinkUnavailable as exc:
+                # The game went away mid-wait, or the port stopped answering as
+                # the mod. Bytes already downloaded in this call are still a
+                # board; only an empty-handed wait surfaces it. The reason is
+                # the exception's own, whichever it was.
+                if path is None:
+                    raise
+                self.stale = str(exc)
+                return path
+            if got is not None:
+                path = got
+                if superseded is None or self.stamp != superseded:
+                    return path
+            if time.monotonic() >= deadline:
+                # The requested refresh never landed; the bytes that did are
+                # still the game's state, only a little older. The caller says so.
+                self.stale = "the mod did not finish the refresh in time" if path is not None else False
+                return path
+            time.sleep(1)
+
+    def refresh(self) -> tuple[int, dict]:
+        """Ask the mod to serialize the game now; /refresh's status and body."""
+        status, _, body = self._call("/refresh", method="POST")
+        try:
+            parsed = json.loads(body or b"{}")
+        except ValueError:
+            parsed = {}
+        # Some other local service on that port answers JSON that is no object.
+        return status, parsed if isinstance(parsed, dict) else {}
+
+
 class Board:
     """Holds the current dashboard, and rebuilds it when the save changes."""
 
-    def __init__(self, target: str, out: str):
+    def __init__(self, target: str, out: str, link: GameLink | None = None):
         self.target = target
+        self.link = link
         self.out = out
         self.locale_source, locale = load_best_locale()
         self.names = Names(locale)
@@ -16528,6 +16691,7 @@ class Board:
         self.data = b"{}"
         self.stamp = b'{"stamp":""}'
         self.source = None
+        self.day = None
         self.error = None
         self._stamp = ""
         self._fingerprint = None
@@ -16552,15 +16716,32 @@ class Board:
             return self._refresh(settle)
 
     def _refresh(self, settle: bool) -> bool:
-        path = newest_under(self.target)
-        mark = (path, os.path.getmtime(path), os.path.getsize(path))
-        if mark == self._fingerprint:
-            return False
-        if settle:
-            # The game may still be writing; only read once the file holds still.
-            time.sleep(0.75)
-            if (os.path.getmtime(path), os.path.getsize(path)) != mark[1:]:
+        if self.link is not None:
+            # The link has no folder to scan: the mod says when its bytes have
+            # moved, and its stamp is the whole fingerprint. A cleared
+            # fingerprint (the player named a line) rebuilds from the bytes
+            # this link downloaded, since the mod has nothing newer to say. A
+            # fresh board has no fingerprint either, and no stamp: a
+            # game-link.hsg left by an earlier session is never its source.
+            path = self.link.poll()
+            if path is None:
+                if (self._fingerprint is not None or not self.link.stamp
+                        or not os.path.exists(self.link.path)):
+                    return False
+                path = self.link.path
+            mark = self.link.stamp
+            if mark == self._fingerprint:
                 return False
+        else:
+            path = newest_under(self.target)
+            mark = (path, os.path.getmtime(path), os.path.getsize(path))
+            if mark == self._fingerprint:
+                return False
+            if settle:
+                # The game may still be writing; only read once the file holds still.
+                time.sleep(0.75)
+                if (os.path.getmtime(path), os.path.getsize(path)) != mark[1:]:
+                    return False
 
         try:
             data = safe_extract(load_save(path), self.names, self.history)
@@ -16584,7 +16765,11 @@ class Board:
             self.html = live_page
             self.data = json.dumps(data, separators=(",", ":")).encode("utf-8")
             self.character = data["supply"].get("factories", {}).get("character")
-            self._stamp = f"{os.path.basename(path)}@{mark[1]:.0f}#{self.revision}"
+            self.day = data["meta"]["day"]
+            if self.link is not None:
+                self._stamp = f"game-link@{mark}#{self.revision}"
+            else:
+                self._stamp = f"{os.path.basename(path)}@{mark[1]:.0f}#{self.revision}"
             self._publish_stamp()
 
         with open(self.out, "wb") as fh:
@@ -16673,25 +16858,43 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
         pass  # the watcher prints what matters
 
 
-def watch(target: str, out: str, port: int, interval: int, open_browser: bool) -> None:
+def watch(
+    target: str,
+    out: str,
+    port: int,
+    interval: int,
+    open_browser: bool,
+    link: GameLink | None = None,
+) -> None:
     lowered = yield_to_the_game()
-    board = Board(target, out)
-    board.refresh(settle=False)
+    board = Board(target, out, link=link)
+    try:
+        board.refresh(settle=False)
+    except LinkUnavailable as exc:
+        # The game is not up yet, or the mod is off. The poll loop below
+        # keeps trying; the server has nothing to be sorry for.
+        print(f"  {exc}", flush=True)
     BoardHandler.board = board
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), BoardHandler)
     url = f"http://127.0.0.1:{port}/"
 
     def poll():
         last_failure = None
+        link_down = False
         while True:
             try:
-                if board.refresh():
-                    print(
-                        f"  {time.strftime('%H:%M:%S')}  rebuilt from "
-                        f"{os.path.basename(board.source)}",
-                        flush=True,
-                    )
-                    last_failure = None
+                moved = board.refresh()
+            except SystemExit as exc:
+                # A schema mismatch will not fix itself by polling: say it
+                # once and stop, leaving the last board served.
+                print(f"  {time.strftime('%H:%M:%S')}  {exc}", flush=True)
+                return
+            except LinkUnavailable as exc:
+                # Once per outage, not once per interval: the game is closed
+                # or between cities, and the board on screen is still good.
+                if not link_down:
+                    link_down = True
+                    print(f"  {time.strftime('%H:%M:%S')}  {exc}", flush=True)
             except Exception as exc:
                 signature = f"{type(exc).__name__}: {exc}"
                 print(
@@ -16710,11 +16913,29 @@ def watch(target: str, out: str, port: int, interval: int, open_browser: bool) -
                         "the game writes a new save",
                         flush=True,
                     )
+            else:
+                if link_down:
+                    link_down = False
+                    print(f"  {time.strftime('%H:%M:%S')}  the game link is back", flush=True)
+                if moved:
+                    what = (
+                        f"the game (day {board.day})"
+                        if board.link is not None
+                        else os.path.basename(board.source)
+                    )
+                    print(
+                        f"  {time.strftime('%H:%M:%S')}  rebuilt from {what}",
+                        flush=True,
+                    )
+                    last_failure = None
             time.sleep(interval)
 
     threading.Thread(target=poll, daemon=True).start()
 
-    print(f"Watching {target}", flush=True)
+    if board.link is not None:
+        print(f"Linked to the game at {board.link.url}", flush=True)
+    else:
+        print(f"Watching {target}", flush=True)
     print(f"  serving {url}  (checks every {interval}s, rebuilds only on a new save)")
     print(f"  priority {'lowered, the game gets the CPU first' if lowered else 'unchanged'}")
     print(f"  {locale_note(board.locale_source, board.names.locale)}")
@@ -16776,10 +16997,23 @@ def main() -> None:
         "--port", type=int, default=8770, help="port for the local server in watch mode"
     )
     ap.add_argument(
-        "--interval", type=int, default=5, help="seconds between save-file checks"
+        "--interval",
+        type=int,
+        default=None,
+        help="seconds between checks: 5 for a save folder, 30 for the game link",
     )
     ap.add_argument(
         "--no-open", action="store_true", help="with --watch, do not open a browser"
+    )
+    ap.add_argument(
+        "--game",
+        nargs="?",
+        const="http://127.0.0.1:8322",
+        default=None,
+        metavar="URL",
+        help="read the running game through the Big Copilot Link mod instead of a "
+        "save folder; URL defaults to http://127.0.0.1:8322. The bytes are kept "
+        "as game-link.hsg beside the output file",
     )
     ap.add_argument(
         "--backfill",
@@ -16787,6 +17021,13 @@ def main() -> None:
         help="seed demand history from every save on disk, then build",
     )
     args = ap.parse_args()
+
+    if args.game and (args.list or args.save):
+        raise SystemExit(
+            "--game reads the running game; it does not combine with --list or a "
+            "save or character name"
+        )
+    interval = args.interval if args.interval is not None else (30 if args.game else 5)
 
     if args.list:
         if not args.save:
@@ -16800,9 +17041,18 @@ def main() -> None:
         print_catalogue(catalogue(root))
         return
 
-    target = resolve_target(args.save)
     out = os.path.abspath(args.out)
     history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
+
+    # The link needs no folder: the mod names the character and the day, so
+    # the positional argument and the save-folder search are beside the point.
+    link = GameLink(args.game, os.path.dirname(out) or ".") if args.game else None
+    target = None if link is not None else resolve_target(args.save)
+    if link is not None and args.backfill:
+        raise SystemExit(
+            "--backfill seeds history from the saves of a folder; it does not "
+            "combine with --game"
+        )
 
     # --watch has its own Board, which resolves the text itself, so a plain
     # watch run does not parse en.json here only to leave it behind.
@@ -16815,10 +17065,23 @@ def main() -> None:
         print(f"  merged {recorded} snapshots into {os.path.basename(history)}")
 
     if args.watch:
-        watch(target, out, args.port, args.interval, not args.no_open)
+        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link)
         return
 
-    path = newest_under(target)
+    if link is not None:
+        try:
+            path = link.wait_for_save()
+        except LinkUnavailable as exc:
+            raise SystemExit(str(exc)) from None
+        if path is None:
+            raise SystemExit(
+                "the game link has no save to read yet; load a save in the game "
+                "and try again"
+            )
+        source_name = "the game link"
+    else:
+        path = newest_under(target)
+        source_name = os.path.basename(path)
     data = safe_extract(load_save(path), names, history)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(render(data))
@@ -16827,9 +17090,13 @@ def main() -> None:
     minor = data["minor"]
     print(
         f"{data['meta']['save']} - day {data['meta']['day']}  "
-        f"(from {os.path.basename(path)}, game build {data['meta']['build']}, "
+        f"(from {source_name}, game build {data['meta']['build']}, "
         f"board checked on {VERIFIED_BUILD})"
     )
+    if link is not None and link.stale:
+        # Two lines: the reason is a sentence of its own, sometimes a question.
+        print(f"  {link.stale}", flush=True)
+        print("  the board shows the state the mod last served", flush=True)
     worth = f"{k['netWorth']:>14,.0f}" if k["netWorth"] is not None else "   not reported"
     print(f"  cash {k['cash']:>14,.0f}   net worth {worth}")
     print(f"  profit yesterday {k['profitYesterday']:>+11,.0f}   7-day avg {k['profitAvg7']:>+11,.0f}")

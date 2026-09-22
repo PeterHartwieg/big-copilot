@@ -1,0 +1,6 @@
+{
+  "name": "BclBatch.Editor",
+  "references": ["BAModTemplate.Bootstrap.Editor", "ModBuilder.Editor"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": false
+}
