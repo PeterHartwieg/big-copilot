@@ -211,9 +211,10 @@ namespace BigCopilotLink
                 return;
             }
             // Refused (a refresh in flight, the game saving, a state that cannot
-            // save): the state after the load is still worth having, so the pump runs
-            // it as the next attach refresh, on the worker if it is on, once the
-            // window lifts. An attempt that failed has its one retry already.
+            // save, no game instance): the state after the load is still worth
+            // having, so the pump runs it as the next attach refresh, on whichever
+            // path is on, once the window lifts. An attempt that failed has its one
+            // retry already.
             var result = TryStartRefresh(inside ? "enter" : "leave", true);
             if (result.Outcome != RefreshOutcome.Started && !result.Attempted) _pendingAfterAttach = true;
         }
@@ -532,12 +533,14 @@ namespace BigCopilotLink
             _retryPending = true;
             if ((_backgroundFailures >= BackgroundFailuresBeforeFallback || _reprobing) && _backgroundSerialize)
             {
+                var why = _reprobing
+                    ? "the worker thread failed again on its second chance"
+                    : BackgroundFailuresBeforeFallback.ToString(CultureInfo.InvariantCulture) + " background serializes in a row failed";
                 _backgroundSerialize = false;
                 _reprobing = false;
                 _fallbackRuns = 0;
-                LinkMod.LogWarn(BackgroundFailuresBeforeFallback.ToString(CultureInfo.InvariantCulture) +
-                                " background serializes in a row failed; serializing on the main thread; the worker gets another chance after " +
-                                FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " refreshes.");
+                LinkMod.LogWarn(why + "; serializing on the main thread; the worker gets another chance after " +
+                                FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " fallback refreshes.");
             }
         }
 
@@ -584,7 +587,7 @@ namespace BigCopilotLink
                         _backgroundSerialize = true;
                         _reprobing = true;
                         _fallbackRuns = 0;
-                        LinkMod.LogInfo("trying the worker thread again after " + FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " main-thread refreshes.");
+                        LinkMod.LogInfo("trying the worker thread again after " + FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " fallback refreshes.");
                     }
                 });
             }

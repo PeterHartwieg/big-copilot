@@ -51,13 +51,13 @@ snapshot can therefore mix two moments a few hundred milliseconds apart, which a
 dashboard tolerates, and a collection that changed under the walk makes
 OdinSerializer throw. That walk keeps the previous bytes and retries once the
 fifteen-second window lifts; two failed walks with nothing served between them
-switch this city session to
-serializing on the main thread, where nothing moves under the walk — a stall per
-refresh, logged as `… on the main thread`; after ten such refreshes the worker gets
-one more chance (one more throw sends it back), and loading a save starts afresh. A building load (entering or
-leaving) serializes on the main thread: the screen is black, the load is rewriting
-the state a walk would read, and its stall is hidden anyway. One that finds a refresh
-already in flight is run once the fifteen-second window lifts instead, on the worker.
+switch this city session to serializing on the main thread, where nothing moves
+under the walk — a stall per refresh, logged as `… on the main thread`; after ten
+such refreshes the worker gets one more chance (one more throw sends it back), and
+loading a save starts afresh. A building load (entering or leaving) serializes on
+the main thread: the screen is black, the load is rewriting the state a walk would
+read, and its stall is hidden anyway. One that finds a refresh already in flight is
+run once the fifteen-second window lifts instead, on whichever path is on.
 
 The log lines:
 
@@ -65,8 +65,9 @@ The log lines:
 serialized in 231 ms on a worker thread (first)
 serialized in 229 ms on the main thread (hour)
 background serialize failed (hour): InvalidOperationException: …
-2 background serializes in a row failed; serializing on the main thread; the worker gets another chance after 10 refreshes.
-trying the worker thread again after 10 main-thread refreshes.
+2 background serializes in a row failed; serializing on the main thread; the worker gets another chance after 10 fallback refreshes.
+trying the worker thread again after 10 fallback refreshes.
+the worker thread failed again on its second chance; serializing on the main thread; the worker gets another chance after 10 fallback refreshes.
 ```
 
 ## Build and install (in the SDK's Unity project)

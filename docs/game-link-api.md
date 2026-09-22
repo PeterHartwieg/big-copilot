@@ -36,11 +36,10 @@ what `SerializeBinaryData` would write. The game keeps running meanwhile. The sa
 thread gzips the result with `SaveGameSerializationHelper.CompressBytes`. A walk
 that throws because the game changed state keeps the previous bytes and retries; two
 failed walks with nothing served between them fall back to serializing on the main
-thread for this city session, with one more try for the worker after ten main-thread
-refreshes (one more throw sends it back). A
-building load serializes on the main thread, under the black screen; one that finds
-a refresh already in flight is run once the fifteen-second window lifts instead, on
-the worker.
+thread for this city session, with one more try for the worker after ten refreshes
+the fallback ran (one more throw sends it back). A building load serializes on the
+main thread, under the black screen; one that finds a refresh already in flight is
+run once the fifteen-second window lifts instead, on whichever path is on.
 
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
