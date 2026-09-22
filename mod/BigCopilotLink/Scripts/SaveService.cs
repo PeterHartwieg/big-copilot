@@ -27,26 +27,41 @@ namespace BigCopilotLink
         /// <summary>One of the reasons docs/game-link-api.md names, when the game refuses.</summary>
         public readonly string Reason;
 
-        private RefreshResult(RefreshOutcome outcome, int retryAfterSeconds, string reason)
+        /// <summary>
+        /// True when the refresh got past the guards and did work before failing (a
+        /// walk that threw, a thread that would not start), as opposed to being
+        /// refused before it began. A refused refresh may stay pending and try again
+        /// next tick; an attempted one gets exactly one retry, from FailedStart.
+        /// </summary>
+        public readonly bool Attempted;
+
+        private RefreshResult(RefreshOutcome outcome, int retryAfterSeconds, string reason, bool attempted)
         {
             Outcome = outcome;
             RetryAfterSeconds = retryAfterSeconds;
             Reason = reason;
+            Attempted = attempted;
         }
 
         public static RefreshResult Started()
         {
-            return new RefreshResult(RefreshOutcome.Started, 0, null);
+            return new RefreshResult(RefreshOutcome.Started, 0, null, false);
         }
 
         public static RefreshResult Throttled(int retryAfterSeconds)
         {
-            return new RefreshResult(RefreshOutcome.Throttled, retryAfterSeconds, null);
+            return new RefreshResult(RefreshOutcome.Throttled, retryAfterSeconds, null, false);
         }
 
         public static RefreshResult CannotSave(string reason)
         {
-            return new RefreshResult(RefreshOutcome.CannotSave, 0, reason);
+            return new RefreshResult(RefreshOutcome.CannotSave, 0, reason, false);
+        }
+
+        /// <summary>Attempted and failed: answers as "other", and asks for no more than one retry.</summary>
+        public static RefreshResult Failed()
+        {
+            return new RefreshResult(RefreshOutcome.CannotSave, 0, "other", true);
         }
     }
 
@@ -86,12 +101,13 @@ namespace BigCopilotLink
     /// The serialize and the gzip both run on one worker thread of their own, walking
     /// the live game with a private SerializationContext; the main thread only decides
     /// when, and captures the in-game clock before the walk starts. A walk that throws
-    /// because the game changed state under it is retried once, and after two
-    /// consecutive failures this city session falls back to serializing on the main
-    /// thread, where nothing moves under the walk, until ten such refreshes have run
-    /// and the worker is tried again. A building load always walks on the main thread:
-    /// the screen is black there and the load is rewriting the state. The finished
-    /// bytes come back through the dispatcher as one immutable Snapshot.
+    /// because the game changed state under it is retried once, and after two failed
+    /// walks with nothing served between them this city session falls back to
+    /// serializing on the main thread, where nothing moves under the walk, until ten
+    /// such refreshes have run and the worker is tried again (one more throw sends it
+    /// back). A building load walks on the main thread: the screen is black there and
+    /// the load is rewriting the state. The finished bytes come back through the
+    /// dispatcher as one immutable Snapshot.
     /// </summary>
     public sealed class SaveService
     {
@@ -130,6 +146,9 @@ namespace BigCopilotLink
         private int _backgroundFailures;
         private bool _backgroundSerialize = true;
         private int _fallbackRuns;
+        // True from the re-probe until the worker serves once: on that chance a single
+        // throw is enough to fall back again, whatever else was served meanwhile.
+        private bool _reprobing;
         private const int BackgroundFailuresBeforeFallback = 2;
         private const int FallbackRunsBeforeReprobe = 10;
         // A failed walk asks for one more try when the throttle window lifts. Any
@@ -191,11 +210,12 @@ namespace BigCopilotLink
                 _pendingAfterAttach = true;
                 return;
             }
-            // Refused only by a refresh in flight (a load passes the window): the
-            // state after the load is still worth having, so the pump runs it once
-            // that one lands, on the worker if it is on.
+            // Refused (a refresh in flight, the game saving, a state that cannot
+            // save): the state after the load is still worth having, so the pump runs
+            // it as the next attach refresh, on the worker if it is on, once the
+            // window lifts. An attempt that failed has its one retry already.
             var result = TryStartRefresh(inside ? "enter" : "leave", true);
-            if (result.Outcome != RefreshOutcome.Started) _pendingAfterAttach = true;
+            if (result.Outcome != RefreshOutcome.Started && !result.Attempted) _pendingAfterAttach = true;
         }
 
         /// <summary>
@@ -278,9 +298,11 @@ namespace BigCopilotLink
             // throttle window, or during placement mode, would wait for the floor.
             // The retry is a few property reads a second, nothing more. A start clears
             // both flags inside TryStartRefresh; a retry that does not start is still
-            // set, and any other trigger that does not start becomes pending.
+            // set, and any other trigger that is refused becomes pending. One that was
+            // attempted and failed is not re-pended: FailedStart gave it its one retry,
+            // and a failure that outlasts that waits for the floor.
             var result = TryStartRefresh(trigger);
-            if (result.Outcome != RefreshOutcome.Started && trigger != "retry") _pendingAfterAttach = true;
+            if (result.Outcome != RefreshOutcome.Started && !result.Attempted && trigger != "retry") _pendingAfterAttach = true;
         }
 
         /// <summary>
@@ -320,10 +342,8 @@ namespace BigCopilotLink
             _lastRefreshStarted = DateTime.UtcNow;
             // Whatever asked, this refresh answers it: a retry left set here would buy a
             // second serialize nothing wants once the window lifts. A start that fails
-            // below (FailedStart) gives one retry back, never a loop of them, and
-            // hands back the attach flag it took.
+            // below (FailedStart) gives one retry back, never a loop of them.
             var wasRetry = trigger == "retry";
-            var hadAttach = _pendingAfterAttach;
             _retryPending = false;
             _pendingAfterAttach = false;
 
@@ -348,7 +368,7 @@ namespace BigCopilotLink
                 catch (Exception e)
                 {
                     // No thread means nothing will ever clear Busy; clear it here.
-                    return FailedStart("could not start the serialize thread (" + trigger + "): " + e, wasRetry, hadAttach);
+                    return FailedStart("could not start the serialize thread (" + trigger + "): " + e, wasRetry);
                 }
                 return RefreshResult.Started();
             }
@@ -363,7 +383,7 @@ namespace BigCopilotLink
             }
             catch (Exception e)
             {
-                return FailedStart("serializing the game failed on the main thread (" + trigger + "): " + e, wasRetry, hadAttach);
+                return FailedStart("serializing the game failed on the main thread (" + trigger + "): " + e, wasRetry);
             }
 
             // Counts toward the re-probe only when the fallback chose this thread, not
@@ -381,24 +401,25 @@ namespace BigCopilotLink
             }
             catch (Exception e)
             {
-                return FailedStart("could not start the compress thread (" + trigger + "): " + e, wasRetry, hadAttach);
+                return FailedStart("could not start the compress thread (" + trigger + "): " + e, wasRetry);
             }
             return RefreshResult.Started();
         }
 
         /// <summary>
         /// Main thread only: a refresh that got past the guards and then could not
-        /// start. Busy goes back down (nothing else will lower it), the attach flag
-        /// goes back to what it was, and one retry is given back unless this was
-        /// the retry: a persistent failure then waits for the floor, not a loop.
+        /// start. Busy goes back down (nothing else will lower it) and one retry is
+        /// given back unless this was the retry; whatever else was pending stays
+        /// spent, so a persistent failure waits for the floor instead of looping
+        /// through the window. The result says it was attempted, so no caller
+        /// re-pends it either.
         /// </summary>
-        private RefreshResult FailedStart(string message, bool wasRetry, bool hadAttach)
+        private RefreshResult FailedStart(string message, bool wasRetry)
         {
             _busy = false;
             _retryPending = !wasRetry;
-            _pendingAfterAttach = hadAttach;
             LinkMod.LogError(message);
-            return RefreshResult.CannotSave("other");
+            return RefreshResult.Failed();
         }
 
         // SaveGameManager.CanSave() is private static on build 3680 (verified on the
@@ -509,9 +530,10 @@ namespace BigCopilotLink
             if (_cleared) return;
             _backgroundFailures++;
             _retryPending = true;
-            if (_backgroundFailures >= BackgroundFailuresBeforeFallback && _backgroundSerialize)
+            if ((_backgroundFailures >= BackgroundFailuresBeforeFallback || _reprobing) && _backgroundSerialize)
             {
                 _backgroundSerialize = false;
+                _reprobing = false;
                 _fallbackRuns = 0;
                 LinkMod.LogWarn(BackgroundFailuresBeforeFallback.ToString(CultureInfo.InvariantCulture) +
                                 " background serializes in a row failed; serializing on the main thread; the worker gets another chance after " +
@@ -550,14 +572,17 @@ namespace BigCopilotLink
                     _current = next;
                     _busy = false;
                     // Any published refresh ends the failure streak: "two in a row"
-                    // means two failed walks with nothing served between them.
+                    // means two failed walks with nothing served between them. A
+                    // worker success also ends its re-probe.
                     _backgroundFailures = 0;
+                    if (fromWorker) _reprobing = false;
                     if (!fromWorker && fallbackRun && !_backgroundSerialize && ++_fallbackRuns >= FallbackRunsBeforeReprobe)
                     {
-                        // Enough stalls: give the worker one more chance, with one
-                        // failure already on the count so a single throw ends it.
+                        // Enough stalls: give the worker one more chance; on it a
+                        // single throw ends it (the _reprobing flag, not the count,
+                        // which any publish resets).
                         _backgroundSerialize = true;
-                        _backgroundFailures = BackgroundFailuresBeforeFallback - 1;
+                        _reprobing = true;
                         _fallbackRuns = 0;
                         LinkMod.LogInfo("trying the worker thread again after " + FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " main-thread refreshes.");
                     }

@@ -50,12 +50,14 @@ IL of build 3680), so the mod is walking a graph the main thread is still changi
 snapshot can therefore mix two moments a few hundred milliseconds apart, which a
 dashboard tolerates, and a collection that changed under the walk makes
 OdinSerializer throw. That walk keeps the previous bytes and retries once the
-fifteen-second window lifts; two consecutive failures switch this city session to
+fifteen-second window lifts; two failed walks with nothing served between them
+switch this city session to
 serializing on the main thread, where nothing moves under the walk — a stall per
 refresh, logged as `… on the main thread`; after ten such refreshes the worker gets
-one more chance, and loading a save starts afresh. A building load (entering or
-leaving) always serializes on the main thread: the screen is black, the load is
-rewriting the state a walk would read, and its stall is hidden anyway.
+one more chance (one more throw sends it back), and loading a save starts afresh. A building load (entering or
+leaving) serializes on the main thread: the screen is black, the load is rewriting
+the state a walk would read, and its stall is hidden anyway. One that finds a refresh
+already in flight is run once the fifteen-second window lifts instead, on the worker.
 
 The log lines:
 
