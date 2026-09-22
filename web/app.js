@@ -472,6 +472,7 @@
       }
       clearTimeout(timer);
       linkSpace = space;
+      linkGone = false;  // the mod answered, whatever it said: the watcher's gone note is over
       return res;
     }
     throw new Error("The game is not running, or the Big Copilot Link mod is not installed.");
@@ -533,7 +534,6 @@
     try { health = await (await linkFetch("/health")).json(); }
     catch (err) { linkDown(gen, err); return; }
     if (gen !== sourceGen) return;
-    linkGone = false;  // the game answered: whatever the watcher said is over
     if (health.schemaVersion !== 1) {
       finishAttempt(gen);
       state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);

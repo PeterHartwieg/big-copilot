@@ -355,6 +355,17 @@ test('the linked watcher says once when the game goes away, and clears it when i
   assert.deepEqual(h.seen.notes.at(-1), [''], 'cleared when the game answers again');
 });
 
+test('any answer from the mod ends the gone note, a refusal included', async () => {
+  const h = harness({routes: {refresh: reply(409, {error: 'cannot_save', reason: 'saving'}), health: HEALTH}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; linkGone = true');
+  await h.run('update()');
+  assert.equal(h.run('linkGone'), false, 'a 409 is still an answer');
+  h.run('linkGone = true; lastLinkStamp = "s1"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.states.at(-1)[1], 'No newer state from the game');
+  assert.equal(h.run('linkGone'), false, 'so is "no newer state"');
+});
+
 test('#link= only moves the port on this machine', () => {
   const h = harness();
   h.context.location.hash = '#link=http://127.0.0.1:8323';
