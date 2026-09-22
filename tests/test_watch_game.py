@@ -106,12 +106,21 @@ class GameLinkAgainstMock(unittest.TestCase):
             ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
 
     def test_wait_for_save_waits_for_the_refresh_it_asked_for(self):
-        """A 202 names the stamp being replaced; the bytes returned are newer."""
-        self.mock.last_refresh = 0  # outside the throttle window
+        """A 202 names the stamp being replaced; the bytes returned are newer.
+
+        The mock refreshes inside /refresh, which would let a wait_for_save()
+        that takes the first bytes on offer pass. So the request is answered
+        here as the mod answers a queued one: accepted, not yet run, with the
+        old stamp still served, and the new bytes land a moment later.
+        """
+        import threading
         before = self.mock.stamp
+        self.game.refresh = lambda: (202, {"accepted": True, "stamp": before})
+        threading.Timer(1.5, lambda: self.mock.refresh(force=True)).start()
         path = self.game.wait_for_save(seconds=10)
         self.assertIsNotNone(path)
-        self.assertNotEqual(self.game.stamp, before)
+        self.assertNotEqual(self.game.stamp, before, "the old bytes were not taken")
+        self.assertEqual(self.game.stamp, self.mock.stamp)
 
     def test_wait_for_save_falls_through_on_a_throttle(self):
         """Inside the window the mod refuses; the bytes it serves are read as they are."""
