@@ -62,6 +62,16 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertEqual(fh.read(), BYTES + b" more")
         self.assertEqual(self.game.stamp, self.mock.stamp)
 
+    def test_a_200_that_is_no_health_object_is_named_not_versioned(self):
+        real = self.game._call
+        self.game._call = lambda route, method="GET", headers=None: (200, {}, b"<html>hi</html>")
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                self.game.poll()
+            self.assertIn("not with the Big Copilot Link mod's health", str(caught.exception))
+        finally:
+            self.game._call = real
+
     def test_a_health_that_is_not_200_is_not_a_schema_mismatch(self):
         """Some other status on /health means not ready, never a version refusal.
 

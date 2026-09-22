@@ -16599,9 +16599,15 @@ class GameLink:
         try:
             health = json.loads(body or b"{}")
         except ValueError:
-            health = {}
+            health = None
         if not isinstance(health, dict):
-            health = {}
+            # A 200 that is no health object: something else on that port,
+            # or a mod this board cannot read. Said as that, and it stops the
+            # watch loop like a version mismatch, since polling will not fix it.
+            raise SystemExit(
+                f"{self.url} answers 200, but not with the Big Copilot Link mod's "
+                "health; is another program on that port, or the mod too new?"
+            )
         version = health.get("schemaVersion")
         if version != self.SCHEMA:
             raise SystemExit(
