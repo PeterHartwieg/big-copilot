@@ -23,8 +23,8 @@ treats it as "the game is not running or no save is loaded".
 
 The mod does not model the game. It asks the game to serialize itself with the call
 the game's own save uses, `SaveGameSerializationHelper.SerializeBinaryData(path,
-SaveGameManager.Current, compressed: true)`, on a background thread, and serves the
-resulting bytes: a `.hsg` exactly as the game would write it. Clients feed those bytes
+SaveGameManager.Current, compressed)`, and serves the resulting bytes: a `.hsg`
+exactly as the game would write it. Clients feed those bytes
 to `ba_save.py` unchanged.
 
 The serializer keeps a static `SerializationContext`, shared with the game's own save
