@@ -6,6 +6,11 @@ running game with the game's own serializer settings, on a thread of its own, an
 serves the resulting bytes — a `.hsg` as the game would write it — over loopback
 HTTP. It holds no model of the game and changes nothing in it.
 
+**Players:** subscribe on the Steam Workshop,
+[Big Copilot Link: Live Business Dashboard](https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395)
+(item 3806322395), enable it in the game's Mods menu, load a save, then click **Link to
+the game** on bigcopilot.com. The rest of this file is for building it.
+
 The wire contract is [`docs/game-link-api.md`](../../docs/game-link-api.md). This
 folder is a drop-in mod for the official
 [Big Ambitions modding SDK](https://github.com/hovgaardgames/bigambitions); it does
@@ -180,6 +185,19 @@ same paused moment line for line; the stamp moved at every game hour; Chrome, Sa
 and Firefox linked from a local page. The bytes are not identical to the game's file
 (one Odin reference id and a 367-byte block after the `Minute` field differ, likely
 `CreateSaveSnapshot` versus serializing `Current`); nothing the board reads differs.
+
+## Publish to the Workshop
+
+The Workshop item is 3806322395, owned by Peter's Steam account; its page, art and
+description come from [`mod/workshop/`](../workshop/). To publish a new build: put the
+built `BigCopilotLink.dll` and `Locales/` in the game's `ModsLocal/BigCopilotLink/`
+with `thumbnail.png` beside them (the Mod Creator takes the thumbnail from the mod
+folder's root, 1 MB at most), then in the game's main menu open **Mods → Mod Creator**,
+choose **Edit mod** on the item under **My created mods**, select the mod folder, fill in **Change Logs** and
+set **Target Build** to the game build it was built against, and upload. The
+description is Steam BBCode: `mod/workshop/description.bbcode`, pasted whole.
+`node mod/workshop/render.cjs` re-renders the thumbnail and `how-it-works.png` (an extra
+image added on the Workshop page under Add/edit images & videos) from `art.html`.
 
 ## Options
 

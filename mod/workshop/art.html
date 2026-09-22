@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- The Workshop art for Big Copilot Link. render.cjs opens this page once per
+     image (#thumb, #how) and screenshots the matching frame. The palette,
+     fonts and the orb are the site's own (TEMPLATE in ba_dashboard.py). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../web/fonts/fonts.css">
+<style>
+:root{
+  --ground:#0d100f; --surface:#151917; --raised:#1c211e;
+  --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#6b756f;
+  --rule:#262c28; --accent:#43c07a; --on-accent:#08130d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--ground);color:var(--ink);font-family:Archivo,sans-serif}
+.frame{position:relative;overflow:hidden;background:var(--ground);display:none}
+body.thumb #thumb, body.how #how{display:block}
+.mono{font-family:"IBM Plex Mono",monospace}
+
+/* a faint dot grid and a green glow, as behind the landing orb */
+.grid{position:absolute;inset:0;background-image:radial-gradient(#ffffff0d 1.2px,transparent 1.6px);background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(circle at 50% 42%,#000 0,#000 30%,transparent 75%);mask-image:radial-gradient(circle at 50% 42%,#000 0,#000 30%,transparent 75%)}
+.glow{position:absolute;border-radius:50%;background:radial-gradient(circle,#43c07a40 0,#43c07a14 40%,transparent 70%)}
+
+/* the orb: .orb i and .orb u from the board */
+.orb{position:absolute}
+.orb i{display:block;width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#d9ffe8 0%,#7fe3a8 14%,var(--accent) 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 40px 90px #43c07a4d,inset -40px -56px 90px #00000066,inset 16px 20px 44px #ffffff22}
+.orb u{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%),radial-gradient(circle at 62% 80%,#0002 0 3%,transparent 4%),radial-gradient(circle at 40% 22%,#0002 0 2%,transparent 3%)}
+.orb::after{content:"";position:absolute;left:16%;right:16%;bottom:-7%;height:9%;border-radius:50%;background:#000;opacity:.55;filter:blur(18px);z-index:-1}
+
+.wordmark{font-weight:800;letter-spacing:-.045em;line-height:1;display:flex;align-items:baseline;white-space:nowrap}
+.wordmark .dot{display:inline-block;border-radius:50%;background:var(--accent)}
+
+/* ---- thumbnail, 1024 square ------------------------------------------------ */
+#thumb{width:1024px;height:1024px}
+#thumb .glow{width:980px;height:980px;left:22px;top:-40px}
+#thumb .orb{width:500px;height:500px;left:262px;top:118px}
+#thumb .link{position:absolute;left:50%;top:356px;transform:translate(-50%,-50%);width:250px;height:250px;
+  stroke:#08130dcc;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 0 #ffffff2e)}
+#thumb .title{position:absolute;left:0;right:0;top:720px;display:flex;flex-direction:column;align-items:center;gap:26px}
+#thumb .wordmark{font-size:112px}
+#thumb .wordmark .dot{width:32px;height:32px;margin-left:6px}
+#thumb .tag{font-size:40px;font-weight:600;letter-spacing:.34em;color:var(--accent);padding-left:.34em}
+#thumb .tag b{color:var(--ink-3);font-weight:500;letter-spacing:.1em}
+
+/* ---- how it works, 1920 x 1080 --------------------------------------------- */
+#how{width:1920px;height:1080px}
+#how .glow{width:1400px;height:1400px;left:260px;top:-520px}
+#how header{position:absolute;left:120px;right:120px;top:92px;display:flex;align-items:flex-end;justify-content:space-between}
+#how h1{font-size:76px;font-weight:800;letter-spacing:-.04em;line-height:1.02;max-width:1150px}
+#how h1 em{font-style:normal;color:var(--accent)}
+#how .wordmark{font-size:46px}
+#how .wordmark .dot{width:14px;height:14px;margin-left:3px}
+#how .row{position:absolute;left:120px;right:120px;top:330px;height:460px;display:grid;grid-template-columns:1fr 190px 1fr 190px 1fr;align-items:center}
+.card{height:440px;border:1px solid var(--rule);border-radius:22px;background:linear-gradient(180deg,#171b19,#121614);padding:34px 34px;position:relative;display:flex;flex-direction:column}
+.card .k{font-size:22px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.card h2{font-size:40px;font-weight:800;letter-spacing:-.03em;margin-top:10px}
+.card p{font-size:23px;line-height:1.4;color:var(--ink-2);margin-top:12px}
+.card .art{margin-top:auto;height:120px;position:relative}
+.card.mod{border-color:#43c07a66;box-shadow:0 0 0 1px #43c07a22,0 30px 80px #43c07a1f}
+.wire{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:0 14px}
+.wire .line{width:100%;height:6px;border-radius:3px;background:repeating-linear-gradient(90deg,var(--accent) 0 26px,transparent 26px 40px);opacity:.9;position:relative}
+.wire .line::after{content:"";position:absolute;right:-4px;top:50%;width:22px;height:22px;border-top:6px solid var(--accent);border-right:6px solid var(--accent);transform:translateY(-50%) rotate(45deg);border-radius:2px}
+.wire .pill{font-size:19px;line-height:1.35;text-align:center;color:var(--ink-2);background:var(--raised);border:1px solid var(--rule);padding:8px 14px;border-radius:14px}
+.wire .pill b{color:var(--ink);font-weight:500}
+/* the game: a skyline of blocks */
+.sky{position:absolute;left:0;right:0;bottom:0;height:120px;display:flex;align-items:flex-end;gap:10px}
+.sky span{flex:1;background:var(--raised);border:1px solid var(--rule);border-radius:6px 6px 0 0;position:relative}
+.sky span::before{content:"";position:absolute;inset:14px 12px auto 12px;height:calc(100% - 28px);background:repeating-linear-gradient(180deg,#ffffff10 0 8px,transparent 8px 20px)}
+.sky span.lit::before{background:repeating-linear-gradient(180deg,#43c07a55 0 8px,transparent 8px 20px)}
+/* the mod: a chip with a small orb */
+.chip{position:absolute;left:0;right:0;bottom:0;height:120px;border-radius:16px;background:var(--raised);border:1px dashed #43c07a66;display:flex;align-items:center;gap:22px;padding:0 24px}
+.chip .orb{position:relative;width:78px;height:78px;flex:none}
+.chip .orb i{box-shadow:0 10px 26px #43c07a4d,inset -10px -14px 22px #00000066,inset 4px 5px 12px #ffffff22}
+.chip .orb::after{filter:blur(6px)}
+.chip .addr{font-size:26px;color:var(--ink)}
+.chip .addr small{display:block;font-size:19px;color:var(--ink-3);margin-top:4px}
+/* the board: a browser window */
+.win{position:absolute;left:0;right:0;bottom:0;height:120px;border-radius:12px 12px 0 0;background:var(--raised);border:1px solid var(--rule);border-bottom:none;overflow:hidden}
+.win .bar{height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;border-bottom:1px solid var(--rule)}
+.win .bar i{width:10px;height:10px;border-radius:50%;background:#ffffff1f}
+.win .bar span{margin-left:10px;font-size:15px;color:var(--ink-3)}
+.win .tiles{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:10px;padding:12px}
+.win .tiles div{height:66px;border-radius:8px;background:#ffffff08;border:1px solid var(--rule);position:relative;overflow:hidden}
+.win .tiles div:first-child::after{content:"";position:absolute;left:10px;right:10px;bottom:10px;height:34px;
+  background:linear-gradient(90deg,transparent,transparent);border-bottom:3px solid var(--accent);clip-path:polygon(0 80%,15% 60%,30% 70%,45% 40%,60% 50%,75% 20%,90% 30%,100% 5%,100% 100%,0 100%)}
+.win .tiles div:nth-child(2)::after,.win .tiles div:nth-child(3)::after{content:"";position:absolute;left:12px;top:14px;width:50%;height:9px;border-radius:4px;background:#ffffff1a;box-shadow:0 20px 0 #43c07a88}
+#how footer{position:absolute;left:120px;right:120px;bottom:84px;display:grid;grid-template-columns:repeat(3,1fr);gap:40px}
+.step{display:flex;gap:22px;align-items:flex-start}
+.step .n{flex:none;width:52px;height:52px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:28px;display:grid;place-items:center}
+.step p{font-size:27px;line-height:1.35;color:var(--ink-2)}
+.step p b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="frame" id="thumb">
+  <div class="glow"></div><div class="grid"></div>
+  <div class="orb"><i></i><u></u></div>
+  <svg class="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+  <div class="title">
+    <div class="wordmark">Big Copilot<span class="dot"></span></div>
+    <div class="tag mono">LINK <b>·</b> LIVE</div>
+  </div>
+</div>
+
+<div class="frame" id="how">
+  <div class="glow"></div><div class="grid"></div>
+  <header>
+    <h1>Your running game, <em>live</em> on the Big&nbsp;Copilot board.</h1>
+    <div class="wordmark">Big Copilot<span class="dot"></span></div>
+  </header>
+  <div class="row">
+    <div class="card">
+      <div class="k mono">Big Ambitions</div>
+      <h2>You play</h2>
+      <p>Your company as it is right now, no save to pick.</p>
+      <div class="art"><div class="sky"><span style="height:60%"></span><span class="lit" style="height:100%"></span><span style="height:75%"></span><span class="lit" style="height:88%"></span><span style="height:50%"></span></div></div>
+    </div>
+    <div class="wire"><div class="line"></div><div class="pill mono">the game's<br>own save</div></div>
+    <div class="card mod">
+      <div class="k mono">This mod</div>
+      <h2>Big Copilot Link</h2>
+      <p>Hands it over on this PC only. Changes nothing in the game.</p>
+      <div class="art"><div class="chip"><div class="orb"><i></i><u></u></div><div class="addr mono">127.0.0.1:8322<small>loopback, never the internet</small></div></div></div>
+    </div>
+    <div class="wire"><div class="line"></div><div class="pill mono">fresh every<br><b>game hour</b></div></div>
+    <div class="card">
+      <div class="k mono">Your browser</div>
+      <h2>bigcopilot.com</h2>
+      <p>The board reads it in your browser. It is not uploaded.</p>
+      <div class="art"><div class="win"><div class="bar"><i></i><i></i><i></i><span class="mono">bigcopilot.com</span></div><div class="tiles"><div></div><div></div><div></div></div></div></div>
+    </div>
+  </div>
+  <footer>
+    <div class="step"><div class="n">1</div><p><b>Subscribe</b> and enable Big&nbsp;Copilot Link in the game's Mods menu.</p></div>
+    <div class="step"><div class="n">2</div><p><b>Load a save.</b> The mod starts serving as soon as the city is loaded.</p></div>
+    <div class="step"><div class="n">3</div><p>Open <b>bigcopilot.com</b>, click <b>Link to the game</b>, allow it once.</p></div>
+  </footer>
+</div>
+
+<script>document.body.className = (location.hash || "#thumb").slice(1);</script>
+</body>
+</html>

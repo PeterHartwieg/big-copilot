@@ -294,6 +294,9 @@
     btn.classList.toggle("primary", opens);
     btn.title = linkUrl ? "Ask the game for its current state" : "Read the newest save from the chosen folder again";
     $("recoverBtn").hidden = !(bad && noted.recover);
+    // A link that reaches nothing is most often a mod that is not installed yet.
+    const modLink = $("modLink");
+    if (modLink) modLink.hidden = !(bad && linkUrl);
     // In linked mode the folder is a way out, not a way back.
     $("recoverBtn").innerHTML = ICON_FOLDER + (linkUrl ? "Choose a folder instead" : "Choose the folder again");
     $("reloadBtn").hidden = !readerError;

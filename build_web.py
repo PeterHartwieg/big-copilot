@@ -322,6 +322,7 @@ details.help[open] summary::after{content:"\2013"}
     <div class="strip" id="srcStrip" hidden>
       <div class="st"><span class="led" id="srcLed" aria-hidden="true"></span><span id="srcStatus" role="status" aria-live="polite" aria-atomic="true"></span><span class="prog" id="srcProg" role="progressbar" aria-label="Loading save" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
       <div class="right" id="srcActions">
+        <a class="btn2" id="modLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" hidden title="Big Copilot Link on the Steam Workshop: subscribe, enable it in the game's Mods menu, load a save">Get the mod</a>
         <button type="button" class="btn2 primary" id="recoverBtn" hidden>__ICON_FOLDER__Choose the folder again</button>
         <button type="button" class="btn2 primary" id="reloadBtn" hidden>Reload app</button>
         <button type="button" class="btn2" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
@@ -336,7 +337,7 @@ details.help[open] summary::after{content:"\2013"}
       <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
       <p>If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
       <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
-      <p><b>Linked to the game.</b> With the Big Copilot Link mod enabled (Steam Workshop), click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
+      <p><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
