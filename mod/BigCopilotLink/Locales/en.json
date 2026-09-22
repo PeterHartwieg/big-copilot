@@ -1,0 +1,15 @@
+{
+  "bigcopilotlink_options_header": "Big Copilot Link",
+
+  "bigcopilotlink_enabled_label": "Serve the game to Big Copilot",
+
+  "bigcopilotlink_port_label": "Port",
+  "bigcopilotlink_port_8322": "8322",
+  "bigcopilotlink_port_8323": "8323",
+  "bigcopilotlink_port_8324": "8324",
+  "bigcopilotlink_port_8325": "8325",
+
+  "bigcopilotlink_hourly_label": "Refresh every game hour",
+
+  "bigcopilotlink_copy_label": "Copy address"
+}

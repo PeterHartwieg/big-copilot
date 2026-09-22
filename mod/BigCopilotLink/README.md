@@ -60,6 +60,7 @@ Mod Builder.
    | Author | `Peter Hartwieg` |
    | Version | `0.1.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
+   | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
 5. **Build & Install**: menu **Big Ambitions → Mod Builder** → Build & Install. It
    validates, compiles, and installs into the game's `ModsLocal` folder. On a machine
@@ -111,19 +112,13 @@ installed mod with the board closed does no work at all.
 
 ## Notes for the first compile
 
-Three things in here were written against an API surface that could not be checked on
+Two things in here were written against an API surface that could not be checked on
 the machine that wrote it. If the Mod Builder complains, look at these first.
 
-- **`OptionsService`.** The calls are `OptionsService.Register(context.ModId, options)`
-  and `OptionsService.RemoveModOptions(_context.ModId)`, copied from the SDK's own
-  `Assets/Mods/Example-Options` mod, where they are static. A reflection read of build
-  3680 listed them as instance methods on a class with no public constructor. If they
-  are instance methods, these two calls need the instance the game holds, and this is
-  the only file that has to change (`LinkMod.RegisterOptions` and `OnUnloadAsync`).
-- **Option labels are literal English.** The SDK example passes localization keys and
-  ships a `Locales/` folder; this mod ships none, on the assumption that an unknown key
-  renders as itself. If the panel shows bare keys, add `Locales/en.json` and swap the
-  strings for keys.
+- **`OptionsService`.** `OptionsService.Register(context.ModId, options)` and
+  `OptionsService.RemoveModOptions(_context.ModId)` are called statically, as the
+  SDK's own `Assets/Mods/Example-Options` mod calls them. That mod compiles against
+  the same game DLLs, so this is expected to hold.
 - **`build` comes from the version string.** There is no verified member holding the
   build number, so `HealthState` parses the trailing integer out of
   `GameVersion.GetCurrent().GetBuildVersionString()` and falls back to

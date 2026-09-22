@@ -83,7 +83,8 @@ namespace BigCopilotLink
 
         // Main thread only.
         private readonly DateTime _loadedAtUtc = DateTime.UtcNow;
-        private DateTime _lastRefreshStarted = DateTime.UtcNow;
+        // MinValue, not now: the first refresh must not be throttled by the load itself.
+        private DateTime _lastRefreshStarted = DateTime.MinValue;
         private DateTime _lastGameSaveSeen = DateTime.MinValue;
         private int _lastHourSeen = -1;
         private bool _lastSavingInProgress;
@@ -173,11 +174,12 @@ namespace BigCopilotLink
                 trigger = "attach";
             }
 
-            _pendingAfterAttach = false;
-
-            // A triggered refresh that comes back throttled or refused is dropped; the
-            // next trigger tries again.
-            TryStartRefresh(trigger);
+            // A refresh that comes back throttled or refused stays pending, so the
+            // next tick tries again: without this a client that attached inside the
+            // throttle window, or during placement mode, would wait for the floor.
+            // The retry is a few property reads a second, nothing more.
+            var result = TryStartRefresh(trigger);
+            _pendingAfterAttach = result.Outcome != RefreshOutcome.Started;
         }
 
         /// <summary>

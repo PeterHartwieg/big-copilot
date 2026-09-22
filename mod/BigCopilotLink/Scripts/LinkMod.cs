@@ -30,7 +30,12 @@ namespace BigCopilotLink
         /// <summary>8321 is Peter's MCP bridge and 8765 the Companion mod, so neither is offered.</summary>
         private static readonly int[] Ports = { 8322, 8323, 8324, 8325 };
 
-        private static readonly string[] PortChoices = { "8322", "8323", "8324", "8325" };
+        // Localization keys, resolved from Locales/en.json, like every label below.
+        private static readonly string[] PortChoices =
+        {
+            "bigcopilotlink_port_8322", "bigcopilotlink_port_8323",
+            "bigcopilotlink_port_8324", "bigcopilotlink_port_8325"
+        };
 
         private const float PumpSeconds = 1f;
 
@@ -171,12 +176,12 @@ namespace BigCopilotLink
             if (context == null) return;
 
             var options = new ModOptions()
-                .AddHeader("Big Copilot Link")
-                .AddToggle("enabled", "Serve the game to Big Copilot", _enabled, OnEnabledChanged)
-                .AddDropdown("port", "Port", PortChoices, ClampPortIndex(_portIndex), OnPortChanged)
-                .AddToggle("hourly", "Refresh every game hour", _hourly, OnHourlyChanged)
+                .AddHeader("bigcopilotlink_options_header")
+                .AddToggle("enabled", "bigcopilotlink_enabled_label", _enabled, OnEnabledChanged)
+                .AddDropdown("port", "bigcopilotlink_port_label", PortChoices, ClampPortIndex(_portIndex), OnPortChanged)
+                .AddToggle("hourly", "bigcopilotlink_hourly_label", _hourly, OnHourlyChanged)
                 .AddSplitter()
-                .AddButton("Copy address", CopyAddress);
+                .AddButton("bigcopilotlink_copy_label", CopyAddress);
 
             try
             {
