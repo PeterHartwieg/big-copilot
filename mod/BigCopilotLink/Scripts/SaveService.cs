@@ -277,7 +277,7 @@ namespace BigCopilotLink
 
             // Its own thread, not the pool: the listener's handlers share the pool,
             // and a flood of them must not hold the compress, and so Busy, hostage.
-            var worker = new Thread(delegate () { CompressOnPoolThread(tempPath, day, hour); });
+            var worker = new Thread(delegate () { CompressOnWorkerThread(tempPath, day, hour); });
             worker.Name = "BigCopilotLink.Compress";
             worker.IsBackground = true;
             worker.Start();
@@ -354,10 +354,10 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// Pool thread. Reads the uncompressed stream the main thread just wrote,
+        /// Its own thread. Reads the uncompressed stream the main thread just wrote,
         /// gzips it with the game's own call, and hands the result back.
         /// </summary>
-        private void CompressOnPoolThread(string tempPath, int day, int hour)
+        private void CompressOnWorkerThread(string tempPath, int day, int hour)
         {
             try
             {

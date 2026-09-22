@@ -16553,7 +16553,7 @@ class GameLink:
         self.stamp = ""  # the stamp of the bytes last downloaded
         self.character = ""
         self.company = ""
-        self.stale = False  # wait_for_save() returned older bytes than it asked for
+        self.stale = False  # why wait_for_save() returned older bytes than it asked for, or False
 
     def _call(self, route: str, method: str = "GET", headers: dict | None = None):
         try:
@@ -16580,10 +16580,16 @@ class GameLink:
         Raises LinkUnavailable while the game is not there and SystemExit
         when the mod speaks a schema version this board does not know.
         """
-        _, _, body = self._call("/health")
+        status, _, body = self._call("/health")
+        if status != 200:
+            # Answered, but not with health: the mod is there and not ready.
+            # The next poll asks again; only a 200 says what version it speaks.
+            return None
         try:
             health = json.loads(body or b"{}")
         except ValueError:
+            health = {}
+        if not isinstance(health, dict):
             health = {}
         version = health.get("schemaVersion")
         if version != self.SCHEMA:
@@ -16630,7 +16636,7 @@ class GameLink:
                 # call are still a board; only an empty-handed wait surfaces it.
                 if path is None:
                     raise
-                self.stale = True
+                self.stale = "the game went away before the refresh landed"
                 return path
             if got is not None:
                 path = got
@@ -16639,7 +16645,7 @@ class GameLink:
             if time.monotonic() >= deadline:
                 # The requested refresh never landed; the bytes that did are
                 # still the game's state, only a little older. The caller says so.
-                self.stale = path is not None
+                self.stale = "the mod did not finish the refresh in time" if path is not None else False
                 return path
             time.sleep(1)
 
@@ -17057,12 +17063,6 @@ def main() -> None:
                 "and try again"
             )
         source_name = "the game link"
-        if link.stale:
-            print(
-                "  the mod did not finish the refresh in time; this is the state it "
-                "last served",
-                flush=True,
-            )
     else:
         path = newest_under(target)
         source_name = os.path.basename(path)
@@ -17077,6 +17077,8 @@ def main() -> None:
         f"(from {source_name}, game build {data['meta']['build']}, "
         f"board checked on {VERIFIED_BUILD})"
     )
+    if link is not None and link.stale:
+        print(f"  {link.stale}; this is the state it last served", flush=True)
     worth = f"{k['netWorth']:>14,.0f}" if k["netWorth"] is not None else "   not reported"
     print(f"  cash {k['cash']:>14,.0f}   net worth {worth}")
     print(f"  profit yesterday {k['profitYesterday']:>+11,.0f}   7-day avg {k['profitAvg7']:>+11,.0f}")

@@ -62,6 +62,15 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertEqual(fh.read(), BYTES + b" more")
         self.assertEqual(self.game.stamp, self.mock.stamp)
 
+    def test_a_health_that_is_not_200_is_not_a_schema_mismatch(self):
+        """Some other status on /health means not ready, never a version refusal."""
+        real = self.game._call
+        self.game._call = lambda route, method="GET", headers=None: (503, {}, b'{"error":"x"}')
+        try:
+            self.assertIsNone(self.game.poll())
+        finally:
+            self.game._call = real
+
     def test_a_busy_game_polls_to_nothing(self):
         self.mock.busy = True
         self.assertIsNone(self.game.poll())
@@ -135,13 +144,14 @@ class GameLinkAgainstMock(unittest.TestCase):
         before = self.mock.stamp
         self.game.refresh = lambda: (202, {"accepted": True, "stamp": before})
         import threading
-        threading.Timer(1.5, self.server.stop).start()
+        # Three seconds: the first poll inside wait_for_save() must download
+        # before the listener goes, even on a loaded machine.
+        threading.Timer(3.0, self.server.stop).start()
         path = self.game.wait_for_save(seconds=10)
         self.assertIsNotNone(path)
         self.assertEqual(self.game.stamp, before)
-        self.assertTrue(self.game.stale)
-        # tearDown stops a server; shutdown() on one never started would wait forever.
-        self.server = game_link_mock.MockServer(self.mock, port=0).start(follow=False)
+        self.assertIn("went away", self.game.stale)
+        # tearDown's stop() on the already stopped server returns at once.
 
     def test_a_save_name_after_the_flag_is_refused(self):
         with self.assertRaises(SystemExit) as caught:

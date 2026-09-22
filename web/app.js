@@ -531,10 +531,15 @@
     note("");
     state("busy", why, linkUrl);
     let health;
-    try { health = await (await linkFetch("/health")).json(); }
+    try {
+      const res = await linkFetch("/health");
+      // Answered, but not with health: the mod is there and not ready. Only a
+      // 200 says what version it speaks; anything else is waited out below.
+      health = res.ok ? await res.json() : {stamp: "", busy: true};
+    }
     catch (err) { linkDown(gen, err); return; }
     if (gen !== sourceGen) return;
-    if (health.schemaVersion !== 1) {
+    if (health.schemaVersion !== 1 && !health.busy) {
       finishAttempt(gen);
       state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
       note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
@@ -554,9 +559,18 @@
         }
         await linkWait(LINK_POLL_MS);
         if (gen !== sourceGen) return;
-        try { health = await (await linkFetch("/health")).json(); }
+        try {
+          const res = await linkFetch("/health");
+          health = res.ok ? await res.json() : {stamp: "", busy: true};
+        }
         catch (err) { linkDown(gen, err); return; }
         if (gen !== sourceGen) return;
+      }
+      if (health.schemaVersion !== 1) {
+        finishAttempt(gen);
+        state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
+        note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+        return;
       }
     }
     if (health.stamp === lastLinkStamp && onBoard()) {

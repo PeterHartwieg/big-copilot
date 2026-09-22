@@ -44,13 +44,9 @@ namespace BigCopilotLink
         private readonly int _port;
         private readonly SaveService _saves;
         private readonly HealthState _health;
-        /// <summary>Requests handled at once; more than this and a caller gets a quick 503.</summary>
-        private const int MaxInFlight = 8;
-
         private HttpListener _listener;
         private Thread _thread;
         private volatile bool _running;
-        private int _inFlight;
 
         public LinkHttpServer(int port, SaveService saves, HealthState health)
         {
@@ -93,11 +89,10 @@ namespace BigCopilotLink
                 // Already shutting down; nothing useful to do.
             }
             if (_thread != null) _thread.Join(1000);
-            // Handlers run on pool threads; give the ones in flight a moment to
-            // finish (a /refresh may sit in its three-second wait) so unload does
-            // not clear the snapshot under a /save mid-write.
-            var until = DateTime.UtcNow.AddSeconds(4);
-            while (Volatile.Read(ref _inFlight) > 0 && DateTime.UtcNow < until) Thread.Sleep(20);
+            // Handlers in flight are not waited for: Stop() runs on the main thread,
+            // which a /refresh handler may itself be waiting on, and there is nothing
+            // to protect. The closed listener ends their requests, a /save holds its
+            // own reference to an immutable Snapshot, and a late enqueue is refused.
             _listener = null;
             _thread = null;
         }
@@ -119,23 +114,10 @@ namespace BigCopilotLink
                 // Each request on its own pool thread: a /refresh waits up to
                 // three seconds for the main thread, and a second caller must
                 // not queue behind it past its own five-second timeout. Handlers
-                // touch only volatile fields and the dispatcher, so they may run
-                // side by side. A cap keeps a flood of callers from parking the
-                // pool: the compress runs on its own thread, not the pool, but
-                // the listener should not be the one thing left running either.
-                if (Interlocked.Increment(ref _inFlight) > MaxInFlight)
-                {
-                    Interlocked.Decrement(ref _inFlight);
-                    try
-                    {
-                        WriteJson(context, 503, "{\"error\":\"too_many_requests\"}");
-                    }
-                    catch (Exception)
-                    {
-                        TryAbort(context);
-                    }
-                    continue;
-                }
+                // touch only volatile fields, the immutable Snapshot and the
+                // dispatcher, so they may run side by side. Only loopback can
+                // reach this port, and the compress has its own thread, so a
+                // flood of callers costs pool threads and nothing else.
                 var queued = ThreadPool.QueueUserWorkItem(delegate
                 {
                     try
@@ -149,17 +131,8 @@ namespace BigCopilotLink
                         if (_running) LinkMod.LogError("request failed: " + e);
                         TryAbort(context);
                     }
-                    finally
-                    {
-                        Interlocked.Decrement(ref _inFlight);
-                    }
                 });
-                if (!queued)
-                {
-                    // The pool refused the item: nothing will run the finally above.
-                    Interlocked.Decrement(ref _inFlight);
-                    TryAbort(context);
-                }
+                if (!queued) TryAbort(context);
             }
         }
 
