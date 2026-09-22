@@ -326,6 +326,12 @@
   }
 
   /* --- where the controls live ------------------------------------------ */
+  // The link button's label keeps its New badge: textContent alone drops it.
+  function linkLabel(lb) {
+    lb.textContent = "Link to the game";
+    lb.insertAdjacentHTML("beforeend", '<span class="feature-new" data-new-feature="game-link" hidden>New</span>');
+    if (typeof featureDiscovery !== "undefined") featureDiscovery.refresh();
+  }
   function place() {
     const fb = $("folderBtn"), sp = $("savePickLabel");
     if (onBoard()) {
@@ -336,7 +342,7 @@
       $("srcActions").appendChild($("boardControls").content.cloneNode(true));
       const lb = $("linkBtn");
       fb.className = "lg-btn"; fb.textContent = "Choose save folder";
-      if (lb) { lb.className = "lg-btn"; lb.textContent = "Link to the game"; }
+      if (lb) { lb.className = "lg-btn"; linkLabel(lb); }
       sp.className = "lg-btn lg-pick"; $("savePickText").textContent = "One save file";
       $("menuSourceSlot").append(savePicker, fb, ...(lb ? [lb] : []), sp);
       $("watchBtn").addEventListener("click", toggleWatch);
@@ -367,7 +373,7 @@
         // draws them: Open newest save, Change folder, one file. The link
         // rides along, so a folder player can still switch to the game.
         fb.className = "btn2"; fb.textContent = "Change folder";
-        if (lb) { lb.className = "btn2"; lb.textContent = "Link to the game"; }
+        if (lb) { lb.className = "btn2"; linkLabel(lb); }
         $("savePickText").textContent = "one file";
         $("srcActions").append(savePicker, fb, sp);
         if (lb) $("srcActions").append(lb);
@@ -1705,7 +1711,13 @@
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
-    if ($("linkBtn")) $("linkBtn").addEventListener("click", linkToGame);
+    if ($("linkBtn")) $("linkBtn").addEventListener("click", () => {
+      // Recorded here too, not only by the page's data-visit-feature listener:
+      // a cached page older than the badge has neither, but this script
+      // still gives its button the badge.
+      if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("game-link");
+      linkToGame();
+    });
     $("recoverBtn").addEventListener("click", pickFolder);
     $("reloadBtn").addEventListener("click", () => location.reload());
     $("savePickLabel").addEventListener("keydown", (e) => {
