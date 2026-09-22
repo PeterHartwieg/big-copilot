@@ -33,3 +33,7 @@ docs/location-selector-scope.md
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+# The mod's compiled output and Unity's editor droppings; only sources are committed
+mod/**/*.dll
+mod/**/Library/
+mod/**/obj/
