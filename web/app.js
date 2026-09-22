@@ -552,7 +552,13 @@
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
   function wrongVersion(health, gen) {
-    if (health === NOT_READY || health.schemaVersion === 1) return false;
+    if (health === NOT_READY) return false;
+    if (health.schemaVersion === 1) {
+      // A health answer of this version, from whichever caller: whatever the
+      // watcher said about the port is over, and may be said again later.
+      linkPortSaid = false;
+      return false;
+    }
     finishAttempt(gen);
     if (health.schemaVersion == null) {
       // A JSON object with no version in it is not the mod's health at all.

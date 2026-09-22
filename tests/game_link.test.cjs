@@ -526,6 +526,25 @@ test('the watcher says once when a foreign object or another version answers, an
   assert.match(h.seen.notes.at(-1)[1], /version 2/);
 });
 
+test('an Update that reads health of this version re-arms the port note of the watcher', async () => {
+  let mode = 'notready';
+  const h = harness({routes: {
+    health: () => (mode === 'health' ? {...HEALTH, stamp: 's2'} : reply(503, {error: 'x'})),
+    refresh: reply(202, {accepted: true, stamp: 's1'}),
+    save: reply(200, null, {'X-Game-Link-Stamp': 's2'}),
+  }});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  for (let i = 0; i < 10; i++) await h.run('checkFolder()');
+  assert.equal(h.run('linkPortSaid'), true);
+  mode = 'health';
+  await h.run('update()');
+  assert.equal(h.run('linkPortSaid'), false, 'cleared by the health the Update read');
+  mode = 'notready';
+  h.run('strip.tone = "ok"');
+  for (let i = 0; i < 10; i++) await h.run('checkFolder()');
+  assert.equal(h.seen.notes.filter((n) => /no longer answers/.test(n[1])).length, 2, 'said again');
+});
+
 test('#link= only moves the port on this machine', () => {
   const h = harness();
   h.context.location.hash = '#link=http://127.0.0.1:8323';
