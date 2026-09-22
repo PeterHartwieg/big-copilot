@@ -57,10 +57,14 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 - on every change of the in-game hour, with the option "Refresh every game hour",
   which is **on** by default: while the worker path holds, it costs nothing visible.
 
+A building load's two edges (the loading spinner rising, the inside/outside flip)
+land within one load screen of each other and count as one refresh: the second passes
+only three seconds after the first.
+
 A serialize takes a few hundred milliseconds of a worker thread on a 5 MB save, plus
 the gzip on the same thread (`busy` covers both), and is not a stall; the mod logs
 `serialized in N ms on a worker thread (<trigger>)` on each one,
-or `… on the main thread …` after it has fallen back.
+or `… on the main thread …` for a building load and after it has fallen back.
 
 **Attached** means a client fetched `/health` in the last 120 seconds. When nothing is
 attached the mod refreshes only on the first trigger after a client returns, so an
@@ -135,13 +139,16 @@ the mod sees it. Browsers' `fetch` and Python's `urllib` send it; curl does not,
   thread is free, so a 202 can precede the refresh by a moment. A walk that fails
   after the 202 (the game changed state under it) keeps the previous stamp; the mod
   retries once the fifteen-second window lifts, so the stamp can move only fifteen to
-  thirty seconds later. The clients' wait allows that. Clients time out a call
+  about thirty seconds later (one window per failed walk; after the second failure
+  the main thread takes it). The clients' wait allows that. Clients time out a call
   after five seconds; the mod never holds one longer than that.
 - `429 {"error": "throttled", "retryAfter": <seconds>}` inside the 15-second window
   or while one is in flight; the client waits and polls `/health` as above.
 - `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino" | "other"}`
   when the game refuses; the client shows the reason and keeps the last bytes.
-  `"other"` is `CanSave()` false for a reason the mod cannot name.
+  `"other"` is `CanSave()` false for a reason the mod cannot name, or the mod itself
+  failing to start the refresh (a thread that would not start, a main-thread walk
+  that threw); the log says which.
 - `503 {"error": "main_thread_unavailable"}` when the mod could not hand the request to
   the game at all (no city is loaded any more). No refresh started. The client says the
   mod did not take the request and keeps the last bytes; it is not "the game is not running".

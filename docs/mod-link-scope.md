@@ -7,16 +7,17 @@ writes the staffing plan's roster back into the game.
 
 Everything under *What the game offers* was read from build 3680's
 `BigAmbitions.dll` and `BigAmbitions.ModAPI.dll` by reflection on 22 September 2026,
-and is quoted with its source. Step 1 is implemented (the README in
-`mod/BigCopilotLink/` describes what was built, which differs from section 4 where
-marked); step 2 is not.
+and is quoted with its source. Step 1 is implemented; step 2 is not. Section 4 is
+the scope as it was written that day and is left as written: the README in
+`mod/BigCopilotLink/` and `docs/game-link-api.md` describe what was built, and win
+wherever they differ from it.
 
 ---
 
 ## 1. The recommendation in one paragraph
 
-The mod does not model the game. It asks the game to serialize itself, exactly as
-the game's own save does, and serves those bytes on loopback HTTP. Big Copilot
+The mod does not model the game. It serializes the game with the game's own
+serializer settings and serves those bytes on loopback HTTP. Big Copilot
 fetches them and feeds them to the same reader and the same `extract()` that read a
 save file today, so both modes produce the same board from the same code, and a
 game update that changes the save format breaks both modes in the same place, which

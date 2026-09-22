@@ -87,14 +87,23 @@ namespace BigCopilotLink
     /// the live game with a private SerializationContext; the main thread only decides
     /// when, and captures the in-game clock before the walk starts. A walk that throws
     /// because the game changed state under it is retried once, and after two
-    /// consecutive failures the session falls back to serializing on the main thread,
-    /// where nothing moves under the walk. The finished bytes come back through the
-    /// dispatcher as one immutable Snapshot.
+    /// consecutive failures this city session falls back to serializing on the main
+    /// thread, where nothing moves under the walk, until ten such refreshes have run
+    /// and the worker is tried again. A building load always walks on the main thread:
+    /// the screen is black there and the load is rewriting the state. The finished
+    /// bytes come back through the dispatcher as one immutable Snapshot.
     /// </summary>
     public sealed class SaveService
     {
         /// <summary>At most one refresh this often, whatever asks.</summary>
         private const int ThrottleSeconds = 15;
+
+        /// <summary>
+        /// The window a building load passes instead: its two edges, the spinner
+        /// rising and the inside/outside flip, land within a load screen of each
+        /// other and are one refresh, not two main-thread walks under one black.
+        /// </summary>
+        private const int BuildingLoadWindowSeconds = 3;
 
         /// <summary>A floor, so an attached board is never looking at something very old.</summary>
         private const int FloorMinutes = 5;
@@ -291,14 +300,16 @@ namespace BigCopilotLink
 
         /// <summary>
         /// Main thread only. A trigger whose stall is hidden anyway (a building load
-        /// screen) may pass the fifteen-second window; nothing passes Busy.
+        /// screen) passes the fifteen-second window, though not a three-second one, so
+        /// the load's two edges make one refresh; nothing passes Busy.
         /// </summary>
         public RefreshResult TryStartRefresh(string trigger, bool pastWindow)
         {
             var sinceLast = (DateTime.UtcNow - _lastRefreshStarted).TotalSeconds;
-            if (_busy || (!pastWindow && sinceLast < ThrottleSeconds))
+            var window = pastWindow ? BuildingLoadWindowSeconds : ThrottleSeconds;
+            if (_busy || sinceLast < window)
             {
-                var remaining = ThrottleSeconds - sinceLast;
+                var remaining = window - sinceLast;
                 var retryAfter = remaining > 0 ? (int)Math.Ceiling(remaining) : 1;
                 return RefreshResult.Throttled(retryAfter < 1 ? 1 : retryAfter);
             }
@@ -317,7 +328,9 @@ namespace BigCopilotLink
             _busy = true;
             _lastRefreshStarted = DateTime.UtcNow;
             // Whatever asked, this refresh answers it: a retry left set here would buy a
-            // second serialize nothing wants once the window lifts.
+            // second serialize nothing wants once the window lifts. A start that fails
+            // below gives one retry back, never a loop of them.
+            var wasRetry = trigger == "retry";
             _retryPending = false;
             _pendingAfterAttach = false;
 
@@ -343,6 +356,7 @@ namespace BigCopilotLink
                 {
                     // No thread means nothing will ever clear Busy; clear it here.
                     _busy = false;
+                    _retryPending = !wasRetry;
                     LinkMod.LogError("could not start the serialize thread (" + trigger + "): " + e);
                     return RefreshResult.CannotSave("other");
                 }
@@ -360,16 +374,18 @@ namespace BigCopilotLink
             catch (Exception e)
             {
                 _busy = false;
+                _retryPending = !wasRetry;
                 LinkMod.LogError("serializing the game failed on the main thread (" + trigger + "): " + e);
                 return RefreshResult.CannotSave("other");
             }
-            LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
 
             // Counts toward the re-probe only when the fallback chose this thread, not
-            // when a building load did.
-            var fallbackRun = !_backgroundSerialize;
+            // when a building load did (a building load takes it even with the
+            // worker path on).
+            var fallbackRun = !_backgroundSerialize && !pastWindow;
             try
             {
+                LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
                 var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun); });
                 compressor.Name = "BigCopilotLink.Compress";
                 compressor.IsBackground = true;
@@ -379,6 +395,7 @@ namespace BigCopilotLink
             catch (Exception e)
             {
                 _busy = false;
+                _retryPending = !wasRetry;
                 LinkMod.LogError("could not start the compress thread (" + trigger + "): " + e);
                 return RefreshResult.CannotSave("other");
             }

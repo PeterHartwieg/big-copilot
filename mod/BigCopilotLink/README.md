@@ -55,7 +55,8 @@ serializing on the main thread, where nothing moves under the walk — a stall p
 refresh, logged as `… on the main thread`; after ten such refreshes the worker gets
 one more chance, and loading a save starts afresh. A building load (entering or
 leaving) always serializes on the main thread: the screen is black, the load is
-rewriting the state a walk would read, and its stall is hidden anyway.
+rewriting the state a walk would read, and its stall is hidden anyway; its two edges
+(the spinner, the flip) within one load screen are one refresh, not two.
 
 The log lines:
 
