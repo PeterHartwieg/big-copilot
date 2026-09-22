@@ -544,9 +544,9 @@
     let body = null;
     try { body = await res.json(); } catch (e) {}
     if (!(body && typeof body === "object" && !Array.isArray(body))) return NOT_READY;
-    // A health answer, from whichever caller: the run of never-health is over.
+    // An object, from whichever caller: the run of never-health is over. What
+    // the watcher said stands until a health answer of this version.
     linkNotReady = 0;
-    linkPortSaid = false;
     return body;
   }
   // False when the mod speaks this page's version; otherwise the bad state
@@ -751,7 +751,7 @@
     // board that stays, and the next answer clears it.
     const gen = sourceGen;
     const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
-    const wasSaid = linkPortSaid;  // readHealth clears it on a health answer
+    const wasSaid = linkPortSaid;  // cleared below, on a health answer of this version
     let health;
     try { health = await readHealth(); }
     catch (err) {
@@ -765,9 +765,7 @@
       return;
     }
     if (gen !== sourceGen) return;
-    // The game is back, or the port answers as the mod again: whichever note
-    // the watcher left is withdrawn, even when the stamp has not moved.
-    if ((wasGone || (wasSaid && health !== NOT_READY)) && strip.tone === "ok") note("");
+    if (wasGone && strip.tone === "ok") note("");
     lastCheck = Date.now();  // the button's "checked HH:MM", per check, like the folder's
     // The CLI's rule, on the watcher: ten checks in a row that were never
     // health mean the port is held by something else, said once under the
@@ -793,6 +791,10 @@
       }
       return;
     }
+    // The port answers as the mod again: whatever the watcher said about it
+    // is withdrawn, even when the stamp has not moved.
+    linkPortSaid = false;
+    if (wasSaid && strip.tone === "ok") note("");
     if (document.hidden || busy || attempt) return;
     // Nothing yet, or mid-refresh: nothing to build from. The next tick, or
     // Update, looks again.

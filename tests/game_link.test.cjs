@@ -410,7 +410,8 @@ test('a foreign 200 that copies the not-ready shape is still judged', async () =
   const h = harness({routes: {health: {stamp: '', busy: true, notReady: true}}});
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match');
+  assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
+  assert.equal(h.waits.length, 0, 'judged at once, not waited out as not ready');
 });
 
 test('a 200 /health with no object in it is not ready, and names the port after the wait', async () => {
