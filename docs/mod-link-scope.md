@@ -7,7 +7,9 @@ writes the staffing plan's roster back into the game.
 
 Everything under *What the game offers* was read from build 3680's
 `BigAmbitions.dll` and `BigAmbitions.ModAPI.dll` by reflection on 22 September 2026,
-and is quoted with its source. Nothing is implemented.
+and is quoted with its source. Step 1 is implemented (the README in
+`mod/BigCopilotLink/` describes what was built, which differs from section 4 where
+marked); step 2 is not.
 
 ---
 
@@ -50,14 +52,15 @@ calls it on the main thread (`SerializeSaveGame` is a plain call; only the gzip,
 `CompressSaveGame`, runs on its "SaveGame Compress Thread"), against
 `SaveGameManager.Current` directly, with no copy (corrected 22 September 2026 from
 the IL), and the feedback form
-(`SavegameFeedbackData.AddToForm`) calls it on the main thread. Both are precedents the
-mod copies. Guards: `SaveGameManager.SavingGameInProgress`, `CanSave()` (false inside
+(`SavegameFeedbackData.AddToForm`) calls it on the main thread. The mod copies the
+serializer settings, not the thread: see the README. Guards:
+`SaveGameManager.SavingGameInProgress`, `CanSave()` (false inside
 the interior designer, placement mode, the casino boat), `HasChangesSinceLastSave()`.
 The game keeps a temp path for this in `SaveGamePathHelper.GetTempSavePath()`.
 
 Cost, measured 11 September on the 4.9 MB Costco save: about 185 ms to serialize and
 600 ms to compress. On the mod's own thread that is invisible; on the main thread it
-is a visible hitch, so the mod uses the thread, as `Save()` does.
+is a visible hitch, so the mod uses a thread of its own, which the game does not.
 
 **Lifecycle.** `[ModEntryOnCityLoad]` on an `IModBigAmbitions` gives `OnLoadAsync`
 when a save is loaded and `OnUnloadAsync` when it unloads, so the listener only runs
@@ -111,15 +114,14 @@ way.
 - `POST /refresh`: asks for a new serialization now. Throttled to one in flight and
   no more than one every 15 seconds; answers 202 with the stamp to wait for. The main
   thread checks `SavingGameInProgress` and `CanSave()` before starting, hands
-  `Current` to a worker thread that calls `SerializeBinaryData(temp, Current, true)`
-  and reads the file back into memory. The game does the same, so the same
-  tearing risk (state moving while the thread walks it) applies; if a build ever
-  reads back inconsistent, the fallback is `CreateSaveSnapshot(Current)` on the main
-  thread first, which is what `CompleteLoad` uses.
+  `Current` to a worker thread that serializes it in memory with a private context
+  configured like the game's helper (as built: no temporary file, and the game
+  itself does not walk on a thread, so the tearing risk is the mod's alone; a walk
+  that throws is retried, two failures fall back to the main thread).
 - Automatic refresh: when a building's load screen appears (the stall is hidden there),
   on any game save completing, every five minutes as a floor, and on the in-game hour
-  change as an option that is off by default (a stall every minute of play at normal
-  speed). Idle when no client has polled
+  change as an option that is on by default now that the walk is off the main thread
+  (as built). Idle when no client has polled
   `/health` for two minutes, so an installed mod costs nothing to a player who is
   not looking at the board.
 - CORS: `Access-Control-Allow-Origin` limited to `https://bigcopilot.com` and

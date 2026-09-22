@@ -23,9 +23,10 @@ treats it as "the game is not running or no save is loaded".
 
 The mod does not model the game. It serializes `SaveGameManager.Current` the way the
 game's own save does — `SaveGameSerializationHelper.SerializeBinaryData` is the
-template, not a call the mod makes — and serves the resulting bytes: a `.hsg`
-exactly as the game would write it. Clients feed those bytes
-to `ba_save.py` unchanged.
+template, not a call the mod makes — and serves the resulting bytes: a `.hsg` as the
+game would write it, except that a walk on the worker thread can mix two moments a
+few hundred milliseconds apart (the game keeps running under it). Clients feed those
+bytes to `ba_save.py` unchanged.
 
 The mod serializes on a worker thread of its own, with a private
 `SerializationContext` configured like the game's helper — the same policy
@@ -34,8 +35,9 @@ The mod serializes on a worker thread of its own, with a private
 what `SerializeBinaryData` would write. The game keeps running meanwhile. The same
 thread gzips the result with `SaveGameSerializationHelper.CompressBytes`. A walk
 that throws because the game changed state keeps the previous bytes and retries; two
-consecutive failures fall back to serializing on the main thread for the rest of the
-session.
+consecutive failures fall back to serializing on the main thread for this city
+session, with one more try for the worker after ten main-thread refreshes. A
+building load always serializes on the main thread, under the black screen.
 
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
@@ -55,8 +57,9 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 - on every change of the in-game hour, with the option "Refresh every game hour",
   which is **on** by default: while the worker path holds, it costs nothing visible.
 
-A serialize takes about 200 to 500 ms of a worker thread on a 5 MB save and is not a
-stall; the mod logs `serialized in N ms on a worker thread (<trigger>)` on each one,
+A serialize takes a few hundred milliseconds of a worker thread on a 5 MB save, plus
+the gzip on the same thread (`busy` covers both), and is not a stall; the mod logs
+`serialized in N ms on a worker thread (<trigger>)` on each one,
 or `… on the main thread …` after it has fallen back.
 
 **Attached** means a client fetched `/health` in the last 120 seconds. When nothing is
@@ -129,7 +132,10 @@ the mod sees it. Browsers' `fetch` and Python's `urllib` send it; curl does not,
   `/health` until `stamp` changes and `busy` is false, then fetches `/save`. The mod
   answers within about three seconds: when the game's main thread has not taken the
   request by then (mid-load, a long frame) it is still accepted and runs when the
-  thread is free, so a 202 can precede the refresh by a moment. Clients time out a call
+  thread is free, so a 202 can precede the refresh by a moment. A walk that fails
+  after the 202 (the game changed state under it) keeps the previous stamp; the mod
+  retries once the fifteen-second window lifts, so the stamp can move only fifteen to
+  thirty seconds later. The clients' wait allows that. Clients time out a call
   after five seconds; the mod never holds one longer than that.
 - `429 {"error": "throttled", "retryAfter": <seconds>}` inside the 15-second window
   or while one is in flight; the client waits and polls `/health` as above.

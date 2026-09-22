@@ -121,13 +121,22 @@ namespace BigCopilotLink
         private bool _pendingAfterAttach;
         private bool _firstRefreshTriggered;
         // The worker-thread walk reads live state the main thread keeps changing; a walk
-        // that throws is one failure. Two in a row and the session goes back to the
-        // main-thread path: a stall, but bytes that always arrive.
+        // that throws is one failure. Two in a row and this city session goes back to
+        // the main-thread path: a stall, but bytes that always arrive. After ten
+        // main-thread refreshes the worker gets one more chance, so a bad minute does
+        // not cost a whole evening; one more failure and it is back to the main thread.
         private int _backgroundFailures;
         private bool _backgroundSerialize = true;
-        // A failed walk asks for one more try when the throttle window lifts.
-        private bool _retryPending;
+        private int _fallbackRuns;
         private const int BackgroundFailuresBeforeFallback = 2;
+        private const int FallbackRunsBeforeReprobe = 10;
+        // A failed walk asks for one more try when the throttle window lifts. Any
+        // refresh that starts spends it, whatever asked for that refresh.
+        private bool _retryPending;
+        // The uncompressed size of the last refresh, so the next stream is allocated
+        // once instead of doubling its way up through the large-object heap. Written by
+        // the worker, read by the next one; a stale value costs one extra growth step.
+        private volatile int _lastRawLength;
 
         /// <summary>
         /// The last refresh as one object: the gzipped .hsg, its stamp ("" before
@@ -141,9 +150,9 @@ namespace BigCopilotLink
 
         /// <summary>
         /// Forget the bytes on unload — they are the player's whole company. Main
-        /// thread only. A compress still running publishes nothing afterwards. A
-        /// /save already past taking the snapshot finishes writing it; no new reader
-        /// gets it.
+        /// thread only. A serialize or compress still running publishes nothing
+        /// afterwards. A /save already past taking the snapshot finishes writing it;
+        /// no new reader gets it.
         /// </summary>
         public void Clear()
         {
@@ -265,12 +274,11 @@ namespace BigCopilotLink
             // A refresh that comes back throttled or refused stays pending, so the next
             // tick tries again: without this a client that attached inside the
             // throttle window, or during placement mode, would wait for the floor.
-            // The retry is a few property reads a second, nothing more. A retry that
-            // starts is spent; one that does not stays a retry.
+            // The retry is a few property reads a second, nothing more. A start clears
+            // both flags inside TryStartRefresh; a retry that does not start is still
+            // set, and any other trigger that does not start becomes pending.
             var result = TryStartRefresh(trigger);
-            var started = result.Outcome == RefreshOutcome.Started;
-            if (trigger == "retry") _retryPending = !started;
-            else _pendingAfterAttach = !started;
+            if (result.Outcome != RefreshOutcome.Started && trigger != "retry") _pendingAfterAttach = true;
         }
 
         /// <summary>
@@ -308,22 +316,41 @@ namespace BigCopilotLink
 
             _busy = true;
             _lastRefreshStarted = DateTime.UtcNow;
+            // Whatever asked, this refresh answers it: a retry left set here would buy a
+            // second serialize nothing wants once the window lifts.
+            _retryPending = false;
+            _pendingAfterAttach = false;
 
-            if (_backgroundSerialize)
+            // A trigger past the window is a building load: the frame is black and the
+            // load coroutine is rewriting the very state a walk would read, so that
+            // refresh runs on the main thread, where the stall is hidden and the bytes
+            // are certain. It also keeps those failures out of the worker's count.
+            if (_backgroundSerialize && !pastWindow)
             {
                 // The whole job on its own thread: walk, gzip, publish. Its own
                 // thread, not the pool: the listener's handlers share the pool and a
                 // flood of them must not hold Busy hostage. BelowNormal, so it never
                 // competes with the frame.
-                var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger); });
-                worker.Name = "BigCopilotLink.Serialize";
-                worker.IsBackground = true;
-                worker.Priority = ThreadPriority.BelowNormal;
-                worker.Start();
+                try
+                {
+                    var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger); });
+                    worker.Name = "BigCopilotLink.Serialize";
+                    worker.IsBackground = true;
+                    worker.Priority = ThreadPriority.BelowNormal;
+                    worker.Start();
+                }
+                catch (Exception e)
+                {
+                    // No thread means nothing will ever clear Busy; clear it here.
+                    _busy = false;
+                    LinkMod.LogError("could not start the serialize thread (" + trigger + "): " + e);
+                    return RefreshResult.CannotSave("other");
+                }
                 return RefreshResult.Started();
             }
 
-            // The fallback: the walk on the main thread, where nothing moves under it.
+            // The walk on the main thread, where nothing moves under it: a building
+            // load, or the fallback after the worker failed twice.
             byte[] raw;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             try
@@ -338,10 +365,23 @@ namespace BigCopilotLink
             }
             LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
 
-            var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour); });
-            compressor.Name = "BigCopilotLink.Compress";
-            compressor.IsBackground = true;
-            compressor.Start();
+            // Counts toward the re-probe only when the fallback chose this thread, not
+            // when a building load did.
+            var fallbackRun = !_backgroundSerialize;
+            try
+            {
+                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun); });
+                compressor.Name = "BigCopilotLink.Compress";
+                compressor.IsBackground = true;
+                compressor.Priority = ThreadPriority.BelowNormal;
+                compressor.Start();
+            }
+            catch (Exception e)
+            {
+                _busy = false;
+                LinkMod.LogError("could not start the compress thread (" + trigger + "): " + e);
+                return RefreshResult.CannotSave("other");
+            }
             return RefreshResult.Started();
         }
 
@@ -375,8 +415,8 @@ namespace BigCopilotLink
 
         /// <summary>
         /// Which of the three states CanSave() names, when we can tell. Qualified from
-        /// the global namespace because UnityEngine also declares a "UI" namespace,
-        /// and these are the game's.
+        /// the global namespace so that nothing a later using brings in (UnityEngine
+        /// has a UI namespace) can shadow the game's.
         /// </summary>
         private static string RefusalReason()
         {
@@ -392,18 +432,26 @@ namespace BigCopilotLink
         /// 3680): a fresh context with the game's own SaveGameSerializationPolicy and
         /// ThrowOnErrors, internal references reset, DataFormat.Binary. A private
         /// context, not the helper's static one, so a game save that starts on the main
-        /// thread mid-walk never shares state with this call. Any thread: OdinSerializer
-        /// walks fields only and touches no Unity API for this graph.
+        /// thread mid-walk (SavingGameInProgress is checked once, when the refresh
+        /// starts) shares no per-walk state with this call. What the two walks do share
+        /// are OdinSerializer's process-wide caches, and those take a lock: in the
+        /// shipped OdinSerializer.dll FormatterLocator.GetFormatter, Serializer.Get,
+        /// FormatterUtilities.GetSerializableMembers, DefaultSerializationBinder,
+        /// SerializationPolicies and FormatterEmitter all enter a Monitor (verified by
+        /// IL scan, 22 Sep 2026). Any thread: Odin walks fields only and touches no
+        /// Unity API for this graph.
         /// </summary>
-        private static byte[] SerializeToBytes(GameInstance instance)
+        private byte[] SerializeToBytes(GameInstance instance)
         {
             var context = new OdinSerializer.SerializationContext();
             context.Config.SerializationPolicy = new Player.SaveSystem.SaveGameSerializationPolicy();
             context.Config.DebugContext.ErrorHandlingPolicy = OdinSerializer.ErrorHandlingPolicy.ThrowOnErrors;
             context.ResetInternalReferences();
-            using (var stream = new MemoryStream())
+            var capacity = _lastRawLength > 0 ? _lastRawLength + _lastRawLength / 16 : 0;
+            using (var stream = new MemoryStream(capacity))
             {
                 OdinSerializer.SerializationUtility.SerializeValue<GameInstance>(instance, stream, OdinSerializer.DataFormat.Binary, context);
+                _lastRawLength = (int)stream.Length;
                 return stream.ToArray();
             }
         }
@@ -423,6 +471,7 @@ namespace BigCopilotLink
             try
             {
                 raw = SerializeToBytes(instance);
+                LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on a worker thread (" + trigger + ")");
             }
             catch (Exception e)
             {
@@ -431,8 +480,10 @@ namespace BigCopilotLink
                 MainThreadDispatcher.Enqueue(delegate { OnBackgroundFailure(); });
                 return;
             }
-            LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on a worker thread (" + trigger + ")");
-            CompressAndPublishOnWorkerThread(raw, day, hour);
+            // The city may have unloaded during the walk; the gzip is the longer half
+            // of the job and its result would be thrown away at the publish.
+            if (_cleared) return;
+            CompressAndPublishOnWorkerThread(raw, day, hour, true, false);
         }
 
         /// <summary>Main thread only, through the dispatcher.</summary>
@@ -445,16 +496,19 @@ namespace BigCopilotLink
             if (_backgroundFailures >= BackgroundFailuresBeforeFallback && _backgroundSerialize)
             {
                 _backgroundSerialize = false;
+                _fallbackRuns = 0;
                 LinkMod.LogWarn(BackgroundFailuresBeforeFallback.ToString(CultureInfo.InvariantCulture) +
-                                " background serializes in a row failed; serializing on the main thread for the rest of this session.");
+                                " background serializes in a row failed; serializing on the main thread; the worker gets another chance after " +
+                                FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " refreshes.");
             }
         }
 
         /// <summary>
-        /// Its own thread. Gzips the bytes the walk produced, with the game's own
-        /// stateless call, and hands the result back.
+        /// Its own thread, or the tail of the serialize thread. Gzips the bytes the
+        /// walk produced, with the game's own stateless call, and hands the result
+        /// back.
         /// </summary>
-        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour)
+        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun)
         {
             try
             {
@@ -477,18 +531,30 @@ namespace BigCopilotLink
                 MainThreadDispatcher.Enqueue(delegate
                 {
                     if (_cleared) return;
-                    // A success ends the failure streak; it does not switch the
-                    // background path back on once the session has turned it off.
-                    _backgroundFailures = 0;
                     _current = next;
                     _busy = false;
+                    if (fromWorker)
+                    {
+                        // A success ends the failure streak.
+                        _backgroundFailures = 0;
+                    }
+                    else if (fallbackRun && !_backgroundSerialize && ++_fallbackRuns >= FallbackRunsBeforeReprobe)
+                    {
+                        // Enough stalls: give the worker one more chance, with one
+                        // failure already on the count so a single throw ends it.
+                        _backgroundSerialize = true;
+                        _backgroundFailures = BackgroundFailuresBeforeFallback - 1;
+                        _fallbackRuns = 0;
+                        LinkMod.LogInfo("trying the worker thread again after " + FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " main-thread refreshes.");
+                    }
                 });
             }
             catch (Exception e)
             {
                 LinkMod.LogError("compressing the save failed: " + e);
-                // The flag is the main thread's to write, like the publish.
-                MainThreadDispatcher.Enqueue(delegate { _busy = false; });
+                // The flag is the main thread's to write, like the publish; the bytes
+                // are lost, so the pump retries once the window lifts.
+                MainThreadDispatcher.Enqueue(delegate { _busy = false; _retryPending = true; });
             }
         }
     }

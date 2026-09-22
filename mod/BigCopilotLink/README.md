@@ -1,11 +1,10 @@
 # Big Copilot Link — the game mod
 
 This mod lets [Big Copilot](https://bigcopilot.com) read the game you are playing
-instead of a save file you picked by hand. While a city is loaded it asks the game to
-serialize itself with the game's own save call and serves the resulting bytes — a
-`.hsg` exactly as the game would have written it — over loopback HTTP. It holds no
-model of the game and changes nothing in it: every refresh is the same serialize the
-game does when it saves.
+instead of a save file you picked by hand. While a city is loaded it serializes the
+running game with the game's own serializer settings, on a thread of its own, and
+serves the resulting bytes — a `.hsg` as the game would write it — over loopback
+HTTP. It holds no model of the game and changes nothing in it.
 
 The wire contract is [`docs/game-link-api.md`](../../docs/game-link-api.md). This
 folder is a drop-in mod for the official
@@ -51,9 +50,12 @@ IL of build 3680), so the mod is walking a graph the main thread is still changi
 snapshot can therefore mix two moments a few hundred milliseconds apart, which a
 dashboard tolerates, and a collection that changed under the walk makes
 OdinSerializer throw. That walk keeps the previous bytes and retries once the
-fifteen-second window lifts; two consecutive failures switch the session to
+fifteen-second window lifts; two consecutive failures switch this city session to
 serializing on the main thread, where nothing moves under the walk — a stall per
-refresh, logged as `… on the main thread`.
+refresh, logged as `… on the main thread`; after ten such refreshes the worker gets
+one more chance, and loading a save starts afresh. A building load (entering or
+leaving) always serializes on the main thread: the screen is black, the load is
+rewriting the state a walk would read, and its stall is hidden anyway.
 
 The log lines:
 
@@ -61,7 +63,8 @@ The log lines:
 serialized in 231 ms on a worker thread (first)
 serialized in 229 ms on the main thread (hour)
 background serialize failed (hour): InvalidOperationException: …
-2 background serializes in a row failed; serializing on the main thread for the rest of this session.
+2 background serializes in a row failed; serializing on the main thread; the worker gets another chance after 10 refreshes.
+trying the worker thread again after 10 main-thread refreshes.
 ```
 
 ## Build and install (in the SDK's Unity project)
@@ -183,7 +186,7 @@ In the game's mod options, under **Big Copilot Link**:
 | Serve the game to Big Copilot | on | Off stops the listener; the mod stays loaded and costs nothing. |
 | Port | 8322 | 8322–8325. 8321 belongs to the MCP bridge and 8765 to the Companion mod. Changing it restarts the listener. |
 | Refresh when a building loads | on | Entering or leaving a building fades the screen to black while the game loads the other side; the serialize runs under that black, so it costs nothing you can see. |
-| Refresh every game hour | on | The refresh runs on a worker thread, so it costs nothing you can see. If the mod has fallen back to the main thread (see the log), it is a short stall every game hour, a minute of play at normal speed; switch it off here. The other triggers stay: a completed game save, a building load, `POST /refresh`, and a five-minute floor. |
+| Refresh every game hour | on | The refresh runs on a worker thread, so it costs nothing you can see. If the mod has fallen back to the main thread (see the log), it is a short stall every game hour, a minute of play at normal speed, until the worker is tried again; switch it off here if that bothers you. The other triggers stay: a completed game save, a building load, `POST /refresh`, and a five-minute floor. |
 | Copy address | — | Puts `http://127.0.0.1:<port>/` on the clipboard. |
 
 Nothing refreshes unless something fetched `/health` in the last 120 seconds, so an
