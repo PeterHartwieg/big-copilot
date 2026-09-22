@@ -1711,7 +1711,13 @@
     };
 
     $("folderBtn").addEventListener("click", pickFolder);
-    if ($("linkBtn")) $("linkBtn").addEventListener("click", linkToGame);
+    if ($("linkBtn")) $("linkBtn").addEventListener("click", () => {
+      // Recorded here too, not only by the page's data-visit-feature listener:
+      // a cached page older than the badge has neither, but this script
+      // still gives its button the badge.
+      if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("game-link");
+      linkToGame();
+    });
     $("recoverBtn").addEventListener("click", pickFolder);
     $("reloadBtn").addEventListener("click", () => location.reload());
     $("savePickLabel").addEventListener("keydown", (e) => {
