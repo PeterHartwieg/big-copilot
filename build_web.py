@@ -310,7 +310,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <div class="row rv" id="entryRow">
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">__ICON_FOLDER__Choose the folder</button>
-    <button type="button" class="btn" id="linkBtn" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play.">__ICON_LINK__Link to the game</button>
+    <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play.">__ICON_LINK__Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
     <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
   <div class="save-location rv" id="saveLocation">

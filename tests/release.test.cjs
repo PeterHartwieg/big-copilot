@@ -24,10 +24,14 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       });
     }
     await page.goto(base);
-    // Six: the landing's footer and the board's each carry a Changelog and a
-    // voting badge, and the nav adds two. The pairs share an id, so the counts
-    // below still go to zero together once the feature has been opened.
-    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),6);
+    // Nine: the landing's footer and the board's each carry a Changelog, a
+    // voting and a game-link badge, the nav adds two and the Link button one.
+    // The copies share an id, so the counts below still go to zero together
+    // once the feature has been opened.
+    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),9);
+    // Linking reaches no game here; using the entry point is what counts.
+    await page.locator('#linkBtn').click();
+    assert.equal(await page.locator('[data-new-feature="game-link"]:not([hidden])').count(),0);
     await page.locator('#landing [data-community-open]').click();
     assert.equal(await page.locator('.community-dialog').evaluate(d => d.open),true);
     assert.equal(await page.locator('[data-new-feature="community-voting"]:not([hidden])').count(),0);

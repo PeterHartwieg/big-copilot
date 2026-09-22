@@ -66,6 +66,8 @@ SUBREDDIT_URL = "https://www.reddit.com/r/bigambitions/"
 # players have a Discord account than a GitHub one.
 DISCORD_URL = "https://discord.gg/TxHaVpSkNg"
 FEEDBACK_URL = "https://discord.gg/EdjRzkxQTu"
+# The Big Copilot Link mod on the Steam Workshop (mod/BigCopilotLink/README.md).
+WORKSHOP_URL = "https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395"
 # Who made the game, and where a visitor who has never heard of it can go and look.
 GAME_NAME = "Big Ambitions"
 GAME_MAKER = "Hovgaard Games"
@@ -93,11 +95,18 @@ COLOPHON = (
 _ARROW = '<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg>'
 
 
-def _sf_out(href: str, text: str, icon: str = "", title: str = "") -> str:
-    """One outbound footer link, with the little corner arrow."""
+def _sf_out(href: str, text: str, icon: str = "", title: str = "", feature: str = "") -> str:
+    """One outbound footer link, with the little corner arrow.
+
+    ``feature`` gives it the New badge of that feature id, which following the
+    link dismisses, as every other entry point of the feature does."""
     tip = f' title="{title}"' if title else ""
-    return (f'<a class="sf-link" href="{href}" target="_blank" rel="noopener"{tip}>'
-            f"{icon}{text}{_ARROW}</a>")
+    badge = visit = ""
+    if feature:
+        visit = f' data-visit-feature="{feature}"'
+        badge = f'<span class="feature-new" data-new-feature="{feature}" hidden>New</span>'
+    return (f'<a class="sf-link" href="{href}" target="_blank" rel="noopener"{tip}{visit}>'
+            f"{icon}{text}{badge}{_ARROW}</a>")
 
 
 def footer_html(landing: bool = False, site: bool = False) -> str:
@@ -163,6 +172,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
       <div class="sf-col">
         <h2 class="sf-head">Big Copilot</h2>
         {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
+        {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link")}
         {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.")}
         {_sf_out(REPO_URL, "Source code", title="MIT-licensed")}
       </div>
@@ -9592,6 +9602,12 @@ featureDiscovery.refresh();
     if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
   });
 })();
+/* An entry point marked data-visit-feature dismisses that feature's badges when
+   it is used, wherever it sits: a footer link, a button the shell owns. */
+document.addEventListener('click', event => {
+  const entry = event.target.closest('[data-visit-feature]');
+  if(entry) featureDiscovery.visit(entry.dataset.visitFeature);
+});
 /* --- theme control --------------------------------------------------- */
 /* Three states over one attribute on <html>, which the palette keys off:
    light and dark set it, auto removes it and lets prefers-color-scheme decide.

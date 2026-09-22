@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=27e63707ec">
+<link rel="stylesheet" href="community.css?v=2d834d57a1">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=27e63707ec">
+<link rel="stylesheet" href="fonts/fonts.css?v=2d834d57a1">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2224,7 +2224,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <div class="row rv" id="entryRow">
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save."><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Choose the folder</button>
-    <button type="button" class="btn" id="linkBtn" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play."><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Link to the game</button>
+    <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play."><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
     <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
   <div class="save-location rv" id="saveLocation">
@@ -2284,6 +2284,7 @@ details.help[open] summary::after{content:"\2013"}
         <h2 class="sf-head">Big Copilot</h2>
         <a class="sf-link" id="helpLink" href="#help">Where saves live</a>
         <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
+        <a class="sf-link" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing." data-visit-feature="game-link">Game link mod<span class="feature-new" data-new-feature="game-link" hidden>New</span><svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://discord.gg/EdjRzkxQTu" target="_blank" rel="noopener" title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.">Bugs and feedback<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source code<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
       </div>
@@ -2551,6 +2552,7 @@ details.help[open] summary::after{content:"\2013"}
       <div class="sf-col">
         <h2 class="sf-head">Big Copilot</h2>
         <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
+        <a class="sf-link" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing." data-visit-feature="game-link">Game link mod<span class="feature-new" data-new-feature="game-link" hidden>New</span><svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://discord.gg/EdjRzkxQTu" target="_blank" rel="noopener" title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.">Bugs and feedback<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
         <a class="sf-link" href="https://github.com/PeterHartwieg/big-copilot" target="_blank" rel="noopener" title="MIT-licensed">Source code<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg></a>
       </div>
@@ -2631,6 +2633,12 @@ featureDiscovery.refresh();
     if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
   });
 })();
+/* An entry point marked data-visit-feature dismisses that feature's badges when
+   it is used, wherever it sits: a footer link, a button the shell owns. */
+document.addEventListener('click', event => {
+  const entry = event.target.closest('[data-visit-feature]');
+  if(entry) featureDiscovery.visit(entry.dataset.visitFeature);
+});
 /* --- theme control --------------------------------------------------- */
 /* Three states over one attribute on <html>, which the palette keys off:
    light and dark set it, auto removes it and lets prefers-color-scheme decide.
@@ -2673,8 +2681,8 @@ featureDiscovery.refresh();
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "27e63707ec";</script>
-<script>window.LEDGER_RELEASE = {"version":"27e63707ec","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "2d834d57a1";</script>
+<script>window.LEDGER_RELEASE = {"version":"2d834d57a1","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2743,8 +2751,8 @@ featureDiscovery.refresh();
   check();
 })();
 </script>
-<script src="app.js?v=27e63707ec"></script>
-<script src="community.js?v=27e63707ec"></script>
+<script src="app.js?v=2d834d57a1"></script>
+<script src="community.js?v=2d834d57a1"></script>
 
 <script>
 
