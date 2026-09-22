@@ -105,6 +105,20 @@ class GameLinkAgainstMock(unittest.TestCase):
         finally:
             ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
 
+    def test_wait_for_save_waits_for_the_refresh_it_asked_for(self):
+        """A 202 names the stamp being replaced; the bytes returned are newer."""
+        self.mock.last_refresh = 0  # outside the throttle window
+        before = self.mock.stamp
+        path = self.game.wait_for_save(seconds=10)
+        self.assertIsNotNone(path)
+        self.assertNotEqual(self.game.stamp, before)
+
+    def test_wait_for_save_falls_through_on_a_throttle(self):
+        """Inside the window the mod refuses; the bytes it serves are read as they are."""
+        path = self.game.wait_for_save(seconds=5)
+        self.assertIsNotNone(path)
+        self.assertEqual(self.game.stamp, self.mock.stamp)
+
     def test_a_save_name_after_the_flag_is_refused(self):
         with self.assertRaises(SystemExit) as caught:
             ba_dashboard.GameLink("Hart", self.dir.name)

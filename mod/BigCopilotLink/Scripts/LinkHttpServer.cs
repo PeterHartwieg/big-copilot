@@ -107,15 +107,24 @@ namespace BigCopilotLink
                     break; // listener stopped or disposed — normal shutdown path
                 }
 
-                try
+                // Each request on its own pool thread: a /refresh waits up to
+                // three seconds for the main thread, and a second caller must
+                // not queue behind it past its own five-second timeout. Handlers
+                // touch only volatile fields and the dispatcher, so they may run
+                // side by side.
+                var captured = context;
+                ThreadPool.QueueUserWorkItem(delegate
                 {
-                    Handle(context);
-                }
-                catch (Exception e)
-                {
-                    LinkMod.LogError("request failed: " + e);
-                    TryAbort(context);
-                }
+                    try
+                    {
+                        Handle(captured);
+                    }
+                    catch (Exception e)
+                    {
+                        LinkMod.LogError("request failed: " + e);
+                        TryAbort(captured);
+                    }
+                });
             }
         }
 

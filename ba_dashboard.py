@@ -16608,19 +16608,28 @@ class GameLink:
         """Ask the mod for fresh bytes and poll until they arrive, or time out.
 
         The one-shot build's way in: a refresh is requested, and poll() is
-        tried every second until it hands over a path. A refusal or a throttle
-        is not an error here: this link has downloaded nothing yet, so poll()
-        takes whatever the mod already serves. Only a mod with nothing to serve
-        at all comes back None. A LinkUnavailable from the refresh surfaces.
+        tried every second until it hands over a path. An accepted refresh
+        (202) is waited for: the bytes must carry a stamp newer than the one
+        the mod named, or the build would show the state before the request.
+        A refusal or a throttle is not an error here: this link has downloaded
+        nothing yet, so poll() takes whatever the mod already serves. Only a
+        mod with nothing to serve inside the deadline comes back None. A
+        LinkUnavailable from the refresh surfaces.
         """
-        self.refresh()
+        status, body = self.refresh()
+        superseded = body.get("stamp") if status == 202 else None
         deadline = time.monotonic() + seconds
+        path = None
         while True:
-            path = self.poll()
-            if path is not None:
-                return path
+            got = self.poll()
+            if got is not None:
+                path = got
+                if superseded is None or self.stamp != superseded:
+                    return path
             if time.monotonic() >= deadline:
-                return None
+                # The requested refresh never landed; the bytes that did are
+                # still the game's state, only a little older.
+                return path
             time.sleep(1)
 
     def refresh(self) -> tuple[int, dict]:
