@@ -98,13 +98,6 @@ namespace BigCopilotLink
         /// <summary>At most one refresh this often, whatever asks.</summary>
         private const int ThrottleSeconds = 15;
 
-        /// <summary>
-        /// The window a building load passes instead: its two edges, the spinner
-        /// rising and the inside/outside flip, land within a load screen of each
-        /// other and are one refresh, not two main-thread walks under one black.
-        /// </summary>
-        private const int BuildingLoadWindowSeconds = 3;
-
         /// <summary>A floor, so an attached board is never looking at something very old.</summary>
         private const int FloorMinutes = 5;
 
@@ -170,39 +163,39 @@ namespace BigCopilotLink
             _busy = false;
         }
 
-        private bool _lastLoading;
         private bool _lastInside;
         private bool _insideKnown;
 
         /// <summary>
-        /// Main thread, every frame. Two moments the player already sees as a
-        /// pause, so a serialize there costs nothing visible: the first frame of
-        /// the city's loading spinner (CityManager.DelayEnterBuilding), and the
-        /// frame on which the player's inside/outside state flips. Entering and
-        /// leaving a building both fade the screen to black, load, and fade back
+        /// Main thread, every frame. One moment the player already sees as a pause,
+        /// so a serialize there costs nothing visible: the frame on which the
+        /// player's inside/outside state flips. Entering and leaving a building both
+        /// fade the screen to black, load, and fade back
         /// (BuildingManager.EnterBuildingCoroutine, ExitFromBuildingCoroutine);
         /// IsInsideBuilding changes under the black, so whatever a serialize costs
-        /// lands there. These pass the fifteen-second window. Only while a client is
-        /// attached.
+        /// lands there. The city's loading spinner is not an edge of its own: it
+        /// rises only for CityManager.DelayEnterBuilding, whose entry flips too, and
+        /// a second walk under the same black bought nothing. This passes the
+        /// fifteen-second window. Only while a client is attached.
         /// </summary>
         public void FrameOnMainThread(bool attached, bool onBuildingLoad)
         {
-            var loading = global::LoadingSpinner.isLoading;
-            var spinnerRising = loading && !_lastLoading;
-            _lastLoading = loading;
-
             var inside = global::BuildingManager.IsInsideBuilding;
             var flipped = _insideKnown && inside != _lastInside;
             _lastInside = inside;
             _insideKnown = true;
 
-            if (!(spinnerRising || flipped) || !onBuildingLoad) return;
+            if (!flipped || !onBuildingLoad) return;
             if (!attached)
             {
                 _pendingAfterAttach = true;
                 return;
             }
-            TryStartRefresh(flipped ? (inside ? "enter" : "leave") : "loading", true);
+            // Refused only by a refresh in flight (a load passes the window): the
+            // state after the load is still worth having, so the pump runs it once
+            // that one lands, on the worker if it is on.
+            var result = TryStartRefresh(inside ? "enter" : "leave", true);
+            if (result.Outcome != RefreshOutcome.Started) _pendingAfterAttach = true;
         }
 
         /// <summary>
@@ -299,17 +292,15 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// Main thread only. A trigger whose stall is hidden anyway (a building load
-        /// screen) passes the fifteen-second window, though not a three-second one, so
-        /// the load's two edges make one refresh; nothing passes Busy.
+        /// Main thread only. A trigger whose stall is hidden anyway (a building load)
+        /// may pass the fifteen-second window; nothing passes Busy.
         /// </summary>
         public RefreshResult TryStartRefresh(string trigger, bool pastWindow)
         {
             var sinceLast = (DateTime.UtcNow - _lastRefreshStarted).TotalSeconds;
-            var window = pastWindow ? BuildingLoadWindowSeconds : ThrottleSeconds;
-            if (_busy || sinceLast < window)
+            if (_busy || (!pastWindow && sinceLast < ThrottleSeconds))
             {
-                var remaining = window - sinceLast;
+                var remaining = ThrottleSeconds - sinceLast;
                 var retryAfter = remaining > 0 ? (int)Math.Ceiling(remaining) : 1;
                 return RefreshResult.Throttled(retryAfter < 1 ? 1 : retryAfter);
             }
@@ -329,8 +320,10 @@ namespace BigCopilotLink
             _lastRefreshStarted = DateTime.UtcNow;
             // Whatever asked, this refresh answers it: a retry left set here would buy a
             // second serialize nothing wants once the window lifts. A start that fails
-            // below gives one retry back, never a loop of them.
+            // below (FailedStart) gives one retry back, never a loop of them, and
+            // hands back the attach flag it took.
             var wasRetry = trigger == "retry";
+            var hadAttach = _pendingAfterAttach;
             _retryPending = false;
             _pendingAfterAttach = false;
 
@@ -355,10 +348,7 @@ namespace BigCopilotLink
                 catch (Exception e)
                 {
                     // No thread means nothing will ever clear Busy; clear it here.
-                    _busy = false;
-                    _retryPending = !wasRetry;
-                    LinkMod.LogError("could not start the serialize thread (" + trigger + "): " + e);
-                    return RefreshResult.CannotSave("other");
+                    return FailedStart("could not start the serialize thread (" + trigger + "): " + e, wasRetry, hadAttach);
                 }
                 return RefreshResult.Started();
             }
@@ -373,10 +363,7 @@ namespace BigCopilotLink
             }
             catch (Exception e)
             {
-                _busy = false;
-                _retryPending = !wasRetry;
-                LinkMod.LogError("serializing the game failed on the main thread (" + trigger + "): " + e);
-                return RefreshResult.CannotSave("other");
+                return FailedStart("serializing the game failed on the main thread (" + trigger + "): " + e, wasRetry, hadAttach);
             }
 
             // Counts toward the re-probe only when the fallback chose this thread, not
@@ -386,7 +373,7 @@ namespace BigCopilotLink
             try
             {
                 LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
-                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun); });
+                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun, wasRetry); });
                 compressor.Name = "BigCopilotLink.Compress";
                 compressor.IsBackground = true;
                 compressor.Priority = ThreadPriority.BelowNormal;
@@ -394,12 +381,24 @@ namespace BigCopilotLink
             }
             catch (Exception e)
             {
-                _busy = false;
-                _retryPending = !wasRetry;
-                LinkMod.LogError("could not start the compress thread (" + trigger + "): " + e);
-                return RefreshResult.CannotSave("other");
+                return FailedStart("could not start the compress thread (" + trigger + "): " + e, wasRetry, hadAttach);
             }
             return RefreshResult.Started();
+        }
+
+        /// <summary>
+        /// Main thread only: a refresh that got past the guards and then could not
+        /// start. Busy goes back down (nothing else will lower it), the attach flag
+        /// goes back to what it was, and one retry is given back unless this was
+        /// the retry: a persistent failure then waits for the floor, not a loop.
+        /// </summary>
+        private RefreshResult FailedStart(string message, bool wasRetry, bool hadAttach)
+        {
+            _busy = false;
+            _retryPending = !wasRetry;
+            _pendingAfterAttach = hadAttach;
+            LinkMod.LogError(message);
+            return RefreshResult.CannotSave("other");
         }
 
         // SaveGameManager.CanSave() is private static on build 3680 (verified on the
@@ -500,7 +499,7 @@ namespace BigCopilotLink
             // The city may have unloaded during the walk; the gzip is the longer half
             // of the job and its result would be thrown away at the publish.
             if (_cleared) return;
-            CompressAndPublishOnWorkerThread(raw, day, hour, true, false);
+            CompressAndPublishOnWorkerThread(raw, day, hour, true, false, trigger == "retry");
         }
 
         /// <summary>Main thread only, through the dispatcher.</summary>
@@ -525,7 +524,7 @@ namespace BigCopilotLink
         /// walk produced, with the game's own stateless call, and hands the result
         /// back.
         /// </summary>
-        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun)
+        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun, bool wasRetry)
         {
             try
             {
@@ -550,12 +549,10 @@ namespace BigCopilotLink
                     if (_cleared) return;
                     _current = next;
                     _busy = false;
-                    if (fromWorker)
-                    {
-                        // A success ends the failure streak.
-                        _backgroundFailures = 0;
-                    }
-                    else if (fallbackRun && !_backgroundSerialize && ++_fallbackRuns >= FallbackRunsBeforeReprobe)
+                    // Any published refresh ends the failure streak: "two in a row"
+                    // means two failed walks with nothing served between them.
+                    _backgroundFailures = 0;
+                    if (!fromWorker && fallbackRun && !_backgroundSerialize && ++_fallbackRuns >= FallbackRunsBeforeReprobe)
                     {
                         // Enough stalls: give the worker one more chance, with one
                         // failure already on the count so a single throw ends it.
@@ -570,8 +567,9 @@ namespace BigCopilotLink
             {
                 LinkMod.LogError("compressing the save failed: " + e);
                 // The flag is the main thread's to write, like the publish; the bytes
-                // are lost, so the pump retries once the window lifts.
-                MainThreadDispatcher.Enqueue(delegate { _busy = false; _retryPending = true; });
+                // are lost, so the pump retries once the window lifts, unless this
+                // was the retry: a gzip that fails twice waits for the floor.
+                MainThreadDispatcher.Enqueue(delegate { _busy = false; _retryPending = !wasRetry; });
             }
         }
     }
