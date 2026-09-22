@@ -41,11 +41,18 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 ### When the mod refreshes
 
 - once, a few seconds after the city loads;
-- on every change of the in-game hour (option "Refresh every game hour", default on);
+- when a building's load screen appears (option "Refresh when a building loads",
+  default on): the player already sees a stall there, so the serialize is free, and
+  this trigger alone may pass the fifteen-second window below;
 - after any game save completes, so the served bytes are never older than the
   player's own save;
 - on `POST /refresh`;
-- as a floor, every 5 real minutes while attached.
+- as a floor, every 5 real minutes while attached;
+- on every change of the in-game hour, with the option "Refresh every game hour",
+  which is off by default: at normal speed that is a stall every minute of play.
+
+Every serialize is a stall of the game's main thread for as long as it takes, about
+185 ms for a 5 MB save; the mod logs `serialized in N ms` on each one.
 
 **Attached** means a client fetched `/health` in the last 120 seconds. When nothing is
 attached the mod refreshes only on the first trigger after a client returns, so an

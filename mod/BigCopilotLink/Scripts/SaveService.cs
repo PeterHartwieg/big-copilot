@@ -146,6 +146,29 @@ namespace BigCopilotLink
             DeleteTempFile();
         }
 
+        private bool _lastLoading;
+
+        /// <summary>
+        /// Main thread, every frame. The building load screen (LoadingSpinner, shown
+        /// by CityManager.DelayEnterBuilding) is a stall the player already sees,
+        /// so a serialize on its first frame costs nothing visible: the cheapest
+        /// moment there is for fresh bytes, and it passes the fifteen-second window.
+        /// Only while a client is attached; leaving a building shows no screen.
+        /// </summary>
+        public void FrameOnMainThread(bool attached, bool onBuildingLoad)
+        {
+            var loading = global::LoadingSpinner.isLoading;
+            var rising = loading && !_lastLoading;
+            _lastLoading = loading;
+            if (!rising || !onBuildingLoad) return;
+            if (!attached)
+            {
+                _pendingAfterAttach = true;
+                return;
+            }
+            TryStartRefresh("building", true);
+        }
+
         /// <summary>
         /// Main thread only, once a second. Works out whether anything asks for a
         /// refresh and, when a client is attached, starts one. A trigger that fires
@@ -233,8 +256,17 @@ namespace BigCopilotLink
         /// </summary>
         public RefreshResult TryStartRefresh(string trigger)
         {
+            return TryStartRefresh(trigger, false);
+        }
+
+        /// <summary>
+        /// Main thread only. A trigger whose stall is hidden anyway (a building load
+        /// screen) may pass the fifteen-second window; nothing passes Busy.
+        /// </summary>
+        public RefreshResult TryStartRefresh(string trigger, bool pastWindow)
+        {
             var sinceLast = (DateTime.UtcNow - _lastRefreshStarted).TotalSeconds;
-            if (_busy || sinceLast < ThrottleSeconds)
+            if (_busy || (!pastWindow && sinceLast < ThrottleSeconds))
             {
                 var remaining = ThrottleSeconds - sinceLast;
                 var retryAfter = remaining > 0 ? (int)Math.Ceiling(remaining) : 1;
@@ -267,6 +299,7 @@ namespace BigCopilotLink
             _lastRefreshStarted = DateTime.UtcNow;
 
             bool written;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 written = SaveGameSerializationHelper.SerializeBinaryData(tempPath, instance, false);
@@ -286,6 +319,10 @@ namespace BigCopilotLink
                 LinkMod.LogWarn("the game declined to serialize (" + trigger + "); keeping the previous bytes.");
                 return RefreshResult.CannotSave("other");
             }
+
+            // The stall this cost the game, in the log: the number a late-game save
+            // needs before the triggers can be judged.
+            LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms (" + trigger + ")");
 
             // Its own thread, not the pool: the listener's handlers share the pool,
             // and a flood of them must not hold the compress, and so Busy, hostage.

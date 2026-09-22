@@ -54,7 +54,10 @@ namespace BigCopilotLink
         // Written by the options panel, read by the pump and the listener. Volatile
         // rather than locked: a stale read costs one second, a torn read cannot happen.
         private volatile bool _enabled = true;
-        private volatile bool _hourly = true;
+        // Off by default: an hourly serialize is a stall every game hour, a
+        // minute of play at normal speed. The building load screen hides its own.
+        private volatile bool _hourly = false;
+        private volatile bool _onBuildingLoad = true;
         private volatile int _portIndex;
 
         public string[] RelativeAssetBundlePaths => Array.Empty<string>();
@@ -72,6 +75,7 @@ namespace BigCopilotLink
             Application.quitting += OnQuitting;
             _dispatcher = MainThreadDispatcher.Install();
             _dispatcher.StartInterval(PumpSeconds, Pump);
+            _dispatcher.StartEachFrame(Frame);
 
             RegisterOptions(context);
             StartListener();
@@ -120,6 +124,13 @@ namespace BigCopilotLink
         private static void OnQuitting()
         {
             _quitting = true;
+        }
+
+        /// <summary>Main thread, every frame: only the building-load edge.</summary>
+        private void Frame()
+        {
+            if (_quitting || _http == null) return;
+            _saves.FrameOnMainThread(_health.Attached, _onBuildingLoad);
         }
 
         /// <summary>Main thread, once a second.</summary>
@@ -191,6 +202,7 @@ namespace BigCopilotLink
                 .AddHeader("bigcopilotlink_options_header")
                 .AddToggle("enabled", "bigcopilotlink_enabled_label", _enabled, OnEnabledChanged)
                 .AddDropdown("port", "bigcopilotlink_port_label", PortChoices, ClampPortIndex(_portIndex), OnPortChanged)
+                .AddToggle("onbuilding", "bigcopilotlink_onbuilding_label", _onBuildingLoad, OnBuildingLoadChanged)
                 .AddToggle("hourly", "bigcopilotlink_hourly_label", _hourly, OnHourlyChanged)
                 .AddSplitter()
                 .AddButton("bigcopilotlink_copy_label", CopyAddress);
@@ -217,6 +229,11 @@ namespace BigCopilotLink
         {
             _portIndex = ClampPortIndex(index);
             MainThreadDispatcher.Enqueue(RestartListener);
+        }
+
+        private void OnBuildingLoadChanged(bool value)
+        {
+            _onBuildingLoad = value;
         }
 
         private void OnHourlyChanged(bool value)

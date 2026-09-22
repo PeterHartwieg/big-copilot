@@ -154,7 +154,8 @@ In the game's mod options, under **Big Copilot Link**:
 | --- | --- | --- |
 | Serve the game to Big Copilot | on | Off stops the listener; the mod stays loaded and costs nothing. |
 | Port | 8322 | 8322–8325. 8321 belongs to the MCP bridge and 8765 to the Companion mod. Changing it restarts the listener. |
-| Refresh every game hour | on | Off leaves the other triggers: a completed game save, `POST /refresh`, and a five-minute floor. |
+| Refresh when a building loads | on | The load screen when you enter a building already stalls the game, so the serialize there costs nothing you can see. Leaving a building shows no screen and is not a trigger. |
+| Refresh every game hour | off | On, the game stalls for the serialize (about 185 ms on a 5 MB save, more late game) every game hour, a minute of play at normal speed. The other triggers stay: a completed game save, a building load, `POST /refresh`, and a five-minute floor. |
 | Copy address | — | Puts `http://127.0.0.1:<port>/` on the clipboard. |
 
 Nothing refreshes unless something fetched `/health` in the last 120 seconds, so an

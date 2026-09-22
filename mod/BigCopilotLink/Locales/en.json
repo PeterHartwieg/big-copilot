@@ -9,6 +9,7 @@
   "bigcopilotlink_port_8324": "8324",
   "bigcopilotlink_port_8325": "8325",
 
+  "bigcopilotlink_onbuilding_label": "Refresh when a building loads",
   "bigcopilotlink_hourly_label": "Refresh every game hour",
 
   "bigcopilotlink_copy_label": "Copy address"
