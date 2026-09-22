@@ -16588,13 +16588,15 @@ class GameLink:
                 health = json.loads(body)
             except ValueError:
                 health = None
-        if not isinstance(health, dict):
+        if not isinstance(health, dict) or health.get("schemaVersion") is None:
             # Answered, but not with health: a status other than 200 (the mod is
-            # there and not ready), or a 200 that is no health object (something
-            # else on that port for a moment). The next poll asks again; only a
-            # health object says what version it speaks. Ten in a row is an
-            # outage, said once by the watch loop and raised on every poll
-            # until a health answer, so it never looks over between two polls.
+            # there and not ready), or a 200 that is no health object, or one
+            # with no version in it (something else on that port for a moment).
+            # The next poll asks again; only a health object with a version says
+            # what it speaks. Ten in a row is an outage, said once by the watch
+            # loop and raised on every poll until a health answer, so it never
+            # looks over between two polls, and one stray answer never stops
+            # the watcher for good.
             self.not_ready += 1
             if self.not_ready >= 10:
                 raise LinkUnavailable(
@@ -16604,12 +16606,6 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
-        if version is None:
-            # A JSON object with no version in it is not the mod's health at all.
-            raise SystemExit(
-                f"{self.url} answers with something that is not the Big Copilot "
-                "Link mod's health; is another program on that port?"
-            )
         if version != self.SCHEMA:
             raise SystemExit(
                 f"the Big Copilot Link mod speaks schema version {version}; this "

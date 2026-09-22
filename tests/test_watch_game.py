@@ -62,13 +62,16 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertEqual(fh.read(), BYTES + b" more")
         self.assertEqual(self.game.stamp, self.mock.stamp)
 
-    def test_a_health_object_with_no_version_names_the_port(self):
+    def test_a_health_object_with_no_version_counts_as_not_ready(self):
+        """A foreign JSON object is the same recoverable outage as a non-object: never version None."""
         real = self.game._call
         self.game._call = lambda route, method="GET", headers=None: (200, {}, b'{"status":"ok"}')
         try:
-            with self.assertRaises(SystemExit) as caught:
+            for _ in range(9):
+                self.assertIsNone(self.game.poll())
+            with self.assertRaises(ba_dashboard.LinkUnavailable) as caught:
                 self.game.poll()
-            self.assertIn("not the Big Copilot Link mod's health", str(caught.exception))
+            self.assertIn("not as the Big Copilot Link mod", str(caught.exception))
             self.assertNotIn("None", str(caught.exception))
         finally:
             self.game._call = real
