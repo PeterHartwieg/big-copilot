@@ -27,6 +27,13 @@ SaveGameManager.Current, compressed: true)`, on a background thread, and serves 
 resulting bytes: a `.hsg` exactly as the game would write it. Clients feed those bytes
 to `ba_save.py` unchanged.
 
+The serializer keeps a static `SerializationContext`, shared with the game's own save
+thread, so the mod serializes on the main thread (uncompressed, about 185 ms on a
+5 MB save) only while `SavingGameInProgress` is false, and gzips the bytes on its
+own thread afterwards with `SaveGameSerializationHelper.CompressBytes`. The main
+thread cannot start a game save while it is busy serializing, so the two never share
+the context.
+
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
 and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on it.
@@ -107,8 +114,9 @@ Asks for a refresh now. No body.
   `/health` until `stamp` changes and `busy` is false, then fetches `/save`.
 - `429 {"error": "throttled", "retryAfter": <seconds>}` inside the 15-second window
   or while one is in flight; the client waits and polls `/health` as above.
-- `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino"}`
+- `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino" | "other"}`
   when the game refuses; the client shows the reason and keeps the last bytes.
+  `"other"` is `CanSave()` false for a reason the mod cannot name.
 
 ### Anything else
 
