@@ -390,6 +390,21 @@ test('an incompatible mod that is busy is refused at once, not after the wait', 
   assert.match(h.seen.notes.at(-1)[1], /version 2/);
 });
 
+test('a port that never answers as the mod is named after the wait, not blamed on a missing save', async () => {
+  const h = harness({routes: {health: reply(503, {error: 'x'})}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
+  assert.match(h.seen.notes.at(-1)[1], /another program on that port/);
+});
+
+test('a foreign 200 that copies the not-ready shape is still judged', async () => {
+  const h = harness({routes: {health: {stamp: '', busy: true, notReady: true}}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match');
+});
+
 test('a 200 /health with no object in it is said to be unreadable', async () => {
   for (const body of [null, [1, 2], 'x']) {
     const h = harness({routes: {health: reply(200, body)}});

@@ -16582,32 +16582,27 @@ class GameLink:
         when the mod speaks a schema version this board does not know.
         """
         status, _, body = self._call("/health")
-        if status != 200:
-            # Answered, but not with health: the mod is there and not ready.
-            # The next poll asks again; only a 200 says what version it speaks.
-            # Ten in a row is something else on that port, and is said so.
+        health = None
+        if status == 200:
+            try:
+                health = json.loads(body or b"{}")
+            except ValueError:
+                health = None
+        if not isinstance(health, dict):
+            # Answered, but not with health: a status other than 200 (the mod is
+            # there and not ready), or a 200 that is no health object (something
+            # else on that port for a moment). The next poll asks again; only a
+            # health object says what version it speaks. Ten in a row is an
+            # outage, said once by the watch loop and raised on every poll
+            # until a health answer, so it never looks over between two polls.
             self.not_ready += 1
             if self.not_ready >= 10:
-                # Every poll from here on, until a 200: the outage is one outage,
-                # and the watch loop must not see it end between two of them.
                 raise LinkUnavailable(
                     f"{self.url} answers, but not as the Big Copilot Link mod; "
                     "is another program on that port?"
                 )
             return None
         self.not_ready = 0
-        try:
-            health = json.loads(body or b"{}")
-        except ValueError:
-            health = None
-        if not isinstance(health, dict):
-            # A 200 that is no health object: something else on that port,
-            # or a mod this board cannot read. Said as that, and it stops the
-            # watch loop like a version mismatch, since polling will not fix it.
-            raise SystemExit(
-                f"{self.url} answers 200, but not with the Big Copilot Link mod's "
-                "health; is another program on that port, or the mod too new?"
-            )
         version = health.get("schemaVersion")
         if version != self.SCHEMA:
             raise SystemExit(

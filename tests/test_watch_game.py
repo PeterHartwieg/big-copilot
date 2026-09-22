@@ -62,13 +62,15 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertEqual(fh.read(), BYTES + b" more")
         self.assertEqual(self.game.stamp, self.mock.stamp)
 
-    def test_a_200_that_is_no_health_object_is_named_not_versioned(self):
+    def test_a_200_that_is_no_health_object_counts_as_not_ready(self):
+        """One stray 200 from whatever held the port must not stop the watcher for good."""
         real = self.game._call
         self.game._call = lambda route, method="GET", headers=None: (200, {}, b"<html>hi</html>")
         try:
-            with self.assertRaises(SystemExit) as caught:
+            for _ in range(9):
+                self.assertIsNone(self.game.poll())
+            with self.assertRaises(ba_dashboard.LinkUnavailable):
                 self.game.poll()
-            self.assertIn("not with the Big Copilot Link mod's health", str(caught.exception))
         finally:
             self.game._call = real
 
