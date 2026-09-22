@@ -525,26 +525,39 @@
     await loadFromLink("Linking to the game", gen);
   }
 
+  // One /health answer as the page reads it. A status other than 200 means
+  // the mod is there and not ready: only a 200 says what version it speaks,
+  // so that answer is marked and waited out rather than judged. A 200 whose
+  // body is no object is an answer this page cannot read, and says so.
+  async function readHealth() {
+    const res = await linkFetch("/health");
+    if (!res.ok) return {stamp: "", busy: true, notReady: true};
+    let body = null;
+    try { body = await res.json(); } catch (e) {}
+    return body && typeof body === "object" ? body : {stamp: "", busy: false, unreadable: true};
+  }
+  // False when the mod speaks this page's version; otherwise the bad state
+  // is on screen and the caller returns. A not-ready answer is not judged.
+  function wrongVersion(health, gen) {
+    if (health.notReady || health.schemaVersion === 1) return false;
+    finishAttempt(gen);
+    state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
+    note("bad", health.unreadable
+      ? "The mod's health answer is not one this page can read. Update the mod (or the page) and try again."
+      : `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+    return true;
+  }
+
   async function loadFromLink(why, gen) {
     if (gen === undefined) gen = sourceGen;
     if (!startAttempt(gen)) return;
     note("");
     state("busy", why, linkUrl);
     let health;
-    try {
-      const res = await linkFetch("/health");
-      // Answered, but not with health: the mod is there and not ready. Only a
-      // 200 says what version it speaks; anything else is waited out below.
-      health = res.ok ? await res.json() : {stamp: "", busy: true};
-    }
+    try { health = await readHealth(); }
     catch (err) { linkDown(gen, err); return; }
     if (gen !== sourceGen) return;
-    if (health.schemaVersion !== 1 && !health.busy) {
-      finishAttempt(gen);
-      state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
-      note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
-      return;
-    }
+    if (wrongVersion(health, gen)) return;
     // The mod serializes on the game's main thread and only while the game
     // is not saving, so a first refresh can take a moment to land.
     if (health.stamp === "" || health.busy) {
@@ -559,18 +572,12 @@
         }
         await linkWait(LINK_POLL_MS);
         if (gen !== sourceGen) return;
-        try {
-          const res = await linkFetch("/health");
-          health = res.ok ? await res.json() : {stamp: "", busy: true};
-        }
+        try { health = await readHealth(); }
         catch (err) { linkDown(gen, err); return; }
         if (gen !== sourceGen) return;
-      }
-      if (health.schemaVersion !== 1) {
-        finishAttempt(gen);
-        state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
-        note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
-        return;
+        // Judged on every real answer: an incompatible mod that is also busy
+        // is refused now, not after thirty seconds of waiting.
+        if (wrongVersion(health, gen)) return;
       }
     }
     if (health.stamp === lastLinkStamp && onBoard()) {

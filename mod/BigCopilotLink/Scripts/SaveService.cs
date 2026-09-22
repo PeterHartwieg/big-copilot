@@ -88,7 +88,7 @@ namespace BigCopilotLink
     /// thread uses, so the uncompressed write happens on the main thread while
     /// SavingGameInProgress is false: the game cannot start a save while our call is
     /// on the main thread, so the two never share the context. Compressing is
-    /// stateless and runs on a pool thread; the finished bytes come back through the
+    /// stateless and runs on its own thread; the finished bytes come back through the
     /// dispatcher.
     /// </summary>
     public sealed class SaveService
@@ -246,7 +246,7 @@ namespace BigCopilotLink
                 return RefreshResult.CannotSave("other");
             }
 
-            // Captured here because the pool thread may not touch the game; the
+            // Captured here because the compress thread may not touch the game; the
             // same clock as /health and the hour trigger.
             var day = TimeHelper.CurrentDay;
             var hour = TimeHelper.CurrentHour;

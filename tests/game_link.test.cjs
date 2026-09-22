@@ -366,6 +366,36 @@ test('any answer from the mod ends the gone note, a refusal included', async () 
   assert.equal(h.run('linkGone'), false, 'so is "no newer state"');
 });
 
+test('a /health that is not 200 is waited out, never read as a version mismatch', async () => {
+  let asked = 0;
+  const h = harness({
+    routes: {
+      health: () => (++asked < 3 ? reply(503, {error: 'too_many_requests'}) : {...HEALTH, stamp: 's7'}),
+      save: reply(200, null, {'X-Game-Link-Stamp': 's7'}),
+    },
+  });
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.builds.length, 1, 'built once the mod answered with health');
+  assert.ok(!h.seen.states.some((s) => /do not match/.test(s[1])), 'no version refusal');
+});
+
+test('an incompatible mod that is busy is refused at once, not after the wait', async () => {
+  const h = harness({routes: {health: {...HEALTH, schemaVersion: 2, stamp: '', busy: true}}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.waits.length, 0, 'no waiting');
+  assert.match(h.seen.notes.at(-1)[1], /version 2/);
+});
+
+test('a 200 /health with no object in it is said to be unreadable', async () => {
+  const h = harness({routes: {health: reply(200, null)}});
+  h.run('linkUrl = "http://127.0.0.1:8322"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match');
+  assert.match(h.seen.notes.at(-1)[1], /not one this page can read/);
+});
+
 test('#link= only moves the port on this machine', () => {
   const h = harness();
   h.context.location.hash = '#link=http://127.0.0.1:8323';
