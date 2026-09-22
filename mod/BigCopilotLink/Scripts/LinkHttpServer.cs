@@ -136,7 +136,7 @@ namespace BigCopilotLink
                     }
                     continue;
                 }
-                ThreadPool.QueueUserWorkItem(delegate
+                var queued = ThreadPool.QueueUserWorkItem(delegate
                 {
                     try
                     {
@@ -154,6 +154,12 @@ namespace BigCopilotLink
                         Interlocked.Decrement(ref _inFlight);
                     }
                 });
+                if (!queued)
+                {
+                    // The pool refused the item: nothing will run the finally above.
+                    Interlocked.Decrement(ref _inFlight);
+                    TryAbort(context);
+                }
             }
         }
 
