@@ -54,10 +54,11 @@ fifteen-second window lifts; two failed walks with nothing served between them
 switch this city session to serializing on the main thread, where nothing moves
 under the walk — a stall per refresh, logged as `… on the main thread`; after ten
 such refreshes the worker gets one more chance (one more throw sends it back), and
-loading a save starts afresh. A building load (entering or leaving) serializes on
-the main thread: the screen is black, the load is rewriting the state a walk would
-read, and its stall is hidden anyway. One that finds a refresh already in flight is
-run once the fifteen-second window lifts instead, on whichever path is on.
+loading a save starts afresh. With the option "Refresh when a building loads" on
+(off by default, a backup), a building load (entering or leaving) serializes on the
+main thread: the screen is black, the load is rewriting the state a walk would read,
+and its stall is hidden anyway. One that finds a refresh already in flight is run
+once the fifteen-second window lifts instead, on whichever path is on.
 
 The log lines:
 
@@ -188,7 +189,7 @@ In the game's mod options, under **Big Copilot Link**:
 | --- | --- | --- |
 | Serve the game to Big Copilot | on | Off stops the listener; the mod stays loaded and costs nothing. |
 | Port | 8322 | 8322–8325. 8321 belongs to the MCP bridge and 8765 to the Companion mod. Changing it restarts the listener. |
-| Refresh when a building loads | on | Entering or leaving a building fades the screen to black while the game loads the other side; the serialize runs under that black, so it costs nothing you can see. |
+| Refresh when a building loads | off | A backup: the hourly and game-save refreshes already keep the board fresh with no cost, so this buys at most one game hour. On, entering or leaving a building fades the screen to black while the game loads the other side and the serialize runs on the main thread under that black, about 250 ms added to the load that you do not see. |
 | Refresh every game hour | on | The refresh runs on a worker thread, so it costs nothing you can see. If the mod has fallen back to the main thread (see the log), it is a short stall every game hour, a minute of play at normal speed, until the worker is tried again; switch it off here if that bothers you. The other triggers stay: a completed game save, a building load, `POST /refresh`, and a five-minute floor. |
 | Copy address | — | Puts `http://127.0.0.1:<port>/` on the clipboard. |
 

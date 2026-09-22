@@ -105,9 +105,9 @@ namespace BigCopilotLink
     /// walks with nothing served between them this city session falls back to
     /// serializing on the main thread, where nothing moves under the walk, until ten
     /// such refreshes have run and the worker is tried again (one more throw sends it
-    /// back). A building load walks on the main thread: the screen is black there and
-    /// the load is rewriting the state. The finished bytes come back through the
-    /// dispatcher as one immutable Snapshot.
+    /// back). A building load, with its option on (off by default), walks on the main
+    /// thread: the screen is black there and the load is rewriting the state. The
+    /// finished bytes come back through the dispatcher as one immutable Snapshot.
     /// </summary>
     public sealed class SaveService
     {

@@ -37,9 +37,10 @@ thread gzips the result with `SaveGameSerializationHelper.CompressBytes`. A walk
 that throws because the game changed state keeps the previous bytes and retries; two
 failed walks with nothing served between them fall back to serializing on the main
 thread for this city session, with one more try for the worker after ten refreshes
-the fallback ran (one more throw sends it back). A building load serializes on the
-main thread, under the black screen; one that finds a refresh already in flight is
-run once the fifteen-second window lifts instead, on whichever path is on.
+the fallback ran (one more throw sends it back). A building load, when its option is
+on, serializes on the main thread, under the black screen; one that finds a refresh
+already in flight is run once the fifteen-second window lifts instead, on whichever
+path is on.
 
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
@@ -49,7 +50,8 @@ and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on i
 
 - once, a few seconds after the city loads;
 - on the frame the player enters or leaves a building (option "Refresh when a
-  building loads", default on): the screen is black between the fade-out and the
+  building loads", **off** by default, a backup: the hourly and game-save refreshes
+  make it redundant): the screen is black between the fade-out and the
   fade-in, so the serialize is not seen, and this trigger alone may pass the
   fifteen-second window below (a refresh already in flight still blocks it; the
   refresh then runs once the window lifts);

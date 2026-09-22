@@ -58,7 +58,10 @@ namespace BigCopilotLink
         // costs the player nothing they can see. Should the worker path fall back to
         // the main thread (SaveService logs it), each hourly refresh is a stall again.
         private volatile bool _hourly = true;
-        private volatile bool _onBuildingLoad = true;
+        // Off by default, a backup: with the hourly and game-save refreshes free on
+        // the worker thread it buys at most one game hour of freshness, and it walks
+        // on the main thread (under the black screen) for about 250 ms per load.
+        private volatile bool _onBuildingLoad = false;
         private volatile int _portIndex;
 
         public string[] RelativeAssetBundlePaths => Array.Empty<string>();
