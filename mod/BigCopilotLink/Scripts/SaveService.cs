@@ -115,7 +115,6 @@ namespace BigCopilotLink
         private readonly DateTime _loadedAtUtc = DateTime.UtcNow;
         // MinValue, not now: the first refresh must not be throttled by the load itself.
         private DateTime _lastRefreshStarted = DateTime.MinValue;
-        private DateTime _lastGameSaveSeen = DateTime.MinValue;
         private int _lastHourSeen = -1;
         private bool _lastSavingInProgress;
         private bool _lastHadChanges;
@@ -182,7 +181,6 @@ namespace BigCopilotLink
             var gameSaveCompleted = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
             _lastSavingInProgress = saving;
             _lastHadChanges = hasChanges;
-            if (gameSaveCompleted) _lastGameSaveSeen = now;
 
             var firstDue = !_firstRefreshTriggered &&
                            (now - _loadedAtUtc).TotalSeconds >= FirstRefreshSeconds;
