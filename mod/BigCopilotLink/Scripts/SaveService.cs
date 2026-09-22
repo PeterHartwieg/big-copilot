@@ -102,6 +102,9 @@ namespace BigCopilotLink
         /// <summary>The first refresh after the city loads.</summary>
         private const int FirstRefreshSeconds = 5;
 
+        /// <summary>Two save-completed edges this close together are one save.</summary>
+        private const int SameSaveSeconds = 5;
+
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         // One immutable snapshot, swapped as a whole: a reader on the HTTP thread
@@ -132,13 +135,6 @@ namespace BigCopilotLink
 
         /// <summary>True while a refresh is in flight.</summary>
         public bool Busy { get { return _busy; } }
-
-        /// <summary>
-        /// When the player's own save last finished, or DateTime.MinValue. Main thread
-        /// only; kept because the trigger it feeds is the one that makes the served
-        /// bytes never older than the player's own save.
-        /// </summary>
-        public DateTime LastGameSaveSeenUtc { get { return _lastGameSaveSeen; } }
 
         /// <summary>
         /// Forget the bytes on unload — they are the player's whole company. Main
@@ -175,14 +171,19 @@ namespace BigCopilotLink
             }
 
             // A completed game save shows as either edge: SavingGameInProgress
-            // falling, or HasChangesSinceLastSave falling (Save() clears it last).
-            // Sampling once a second can miss the first on a fast save; the second
-            // stays down until the game marks another change.
+            // falling, or HasChangesSinceLastSave falling (Save() clears it last;
+            // SerializeBinaryData, which this mod calls, does not touch it: its IL
+            // calls only File, GZipStream, the Odin serializer and Debug). Sampling
+            // once a second can miss the first on a fast save; the second stays
+            // down until the game marks another change. The two edges of one save
+            // can land on different ticks, so a save seen in the last few seconds
+            // is the same save, not a second trigger.
             var saving = SaveGameManager.SavingGameInProgress;
             var hasChanges = SaveGameManager.HasChangesSinceLastSave();
-            var gameSaveCompleted = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
+            var edge = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
             _lastSavingInProgress = saving;
             _lastHadChanges = hasChanges;
+            var gameSaveCompleted = edge && (now - _lastGameSaveSeen).TotalSeconds > SameSaveSeconds;
             if (gameSaveCompleted) _lastGameSaveSeen = now;
 
             var firstDue = !_firstRefreshTriggered &&
@@ -302,10 +303,33 @@ namespace BigCopilotLink
             {
                 var folder = Path.Combine(Application.temporaryCachePath, "BigCopilotLink");
                 Directory.CreateDirectory(folder);
-                _tempPath = Path.Combine(folder, "live.bin");
+                // One file per service: a compress still finishing for the city
+                // that was just unloaded must never read or delete this city's.
+                _tempPath = Path.Combine(folder, "live-" + Guid.NewGuid().ToString("N") + ".bin");
+                SweepStaleTempFiles(folder);
             }
             DeleteTempFile();
             return _tempPath;
+        }
+
+        /// <summary>
+        /// A crash leaves an uncompressed copy behind; anything older than a minute
+        /// in the folder belongs to no running compress and goes. Main thread.
+        /// </summary>
+        private static void SweepStaleTempFiles(string folder)
+        {
+            try
+            {
+                var cutoff = DateTime.UtcNow.AddMinutes(-1);
+                foreach (var file in Directory.GetFiles(folder, "live-*.bin"))
+                {
+                    if (File.GetLastWriteTimeUtc(file) < cutoff) File.Delete(file);
+                }
+            }
+            catch (Exception e)
+            {
+                LinkMod.LogWarn("could not sweep old temporary files: " + e.Message);
+            }
         }
 
         /// <summary>

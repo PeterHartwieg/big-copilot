@@ -16541,6 +16541,13 @@ class GameLink:
     TIMEOUT = 5
 
     def __init__(self, url: str, out_dir: str):
+        # --game takes a URL and nothing else; argparse would otherwise hand a
+        # save name typed after the flag to urllib, which raises ValueError.
+        if not re.match(r"^https?://", url or ""):
+            raise SystemExit(
+                f"--game takes the mod's address (default http://127.0.0.1:8322), "
+                f"not {url!r}; a save or character name does not combine with it"
+            )
         self.url = url.rstrip("/")
         self.path = os.path.join(out_dir, "game-link.hsg")
         self.stamp = ""  # the stamp of the bytes last downloaded
@@ -16556,7 +16563,7 @@ class GameLink:
                 return res.status, dict(res.headers), res.read()
         except urllib.error.HTTPError as err:
             return err.code, dict(err.headers), err.read()
-        except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
+        except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
             raise LinkUnavailable(
                 "waiting for the game: start it with the Big Copilot Link mod "
                 "enabled and load a save"
@@ -16600,13 +16607,11 @@ class GameLink:
 
         The one-shot build's way in: a refresh is requested, and poll() is
         tried every second until it hands over a path. A refusal or a throttle
-        is not an error here, the bytes already served are read instead; only
-        a mod with nothing to serve at all comes back None.
+        is not an error here: this link has downloaded nothing yet, so poll()
+        takes whatever the mod already serves. Only a mod with nothing to serve
+        at all comes back None. A LinkUnavailable from the refresh surfaces.
         """
-        try:
-            self.refresh()
-        except LinkUnavailable:
-            raise
+        self.refresh()
         deadline = time.monotonic() + seconds
         while True:
             path = self.poll()
@@ -16669,10 +16674,13 @@ class Board:
             # The link has no folder to scan: the mod says when its bytes have
             # moved, and its stamp is the whole fingerprint. A cleared
             # fingerprint (the player named a line) rebuilds from the bytes
-            # already downloaded, since the mod has nothing newer to say.
+            # this link downloaded, since the mod has nothing newer to say. A
+            # fresh board has no fingerprint either, and no stamp: a
+            # game-link.hsg left by an earlier session is never its source.
             path = self.link.poll()
             if path is None:
-                if self._fingerprint is not None or not os.path.exists(self.link.path):
+                if (self._fingerprint is not None or not self.link.stamp
+                        or not os.path.exists(self.link.path)):
                     return False
                 path = self.link.path
             mark = self.link.stamp

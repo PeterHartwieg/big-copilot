@@ -73,6 +73,11 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.assertIn("version 2", str(caught.exception))
         self.assertIn("version 1", str(caught.exception))
 
+    def test_a_save_name_after_the_flag_is_refused(self):
+        with self.assertRaises(SystemExit) as caught:
+            ba_dashboard.GameLink("Hart", self.dir.name)
+        self.assertIn("takes the mod's address", str(caught.exception))
+
     def test_a_closed_port_raises_unavailable(self):
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))

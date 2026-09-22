@@ -288,6 +288,17 @@ test('linking again after a folder reads the game even on the same stamp', async
   assert.equal(h.seen.builds.length, 1, 'the same stamp is read again for the new source');
 });
 
+test('linking again on another port forgets the stamp of the earlier link', async () => {
+  const h = harness({
+    routes: {health: HEALTH, save: reply(200, null, {'X-Game-Link-Stamp': HEALTH.stamp})},
+  });
+  h.run(`linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = ${JSON.stringify(HEALTH.stamp)}; linkGone = true`);
+  h.context.location.hash = '#link=http://127.0.0.1:8323';
+  await h.run('linkToGame()');
+  assert.equal(h.seen.builds.length, 1, 'the new link reads its first stamp whatever the old one was');
+  assert.equal(h.run('linkGone'), false, 'and starts with nothing said about the old one');
+});
+
 test('a refusal before any link build leaves the idle state, not a spinner', async () => {
   const h = harness({routes: {refresh: reply(409, {error: 'cannot_save', reason: 'interior'})}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = ""');

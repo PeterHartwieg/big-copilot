@@ -422,6 +422,7 @@
   let linkUrl = null;     // the mod's base URL while the link is the source
   let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
   let linkHealth = null;  // the /health body behind those bytes, for the strip
+  let linkGone = false;   // the watcher has said the game went away
   let linkSpace = null;   // the targetAddressSpace this browser accepted, "" for none
   // Every wait the link takes. Tests swap this rather than sleep.
   let linkWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -502,6 +503,7 @@
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
+    linkGone = false;
     try { localStorage.removeItem(LINK_KEY); } catch (e) {}
   }
 
@@ -512,6 +514,7 @@
     // first stamp the mod answers has to be read, whatever it is.
     lastLinkStamp = "";
     linkHealth = null;
+    linkGone = false;
     stored.set(LINK_KEY, linkUrl);
     dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
     savePicker.hidden = true;
@@ -678,7 +681,6 @@
     await loadFromLink("Reading the game", gen);
   }
 
-  let linkGone = false;  // the watcher has said the game went away
   async function checkLink() {
     // The watcher's link half: a quiet /health, and a build only when the
     // game has moved on. A game that went away is said once, under the
@@ -694,6 +696,7 @@
     }
     if (gen !== sourceGen) return;
     if (linkGone) { linkGone = false; if (strip.tone === "ok") note(""); }
+    lastCheck = Date.now();  // the button's "checked HH:MM", per check, like the folder's
     if (document.hidden || busy || attempt) return;
     if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
     if (health.stamp !== lastLinkStamp) await loadFromLink("Reading the game", gen);
@@ -1159,6 +1162,7 @@
       // must not both start a check of the same stamp.
       watchChecking = true;
       try { await checkLink(); } finally { watchChecking = false; }
+      syncWatchBtn();
       return;
     }
     if (!dirHandle) return;
@@ -1205,9 +1209,13 @@
     const at = lastCheck ? new Date(lastCheck).toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}) : "";
     const what = linkUrl ? "the game" : "the folder";
     b.textContent = on ? `Watching ${what}${at ? " · checked " + at : ""}` : `Watch ${what}`;
-    b.title = on
-      ? "Checking the folder every 30 seconds; the board rebuilds when the game writes a newer save. Click to pause."
-      : "Check the folder every 30 seconds and rebuild on every autosave.";
+    b.title = linkUrl
+      ? (on
+        ? "Asking the game every 30 seconds whether it has a newer state; the board rebuilds when it has. Click to pause."
+        : "Ask the game every 30 seconds for a newer state and rebuild when it has one.")
+      : (on
+        ? "Checking the folder every 30 seconds; the board rebuilds when the game writes a newer save. Click to pause."
+        : "Check the folder every 30 seconds and rebuild on every autosave.");
   }
   async function toggleWatch() {
     if (watchTimer) {

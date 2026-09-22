@@ -169,6 +169,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_PATCH(self):
         self._other_method()
 
+    def do_HEAD(self):
+        self._other_method()
+
+    def do_TRACE(self):
+        self._other_method()
+
     def _other_method(self):
         if self._route() in ("/", "/health", "/save", "/refresh"):
             self._json(405, {"error": "method_not_allowed"})
@@ -177,7 +183,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self._route() != "/refresh":
-            self._not_found() if self._route() not in ("/health", "/save") else self._json(405, {"error": "method_not_allowed"})
+            self._other_method()
             return
         status, body = self.link.refresh()
         self._json(status, body)

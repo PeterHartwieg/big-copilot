@@ -280,19 +280,26 @@ namespace BigCopilotLink
             RefreshResult result;
             try
             {
-                var task = MainThreadDispatcher.RunOnMainThread(() =>
-                    request.Cancelled ? RefreshResult.Throttled(1) : saves.TryStartRefresh("request"));
-                if (!task.Wait(MainThreadTimeoutMs))
+                var task = MainThreadDispatcher.RunOnMainThread(() => request.Run(saves));
+                if (task.Wait(MainThreadTimeoutMs))
+                {
+                    result = task.Result;
+                }
+                else if (request.Cancel())
                 {
                     // Nothing dequeued our work in ten seconds: the game is wedged or
-                    // mid-load. Say so rather than holding the listener open, and make
-                    // the queued work a no-op when it finally runs: the client was told
-                    // that no refresh started.
-                    request.Cancelled = true;
+                    // mid-load. The queued work is now a no-op, so "no refresh
+                    // started" is true when the client reads it.
                     WriteJson(context, 503, "{\"error\":\"main_thread_unavailable\"}");
                     return;
                 }
-                result = task.Result;
+                else
+                {
+                    // The pump took it on the boundary: a refresh really started, and
+                    // the ordinary answer is the true one.
+                    task.Wait();
+                    result = task.Result;
+                }
             }
             catch (Exception e)
             {
@@ -331,10 +338,38 @@ namespace BigCopilotLink
             WriteJson(context, 202, accepted.ToString());
         }
 
-        /// <summary>A /refresh in flight between the HTTP thread and the main thread.</summary>
+        /// <summary>
+        /// A /refresh in flight between the HTTP thread and the main thread. The lock
+        /// makes "the pump took it" and "the listener gave up" exclusive, so the
+        /// client is never told that nothing started when something did.
+        /// </summary>
         private sealed class RefreshRequest
         {
-            public volatile bool Cancelled;
+            private readonly object _gate = new object();
+            private bool _started;
+            private bool _cancelled;
+
+            /// <summary>Main thread: the work, unless the listener gave up first.</summary>
+            public RefreshResult Run(SaveService saves)
+            {
+                lock (_gate)
+                {
+                    if (_cancelled) return RefreshResult.Throttled(1);
+                    _started = true;
+                }
+                return saves.TryStartRefresh("request");
+            }
+
+            /// <summary>HTTP thread: true when cancelled in time, false when the work had begun.</summary>
+            public bool Cancel()
+            {
+                lock (_gate)
+                {
+                    if (_started) return false;
+                    _cancelled = true;
+                    return true;
+                }
+            }
         }
 
         // ---- writing -------------------------------------------------------------

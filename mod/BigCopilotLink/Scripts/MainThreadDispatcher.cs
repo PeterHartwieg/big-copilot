@@ -14,6 +14,10 @@ namespace BigCopilotLink
     {
         private static readonly ConcurrentQueue<Action> Queue = new ConcurrentQueue<Action>();
 
+        // Enqueue after Uninstall would park the closure, and whatever it holds,
+        // in this static field until the next city load; refuse it instead.
+        private static volatile bool Installed;
+
         private Action _intervalCallback;
         private float _intervalSeconds;
         private float _accumulated;
@@ -27,6 +31,7 @@ namespace BigCopilotLink
             {
             }
 
+            Installed = true;
             var go = new GameObject("BigCopilotLink.MainThreadDispatcher");
             go.hideFlags = HideFlags.HideAndDontSave;
             DontDestroyOnLoad(go);
@@ -35,6 +40,7 @@ namespace BigCopilotLink
 
         public void Uninstall()
         {
+            Installed = false;
             _intervalCallback = null;
             // Nothing queued may run without a city, and a queued publish would
             // hold the player's bytes in a static field until the next load.
@@ -53,8 +59,10 @@ namespace BigCopilotLink
             _accumulated = seconds;
         }
 
+        /// <summary>Queues work for the next frame; dropped when no city is loaded.</summary>
         public static void Enqueue(Action action)
         {
+            if (!Installed) return;
             Queue.Enqueue(action);
         }
 
