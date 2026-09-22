@@ -16554,7 +16554,7 @@ class GameLink:
         self.character = ""
         self.company = ""
         self.stale = False  # why wait_for_save() returned older bytes than it asked for, or False
-        self.not_ready = 0  # /health answers in a row that were not a 200
+        self.not_ready = 0  # /health answers in a row that were no health object (any status)
 
     def _call(self, route: str, method: str = "GET", headers: dict | None = None):
         try:
@@ -16583,9 +16583,9 @@ class GameLink:
         """
         status, _, body = self._call("/health")
         health = None
-        if status == 200:
+        if status == 200 and body:
             try:
-                health = json.loads(body or b"{}")
+                health = json.loads(body)
             except ValueError:
                 health = None
         if not isinstance(health, dict):

@@ -413,14 +413,21 @@ test('a foreign 200 that copies the not-ready shape is still judged', async () =
   assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match');
 });
 
-test('a 200 /health with no object in it is said to be unreadable', async () => {
+test('a 200 /health with no object in it is not ready, and names the port after the wait', async () => {
   for (const body of [null, [1, 2], 'x']) {
     const h = harness({routes: {health: reply(200, body)}});
     h.run('linkUrl = "http://127.0.0.1:8322"');
     await h.run('loadFromLink("Reading the game")');
-    assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match', JSON.stringify(body));
-    assert.match(h.seen.notes.at(-1)[1], /not one this page can read/);
+    assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod', JSON.stringify(body));
+    assert.ok(!h.seen.states.some((s) => /do not match/.test(s[1])), 'never a version refusal');
   }
+});
+
+test('an Update accepted by something that never answers as the mod names the port', async () => {
+  const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: reply(503, {error: 'x'})}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
+  await h.run('update()');
+  assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
 });
 
 test('an incompatible mod answering an Update is refused inside the poll, not after 45 seconds', async () => {

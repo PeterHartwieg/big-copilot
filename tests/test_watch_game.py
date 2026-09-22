@@ -65,14 +65,18 @@ class GameLinkAgainstMock(unittest.TestCase):
     def test_a_200_that_is_no_health_object_counts_as_not_ready(self):
         """One stray 200 from whatever held the port must not stop the watcher for good."""
         real = self.game._call
-        self.game._call = lambda route, method="GET", headers=None: (200, {}, b"<html>hi</html>")
-        try:
-            for _ in range(9):
-                self.assertIsNone(self.game.poll())
-            with self.assertRaises(ba_dashboard.LinkUnavailable):
-                self.game.poll()
-        finally:
-            self.game._call = real
+        for body in (b"<html>hi</html>", b"", b"null", b"[1]"):
+            self.game.not_ready = 0
+            self.game._call = lambda route, method="GET", headers=None, body=body: (200, {}, body)
+            try:
+                for _ in range(9):
+                    self.assertIsNone(self.game.poll(), body)
+                with self.assertRaises(ba_dashboard.LinkUnavailable):
+                    self.game.poll()
+            finally:
+                self.game._call = real
+        self.assertIsNotNone(self.game.poll(), "a health answer after that is read as ever")
+        self.assertEqual(self.game.not_ready, 0)
 
     def test_a_health_that_is_not_200_is_not_a_schema_mismatch(self):
         """Some other status on /health means not ready, never a version refusal.

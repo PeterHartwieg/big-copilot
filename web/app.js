@@ -529,16 +529,19 @@
   // the mod is there and not ready: only a 200 says what version it speaks,
   // so that answer is marked and waited out rather than judged. A 200 whose
   // body is no object is an answer this page cannot read, and says so.
-  // The two answers this page makes up. Compared by identity, so a foreign
-  // service answering a body with the same keys is judged like any other.
+  // The one answer this page makes up, for anything that is not a 200 with a
+  // JSON object in it: the mod is there and not ready, or something else is
+  // on the port for a moment. Compared by identity, so a foreign service
+  // answering a body with the same keys is judged like any other. The same
+  // rule as the CLI's: only a health object is judged, and a bounded wait of
+  // answers that were never health names the port.
   const NOT_READY = Object.freeze({stamp: "", busy: true});
-  const UNREADABLE = Object.freeze({stamp: "", busy: false});
   async function readHealth() {
     const res = await linkFetch("/health");
     if (res.status !== 200) return NOT_READY;
     let body = null;
     try { body = await res.json(); } catch (e) {}
-    return body && typeof body === "object" && !Array.isArray(body) ? body : UNREADABLE;
+    return body && typeof body === "object" && !Array.isArray(body) ? body : NOT_READY;
   }
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
@@ -546,9 +549,7 @@
     if (health === NOT_READY || health.schemaVersion === 1) return false;
     finishAttempt(gen);
     state("bad", "The Big Copilot Link mod and this page do not match", linkUrl);
-    note("bad", health === UNREADABLE
-      ? "The mod's health answer is not one this page can read. Update the mod (or the page) and try again."
-      : `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
+    note("bad", `The mod speaks version ${health.schemaVersion}; this page needs version 1. Update the mod (or the page) and try again.`, "", true);
     return true;
   }
 
@@ -698,10 +699,12 @@
     // stamp has moved and the bytes are worth fetching.
     const deadline = Date.now() + 45000;
     let health = null;
+    let sawHealth = false;
     while (Date.now() < deadline) {
       try { health = await readHealth(); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
+      if (health !== NOT_READY) sawHealth = true;
       if (wrongVersion(health, gen)) return;
       if (health.stamp && health.stamp !== before && !health.busy) break;
       health = null;
@@ -711,8 +714,13 @@
     }
     if (!health) {
       finishAttempt(gen);
-      state("bad", "The game did not finish serializing", linkUrl);
-      note("bad", "No new state from the mod in 45 seconds. Try Update again.", "", true);
+      if (!sawHealth) {
+        state("bad", "That address does not answer as the Big Copilot Link mod", linkUrl);
+        note("bad", "It answers, but never with the mod's health. Is another program on that port?", "Check the port in the mod's options, then click Update.", true);
+      } else {
+        state("bad", "The game did not finish serializing", linkUrl);
+        note("bad", "No new state from the mod in 45 seconds. Try Update again.", "", true);
+      }
       return;
     }
     await loadFromLink("Reading the game", gen);

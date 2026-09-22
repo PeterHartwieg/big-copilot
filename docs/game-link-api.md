@@ -185,9 +185,10 @@ unverified.
 
 1. `GET /health`. A connection error means the game is not there: say so, keep the
    last board, retry on the next poll or on Update.
-2. Only a `200` with a JSON object is judged: any other status on `/health` means the
-   mod is there and not ready, and is waited out like `busy`, for a bounded time (the
-   page thirty seconds, the CLI ten answers), after which the client says the address
+2. Only a `200` with a JSON object is judged: any other status, or a `200` whose body
+   is no JSON object, means the mod is there and not ready (or something else held the
+   port for a moment) and is waited out like `busy`, for a bounded time (the page
+   thirty seconds, the CLI ten answers), after which the client says the address
    answers but not as the mod. On a health object, if `schemaVersion` is unknown, stop
    and say which version this client needs.
 3. If `stamp` differs from the stamp of the board on screen and `busy` is false,
