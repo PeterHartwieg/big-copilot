@@ -21,6 +21,7 @@ namespace BigCopilotLink
         private static bool Installed;
 
         private Action _intervalCallback;
+        private Action _frameCallback;
         private float _intervalSeconds;
         private float _accumulated;
 
@@ -43,6 +44,7 @@ namespace BigCopilotLink
         public void Uninstall()
         {
             _intervalCallback = null;
+            _frameCallback = null;
             // Nothing queued may run without a city, and a queued publish would
             // hold the player's bytes in a static field until the next load.
             lock (Gate)
@@ -65,6 +67,12 @@ namespace BigCopilotLink
         }
 
         /// <summary>Queues work for the next frame. False, and nothing queued, when no city is loaded.</summary>
+        /// <summary>Run <paramref name="tick"/> on the main thread every frame: for edges a one-second pump would miss.</summary>
+        public void StartEachFrame(Action tick)
+        {
+            _frameCallback = tick;
+        }
+
         public static bool Enqueue(Action action)
         {
             lock (Gate)
@@ -113,6 +121,18 @@ namespace BigCopilotLink
                 catch (Exception e)
                 {
                     Debug.LogError("[BigCopilotLink] queued action failed: " + e);
+                }
+            }
+
+            if (_frameCallback != null)
+            {
+                try
+                {
+                    _frameCallback();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[BigCopilotLink] frame tick failed: " + e);
                 }
             }
 
