@@ -454,6 +454,31 @@
     return LINK_DEFAULT;
   }
 
+  // Chrome and Edge hold a public page's first fetch to loopback while they
+  // ask the player whether the site may reach this computer, for as long as
+  // the player takes. Five seconds cut that question off under a new player,
+  // so a fetch made while it is open gets PROMPT_WAIT_MS, and the strip says
+  // what the browser is waiting for. The permission's name moved with the
+  // address spaces: "loopback-network" from Chrome 145, "local-network-access"
+  // before; a browser that knows neither asks nothing and reads as granted.
+  const PROMPT_WAIT_MS = 90000;
+  async function loopbackPermission() {
+    if (typeof navigator === "undefined" || !navigator.permissions) return "granted";
+    // A page served from this machine is already on loopback: nothing to ask.
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname || "")) return "granted";
+    const states = [];
+    for (const name of ["loopback-network", "local-network-access"]) {
+      try { states.push((await navigator.permissions.query({name})).state); } catch (e) {}
+    }
+    if (!states.length || states.includes("granted")) return "granted";
+    return states.includes("denied") ? "denied" : "prompt";
+  }
+  function linkBlocked() {
+    const err = new Error("Your browser is blocking this site from reaching the game.");
+    err.sub = "Allow local network access for this site in its site settings (the icon left of the address), then click Update.";
+    return err;
+  }
+
   async function linkFetch(path, init) {
     // A public page's fetch to loopback is a site permission in Chrome and
     // Edge, and the call has to name the address space: "loopback" from
@@ -461,10 +486,14 @@
     // that knows neither throws the unknown value back as a TypeError. The
     // spelling that works is remembered, so the player answers the prompt
     // once, not once per call. No credentials, ever.
+    const permission = await loopbackPermission();
+    if (permission === "denied") throw linkBlocked();
+    const asking = permission === "prompt";
+    if (asking && attempt) state("busy", "Allow Big Copilot to reach the game", "your browser is asking, at the top of the window");
     const spaces = linkSpace === null ? ["loopback", "local", ""] : [linkSpace];
     for (const space of spaces) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
+      const timer = setTimeout(() => controller.abort(), asking ? PROMPT_WAIT_MS : 5000);
       const options = Object.assign({credentials: "omit"}, init, {signal: controller.signal});
       if (space) options.targetAddressSpace = space;
       let res;
@@ -477,14 +506,20 @@
         // game and not about this call's options. The name, not instanceof:
         // the error can come from another realm than this script's.
         if (err.name === "TypeError" && space && linkSpace === null) continue;
-        throw new Error("The game is not running, or the Big Copilot Link mod is not installed.");
+        throw await linkFailure();
       }
       clearTimeout(timer);
       linkSpace = space;
       linkGone = false;  // the mod answered, whatever it said: the watcher's gone note is over
       return res;
     }
-    throw new Error("The game is not running, or the Big Copilot Link mod is not installed.");
+    throw await linkFailure();
+  }
+  // A "Block" on the prompt fails the fetch like a closed port does; only
+  // the permission tells them apart.
+  async function linkFailure() {
+    if (await loopbackPermission() === "denied") return linkBlocked();
+    return new Error("The game is not running, or the Big Copilot Link mod is not installed.");
   }
 
   function linkLine(health, extra) {
@@ -502,7 +537,7 @@
     if (gen !== sourceGen) return;
     finishAttempt(gen);
     state("bad", "Could not reach the game", linkUrl);
-    note("bad", err.message, "Start the game with the mod enabled and load a save, then click Update.", true);
+    note("bad", err.message, err.sub || "Start the game with the mod enabled and load a save, then click Update.", true);
   }
 
   function dropLink() {
