@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Threading;
 
 namespace BigCopilotLink
@@ -80,45 +79,25 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// The build number is not exposed as a member we could verify, so it is parsed
-        /// out of the version string — the trailing integer of e.g. "0.9.3.3680". The
-        /// fallback is the build stamped into the loaded save, which is 0 until the
-        /// player's first save.
+        /// GameVersion.buildNumber is a public field (verified on build 3680; the
+        /// string getters are private). The fallback is the build stamped into the
+        /// loaded save, which is 0 until the player's first save.
         /// </summary>
         private static int ReadBuildNumber()
         {
             try
             {
                 var version = GameVersion.GetCurrent();
-                if (version != null)
-                {
-                    var parsed = TrailingInteger(version.GetBuildVersionString());
-                    if (parsed > 0) return parsed;
-                }
+                if (version != null && version.buildNumber > 0) return version.buildNumber;
             }
             catch (Exception)
             {
-                // A version string we cannot read is not worth failing health over.
+                // A version we cannot read is not worth failing health over.
             }
 
             var instance = SaveGameManager.Current;
             return instance != null ? instance.buildNumberAtLastSave : 0;
         }
 
-        private static int TrailingInteger(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return 0;
-
-            var end = text.Length;
-            while (end > 0 && !char.IsDigit(text[end - 1])) end--;
-            var start = end;
-            while (start > 0 && char.IsDigit(text[start - 1])) start--;
-            if (start == end) return 0;
-
-            int value;
-            if (int.TryParse(text.Substring(start, end - start), NumberStyles.None, CultureInfo.InvariantCulture, out value))
-                return value;
-            return 0;
-        }
     }
 }

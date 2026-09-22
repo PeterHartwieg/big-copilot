@@ -108,7 +108,10 @@ the fetch) as the file time.
 
 ### `POST /refresh`
 
-Asks for a refresh now. No body.
+Asks for a refresh now. No body, but a `Content-Length: 0` header: Mono's
+`HttpListener` answers a body-less POST without one with `411 Length Required` before
+the mod sees it. Browsers' `fetch` and Python's `urllib` send it; curl does not, so
+`curl -X POST -H "Content-Length: 0" …`.
 
 - `202 {"accepted": true, "stamp": "<stamp before this refresh>"}`. The client polls
   `/health` until `stamp` changes and `busy` is false, then fetches `/save`. The mod

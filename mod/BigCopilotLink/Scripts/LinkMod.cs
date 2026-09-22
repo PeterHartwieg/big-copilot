@@ -41,6 +41,9 @@ namespace BigCopilotLink
 
         private static IModLogger _logger;
         private static int _mainThreadId;
+        // Exit to desktop gives the pump one more tick after the game's objects are
+        // gone; nothing it could read then is worth a red line in the log.
+        private static volatile bool _quitting;
 
         private ModContext _context;
         private MainThreadDispatcher _dispatcher;
@@ -65,6 +68,8 @@ namespace BigCopilotLink
             _health = new HealthState();
             _saves = new SaveService();
 
+            _quitting = false;
+            Application.quitting += OnQuitting;
             _dispatcher = MainThreadDispatcher.Install();
             _dispatcher.StartInterval(PumpSeconds, Pump);
 
@@ -76,6 +81,7 @@ namespace BigCopilotLink
 
         public Task OnUnloadAsync()
         {
+            Application.quitting -= OnQuitting;
             StopListener();
 
             if (_context != null)
@@ -111,9 +117,15 @@ namespace BigCopilotLink
             return Task.CompletedTask;
         }
 
+        private static void OnQuitting()
+        {
+            _quitting = true;
+        }
+
         /// <summary>Main thread, once a second.</summary>
         private void Pump()
         {
+            if (_quitting) return;
             _health.RefreshOnMainThread();
             if (_http == null) return; // disabled, or the port was taken
             _saves.PumpOnMainThread(_health.Attached, _hourly);

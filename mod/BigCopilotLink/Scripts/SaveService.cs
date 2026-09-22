@@ -178,7 +178,18 @@ namespace BigCopilotLink
             // lifts. One spare serialization per save is the price of never
             // dropping a real second save that close behind.
             var saving = SaveGameManager.SavingGameInProgress;
-            var hasChanges = SaveGameManager.HasChangesSinceLastSave();
+            bool hasChanges;
+            try
+            {
+                hasChanges = SaveGameManager.HasChangesSinceLastSave();
+            }
+            catch (NullReferenceException)
+            {
+                // On exit to desktop the pump gets one more tick after the player
+                // object is gone, and this call walks the player's position. Not an
+                // edge, not an error: the same answer as last time.
+                hasChanges = _lastHadChanges;
+            }
             var gameSaveCompleted = (_lastSavingInProgress && !saving) || (_lastHadChanges && !hasChanges);
             _lastSavingInProgress = saving;
             _lastHadChanges = hasChanges;
@@ -231,7 +242,7 @@ namespace BigCopilotLink
             }
 
             if (SaveGameManager.SavingGameInProgress) return RefreshResult.CannotSave("saving");
-            if (!SaveGameManager.CanSave()) return RefreshResult.CannotSave(RefusalReason());
+            if (!CanSaveNow()) return RefreshResult.CannotSave(RefusalReason());
 
             var instance = SaveGameManager.Current;
             if (instance == null) return RefreshResult.CannotSave("other");
@@ -283,6 +294,34 @@ namespace BigCopilotLink
             worker.IsBackground = true;
             worker.Start();
             return RefreshResult.Started();
+        }
+
+        // SaveGameManager.CanSave() is private static on build 3680 (verified on the
+        // Mac compile), so it is reached by reflection, looked up once. Should a later
+        // build rename or drop it, the public states it checks stand in: the interior
+        // designer, placement mode, the casino boat and the player-activity panel.
+        private static readonly System.Reflection.MethodInfo CanSaveMethod =
+            typeof(SaveGameManager).GetMethod("CanSave",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Public);
+
+        private static bool CanSaveNow()
+        {
+            if (CanSaveMethod != null)
+            {
+                try
+                {
+                    return (bool)CanSaveMethod.Invoke(null, null);
+                }
+                catch (Exception e)
+                {
+                    LinkMod.LogWarn("CanSave() could not be called (" + e.Message + "); using the public checks.");
+                }
+            }
+            return !global::UI.InteriorDesigner.InteriorDesignerUI.IsOpen
+                && !global::BigAmbitions.PlacementSystem.PlacementSystem.IsInPlacementMode
+                && !global::CasinoBoatManager.IsOnCasinoBoat
+                && !global::PlayerActivity.PlayerActivityUI.IsPanelOpen;
         }
 
         /// <summary>

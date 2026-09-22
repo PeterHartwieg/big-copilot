@@ -28,8 +28,12 @@ Mod Builder.
   allowlist is for.
 - **Chrome asks you once.** Chrome and Edge gate a fetch from a public HTTPS page to
   loopback behind a site permission prompt. Big Copilot only works after you allow it.
-- **Saves made with the mod enabled are marked as modded by the game**, the same as
-  with any other mod.
+- **Saves made with the mod enabled are modded saves**, the same as with any other
+  mod. Loading an unmodded save with the mod on asks "Load with mods?" and writes a
+  copy, `<name> (Modded).hsg`, leaving the original untouched; that copy carries a
+  mod icon on the Load Game screen ("Saved with Mods", listing the mods), and the
+  game's bug reporting is off for it. `/health` then reports the company as
+  "<name> (Modded)". No achievement text mentions mods (build 3680).
 - The uncompressed copy the serializer writes lives in the game's temporary cache and
   is deleted as soon as it has been gzipped.
 
@@ -37,14 +41,31 @@ Mod Builder.
 
 1. **Get the SDK**: `git clone https://github.com/hovgaardgames/bigambitions` and open
    it with Unity **2022.3.62f2** (Unity Hub will offer to install that version).
-2. **Import the game DLLs**: follow the SDK's welcome dialog. It wants the `Managed`
-   folder of an installed game — on Windows
-   `…/steamapps/common/Big Ambitions/Big Ambitions_Data/Managed`. On a Mac without the
-   game installed, copy that whole `Managed` folder over from the Windows machine and
-   point the importer at the copy. Until this is done, the mod's code is excluded from
-   compilation by the `BA_GAME_DLLS_IMPORTED` define constraint in
-   `BigCopilotLink.asmdef` and the scripts show up greyed out with no errors at all —
-   that symptom means the import, not the code.
+2. **Import the game DLLs**: the SDK's welcome dialog (Big Ambitions → Welcome →
+   Import DLLs from Steam) wants the `Managed` folder of an installed game in the
+   Windows layout, `<install>/Big Ambitions_Data/Managed`, with a
+   `Facepunch.Steamworks.Win64.dll` in it. On Windows, Auto-detect finds the Steam
+   install. On a Mac the game keeps its DLLs at
+   `…/Big Ambitions.app/Contents/Resources/Data/Managed` and ships
+   `Facepunch.Steamworks.Posix.dll` instead, so make a shim: a real folder
+   `~/Library/Application Support/BigCopilotLink/dll-shim/Big Ambitions_Data/Managed`
+   holding a symlink to each DLL in the bundle plus one named
+   `Facepunch.Steamworks.Win64.dll` pointing at the Posix one, and give the dialog the
+   shim's `Big Ambitions_Data` parent as Path. Never write inside the `.app`: it is
+   signed.
+
+   The SDK commits `BA_GAME_DLLS_IMPORTED` in `ProjectSettings/ProjectSettings.asset`,
+   so a fresh clone opens with hundreds of "type not found" errors rather than greyed
+   scripts, and the Welcome window cannot run until the import has happened once. If
+   the dialog will not, do what it does: copy the 32 canonical DLLs into
+   `Assets/_BaDependencies/GameDlls/`, give each a `.dll.meta` PluginImporter with
+   `isExplicitlyReferenced: 1`, `validateReferences: 0`, Editor and Standalone enabled
+   and the SDK's GUID (`md5("BAModTemplate.GameDllGuid:" + name.ToLowerInvariant())`),
+   and call `GameDllImporter.Import(<shim parent>)` from a batch-mode editor method
+   (`mod/build/BclBatch.cs` does). Without explicit referencing Unity auto-references
+   the game DLLs everywhere and the game's `PlayerPrefs` type breaks the Addressables
+   and VFX packages. Unity Hub must be running, or the editor stops for want of a
+   licence.
 3. **Link the folder in** as `Assets/Mods/BigCopilotLink/`, so the SDK project and this
    repo share the files:
    - macOS/Linux: `ln -s <repo>/mod/BigCopilotLink <sdk>/Assets/Mods/BigCopilotLink`
@@ -63,13 +84,31 @@ Mod Builder.
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
 5. **Build & Install**: menu **Big Ambitions → Mod Builder** → Build & Install. It
-   validates, compiles, and installs into the game's `ModsLocal` folder. On a machine
-   without the game, symlink `ModsLocal` to somewhere you can copy from, or take the
-   built folder out of the SDK's build output and copy it to the game machine's
-   `ModsLocal`.
+   validates, compiles, and installs into the game's `ModsLocal` folder. The SDK's
+   installer derives that folder from .NET's `LocalApplicationData`, which Mono on a
+   Mac maps to `~/.local/share/Hovgaard Games/Big Ambitions/ModsLocal`, while the game
+   reads `~/Library/Application Support/com.Hovgaard-Games.Big-Ambitions/ModsLocal`.
+   Bridge them once:
+   `ln -s "$HOME/Library/Application Support/com.Hovgaard-Games.Big-Ambitions" "$HOME/.local/share/Hovgaard Games/Big Ambitions"`
+   (the Mod Builder also honours an EditorPrefs override, `BAModBuilder.ModsLocalPath`).
+   On a machine without the game, take the built folder out of the SDK's
+   `Output/BigCopilotLink` and copy it to the game machine's `ModsLocal`.
 
-Unity writes a `.meta` file next to every file in this folder. Commit them — the GUIDs
-have to stay stable — along with the generated `ModManifest.asset`. The repo's
+   **Headless:** `mod/build/BclBatch.cs` and its asmdef, copied to
+   `<sdk>/Assets/Editor/BclBatch/`, do the import, the manifest, the validation and
+   Build & Install without the editor UI:
+
+   ```
+   /Applications/Unity/Hub/Editor/2022.3.62f2/Unity.app/Contents/MacOS/Unity \
+     -batchmode -projectPath ~/bigambitions -executeMethod BclBatch.Run -logFile ~/bcl-build.log
+   ```
+
+   (no `-quit`: the script exits the editor itself when the job is terminal; on a Mac
+   the Windows build module is not installed and that is fine, the packager's assembly
+   build works and the bundle step is skipped because the mod has no assets).
+
+Unity writes a `.meta` file next to every file in this folder; they are committed,
+along with `ModManifest.asset`, because the GUIDs have to stay stable. The repo's
 `.gitignore` keeps the built `.dll` out.
 
 ## Verify
@@ -91,10 +130,21 @@ mod writes carries the `[BigCopilotLink]` prefix, so filter on it.
 ```
 curl -o live.hsg http://127.0.0.1:8322/save
 python ba_dashboard.py live.hsg
+curl -X POST -H "Content-Length: 0" http://127.0.0.1:8322/refresh
 ```
 
-That writes `dashboard.html` from the running game. On Windows use `curl.exe` in
-PowerShell — plain `curl` is an alias for `Invoke-WebRequest`.
+That writes `dashboard.html` from the running game. The `Content-Length` header
+matters: Mono's `HttpListener` answers a body-less POST without one with `411` before
+the mod sees it (browsers and Python send it on their own). On Windows use `curl.exe`
+in PowerShell — plain `curl` is an alias for `Invoke-WebRequest`. In the game, F5 is
+Quick Save, which the mod follows with a refresh of its own.
+
+Verified on a Mac, build 3680 (22 Sep 2026): every endpoint as the contract says;
+the board built from `/save` matched the board built from the game's own save of the
+same paused moment line for line; the stamp moved at every game hour; Chrome, Safari
+and Firefox linked from a local page. The bytes are not identical to the game's file
+(one Odin reference id and a 367-byte block after the `Minute` field differ, likely
+`CreateSaveSnapshot` versus serializing `Current`); nothing the board reads differs.
 
 ## Options
 
@@ -110,21 +160,22 @@ In the game's mod options, under **Big Copilot Link**:
 Nothing refreshes unless something fetched `/health` in the last 120 seconds, so an
 installed mod with the board closed does no work at all.
 
-## Notes for the first compile
+## The game members it uses (build 3680)
 
-Two things in here were written against an API surface that could not be checked on
-the machine that wrote it. If the Mod Builder complains, look at these first.
+Read by reflection and confirmed by the Mac compile. Public unless noted.
 
-- **`OptionsService`.** `OptionsService.Register(context.ModId, options)` and
-  `OptionsService.RemoveModOptions(_context.ModId)` are called statically, as the
-  SDK's own `Assets/Mods/Example-Options` mod calls them. That mod compiles against
-  the same game DLLs, so this is expected to hold.
-- **`build` comes from the version string.** There is no verified member holding the
-  build number, so `HealthState` parses the trailing integer out of
-  `GameVersion.GetCurrent().GetBuildVersionString()` and falls back to
-  `SaveGameManager.Current.buildNumberAtLastSave`, which reads 0 until the player's
-  first save. If `/health` reports a `build` of 0 or something odd, that parse is why.
+| Member | Used for |
+| --- | --- |
+| `SaveGameManager.Current` (static `GameInstance`), fields `Day`, `Hour`, `Minute`, `Money`, `characterId`, `SaveGameName`, `buildNumberAtLastSave` | health, the serialize |
+| `SaveGameManager.SavingGameInProgress`, `HasChangesSinceLastSave()` | the save-completed edges; the second dereferences the player and throws once on exit to desktop, which the pump swallows |
+| `SaveGameManager.CanSave()` | **private static**: called by reflection, looked up once; falls back to the four public states below |
+| `SaveGameSerializationHelper.SerializeBinaryData(string, GameInstance, bool)`, `CompressBytes(byte[])` | the bytes |
+| `TimeHelper.CurrentDay/CurrentHour/CurrentMinute` | the clock |
+| `GameVersion.GetCurrent().buildNumber` | `build`; `GetBuildVersionString()` is **private** |
+| `UI.InteriorDesigner.InteriorDesignerUI.IsOpen`, `BigAmbitions.PlacementSystem.PlacementSystem.IsInPlacementMode`, `CasinoBoatManager.IsOnCasinoBoat`, `PlayerActivity.PlayerActivityUI.IsPanelOpen` | the refusal reason, and the fallback when `CanSave` is not found |
+| `BAModAPI`: `RegisterModClass`, `ModEntryOnCityLoad`, `IModBigAmbitions`, `ModContext`, `IModLogger` | the entry point |
+| `BigAmbitions.Mods.ModOptions`, static `OptionsService.Register/RemoveModOptions` | the options panel (compiles; the panel itself is not yet checked in-game) |
 
 Whether the game restores persisted option values by calling the change callbacks at
-registration is also unverified. It is safe either way: restarting the listener is
+registration is unverified. It is safe either way: restarting the listener is
 idempotent.
