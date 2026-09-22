@@ -687,6 +687,7 @@
     // game has moved on. A game that went away is said once, under the
     // board that stays, and the next answer clears it.
     const gen = sourceGen;
+    const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
     let health;
     try { health = await (await linkFetch("/health")).json(); }
     catch (err) {
@@ -696,7 +697,7 @@
       return;
     }
     if (gen !== sourceGen) return;
-    if (linkGone) { linkGone = false; if (strip.tone === "ok") note(""); }
+    if (wasGone && strip.tone === "ok") note("");
     lastCheck = Date.now();  // the button's "checked HH:MM", per check, like the folder's
     if (document.hidden || busy || attempt) return;
     if (health.schemaVersion !== 1 || !health.stamp || health.busy) return;
