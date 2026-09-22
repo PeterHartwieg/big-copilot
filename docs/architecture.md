@@ -44,7 +44,10 @@ flowchart TD
 Both doors run the same `extract()` and the same `TEMPLATE`. Only the wrapper differs:
 locally `main()` calls `load_save()` and `render(data)`; in the browser `web/worker.js` calls
 `browser_build()`, which does the same work on Pyodide's virtual filesystem and returns
-JSON.
+JSON. A third source feeds either door: the Big Copilot Link mod serves the running
+game's own save bytes on loopback HTTP ([game-link-api.md](game-link-api.md)), and
+`--game` on the CLI or "Link to the game" in the browser takes the bytes from there.
+Those bytes are a normal `.hsg`, so nothing downstream knows where they came from.
 
 ## The payload contract
 
@@ -266,11 +269,16 @@ polls `stamp` every 15 seconds and pulls fresh numbers only when the stamp moves
 satisfy the same contract: `data()` resolves to a fresh data object (by posting a `build`
 message to the worker), `name(rid, slug)` records a factory-line name and resolves to the
 data that follows, and `watch(h)` keeps the callbacks `changed(data)`, `stale(why)` and
-`lost()`.
+`lost()`. The bytes behind `data()` can come from the game link as well as from a folder
+handle or a file: when the player has linked the page to the running game, `app.js` fetches
+the save from the Big Copilot Link mod on the player's own loopback
+([game-link-api.md](game-link-api.md)) and hands the worker the same kind of `File`.
 
 What that does and does not change. On the hosted site the save itself never leaves the
 tab: `LEDGER_SOURCE` replaces the three watch-server routes, so nothing about the save is
-fetched or posted. The page still uses the network for its own assets, all same-origin.
+fetched or posted — unless the player has linked the page to the running game, in which
+case `app.js` fetches the bytes from that mod on the player's own machine, and to nowhere
+else. The page still uses the network for its own assets, all same-origin.
 The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
 `maps/locations.json` with the build stamp and the background image with its own content
 hash, and `web/wiki.js` fetches `wiki-data.json` with the build stamp. The dynamic ones
