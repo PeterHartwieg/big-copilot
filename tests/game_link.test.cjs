@@ -462,6 +462,36 @@ test('the watcher names a port taken over after ten checks, once, and counts fro
   assert.equal(h.run('linkNotReady'), 0);
 });
 
+test('the takeover count does not leak into a relink, and a disconnect does not silence it for good', async () => {
+  let mode = 'notready';
+  const h = harness({routes: {health: () => {
+    if (mode === 'down') throw new TypeError('Failed to fetch');
+    return mode === 'health' ? HEALTH : reply(503, {error: 'x'});
+  }, save: reply(200, null, {'X-Game-Link-Stamp': 's1'})}});
+  h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
+  for (let i = 0; i < 9; i++) await h.run('checkFolder()');
+  assert.equal(h.run('linkNotReady'), 9);
+  // A relink to another port starts from nothing.
+  mode = 'health';
+  h.context.location.hash = '#link=http://127.0.0.1:8323';
+  await h.run('linkToGame()');
+  assert.equal(h.run('linkNotReady'), 0);
+  mode = 'notready';
+  h.run('strip.tone = "ok"');
+  await h.run('checkFolder()');
+  assert.equal(h.seen.notes.filter((n) => n[0] === 'warn').length, 0, 'one check on the new port says nothing');
+  // Ten more say it once; a disconnect and a return say it again.
+  for (let i = 0; i < 10; i++) await h.run('checkFolder()');
+  let warns = h.seen.notes.filter((n) => /no longer answers/.test(n[1]));
+  assert.equal(warns.length, 1);
+  mode = 'down';
+  await h.run('checkFolder()');
+  mode = 'notready';
+  await h.run('checkFolder()');
+  warns = h.seen.notes.filter((n) => /no longer answers/.test(n[1]));
+  assert.equal(warns.length, 2, 'said again after the game came back and the port was still not the mod');
+});
+
 test('#link= only moves the port on this machine', () => {
   const h = harness();
   h.context.location.hash = '#link=http://127.0.0.1:8323';

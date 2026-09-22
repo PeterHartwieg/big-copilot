@@ -423,7 +423,8 @@
   let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
   let linkHealth = null;  // the /health body behind those bytes, for the strip
   let linkGone = false;   // the watcher has said the game went away
-  let linkNotReady = 0;   // the watcher's checks in a row that were never health
+  let linkNotReady = 0;   // /health answers in a row that were never health, any caller
+  let linkPortSaid = false;  // the watcher has said the port no longer answers as the mod
   let linkSpace = null;   // the targetAddressSpace this browser accepted, "" for none
   // Every wait the link takes. Tests swap this rather than sleep.
   let linkWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -506,6 +507,8 @@
     lastLinkStamp = "";
     linkHealth = null;
     linkGone = false;
+    linkNotReady = 0;
+    linkPortSaid = false;
     try { localStorage.removeItem(LINK_KEY); } catch (e) {}
   }
 
@@ -517,6 +520,8 @@
     lastLinkStamp = "";
     linkHealth = null;
     linkGone = false;
+    linkNotReady = 0;
+    linkPortSaid = false;
     stored.set(LINK_KEY, linkUrl);
     dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
     savePicker.hidden = true;
@@ -542,7 +547,11 @@
     if (res.status !== 200) return NOT_READY;
     let body = null;
     try { body = await res.json(); } catch (e) {}
-    return body && typeof body === "object" && !Array.isArray(body) ? body : NOT_READY;
+    if (!(body && typeof body === "object" && !Array.isArray(body))) return NOT_READY;
+    // A health answer, from whichever caller: the run of never-health is over.
+    linkNotReady = 0;
+    linkPortSaid = false;
+    return body;
   }
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
@@ -745,7 +754,11 @@
     let health;
     try { health = await readHealth(); }
     catch (err) {
-      if (gen !== sourceGen || linkGone || strip.tone !== "ok") return;
+      if (gen !== sourceGen) return;
+      // Whatever was said about the port is replaced by the gone note, and
+      // is said again after the game is back if the port is still not the mod.
+      linkPortSaid = false;
+      if (linkGone || strip.tone !== "ok") return;
       linkGone = true;
       note("warn", "The game is not reachable; the board shows its last state.", "It reconnects on its own when the game is back.");
       return;
@@ -757,12 +770,13 @@
     // health mean the port is held by something else, said once under the
     // board that stays; one health answer counts from zero again.
     if (health === NOT_READY) {
-      if (++linkNotReady === 10 && strip.tone === "ok") {
+      linkNotReady++;
+      if (linkNotReady >= 10 && !linkPortSaid && strip.tone === "ok") {
+        linkPortSaid = true;
         note("warn", "That address no longer answers as the Big Copilot Link mod.", "Is another program on that port? Check the port in the mod's options, then click Update.");
       }
       return;
     }
-    linkNotReady = 0;
     if (document.hidden || busy || attempt) return;
     // Another version, nothing yet, or mid-refresh: nothing to build from.
     // The next tick, or Update, looks again.
