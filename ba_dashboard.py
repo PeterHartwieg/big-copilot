@@ -1798,7 +1798,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
 
 
 def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
-    """The roles working this floor that have no uniform, as the game scores it.
+    """The skill ids working this floor that have no uniform, as the game scores it.
 
     EmployeeUniformsCustomerDemand.Fulfilled walks the staff on shift at that
     instant, takes for each the first of their station's suitableSkills they
@@ -1844,8 +1844,9 @@ def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
                     if skill not in uniforms:
                         gaps.add(skill)
                     break  # the game checks the first match and stops
-    # A set decides these, so sort before they reach the payload.
-    return [names.label(skill) for skill in sorted(gaps)]
+    # A set decides these, so sort before they reach the payload. The caller
+    # labels them; the ids stay for a write that sets the uniforms.
+    return sorted(gaps)
 
 
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
@@ -2026,8 +2027,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
             if status == "retail"
             else None
         ),
-        # The roles on this floor with no uniform set for them, named.
-        "uniformGaps": uniform_gaps,
+        # The roles on this floor with no uniform set for them, named, and the
+        # same skills as the game's ids, in the same order.
+        "uniformGaps": [names.label(skill) for skill in uniform_gaps],
+        "uniformGapSkills": uniform_gaps,
         # The locker is what the player manages uniforms from, so it is checked
         # directly rather than through any demand; one still in cargo is boxed.
         # A type whose customers never ask about uniforms needs neither.
