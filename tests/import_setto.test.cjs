@@ -199,19 +199,25 @@ const mixed = () => {
   const data = fixture();
   Object.assign(data.businesses[0].lines, [...data.businesses[0].lines,
     {slug: 'hops', item: 'Hops', units: 0}, {slug: 'malt', item: 'Malt', units: 0},
-    {slug: 'yeast', item: 'Yeast', units: 0}]);
+    {slug: 'yeast', item: 'Yeast', units: 0}, {slug: 'rye', item: 'Rye', units: 0}]);
   Object.assign(data.supply.factories.depots[0], {
     // Level first, then a plain 400 on top: at most 1,400 a week.
-    hops: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainAfter: 400, arrivedLastWeek: 1400,
-      contracts: [contractOf(4, 'Pier 1', true, 1000), contractOf(5, 'Pier 2', false, 400)]},
+    hops: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainBefore: 0, plainAfter: 400,
+      levelImporter: 'Pier 1', levelAt: 0, pass: [{amount: 1000, smart: true}, {amount: 400, smart: false}],
+      arrivedLastWeek: 1400, contracts: [contractOf(4, 'Pier 1', true, 1000), contractOf(5, 'Pier 2', false, 400)]},
     // Plain first: the 400 lands inside the level.
-    malt: {weekly: 1000, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainAfter: 0, arrivedLastWeek: 1000,
-      contracts: [contractOf(6, 'Pier 2', false, 400), contractOf(7, 'Pier 1', true, 1000)]},
+    malt: {weekly: 1000, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainBefore: 400, plainAfter: 0,
+      levelImporter: 'Pier 1', levelAt: 1, pass: [{amount: 400, smart: false}, {amount: 1000, smart: true}],
+      arrivedLastWeek: 1000, contracts: [contractOf(6, 'Pier 2', false, 400), contractOf(7, 'Pier 1', true, 1000)]},
+    // Plain 1,400 first already passes the level of 1,000.
+    rye: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 1400, plainBefore: 1400, plainAfter: 0,
+      levelImporter: 'Pier 1', levelAt: 1, pass: [{amount: 1400, smart: false}, {amount: 1000, smart: true}],
+      arrivedLastWeek: 1400, contracts: [contractOf(9, 'Pier 2', false, 1400), contractOf(10, 'Pier 1', true, 1000)]},
     // Set up at zero, nothing brought.
     yeast: {weekly: 0, pausedWeekly: 0, zeroOnly: true, smart: false, target: null, plain: 0, plainAfter: 0,
       arrivedLastWeek: 0, contracts: [contractOf(8, 'Pier 1', false, 0)]},
   });
-  Object.assign(data.supply.factories.depotOther[0], {hops: 1800, malt: 1800, yeast: 300});
+  Object.assign(data.supply.factories.depotOther[0], {hops: 1800, malt: 1800, yeast: 300, rye: 2000});
   return data;
 };
 
@@ -219,30 +225,40 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
   const page = await board({data: mixed()});
   try{
     const rows = Object.fromEntries((await cells(page)).map(r => [r.item, r]));
-    assert.match(rows.Hops.inGame, /^1,000 in stock\s*plus 400 a week$/);
-    assert.match(rows.Malt.inGame, /^1,000 in stock$/);
-    // The level a week needs is the week less what comes on top of it.
+    // The contract holding the level is named; plain amounts are placed
+    // before or after it as the game delivers them.
+    assert.match(rows.Hops.inGame, /^1,000 in stock\s*at Pier 1\s*plus 400 a week$/);
+    assert.match(rows.Malt.inGame, /^1,000 in stock\s*at Pier 1\s*400 a week delivered first counts toward it$/);
+    assert.match(rows.Rye.inGame, /1,400 a week delivered first counts toward it$/);
+    assert.doesNotMatch(rows.Rye.inGame, /plus/);
+    // The level a week needs is the pass replayed, never the plain taken off.
     assert.equal(rows.Hops.box, '1400');
     assert.equal(rows.Malt.box, '1800');
+    assert.equal(rows.Rye.box, '2000');
     // A contract set up at zero is a contract, at zero.
     assert.match(rows.Yeast.inGame, /^0 a week$/);
     assert.equal(rows.Yeast.box, '300');
     const hops = (await actions(page)).find(a => a[0] === 'Hops');
     assert.deepEqual(hops, ['Hops', 1000, 1400, 'smart']);
+    const reason = await page.evaluate(() => window.fixtureActions.find(a => a.item === 'Hops').reason);
+    assert.match(reason, /^Set Smart Delivery stock at Pier 1 to 1,?400\./);
+    assert.match(await box(page, 'Rye').getAttribute('data-tip'), /The board suggests 2,?000: the level at Pier 1/);
   } finally { await page.close(); }
 });
 
 const KEY = 'ba_import_set_v2:set-fixture';
-test('a figure the game now holds is forgotten and the row reads as the board sees it', async () => {
-  // 900 was typed when the game held 700; the game has since moved to 900.
-  const page = await board({before: [KEY, JSON.stringify({'["depot#0","sugar"]': {value: 900, inGame: 700}})]});
-  try{
-    const sugar = (await cells(page)).find(r => r.item === 'Sugar');
-    assert.deepEqual([sugar.box, sugar.changed], ['1400', true]);
-    assert.match(sugar.verdict, /raise/);
-    assert.equal(await page.evaluate(key => localStorage.getItem(key), KEY), '{}');
-  } finally { await page.close(); }
-});
+for(const value of [900, 2000]){
+  test(`a figure typed before the game moved is forgotten (${value === 900 ? 'moved onto it' : 'moved elsewhere'})`, async () => {
+    // Typed when the game held 700; the game now holds 900.
+    const page = await board({before: [KEY, JSON.stringify({'["depot#0","sugar"]': {value, inGame: 700}})]});
+    try{
+      const sugar = (await cells(page)).find(r => r.item === 'Sugar');
+      assert.deepEqual([sugar.box, sugar.changed], ['1400', true]);
+      assert.match(sugar.verdict, /raise/);
+      assert.equal(await page.evaluate(key => localStorage.getItem(key), KEY), '{}');
+    } finally { await page.close(); }
+  });
+}
 
 test('typing the figure in game turns the suggestion down and it stays down', async () => {
   const page = await board();
@@ -284,7 +300,7 @@ test('the box and its reset say what they hold in each state', async () => {
   const page = await board();
   try{
     const tip = item => box(page, item).getAttribute('data-tip');
-    assert.match(await tip('Sugar'), /^The board suggests 1,?400: the stock that runs everything/);
+    assert.match(await tip('Sugar'), /^The board suggests 1,?400: the level at which the week's deliveries/);
     assert.match(await tip('Flour'), /^The figure in game/);
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');

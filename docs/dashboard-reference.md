@@ -1003,19 +1003,20 @@ Two tables, one per number a logistics manager is set with.
   cap shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
   *Set to* is a box: where the setting falls short of the week it holds the
-  suggestion, the used week rounded up to the hundred (for Smart Delivery, the stock
-  that runs everything the depot feeds at full capacity for a week, less any plain
-  amount the game delivers after the level, which comes on top of it); elsewhere it
-  holds the figure in game. The level and the "plus N a week" beside it come from the
-  game's delivery pass into an empty depot, so together they are always what a week can
-  bring: the level shown is the last one that still brings something, a plain amount
-  delivered before it lands inside it, and whatever arrives after it is the plus. Enter
-  your own figure and it is kept in this browser per character, depot and material,
-  with the figure the game held when you entered it, until you reset it or the game's
-  figure moves to it. Entering the figure the game already holds turns the suggestion
-  down until the game's figure moves; a row whose box differs from the
-  game is marked, stays in *Needs a change*, and goes into the Plan imports checklist
-  as "Set Smart Delivery stock to N" or "Set the weekly order to N". A high Smart
+  suggestion, elsewhere the figure in game. For a plain order the suggestion is the used
+  week rounded up to the hundred. For Smart Delivery it names one contract, the one
+  whose level holds: the last that still brings something when the game's delivery pass
+  runs into an empty depot. A plain amount delivered before that level counts toward it
+  (the level only tops up what is missing), one delivered after it comes on top as
+  "plus N a week". The suggested level is the least, in hundreds, at which that pass,
+  replayed with it, brings the week, so a plain amount that already passes the level is
+  never taken off it. Enter your own figure and it is kept in this browser per character,
+  depot and material, with the figure the game held when you entered it, until you reset
+  it or the game's figure moves; once the game has changed, the earlier answer is
+  dropped. Entering the figure the game already holds turns the suggestion down until
+  then. A row whose box differs from the game is marked, stays in *Needs a change*, and
+  goes into the Plan imports checklist as "Set Smart Delivery stock at <importer> to N"
+  or "Set the weekly order to N". A high Smart
   Delivery level only holds stock, so it is never marked *could lower*. A material
   with two or more contracts at the depot lists them under its name in delivery order,
   with importer, kind and amount. A contract set to zero that brought nothing is listed

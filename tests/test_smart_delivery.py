@@ -8,8 +8,8 @@ import unittest
 from unittest.mock import patch
 
 import test_import_routes as fixtures
-from ba_dashboard import (_alerts, _feed_notes, _import_drop, _import_level, _scheduled_import_gap,
-                          _supply)
+from ba_dashboard import (_alerts, _feed_notes, _import_drop, _import_level, _import_pass, _level_for,
+                          _scheduled_import_gap, _supply)
 from test_import_routes import contract
 from test_recipe_identity import WATER
 
@@ -50,32 +50,67 @@ class ImportDropTests(unittest.TestCase):
 
 
 class ImportLevelTests(unittest.TestCase):
-    """What the page says of a line always equals what a delivery pass brings."""
+    """Which contract holds a line's level, and the plain around it."""
 
     CASES = [
-        # (delivery order, level shown, plain on top of it)
-        ([drop(1000, True)], 1000, 0),
-        ([drop(400), drop(1000, True)], 1000, 0),
-        ([drop(1000, True), drop(400)], 1000, 400),
+        # (delivery order, named index, level, plain before it, plain after it)
+        ([drop(1000, True)], 0, 1000, 0, 0),
+        ([drop(400), drop(1000, True)], 1, 1000, 400, 0),
+        ([drop(1000, True), drop(400)], 0, 1000, 0, 400),
         # A second equal level finds the depot at 1,400 and brings nothing.
-        ([drop(1000, True), drop(400), drop(1000, True)], 1000, 400),
-        # A higher level after a plain amount can bring nothing too: 500 + 300
-        # is 800 before the 600 is asked for, so 500 is the level that holds.
-        ([drop(500, True), drop(300), drop(600, True)], 500, 300),
-        ([drop(500, True), drop(300), drop(900, True)], 900, 0),
-        ([drop(1000, True), drop(1500, True)], 1500, 0),
-        # Plain amounts first already fill the level: the rest is on top.
-        ([drop(1400), drop(1000, True)], 1000, 400),
-        ([drop(700)], None, 0),
+        ([drop(1000, True), drop(400), drop(1000, True)], 0, 1000, 0, 400),
+        # 500 + 300 is 800 before the 600 is asked for: the 500 holds.
+        ([drop(500, True), drop(300), drop(600, True)], 0, 500, 0, 300),
+        ([drop(500, True), drop(300), drop(900, True)], 2, 900, 300, 0),
+        ([drop(1000, True), drop(1500, True)], 1, 1500, 0, 0),
+        # A plain amount delivered first already passes the level: it is before
+        # the level, never "on top" of it.
+        ([drop(1400), drop(1000, True)], 1, 1000, 1400, 0),
+        ([drop(600), drop(500, True), drop(200)], 1, 500, 600, 200),
+        ([drop(700)], None, None, 0, 0),
     ]
 
-    def test_level_and_plain_after_add_up_to_the_delivery_pass(self):
-        for drops, level, after in self.CASES:
+    def test_the_named_contract_and_the_plain_either_side_of_it(self):
+        for drops, at, level, before, after in self.CASES:
             with self.subTest(drops=[(d["amount"], d["smart"]) for d in drops]):
-                smart, shown, plain_after = _import_level(drops)
-                self.assertEqual((shown, plain_after), (level, after))
-                if smart:
-                    self.assertEqual(shown + plain_after, _import_drop(0, drops))
+                holds = _import_level(drops)
+                self.assertEqual((holds["at"], holds["level"], holds["plainBefore"], holds["plainAfter"]),
+                                 (at, level, before, after))
+
+    def test_the_suggested_level_is_what_the_replayed_pass_needs(self):
+        # The two cases the arithmetic got wrong: week - plain after is short
+        # where a plain amount before the level already passes it.
+        drops = [drop(1400), drop(1000, True)]
+        self.assertEqual(_level_for(drops, 1, 2000), 2000)
+        self.assertEqual(_import_pass(drops, 1, 2000), 2000)
+        drops = [drop(600), drop(500, True), drop(200)]
+        self.assertEqual(_level_for(drops, 1, 1000), 800)
+        self.assertEqual(_import_pass(drops, 1, 800), 1000)
+        # The named contract is the one raised: A 500, plain 300, C 600, a week
+        # of 1,100 needs A at 800, and C at 800 would leave it short.
+        drops = [drop(500, True), drop(300), drop(600, True)]
+        self.assertEqual(_import_level(drops)["at"], 0)
+        self.assertEqual(_level_for(drops, 0, 1100), 800)
+        self.assertLess(_import_pass(drops, 2, 800), 1100)
+
+    def test_the_search_matches_a_plain_replay_over_many_orders(self):
+        import random
+        rng = random.Random(3680)
+        for case in range(400):
+            drops = [drop(rng.choice(range(0, 3001, 50)), rng.random() < .5)
+                     for _ in range(rng.randint(1, 5))]
+            if not any(d["smart"] for d in drops):
+                drops[rng.randrange(len(drops))]["smart"] = True
+            at = _import_level(drops)["at"]
+            need = rng.randint(1, 8000)
+            level = _level_for(drops, at, need)
+            with self.subTest(case=case):
+                self.assertEqual(level % 100, 0)
+                self.assertGreaterEqual(_import_pass(drops, at, level), need)
+                # Nothing smaller, in hundreds, would do.
+                smallest = next(n for n in range(0, need + 101, 100)
+                                if _import_pass(drops, at, n) >= need)
+                self.assertEqual(level, smallest)
 
 
 class ScheduledGapTests(unittest.TestCase):
@@ -163,7 +198,8 @@ class SmartSupplyTests(unittest.TestCase):
                          (1100, 700, 400))
         self.assertEqual(need["raiseImport"], 1300)
         [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
-        self.assertIn("Smart Delivery keeps 700 in stock plus 400 a week", note["text"])
+        self.assertIn("Smart Delivery keeps 700 in stock, plus 400 a week on top", note["text"])
+        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,300", note["text"])
         self.assertNotIn("1,100 in stock", note["text"])
         # Plain first, the same contracts read as the level alone.
         data = self.routes.build([contract(400, pier=2, destination=("factory", 0)),
@@ -205,9 +241,10 @@ class SmartSupplyTests(unittest.TestCase):
         # keeps its raw place in the plan for a later reorder.
         self.assertEqual([(c["order"], c["importer"]) for c in line["contracts"]],
                          [(0, "1 Pier"), (2, "1 Pier"), (1, "2 Pier")])
-        # Both plain amounts land before the level and already pass it, so
-        # the level brings nothing and 100 sits on top of it.
-        self.assertEqual((line["target"], line["plainAfter"]), (1000, 100))
+        # Both plain amounts land before the level and already pass it, so the
+        # level brings nothing; they count toward it, nothing is on top.
+        self.assertEqual((line["target"], line["plainBefore"], line["plainAfter"]), (1000, 1100, 0))
+        self.assertEqual(line["levelImporter"], "2 Pier")
 
     def test_paused_contracts_count_in_what_arrived_but_not_in_supply(self):
         _, line = self.depot([smart(3000, last=900), smart(8000, last=500, active=False, pier=2)],
@@ -230,7 +267,7 @@ class SmartSupplyTests(unittest.TestCase):
         data = self.routes.build([smart(700, destination=("factory", 0))])
         [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
         self.assertIn("Smart Delivery keeps 700 in stock", note["text"])
-        self.assertIn("raise the stock level to 1,700", note["text"])
+        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,700", note["text"])
         self.assertNotIn("import order", note["text"])
         data = self.routes.build([smart(1650, destination=("factory", 0))])
         [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())

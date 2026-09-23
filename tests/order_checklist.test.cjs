@@ -203,17 +203,19 @@ test('the player\'s figure replaces the suggestion; typing the suggestion is no 
   // Typing the figure the game holds turns the suggestion down: an edit
   // that asks for no change, kept while the game's figure stays put.
   const down = setting(1400, {weekly:900}, 900);
-  assert.deepEqual([down.entered, down.edited, down.value, down.changed], [false, true, 900, false]);
-  // Once the game's figure has moved to what was typed, it has been entered:
-  // no longer an edit, and the row goes back to the board's own verdict.
+  assert.deepEqual([down.stale, down.edited, down.value, down.changed], [false, true, 900, false]);
+  // Once the game's figure has moved, the typed figure answered a game that
+  // is gone: stale, dropped, and the row reads as the board sees it again,
+  // whether the game moved to the typed figure or elsewhere.
   const entered = setting(1400, {weekly:1200}, {value:1200, inGame:900});
-  assert.deepEqual([entered.entered, entered.edited, entered.value], [true, false, 1400]);
-  // The game moved, but not to the typed figure: still the player's own.
+  assert.deepEqual([entered.stale, entered.edited, entered.value], [true, false, 1400]);
   const moved = setting(1400, {weekly:1000}, {value:2000, inGame:900});
-  assert.deepEqual([moved.entered, moved.edited, moved.value], [false, true, 2000]);
-  // The turned-down figure stays the player's even when the game moves away.
+  assert.deepEqual([moved.stale, moved.edited, moved.value], [true, false, 1400]);
+  // The turned-down 900 does not come back as an order to lower a short row.
   const away = setting(1400, {weekly:1200}, {value:900, inGame:900});
-  assert.deepEqual([away.entered, away.edited, away.value], [false, true, 900]);
+  assert.deepEqual([away.stale, away.edited, away.value], [true, false, 1400]);
+  const rows = build({imports:[{s:0, rows:[row(1400, {weekly:1200}, {value:900, inGame:900})]}]});
+  assert.deepEqual([rows[0].current, rows[0].proposed], [1200, 1400]);
   // Not a number, or below zero, is not a figure.
   assert.equal(setting(1400, {weekly:900}, -5).edited, false);
   assert.equal(setting(1400, {weekly:900}, NaN).edited, false);
@@ -263,21 +265,69 @@ test('a figure entered in game on a tight row goes back to the tight verdict', (
   // again, with the suggestion.
   const was = {value:1300, inGame:1200};
   const tight = setting(1350, {weekly:1300, smart:true, target:1300}, was);
-  assert.deepEqual([tight.fit, tight.entered, tight.edited, tight.value], ['tight', true, false, 1400]);
+  assert.deepEqual([tight.fit, tight.stale, tight.edited, tight.value], ['tight', true, false, 1400]);
   const rows = build({imports:[{s:0, rows:[row(1350, {weekly:1300, smart:true, target:1300}, was)]}]});
   assert.deepEqual([rows[0].current, rows[0].proposed], [1300, 1400]);
 });
 
-test('a level with a plain amount after it shows the level and asks for the week less that amount', () => {
-  // Delivered level first, then 400 plain: a week brings 1,400 at most.
-  const after = setting(1800, {weekly:1400, smart:true, target:1000, plainAfter:400});
+/* A line as the payload carries it: the counted contracts in delivery order,
+   the named level's place in them, and what one pass brings. */
+const line = (pass, at, importer = 'Pier 1') => {
+  const d = (a, s = false) => ({amount: a, smart: s});
+  const drops = pass.map(([a, s]) => d(a, s));
+  let before = 0, after = 0;
+  drops.forEach((x, i) => { if(!x.smart){ if(i < at) before += x.amount; else if(i > at) after += x.amount; } });
+  return {weekly: context.importPassDelivers(drops, at, drops[at].amount), smart: true,
+    target: drops[at].amount, plainBefore: before, plainAfter: after, pass: drops, levelAt: at, levelImporter: importer};
+};
+
+test('a level with a plain amount after it shows the level and asks for what the replayed pass needs', () => {
+  // Level first, then 400 plain: a week brings 1,400 at most.
+  const after = setting(1800, line([[1000, true], [400]], 0));
   assert.deepEqual([after.inGame, after.plainAfter, after.fit, after.setTo, after.value], [1000, 400, 'short', 1400, 1400]);
-  const rows = build({imports:[{s:0, rows:[row(1800, {weekly:1400, smart:true, target:1000, plainAfter:400})]}]});
+  const rows = build({imports:[{s:0, rows:[row(1800, line([[1000, true], [400]], 0))]}]});
   assert.deepEqual([rows[0].current, rows[0].proposed], [1000, 1400]);
-  assert.match(rows[0].reason, /^Set Smart Delivery stock to 1[,.]400\./);
+  assert.match(rows[0].reason, /^Set Smart Delivery stock at Pier 1 to 1[,.]400\./);
   // Plain first, the 400 lands inside the level: the level alone is the week.
-  const inside = setting(1800, {weekly:1000, smart:true, target:1000, plainAfter:0});
-  assert.deepEqual([inside.inGame, inside.setTo], [1000, 1800]);
+  const inside = setting(1800, line([[400], [1000, true]], 1));
+  assert.deepEqual([inside.inGame, inside.plainBefore, inside.setTo], [1000, 400, 1800]);
+});
+
+test('a plain amount delivered before the level is never taken off the level', () => {
+  // Plain 1,400 then a level of 1,000, a week of 2,000: the level must be
+  // 2,000, since 1,600 would bring only max(1,400, 1,600).
+  const over = setting(2000, line([[1400], [1000, true]], 1));
+  assert.equal(over.setTo, 2000);
+  assert.equal(context.importPassDelivers(line([[1400], [1000, true]], 1).pass, 1, over.setTo), 2000);
+  // Plain 600, level 500, plain 200, a week of 1,000: 800, not 700.
+  const mixed = setting(1000, line([[600], [500, true], [200]], 1));
+  assert.equal(mixed.setTo, 800);
+});
+
+test('the checklist names the contract that holds the level', () => {
+  // A 500, plain 300, C 600: A holds the level, and a week of 1,100 needs A
+  // at 800. C at 800 would bring 500 + 300, then nothing: still short.
+  const held = line([[500, true], [300], [600, true]], 0, 'A');
+  const rows = build({imports:[{s:0, rows:[row(1100, held)]}]});
+  assert.equal(rows[0].proposed, 800);
+  assert.match(rows[0].reason, /^Set Smart Delivery stock at A to 800\./);
+  assert.ok(context.importPassDelivers(held.pass, 2, 800) < 1100);
+});
+
+test('the level search matches a plain replay over many orders', () => {
+  let seed = 3680;
+  const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for(let k = 0; k < 400; k++){
+    const drops = Array.from({length: 1 + Math.floor(rand() * 5)},
+      () => ({amount: Math.floor(rand() * 61) * 50, smart: rand() < .5}));
+    if(!drops.some(d => d.smart)) drops[0].smart = true;
+    const at = drops.findIndex(d => d.smart);
+    const need = 1 + Math.floor(rand() * 8000);
+    const level = context.importLevelFor(drops, at, need);
+    let smallest = 0;
+    while(context.importPassDelivers(drops, at, smallest) < need) smallest += 100;
+    assert.equal(level, smallest, JSON.stringify({drops, at, need}));
+  }
 });
 
 test('a paused level shows the level in game', () => {
