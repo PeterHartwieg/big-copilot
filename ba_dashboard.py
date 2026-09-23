@@ -43,7 +43,7 @@ SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
     r"AppData\LocalLow\Hovgaard Games\Big Ambitions\SaveGames\Big Ambitions",
 )
-VERIFIED_BUILD = 3680  # the game build every number here was last checked against
+VERIFIED_BUILD = 3682  # the game build every number here was last checked against
 MIN_BUILD = 3540  # saves older than this lack fields the board relies on (checked over 57 saves)
 
 # Everywhere the footer points. They live here, not in build_web.py, because the

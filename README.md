@@ -191,7 +191,7 @@ a random browser ID, and voting stores a protected hash of the IP. Save and comp
 data stay on your computer. See [Community features](docs/community-features.md)
 for how the count works and what is stored.
 
-Checked against game build **3680**. Saves older than **3540** are unsupported;
+Checked against game build **3682**. Saves older than **3540** are unsupported;
 load and save them in a current game build first. Game updates can change the format.
 
 If a save fails, [open an issue](https://github.com/PeterHartwieg/big-copilot/issues)
