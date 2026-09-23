@@ -355,6 +355,23 @@ class AmenityAlertTests(unittest.TestCase):
                              [], by_addr, 8)
         self.assertEqual(business["uniformGaps"], ["Security Guard"])
 
+    def test_the_skill_ids_ride_beside_the_names_in_the_same_order(self):
+        # A write sets uniforms by skill id, so the payload carries the ids too,
+        # sorted by id and parallel to the names.
+        locale = {GUARD: "Security Guard", SERVICE: "Customer Service"}
+        save, building, addr = self.site(items=[LOCKER],
+                                         posts=[((SERVICE,), "ba:itemname_cashregister"),
+                                                ((GUARD,), GUARD_POST)],
+                                         uniforms=[])
+        names = Names(locale)
+        by_addr, _ = _staff(save, names)
+        business = _business(save, names, building, addr,
+                             {addr: {"TotalSales": 1000, "TotalProfit": 500}},
+                             [], by_addr, 8)
+        self.assertEqual(business["uniformGapSkills"], sorted([GUARD, SERVICE]))
+        self.assertEqual(business["uniformGaps"],
+                         [locale[skill] for skill in business["uniformGapSkills"]])
+
     # --- sites with no shop floor --------------------------------------
 
     def test_support_vacant_and_new_nontrading_sites_are_not_flagged(self):

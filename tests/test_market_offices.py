@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from ba_dashboard import History, _market
+from ba_dashboard import History, _market, _type_catalogue
 from ba_save import Names, Save
 
 FEE = "ba:itemname_hourlylawyerfee"
@@ -133,6 +133,24 @@ class MarketOfficeTests(unittest.TestCase):
         [row] = [r for r in market["rows"] if r["slug"] == FEE]
         self.assertFalse(row["sell"])
         self.assertFalse(any(c and c["here"] for c in market["offices"][0]["cells"]))
+
+    def test_only_types_the_help_lists_rank_even_when_the_city_sells_more(self):
+        # Two city-owned gas stations stock the supermarket's goods; nobody can
+        # open one, so it has no help page and never ranks as a type to open.
+        station = {"businessTypeName": "ba:businesstype_gasstation",
+                   "retailPrices": {"$items": [{"itemName": item} for item in GOODS]}}
+        goods = [entry(item, [reading("midtown", 70, 1)]) for item in GOODS]
+        ticket = entry(TICKET, [reading("midtown", 80, 1)])
+        save = Save({"marketEvents": {"$items": []}, "logisticsManagerPlans": {"$items": []},
+                     "BuildingRegistrations": {"$items": [station, dict(station)]},
+                     "productMarketEntries": {"$items": goods + [ticket]}}, {}, "")
+        names = Names({**NAMES.locale, **HELP})
+        # Nobody in this city runs a law firm or a cinema; both are still listed.
+        self.assertEqual(_type_catalogue(names, set(GOODS) | {FEE, TICKET}),
+                         {LAW: {FEE}, CINEMA: {TICKET}})
+        with patch("ba_dashboard.load_buildings", return_value=BUILDINGS):
+            market = _market(save, names, [], 10, History(None), "test")
+        self.assertEqual([t["slug"] for t in market["types"]], [CINEMA])
 
     def test_without_the_building_table_no_neighbourhood_is_called_office_free(self):
         self.assertEqual(self.market(buildings={})["noOffices"], [])
