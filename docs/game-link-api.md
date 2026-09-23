@@ -174,6 +174,7 @@ and a fourth undoes the last write of a kind. The scope and the game rules behin
 at most 256 KiB, else `413 {"error":"too_large"}`) and the header
 `Authorization: Bearer <code>`.
 
+- A request that names the same site, contract or product twice is `400 bad_request`.
 - **Pairing code.** Six characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, drawn once per
   game launch (a city reload keeps it). The mod shows it on demand: the options panel's
   "Copy pairing code" button puts it on the clipboard and shows it in an in-game
@@ -294,14 +295,17 @@ named "Default", else the first of `GameInstance.employeePresets`; a string name
   `locked` (with `reopens: {"day": <game day>, "hour": 8}`), `screen_open` (the BizMan
   plan screen is open on this contract, or the headquarters' purchasing-agent list while
   `order` would reorder it), `no_amounts` (activating a contract whose amounts are all 0,
-  which the game's Start refuses), `changed`. A contract row's `error` repeats its first
+  or setting every amount of a running one to 0: the game's Start refuses both), `changed`. A contract row's `error` repeats its first
   product error, so a row can be judged without reading its products.
 - Product `error`: `not_found`, `no_warehouse`, `backorder` (the item is in a backorder
   market event), `over_cap` (a plain contract's amount above what the importer allows,
   with `max`), `changed`, `bad_amount` (negative or not a whole number). A Smart Delivery
   amount is a stock level, never `over_cap`. `max` is what the importer still allows,
   `max(0, cap - orderedThisWeek)`: urgent orders during the week count against the next
-  Monday's delivery, which is the one the amount is for.
+  Monday's delivery, which is the one the amount is for. Inside the lock window a restart's
+  first delivery is the Monday after, when the week's count has reset, so `max` is the full
+  cap. `max` ignores the player's other contracts with the same importer and item; the game
+  trims those at delivery in plan order.
 - Activation lists, as extra product rows, products the request did not name that the
   game's Start would refuse (`no_warehouse`). Rows also carry `reordered` (true when `order`
   moved this contract).
