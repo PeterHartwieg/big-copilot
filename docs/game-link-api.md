@@ -299,8 +299,9 @@ named "Default", else the first of `GameInstance.employeePresets`; a string name
 - Product `error`: `not_found`, `no_warehouse`, `backorder` (the item is in a backorder
   market event), `over_cap` (a plain contract's amount above what the importer allows,
   with `max`), `changed`, `bad_amount` (negative or not a whole number). A Smart Delivery
-  amount is a stock level, never `over_cap`. `max` is the importer's full weekly cap: the
-  week's count resets at the Monday delivery the amount is for.
+  amount is a stock level, never `over_cap`. `max` is what the importer still allows,
+  `max(0, cap - orderedThisWeek)`: urgent orders during the week count against the next
+  Monday's delivery, which is the one the amount is for.
 - Activation lists, as extra product rows, products the request did not name that the
   game's Start would refuse (`no_warehouse`). Rows also carry `reordered` (true when `order`
   moved this contract).
@@ -322,8 +323,10 @@ One business per call: its seven days of shifts are replaced.
 - A shift's type is the mod's to choose, as the game's schedule screen does
   (`GetWorkShiftType`: cleaning stations get the cleaning type).
 - `openAllHours: true` also sets every day open 0 to 24 (`isOpen`, one slot `{0, 24}`), the
-  full-cover plan's opening hours. Refused at a headquarters (`hq_hours`), as the game refuses
-  to toggle open there.
+  full-cover plan's opening hours.
+- A headquarters is refused (`headquarters`): the game ties its shifts to the day's opening
+  slot on every open day, and unassigning people there clears their plans and import
+  contracts. The board plans no headquarters.
 - `expect` is the **shift print** of the business's current shifts (below).
 
 ```json
@@ -338,8 +341,8 @@ One business per call: its seven days of shifts are replaced.
 - `leftWithout`: people with a shift here before and none after; the game unassigns their
   work and adds a to-do, as its own screen does.
 - `siteError`, the business's own refusal: `not_found`, `not_rented`, `screen_open` (the
-  BizMan schedule is open on this business, or an auto-fill is running on it), `hq_hours`,
-  `changed`. In a `409 refused` the rows lead with `{"error": <siteError>}` (no `d`, `i`); a
+  BizMan schedule is open on this business, or an auto-fill is running on it),
+  `headquarters`, `changed`. In a `409 refused` the rows lead with `{"error": <siteError>}` (no `d`, `i`); a
   `409 changed` has empty rows.
 - Shift `error`s in `rows`, each `{"d", "i" (index in that day's list), "error"}`:
   `not_assigned` (the employee is not assigned to this business), `no_station` (no such item
@@ -368,7 +371,8 @@ Restores what the last applied write of that kind changed, in this city session,
 the target still holds what that write left there: uniforms only on the skills it set and
 still holding its preset; imports the amounts, running state, Repeating, urgent flag, next
 delivery day and plan order; the schedule the shifts and, when it opened them, the
-opening hours. Answers like the write it undoes, with `"undo": true`: uniforms list the
+opening hours, after checking the restored shifts as a write would (a person moved away
+or a station sold since answers `changed`). Answers like the write it undoes, with `"undo": true`: uniforms list the
 skills it cleared in `set`; imports and schedule answer `before` as the state the undo
 found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the

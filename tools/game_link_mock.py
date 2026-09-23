@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import ba_save  # noqa: E402
-from ba_dashboard import schedule_entries, shift_print  # noqa: E402
+from ba_dashboard import STATION_SKILLS, _uniform_gaps, schedule_entries, shift_print  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_PORT = 8322
@@ -256,7 +256,7 @@ class Link:
             rule = "changed" if error == "changed" else detail or REFUSED_DEFAULT[kind]
             rows = answer.get("rows", [])
             if kind == "schedule":
-                rows = [] if error == "changed" else [{"d": 0, "i": 0, "error": rule}]
+                rows = [] if error == "changed" else [{"error": rule}]
             for row in rows:
                 if "error" in row:
                     row["error"] = rule
@@ -278,8 +278,8 @@ class Link:
                 raise BadRequest("sites[] must be objects")
             address = _address(site.get("address"), "sites[].address")
             skills = site.get("skills")
-            if not isinstance(skills, list) or not all(isinstance(s, str) for s in skills):
-                raise BadRequest("sites[].skills must be a list of skill ids")
+            if skills is not None and not (isinstance(skills, list) and all(isinstance(s, str) for s in skills)):
+                raise BadRequest("sites[].skills must be null or a list of skill ids")
             wanted = site.get("presetId")
             if wanted is not None and not isinstance(wanted, str):
                 raise BadRequest("sites[].presetId must be null or a string")
@@ -309,11 +309,13 @@ class Link:
             row["presetId"], row["presetName"] = preset["id"], preset["name"]
             have = {e.get("$k") for e in save.items(reg.get("uniformsBySkill"))}
             have |= set(self.uniforms.get(address, {}))
-            for skill in dict.fromkeys(skills):
-                if skill in have:
-                    row["skipped"].append({"skill": skill, "reason": "already_set"})
-                elif not skill.startswith("ba:skill_"):
+            offered = self._offered(save, reg, address)
+            # null asks for every offered skill; a list is a filter over them.
+            for skill in dict.fromkeys(offered if skills is None else skills):
+                if skill not in offered:
                     row["skipped"].append({"skill": skill, "reason": "not_offered"})
+                elif skill in have:
+                    row["skipped"].append({"skill": skill, "reason": "already_set"})
                 else:
                     row["set"].append(skill)
             writes.append((address, row["set"], preset["id"]))
@@ -325,8 +327,32 @@ class Link:
             return 409, {"error": "refused", "rows": rows}
         for address, skills, preset_id in writes:
             self.uniforms.setdefault(address, {}).update({skill: preset_id for skill in skills})
-        self.undo["uniforms"] = {"rows": [dict(row) for row in rows]}
+        # An apply that sets nothing leaves nothing to undo.
+        if any(row["set"] for row in rows):
+            self.undo["uniforms"] = {"rows": [dict(row) for row in rows]}
+        else:
+            self.undo.pop("uniforms", None)
         return 200, answer
+
+    @staticmethod
+    def _offered(save, reg, address) -> list:
+        """The skills the site's Uniforms window offers, as far as the bytes
+        tell: the game builds the list from the business type and the
+        building, neither of which the save holds, so the skills of the
+        stations installed here stand in for it, and the roles on shift
+        without a uniform (the board's uniformGapSkills) where no station
+        names one."""
+        offered = {}
+        for holder in save.items(reg.get("itemInstances")):
+            item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+            for skill in STATION_SKILLS.get((item or {}).get("itemName"), ()):
+                offered[skill] = True
+        if offered:
+            return sorted(offered)
+        crew = [{"id": e.get("id"), "skills": [k.get("name") for k in save.items((save.deref(e.get("characterData")) or {}).get("skills"))]}
+                for e in save.items(save.root.get("EmployeeInstances"))
+                if save.address(e.get("assignedAddress")) == address]
+        return _uniform_gaps(save, reg, crew, None)
 
     # imports --------------------------------------------------------------------
     def _lock_window(self) -> bool:
@@ -376,7 +402,7 @@ class Link:
             contract = contracts.get(ask["id"])
             row = {"id": ask["id"], "importer": None, "active": None, "repeating": None,
                    "reactivated": False, "nextDeliveryDay": None, "nextDeliveryTotal": None,
-                   "error": None, "reopens": None, "products": []}
+                   "error": None, "reopens": None, "reordered": False, "products": []}
             rows.append(row)
             if contract is None:
                 row["error"] = "not_found"
@@ -415,29 +441,51 @@ class Link:
                     line["error"] = "no_warehouse"
                 else:
                     amounts[(ask["id"], want["itemName"], warehouse)] = (before, want["amount"])
-            if any(line["error"] == "changed" for line in row["products"]):
-                row["error"] = "changed"
+            named = {(line["itemName"], (line["warehouse"]["street"], line["warehouse"]["number"]))
+                     for line in row["products"]}
+            if row["reactivated"]:
+                # The game's Start refuses a product with no warehouse, named or not.
+                for product in save.items(contract.get("products")):
+                    where = self._product_address(product)
+                    if (product.get("itemName"), where) in named:
+                        continue
+                    if where is None or self._site_error(self._registration(save, where)):
+                        amount = self._amount(ask["id"], product)
+                        row["products"].append({
+                            "itemName": product.get("itemName"), "warehouse": _wire(where) if where else None,
+                            "before": amount, "amount": amount, "smart": bool(contract.get("isTarget")),
+                            "unitPrice": None, "cap": None, "orderedThisWeek": product.get("amountOrderedThisWeek", 0),
+                            "error": "no_warehouse", "max": None})
+            written = [amounts.get((ask["id"], p.get("itemName"), self._product_address(p)),
+                                   (None, self._amount(ask["id"], p)))[1]
+                       for p in save.items(contract.get("products"))]
+            first = next((line["error"] for line in row["products"] if line["error"]), None)
+            if first:
+                row["error"] = first  # a row can be judged without reading its products
             elif not contract.get("employeeInstanceId"):
                 row["error"] = "no_agent"
+            elif row["reactivated"] and not any(written):
+                row["error"] = "no_amounts"
             elif (state["active"] and any(b != a for b, a in amounts.values())
                   and self._lock_window() and state["nextDeliveryDay"] == self._imminent_monday()):
                 row["error"] = "locked"
                 row["reopens"] = {"day": state["nextDeliveryDay"], "hour": 8}
             row.update(active=after["active"], repeating=after["repeating"],
                        nextDeliveryDay=after["nextDeliveryDay"])
-            if row["error"] is None and any(line["error"] for line in row["products"]):
-                row["error"] = next(line["error"] for line in row["products"] if line["error"])
             changes.append((ask["id"], state, after, amounts))
         new_order = None
         if order is not None:
             for cid in order:
                 if cid not in contracts:
-                    rows.append({"id": cid, "importer": None, "error": "not_found", "products": []})
+                    rows.append({"id": cid, "importer": None, "error": "not_found", "reordered": False, "products": []})
             if all(cid in contracts for cid in order):
                 slots = sorted(current.index(cid) for cid in order)
                 new_order = list(current)
                 for slot, cid in zip(slots, order):
                     new_order[slot] = cid
+                for row in rows:
+                    if row["id"] in contracts:
+                        row["reordered"] = new_order.index(row["id"]) != current.index(row["id"])
         ok = all(row["error"] is None for row in rows)
         answer = {"ok": ok, "kind": "imports", "dryRun": dry, "cash": self.cash, "rows": rows}
         if dry:
@@ -453,9 +501,15 @@ class Link:
             for key, (before, amount) in amounts.items():
                 undo["products"][key] = self.products.get(key)
                 self.products[key] = amount
+        moved = new_order is not None and new_order != current
         if new_order is not None:
             self.order = new_order
-        self.undo["imports"] = {"rows": rows, "state": undo}
+        # An apply that changes nothing leaves nothing to undo.
+        if moved or any(state != after or any(b != a for b, a in amounts.values())
+                        for _cid, state, after, amounts in changes):
+            self.undo["imports"] = {"rows": rows, "state": undo}
+        else:
+            self.undo.pop("imports", None)
         return 200, answer
 
     # schedule -------------------------------------------------------------------
@@ -474,7 +528,7 @@ class Link:
         answer = {"ok": False, "kind": "schedule", "dryRun": dry, "address": _wire(address),
                   "business": reg.get("BusinessName") if reg else None, "before": None, "after": None,
                   "removed": 0, "added": 0, "openedHours": False, "leftWithout": [], "warnings": [],
-                  "error": self._site_error(reg), "rows": []}
+                  "siteError": self._site_error(reg), "rows": []}
         shifts = []
         for day in days:
             if not (isinstance(day, dict) and _whole(day.get("d")) and 0 <= day["d"] <= 6
@@ -484,15 +538,15 @@ class Link:
                 if not isinstance(shift, dict):
                     raise BadRequest("shifts[] must be objects")
                 shifts.append((day["d"], i, shift))
-        if answer["error"]:
+        if answer["siteError"]:
             return self._schedule_refused(answer, dry)
         before = self.schedules.get(address, schedule_entries(save, reg))
         answer["before"] = {"shifts": len(before), "print": shift_print(before)}
         if expect != answer["before"]["print"]:
-            answer["error"] = "changed"
+            answer["siteError"] = "changed"
             return (200, answer) if dry else (409, {"error": "changed", "rows": []})
         if open_all and reg.get("businessTypeName") == HQ_TYPE:
-            answer["error"] = "hq_hours"
+            answer["siteError"] = "hq_hours"
             return self._schedule_refused(answer, dry)
         staff = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances"))}
         stations = {h.get("$k"): (save.deref(h.get("$v")) or {}).get("itemName")
@@ -518,7 +572,7 @@ class Link:
                 continue
             taken.append((d, f, t, who, post))
             after.append((d, f, t, who, post, 0 if stations[post] == CLEANING_STATION else 1))
-        answer["ok"] = answer["error"] is None and not answer["rows"]
+        answer["ok"] = answer["siteError"] is None and not answer["rows"]
         self._schedule_answer(answer, save, before, after, open_all)
         if dry or not answer["ok"]:
             return self._schedule_refused(answer, dry)
@@ -526,8 +580,11 @@ class Link:
         opened_before = address in self.opened
         if open_all:
             self.opened.add(address)
-        self.undo["schedule"] = {"address": address, "before": before, "after": after,
-                                 "opened": open_all and not opened_before, "business": answer["business"]}
+        if sorted(after) != sorted(before) or (open_all and not opened_before):
+            self.undo["schedule"] = {"address": address, "before": before, "after": after,
+                                     "opened": open_all and not opened_before, "business": answer["business"]}
+        else:
+            self.undo.pop("schedule", None)  # nothing changed, nothing to undo
         return 200, answer
 
     @staticmethod
@@ -536,7 +593,7 @@ class Link:
         and, as a row with no d and i, the site's own."""
         if dry or answer["ok"]:
             return 200, answer
-        rows = ([{"error": answer["error"]}] if answer["error"] else []) + answer["rows"]
+        rows = ([{"error": answer["siteError"]}] if answer["siteError"] else []) + answer["rows"]
         return 409, {"error": "refused", "rows": rows}
 
     @staticmethod
@@ -594,7 +651,7 @@ class Link:
         else:
             address = record["address"]
             answer = {"ok": True, "kind": kind, "dryRun": dry, "undo": True, "address": _wire(address),
-                      "business": record["business"], "error": None, "rows": []}
+                      "business": record["business"], "siteError": None, "rows": []}
             self._schedule_answer(answer, self._save(), record["after"], record["before"], False)
             answer["openedHours"] = record["opened"]
             if not dry:
