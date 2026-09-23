@@ -215,7 +215,10 @@ namespace BigCopilotLink
                     }
                     p.Amount = JsonReader.Num(pobj, "amount", ppath);
                     p.Expect = JsonReader.Num(pobj, "expect", ppath);
-                    var key = p.ItemName + "|" + (p.HasWarehouse ? p.Warehouse.Street + "|" + p.Warehouse.Number : "");
+                    // An empty street is no warehouse, as SameAddress matches it.
+                    var key = p.ItemName + "|" + (p.HasWarehouse && !string.IsNullOrEmpty(p.Warehouse.Street)
+                        ? p.Warehouse.Street + "|" + p.Warehouse.Number
+                        : "");
                     if (!keys.Add(key)) throw new BadRequestException(ppath + " repeats a product");
                     c.Products.Add(p);
                 }
@@ -441,10 +444,10 @@ namespace BigCopilotLink
                 row.ReopenDay = ReopenDay();
             }
 
-            // The delivery these amounts are for: Start picks it on a restart.
-            var deliveryDay = row.Activates || (ip.isActive && row.AmountsChange)
-                ? DeliveryHelper.GetNextDeliveryDay()
-                : ip.nextDeliveryDay;
+            // The delivery these amounts are for: the day a Start issued now would pick.
+            // A restart picks it here; a stopped contract edited now delivers only after
+            // some later Start, which cannot pick an earlier day.
+            var deliveryDay = DeliveryHelper.GetNextDeliveryDay();
             foreach (var pr in row.Products)
             {
                 if (pr.Error != null || pr.Product == null || !(pr.Changes || row.Activates)) continue;
@@ -663,7 +666,9 @@ namespace BigCopilotLink
         /// What the importer still allows for the Monday delivery: the weekly cap less what
         /// the player's contracts with it already ordered of the item this week, urgent
         /// orders included (DoAllDeliveries clears the tally only after that Monday's
-        /// deliveries, so it counts against them). False when no cap applies.
+        /// deliveries, so it counts against them). Inside the lock window a
+        /// <paramref name="deliveryDay"/> after the imminent Monday comes after that reset,
+        /// so the tally counts as 0 and the whole cap is left. False when no cap applies.
         /// </summary>
         private static bool TryRemainingCap(ImportPartnership ip, string itemName, int deliveryDay, out int left)
         {
