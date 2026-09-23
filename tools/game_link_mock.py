@@ -393,10 +393,10 @@ class Link:
         key = (cid, product.get("itemName"), self._product_address(product))
         return self.products.get(key, product.get("amount", 0))
 
-    @staticmethod
-    def _product_address(product):
-        where = product.get("assignedWarehouse")
-        return (where.get("streetName"), where.get("streetNumber", 0)) if isinstance(where, dict) else None
+    def _product_address(self, product):
+        # A real save stores the warehouse as a reference to an Address held
+        # elsewhere in the file, so it goes through the save's deref.
+        return self._save().address(product.get("assignedWarehouse"))
 
     def _allowed(self, cap: int, ordered: int) -> int:
         """What the importer still allows for the delivery an amount is for:
