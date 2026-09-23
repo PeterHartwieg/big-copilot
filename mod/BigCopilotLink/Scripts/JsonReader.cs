@@ -194,14 +194,39 @@ namespace BigCopilotLink
 
         private static double ReadNumber(string s, ref int pos)
         {
+            // RFC 8259's grammar first: -?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?.
+            // double.TryParse alone would take 01, 1., .5 and +1.
             var start = pos;
-            if (s[pos] == '-') pos++;
-            while (pos < s.Length && "0123456789.eE+-".IndexOf(s[pos]) >= 0) pos++;
+            if (pos < s.Length && s[pos] == '-') pos++;
+            if (pos < s.Length && s[pos] == '0') pos++;
+            else if (pos < s.Length && s[pos] >= '1' && s[pos] <= '9') SkipDigits(s, ref pos);
+            else throw Fail("bad number", start);
+            if (pos < s.Length && s[pos] == '.')
+            {
+                pos++;
+                if (!SkipDigits(s, ref pos)) throw Fail("bad number", start);
+            }
+            if (pos < s.Length && (s[pos] == 'e' || s[pos] == 'E'))
+            {
+                pos++;
+                if (pos < s.Length && (s[pos] == '+' || s[pos] == '-')) pos++;
+                if (!SkipDigits(s, ref pos)) throw Fail("bad number", start);
+            }
+            // A digit or sign straight after is not a separator: "01", "1.5.2", "1-2".
+            if (pos < s.Length && "0123456789.eE+-".IndexOf(s[pos]) >= 0) throw Fail("bad number", start);
             double value;
             if (!double.TryParse(s.Substring(start, pos - start), NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
                 double.IsNaN(value) || double.IsInfinity(value))
                 throw Fail("bad number", start);
             return value;
+        }
+
+        /// <summary>At least one digit, skipped.</summary>
+        private static bool SkipDigits(string s, ref int pos)
+        {
+            var start = pos;
+            while (pos < s.Length && s[pos] >= '0' && s[pos] <= '9') pos++;
+            return pos > start;
         }
 
         private static bool Match(string s, ref int pos, string word)

@@ -40,7 +40,7 @@ namespace BigCopilotLink
             public double Expect;
         }
 
-        /// <summary>The fields of a contract a write may change, for undo and its check.</summary>
+        /// <summary>A contract's fields a write may change, as they stood at one moment.</summary>
         internal sealed class State
         {
             public ImportProduct[] Products;
@@ -66,19 +66,7 @@ namespace BigCopilotLink
                 return state;
             }
 
-            /// <summary>Still what it was, for the products this state knows (the game may add new ones).</summary>
-            public bool Holds(ImportPartnership ip)
-            {
-                if (ip.isActive != Active || ip.isRepeatingOrder != Repeating || ip.isUrgentOrder != Urgent || ip.nextDeliveryDay != NextDay)
-                    return false;
-                for (var i = 0; i < Products.Length; i++)
-                {
-                    if (Products[i] == null) continue;
-                    if (ip.products == null || !ip.products.Contains(Products[i]) || Products[i].amount != Amounts[i]) return false;
-                }
-                return true;
-            }
-
+            /// <summary>Everything back as it was: only for a write that threw halfway.</summary>
             public void Restore(ImportPartnership ip)
             {
                 for (var i = 0; i < Products.Length; i++)
@@ -88,20 +76,78 @@ namespace BigCopilotLink
                 ip.isUrgentOrder = Urgent;
                 ip.nextDeliveryDay = NextDay;
             }
-
-            public int AmountOf(ImportProduct product)
-            {
-                var i = Array.IndexOf(Products, product);
-                return i >= 0 ? Amounts[i] : product.amount;
-            }
         }
 
-        /// <summary>What the last applied write changed: each contract before and after, and the plan order.</summary>
+        /// <summary>
+        /// What one write changed on one contract, and only that: the amounts it moved and
+        /// the flags it set. Undo checks those still hold what the write left and puts
+        /// back those alone, so a field the player changed that the write never touched
+        /// neither blocks the undo nor is overwritten by it.
+        /// </summary>
+        internal sealed class ContractChange
+        {
+            public ImportPartnership Contract;
+            public readonly List<ImportProduct> Products = new List<ImportProduct>();
+            public readonly List<int> Was = new List<int>();
+            public readonly List<int> Now = new List<int>();
+            public bool ActiveChanged, RepeatingChanged, UrgentChanged, NextDayChanged;
+            public State Before;
+            public State After;
+
+            public static ContractChange Between(ImportPartnership ip, State before, State after)
+            {
+                var c = new ContractChange { Contract = ip, Before = before, After = after };
+                for (var i = 0; i < before.Products.Length; i++)
+                {
+                    var product = before.Products[i];
+                    var j = Array.IndexOf(after.Products, product);
+                    if (product == null || j < 0 || after.Amounts[j] == before.Amounts[i]) continue;
+                    c.Products.Add(product);
+                    c.Was.Add(before.Amounts[i]);
+                    c.Now.Add(after.Amounts[j]);
+                }
+                c.ActiveChanged = before.Active != after.Active;
+                c.RepeatingChanged = before.Repeating != after.Repeating;
+                c.UrgentChanged = before.Urgent != after.Urgent;
+                c.NextDayChanged = before.NextDay != after.NextDay;
+                return c;
+            }
+
+            /// <summary>The fields this write changed still hold what it left there.</summary>
+            public bool Holds()
+            {
+                var ip = Contract;
+                if (ActiveChanged && ip.isActive != After.Active) return false;
+                if (RepeatingChanged && ip.isRepeatingOrder != After.Repeating) return false;
+                if (UrgentChanged && ip.isUrgentOrder != After.Urgent) return false;
+                if (NextDayChanged && ip.nextDeliveryDay != After.NextDay) return false;
+                for (var i = 0; i < Products.Count; i++)
+                    if (ip.products == null || !ip.products.Contains(Products[i]) || Products[i].amount != Now[i]) return false;
+                return true;
+            }
+
+            /// <summary>Main thread: the changed fields back to what they were before the write.</summary>
+            public void Undo()
+            {
+                var ip = Contract;
+                for (var i = 0; i < Products.Count; i++) Products[i].amount = Was[i];
+                if (ActiveChanged) ip.isActive = Before.Active;
+                if (RepeatingChanged) ip.isRepeatingOrder = Before.Repeating;
+                if (UrgentChanged) ip.isUrgentOrder = Before.Urgent;
+                if (NextDayChanged) ip.nextDeliveryDay = Before.NextDay;
+            }
+
+            // The values the contract holds once undone: the old one where the write
+            // changed it, the current one elsewhere.
+            public bool ActiveAfterUndo { get { return ActiveChanged ? Before.Active : Contract.isActive; } }
+            public bool RepeatingAfterUndo { get { return RepeatingChanged ? Before.Repeating : Contract.isRepeatingOrder; } }
+            public int NextDayAfterUndo { get { return NextDayChanged ? Before.NextDay : Contract.nextDeliveryDay; } }
+        }
+
+        /// <summary>What the last applied write changed: per contract, and the plan order.</summary>
         public sealed class UndoState
         {
-            internal readonly List<ImportPartnership> Contracts = new List<ImportPartnership>();
-            internal readonly List<State> Before = new List<State>();
-            internal readonly List<State> After = new List<State>();
+            internal readonly List<ContractChange> Changes = new List<ContractChange>();
             internal List<ImportPartnership> OrderBefore;
             internal List<ImportPartnership> OrderAfter;
         }
@@ -116,6 +162,7 @@ namespace BigCopilotLink
             public bool Activates;
             public bool AmountsChange;
             public bool Reordered;
+            public bool Restart;
             // What the contract holds after the write (a dry run: would hold); Known once set.
             public bool Known;
             public bool Active;
@@ -255,69 +302,81 @@ namespace BigCopilotLink
 
             var failed = rows.Exists(r => r.Error != null || r.Products.Exists(p => p.Error != null));
 
-            // Values after the write. NextDeliveryTotal reads the amounts, so the new ones
-            // go in for the read; a dry run or a refusal puts the old ones back.
-            var apply = !dryRun && !failed;
-            var undo = apply ? new UndoState() : null;
+            // Pass one, nothing kept: the values after the write. NextDeliveryTotal reads
+            // the amounts, so the new ones go in for the read and always come back out.
             try
             {
                 foreach (var row in rows)
                 {
                     if (row.Contract == null) continue;
                     var ip = row.Contract;
-                    var touched = row.Activates || row.AmountsChange;
-                    if (touched && undo != null)
-                    {
-                        undo.Contracts.Add(ip);
-                        undo.Before.Add(State.Of(ip));
-                    }
                     foreach (var p in row.Products)
                         if (p.Product != null && p.Changes) p.Product.amount = p.Amount;
 
                     // Start (for a stopped contract being switched on) or Cancel + Start
                     // (for a running one whose amounts change).
-                    var restart = row.Activates || (ip.isActive && row.AmountsChange);
+                    row.Restart = row.Activates || (ip.isActive && row.AmountsChange);
                     row.Active = ip.isActive || row.Activates;
                     row.Repeating = row.Activates || ip.isRepeatingOrder;
-                    row.NextDay = restart ? DeliveryHelper.GetNextDeliveryDay() : ip.nextDeliveryDay;
+                    row.NextDay = row.Restart ? DeliveryHelper.GetNextDeliveryDay() : ip.nextDeliveryDay;
                     row.Total = Total(ip);
                     row.Known = true;
-
-                    if (apply && touched)
-                    {
-                        if (restart)
-                        {
-                            ip.isActive = true;
-                            ip.nextDeliveryDay = row.NextDay;
-                            ip.isUrgentOrder = false;
-                        }
-                        if (row.Activates) ip.isRepeatingOrder = true;
-                        undo.After.Add(State.Of(ip));
-                    }
                 }
             }
             finally
             {
-                if (!apply)
-                    foreach (var row in rows)
-                    foreach (var p in row.Products)
-                        if (p.Product != null && p.Changes) p.Product.amount = p.Before;
+                foreach (var row in rows)
+                foreach (var p in row.Products)
+                    if (p.Product != null && p.Changes) p.Product.amount = p.Before;
             }
 
-            if (!apply) return Answer(rows, dryRun, failed, false, null);
+            if (dryRun || failed) return Answer(rows, dryRun, failed, false, null);
 
-            if (orderAfter != null)
+            // Pass two: the writes, plain field sets from values already worked out. Should
+            // one throw all the same, every contract touched so far goes back as it was.
+            var undo = new UndoState();
+            var befores = new List<KeyValuePair<ImportPartnership, State>>();
+            try
             {
-                Reorder(list, orderAfter);
-                undo.OrderBefore = orderBefore;
-                undo.OrderAfter = orderAfter;
+                foreach (var row in rows)
+                {
+                    if (row.Contract == null || !(row.Activates || row.AmountsChange)) continue;
+                    var ip = row.Contract;
+                    var before = State.Of(ip);
+                    befores.Add(new KeyValuePair<ImportPartnership, State>(ip, before));
+                    foreach (var p in row.Products)
+                        if (p.Product != null && p.Changes) p.Product.amount = p.Amount;
+                    if (row.Restart)
+                    {
+                        ip.isActive = true;
+                        ip.nextDeliveryDay = row.NextDay;
+                        ip.isUrgentOrder = false;
+                    }
+                    if (row.Activates) ip.isRepeatingOrder = true;
+                    undo.Changes.Add(ContractChange.Between(ip, before, State.Of(ip)));
+                }
+                if (orderAfter != null)
+                {
+                    Reorder(list, orderAfter);
+                    undo.OrderBefore = orderBefore;
+                    undo.OrderAfter = orderAfter;
+                }
             }
+            catch
+            {
+                foreach (var pair in befores) pair.Value.Restore(pair.Key);
+                if (orderAfter != null && orderBefore != null && SameSequence(RelativeOrder(list, orderAfter), orderAfter))
+                    Reorder(list, orderBefore);
+                throw;
+            }
+
             // The last write of the kind is what undo restores, even one that changed nothing.
-            var changedAnything = undo.Contracts.Count > 0 || orderAfter != null;
+            var changedAnything = undo.Changes.Count > 0 || orderAfter != null;
             ws.ImportUndo = changedAnything ? undo : null;
 
+            var touched = undo.Changes.ConvertAll(c => c.Contract);
             var stamp = changedAnything
-                ? ws.Applied("bigcopilotlink_notify_imports", Headquarters(undo.Contracts, orderAfter))
+                ? ws.Applied("bigcopilotlink_notify_imports", Headquarters(touched, orderAfter))
                 : ws.RefreshAfterWrite();
             return Answer(rows, false, false, false, stamp);
         }
@@ -379,27 +438,27 @@ namespace BigCopilotLink
                 // Cancel's rule: inside Sunday 20:00 to Monday 08:00 the imminent
                 // Monday's delivery is in progress. It reopens Monday 08:00.
                 row.Error = "locked";
-                row.ReopenDay = TimeHelper.CurrentDay +
-                                (TimeHelper.GetDayOfWeek() == BigAmbitions.DayNightCycle.DayOfWeekOrdered.Sunday ? 1 : 0);
+                row.ReopenDay = ReopenDay();
             }
 
             foreach (var pr in row.Products)
             {
                 if (pr.Error != null || pr.Product == null || !(pr.Changes || row.Activates)) continue;
-                int cap;
+                int left;
                 if (pr.Changes && pr.Amount > 0 && InBackorder(pr.ItemName)) pr.Error = "backorder";
-                else if (!ip.isTarget && TryCap(ip, pr.ItemName, out cap) && pr.Amount > cap)
+                else if (!ip.isTarget && TryRemainingCap(ip, pr.ItemName, out left) && pr.Amount > left)
                 {
                     // A Smart Delivery amount is a stock level, so only a plain one is capped.
                     pr.Error = "over_cap";
-                    pr.Max = cap;
+                    pr.Max = left;
                 }
                 else if (pr.Amount > 0 && Streets.AddressHelper.IsUndefined(pr.Product.assignedWarehouse)) pr.Error = "no_warehouse";
             }
 
             // Start's own refusals: nothing to deliver, or something to deliver nowhere
-            // (a product the request did not name counts too).
-            if (row.Activates && row.Error == null)
+            // (a product the request did not name counts too). They hold for a running
+            // contract whose amounts change as well: that is Cancel, edit, Start.
+            if ((row.Activates || (ip.isActive && row.AmountsChange)) && row.Error == null)
             {
                 var anyAmount = false;
                 foreach (var product in ip.products ?? new List<ImportProduct>())
@@ -433,34 +492,32 @@ namespace BigCopilotLink
             var rows = new List<Row>();
             var rowByContract = new Dictionary<ImportPartnership, Row>();
 
-            for (var i = 0; i < state.Contracts.Count; i++)
+            foreach (var change in state.Changes)
             {
-                var ip = state.Contracts[i];
-                var before = state.Before[i];
-                var after = state.After[i];
+                var ip = change.Contract;
                 var row = new Row { Id = ip.id, Contract = ip };
                 rows.Add(row);
                 rowByContract[ip] = row;
-                for (var j = 0; j < after.Products.Length; j++)
+                // before: what the undo found; amount: what it puts back.
+                for (var j = 0; j < change.Products.Count; j++)
                 {
-                    var product = after.Products[j];
-                    if (product == null) continue;
-                    var restored = before.AmountOf(product);
+                    var product = change.Products[j];
                     row.Products.Add(new ProductRow
                     {
                         ItemName = product.itemName, Warehouse = product.assignedWarehouse, Product = product,
-                        Before = product.amount, Amount = restored, Changes = restored != product.amount
+                        Before = product.amount, Amount = change.Was[j], Changes = product.amount != change.Was[j]
                     });
                 }
-                row.AmountsChange = row.Products.Exists(p => p.Changes);
+                row.AmountsChange = change.Products.Count > 0;
 
-                if (!list.Contains(ip) || !after.Holds(ip)) row.Error = "changed";
+                if (!list.Contains(ip) || !change.Holds()) row.Error = "changed";
                 else if (WriteService.PlanScreenOpenOn(ip)) row.Error = "screen_open";
-                else if (ip.isActive && (row.AmountsChange || !before.Active) && !DeliveryHelper.CanModifyContract(ip.nextDeliveryDay))
+                else if (ip.isActive && (row.AmountsChange || change.ActiveChanged) && !DeliveryHelper.CanModifyContract(ip.nextDeliveryDay))
                 {
+                    // Putting amounts back on a running contract, or stopping one the write
+                    // started, is the game's Cancel, with its lock rule.
                     row.Error = "locked";
-                    row.ReopenDay = TimeHelper.CurrentDay +
-                                    (TimeHelper.GetDayOfWeek() == BigAmbitions.DayNightCycle.DayOfWeekOrdered.Sunday ? 1 : 0);
+                    row.ReopenDay = ReopenDay();
                 }
             }
 
@@ -486,21 +543,20 @@ namespace BigCopilotLink
             }
 
             var failed = rows.Exists(r => r.Error != null);
-            var apply = !dryRun && !failed;
+
+            // Pass one, nothing kept: the values once undone.
             try
             {
-                for (var i = 0; i < state.Contracts.Count; i++)
+                foreach (var change in state.Changes)
                 {
-                    var row = rowByContract[state.Contracts[i]];
-                    var before = state.Before[i];
+                    var row = rowByContract[change.Contract];
                     foreach (var p in row.Products)
                         if (p.Changes) p.Product.amount = p.Amount;
-                    row.Active = before.Active;
-                    row.Repeating = before.Repeating;
-                    row.NextDay = before.NextDay;
+                    row.Active = change.ActiveAfterUndo;
+                    row.Repeating = change.RepeatingAfterUndo;
+                    row.NextDay = change.NextDayAfterUndo;
                     row.Total = Total(row.Contract);
                     row.Known = true;
-                    if (apply) before.Restore(row.Contract);
                 }
                 foreach (var row in rows)
                 {
@@ -515,18 +571,41 @@ namespace BigCopilotLink
             }
             finally
             {
-                if (!apply)
-                    foreach (var row in rows)
-                    foreach (var p in row.Products)
-                        if (p.Changes) p.Product.amount = p.Before;
+                foreach (var row in rows)
+                foreach (var p in row.Products)
+                    if (p.Changes) p.Product.amount = p.Before;
             }
 
-            if (!apply) return Answer(rows, dryRun, failed, true, null);
+            if (dryRun || failed) return Answer(rows, dryRun, failed, true, null);
 
-            if (state.OrderAfter != null) Reorder(list, state.OrderBefore);
+            // Pass two: the field sets, rolled back whole should one throw.
+            var befores = new List<KeyValuePair<ImportPartnership, State>>();
+            try
+            {
+                foreach (var change in state.Changes)
+                {
+                    befores.Add(new KeyValuePair<ImportPartnership, State>(change.Contract, State.Of(change.Contract)));
+                    change.Undo();
+                }
+                if (state.OrderAfter != null) Reorder(list, state.OrderBefore);
+            }
+            catch
+            {
+                foreach (var pair in befores) pair.Value.Restore(pair.Key);
+                throw;
+            }
+
             ws.ImportUndo = null;
-            var stamp = ws.Applied("bigcopilotlink_notify_undo_imports", Headquarters(state.Contracts, state.OrderAfter));
+            var touched = state.Changes.ConvertAll(c => c.Contract);
+            var stamp = ws.Applied("bigcopilotlink_notify_undo_imports", Headquarters(touched, state.OrderAfter));
             return Answer(rows, false, false, true, stamp);
+        }
+
+        private static int ReopenDay()
+        {
+            // Monday 08:00: tomorrow on a Sunday, today on a Monday.
+            return TimeHelper.CurrentDay +
+                   (TimeHelper.GetDayOfWeek() == BigAmbitions.DayNightCycle.DayOfWeekOrdered.Sunday ? 1 : 0);
         }
 
         // ---- the game's rules ------------------------------------------------------
@@ -574,6 +653,30 @@ namespace BigCopilotLink
                 LinkMod.LogWarn("could not read the import cap of " + itemName + ": " + e.Message);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// What the importer still allows for the Monday delivery: the weekly cap less what
+        /// the player's contracts with it already ordered of the item this week, urgent
+        /// orders included (DoAllDeliveries clears the tally only after that Monday's
+        /// deliveries, so it counts against them). False when no cap applies.
+        /// </summary>
+        private static bool TryRemainingCap(ImportPartnership ip, string itemName, out int left)
+        {
+            left = 0;
+            int cap;
+            if (!TryCap(ip, itemName, out cap)) return false;
+            int ordered;
+            try
+            {
+                ordered = ImportPartnership.GetItemAmountOrderedThisWeek(ip.importAddress, itemName);
+            }
+            catch (Exception)
+            {
+                ordered = 0;
+            }
+            left = Math.Max(0, cap - ordered);
+            return true;
         }
 
         /// <summary>

@@ -134,8 +134,12 @@ namespace BigCopilotLink
             if (reg == null) siteError = "not_found";
             else if (!string.Equals(req.Expect, beforePrint, StringComparison.OrdinalIgnoreCase)) siteError = "changed";
             else if (!reg.RentedByPlayer) siteError = "not_rented";
+            // Not at a headquarters: AddWorkShift ties its shifts to the day's opening slot
+            // on every open day, and a person left without a shift there loses their
+            // import contracts (UnAssignWork) and HQ plans (UpdateHQPlans), which no undo
+            // can give back. The board plans no headquarters.
+            else if (reg.businessTypeName == HeadquartersType) siteError = "headquarters";
             else if (WriteService.ScheduleScreenOpenOn(reg)) siteError = "screen_open";
-            else if (req.OpenAllHours && reg.businessTypeName == HeadquartersType) siteError = "hq_hours";
 
             var dayByD = new Dictionary<int, ScheduleDay>();
             foreach (var sd in liveDays)
@@ -219,6 +223,7 @@ namespace BigCopilotLink
                 siteError = "changed";
             else if (!reg.RentedByPlayer) siteError = "not_rented";
             else if (WriteService.ScheduleScreenOpenOn(reg)) siteError = "screen_open";
+            else if (!StillValid(reg, state)) siteError = "changed";
 
             var restored = new List<Line>();
             var openAfter = new Dictionary<int, bool>();
@@ -257,9 +262,7 @@ namespace BigCopilotLink
 
         private static List<ShiftCheck> CheckShifts(BuildingRegistration reg, Request req)
         {
-            var siteAddress = WriteService.GameAddress(reg);
-            var theater = reg.businessTypeName == TheaterType;
-            var stations = Workstations(reg);
+            var site = new Site(reg);
             var checks = new List<ShiftCheck>();
 
             foreach (var day in req.Days)
@@ -277,36 +280,9 @@ namespace BigCopilotLink
                         continue;
                     }
 
-                    var employee = Helpers.EmployeeHelper.GetEmployeeById(s.EmployeeId, false);
-                    if (employee == null || !WriteService.SameAddress(employee.assignedAddress, siteAddress))
-                    {
-                        c.Error = "not_assigned";
-                        continue;
-                    }
-
-                    // A theater's actors work the stage, not an item: the game keeps a ""
-                    // station for them (ScheduleHelper.FetchWorkstations).
-                    if (string.IsNullOrEmpty(s.ItemInstanceId))
-                    {
-                        if (!theater) c.Error = "no_station";
-                        continue;
-                    }
-
-                    BigAmbitions.Items.ItemInstance station;
-                    if (!stations.TryGetValue(s.ItemInstanceId, out station))
-                    {
-                        c.Error = "no_station";
-                        continue;
-                    }
-                    if (!HasSkillFor(employee, station))
-                    {
-                        c.Error = "no_skill";
-                        continue;
-                    }
-                    // GetWorkShiftType: cleaning stations get the cleaning type, the rest Default.
-                    c.Type = global::UI.Smartphone.Apps.BizMan.Schedule.ScheduleHelper.IsCleaningStation(station)
-                        ? WorkShiftType.Cleaning
-                        : WorkShiftType.Default;
+                    WorkShiftType type;
+                    c.Error = CheckPost(site, s.EmployeeId, s.ItemInstanceId, out type);
+                    c.Type = type;
                 }
 
                 // One person, one station, per hour: the later of two overlapping shifts is
@@ -334,6 +310,63 @@ namespace BigCopilotLink
                 checks.AddRange(dayChecks);
             }
             return checks;
+        }
+
+        /// <summary>What the per-shift rules need to know about the business, worked out once.</summary>
+        private sealed class Site
+        {
+            public readonly Address Address;
+            public readonly bool Theater;
+            public readonly Dictionary<string, BigAmbitions.Items.ItemInstance> Stations;
+
+            public Site(BuildingRegistration reg)
+            {
+                Address = WriteService.GameAddress(reg);
+                Theater = reg.businessTypeName == TheaterType;
+                Stations = Workstations(reg);
+            }
+        }
+
+        /// <summary>
+        /// The rules one shift must pass apart from its hours and overlaps: the person is
+        /// assigned here, the item is a workstation here, the person has a skill for it.
+        /// Null when it passes; <paramref name="type"/> is then the shift type the game's
+        /// GetWorkShiftType gives the station.
+        /// </summary>
+        private static string CheckPost(Site site, string employeeId, string itemInstanceId, out WorkShiftType type)
+        {
+            type = WorkShiftType.Default;
+            var employee = string.IsNullOrEmpty(employeeId) ? null : Helpers.EmployeeHelper.GetEmployeeById(employeeId, false);
+            if (employee == null || !WriteService.SameAddress(employee.assignedAddress, site.Address)) return "not_assigned";
+
+            // A theater's actors work the stage, not an item: the game keeps a ""
+            // station for them (ScheduleHelper.FetchWorkstations).
+            if (string.IsNullOrEmpty(itemInstanceId)) return site.Theater ? null : "no_station";
+
+            BigAmbitions.Items.ItemInstance station;
+            if (!site.Stations.TryGetValue(itemInstanceId, out station)) return "no_station";
+            if (!HasSkillFor(employee, station)) return "no_skill";
+            // GetWorkShiftType: cleaning stations get the cleaning type, the rest Default.
+            if (global::UI.Smartphone.Apps.BizMan.Schedule.ScheduleHelper.IsCleaningStation(station)) type = WorkShiftType.Cleaning;
+            return null;
+        }
+
+        /// <summary>
+        /// Undo puts back shifts that were valid when they were taken. Someone moved to
+        /// another business since, a station sold, a skill that no longer fits: the game
+        /// has moved on, and the undo answers changed rather than write what the grid
+        /// would refuse.
+        /// </summary>
+        private static bool StillValid(BuildingRegistration reg, UndoState state)
+        {
+            var site = new Site(reg);
+            foreach (var shifts in state.Shifts)
+            foreach (var ws in shifts)
+            {
+                WorkShiftType type;
+                if (CheckPost(site, ws.employeeId, ws.itemInstanceId, out type) != null) return false;
+            }
+            return true;
         }
 
         /// <summary>
@@ -394,9 +427,9 @@ namespace BigCopilotLink
         /// IL): weekly hours and days, assigned workstation items, and for one left with
         /// no shift UnAssignWork and the "employee idle" to-do (TodoTaskType 5, with the
         /// quest event). Security as UpdateEmployeesAfterWorkShiftChange does it, once:
-        /// for a business that allows theft, or when a guard's shifts changed. At a
-        /// headquarters UpdateHQPlans, re-implemented because the game's version reads the
-        /// open BizMan business. Then the to-do recheck, and what BizManSchedule.OnDisable
+        /// for a business that allows theft, or when a guard's shifts changed. (The
+        /// game's UpdateHQPlans step never applies: headquarters are refused.) Then the
+        /// to-do recheck, and what BizManSchedule.OnDisable
         /// does when the schedule screen closes: customer entries for today, the theater's
         /// actors, the missing-employee alert, and onBuildingRegistrationChange, which
         /// makes the loaded building's stations pick up their new staff. Each call is
@@ -432,7 +465,6 @@ namespace BigCopilotLink
                 });
             }
 
-            if (reg.businessTypeName == HeadquartersType) Guard("the headquarters plans", () => UpdateHqPlans(address));
             if (security) Guard("the security level", () => { Helpers.BusinessSecurityHelper.UpdateSecurityLevel(reg); return true; });
             Guard("the to-do recheck", () =>
             {
@@ -458,28 +490,6 @@ namespace BigCopilotLink
                 if (handler != null) handler(address);
                 return true;
             });
-        }
-
-        /// <summary>
-        /// ScheduleHelper.UpdateHQPlans for a given headquarters: every plan whose manager
-        /// no longer has a shift anywhere loses that manager, as the game's does.
-        /// </summary>
-        private static bool UpdateHqPlans(Address hq)
-        {
-            foreach (var plan in Buildings.Office.Headquarters.HeadhunterHelper.GetAssignedPlansForHeadquarters(hq))
-                if (plan.HeadhunterInstance != null && !plan.HeadhunterInstance.IsAssignedToAnyWorkShift()) plan.assignedEmployeeId = null;
-            foreach (var plan in Buildings.Office.Headquarters.HrManagerHelper.GetAssignedPlansForHeadquarters(hq))
-                if (plan.HrManagerInstance != null && !plan.HrManagerInstance.IsAssignedToAnyWorkShift()) plan.UnAssignEmployee();
-            foreach (var plan in Buildings.Office.Headquarters.LogisticsManagerHelper.GetAssignedPlansForHeadquarters(hq))
-                if (plan.LogisticsManagerInstance != null && !plan.LogisticsManagerInstance.IsAssignedToAnyWorkShift()) plan.assignedEmployeeId = null;
-            foreach (var plan in Buildings.Office.Headquarters.PurchasingAgentHelper.GetAssignedPlansForHeadquarters(hq))
-                if (plan.PurchasingAgentInstance != null && !plan.PurchasingAgentInstance.IsAssignedToAnyWorkShift()) plan.UnAssignEmployee();
-            foreach (var plan in Buildings.Office.Headquarters.PricingManagerHelper.GetPlansForHeadquarters(hq))
-            {
-                var analyst = plan.AnalystInstance;
-                if (analyst != null && !analyst.IsAssignedToAnyWorkShift()) plan.UnAssignEmployee();
-            }
-            return true;
         }
 
         private static bool Guard(string what, Func<bool> call)
@@ -589,9 +599,8 @@ namespace BigCopilotLink
                 status = 409;
                 w.Prop("error", siteError == "changed" ? "changed" : "refused");
             }
-            else w.Prop("error", siteError);
-            // In a 409 "error" is the refusal, so the site's own error has a key of its
-            // own, and leads the rows as a row with no d and i (as the mock answers).
+            // The business's own refusal. In a 409 refused it also leads the rows, as a
+            // row with no d and i.
             w.Prop("siteError", siteError);
             w.Prop("ok", !failed);
             w.Prop("kind", "schedule");

@@ -73,7 +73,8 @@ namespace BigCopilotLink
     /// the main thread; so a job that finds Busy returns at once, touching nothing, and
     /// the handler asks again a moment later, for up to three seconds. Walks only start
     /// on the main thread, so a job that saw Busy down runs to its end before any walk
-    /// can begin.
+    /// can begin. The refresh a write asks for is queued behind the job, not run inside
+    /// it, so a main-thread serialize (the fallback path) never lengthens the write.
     /// </summary>
     public sealed class WriteService
     {
@@ -85,12 +86,6 @@ namespace BigCopilotLink
         private const int BusyWaitMs = 3000;
 
         private const int BusyRetryMs = 100;
-
-        /// <summary>
-        /// Once the main thread has started a job it runs to its end in one frame; this
-        /// only bounds a handler whose main thread wedged mid-job.
-        /// </summary>
-        private const int RunningJobWaitMs = 1500;
 
         private readonly SaveService _saves;
 
@@ -226,16 +221,13 @@ namespace BigCopilotLink
                     done = task.Wait(left > 0 ? left : 0);
                     if (!done)
                     {
-                        // Not taken in time (mid-load, a long frame). Withdraw it; if the
-                        // main thread got there first it is running now and finishes
-                        // within the frame, so wait for its answer instead.
+                        // Not taken in time (mid-load, a long frame). Withdraw it, and
+                        // "busy" is then the truth: it will never run. If the main thread
+                        // got there first the job has started, and a started job may
+                        // write, so its own answer is the only honest one: wait for it,
+                        // however long. It runs in one go within one frame.
                         if (box.TryWithdraw()) return WriteAnswer.Error(503, "busy");
-                        done = task.Wait(RunningJobWaitMs);
-                        if (!done)
-                        {
-                            LinkMod.LogError("a write started on the main thread and did not finish in time; its answer is lost.");
-                            return WriteAnswer.Error(503, "busy");
-                        }
+                        task.Wait();
                     }
                 }
                 catch (Exception e)
@@ -374,8 +366,11 @@ namespace BigCopilotLink
         /// </summary>
         internal string RefreshAfterWrite()
         {
+            // Only refreshes publish a stamp, and none is in flight (the gate checked
+            // Busy), so this is the stamp before the refresh queued next.
             var stamp = _saves.Current.Stamp;
-            _saves.TryStartRefreshAfterWrite();
+            var saves = _saves;
+            MainThreadDispatcher.Enqueue(delegate { saves.TryStartRefreshAfterWrite(); });
             return stamp;
         }
 

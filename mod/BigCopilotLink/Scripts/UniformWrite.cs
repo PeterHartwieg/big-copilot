@@ -25,7 +25,8 @@ namespace BigCopilotLink
         public sealed class Site
         {
             public WireAddress Address;
-            public readonly List<string> Skills = new List<string>();
+            /// <summary>Null: every skill the site's Uniforms window offers.</summary>
+            public List<string> Skills;
             public string PresetId;
         }
 
@@ -40,6 +41,10 @@ namespace BigCopilotLink
             public WireAddress Address;
             public string Skill;
             public string PresetId;
+            // A skill with no uniform is either no key or a key with an empty id (the
+            // window shows both as unassigned); undo puts back whichever it was.
+            public bool HadKey;
+            public string OldValue;
         }
 
         private sealed class Row
@@ -68,12 +73,17 @@ namespace BigCopilotLink
                     Address = WriteService.ParseAddress(obj, "address", path),
                     PresetId = JsonReader.Str(obj, "presetId", path, false)
                 };
-                var skills = JsonReader.Arr(JsonReader.Get(obj, "skills"), path + ".skills");
-                for (var j = 0; j < skills.Count; j++)
+                var given = JsonReader.Get(obj, "skills");
+                if (given != null)
                 {
-                    var skill = skills[j] as string;
-                    if (string.IsNullOrEmpty(skill)) throw new BadRequestException(path + ".skills[" + j + "] must be a skill id");
-                    if (!site.Skills.Contains(skill)) site.Skills.Add(skill);
+                    site.Skills = new List<string>();
+                    var skills = JsonReader.Arr(given, path + ".skills");
+                    for (var j = 0; j < skills.Count; j++)
+                    {
+                        var skill = skills[j] as string;
+                        if (string.IsNullOrEmpty(skill)) throw new BadRequestException(path + ".skills[" + j + "] must be a skill id");
+                        if (!site.Skills.Contains(skill)) site.Skills.Add(skill);
+                    }
                 }
                 req.Sites.Add(site);
             }
@@ -100,7 +110,7 @@ namespace BigCopilotLink
                 }
 
                 var offered = OfferedSkills(row.Registration);
-                foreach (var skill in site.Skills)
+                foreach (var skill in site.Skills ?? offered)
                 {
                     if (!offered.Contains(skill)) row.Skipped.Add(new KeyValuePair<string, string>(skill, "not_offered"));
                     else if (HasUniform(row.Registration, skill)) row.Skipped.Add(new KeyValuePair<string, string>(skill, "already_set"));
@@ -117,8 +127,11 @@ namespace BigCopilotLink
                 if (row.Set.Count == 0) continue;
                 foreach (var skill in row.Set)
                 {
+                    var entry = new Entry { Address = row.Address, Skill = skill, PresetId = row.Preset.id };
+                    var map = row.Registration.uniformsBySkill;
+                    entry.HadKey = map != null && map.TryGetValue(skill, out entry.OldValue);
+                    undo.Entries.Add(entry);
                     Assign(row.Registration, skill, row.Preset.id);
-                    undo.Entries.Add(new Entry { Address = row.Address, Skill = skill, PresetId = row.Preset.id });
                 }
                 AfterChange(row.Registration, row.Set, row.Preset.id);
                 applied.Add(row);
@@ -174,8 +187,12 @@ namespace BigCopilotLink
 
             foreach (var row in rows)
             {
-                foreach (var skill in row.Set) Clear(row.Registration, skill);
-                AfterChange(row.Registration, row.Set, null);
+                foreach (var entry in state.Entries)
+                {
+                    if (!entry.Address.Is(row.Address.Street, row.Address.Number)) continue;
+                    Restore(row.Registration, entry);
+                    AfterChange(row.Registration, new List<string> { entry.Skill }, entry.HadKey ? entry.OldValue : null);
+                }
             }
             ws.UniformUndo = null;
 
@@ -226,15 +243,17 @@ namespace BigCopilotLink
         /// SetUpUniformsWindow.SetSkillNameDropdownOptions: the business type's
         /// employeePrimarySkills, then the building type's requiredBuildingSkills.
         /// </summary>
-        private static HashSet<string> OfferedSkills(BuildingRegistration reg)
+        private static List<string> OfferedSkills(BuildingRegistration reg)
         {
-            var skills = new HashSet<string>(StringComparer.Ordinal);
+            var skills = new List<string>();
             var business = Helpers.BusinessTypeHelper.GetData(reg);
             if (business != null && business.employeePrimarySkills != null)
-                foreach (var s in business.employeePrimarySkills) skills.Add(s);
+                foreach (var s in business.employeePrimarySkills)
+                    if (!string.IsNullOrEmpty(s) && !skills.Contains(s)) skills.Add(s);
             var building = Buildings.BuildingTypeHelper.GetData(reg);
             if (building != null && building.requiredBuildingSkills != null)
-                foreach (var s in building.requiredBuildingSkills) skills.Add(s);
+                foreach (var s in building.requiredBuildingSkills)
+                    if (!string.IsNullOrEmpty(s) && !skills.Contains(s)) skills.Add(s);
             return skills;
         }
 
@@ -251,9 +270,14 @@ namespace BigCopilotLink
             reg.uniformsBySkill[skill] = presetId;
         }
 
-        private static void Clear(BuildingRegistration reg, string skill)
+        private static void Restore(BuildingRegistration reg, Entry entry)
         {
-            if (reg.uniformsBySkill != null) reg.uniformsBySkill.Remove(skill);
+            if (entry.HadKey)
+            {
+                if (reg.uniformsBySkill == null) reg.uniformsBySkill = new Dictionary<string, string>();
+                reg.uniformsBySkill[entry.Skill] = entry.OldValue;
+            }
+            else if (reg.uniformsBySkill != null) reg.uniformsBySkill.Remove(entry.Skill);
         }
 
         /// <summary>

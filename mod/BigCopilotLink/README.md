@@ -51,9 +51,9 @@ under "Writes":
 
 | Endpoint | What it changes |
 | --- | --- |
-| `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet. A skill you dressed yourself is never touched. |
+| `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet (or on the skills the page names). A skill you dressed yourself is never touched. |
 | `/write/imports` | Sets purchasing-agent contract amounts, switches a stopped contract back on (with Repeating), and reorders contracts in the plan order. It never stops a contract, and never adds or removes a product. |
-| `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. |
+| `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
 | `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. |
 
 - **The pairing code.** Every write needs `Authorization: Bearer <code>`. The code is
@@ -78,7 +78,9 @@ under "Writes":
   rebuilds from what the game now holds. It does not save the game.
 - **Threading.** A write never runs while a refresh walk is in flight on the worker
   thread: the main thread turns the job away without touching anything, and the
-  request asks again every 100 ms for up to three seconds before answering `503 busy`.
+  request asks again every 100 ms for up to three seconds before withdrawing it and
+  answering `503 busy`. A write the main thread has started is always waited for and
+  answered with its result.
 
 ## How a refresh runs
 
@@ -268,7 +270,8 @@ the new bytes.
    `reopens` on that Monday at 8, and nothing changes.
 4. **A capped item with a backup contract.** Two contracts bring one item to one depot
    from two importers. A plain amount above the first importer's cap answers `over_cap`
-   with `max` in the dry run. Reorder the two with `order`; the headquarters'
+   with `max` (the cap less what that importer already delivered of the item this week,
+   urgent orders included) in the dry run. Reorder the two with `order`; the headquarters'
    purchasing-agent list shows the new order when it is opened again. With both on
    Smart Delivery, check after Monday's delivery that the second contract brought only
    what the first left short (scope section 7 item 5).
@@ -286,13 +289,16 @@ the new bytes.
    the assigned staff's shifts and the board says how many people to add. Hire and
    assign them in game, let the board refresh, write again: the holes fill, and the
    second write's `expect` matched the first write's result.
-8. **Full cover.** `openAllHours` on a shop opens every day 0 to 24 in BizMan; at a
-   headquarters it answers `hq_hours`.
+8. **Full cover.** `openAllHours` on a shop opens every day 0 to 24 in BizMan. Any
+   schedule write at a headquarters answers `headquarters`.
 9. **Undo, each kind.** After each of 2, 3 and 6, undo: uniforms go back to unassigned
    only where they still hold the preset the write set; amounts, running state,
    Repeating, next delivery day and plan order come back; the schedule and, after a
    full-cover write, the opening hours come back. Change one of the written values by
-   hand first and undo answers `changed`. A second undo answers `nothing_to_undo`, and
+   hand first and undo answers `changed`; so does a schedule undo after a person it
+   would put back was moved to another business. A field the write did not touch (say,
+   Repeating on a running contract whose amount it changed) may be changed by hand
+   without blocking the undo, and the undo leaves it as you set it. A second undo answers `nothing_to_undo`, and
    so does any undo after loading another save.
 10. **Busy.** With "Refresh every game hour" on, apply just as the hour turns: the
     write waits for the walk (up to three seconds) and applies, or answers `503 busy`
@@ -349,7 +355,7 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `ImportPartnership` fields and `NextDeliveryTotal`, `GetDiscount`, static `GetItemAmountOrderedThisWeek`; `ImportProduct.Price`; `DeliveryHelper.CanModifyContract`, `GetNextDeliveryDay`, `ShouldLimitImporterMaxAmount`, `AreWholesaleAndImportLimitsDisabled`; `ProductMarketHelper.IsProductInMarketEvent`; `EmployeeHelper.GetEmployeeById(id, false)` | imports. `ImportPartnership.GetMaxOrderAmountPerImporter` is **private static**: by reflection, with its build-3680 body (the item's `maxOrderAmountPerImporter`, ×0.66 rounded in a shortage) as the fallback |
 | `PurchasingAgentPlanUI._currentImportPartnership` (**private**, reflection), reached through `UIs.Instance.fullMenu.bizMan.business.purchasingAgentsPlanList.purchasingAgentPlanUISettings` | "is the plan screen open on this contract" |
 | `UIs.Instance.fullMenu.schedule` (`BizManSchedule`), `ScheduleHelper.Business`, `BizManSchedule._activeAutoFillers` (**private**, reflection), `ScheduleAutoFiller.Registration` | "is the schedule screen open on this business, or its auto-fill running" |
-| `ScheduleDay`, `WorkShift`, `OpeningHourSlot` fields; `ScheduleHelper.IsCleaningStation(ItemInstance)`; `EmployeeInstance.UpdateWeeklyHoursAndDays`, `UpdateAssignedWorkStationItems`, `IsAssignedToAnyWorkShift`, `UnAssignWork`, `AddTodoTask`, `HasAnySkillWithTag`; `BusinessSecurityHelper.UpdateSecurityLevel`; the five headquarters plan helpers; `TasksUI.forceCheckForCompletedTodoTasks`; `CustomerEntriesHelper.UpdateCustomerEntriesForPlayerBusiness`, `BusinessHelper.CheckIfTheaterHasNoActors`, `IsMissingEmployeeTaskActive`, `ForceRecheckMissingEmployeeAlert`, `GlobalEvents.onBuildingRegistrationChange` | the schedule. `ScheduleHelper.UpdateEmployeeAfterWorkShiftChange` is **private** and `UpdateHQPlans` reads the open BizMan business, so both are re-implemented from their IL |
+| `ScheduleDay`, `WorkShift`, `OpeningHourSlot` fields; `ScheduleHelper.IsCleaningStation(ItemInstance)`; `EmployeeInstance.UpdateWeeklyHoursAndDays`, `UpdateAssignedWorkStationItems`, `IsAssignedToAnyWorkShift`, `UnAssignWork`, `AddTodoTask`, `HasAnySkillWithTag`; `BusinessSecurityHelper.UpdateSecurityLevel`; `TasksUI.forceCheckForCompletedTodoTasks`; `CustomerEntriesHelper.UpdateCustomerEntriesForPlayerBusiness`, `BusinessHelper.CheckIfTheaterHasNoActors`, `IsMissingEmployeeTaskActive`, `ForceRecheckMissingEmployeeAlert`, `GlobalEvents.onBuildingRegistrationChange` | the schedule. `ScheduleHelper.UpdateEmployeeAfterWorkShiftChange` is **private**, so it is re-implemented from its IL; its `UpdateHQPlans` step never applies, because headquarters are refused |
 
 Whether the game restores persisted option values by calling the change callbacks at
 registration is unverified. It is safe either way: restarting the listener is
