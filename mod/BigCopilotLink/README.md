@@ -5,8 +5,8 @@ instead of a save file you picked by hand. While a city is loaded it serializes 
 running game with the game's own serializer settings, on a thread of its own, and
 serves the resulting bytes — a `.hsg` as the game would write it — over loopback
 HTTP. It holds no model of the game. From 0.2.0 it also makes three changes the board
-proposes, and only when you confirm them on the board with the mod's pairing code:
-default uniforms, import contract amounts, and a business's staff schedule (see
+proposes, and only when you confirm them on the board from a browser you approved in
+the game: default uniforms, import contract amounts, and a business's staff schedule (see
 "What it changes" below).
 
 **Players:** subscribe on the Steam Workshop,
@@ -41,8 +41,14 @@ Mod Builder.
   mod icon on the Load Game screen ("Saved with Mods", listing the mods), and the
   game's bug reporting is off for it. `/health` then reports the company as
   "<name> (Modded)". No achievement text mentions mods (build 3680).
-- **Nothing on disk.** The mod writes nothing to disk: the bytes are produced in
-  memory and only ever leave the process over the loopback listener.
+- **Almost nothing on disk.** The save bytes are produced in memory and only ever leave
+  the process over the loopback listener. The one thing the mod stores is the list of
+  browsers you approved (from 0.2.0): for each, the SHA-256 of its token (never the token
+  itself), its origin (such as `https://bigcopilot.com`), the short name the page gave it
+  (such as "Chrome on Windows") and when it was approved and last used. It lives in the
+  game's PlayerPrefs under the key `BigCopilotLink.approved` (the Windows registry under
+  `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
+  SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
 ## What it changes (0.2.0)
 
@@ -56,12 +62,17 @@ under "Writes":
 | `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
 | `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. |
 
-- **The pairing code.** Every write needs `Authorization: Bearer <code>`. The code is
-  six characters, drawn with a cryptographic random generator once per game launch
-  (loading another save keeps it; restarting the game draws a new one). **Copy pairing
-  code** in the mod's options puts it on the clipboard and shows it in a notification;
-  Big Copilot asks for it once per browser tab. It never appears in the log. Reads
-  (`/health`, `/save`, `/refresh`) never need it.
+- **Approving a browser.** Every write needs `Authorization: Bearer <token>`, a token
+  the game gives a browser once you allow it. The first write from a browser asks in the
+  game, with the game's own confirm popup: "Allow Big Copilot to change your game?",
+  naming the page's origin and the browser. **Allow** approves that browser for good, across
+  game launches; **Deny**, Escape or opening the phone refuses (the same page can ask again
+  after 10 seconds); a popup left for 60 seconds closes itself. A confirm within a second of
+  the popup opening counts as a dismissal, because the game also confirms on its Confirm
+  key. A token works only from the origin it was issued to. At most 10 browsers are kept (the
+  one used longest ago goes), and one unused for 90 days expires. **Forget approved
+  browsers** in the mod's options withdraws every approval. Reads (`/health`, `/save`,
+  `/refresh`) never need a token.
 - **The game's own rules.** Every write is checked on the game's main thread against
   the rules the game's own screens enforce (build 3680 IL), and is all or nothing: one
   refused row and nothing is written. A dry run (`"dryRun": true`) runs every check and
@@ -229,35 +240,54 @@ and Firefox linked from a local page. The bytes are not identical to the game's 
 
 ### Writes by hand
 
-Take the code from **Copy pairing code** (`ABC234` below), then send a dry run first.
-`-d` and `--data-binary @file` set `Content-Length` for you:
+Ask for a token first; curl sends no `Origin`, so the popup names "a program on this
+computer". Click **Allow** in the game within 60 seconds, then fetch the token (it is
+answered once) and use it. `-d` and `--data-binary @file` set `Content-Length` for you:
 
 ```
-curl -H "Authorization: Bearer ABC234" http://127.0.0.1:8322/health
-curl -X POST -H "Authorization: Bearer ABC234" -H "Content-Type: application/json" \
-  -d '{"dryRun":true,"sites":[{"address":{"street":"ba:street_secondavenue","number":12},"skills":["ba:skill_customerservice"],"presetId":null}]}' \
+curl -X POST -H "Content-Type: application/json" -d '{"name":"curl"}' http://127.0.0.1:8322/pair/request
+curl "http://127.0.0.1:8322/pair/status?id=<requestId>"
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:8322/health
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"dryRun":true,"sites":[{"address":{"street":"ba:street_secondavenue","number":12},"skills":null,"presetId":null}]}' \
   http://127.0.0.1:8322/write/uniforms
-curl -X POST -H "Authorization: Bearer ABC234" -H "Content-Type: application/json" \
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   --data-binary @imports.json http://127.0.0.1:8322/write/imports
-curl -X POST -H "Authorization: Bearer ABC234" -H "Content-Type: application/json" \
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"kind":"uniforms","dryRun":false}' http://127.0.0.1:8322/write/undo
 ```
 
-The first answers `"paired":true`. A POST with no body needs
+The health call answers `"paired":true`. A POST with no body needs
 `-H "Content-Length: 0"`, as for `/refresh`. In PowerShell use `curl.exe` and put the
 body in a file: PowerShell's quoting mangles inline JSON.
 
 ### In-game checklist for 0.2.0
 
-Built into `ModsLocal`, a save loaded, the board linked and paired. After each apply,
+Built into `ModsLocal`, a save loaded, the board linked and the browser approved (item 1). After each apply,
 check the notification, that `/health`'s stamp moved, and that the board rebuilt from
 the new bytes.
 
-1. **Pairing.** Copy pairing code: the notification shows the code and the clipboard
-   holds it; a write with a wrong code answers 401; `/health` with the right code says
-   `"paired":true`, without it `false`. Load another save: same code. Restart the
-   game: a new one. The mod options' labels and the notifications read as in
-   `Locales/en.json`, not as raw keys.
+1. **Approving a browser.** The mod options' labels, the popup and the notifications read
+   as in `Locales/en.json`, not as raw keys.
+   - *Approve.* The first write from the board shows "Allow Big Copilot to change your
+     game?" with the page's origin and browser name; Allow, and the write goes through.
+     `/health` from that page says `"paired":true`. Restart the game: the same browser
+     writes without asking.
+   - *Deny.* Deny: the page says it was not approved; asking again within 10 seconds
+     answers 429, after that the popup shows again.
+   - *Escape.* Escape (and, separately, opening the phone) while the popup is up counts as
+     Deny.
+   - *Expiry.* Leave the popup for 60 seconds: it closes itself and the page hears
+     `expired`.
+   - *The Confirm key.* Hold the game's Confirm key while the page asks: the popup closes
+     at once and counts as a dismissal, not an approval.
+   - *Where it shows.* Ask while paused, inside a building and with BizMan open: the popup
+     shows each time. In placement mode or the interior designer the page hears
+     `cannot_pair` with the reason, and no popup appears.
+   - *A second browser.* Another browser (or a private window) asks on its own; the first
+     stays approved. A token copied from one origin to another answers 401.
+   - *Forget.* Forget approved browsers: the notification names how many; the next write
+     from each browser asks again.
 2. **Uniforms.** On a shop with a uniform locker and the "No staff uniforms set"
    warning: dry run, then apply. The Uniforms window (BizMan → business → Settings)
    shows Default on every skill it offers that had none; a skill you had set keeps
@@ -328,7 +358,7 @@ In the game's mod options, under **Big Copilot Link**:
 | Refresh when a building loads | off | A backup: the hourly and game-save refreshes already keep the board fresh with no cost, so this buys at most one game hour. On, entering or leaving a building fades the screen to black while the game loads the other side and the serialize runs on the main thread under that black, about 250 ms added to the load that you do not see. |
 | Refresh every game hour | on | The refresh runs on a worker thread, so it costs nothing you can see. If the mod has fallen back to the main thread (see the log), it is a short stall every game hour, a minute of play at normal speed, until the worker is tried again; switch it off here if that bothers you. The other triggers stay: a completed game save, `POST /refresh`, a five-minute floor, and a building load if that option is on. |
 | Copy address | — | Puts `http://127.0.0.1:<port>/` on the clipboard. |
-| Copy pairing code | — | Puts this game launch's pairing code on the clipboard and shows it in a notification, for Big Copilot's first write. |
+| Forget approved browsers | — | Withdraws every browser's approval to write (see "Approving a browser"); a notification says how many. |
 
 Nothing refreshes unless something fetched `/health` in the last 120 seconds, so an
 installed mod with the board closed does no work at all.
@@ -349,7 +379,8 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `UI.InteriorDesigner.InteriorDesignerUI.IsOpen`, `BigAmbitions.PlacementSystem.PlacementSystem.IsInPlacementMode`, `CasinoBoatManager.IsOnCasinoBoat`, `PlayerActivity.PlayerActivityUI.IsPanelOpen` | the refusal reason, and the fallback when `CanSave` is not found |
 | `BAModAPI`: `RegisterModClass`, `ModEntryOnCityLoad`, `IModBigAmbitions`, `ModContext`, `IModLogger` | the entry point |
 | `BigAmbitions.Mods.ModOptions`, static `OptionsService.Register/RemoveModOptions` | the options panel (compiles; the panel itself is not yet checked in-game) |
-| `SaveGameManager.MarkChange()`, `UI.Notification.Notifications.Show(...)` | after every write; the pairing code |
+| `SaveGameManager.MarkChange()`, `UI.Notification.Notifications.Show(...)` | after every write; Forget approved browsers |
+| `HudConfirm.Show(LanguageChangeEventDataHolder, LanguageChangeEventDataHolder, Action, Action, string, string, bool, bool)`, `HudConfirm.isOpen`, `onShow`, `onClose`; `Localizor.LocalizorManager.Localize(key, args)`; `HudConfirmUi._onConfirmAction` (**private**, reflection, to tell our popup from another); `UnityEngine.PlayerPrefs` (not the game's own `PlayerPrefs` class) | approving a browser. `Show` confirms unseen when no popup UI is registered (`onShow` null) and drops the call when one is already open, so the mod checks both first |
 | `GameInstance.BuildingRegistrations`, `employeePresets`, `importPartnerships`; `BuildingRegistration` fields `StreetName`, `StreetNumber`, `RentedByPlayer`, `businessTypeName`, `BusinessName`, `itemInstances`, `uniformsBySkill`, `scheduleDays`, `GetAssignableItems(list)` | finding and reading the target. A registration is found by searching the list, never with `BuildingHelper.GetBuildingRegistration`, which creates one for a building that has none |
 | `BusinessTypeHelper.GetData(reg).employeePrimarySkills`, `BuildingTypeHelper.GetData(reg).requiredBuildingSkills`, `ItemsGetter.GetByName` + `TagRef.Itemtag.isuniformlocker`, `CustomerDemandHelper.ReloadCachedFulfilled(reg)`, `BuildingManager.Instance.onUniformChanged`, `GameEvent.Invoke` | uniforms, as `SetUpUniformsWindow` does it |
 | `ImportPartnership` fields and `NextDeliveryTotal`, `GetDiscount`, static `GetItemAmountOrderedThisWeek`; `ImportProduct.Price`; `DeliveryHelper.CanModifyContract`, `GetNextDeliveryDay`, `IsLockPeriod`, `ShouldLimitImporterMaxAmount`, `AreWholesaleAndImportLimitsDisabled`; `ProductMarketHelper.IsProductInMarketEvent`; `EmployeeHelper.GetEmployeeById(id, false)` | imports. `ImportPartnership.GetMaxOrderAmountPerImporter` is **private static**: by reflection, with its build-3680 body (the item's `maxOrderAmountPerImporter`, ×0.66 rounded in a shortage) as the fallback |

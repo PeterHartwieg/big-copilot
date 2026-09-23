@@ -49,6 +49,7 @@ namespace BigCopilotLink
         private MainThreadDispatcher _dispatcher;
         private HealthState _health;
         private SaveService _saves;
+        private ApprovalService _approvals;
         private WriteService _writes;
         private LinkHttpServer _http;
 
@@ -75,7 +76,9 @@ namespace BigCopilotLink
 
             _health = new HealthState();
             _saves = new SaveService();
-            _writes = new WriteService(_saves);
+            // Reads the approved browsers from PlayerPrefs: main thread, as here.
+            _approvals = new ApprovalService();
+            _writes = new WriteService(_saves, _approvals);
 
             _quitting = false;
             Application.quitting += OnQuitting;
@@ -110,6 +113,12 @@ namespace BigCopilotLink
             {
                 _dispatcher.Uninstall();
                 _dispatcher = null;
+            }
+
+            if (_approvals != null)
+            {
+                _approvals.Clear();
+                _approvals = null;
             }
 
             if (_writes != null)
@@ -151,6 +160,7 @@ namespace BigCopilotLink
         {
             if (_quitting) return;
             _health.RefreshOnMainThread();
+            if (_approvals != null) _approvals.PumpOnMainThread();
             if (_http == null) return; // disabled, or the port was taken
             _saves.PumpOnMainThread(_health.Attached, _hourly);
         }
@@ -167,7 +177,7 @@ namespace BigCopilotLink
             }
 
             var port = Ports[ClampPortIndex(_portIndex)];
-            var server = new LinkHttpServer(port, _saves, _health, _writes);
+            var server = new LinkHttpServer(port, _saves, _health, _writes, _approvals);
             try
             {
                 server.Start();
@@ -219,7 +229,7 @@ namespace BigCopilotLink
                 .AddToggle("hourly", "bigcopilotlink_hourly_label", _hourly, OnHourlyChanged)
                 .AddSplitter()
                 .AddButton("bigcopilotlink_copy_label", CopyAddress)
-                .AddButton("bigcopilotlink_pairing_label", CopyPairingCode);
+                .AddButton("bigcopilotlink_forget_label", ForgetBrowsers);
 
             try
             {
@@ -264,25 +274,16 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// The code Big Copilot asks for before its first write: on the clipboard, and on
-        /// screen for a player who would rather type it. Never written to the log, which
-        /// players paste into bug reports.
+        /// Every browser the player approved loses its approval; the next write from any
+        /// of them asks again in game.
         /// </summary>
-        private void CopyPairingCode()
+        private void ForgetBrowsers()
         {
-            GUIUtility.systemCopyBuffer = PairingCode.Code;
-            try
-            {
-                global::UI.Notification.Notifications.Show(
-                    global::UI.Notification.NotificationType.Info, "bigcopilotlink_pairing_notification",
-                    new System.Collections.Generic.Dictionary<string, string> { { "code", PairingCode.Code } },
-                    15f, "bigcopilotlink_pairing", null, true, false);
-            }
-            catch (Exception e)
-            {
-                LogError("could not show the pairing code: " + e.Message);
-            }
-            LogInfo("copied the pairing code to the clipboard.");
+            var approvals = _approvals;
+            if (approvals == null) return;
+            var count = approvals.ForgetAll();
+            WriteService.Notify("bigcopilotlink_forget_notification", "count", count.ToString(CultureInfo.InvariantCulture));
+            LogInfo("forgot " + count.ToString(CultureInfo.InvariantCulture) + " approved browser(s).");
         }
 
         // ---- logging -------------------------------------------------------------

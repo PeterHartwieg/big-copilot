@@ -61,7 +61,7 @@ namespace BigCopilotLink
     }
 
     /// <summary>
-    /// POST /write/* (docs/game-link-api.md, "Writes"): the pairing check, the body, the
+    /// POST /write/* (docs/game-link-api.md, "Writes"): the approval check, the body, the
     /// parse, and the trip to the main thread, for every kind; the kinds themselves are
     /// UniformWrite, ImportWrite and ScheduleWrite. One per city load, like SaveService:
     /// the undo it keeps belongs to that city session.
@@ -88,15 +88,17 @@ namespace BigCopilotLink
         private const int BusyRetryMs = 100;
 
         private readonly SaveService _saves;
+        private readonly ApprovalService _approvals;
 
         // Main thread only: what undo restores, one per kind, for this city session.
         internal UniformWrite.UndoState UniformUndo;
         internal ImportWrite.UndoState ImportUndo;
         internal ScheduleWrite.UndoState ScheduleUndo;
 
-        public WriteService(SaveService saves)
+        public WriteService(SaveService saves, ApprovalService approvals)
         {
             _saves = saves;
+            _approvals = approvals;
         }
 
         /// <summary>Main thread, on unload: nothing of this city is kept.</summary>
@@ -116,11 +118,11 @@ namespace BigCopilotLink
         /// </summary>
         public WriteAnswer Handle(HttpListenerRequest request, string kind)
         {
-            // The code before the body: a caller without it learns nothing more.
-            if (!PairingCode.Matches(request.Headers["Authorization"])) return WriteAnswer.Error(401, "not_paired");
+            // The approval before the body: a caller without one learns nothing more.
+            if (!_approvals.IsApproved(request)) return WriteAnswer.Error(401, "not_paired");
 
             string text;
-            if (!TryReadBody(request, out text)) return WriteAnswer.Error(413, "too_large");
+            if (!TryReadBody(request, MaxBodyBytes, out text)) return WriteAnswer.Error(413, "too_large");
 
             Func<WriteService, bool, WriteAnswer> job;
             bool dryRun;
@@ -173,10 +175,10 @@ namespace BigCopilotLink
         /// Null text when the bytes are not UTF-8; false when the body is over the cap.
         /// Reads at most one chunk past the cap, whatever Content-Length claims.
         /// </summary>
-        private static bool TryReadBody(HttpListenerRequest request, out string text)
+        internal static bool TryReadBody(HttpListenerRequest request, int maxBytes, out string text)
         {
             text = null;
-            if (request.ContentLength64 > MaxBodyBytes) return false;
+            if (request.ContentLength64 > maxBytes) return false;
 
             var buffer = new MemoryStream();
             var chunk = new byte[8192];
@@ -185,7 +187,7 @@ namespace BigCopilotLink
             while ((read = input.Read(chunk, 0, chunk.Length)) > 0)
             {
                 buffer.Write(chunk, 0, read);
-                if (buffer.Length > MaxBodyBytes) return false;
+                if (buffer.Length > maxBytes) return false;
             }
 
             try

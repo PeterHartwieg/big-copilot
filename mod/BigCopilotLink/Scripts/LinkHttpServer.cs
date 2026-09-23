@@ -43,18 +43,20 @@ namespace BigCopilotLink
         };
 
         private const string EndpointsJson =
-            "[\"/health\",\"/save\",\"/refresh\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/undo\"]";
+            "[\"/health\",\"/save\",\"/refresh\",\"/pair/request\",\"/pair/status\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/undo\"]";
 
         private readonly int _port;
         private readonly SaveService _saves;
         private readonly HealthState _health;
         private readonly WriteService _writes;
+        private readonly ApprovalService _approvals;
         private HttpListener _listener;
         private Thread _thread;
         private volatile bool _running;
 
-        public LinkHttpServer(int port, SaveService saves, HealthState health, WriteService writes)
+        public LinkHttpServer(int port, SaveService saves, HealthState health, WriteService writes, ApprovalService approvals)
         {
+            _approvals = approvals;
             _port = port;
             _saves = saves;
             _health = health;
@@ -164,7 +166,7 @@ namespace BigCopilotLink
                 // A HEAD answer carries no body, or a kept-alive client reads the
                 // leftover bytes as its next status line. 405 on the known paths.
                 var known = path == "" || path == "/health" || path == "/save" || path == "/refresh" ||
-                            WriteKind(path) != null;
+                            path == "/pair/request" || path == "/pair/status" || WriteKind(path) != null;
                 WriteNoBody(context, known ? 405 : 404);
                 return;
             }
@@ -175,7 +177,7 @@ namespace BigCopilotLink
                 case "/health":
                     if (method != "GET") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
                     _health.MarkHealthPolled();
-                    WriteJson(context, 200, HealthJson(PairingCode.Matches(request.Headers["Authorization"])));
+                    WriteJson(context, 200, HealthJson(_approvals.IsApproved(request)));
                     return;
 
                 case "/save":
@@ -186,6 +188,18 @@ namespace BigCopilotLink
                 case "/refresh":
                     if (method != "POST") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
                     HandleRefresh(context);
+                    return;
+
+                case "/pair/request":
+                    if (method != "POST") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+                    var paired = _approvals.HandleRequest(request);
+                    WriteJson(context, paired.Status, paired.Json);
+                    return;
+
+                case "/pair/status":
+                    if (method != "GET") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+                    var status = _approvals.HandleStatus(request);
+                    WriteJson(context, status.Status, status.Json);
                     return;
 
                 default:
@@ -235,7 +249,7 @@ namespace BigCopilotLink
             return true;
         }
 
-        private static bool IsAllowedOrigin(string origin)
+        internal static bool IsAllowedOrigin(string origin)
         {
             for (var i = 0; i < AllowedOrigins.Length; i++)
             {
@@ -250,7 +264,7 @@ namespace BigCopilotLink
             if (corsAllowed)
             {
                 response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                // Authorization carries the pairing code; Content-Type: application/json
+                // Authorization carries the approval token; Content-Type: application/json
                 // is what makes a write preflight at all.
                 response.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match");
                 response.AddHeader("Access-Control-Max-Age", "600");
@@ -290,7 +304,8 @@ namespace BigCopilotLink
             else w.Prop("refreshedAt", snap.RefreshedAtUtcIso);
 
             // Additive in 0.2.0: which writes this mod takes, and whether this request
-            // carried the pairing code (a code-free poll always reads false).
+            // carried a token the player approved for its origin (a poll without one
+            // always reads false).
             w.BeginArray("writes");
             foreach (var kind in WriteService.Kinds) w.Value(kind);
             w.EndArray();

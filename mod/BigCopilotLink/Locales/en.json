@@ -13,8 +13,14 @@
   "bigcopilotlink_hourly_label": "Refresh every game hour",
 
   "bigcopilotlink_copy_label": "Copy address",
-  "bigcopilotlink_pairing_label": "Copy pairing code",
-  "bigcopilotlink_pairing_notification": "Big Copilot pairing code: {code} (copied)",
+  "bigcopilotlink_forget_label": "Forget approved browsers",
+  "bigcopilotlink_forget_notification": "Big Copilot: forgot {count} approved browser(s)",
+
+  "bigcopilotlink_pair_title": "Allow Big Copilot to change your game?",
+  "bigcopilotlink_pair_body": "{origin} ({name}) asks to set uniforms, imports and staff schedules in this game when you confirm them on the board. Allow once for this browser; Mod options can forget it.",
+  "bigcopilotlink_pair_body_local": "A program on this computer ({name}) asks to set uniforms, imports and staff schedules in this game. Allow once for it; Mod options can forget it.",
+  "bigcopilotlink_pair_allow": "Allow",
+  "bigcopilotlink_pair_deny": "Deny",
 
   "bigcopilotlink_notify_uniforms": "Big Copilot updated uniforms at {business}",
   "bigcopilotlink_notify_imports": "Big Copilot updated imports at {business}",
