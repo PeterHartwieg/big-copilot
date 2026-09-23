@@ -104,7 +104,8 @@ the map.
   - *Change checklist*: open **Plan imports** on Today, or expand the checklist
     under Supply / Orders. It groups recommended weekly orders, factory top-ups,
     existing shop-route top-ups and delivery checks by site. Saved and proposed
-    settings stay separate. Tick actions as you carry them out in-game, or copy
+    settings stay separate; an import figure you typed in the Weekly imports table
+    replaces the board's suggestion. Tick actions as you carry them out in-game, or copy
     the remaining list. Marks are local to this browser and character, and clear
     when their setting or recommendation changes; they are not confirmation from
     the game. Factory quantities use the existing full-rate model. Storage,
@@ -115,6 +116,16 @@ the map.
     the rows back.
     Current active contracts are added by destination and material, even before
     the first delivery; paused contracts do not count toward weekly supply.
+    A contract with Smart Delivery on (`isTarget` in the save) keeps a stock level
+    rather than bringing a fixed amount: each Monday the purchasing agent brings what
+    tops the depot up to that level. A level of 5,000 therefore supplies at most 5,000
+    of use a week, and the board judges it against the week as it judges a plain
+    order's amount. Two Smart Delivery contracts on one material hold the higher
+    level, not the sum. Where a depot mixes the two kinds, the board follows the
+    game's delivery order: importer by importer, each in the place of its first
+    contract in the plan, a Smart Delivery contract counting what an earlier one
+    brought that morning. The stock walk to a later delivery charges a Smart
+    Delivery drop only for the top-up it will bring, so a full depot gets less.
     A factory supplied directly by an importer is checked against its weekly
     input requirement. If it also has a warehouse route, active direct imports
     cover the factory's demand first, and the warehouse's weekly order covers
@@ -980,11 +991,24 @@ walked at a flat daily rate: the machines take the same on a Saturday as on a Tu
 Two tables, one per number a logistics manager is set with.
 
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
-  What all the factories drawing on it eat in a week (from their lines, machines times
-  recipe draw times 24 times 7), what else leaves for the shops (measured from the
-  delivery log), the total, the order as it stands, and the order to set, rounded up to
-  the hundred. Materials a factory line needs that no depot's plan carries are listed at
-  the foot: those need a top-up added on some depot and an import there.
+  *Used / week* is what all the factories drawing on it eat in a week (from their lines,
+  machines times recipe draw times 24 times 7) plus what else leaves for the shops
+  (measured from the delivery log). *Arrived last week* sums every contract's
+  `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
+  cap shows as an order cut short. *Set in game* is the figure in the purchasing
+  agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
+  *Set to* is a box: where the setting falls short of the week it holds the
+  suggestion, the used week rounded up to the hundred (for Smart Delivery, the stock
+  that runs everything the depot feeds at full capacity for a week); elsewhere it
+  holds the figure in game. Type your own figure and it is kept in this browser per
+  character, depot and material until you reset it; a row whose box differs from the
+  game is marked, stays in *Needs a change*, and goes into the Plan imports checklist
+  as "Set Smart Delivery stock to N" or "Set the weekly order to N". A high Smart
+  Delivery level only holds stock, so it is never marked *could lower*. A material
+  with two or more contracts at the depot lists them under its name in plan order,
+  with importer, kind and amount. Materials a factory line needs that no depot's plan
+  carries are listed at the foot: those need a top-up added on some depot and an
+  import there.
 - **Daily top-ups, per factory**: every material each factory eats a day, the lines that
   eat it (with machine counts), the top-up now on the plan feeding it, and the top-up to
   set. A top-up below the day's need starves the machines before midnight; one far above

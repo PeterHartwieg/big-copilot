@@ -297,8 +297,8 @@ test('imports sort inside each depot, and the depots keep their order', async ()
     assert.match(await page.locator('#importPlan .sechead').textContent(), /Sorted by Material, A to Z/);
     await page.locator('#importPlan .sechead [data-usual]').click();
     assert.deepEqual(await groups(page, '#importPlan'), [['Pear', 'Apple', 'Fig'], ['Lime', 'Kiwi', 'Kale']]);
-    // What to set an order to is an action, not a figure.
-    assert.equal(await page.locator('#importPlan thead th', {hasText: 'Set order to'}).first().locator('button').count(), 0);
+    // What to set an import to is an action, not a figure.
+    assert.equal(await page.locator('#importPlan thead th', {hasText: 'Set to'}).first().locator('button').count(), 0);
   } finally { await page.close(); }
 });
 

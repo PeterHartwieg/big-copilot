@@ -13,7 +13,11 @@ assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
 const fitStart = source.indexOf('const feedFit =');
 const fitEnd = source.indexOf('/* The same verdict', fitStart);
-vm.runInContext(source.slice(fitStart, fitEnd) + '\nconst ceil100 = v => Math.ceil(v / 100) * 100;\n' + source.slice(start, end), context);
+// The row setting the imports table computes, which feeds the checklist.
+const settingStart = source.indexOf('function importSetting(');
+assert.ok(settingStart >= 0 && settingStart < start);
+vm.runInContext(source.slice(fitStart, fitEnd) + '\nconst ceil100 = v => Math.ceil(v / 100) * 100;\n'
+  + source.slice(settingStart, start) + source.slice(start, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
@@ -148,4 +152,93 @@ test('copied checklist groups actions and includes units and read-only instructi
 
 test('empty or incomplete supply data does not invent an action', () => {
   assert.deepEqual(build(), []);
+});
+
+/* --- the Set to box: Smart Delivery levels and the player's own figures --- */
+const setting = (total, contract, edit) => JSON.parse(JSON.stringify(
+  context.importSetting(total, contract, edit)));
+// A row as drawLogistics builds it: the factory week, then the setting.
+const row = (total, contract, edit, extra = {}) => ({s:0, item:'Sugar', factoryWeek:total, otherWeek:0,
+  total, ...setting(total, contract, edit), ...extra});
+
+test('a Smart Delivery level is judged as a week of supply and shows the level in game', () => {
+  const covered = setting(1400, {weekly:1500, smart:true, target:1500});
+  assert.equal(covered.fit, 'ok');
+  assert.equal(covered.inGame, 1500);
+  assert.equal(covered.value, 1500, 'nothing to change: the box holds the level in game');
+  assert.equal(covered.changed, false);
+  const short = setting(1400, {weekly:900, smart:true, target:900});
+  assert.equal(short.fit, 'short');
+  assert.equal(short.value, 1400);
+  assert.equal(short.changed, true);
+});
+
+test('a high Smart Delivery level only holds stock, so it is never told to lower', () => {
+  assert.equal(setting(1000, {weekly:5000, smart:true, target:5000}).surplus, false);
+  assert.equal(setting(1000, {weekly:5000}).surplus, true);
+});
+
+test('a mixed depot shows the level in game and judges what one delivery can bring', () => {
+  // A level of 1,000 with a plain 400 delivered after it: 1,400 a week at most.
+  const mixed = setting(1400, {weekly:1400, smart:true, target:1000, plain:400});
+  assert.equal(mixed.inGame, 1000);
+  assert.equal(mixed.fit, 'ok');
+});
+
+test('a paused contract keeps its figure in the box until the player types one', () => {
+  const paused = setting(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000});
+  assert.equal(paused.fit, 'paused');
+  assert.equal(paused.value, 3000);
+  assert.equal(paused.changed, false);
+  assert.equal(setting(1400, {weekly:0, pausedWeekly:3000}, 2000).changed, true);
+});
+
+test('the player\'s figure replaces the suggestion; typing the suggestion is no edit', () => {
+  const mine = setting(1400, {weekly:900, smart:true, target:900}, 2000);
+  assert.deepEqual([mine.edited, mine.value, mine.suggested, mine.changed], [true, 2000, 1400, true]);
+  assert.equal(setting(1400, {weekly:900}, 1400).edited, false);
+  // A figure equal to the one in game says "leave it": no change to make.
+  const keep = setting(1400, {weekly:900}, 900);
+  assert.deepEqual([keep.edited, keep.changed], [true, false]);
+  // Not a number, or below zero, is not a figure.
+  assert.equal(setting(1400, {weekly:900}, -5).edited, false);
+  assert.equal(setting(1400, {weekly:900}, NaN).edited, false);
+});
+
+test('the checklist names a Smart Delivery stock level, not a weekly order', () => {
+  const rows = build({imports:[{s:0, rows:[row(1400, {weekly:900, smart:true, target:900})]}]});
+  assert.equal(rows.length, 1);
+  assert.deepEqual([rows[0].current, rows[0].proposed, rows[0].mode], [900, 1400, 'smart']);
+  assert.match(rows[0].reason, /^Set Smart Delivery stock to 1[,.]400\./);
+  const text = context.orderChecklistText(rows, 'Company');
+  assert.match(text, /Smart Delivery stock 900 -> 1400 units/);
+  assert.doesNotMatch(text, /units\/week/);
+  const plain = build({imports:[{s:0, rows:[row(1400, {weekly:900})]}]});
+  assert.match(plain[0].reason, /^Set the weekly order to 1[,.]400\./);
+  assert.match(context.orderChecklistText(plain, 'Company'), /900 -> 1400 units\/week/);
+  assert.notEqual(rows[0].key, plain[0].key, 'a level and an order are not the same mark');
+});
+
+test('an edited figure feeds the checklist, including on a row the board finds covered', () => {
+  const edited = build({imports:[{s:0, rows:[row(1400, {weekly:1500, smart:true, target:1500}, 3000)]}]});
+  assert.equal(edited.length, 1);
+  assert.deepEqual([edited[0].current, edited[0].proposed], [1500, 3000]);
+  assert.match(edited[0].reason, /Your own figure; the board suggests 1[,.]400/);
+  // An edit on a short row replaces the suggestion.
+  const short = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 2500)]}]});
+  assert.equal(short[0].proposed, 2500);
+  // An edit back to the figure in game leaves nothing to do.
+  assert.deepEqual(build({imports:[{s:0, rows:[row(1400, {weekly:900}, 900)]}]}), []);
+  // A new figure is a new action: an old tick does not carry over.
+  const other = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 2600)]}]});
+  assert.notEqual(short[0].key, other[0].key);
+});
+
+test('a paused contract with a typed figure resumes at that figure', () => {
+  const rows = build({imports:[{s:0, rows:[row(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000}, 1600)]}]});
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].proposed, 1600);
+  assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3[,.]000 in stock\. Set Smart Delivery stock to 1[,.]600\./);
+  const untouched = build({imports:[{s:0, rows:[row(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000})]}]});
+  assert.equal(untouched[0].proposed, null);
 });
