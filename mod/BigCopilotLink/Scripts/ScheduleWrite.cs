@@ -171,7 +171,7 @@ namespace BigCopilotLink
             // Apply. The before-state is kept as copies: the game's own ClearWorkShifts
             // blanks the employeeId of the shifts it removes, so live objects would not
             // survive as a record.
-            var undo = new UndoState { Address = req.Address, OpenedHours = req.OpenAllHours };
+            var undo = new UndoState { Address = req.Address };
             foreach (var sd in liveDays)
             {
                 if (sd == null) continue;
@@ -180,6 +180,9 @@ namespace BigCopilotLink
                 undo.WasOpen.Add(sd.isOpen);
                 undo.Slots.Add(CloneSlots(sd.openingHourSlots));
             }
+            // Only hours the write really opens are its to put back: a day that was open
+            // 0 to 24 already stays the player's, and undo does not check it.
+            undo.OpenedHours = req.OpenAllHours && !WasAllOpen(undo);
 
             // One entry per weekday (a save should hold exactly seven); a duplicate
             // entry, should one exist, is left as it is rather than given the shifts twice.
@@ -204,13 +207,19 @@ namespace BigCopilotLink
                 if (req.OpenAllHours) OpenAllDay(sd);
             }
 
-            AfterShiftChange(reg, Employees(before, after));
             undo.PrintAfter = Print(Lines(liveDays));
             // The last write of the kind is what undo restores, even one that changed
-            // nothing: same shifts, and no hours opened that were not open already.
-            var changedAnything = undo.PrintAfter != beforePrint || (req.OpenAllHours && !WasAllOpen(undo));
+            // nothing: same shifts, and no hours opened that were not open already. A
+            // no-op is not announced and not marked as a change; it only refreshes.
+            var changedAnything = undo.PrintAfter != beforePrint || undo.OpenedHours;
             ws.ScheduleUndo = changedAnything ? undo : null;
-            var stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
+            string stamp;
+            if (changedAnything)
+            {
+                AfterShiftChange(reg, Employees(before, after));
+                stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
+            }
+            else stamp = ws.RefreshAfterWrite();
             return Answer(req.Address, reg, false, false, false, stamp, null, checks, before, after, openAfter, req.OpenAllHours);
         }
 
@@ -240,7 +249,7 @@ namespace BigCopilotLink
             var failed = siteError != null;
             var noChecks = new List<ShiftCheck>();
             if (dryRun || failed)
-                return Answer(state.Address, reg, dryRun, failed, true, null, siteError, noChecks, current, restored, openAfter, false);
+                return Answer(state.Address, reg, dryRun, failed, true, null, siteError, noChecks, current, restored, openAfter, state.OpenedHours);
 
             for (var i = 0; i < state.Days.Count; i++)
             {
@@ -258,7 +267,7 @@ namespace BigCopilotLink
             AfterShiftChange(reg, Employees(current, restored));
             ws.ScheduleUndo = null;
             var stamp = ws.Applied("bigcopilotlink_notify_undo_schedule", reg.BusinessName);
-            return Answer(state.Address, reg, false, false, true, stamp, null, noChecks, current, restored, openAfter, false);
+            return Answer(state.Address, reg, false, false, true, stamp, null, noChecks, current, restored, openAfter, state.OpenedHours);
         }
 
         // ---- the grid's rules ------------------------------------------------------
