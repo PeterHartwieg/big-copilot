@@ -122,7 +122,7 @@ class Link:
         self.contracts: dict = {}   # contract id -> {active, repeating, nextDeliveryDay}
         self.order: list | None = None
         self.schedules: dict = {}   # address -> [entries], as schedule_entries()
-        self.opened: set = set()    # addresses a write opened 0 to 24
+        self.opened: dict = {}      # address -> the weekdays a write opened 0 to 24
         self.undo: dict = {}
         # What the items bundle would tell the game per contract, set by
         # /debug/config: {id: {"unitPrice": float, "cap": int}}.
@@ -482,6 +482,7 @@ class Link:
                 elif self._site_error(self._registration(save, warehouse)):
                     line["error"] = "no_warehouse"
                 elif (line["cap"] is not None and not line["smart"]
+                      and (want["amount"] != before or row["reactivated"])
                       and want["amount"] > self._allowed(line["cap"], line["orderedThisWeek"])):
                     # A Smart Delivery amount is a stock level, never over the cap.
                     line["error"] = "over_cap"
@@ -503,21 +504,24 @@ class Link:
                             "before": amount, "amount": amount, "smart": bool(contract.get("isTarget")),
                             "unitPrice": None, "cap": None, "orderedThisWeek": product.get("amountOrderedThisWeek", 0),
                             "error": "no_warehouse", "max": None})
-            written = [amounts.get((ask["id"], p.get("itemName"), self._product_address(p)),
-                                   (None, self._amount(ask["id"], p)))[1]
+            # What the contract would hold: the amounts asked for, refused or not,
+            # and the rest as they stand.
+            asked_for = {(line["itemName"], (line["warehouse"]["street"], line["warehouse"]["number"])): line["amount"]
+                         for line in row["products"] if line["before"] is not None and _whole(line["amount"])}
+            written = [asked_for.get((p.get("itemName"), self._product_address(p)), self._amount(ask["id"], p))
                        for p in save.items(contract.get("products"))]
             price = self.terms.get(ask["id"], {}).get("unitPrice")
             if price is not None:
                 row["nextDeliveryTotal"] = round(sum(written) * price, 2)
             first = next((line["error"] for line in row["products"] if line["error"]), None)
-            edits = any(b != a for b, a in amounts.values())
+            edits = any(line["before"] is not None and line["amount"] != line["before"] for line in row["products"])
             # The mod's precedence: changed, screen_open, no_agent, locked,
             # no_amounts, then the first product error, which the row repeats
             # so it can be judged without reading its products.
             if any(line["error"] == "changed" for line in row["products"]):
                 row["error"] = "changed"
-            elif not contract.get("employeeInstanceId"):
-                row["error"] = "no_agent"
+            elif not contract.get("employeeInstanceId") and (row["reactivated"] or edits):
+                row["error"] = "no_agent"  # only a contract the write touches
             elif (state["active"] and edits and self._lock_window()
                   and state["nextDeliveryDay"] == self._imminent_monday()):
                 row["error"] = "locked"
@@ -647,17 +651,19 @@ class Link:
             taken.append((d, f, t, who, post))
             after.append((d, f, t, who, post, 0 if stations[post] == CLEANING_STATION else 1))
         answer["ok"] = answer["siteError"] is None and not answer["rows"]
-        self._schedule_answer(answer, save, before, after, open_all,
+        # With openAllHours the write opens the days not open 0 to 24 already;
+        # a day already open stays the player's, and openedHours says whether
+        # any was opened.
+        opens = {d for d in self._days(reg) if not self._all_day(reg, address, d)} if open_all else set()
+        self._schedule_answer(answer, save, before, after, bool(opens),
                               self._open_days(reg, address, open_all))
         if dry or not answer["ok"]:
             return self._schedule_refused(answer, dry)
         self.schedules[address] = after
-        opened_before = address in self.opened
-        if open_all:
-            self.opened.add(address)
-        if sorted(after) != sorted(before) or (open_all and not opened_before):
+        self.opened.setdefault(address, set()).update(opens)
+        if sorted(after) != sorted(before) or opens:
             self.undo["schedule"] = {"address": address, "before": before, "after": after,
-                                     "opened": open_all and not opened_before, "business": answer["business"]}
+                                     "opened": sorted(opens), "business": answer["business"]}
         else:
             self.undo.pop("schedule", None)  # nothing changed, nothing to undo
         return 200, answer
@@ -671,13 +677,27 @@ class Link:
         rows = ([{"error": answer["siteError"]}] if answer["siteError"] else []) + answer["rows"]
         return 409, {"error": "refused", "rows": rows}
 
+    def _days(self, reg) -> dict:
+        """The business's schedule days as the bytes hold them, by weekday."""
+        return {(sd.get("day") or 0) % 7: sd for sd in self._save().items((reg or {}).get("scheduleDays"))}
+
+    def _all_day(self, reg, address, d) -> bool:
+        """Open with one slot, 0 to 24, as the bytes have the day or a write left it."""
+        if d in self.opened.get(address, set()):
+            return True
+        sd = self._days(reg).get(d) or {}
+        slots = self._save().items(sd.get("openingHourSlots"))
+        return bool(sd.get("isOpen")) and len(slots) == 1 and (slots[0].get("startingHour") or 0) == 0 \
+            and slots[0].get("endingHour") == 24
+
     def _open_days(self, reg, address, open_all) -> set:
-        """The weekdays the business is open after the write: every day when it
-        opens all hours, or an earlier write did; else the days the bytes open."""
-        if open_all or address in self.opened:
-            return set(range(7))
-        return {(sd.get("day") or 0) % 7 for sd in self._save().items((reg or {}).get("scheduleDays"))
-                if sd.get("isOpen")}
+        """The weekdays the business is open after the write: every day it
+        holds when it opens all hours; else the days the bytes open, and those
+        a write opened."""
+        days = self._days(reg)
+        if open_all:
+            return set(days)
+        return {d for d, sd in days.items() if sd.get("isOpen")} | self.opened.get(address, set())
 
     @staticmethod
     def _schedule_answer(answer, save, before, after, open_all, open_days):
@@ -751,15 +771,15 @@ class Link:
                 return 409, {"error": "changed"}
             answer = {"ok": True, "kind": kind, "dryRun": dry, "undo": True, "address": _wire(address),
                       "business": record["business"], "siteError": None, "rows": []}
-            # Open after the undo: as the bytes have it where the write opened the
-            # days, else as it was.
+            # Open after the undo: the days the write opened go back as they were.
+            reopened = self.opened.get(address, set()) - set(record["opened"])
             self._schedule_answer(answer, save, record["after"], record["before"], False,
-                                  self._open_days(reg, None if record["opened"] else address, False))
-            answer["openedHours"] = record["opened"]
+                                  {d for d, sd in self._days(reg).items() if sd.get("isOpen")} | reopened)
+            # True only when the undo restores opening hours the write opened.
+            answer["openedHours"] = bool(record["opened"])
             if not dry:
                 self.schedules[address] = record["before"]
-                if record["opened"]:
-                    self.opened.discard(address)
+                self.opened[address] = reopened
         if not dry:
             del self.undo[kind]  # an undo is not itself undoable
         return 200, answer
@@ -770,7 +790,7 @@ class Link:
             if body.get("reset"):  # forget every apply, as a reloaded city would
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
-                self.opened, self.terms = set(), {}
+                self.opened, self.terms = {}, {}
                 self.day, self.hour = self._clock
             if "importTerms" in body:
                 self.terms = dict(body["importTerms"] or {})

@@ -907,7 +907,7 @@
       // cover it, and an apply whose answer cannot be read is as unknown as
       // one with none. A 401 is refused before the body, so it is certain.
       const answer = await readAnswer(res, WRITE_WAIT_MS - (Date.now() - sentAt));
-      if (!answer && res.status !== 401) {
+      if (!wellFormed(answer, res.status, dryRun) && res.status !== 401) {
         if (dryRun) return {status: res.status, error: "unreachable", message: "The game's answer could not be read.", body: null};
         return {status: res.status, error: "uncertain", message: "The game's answer could not be read.", body: null, reread: rereadGame()};
       }
@@ -938,6 +938,16 @@
       res.json().then((v) => (v && typeof v === "object" && !Array.isArray(v) ? v : null), () => null)
         .then((v) => { clearTimeout(timer); resolve(v); });
     });
+  }
+
+  // Whether an answer says what the contract has it say: a refusal names its
+  // error; a 200 carries ok and kind, and an apply's or undo's the stamp the
+  // board follows. Anything short of that is an answer that cannot be read.
+  function wellFormed(answer, status, dryRun) {
+    if (!answer) return false;
+    if (status !== 200) return typeof answer.error === "string";
+    return typeof answer.ok === "boolean" && typeof answer.kind === "string"
+      && (dryRun || typeof answer.stamp === "string");
   }
 
   // Until no read is under way. A poll on the real clock, not linkWait: the

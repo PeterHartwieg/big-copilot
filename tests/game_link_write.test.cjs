@@ -490,35 +490,64 @@ test('imports: a stopped contract is started, with its next delivery against cas
   assert.deepEqual((await applied())[0].body.contracts, [{id: 'CONTRACTthree', activate: true,
     products: [{itemName: 'ba:itemname_candle', warehouse: DEPOT_ADDRESS, amount: 600, expect: 500}]}]);
 });
-test('imports: plain amounts share one cap budget per importer across the whole write', async (t) => {
+test('imports: plain amounts take one cap budget per importer, in the game\'s delivery order', async (t) => {
   const page = await linked(t, {code: CODE});
   const got = await page.evaluate(() => {
     const saved = gwImportRows;
-    const [gifts, depot] = [D.businesses[0].key, D.businesses[3].key];
-    const line = (s, value, contracts) => ({s, slug: 'ba:itemname_x', item: 'X', value, smart: false, changed: true,
-                                            paused: false, total: value, impId: `x${s}`, contracts});
-    const c = (id, importer, order, amount, active = true) => ({id, importer, order, amount, active, smart: false, agent: true});
+    const [gifts, corner, depot] = [D.businesses[0].key, D.businesses[1].key, D.businesses[3].key];
+    const line = (s, value, contracts, smart = false, changed = true) => ({s, slug: 'ba:itemname_x', item: 'X', value, smart,
+      changed, paused: false, total: value, impId: `x${s}`, contracts});
+    const c = (id, importer, group, order, amount, {active = true, product = 0, smart = false} = {}) =>
+      ({id, importer, group, order, product, amount, active, smart, agent: true});
     const run = (rows) => {
       gwImportRows = rows;
-      const plan = gwImportPlan(null);
-      return plan.map((l) => ({at: l.depot.key, set: l.contracts.map(({c, amount}) => [c.id, amount]), uncovered: l.uncovered}));
+      return gwImportPlan(null).filter((l) => !l.r.smart).map((l) => ({at: l.depot.key,
+        set: l.contracts.map(({c, amount}) => [c.id, amount]), uncovered: l.uncovered,
+        ahead: l.smartAhead.map((e) => e.c.id)}));
     };
     gwTerms.clear();
     gwTerms.set(`A|ba:itemname_x|${depot}`, {cap: 1000, orderedThisWeek: 0, max: null});
-    // Importer P allows 1,000 a week: A (ahead in plan order) takes 800 at the
-    // depot, so B at the shop gets the 200 left and Q's C the rest. D, stopped
-    // and given nothing, is not written at all.
-    const shared = run([line(3, 800, [c('A', 'P', 1, 500)]),
-                        line(0, 600, [c('B', 'P', 3, 400), c('C', 'Q', 4, 0, false), c('D', 'P', 5, 300, false)])]);
+    // Importer P allows 1,000 a week. A delivers first and takes 800 at the
+    // depot, B at the shop the 200 left, Q's C (stopped, so started) the rest.
+    // D, stopped and given nothing, is not written at all. S, P's Smart
+    // Delivery contract, orders ahead and is named, not counted.
+    const smartLine = line(1, 900, [c('S', 'P', 0, 0, 900, {smart: true})], true, false);
+    const shared = run([smartLine, line(3, 800, [c('A', 'P', 0, 1, 500)]),
+                        line(0, 600, [c('B', 'P', 0, 3, 400), c('C', 'Q', 4, 4, 0, {active: false}),
+                                      c('D', 'P', 0, 5, 300, {active: false})])]);
     // With nobody after B, the cap leaves 400 of the shop's week uncovered.
-    const capped = run([line(3, 800, [c('A', 'P', 1, 500)]), line(0, 600, [c('B', 'P', 3, 400)])]);
+    const capped = run([line(3, 800, [c('A', 'P', 0, 1, 500)]), line(0, 600, [c('B', 'P', 0, 3, 400)])]);
+    // One contract holding the item for two depots: its first product takes
+    // the budget first.
+    gwTerms.set(`E|ba:itemname_x|${depot}`, {cap: 500, orderedThisWeek: 0, max: null});
+    const twice = run([line(3, 400, [c('E', 'P', 0, 0, 300)]), line(0, 400, [c('E', 'P', 0, 0, 300, {product: 1})])]);
+    // A stopped contract started by one line writes all its products here, 0 included.
+    const started = run([line(3, 400, [c('F', 'Q', 0, 0, 300, {active: false})]),
+                         line(0, 0, [c('F', 'Q', 0, 0, 300, {active: false, product: 1})])]);
     gwImportRows = saved; gwTerms.clear();
-    return {shared, capped, depot, gifts};
+    return {shared, capped, twice, started, depot, gifts};
   });
-  assert.deepEqual(got.shared, [{at: got.depot, set: [['A', 800]], uncovered: 0},
-                                {at: got.gifts, set: [['B', 200], ['C', 400]], uncovered: 0}]);
-  assert.deepEqual(got.capped, [{at: got.depot, set: [['A', 800]], uncovered: 0},
-                                {at: got.gifts, set: [['B', 200]], uncovered: 400}]);
+  assert.deepEqual(got.shared, [{at: got.depot, set: [['A', 800]], uncovered: 0, ahead: ['S']},
+                                {at: got.gifts, set: [['B', 200], ['C', 400]], uncovered: 0, ahead: ['S']}]);
+  assert.deepEqual(got.capped, [{at: got.depot, set: [['A', 800]], uncovered: 0, ahead: []},
+                                {at: got.gifts, set: [['B', 200]], uncovered: 400, ahead: []}]);
+  assert.deepEqual(got.twice, [{at: got.depot, set: [['E', 400]], uncovered: 0, ahead: []},
+                               {at: got.gifts, set: [['E', 100]], uncovered: 300, ahead: []}]);
+  assert.deepEqual(got.started, [{at: got.depot, set: [['F', 400]], uncovered: 0, ahead: []},
+                                 {at: got.gifts, set: [['F', 0]], uncovered: 0, ahead: []}]);
+});
+
+test('imports: a week the caps leave short with nothing to write is said, and not counted', async (t) => {
+  const page = await linked(t, {code: CODE});
+  await configure({importTerms: {CONTRACTthree: {unitPrice: 2.5, cap: 0}}});
+  await supply(page);
+  await setTo(page, 'Candle', 600);
+  await applyImports(page).click();
+  await dialog(page).getByText('Nothing to write. 600 a week of Candle at HART. Depot not covered: the importers\' caps are reached.').waitFor();
+  await dialog(page).getByRole('button', {name: 'Close'}).last().click();
+  await page.evaluate(() => { drawLogistics(); wireAll(); });
+  assert.equal(await applyImports(page).count(), 0);
+  assert.equal((await applied()).length, 0);
 });
 /* --- the schedule --------------------------------------------------------- */
 const ANA = 'AAAAemployeeAAAAAAAAAAAA', BEN = 'BBBBemployeeBBBBBBBBBBBB', DEE = 'DDDDemployeeDDDDDDDDDDDD';

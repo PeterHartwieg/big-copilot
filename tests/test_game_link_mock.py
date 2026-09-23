@@ -512,11 +512,61 @@ class MockWrites(unittest.TestCase):
                     {"f": 12, "t": 20, "employeeId": ANA, "itemInstanceId": REGISTER}]
         body = {"dryRun": True, "address": GIFTS, "expect": fixture_print,
                 "days": [{"d": 1, "shifts": long_day}, {"d": 3, "shifts": long_day}]}
+        reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[0]
+        reg["scheduleDays"]["$items"].append({"day": 3, "isOpen": False, "workShifts": []})
         _, answer = self.post("schedule", body)
         # Gifts opens Sunday and Monday only; Wednesday is closed and not counted.
         self.assertEqual([(w["d"], w["hours"]) for w in answer["warnings"]], [(1, 20)])
         _, answer = self.post("schedule", dict(body, openAllHours=True))
         self.assertEqual([(w["d"], w["hours"]) for w in answer["warnings"]], [(1, 20), (3, 20)])
+
+    def test_open_all_hours_opens_only_the_days_not_open_all_day(self):
+        reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[0]
+        days = self.link._save().items(reg["scheduleDays"])
+        for day in days:  # both of Gifts' days already open 0 to 24
+            day["openingHourSlots"] = {"$items": [{"startingHour": 0, "endingHour": 24}]}
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        body = {"address": GIFTS, "expect": fixture_print, "openAllHours": True,
+                "days": [{"d": 1, "shifts": [{"f": 8, "t": 20, "employeeId": BEN, "itemInstanceId": REGISTER}]}]}
+        status, answer = self.post("schedule", body)
+        self.assertEqual((status, answer["openedHours"]), (200, False))
+        status, undone = self.post("undo", {"kind": "schedule"})
+        self.assertEqual((status, undone["openedHours"]), (200, False), "nothing opened, nothing restored")
+        # One day not open all day: that day alone is the write's, and the undo's.
+        # (An apply moves the stamp, and the mock reads the bytes afresh.)
+        reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[0]
+        self.link._save().items(reg["scheduleDays"])[0]["openingHourSlots"] = {
+            "$items": [{"startingHour": 0, "endingHour": 24}]}  # Sunday
+        status, answer = self.post("schedule", body)
+        self.assertEqual((status, answer["openedHours"]), (200, True))
+        self.assertEqual(self.link.undo["schedule"]["opened"], [1])
+        _, undone = self.post("undo", {"kind": "schedule"})
+        self.assertTrue(undone["openedHours"])
+        self.assertEqual(self.link.opened[("ba:street_secondavenue", 10)], set())
+
+    def test_a_contract_the_write_leaves_alone_is_not_refused_for_it(self):
+        # CONTRACTtwo has no agent; named with its own amount it is not touched.
+        same = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 0, "expect": 0}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTtwo", "products": [same]}]})
+        self.assertIsNone(answer["rows"][0]["error"])
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTtwo", "products": [dict(same, amount=10)]}]})
+        self.assertEqual(answer["rows"][0]["error"], "no_agent")
+        # An unchanged amount over the cap is not over_cap; a changed one is.
+        self.link.terms["CONTRACTone"] = {"cap": 100}
+        contracts = {c["id"]: c for c in self.link._save().items(self.link._save().root["importPartnerships"])}
+        contracts["CONTRACTone"]["isTarget"] = False
+        paper = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 3800, "expect": 3800}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [paper]}]})
+        self.assertIsNone(answer["rows"][0]["error"])
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTone", "products": [dict(paper, amount=3900)]}]})
+        self.assertEqual(answer["rows"][0]["error"], "over_cap")
+        # no_amounts reads the amounts asked for, even one refused over the cap.
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTone", "products": [dict(paper, amount=0)]}]})
+        self.assertEqual(answer["rows"][0]["error"], "no_amounts")
+
 
     def test_import_terms_cap_a_plain_amount_and_price_the_next_delivery(self):
         status, _, _ = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
