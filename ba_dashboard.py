@@ -13334,11 +13334,19 @@ function spRosterNew(c, counts){
   /* Each row opens on the words that carry it, so the bold alone reads as the
      whole note: when the shop's own week arrives, what to do until then, what
      the plan below is, and what clearing would cost. */
-  /* The days since first open that make the demand data complete. */
+  /* The days since the shop's first customer that make the demand data
+     complete, and how many it has, where the payload says. Counted from the
+     first customer, not from the day the shop was rented, so the "Open N
+     days" chip beside it is a different number and the words must not pretend
+     otherwise. */
   const days = (c.row.fullCover || {}).daysNeeded || 9;
+  const so_far = (c.row.fullCover || {}).daysMeasured;
+  const progress = Number.isFinite(so_far)
+    ? `Demand data: ${Math.min(so_far, days)} of ${days} days` : "";
   const why = c.measured
     ? [["clock", `<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.`]]
-    : [["clock", `<b>Its own week arrives ${days} days after it first opened, closed days included.</b> Until then a weekday's hours are only read once the save holds ${
+    : [["clock", `<b>Its own week arrives ${days} days after its first customer, closed days included${
+        progress ? ` (${progress})` : ""}.</b> Until then a weekday's hours are only read once the save holds ${
         need} reports of that same weekday.`],
        ["crew", `<b>Staff every station for those ${days} days</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.${
          spOffersFull(c.row) ? ` Full cover 24/7, above, is that week.` : ""}`]];
@@ -13352,7 +13360,9 @@ function spRosterNew(c, counts){
      that has to be read in full is a note that is not read. */
   const sum = c.measured
     ? `No serving hours to suggest yet, so this plan is <b>cleaning and security only</b>.`
-    : `Until ${days} days after this shop first opened, the plan is <b>cleaning and security only</b>.`;
+    : progress
+      ? `${progress}. Until then the plan is <b>cleaning and security only</b>.`
+      : `Until ${days} days after this shop's first customer, the plan is <b>cleaning and security only</b>.`;
   const head = counts.now && !counts.staffed
     ? `<b>Hire before you clear.</b> Every entry here waits on somebody.`
     : kept
@@ -13444,7 +13454,7 @@ function spPlanPick(base, full){
     ([a, b]) => [...Array(Math.max(0, Math.min(24, b) - Math.max(0, a))).keys()].map(k => a + k))).size, 0);
   const ownFull = openHours * (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0);
   const done = base.demandDataComplete
-    ? `<span class="sp-handover" data-tip="${attr(`Read from the ${needed} days since the shop first opened, as they were staffed. An hour with no customers files no report and counts as none.`)}">${spI("tick")}<span><b>Demand data complete:</b> ${full
+    ? `<span class="sp-handover" data-tip="${attr(`Read from the days since the shop's first customer, as they were staffed. An hour with no customers files no report and counts as none.`)}">${spI("tick")}<span><b>Demand data complete:</b> ${full
       ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
     : !full ? ""
     /* Complete data and no hand-over: either the demand plan wants every
@@ -13454,7 +13464,7 @@ function spPlanPick(base, full){
       ? `<span class="sp-pickwhy">The demand plan also needs every station every hour: keep this staffing.</span>`
     : complete && !fc.inGame
       ? `<span class="sp-pickwhy">Demand data complete, as staffed: an empty station may have turned customers away.</span>`
-    : `<span class="sp-pickwhy">Run it until ${needed} days after the shop first opened, then switch to the demand plan.${
+    : `<span class="sp-pickwhy">Run it until ${needed} days after the shop's first customer, then switch to the demand plan.${
       Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${Math.min(measured, needed)} of ${needed} days.</b>` : ""}</span>`;
   return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
     full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
@@ -13633,8 +13643,8 @@ function spRosterBlock(b){
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
-        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop first opened, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
-        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed until 9 days after the shop first opened, and the count stops being a count of what you turned away.`}`})}
+        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop's first customer, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
+        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed until 9 days after the shop's first customer, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}

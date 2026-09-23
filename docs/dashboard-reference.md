@@ -548,10 +548,13 @@ assumes), `openAllHours: true`, `openNow` (whether the shop already opens that l
 an hour it is shut is an hour the test never measures), `inGame`, `daysMeasured` and `daysNeeded`. On a shop with no
 serving station the two plans are the same week, and the page offers no choice.
 
-**When the demand data is complete.** The game files an hour report only for an hour the
+**When the demand data is complete.** The count starts at the shop's first customer, not
+at the day it was rented, so it is not the *Open N days* figure beside it; wherever the
+payload carries it, the page shows the progress (*Demand data: 7 of 9 days*) rather than
+a date. The game files an hour report only for an hour the
 shop was open and served somebody: none for an hour it was shut, and none for an hour
 nobody came. The data is complete when at least 9 finished days have passed since the
-shop first opened (`DEMAND_RUN_DAYS`, Peter, 23 September 2026): the first open day is the
+shop's first customer (`DEMAND_RUN_DAYS`, Peter, 23 September 2026): the first open day is the
 earliest day in `orderHistory` with a report, and today, being unfinished, is left out. Not
 nine in a row and not around the clock: a nightclub shut every Monday completes on its
 ninth day like any other shop. The order history keeps about sixteen days, so a shop older

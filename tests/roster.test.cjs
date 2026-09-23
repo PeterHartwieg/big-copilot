@@ -913,7 +913,8 @@ test('the note says how new the shop is, what the plan covers, and what not to c
     // Straight out of the planner: opened five days ago, and not one hour
     // report filed yet.
     assert.match(text, /Open 5 days, no hour reports on file/);
-    assert.match(text, /arrives 9 days after it first opened, closed days included/);
+    assert.match(text, /arrives 9 days after its first customer, closed days included \(Demand data: 0 of 9 days\)/);
+    assert.match(text, /Demand data: 0 of 9 days\. Until then the plan is cleaning and security only/);
     assert.match(text, /2 reports of that same weekday/);
     assert.match(text, /cleaning and security cover only/);
     // 56 shifts in the game, 28 of them cleaning: the other 28 are the ones
@@ -1000,7 +1001,7 @@ test('a measured shop whose hours ask for nobody is still a cover-only plan', as
     assert.equal(await note.count(), 1);
     assert.match(await note.innerText(), /Cover only/);
     assert.match(await note.innerText(), /ask for nobody on its serving stations/);
-    assert.doesNotMatch(await note.innerText(), /days after it first opened/);
+    assert.doesNotMatch(await note.innerText(), /days after its first customer/);
     assert.match(await note.innerText(), /Do not clear the whole schedule/);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
@@ -1783,7 +1784,7 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
     assert.match(steps[0], /^Open every day 0 to 24/);
     assert.match(await page.locator('#sp-roster .sp-pickwhy').innerText(),
-      /^Run it until 9 days after the shop first opened, then switch to the demand plan\. Demand data: 0 of 9 days\.$/);
+      /^Run it until 9 days after the shop's first customer, then switch to the demand plan\. Demand data: 0 of 9 days\.$/);
     assert.equal(await page.locator('#sp-roster .sp-progress').innerText(), 'Demand data: 0 of 9 days.');
     assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
       /Every station, every hour/);
@@ -1921,7 +1922,7 @@ test('complete demand data on full cover says so on the block and on the Today c
   } finally { await page.close(); }
 });
 
-test('the progress line counts the days since the shop first opened', async () => {
+test("the progress line counts the days since the shop's first customer", async () => {
   const page = await shop('newshop', row => { row.fullCover.daysMeasured = 5; });
   try {
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());

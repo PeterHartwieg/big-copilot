@@ -24,6 +24,7 @@ from ba_dashboard import (
     _cut_run,
     _full_cover_in_game,
     _full_need,
+    _hourly,
     _hires_for,
     _keeps_floors,
     _open_all_hours,
@@ -45,6 +46,9 @@ from tests.test_staffing import (
     REGISTER,
     SCHEDULING_DEMANDS,
     SERVICE,
+    LABELS,
+    STATIONS,
+    business,
     employee,
     hours,
     kind,
@@ -553,14 +557,19 @@ class NineDayGateTest(unittest.TestCase):
         self.assertEqual(daily[2], [0.0] * 24)
 
     def test_the_fit_out_before_the_first_customer_is_not_averaged(self):
-        """Days on file before the shop first served anybody are not open days."""
+        """Days on file before the shop first served anybody are not open days.
+
+        Days 1 and 2 are the fit-out, day 3 the first customer, and day 10 an
+        open day nobody came: Wednesday halves, Tuesday does not.
+        """
         reg = registration([(1, REGISTER)], {3: 3}, days=14)
         for entry in reg["orderHistory"]["$items"]:
-            if entry["dayNumber"] <= 2:
+            if entry["dayNumber"] in (1, 2, 10):
                 entry["hourReports"] = {"$items": []}
         daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg, ALL_DAY_OPEN)
         self.assertEqual(daily[2][3], 3.0)  # day 9 alone; day 2 was the fit-out
-        self.assertEqual(daily[1][3], 3.0)
+        self.assertEqual(daily[1][3], 3.0)  # day 8 alone; day 1 was the fit-out
+        self.assertEqual(daily[3][3], 1.5)  # days 3 and 10; nobody came on 10
 
     def test_a_weekday_never_opened_averages_to_nothing(self):
         reg = registration([(1, REGISTER)], {12: 10}, days=14, open_days=(0, 1, 2, 4, 5, 6))
@@ -569,13 +578,25 @@ class NineDayGateTest(unittest.TestCase):
         self.assertEqual(daily[3], [0.0] * 24)
 
     def test_todays_partial_day_cannot_set_a_weekday(self):
-        """A weekday with no finished open day is none, not today's partial count."""
-        grid = {"customers": [[None] * 24 for _ in range(7)], "weeks": [1] * 7,
-                "thin": [False] * 7}
-        grid["customers"][4][10] = 25.0  # filed so far today, the first Thursday
-        daily = [[0.0] * 24 for _ in range(7)]
+        """A weekday with no finished open day is none, not today's partial count.
+
+        The order history runs from day 4 to day 10 and today is day 10, a
+        Wednesday: the first Wednesday on file is today's, unfinished, with 25
+        customers at 10:00 so far. The board's hour grid reads that; the demand
+        plan's copy must not.
+        """
+        reg = dict(registration([(1, REGISTER)], {10: 25, 12: 5}, days=10), RentedByPlayer=True)
+        reg["orderHistory"]["$items"] = [
+            e for e in reg["orderHistory"]["$items"] if e["dayNumber"] >= 4]
+        save = Save({"Day": 10, "EmployeeInstances": {"$items": []},
+                     "BuildingRegistrations": {"$items": [reg]}}, {}, "t.hsg")
+        grid = _hourly(save, [reg], [business()], STATIONS, set(), {}, LABELS)[0]
+        self.assertEqual(grid["customers"][3][10], 25.0)
+        daily = _open_day_average(save, reg, grid["open"])
         measured = _run_measured(grid, DEMAND_RUN_DAYS, daily)
-        self.assertEqual(measured["customers"][4][10], 0.0)
+        self.assertEqual(measured["customers"][3][10], 0.0)
+        # A finished Tuesday still reads its own day.
+        self.assertEqual(measured["customers"][2][10], 25.0)
 
     def test_the_threshold_directly(self):
         stations = [{"id": 1}, {"id": 2}]
