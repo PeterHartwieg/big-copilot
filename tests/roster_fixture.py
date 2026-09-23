@@ -10,7 +10,7 @@ the JSON off stdout.
 
 Synthetic saves only. `python -m tests.roster_fixture` prints them.
 
-Eleven sites, each a state the block has to draw:
+Twelve sites, each a state the block has to draw:
 
 full     a measured shop: two counters, a cleaning station and a security
          locker, and a schedule already in the game as two-hour scraps. One
@@ -59,6 +59,9 @@ newshop  a shop five days old, open 8 to 20, with two registers, a cleaning
          unassigned: its demand plan is cover only, and its full-cover plan
          staffs both registers around the clock and draws on the unassigned
          cleaner.
+partday  open 8 to 22 and busy every open hour, both registers staffed all of
+         it in the game, twelve days in: complete data, and its demand plan is
+         its full cover already, so there is nothing to switch to.
 handover a shop whose schedule in the game staffs both registers every
          hour of every day, with two reports for every hour of every weekday:
          the demand data is complete.
@@ -333,6 +336,21 @@ def handover_row():
     return plan(items, people, BUSY, shifts=week)
 
 
+def partday_row():
+    """A shorter day, busy all of it: complete data and no hand-over."""
+    people = [employee(f"s{i}", [SERVICE]) for i in range(8)]
+    people += [employee(f"c{i}", [CLEANING]) for i in range(4)]
+    items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)]
+    week = [
+        {"wd": wd, "employeeId": f"s{(k + wd) % 8}", "itemInstanceId": post,
+         "startingHour": 8, "endingHour": 22, "type": 1}
+        for wd in range(7)
+        for k, post in enumerate((1, 2))
+    ]
+    return plan(items, people, {h: 40 for h in range(8, 22)}, shifts=week,
+                opens=((8, 22),), days=12)
+
+
 def rows():
     return {
         "full": full_row(),
@@ -345,6 +363,7 @@ def rows():
         "shut": shut_row(),
         "weekend": weekend_row(),
         "newshop": newshop_row(),
+        "partday": partday_row(),
         "handover": handover_row(),
     }
 

@@ -28,6 +28,8 @@ from ba_dashboard import (
     _keeps_floors,
     _open_all_hours,
     _days_open,
+    _open_day_average,
+    _run_measured,
     _pack_hires,
 )
 from tests.test_staffing import (
@@ -367,6 +369,20 @@ class HandOverTest(unittest.TestCase):
             entries[:] = [e for e in entries if e["dayNumber"] >= 40]
         self.assertEqual(self.days_open(55, today=56, edit=window), 16)
 
+    def test_a_window_with_no_reports_left_is_complete(self):
+        """The first open day has left the order history, and nobody came since."""
+        def quiet(entries):
+            entries[:] = [dict(e, hourReports={"$items": []}) for e in entries
+                          if e["dayNumber"] >= 40]
+        self.assertEqual(self.days_open(55, today=56, edit=quiet), 55)
+
+    def test_no_reports_and_the_window_reaches_creation_is_not(self):
+        """Created within the window and never served: not opened yet."""
+        def unopened(entries):
+            for entry in entries:
+                entry["hourReports"] = {"$items": []}
+        self.assertEqual(self.days_open(12, today=13, edit=unopened), 0)
+
     def test_nine_days_on_full_cover_shows_the_line(self):
         row = self.row(days=9, day=10)
         self.assertIs(row["fullCover"]["inGame"], True)
@@ -405,6 +421,20 @@ class HandOverTest(unittest.TestCase):
     def test_a_register_empty_for_a_day_is_not(self):
         row = self.row(shifts=game_week((1, 2), skip=(3, 2)))
         self.assertIs(row["fullCover"]["inGame"], False)
+        self.assertIs(row["demandDataComplete"], False)
+
+    def test_busy_every_open_hour_of_a_shorter_day_is_not(self):
+        """Open 8 to 22 and busy all of it: the demand plan is its full cover already.
+
+        The 24/7 full-cover plan would be 336 serving hours against the demand
+        plan's 196; the shop's own hours are 196 too, so there is nothing to
+        switch to.
+        """
+        busy = {h: 40 for h in range(8, 22)}
+        row = plan(self.ITEMS, crew(), busy, opens=((8, 22),), days=12, day=13,
+                   shifts=game_week((1, 2)))
+        self.assertIs(row["fullCover"]["inGame"], True)
+        self.assertEqual(sum(hours(s) for s in serving(row)), 2 * 14 * 7)
         self.assertIs(row["demandDataComplete"], False)
 
     def test_not_shown_where_the_demand_plan_is_full_cover_too(self):
@@ -476,6 +506,35 @@ class NineDayGateTest(unittest.TestCase):
         row = plan(self.ITEMS, crew(), hourly, days=9, day=10, hours=range(8, 22))
         self.assertEqual(row["unmeasured"][1], list(range(0, 8)) + [22, 23])
         self.assertEqual(row["need"][SERVICE][1][3], 0)
+
+    def test_an_hour_is_averaged_over_the_days_the_shop_was_open(self):
+        """Tuesday 03:00: 3 one week, nobody the next. The plan reads 1.5, not 3."""
+        hourly = {3: 3, 12: 10}
+        reg = registration([(1, REGISTER)], hourly, days=14)
+        second = next(e for e in reg["orderHistory"]["$items"] if e["dayNumber"] == 9)
+        second["hourReports"] = {"$items": [{"hour": 12, "customers": 10}]}
+        save = Save({"Day": 15}, {}, "t.hsg")
+        daily = _open_day_average(save, reg)
+        self.assertEqual(daily[2][3], 1.5)
+        self.assertEqual(daily[2][12], 10.0)
+        self.assertEqual(daily[3][3], 3.0)
+        grid = {"customers": [[None] * 24 for _ in range(7)], "weeks": [2] * 7,
+                "thin": [False] * 7}
+        grid["customers"][2][3] = 3.0
+        grid["customers"][2][12] = 10.0
+        measured = _run_measured(grid, DEMAND_RUN_DAYS, daily)
+        self.assertEqual(measured["customers"][2][3], 1.5)
+        # An hour with no report at all stays none, and the board's own grid
+        # is left as it was.
+        self.assertEqual(measured["customers"][2][5], 0.0)
+        self.assertEqual(grid["customers"][2][3], 3.0)
+        # Without the nine days the grid is untouched.
+        self.assertIs(_run_measured(grid, DEMAND_RUN_DAYS - 1, daily), grid)
+
+    def test_a_weekday_never_opened_averages_to_nothing(self):
+        reg = registration([(1, REGISTER)], {12: 10}, days=14, open_days=(0, 1, 2, 4, 5, 6))
+        daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg)
+        self.assertIsNone(daily[3])
 
     def test_the_threshold_directly(self):
         stations = [{"id": 1}, {"id": 2}]
@@ -581,6 +640,16 @@ class AddPeopleTest(unittest.TestCase):
         hourly = {h: 10 for h in range(10, 16)}
         promised = self.live_case(dict(hourly=hourly, days=8, opens=((10, 16),),
                                        open_days=(1,), today=9))
+        self.assertEqual(promised, [[], ["free"]])
+
+
+    def test_a_shop_on_its_normal_hours_is_not_a_live_test(self):
+        """Open 10 to 16 with its register staffed then: that is not the 24/7 test."""
+        hourly = {h: 10 for h in range(10, 16)}
+        shifts = [{"wd": wd, "employeeId": "own1", "itemInstanceId": 1,
+                   "startingHour": 10, "endingHour": 16, "type": 1} for wd in range(7)]
+        promised = self.live_case(dict(hourly=hourly, weeks=2, opens=((10, 16),),
+                                       shifts=shifts, today=15))
         self.assertEqual(promised, [[], ["free"]])
 
 

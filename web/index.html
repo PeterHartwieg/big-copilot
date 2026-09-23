@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=3ab94793f8">
+<link rel="stylesheet" href="community.css?v=ba24d13c25">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=3ab94793f8">
+<link rel="stylesheet" href="fonts/fonts.css?v=ba24d13c25">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2697,8 +2697,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "3ab94793f8";</script>
-<script>window.LEDGER_RELEASE = {"version":"3ab94793f8","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "ba24d13c25";</script>
+<script>window.LEDGER_RELEASE = {"version":"ba24d13c25","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2767,8 +2767,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=3ab94793f8"></script>
-<script src="community.js?v=3ab94793f8"></script>
+<script src="app.js?v=ba24d13c25"></script>
+<script src="community.js?v=ba24d13c25"></script>
 
 <script>
 
@@ -5534,7 +5534,7 @@ function spRosterDay(c, wd, on){
   const unmeasured = [];
   if(!c.full) ((c.row.unmeasured || [])[wd] || []).forEach(h => {
     unmeasured.push(`<i class="sp-unmh" style="grid-column:${h + 2}" data-read="${attr(
-      `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> not measured yet: counted as no customers`)}"></i>`);
+      `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> no customers on file: counted as none`)}"></i>`);
   });
   const bases = Object.values(c.row.basis || {}).flatMap(days => (days || [])[wd] || []);
   const readDay = bases.some(b => b === "measured" || b === "censored") ? "measured"
@@ -5823,7 +5823,7 @@ function spRosterNew(c, counts){
   const days = (c.row.fullCover || {}).daysNeeded || 9;
   const why = c.measured
     ? [["clock", `<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.`]]
-    : [["clock", `<b>Its own week arrives after ${days} days of trading.</b> Until then a weekday's hours are only read once the save holds ${
+    : [["clock", `<b>Its own week arrives ${days} days after it first opened, closed days included.</b> Until then a weekday's hours are only read once the save holds ${
         need} reports of that same weekday.`],
        ["crew", `<b>Staff every station for those ${days} days</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.${
          spOffersFull(c.row) ? ` Full cover 24/7, above, is that week.` : ""}`]];
@@ -5837,7 +5837,7 @@ function spRosterNew(c, counts){
      that has to be read in full is a note that is not read. */
   const sum = c.measured
     ? `No serving hours to suggest yet, so this plan is <b>cleaning and security only</b>.`
-    : `Until this shop has traded ${days} days, the plan is <b>cleaning and security only</b>.`;
+    : `Until ${days} days after this shop first opened, the plan is <b>cleaning and security only</b>.`;
   const head = counts.now && !counts.staffed
     ? `<b>Hire before you clear.</b> Every entry here waits on somebody.`
     : kept
@@ -5892,11 +5892,22 @@ function spHourRanges(hours){
   return runs.map(([a, b]) => `${a}-${b}`).join(", ");
 }
 /* The hours the schedule opens with no report behind them, on a shop whose
-   demand plan counts them as no customers, as one line. */
+   demand plan counts them as no customers, as one line. Worded as what is
+   known: the game files no report for an hour nobody came, so an hour with
+   none may be an empty hour or one the shop was shut, and either way it is
+   counted as none. Weekdays with the same hours share one entry. */
 function spUnmeasuredLine(row){
-  const hours = [...new Set((row.unmeasured || []).flat())];
-  if(!hours.length) return "";
-  return `<p class="sp-unmline">${spI("clock")}<span><b>Not measured yet: ${spHourRanges(hours)}.</b> Counted as no customers until they are.</span></p>`;
+  const days = HOUR_ROWS.map(wd => [wd, spHourRanges((row.unmeasured || [])[wd] || [])])
+    .filter(([, text]) => text);
+  if(!days.length) return "";
+  const groups = [];
+  days.forEach(([wd, text]) => {
+    const same = groups.find(g => g.text === text);
+    if(same) same.days.push(wd); else groups.push({text, days: [wd]});
+  });
+  const words = groups.map(g => `${g.days.length === 7 ? "every day"
+    : g.days.map(wd => WEEK_SHORT[wd]).join(", ")} ${g.text}`).join("; ");
+  return `<p class="sp-unmline">${spI("clock")}<span><b>No customers on file: ${words}.</b> Counted as none.</span></p>`;
 }
 
 function spPlanPick(base, full){
@@ -5907,6 +5918,12 @@ function spPlanPick(base, full){
   const measured = fc.daysMeasured, needed = fc.daysNeeded || 9;
   const complete = Number.isFinite(measured) && measured >= needed;
   const serving = rows => (rows || []).filter(s => !s.k).reduce((n, s) => n + s.t - s.f, 0);
+  /* Full cover of the shop's own open hours now: every serving station, every
+     hour the schedule opens. The test's 24/7 is not the measure, or a shop shut
+     some hour would seem to save the hours it is shut. */
+  const openHours = (base.open || []).reduce((n, day) => n + new Set((day || []).flatMap(
+    ([a, b]) => [...Array(Math.max(0, Math.min(24, b) - Math.max(0, a))).keys()].map(k => a + k))).size, 0);
+  const ownFull = openHours * (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0);
   const done = base.demandDataComplete
     ? `<span class="sp-handover" data-tip="${attr(`Read from the ${needed} days since the shop first opened, as they were staffed. An hour with no customers files no report and counts as none.`)}">${spI("tick")}<span><b>Demand data complete:</b> ${full
       ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
@@ -5914,11 +5931,11 @@ function spPlanPick(base, full){
     /* Complete data and no hand-over: either the demand plan wants every
        station every open hour too, or the game does not staff every station
        every open hour, so the count was taken with stations empty. */
-    : complete && fc.inGame && serving(base.shifts) >= serving(fc.shifts)
+    : complete && fc.inGame && serving(base.shifts) >= ownFull
       ? `<span class="sp-pickwhy">The demand plan also needs every station every hour: keep this staffing.</span>`
     : complete && !fc.inGame
       ? `<span class="sp-pickwhy">Demand data complete, as staffed: an empty station may have turned customers away.</span>`
-    : `<span class="sp-pickwhy">Run it for the shop's first ${needed} days, then switch to the demand plan.${
+    : `<span class="sp-pickwhy">Run it until ${needed} days after the shop first opened, then switch to the demand plan.${
       Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${Math.min(measured, needed)} of ${needed} days.</b>` : ""}</span>`;
   return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
     full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
@@ -6097,8 +6114,8 @@ function spRosterBlock(b){
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
-        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it for the shop's first nine days, then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
-        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`}`})}
+        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop first opened, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
+        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for the shop's first 9 days, closed days included, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}

@@ -913,7 +913,7 @@ test('the note says how new the shop is, what the plan covers, and what not to c
     // Straight out of the planner: opened five days ago, and not one hour
     // report filed yet.
     assert.match(text, /Open 5 days, no hour reports on file/);
-    assert.match(text, /arrives after 9 days of trading/);
+    assert.match(text, /arrives 9 days after it first opened, closed days included/);
     assert.match(text, /2 reports of that same weekday/);
     assert.match(text, /cleaning and security cover only/);
     // 56 shifts in the game, 28 of them cleaning: the other 28 are the ones
@@ -1000,7 +1000,7 @@ test('a measured shop whose hours ask for nobody is still a cover-only plan', as
     assert.equal(await note.count(), 1);
     assert.match(await note.innerText(), /Cover only/);
     assert.match(await note.innerText(), /ask for nobody on its serving stations/);
-    assert.doesNotMatch(await note.innerText(), /days of trading/);
+    assert.doesNotMatch(await note.innerText(), /days after it first opened/);
     assert.match(await note.innerText(), /Do not clear the whole schedule/);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
@@ -1783,7 +1783,7 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
     assert.match(steps[0], /^Open every day 0 to 24/);
     assert.match(await page.locator('#sp-roster .sp-pickwhy').innerText(),
-      /^Run it for the shop's first 9 days, then switch to the demand plan\. Demand data: 0 of 9 days\.$/);
+      /^Run it until 9 days after the shop first opened, then switch to the demand plan\. Demand data: 0 of 9 days\.$/);
     assert.equal(await page.locator('#sp-roster .sp-progress').innerText(), 'Demand data: 0 of 9 days.');
     assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
       /Every station, every hour/);
@@ -1970,7 +1970,7 @@ test('open hours no report has measured are named in one line and marked on the 
   try {
     const line = page.locator('#sp-roster .sp-unmline');
     assert.equal(await line.count(), 1);
-    assert.equal(await line.innerText(), 'Not measured yet: 8-20. Counted as no customers until they are.');
+    assert.equal(await line.innerText(), 'No customers on file: every day 8-20. Counted as none.');
     assert.equal(await page.locator(mon + '.sp-unmh').count(), 12);
     // The test staffs every hour anyway: not on its view.
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
@@ -1982,6 +1982,34 @@ test('open hours no report has measured are named in one line and marked on the 
   try {
     assert.equal(await none.locator('#sp-roster .sp-unmline').count(), 0);
   } finally { await none.close(); }
+});
+
+test('the line names the weekdays, and weekdays with the same hours share an entry', async () => {
+  const page = await shop('quiet', row => {
+    row.unmeasured = [[], [22, 23, 0, 1], [22, 23, 0, 1], [], [], [0, 7], []];
+  });
+  try {
+    assert.equal(await page.locator('#sp-roster .sp-unmline').innerText(),
+      'No customers on file: Mon, Tue 22-2; Fri 0-1, 7-8. Counted as none.');
+  } finally { await page.close(); }
+});
+
+test('a shorter day busy all its hours has nothing to switch to', async () => {
+  // Open 8 to 22, both registers staffed all of it, complete data: the demand
+  // plan is its full cover of those hours, not less than the 24/7 test.
+  const page = await shop('partday');
+  try {
+    assert.equal(ROWS.partday.demandDataComplete, false);
+    assert.equal(ROWS.partday.fullCover.inGame, true);
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-pickwhy').innerText(),
+      'The demand plan also needs every station every hour: keep this staffing.');
+    const card = await page.evaluate(() => {
+      drawOptimizeStaffing();
+      return $('optimizeStaffingCard').querySelector('.what').textContent;
+    });
+    assert.doesNotMatch(card, /Demand data complete/);
+  } finally { await page.close(); }
 });
 
 test('hours read as the player reads them, runs joined across midnight', async () => {
