@@ -3,8 +3,10 @@
 Only the shapes ba_save.load_save() needs to hand the tree back: every dict is
 an untyped struct, a list is a collection, and the scalars keep their Python
 types (int as int32, float as double). Dictionary entries are written as the
-reader returns them, {"$k": ..., "$v": ...}. Never a real save: tests use
-synthetic fixtures only.
+reader returns them, {"$k": ..., "$v": ...}. A Shared is a class instance with a
+reference id and a Ref a back-reference to one, the way the game writes an
+object held in two places (an import product's warehouse Address). Never a real
+save: tests use synthetic fixtures only.
 
     python tests/es3_fixture.py out.hsg [payload.json]
         writes link_company() as a save, and the board's payload for it
@@ -16,6 +18,20 @@ import json
 import os
 import struct
 import sys
+
+
+class Shared:
+    """A class instance with a reference id: `fields`, written once, of `type_name`."""
+
+    def __init__(self, ref_id: int, type_name: str, fields: dict):
+        self.ref_id, self.type_name, self.fields = ref_id, type_name, fields
+
+
+class Ref:
+    """A back-reference to the Shared with this id, wherever in the file it is."""
+
+    def __init__(self, ref_id: int):
+        self.ref_id = ref_id
 
 
 def _string(value: str | None) -> bytes:
@@ -39,10 +55,21 @@ def _value(tag: int, value) -> bytes:
         return b""
     if tag == 0x03:
         return b"\x2e" + _body(value)
+    if tag == 0x01:
+        # A type slot of its own per instance: the reader only maps slots to names.
+        slot = 1000 + value.ref_id
+        return (b"\x2f" + struct.pack("<i", slot) + _string(value.type_name)
+                + struct.pack("<i", value.ref_id) + _body(value.fields))
+    if tag == 0x09:
+        return struct.pack("<i", value.ref_id)
     raise ValueError(tag)
 
 
 def _tag(value) -> int:
+    if isinstance(value, Shared):
+        return 0x01
+    if isinstance(value, Ref):
+        return 0x09
     if value is None:
         return 0x2D
     if isinstance(value, bool):
@@ -82,6 +109,9 @@ def write_link_save(path: str) -> None:
     """The company tests/game_link_write.test.cjs and the mock's tests share."""
     with open(path, "wb") as fh:
         fh.write(encode(link_company()))
+
+
+DEPOT_REF = 7  # the reference id of the depot's shared Address
 
 
 def address(street: str, number: int) -> dict:
@@ -147,8 +177,10 @@ def link_company() -> dict:
             {"id": "CONTRACTone", "importAddress": address("ba:street_pier", 1),
              "employeeInstanceId": "AGENTaaaa", "nextDeliveryDay": 36, "isActive": True,
              "isRepeatingOrder": True, "isTarget": True,
+             # The warehouse as a real save stores it: a reference to an Address
+             # written elsewhere in the file (by CONTRACTthree's product below).
              "products": [{"itemName": "ba:itemname_paperbag", "amount": 3800,
-                           "assignedWarehouse": address("ba:street_pier", 9)}]},
+                           "assignedWarehouse": Ref(DEPOT_REF)}]},
             {"id": "CONTRACTtwo", "importAddress": address("ba:street_pier", 2),
              "nextDeliveryDay": 29, "isActive": False,
              "products": [{"itemName": "ba:itemname_paperbag", "amount": 0,
@@ -156,7 +188,7 @@ def link_company() -> dict:
             {"id": "CONTRACTthree", "importAddress": address("ba:street_pier", 3),
              "employeeInstanceId": "AGENTcccc", "nextDeliveryDay": 29, "isActive": False,
              "products": [{"itemName": "ba:itemname_candle", "amount": 500,
-                           "assignedWarehouse": address("ba:street_pier", 9)}]},
+                           "assignedWarehouse": Shared(DEPOT_REF, "Address", address("ba:street_pier", 9))}]},
         ],
     }
 

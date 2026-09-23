@@ -640,6 +640,17 @@ class MockWrites(unittest.TestCase):
                                                                         "itemInstanceId": REGISTER}]}]})
         self.assertEqual((answer["ok"], answer["openedHours"]), (False, False))
 
+    def test_a_warehouse_held_by_reference_is_found(self):
+        # A real save writes a product's warehouse as a reference to an Address
+        # stored elsewhere; the fixture's CONTRACTone does the same.
+        contract = self.link._save().items(self.link._save().root["importPartnerships"])[0]
+        product = self.link._save().items(contract["products"])[0]
+        self.assertEqual(set(product["assignedWarehouse"]), {"$ref"})
+        paper = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 4200, "expect": 3800}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [paper]}]})
+        line = answer["rows"][0]["products"][0]
+        self.assertEqual((line["error"], line["before"], answer["ok"]), (None, 3800, True))
+
 
 if __name__ == "__main__":
     unittest.main()
