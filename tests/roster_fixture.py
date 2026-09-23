@@ -10,7 +10,7 @@ the JSON off stdout.
 
 Synthetic saves only. `python -m tests.roster_fixture` prints them.
 
-Eight sites, each a state the block has to draw:
+Ten sites, each a state the block has to draw:
 
 full     a measured shop: two counters, a cleaning station and a security
          locker, and a schedule already in the game as two-hour scraps. One
@@ -50,6 +50,13 @@ nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day,
 shut     the two-slot weekday: open 08-12 and 14-20 on Friday, shut on Sunday,
          so the hour in the middle is the doors closed rather than trade
          dipping and nothing may be rostered into it.
+newshop  a shop five days old, open 8 to 20, with two registers, a cleaning
+         station, three cashiers, one cleaner and a second cleaner still
+         unassigned: its demand plan is cover only, and its full-cover plan
+         staffs both registers around the clock and draws on the unassigned
+         cleaner.
+handover a measured shop whose schedule in the game already staffs both
+         registers every hour of every day: the demand test is done.
 """
 import json
 import sys
@@ -283,6 +290,32 @@ def shut_row():
     )
 
 
+def newshop_row():
+    """A new shop: the demand plan is cover only, the full-cover plan is the test."""
+    people = [
+        employee(f"s{i}", [SERVICE], demands=("ba:jobdemand_fulltime",))
+        for i in range(3)
+    ]
+    people += [employee("clean1", [CLEANING]), employee("bench", [CLEANING], here=False)]
+    items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)]
+    return plan(items, people, BUSY, weeks=0, opens=((8, 20),), days_open=5)
+
+
+def handover_row():
+    """Two measured weeks, and the game already runs every register every hour."""
+    people = [employee(f"s{i}", [SERVICE]) for i in range(8)]
+    people += [employee(f"c{i}", [CLEANING]) for i in range(4)]
+    items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)]
+    week = [
+        {"wd": wd, "employeeId": f"s{(2 * k + n + wd) % 8}", "itemInstanceId": post,
+         "startingHour": start, "endingHour": start + 12, "type": 1}
+        for wd in range(7)
+        for k, post in enumerate((1, 2))
+        for n, start in enumerate((0, 12))
+    ]
+    return plan(items, people, BUSY, shifts=week)
+
+
 def rows():
     return {
         "full": full_row(),
@@ -293,6 +326,8 @@ def rows():
         "quiet": quiet_row(),
         "halfmop": halfmop_row(),
         "shut": shut_row(),
+        "newshop": newshop_row(),
+        "handover": handover_row(),
     }
 
 

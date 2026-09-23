@@ -9230,7 +9230,18 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-day.sp-on{display:block}
 /* The board's .seg styles its chosen option with a bare `on`; the roster's
    two segmented controls carry their own so the modifier stays prefixed. */
-.sp-daytabs a.sp-on,.sp-nowplan a.sp-on{background:var(--ink);color:var(--ground)}
+.sp-daytabs a.sp-on,.sp-nowplan a.sp-on,.sp-plans a.sp-on{background:var(--ink);color:var(--ground)}
+/* the pick between the demand plan and the demand test, and the one line each needs */
+.sp-pick{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:0 0 14px}
+.sp-pickwhy{font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.sp-handover{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;line-height:1.45;color:var(--ink)}
+.sp-handover .sp-i{color:var(--accent)}
+.sp-handover b{font-weight:600}
+.sp-handover a{color:inherit}
+/* who to add first: one sentence, so it may wrap */
+.sp-step.sp-add{white-space:normal;text-align:left;line-height:1.4;padding:7px 12px 7px 9px}
+.sp-step.sp-add small{display:block;margin-top:3px}
+.sp-step.sp-add b{font-weight:600}
 .sp-grow{position:relative;display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center;min-height:38px}
 .sp-grow::before{content:"";grid-column:2/-1;grid-row:1;height:32px;border-radius:7px;background:var(--raised);opacity:.45}
 .sp-grow .lab{grid-column:1;grid-row:1;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3);cursor:default;overflow:hidden}
@@ -12012,6 +12023,50 @@ const spTicksWrite = (key, ticks) => {
    next write drops it. */
 const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
   (n, s) => n + (ticks.has(spTickId(row, s)) ? 1 : 0), 0);
+/* --- the two plans ----------------------------------------------------------
+   Every retail row carries two plans from the same placer: the demand plan,
+   cut from the measured hours, and `fullCover`, every station staffed every
+   hour as a two-week demand test. The block shows one at a time, the demand
+   plan unless the player picked the other for this site, and remembers the
+   pick in this browser. Storage can be missing or refuse, and then the pick
+   lasts as long as the page does. */
+const SP_PLAN_STORE = "ba_dash_plan:";
+const spPlanMem = {};
+const spPlanRead = key => {
+  try { return localStorage.getItem(SP_PLAN_STORE + key) === "full" ? "full" : "demand"; }
+  catch(e){ return spPlanMem[key] === "full" ? "full" : "demand"; }
+};
+const spPlanWrite = (key, which) => {
+  spPlanMem[key] = which;
+  try {
+    if(which === "full") localStorage.setItem(SP_PLAN_STORE + key, "full");
+    else localStorage.removeItem(SP_PLAN_STORE + key);
+  } catch(e){ /* spPlanMem holds the pick for as long as the page is open */ }
+};
+/* A demand test needs a serving station to test. A site with none has
+   cleaning and security alone, and both plans would be the same week. */
+const spOffersFull = row => !!(row && !row.failed && row.fullCover
+  && (row.roles || []).some(r => (r.stations || []).length));
+/* The full-cover plan as a row the block draws like any other: the site's
+   tables, schedule and readings, with the plan's own fields laid over them.
+   The tables are shared, so every index in it points where it should. */
+const spFullRow = row => Object.assign({}, row, row.fullCover, {fullCover: null, full: true});
+/* The ticks of each plan are kept apart: an entry ticked on one is not an
+   entry typed for the other. */
+const spTickKey = row => row.full ? `${row.key}#full` : row.key;
+/* Who the player has to add before the plan can be filled, as one sentence:
+   "assign ANA, BEN (unassigned) and hire 2 Customer Service". The planner uses
+   the unassigned staff and new hires to reach its best week, but assigning and
+   hiring are the player's to do, and a week can only be set for people
+   already working here. */
+function spAddWords(add, nameHtml = r => spEsc(r.name || "?")){
+  const parts = [];
+  if((add.assign || []).length)
+    parts.push(`assign ${add.assign.map(nameHtml).join(", ")} (unassigned)`);
+  if((add.hire || []).length)
+    parts.push(`hire ${add.hire.map(h => `${h.people} ${spEsc(h.role || "")}`).join(", ")}`);
+  return parts.join(" and ");
+}
 /* What the week costs to type, against what is in the game now. `fragments`
    is how much of what is there now is a two-hour scrap.
 
@@ -12103,6 +12158,7 @@ const SP_BASIS_READ = {
   censored: " · <b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target",
   scaled: " · <b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks",
   measured: " · measured",
+  full: " · <b>full cover</b>: every station, every hour, to measure demand",
 };
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
@@ -12479,15 +12535,18 @@ function spDesks(grid){
 /* The empty state. A shop too new to have been measured is not given a guess:
    the game's own arrival ceiling over-predicts a shop like it fourfold, and a
    roster cut from that would be a fiction with a shift count on it. */
-function spRosterNone(row){
+function spRosterNone(row, pick){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
   const rows = stations.map((st, k) => `<div class="sp-grow"><span class="lab">${spEsc(codes[k])}</span></div>`).join("");
   const failed = !!(row && row.failed);
-  return `<section class="sec rv" data-block="roster" id="sp-roster">
+  /* A shop with no cover station and nothing measured still has its demand
+     test to offer, so the pick sits here too and the section carries its site. */
+  return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
     ${sechead("Staffing", {icon: "roster", why: failed
       ? `This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.`
       : `A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
+    ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to schedule"}</div>
   </section>`;
@@ -12529,7 +12588,8 @@ function spRosterDay(c, wd, on){
   const readDay = bases.some(b => b === "measured" || b === "censored") ? "measured"
     : bases.some(b => b === "scaled") ? "scaled" : "none";
   let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
-    cells.length ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
+    c.full ? `Every station, every hour: the demand test, ${WEEK_FULL[wd]}`
+      : cells.length ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
          measured no Sunday. */
@@ -12811,7 +12871,8 @@ function spRosterNew(c, counts){
     ? [["clock", `<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.`]]
     : [["clock", `<b>Its own week arrives after about a fortnight of trading.</b> A weekday's hours are only read once the save holds ${
         need} reports of that same weekday.`],
-       ["crew", `<b>Staff every station for those two weeks</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.`]];
+       ["crew", `<b>Staff every station for those two weeks</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.${
+         spOffersFull(c.row) ? ` Full cover 24/7, above, is that week.` : ""}`]];
   /* The border marks a note the player has to read before they touch the
      game's own schedule, which is either of the two warnings above. */
   const care_ = kept || (counts.now && !counts.staffed);
@@ -12852,14 +12913,35 @@ function spRosterWeekdays(key, need){
       [...Array(need).keys()].map(k => `<i${k < (grid.weeks[wd] || 0) ? ` class="on"` : ""}></i>`).join("")}</span>`).join("")}</div>`;
 }
 
+/* The pick between the site's two plans, with the one line each needs. The
+   first choice is named by what it is: "Cover only" on a shop whose plan is
+   cleaning and security alone, "Demand plan" on one measured enough to cut
+   serving hours. The demand test is offered on both and pushed on neither.
+   Once the test has run its two weeks, one line says so, and on the test's
+   own view it switches back. */
+function spPlanPick(base, full){
+  const first = spCoverOnly(base) ? "Cover only" : "Demand plan";
+  const done = base.demandTestDone
+    ? `<span class="sp-handover">${spI("tick")}<span><b>Demand test done:</b> ${full
+      ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
+    : full ? `<span class="sp-pickwhy">Run it for two weeks to measure demand, then switch to the demand plan.</span>` : "";
+  return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
+    full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
+    full ? ` class="sp-on" aria-current="true"` : ""}>Full cover 24/7</a></span>${done}</div>`;
+}
+
 function spRosterBlock(b){
-  const row = spRosterRow(b.key);
+  const base = spRosterRow(b.key);
+  const offer = spOffersFull(base);
+  const full = offer && spPlanRead(base.key) === "full";
+  const row = full ? spFullRow(base) : base;
+  const pick = offer ? spPlanPick(base, full) : "";
   /* A week with nothing in it is the only empty state. A shop too new to have
      been measured still has cleaning and security cover to type -- and that is
      where the block earns its keep, because an unmeasured shop is exactly the
      one whose schedule is 182 two-hour scraps -- so it gets the whole block
      with the need strip in its not-measured state, rather than nothing. */
-  if(!row || row.failed || !(row.shifts || []).length) return spRosterNone(row);
+  if(!row || row.failed || !(row.shifts || []).length) return spRosterNone(row, pick);
   const stations = row.stations || [], people = row.people || [];
   const placed = {};
   (row.placed || []).forEach(r => { (placed[r.p] = placed[r.p] || []).push(r); });
@@ -12869,9 +12951,10 @@ function spRosterBlock(b){
     bench: new Set((row.bench || []).map(r => r.p)),
     plan: spRosterRows(row, row.shifts),
     now: spRosterRows(row, (row.current || {}).list),
-    ticks: spTicksRead(row.key),
+    ticks: spTicksRead(spTickKey(row)),
     name: p => (people[p] || {}).name || "?",
     measured: spRosterMeasured(row),
+    full,
   };
   const counts = spRosterCounts(row);
   const slack = row.slack || {};
@@ -12986,23 +13069,44 @@ function spRosterBlock(b){
     .filter(skill => (row.headcount[skill] || {}).hire)
     .map(skill => `${row.headcount[skill].hire} for the ${
       spEsc(spSkillLabel(row, c.stations, skill))}`).join(", ");
-  const hireStep = counts.hire
-    ? step(`Hire ${plural(posts, "person", "people")}`, `MyEmployees · before you set the week`,
-      `${hireFor}. A full-time employee works 30 to 50 hours a week, so each hire adds at least 30 hours of wages.`)
+  /* One step for everybody the plan counts on who does not work here yet: the
+     unassigned staff it draws on and the people to hire, in one sentence. The
+     week's entries for them can only be set once they are assigned here, so
+     the hours that wait on them are in the tip. A payload older than
+     `addPeople` is read off the bench list and the headcount instead. */
+  const add = row.addPeople || {
+    assign: (row.bench || []).map(r => ({p: r.p, name: c.name(r.p)})),
+    hire: Object.keys(row.headcount || {}).filter(skill => (row.headcount[skill] || {}).hire)
+      .map(skill => ({people: row.headcount[skill].hire, role: spSkillLabel(row, c.stations, skill)})),
+  };
+  const adding = (add.assign || []).length + (add.hire || []).reduce((n, h) => n + (h.people || 0), 0);
+  const addStep = adding
+    ? `<button type="button" class="sp-step sp-add"${add.hoursUncovered || counts.hire ? ` data-tip="${attr(
+      `${add.hoursUncovered ? `${add.hoursUncovered} h a week stay empty until they are added: a week can only be set for people already working here. ` : ""}${
+      counts.hire ? `${hireFor}. A full-time employee works 30 to 50 hours a week, so each hire adds at least 30 hours of wages.` : ""}`)}"` : ""}><span class="sp-box">${
+      spIcon("tick")}</span><span>Add ${plural(adding, "person", "people")} to fill this plan: ${
+      spAddWords(add, r => `<b data-p="${r.p}">${spEsc(r.name || c.name(r.p))}</b>`)}<small>MyEmployees · before you set the week</small></span></button>`
     : "";
   const clearStep = counts.staffed
     ? step(kept ? `Clear the cleaning and security hours` : `Clear entire schedule`,
       `BizMan › Schedule${kept ? ` · leave the rest` : ""}`)
     : "";
-  const steps = (counts.hire && counts.now ? hireStep + clearStep : clearStep + hireStep)
-    + (row.bench || []).map(r => `<button type="button" class="sp-step" data-p="${r.p}"><span class="sp-box">${
-      spIcon("tick")}</span>Assign ${spEsc(c.name(r.p))} here<small>MyEmployees · from the bench</small></button>`).join("");
+  /* The demand test measures only the hours the doors are open, so opening
+     around the clock is its first step wherever the shop is not already. */
+  const openStep = c.full && !row.openNow
+    ? step(`Open every day 0 to 24`, `BizMan › Schedule`,
+      `An hour the shop is closed is an hour the test never measures.`)
+    : "";
+  const steps = openStep + (adding && counts.now ? addStep + clearStep : clearStep + addStep);
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
-    attr(row.key)}" data-tickable="${c.tickable.length}">
+    attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
-      why: `A week to copy into BizMan › Schedule, one day at a time. One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save. The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`})}
+      why: `${c.full
+        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it for two weeks, then switch to the demand plan, which is cut from what those weeks measured.`
+        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
+    ${pick}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
       <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security hours" : "Hours"
@@ -15027,6 +15131,20 @@ function drawOptimizeStaffing(){
      down, at a block neither the card nor the landing named, and a jump like
      that is one the player cannot undo in their head. */
   const go = card.querySelector(".go");
+  /* A demand test that has run its two weeks comes first: the shop is paying
+     for every station every hour, and what it measured is now its own plan.
+     The planner decides it (`demandTestDone`); ties go to the name. */
+  const done = (D.staffing || []).filter(r => !r.failed && r.demandTestDone);
+  if(done.length){
+    const row = spPickRoster(done, () => 0);
+    badge.className = "soon live";
+    badge.textContent = "TEST DONE";
+    text.textContent = `Demand test done at ${row.name}${
+      done.length > 1 ? ` and ${done.length - 1} more` : ""}: switch to the demand plan.`;
+    go.textContent = `Opens ${row.name} › Staffing`;
+    card.dataset.site = row.key;
+    return;
+  }
   const best = spBestRoster();
   if(!best){
     badge.className = "soon";
@@ -16288,8 +16406,27 @@ const wireRoster = once(() => {
     ring.classList.add("sp-bump");
     setTimeout(() => ring.classList.remove("sp-bump"), 260);
   };
-  const store = s => spTicksWrite(s.dataset.site || "",
+  /* Each plan keeps its own ticks: see spTickKey(). */
+  const ticksOf = s => s.dataset.ticks || s.dataset.site || "";
+  const store = s => spTicksWrite(ticksOf(s),
     new Set($$(".sp-shift.sp-done", s).map(el => el.dataset.tick)));
+  /* The pick between the two plans redraws this block alone, in place, and
+     remembers the pick for the site. */
+  on("click", "#sp-roster [data-plan]", (a, e) => {
+    e.preventDefault();
+    const s = sec(a);
+    if(!s) return;
+    spPlanWrite(site(a), a.dataset.plan);
+    const b = (D.businesses || []).find(x => x.key === site(a));
+    if(!b) return;
+    const box = document.createElement("div");
+    box.innerHTML = spRosterBlock(b).trim();
+    const fresh = box.firstElementChild;
+    fresh.classList.add("in");
+    s.replaceWith(fresh);
+    const again = q(`[data-plan="${a.dataset.plan}"]`, fresh);
+    if(again) again.focus();
+  });
   on("click", ".sp-daytabs a", (a, e) => {
     e.preventDefault();
     const s = sec(a);
@@ -16313,7 +16450,7 @@ const wireRoster = once(() => {
     e.preventDefault();
     const s = sec(a);
     $$(".sp-shift.sp-done", s).forEach(el => el.classList.remove("sp-done"));
-    spTicksWrite(site(a), new Set());
+    spTicksWrite(ticksOf(s), new Set());
     retally(s);
   });
   /* One person, wherever they are named: a shift, a bench step, a demand the

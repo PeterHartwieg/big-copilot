@@ -358,7 +358,10 @@ test('a shift bar wears its kind, its pin and the bench mark', async () => {
     const bench = ROWS.pinned.bench[0].p;
     assert.match(await page.locator(`${mon}.sp-shift[data-p="${bench}"]`).getAttribute('data-read'),
       /from the bench.*assign them here in MyEmployees first/);
-    assert.equal(await page.locator(`#sp-roster .sp-step[data-p="${bench}"]`).count(), 1);
+    // One step names everybody to add first, the bench member among them.
+    const add = page.locator('#sp-roster .sp-step.sp-add');
+    assert.equal(await add.locator(`[data-p="${bench}"]`).count(), 1);
+    assert.match(await add.innerText(), /assign BENCH \(unassigned\)/);
   } finally { await page.close(); }
 });
 
@@ -919,7 +922,7 @@ test('the note says how new the shop is, what the plan covers, and what not to c
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
     // Hiring first, because a shift cannot be entered for somebody who has not
     // been hired, and there is a schedule here to lose in the meantime.
-    assert.match(steps[0], /^Hire 1 person/);
+    assert.match(steps[0], /^Add 1 person to fill this plan: hire 1 Security Guard/);
     assert.match(steps[1], /^Clear the cleaning and security hours/);
     assert.match(steps[1], /leave the rest$/);
   } finally { await page.close(); }
@@ -1062,7 +1065,7 @@ test('a week that is all anticipated hires does not bless clearing the cover the
     const posts = await page.evaluate(() => Object.values(D.staffing[0].headcount)
       .reduce((n, h) => n + h.hire, 0));
     assert.ok(posts > 0 && posts < counts.hire, `${posts} of ${counts.hire}`);
-    assert.match(steps[0], new RegExp(`^Hire ${posts} people`));
+    assert.match(steps[0], new RegExp(`^Add ${posts} people to fill this plan: hire ${posts} Cleaning`));
     assert.ok(!steps.some(s => /^Clear/.test(s)), steps.join(' | '));
     const note = await page.locator('#sp-roster .sp-note').innerText();
     assert.match(note, /Hire before you clear/);
@@ -1746,4 +1749,150 @@ test('the card says nothing it cannot know before the payload carries a plan', a
     assert.equal(shown[0], 'SOON');
     assert.equal(shown[1], undefined);
   } finally { await page.close(); }
+});
+
+// --- the two plans: the demand test, its hand-over, and who to add first -----
+
+const pickText = page => page.locator('#sp-roster .sp-plans a')
+  .evaluateAll(a => a.map(x => [x.textContent, x.classList.contains('sp-on')]));
+
+test('a new shop offers cover only or the demand test, and remembers the pick', async () => {
+  const page = await shop('newshop');
+  try {
+    // Cover only is the default, and it is what the note under it describes.
+    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.equal(await page.locator('#sp-roster .sp-note').count(), 1);
+    assert.equal(await page.locator(mon + '.sp-shift:not(.sp-clean):not(.sp-security)').count(), 0);
+    assert.match(await page.locator('#sp-roster .sp-note').innerText(), /Full cover 24\/7, above, is that week/);
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    // The test: both registers every hour, the doors opened first, and the
+    // one line that says what it is for.
+    assert.equal(await page.locator('#sp-roster .sp-note').count(), 0);
+    const regs = await page.locator(mon + '.sp-shift:not(.sp-clean):not(.sp-security)')
+      .evaluateAll(b => b.map(x => x.style.gridColumn));
+    assert.equal(regs.length, 4, 'two registers, two twelve-hour entries each');
+    const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
+      b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
+    assert.match(steps[0], /^Open every day 0 to 24/);
+    assert.match(await page.locator('#sp-roster .sp-pickwhy').innerText(),
+      /^Run it for two weeks to measure demand, then switch to the demand plan\.$/);
+    assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
+      /Every station, every hour/);
+    // Its own hours, headcount and wages, in the tiles the demand plan uses.
+    const hoursTile = await page.locator('#sp-roster .sp-ba > div').first().innerText();
+    const full = ROWS.newshop.fullCover;
+    const staffedHours = full.shifts.filter(s => s.p !== null).reduce((n, s) => n + s.t - s.f, 0);
+    assert.match(hoursTile, new RegExp(`${staffedHours}`));
+    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:' + k), KEY), 'full');
+    // The pick survives the next draw, and going back forgets it.
+    await page.evaluate(() => drawSite());
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
+    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:' + k), KEY), null);
+  } finally { await page.close(); }
+});
+
+test('a measured shop names its plan the demand plan and offers the test beside it', async () => {
+  const page = await shop('full');
+  try {
+    assert.deepEqual(await pickText(page), [['Demand plan', true], ['Full cover 24/7', false]]);
+    assert.equal(await page.locator('#sp-roster .sp-pickwhy').count(), 0);
+    assert.equal(await page.locator('#sp-roster .sp-handover').count(), 0);
+    // Already open around the clock, so there are no doors to open.
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
+      b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
+    assert.ok(!steps.some(s => /^Open every day/.test(s)), steps.join(' | '));
+  } finally { await page.close(); }
+});
+
+test('each plan keeps its own ticks', async () => {
+  const page = await shop('newshop');
+  try {
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    await page.evaluate(s => q(s).click(), mon + 'button.sp-shift');
+    assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '1');
+    assert.ok(await page.evaluate(k => localStorage.getItem('ba_dash_roster:' + k + '#full'), KEY));
+    await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '0');
+  } finally { await page.close(); }
+});
+
+test('the pick works without storage of any kind', async () => {
+  const page = await shop('newshop', null, () => {
+    Object.defineProperty(window, 'localStorage',
+      {get(){ throw new Error('site data blocked'); }});
+  });
+  try {
+    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    // Nothing can be stored, and the pick still holds for as long as the page.
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.equal(await page.locator('#sp-roster').count(), 1);
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    await page.evaluate(() => drawSite());
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+  } finally { await page.close(); }
+});
+
+test('one step names everybody to add, and the hours that wait on them', async () => {
+  const page = await shop('newshop');
+  try {
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    const add = ROWS.newshop.fullCover.addPeople;
+    const step = page.locator('#sp-roster .sp-step.sp-add');
+    assert.equal(await step.count(), 1);
+    const text = (await step.innerText()).replace(/\s+/g, ' ');
+    assert.match(text, new RegExp(`^Add ${add.people} people to fill this plan: assign BENCH \\(unassigned\\) and hire ${
+      add.hire.map(h => `${h.people} ${h.role}`).join(', ')}`));
+    assert.match(await step.getAttribute('data-tip'), new RegExp(`^${add.hoursUncovered} h a week stay empty until they are added`));
+    // No second, competing line: the old per-person bench steps are gone.
+    assert.equal(await page.locator('#sp-roster .sp-step[data-p]').count(), 0);
+    assert.equal(await page.locator('#sp-roster .sp-step').filter({hasText: /^Hire /}).count(), 0);
+  } finally { await page.close(); }
+});
+
+test('a plan with nobody to add has no add step', async () => {
+  const page = await shop('handover');
+  try {
+    assert.deepEqual(ROWS.handover.addPeople.people, 0);
+    assert.equal(await page.locator('#sp-roster .sp-step.sp-add').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('a finished demand test says so on the block and on the Today card', async () => {
+  const page = await shop('handover');
+  try {
+    assert.equal(ROWS.handover.demandTestDone, true);
+    const line = page.locator('#sp-roster .sp-handover');
+    assert.equal(await line.innerText(), 'Demand test done: switch to the demand plan');
+    // On the test's own view the line is the way back.
+    await page.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-pickwhy').count(), 0, 'one line, not two');
+    await page.evaluate(() => q('#sp-roster .sp-handover [data-plan="demand"]').click());
+    assert.deepEqual(await pickText(page), [['Demand plan', true], ['Full cover 24/7', false]]);
+    const card = await page.evaluate(() => {
+      drawOptimizeStaffing();
+      const c = $('optimizeStaffingCard');
+      return [c.querySelector('.what').textContent, c.dataset.site];
+    });
+    assert.equal(card[0], 'Demand test done at HART. Test 12: switch to the demand plan.');
+    assert.equal(card[1], KEY);
+  } finally { await page.close(); }
+});
+
+test('no hand-over line on a shop whose test is not done', async () => {
+  for(const which of ['full', 'newshop']){
+    const page = await shop(which);
+    try {
+      assert.equal(ROWS[which].demandTestDone, false, which);
+      assert.equal(await page.locator('#sp-roster .sp-handover').count(), 0, which);
+      const card = await page.evaluate(() => {
+        drawOptimizeStaffing();
+        return $('optimizeStaffingCard').querySelector('.what').textContent;
+      });
+      assert.doesNotMatch(card, /Demand test done/, which);
+    } finally { await page.close(); }
+  }
 });
