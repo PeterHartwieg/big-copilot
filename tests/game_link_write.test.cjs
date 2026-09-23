@@ -557,8 +557,9 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
     // spent ahead of it that counts for nothing: the gap stays the line's.
     gwTerms.set(`A|ba:itemname_x|${depot}`, {cap: 500, orderedThisWeek: 0, max: null});
     const kept = run([line(3, 500, [c('A', 'P', 0, 1, 400)]), line(0, 200, [c('G', 'P', 0, 2, 300)])]);
+    const keptWords = gwImportPlan(null).flatMap((l) => gwLineWords(l, false));
     gwImportRows = saved; gwTerms.clear();
-    return {shared, capped, twice, started, kept, depot, gifts};
+    return {shared, capped, twice, started, kept, keptWords, depot, gifts};
   });
   assert.deepEqual(got.shared, [{at: got.depot, set: [['A', 800]], uncovered: 0, ahead: ['S']},
                                 {at: got.gifts, set: [['B', 200], ['C', 400]], uncovered: 0, ahead: ['S']}]);
@@ -566,6 +567,8 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
                                 {at: got.gifts, set: [['B', 200]], uncovered: 400, ahead: []}]);
   assert.deepEqual(got.twice, [{at: got.depot, set: [['E', 400]], uncovered: 0, ahead: []},
                                {at: got.gifts, set: [['E', 100]], uncovered: 300, ahead: []}]);
+  assert.ok(got.keptWords.some((w) => w.includes("keeps its 300 a week: its importer's cap leaves it nothing this week")),
+    JSON.stringify(got.keptWords));
   assert.deepEqual(got.kept, [{at: got.depot, set: [['A', 500]], uncovered: 0, ahead: []},
                               {at: got.gifts, set: [], uncovered: 200, ahead: []}]);
   assert.deepEqual(got.started, [{at: got.depot, set: [['F', 400]], uncovered: 0, ahead: []},
@@ -599,7 +602,6 @@ test('imports: Smart Delivery contracts the write starts, and the lines it leave
     const ahead = lines.filter((l) => !l.r.smart).map((l) => l.smartAhead.map((e) => [e.c.id, e.level]));
     const lead = said(lines);
     // A kept contract with the week covered, and a Smart line with no agent on its contract.
-    gwTerms.set(`A|ba:itemname_q|${D.businesses[3].key}`, {cap: 500, orderedThisWeek: 0, max: null});
     const quiet = plan([row(3, 'ba:itemname_q', 0, [c('G', 'P', 2, 300)]),
                         row(0, 'ba:itemname_w', 700, [c('H', 'P', 3, 100, {smart: true, agent: false})], {smart: true})]);
     const words = quiet.map((l) => [gwNeedsWord(l), l.cause]);
