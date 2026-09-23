@@ -67,7 +67,9 @@ namespace BigCopilotLink
             internal WireAddress Address;
             internal readonly List<ScheduleDay> Days = new List<ScheduleDay>();
             internal readonly List<List<WorkShift>> Shifts = new List<List<WorkShift>>();
+            /// <summary>Any day's hours opened; Opened says which, per entry of Days.</summary>
             internal bool OpenedHours;
+            internal readonly List<bool> Opened = new List<bool>();
             internal readonly List<bool> WasOpen = new List<bool>();
             internal readonly List<List<OpeningHourSlot>> Slots = new List<List<OpeningHourSlot>>();
             internal string PrintAfter;
@@ -162,11 +164,32 @@ namespace BigCopilotLink
                     Item = c.Req.ItemInstanceId ?? "", Type = (int)c.Type
                 });
             }
+            // Which days the write opens: with openAllHours, those not open 0 to 24 already.
+            // Only those are the write's; a day already open stays the player's.
+            var opens = new HashSet<int>();
             var openAfter = new Dictionary<int, bool>();
-            foreach (var pair in dayByD) openAfter[pair.Key] = req.OpenAllHours || pair.Value.isOpen;
+            foreach (var pair in dayByD)
+            {
+                if (req.OpenAllHours && !IsOpenAllDay(pair.Value)) opens.Add(pair.Key);
+                openAfter[pair.Key] = req.OpenAllHours || pair.Value.isOpen;
+            }
+
+            // A no-op, decided before anything is touched: the same shifts (types
+            // included) on the days the write owns, and no hours to open.
+            var owned = new List<Line>();
+            foreach (var pair in dayByD) owned.AddRange(Lines(new List<ScheduleDay> { pair.Value }));
+            var noOp = !failed && opens.Count == 0 && Print(owned) == Print(after);
 
             if (dryRun || failed)
-                return Answer(req.Address, reg, dryRun, failed, false, null, siteError, checks, before, after, openAfter, req.OpenAllHours && !failed);
+                return Answer(req.Address, reg, dryRun, failed, false, null, siteError, checks, before, after, openAfter, !failed && opens.Count > 0);
+
+            if (noOp)
+            {
+                // Not announced, not marked as a change, the live shifts left as they are;
+                // it only refreshes, and it replaces the kind's undo with nothing.
+                ws.ScheduleUndo = null;
+                return Answer(req.Address, reg, false, false, false, ws.RefreshAfterWrite(), null, checks, before, after, openAfter, false);
+            }
 
             // Apply. The before-state is kept as copies: the game's own ClearWorkShifts
             // blanks the employeeId of the shifts it removes, so live objects would not
@@ -175,14 +198,8 @@ namespace BigCopilotLink
             foreach (var sd in liveDays)
             {
                 if (sd == null) continue;
-                undo.Days.Add(sd);
-                undo.Shifts.Add(CloneShifts(sd.workShifts));
-                undo.WasOpen.Add(sd.isOpen);
-                undo.Slots.Add(CloneSlots(sd.openingHourSlots));
+                DayRecord(undo, sd, dayByD.ContainsValue(sd) && opens.Contains(DayIndex(sd)));
             }
-            // Only hours the write really opens are its to put back: a day that was open
-            // 0 to 24 already stays the player's, and undo does not check it.
-            undo.OpenedHours = req.OpenAllHours && !WasAllOpen(undo);
 
             // One entry per weekday (a save should hold exactly seven); a duplicate
             // entry, should one exist, is left as it is rather than given the shifts twice.
@@ -204,23 +221,25 @@ namespace BigCopilotLink
                         type = c.Type
                     });
                 }
-                if (req.OpenAllHours) OpenAllDay(sd);
+                if (opens.Contains(d)) OpenAllDay(sd);
             }
 
             undo.PrintAfter = Print(Lines(liveDays));
-            // The last write of the kind is what undo restores, even one that changed
-            // nothing: same shifts, and no hours opened that were not open already. A
-            // no-op is not announced and not marked as a change; it only refreshes.
-            var changedAnything = undo.PrintAfter != beforePrint || undo.OpenedHours;
-            ws.ScheduleUndo = changedAnything ? undo : null;
-            string stamp;
-            if (changedAnything)
-            {
-                AfterShiftChange(reg, Employees(before, after));
-                stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
-            }
-            else stamp = ws.RefreshAfterWrite();
-            return Answer(req.Address, reg, false, false, false, stamp, null, checks, before, after, openAfter, req.OpenAllHours);
+            ws.ScheduleUndo = undo;
+            AfterShiftChange(reg, Employees(before, after));
+            var stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
+            return Answer(req.Address, reg, false, false, false, stamp, null, checks, before, after, openAfter, undo.OpenedHours);
+        }
+
+        /// <summary>One day's before-state; <paramref name="opened"/>: the write opens this day's hours.</summary>
+        private static void DayRecord(UndoState undo, ScheduleDay sd, bool opened)
+        {
+            undo.Days.Add(sd);
+            undo.Shifts.Add(CloneShifts(sd.workShifts));
+            undo.Opened.Add(opened);
+            undo.WasOpen.Add(sd.isOpen);
+            undo.Slots.Add(CloneSlots(sd.openingHourSlots));
+            if (opened) undo.OpenedHours = true;
         }
 
         public static WriteAnswer Undo(WriteService ws, UndoState state, bool dryRun)
@@ -229,9 +248,14 @@ namespace BigCopilotLink
             var liveDays = reg != null && reg.scheduleDays != null ? reg.scheduleDays : new List<ScheduleDay>();
             var current = Lines(liveDays);
 
+            // The hours are checked only on the days the write opened; a day it left
+            // alone may have changed since without blocking the undo.
+            var hoursHold = true;
+            for (var i = 0; i < state.Days.Count; i++)
+                if (state.Opened[i] && !IsOpenAllDay(state.Days[i])) hoursHold = false;
+
             string siteError = null;
-            if (reg == null || Print(current) != state.PrintAfter || !state.Days.TrueForAll(liveDays.Contains) ||
-                (state.OpenedHours && !StillOpenAllDay(state.Days)))
+            if (reg == null || Print(current) != state.PrintAfter || !state.Days.TrueForAll(liveDays.Contains) || !hoursHold)
                 siteError = "changed";
             else if (!reg.RentedByPlayer) siteError = "not_rented";
             else if (WriteService.ScheduleScreenOpenOn(reg)) siteError = "screen_open";
@@ -243,7 +267,7 @@ namespace BigCopilotLink
             {
                 var d = DayIndex(state.Days[i]);
                 foreach (var ws0 in state.Shifts[i]) restored.Add(ToLine(d, ws0));
-                openAfter[d] = state.OpenedHours ? state.WasOpen[i] : state.Days[i].isOpen;
+                openAfter[d] = state.Opened[i] ? state.WasOpen[i] : state.Days[i].isOpen;
             }
 
             var failed = siteError != null;
@@ -257,7 +281,7 @@ namespace BigCopilotLink
                 if (sd.workShifts == null) sd.workShifts = new List<WorkShift>();
                 sd.workShifts.Clear();
                 sd.workShifts.AddRange(CloneShifts(state.Shifts[i]));
-                if (!state.OpenedHours) continue;
+                if (!state.Opened[i]) continue;
                 sd.isOpen = state.WasOpen[i];
                 if (sd.openingHourSlots == null) sd.openingHourSlots = new List<OpeningHourSlot>();
                 sd.openingHourSlots.Clear();
@@ -420,25 +444,12 @@ namespace BigCopilotLink
             sd.openingHourSlots.Add(new OpeningHourSlot(0, 24));
         }
 
-        private static bool WasAllOpen(UndoState undo)
+        /// <summary>Open with one slot, 0 to 24: what OpenAllDay leaves.</summary>
+        private static bool IsOpenAllDay(ScheduleDay sd)
         {
-            for (var i = 0; i < undo.Days.Count; i++)
-            {
-                var slots = undo.Slots[i];
-                if (!undo.WasOpen[i] || slots.Count != 1 || slots[0].startingHour != 0 || slots[0].endingHour != 24) return false;
-            }
-            return true;
-        }
-
-        private static bool StillOpenAllDay(List<ScheduleDay> days)
-        {
-            foreach (var sd in days)
-            {
-                if (!sd.isOpen || sd.openingHourSlots == null || sd.openingHourSlots.Count != 1) return false;
-                var slot = sd.openingHourSlots[0];
-                if (slot == null || slot.startingHour != 0 || slot.endingHour != 24) return false;
-            }
-            return true;
+            if (!sd.isOpen || sd.openingHourSlots == null || sd.openingHourSlots.Count != 1) return false;
+            var slot = sd.openingHourSlots[0];
+            return slot != null && slot.startingHour == 0 && slot.endingHour == 24;
         }
 
         // ---- after the change ------------------------------------------------------
