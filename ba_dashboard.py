@@ -2349,34 +2349,98 @@ def _import_catch_up(stock, per_day, weekly, day, arrives, left_today):
     return max(0, math.ceil(need - stock))
 
 
+def _import_setting(supply: dict) -> dict:
+    """How a depot line's imports are set in game, for the page to show.
+
+    `smart` and `target` say whether the line runs on Smart Delivery and the
+    stock level that holds; `plain` is what plain contracts beside it bring a
+    week. `arrivedLastWeek` sums every contract's amountOrderedLastWeek, paused
+    ones too, since those goods did arrive. `contracts` lists each contract on
+    the line in plan order.
+    """
+    # A hand-built supply (tests of the factory view) may carry only the
+    # weekly figures; it reads as plain contracts with nothing more known.
+    return {
+        "smart": supply.get("smart", False),
+        "target": supply.get("target"),
+        "plain": supply.get("plain", supply.get("weekly", 0)),
+        "arrivedLastWeek": supply.get("arrived", supply.get("lastWeek", 0)),
+        "contracts": supply.get("contracts", []),
+    }
+
+
+def _import_drop(stock, drops):
+    """Units one delivery day brings to one depot line, the game's way.
+
+    DeliveryHelper walks the contracts in plan order. A plain contract brings
+    its amount. A Smart Delivery one (isTarget) brings what tops the depot up
+    to its amount, max(0, amount - stock), and counts what an earlier contract
+    delivered the same morning. So two Smart Delivery contracts on one item
+    hold the larger of their two levels, not the sum. `drops` is in plan order.
+    """
+    brought = 0
+    for drop in drops:
+        if drop.get("smart"):
+            brought += max(0, drop["amount"] - max(stock + brought, 0))
+        else:
+            brought += drop["amount"]
+    return brought
+
+
 def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today):
     """Project stock through the last upcoming drop, retaining each quantity.
 
     The maximum running deficit is the one-off amount that bridges every gap;
     a small early drop must not make a much larger later shipment arrive early.
     The last delivery day itself is excluded, as in _import_catch_up.
+
+    A Smart Delivery drop brings only what tops the depot up to its level, so
+    extra stock brought in now makes that drop smaller: the one-off amount is
+    then the least that keeps every day of the walk above zero, found by search.
     """
-    drops = collections.defaultdict(float)
+    drops = collections.defaultdict(list)
     for delivery in deliveries:
         if delivery["day"] >= day:
-            drops[delivery["day"]] += delivery["amount"]
+            drops[delivery["day"]].append(delivery)
     if len(drops) < 2:
         return None
+    for same_day in drops.values():
+        same_day.sort(key=lambda d: d.get("rank", 0))
     until = max(drops)
-    remaining, elapsed, deficit = stock, 0.0, 0.0
-    cover = runs_out = None
-    for when in range(day, until):
-        remaining += drops.get(when, 0)
-        share = left_today if when == day else 1.0
-        use = per_day * weekly[when % 7] * share
-        if use > remaining and cover is None:
-            cover = elapsed + share * max(remaining, 0) / use if use else elapsed
-            runs_out = when
-        remaining -= use
-        deficit = max(deficit, -remaining)
-        elapsed += share
-    return {"until": until, "cover": cover if cover is not None else elapsed,
-            "runsOut": runs_out, "catchUp": math.ceil(deficit)}
+
+    def walk(extra):
+        remaining, elapsed, low = stock + extra, 0.0, 0.0
+        cover = runs_out = None
+        for when in range(day, until):
+            if when in drops:
+                remaining += _import_drop(remaining, drops[when])
+            share = left_today if when == day else 1.0
+            use = per_day * weekly[when % 7] * share
+            if use > remaining and cover is None:
+                cover = elapsed + share * max(remaining, 0) / use if use else elapsed
+                runs_out = when
+            remaining -= use
+            low = min(low, remaining)
+            elapsed += share
+        return (cover if cover is not None else elapsed), runs_out, -low
+
+    cover, runs_out, deficit = walk(0)
+    catch_up = math.ceil(deficit)
+    if deficit > 0 and any(d.get("smart") for same_day in drops.values() for d in same_day):
+        # Enough to cover every day with no delivery at all always works.
+        lo, hi = 0, math.ceil(sum(
+            per_day * weekly[when % 7] * (left_today if when == day else 1.0)
+            for when in range(day, until)
+        ))
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if walk(mid)[1] is None:
+                hi = mid
+            else:
+                lo = mid + 1
+        catch_up = lo
+    return {"until": until, "cover": cover,
+            "runsOut": runs_out, "catchUp": catch_up}
 
 
 def _supply(
@@ -2517,49 +2581,89 @@ def _supply(
         return received[key].get(item, 0.0) / len(days)
 
     # --- imports: what lands weekly, and when
+    # A contract is plain or Smart Delivery (isTarget; the save leaves out a
+    # false one). Plain brings its amount every Monday. Smart Delivery's amount
+    # is a stock level: the purchasing agent brings what tops the depot up to
+    # it, so a week can use at most that level. `weekly` is therefore what one
+    # delivery brings into an empty depot, the most a week can draw on: the
+    # sum of plain amounts, the level of a Smart Delivery one, and the game's
+    # own sequence where a depot mixes the two. Deliveries run importer by
+    # importer, each importer in the place of its first contract in the plan.
     imports = {}
+    contracts_at = collections.defaultdict(list)
     next_day = None
-    for partnership in save.items(save.root["importPartnerships"]):
+    partnerships = save.items(save.root["importPartnerships"])
+    first_of = {}
+    for order, partnership in enumerate(partnerships):
+        first_of.setdefault(save.address(partnership.get("importAddress")), order)
+    for order, partnership in enumerate(partnerships):
         arrives = partnership.get("nextDeliveryDay") or 0
         active = bool(partnership.get("isActive"))
+        smart = bool(partnership.get("isTarget"))
+        importer = save.address(partnership.get("importAddress"))
+        rank = (first_of[importer], order)
+        who = names.addr(importer)
         if active and arrives >= day:
             next_day = arrives if next_day is None else min(next_day, arrives)
         for product in save.items(partnership["products"]):
             warehouse = site_key(save.address(product["assignedWarehouse"]))
             ordered = product.get("amountOrderedLastWeek", 0)
             amount = product.get("amount", 0)
-            if not warehouse or not (amount or ordered):
+            if not warehouse:
+                continue
+            # Every contract on the line, for the page to list and a later
+            # write to address; after a delivery a contract stays on only if
+            # it repeats, so a paused one may be a finished one-off.
+            contracts_at[(warehouse, product["itemName"])].append({
+                "order": order, "id": partnership.get("id"), "importer": who,
+                "smart": smart, "amount": amount, "lastWeek": ordered, "active": active,
+                "repeating": bool(partnership.get("isRepeatingOrder")),
+                "agent": partnership.get("employeeInstanceId") is not None,
+            })
+            if not (amount or ordered):
                 continue
             # Current settings establish a route even before its first delivery.
             # Several importers can supply the same holding; inactive contracts
             # and zero orders must never replace or inflate its active supply.
             supply = imports.setdefault((warehouse, product["itemName"]), {
-                "weekly": 0, "lastWeek": 0, "arrives": arrives,
+                "weekly": 0, "lastWeek": 0, "arrived": 0, "arrives": arrives,
                 "active": False, "from": "",
                 "suppliers": {"active": [], "paused": [], "zero": []},
                 "history": {"active": 0, "paused": 0, "zero": 0},
                 "pausedWeekly": 0, "deliveries": [],
+                "drops": {"active": [], "paused": [], "zero": []},
             })
             supplying = active and amount > 0
-            if supplying:
-                supply["arrives"] = min(supply["arrives"], arrives) if supply["weekly"] else arrives
-                supply["weekly"] += amount
-                supply["deliveries"].append({"day": arrives, "amount": amount})
-            elif not active:
-                supply["pausedWeekly"] += amount
-            supply["active"] = supply["active"] or active
             group = "active" if supplying else "paused" if not active else "zero"
+            drop = {"day": arrives, "amount": amount, "smart": smart, "rank": rank}
+            if supplying:
+                supply["arrives"] = min(supply["arrives"], arrives) if supply["deliveries"] else arrives
+                supply["deliveries"].append(drop)
+            supply["drops"][group].append(drop)
+            supply["active"] = supply["active"] or active
             supply["history"][group] += ordered
-            who = names.addr(save.address(partnership.get("importAddress")))
+            supply["arrived"] += ordered
             if who not in supply["suppliers"][group]:
                 supply["suppliers"][group].append(who)
 
-    for supply in imports.values():
+    for line, supply in imports.items():
+        for drops in supply["drops"].values():
+            drops.sort(key=lambda d: d["rank"])
+        supply["deliveries"].sort(key=lambda d: d["rank"])
+        supply["weekly"] = _import_drop(0, supply["drops"]["active"])
+        supply["pausedWeekly"] = _import_drop(0, supply["drops"]["paused"])
         group = "active" if supply["weekly"] else "paused" if supply["pausedWeekly"] else "zero"
         supply["lastWeek"] = supply["history"][group]
         supply["from"] = ", ".join(supply["suppliers"][group])
         if group == "paused":
             supply["active"] = False
+        # How the line is set in game: Smart Delivery where any contract of the
+        # group that counts is, at the highest level, which is the one that holds.
+        lead = supply["drops"][group]
+        supply["smart"] = any(d["smart"] for d in lead)
+        supply["target"] = max((d["amount"] for d in lead if d["smart"]), default=None)
+        supply["plain"] = sum(d["amount"] for d in lead if not d["smart"])
+        supply["contracts"] = sorted(contracts_at[line], key=lambda c: c["order"])
 
     days_to_import = (next_day - day) if next_day is not None else None
     # The delivery lands at the start of its day, so the stock has to reach it
@@ -2749,6 +2853,7 @@ def _supply(
                     "runsOut": WEEKDAYS[runs_out % 7] if runs_out is not None else None,
                     "weekly": supply["weekly"],
                     "lastWeek": supply["lastWeek"],
+                    **_import_setting(supply),
                     "weekNeed": round(week_need),
                     "orderFit": order_fit,
                     "coverFit": cover_fit,
@@ -3239,6 +3344,7 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
         if depot in index:
             depots[index[depot]][slug] = {
                 "weekly": supply["weekly"], "pausedWeekly": supply.get("pausedWeekly", 0),
+                **_import_setting(supply),
             }
     # A depot's outflow that is not a factory's intake: the shops it also
     # serves, so an import order can be sized to the whole of what leaves.
@@ -3556,6 +3662,8 @@ def _factories(
             row["perWeek"] = round(per_day * 7)
             row["depotNeed"] = round(weekly_need)
             row["importWeekly"] = supply["weekly"] if supply else None
+            # Smart Delivery keeps importWeekly in stock rather than bringing it.
+            row["importSmart"] = bool(supply and supply.get("smart"))
             row["importPaused"] = bool(supply and not supply["weekly"] and supply.get("pausedWeekly"))
             row["importFit"] = (
                 "short" if weekly_need and not supply["weekly"] else _fit(weekly_need, supply["weekly"])
@@ -7604,8 +7712,12 @@ def _alerts(
                 "critical",
                 site,
                 "order",
-                f"{row['item']} orders {row['weekly']:,} a week against a "
-                f"{row['weekNeed']:,} week of use, {row['weekNeed'] - row['weekly']:,} short"
+                (
+                    f"{row['item']}: Smart Delivery keeps {row['weekly']:,} in stock against a "
+                    if row.get("smart")
+                    else f"{row['item']} orders {row['weekly']:,} a week against a "
+                )
+                + f"{row['weekNeed']:,} week of use, {row['weekNeed'] - row['weekly']:,} short"
                 + (
                     f"; already runs dry {when}, {row['shortBy']:.1f} days before "
                     f"{arrives}'s import"
@@ -7837,10 +7949,21 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"the machines could eat; staffing runs them {round(row['staffedShare'] * 100)}% "
                     f"of the week"
                 )
+            elif status == "import" and row["raiseImport"] and row.get("importSmart"):
+                text = (
+                    f"{row['item']}: this import needs to cover {row['depotNeed']:,} a week and "
+                    f"Smart Delivery keeps {row['importWeekly']:,} in stock; raise the stock "
+                    f"level to {row['raiseImport']:,}"
+                )
             elif status == "import" and row["raiseImport"]:
                 text = (
                     f"{row['item']}: this import needs to cover {row['depotNeed']:,} a week and the "
                     f"import order is {row['importWeekly']:,}; raise it to {row['raiseImport']:,}"
+                )
+            elif status == "import" and row.get("importSmart"):
+                text = (
+                    f"{row['item']}: Smart Delivery keeps {row['importWeekly']:,} in stock, within "
+                    f"5% of the {row['depotNeed']:,} it needs to cover a week"
                 )
             elif status == "import":
                 text = (
