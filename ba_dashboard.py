@@ -2369,6 +2369,21 @@ def _import_setting(supply: dict) -> dict:
     }
 
 
+def _import_ranks(save: Save, partnerships: list) -> list:
+    """Each contract's place in the game's delivery pass, by plan position.
+
+    DoAllDeliveries goes importer by importer, each importer in the place of
+    its first contract in importPartnerships, and its contracts in plan order.
+    """
+    first_of = {}
+    for order, partnership in enumerate(partnerships):
+        first_of.setdefault(save.address(partnership.get("importAddress")), order)
+    return [
+        (first_of[save.address(partnership.get("importAddress"))], order)
+        for order, partnership in enumerate(partnerships)
+    ]
+
+
 def _import_drop(stock, drops):
     """Units one delivery day brings to one depot line, the game's way.
 
@@ -2593,15 +2608,13 @@ def _supply(
     contracts_at = collections.defaultdict(list)
     next_day = None
     partnerships = save.items(save.root["importPartnerships"])
-    first_of = {}
-    for order, partnership in enumerate(partnerships):
-        first_of.setdefault(save.address(partnership.get("importAddress")), order)
+    ranks = _import_ranks(save, partnerships)
     for order, partnership in enumerate(partnerships):
         arrives = partnership.get("nextDeliveryDay") or 0
         active = bool(partnership.get("isActive"))
         smart = bool(partnership.get("isTarget"))
         importer = save.address(partnership.get("importAddress"))
-        rank = (first_of[importer], order)
+        rank = ranks[order]
         who = names.addr(importer)
         if active and arrives >= day:
             next_day = arrives if next_day is None else min(next_day, arrives)
@@ -2725,6 +2738,7 @@ def _supply(
 
     # --- 2. depots: does the holding reach the next delivery?
     import_rows = []
+    weekly_use = {}  # (depot, item) -> a week of the draw the rows below judge
     for business in businesses:
         if business["status"] not in ("overhead", "support"):
             continue
@@ -2744,6 +2758,7 @@ def _supply(
                 per_day, basis = draw(business["key"], item), "sales"
             else:
                 per_day, basis = supply["lastWeek"] / 7, "order"
+            weekly_use[(business["key"], item)] = per_day * 7
             if per_day <= 0:
                 continue
             driven = customer_driven(business["key"], item)
@@ -2985,8 +3000,28 @@ def _supply(
             business["type"],
         )
 
+    # What each contract brings in an ordinary week, for the pipe's width. A
+    # plain contract brings its amount. A Smart Delivery one brings only the
+    # top-up, max(0, level - stock on Monday), and in a steady week the stock
+    # on Monday is the level less what the week used, so the top-up is the
+    # week's use, up to the level. The use is the depot row's own draw (the
+    # delivery log, else the shops' sales, else last week's order); a line with
+    # no row takes what arrived last week, which is measured too. Today's stock
+    # would be a worse guide: it is only the Monday figure on a Monday.
+    # Contracts sharing a line split that top-up in the game's delivery order.
+    expected = {}
+    for line, supply in imports.items():
+        use = weekly_use.get(line, supply["arrived"])
+        for group in ("active", "paused"):
+            drops = supply["drops"][group]
+            stock = max(0, _import_drop(0, drops) - use)
+            for drop in drops:
+                brought = _import_drop(stock, [drop])
+                expected[(drop["rank"][1], line)] = brought
+                stock += brought
+
     # Importers sit outside the company: they are where the week's goods enter.
-    for partnership in save.items(save.root["importPartnerships"]):
+    for order, partnership in enumerate(save.items(save.root["importPartnerships"])):
         source = save.address(partnership.get("importAddress"))
         if not source:
             continue
@@ -3007,7 +3042,7 @@ def _supply(
             if warehouse not in nodes or not amount:
                 continue
             entry = moved[warehouse]
-            entry[0] += amount
+            entry[0] += expected.get((order, (warehouse, product["itemName"])), amount)
             entry[1] += 1
         for warehouse, (amount, count) in moved.items():
             links.append(

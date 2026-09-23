@@ -193,6 +193,34 @@ class SmartSupplyTests(unittest.TestCase):
         self.assertTrue(any("Smart Delivery keeps 1,000 in stock against a 1,400 week" in t
                             for t in texts), texts)
 
+    @staticmethod
+    def pipes(data):
+        """Each importer's pipe into the depot, units a day."""
+        return {link["from"]: link["perDay"] for link in data["supply"]["graph"]["links"]
+                if link["to"] == "depot#1"}
+
+    def test_the_graph_draws_a_levels_weekly_top_up_not_the_level(self):
+        # 200 a day leaves the depot: a level of 3,000 tops up 1,400 a week.
+        data, _ = self.measured([smart(3000)])
+        self.assertEqual(self.pipes(data), {"import:pier#1": 200})
+        # A plain 3,000 still arrives whole.
+        data, _ = self.measured([contract(3000)])
+        self.assertEqual(self.pipes(data), {"import:pier#1": 429})
+        # A level below the week's use brings the whole level.
+        data, _ = self.measured([smart(700)])
+        self.assertEqual(self.pipes(data), {"import:pier#1": 100})
+
+    def test_with_no_measured_draw_the_pipe_is_what_arrived_last_week(self):
+        data = self.routes.build([smart(3000, last=1200)])
+        self.assertEqual(self.pipes(data), {"import:pier#1": 171})
+
+    def test_two_levels_split_the_top_up_in_delivery_order(self):
+        data, _ = self.measured([smart(3000), smart(1000, pier=2)])
+        self.assertEqual(self.pipes(data), {"import:pier#1": 200, "import:pier#2": 0})
+        # The plain order comes first, and the level only tops up the rest.
+        data, _ = self.measured([contract(700), smart(3000, pier=2)])
+        self.assertEqual(self.pipes(data), {"import:pier#1": 100, "import:pier#2": 100})
+
     def test_a_high_level_on_a_full_depot_brings_nothing_in_the_walk(self):
         # 20,000 held against 200 a day: two staggered levels change nothing.
         early, late = smart(1000, last=0), smart(1000, pier=2)
