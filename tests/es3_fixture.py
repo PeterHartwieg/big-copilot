@@ -90,8 +90,9 @@ def address(street: str, number: int) -> dict:
 
 def link_company() -> dict:
     """Three shops: two with a locker and a role on shift without a uniform,
-    one with no locker; a depot; two import contracts on one item; a schedule
-    of two shifts at the first shop. Enough besides for extract() to run."""
+    one with no locker; a depot; two import contracts on one item and a
+    stopped one, with an agent, on another; a schedule of two shifts at the
+    first shop. Enough besides for extract() to run."""
     preset = "PRESETdefaultAAAAAAAAAA=="
 
     def shop(street, number, name, uniforms, locker=True):
@@ -125,6 +126,7 @@ def link_company() -> dict:
              "BusinessName": "HART. Depot", "businessTypeName": "ba:businesstype_warehouse",
              "itemInstances": [], "scheduleDays": [], "orderHistory": [], "retailPrices": []}
     served = {"name": "ba:skill_customerservice", "value": 60.0}
+    cleans = {"name": "ba:skill_cleaning", "value": 40.0}
     return {
         "Day": 34, "Hour": 14, "Minute": 0, "Money": 10000.0, "SaveGameName": "Link Co",
         "gameVariables": {"daysPerYear": 60},
@@ -133,7 +135,7 @@ def link_company() -> dict:
                                "playerWeeklyIncomeHistory", "playerNumberOfBusinessesHistory")},
         "BuildingRegistrations": [first, second, bare, depot],
         "EmployeeInstances": [
-            {"id": "AAAAemployeeAAAAAAAAAAAA", "characterData": {"name": "Ana Silva", "skills": [served]},
+            {"id": "AAAAemployeeAAAAAAAAAAAA", "characterData": {"name": "Ana Silva", "skills": [served, cleans]},
              "assignedAddress": address("ba:street_secondavenue", 10)},
             {"id": "BBBBemployeeBBBBBBBBBBBB", "characterData": {"name": "Ben Ode", "skills": [served]},
              "assignedAddress": address("ba:street_secondavenue", 10)},
@@ -150,6 +152,10 @@ def link_company() -> dict:
             {"id": "CONTRACTtwo", "importAddress": address("ba:street_pier", 2),
              "nextDeliveryDay": 29, "isActive": False,
              "products": [{"itemName": "ba:itemname_paperbag", "amount": 0,
+                           "assignedWarehouse": address("ba:street_pier", 9)}]},
+            {"id": "CONTRACTthree", "importAddress": address("ba:street_pier", 3),
+             "employeeInstanceId": "AGENTcccc", "nextDeliveryDay": 29, "isActive": False,
+             "products": [{"itemName": "ba:itemname_candle", "amount": 500,
                            "assignedWarehouse": address("ba:street_pier", 9)}]},
         ],
     }

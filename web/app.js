@@ -448,16 +448,22 @@
   function linkBase() {
     const given = /[#&]link=([^&]+)/.exec(location.hash || "");
     if (!given) return LINK_DEFAULT;
-    // Only this machine: the bytes are the player's whole company, and a
-    // link in a pasted address must never point the page at someone else.
+    let text = "";
+    try { text = decodeURIComponent(given[1]); } catch (e) {}
+    return loopbackOrigin(text) || LINK_DEFAULT;
+  }
+  // Only this machine: the bytes are the player's whole company, and a link
+  // in a pasted address must never point the page at someone else. The
+  // origin of a loopback http URL, else null.
+  function loopbackOrigin(text) {
     try {
-      const url = new URL(decodeURIComponent(given[1]));
+      const url = new URL(text);
       const host = url.hostname.replace(/^\[|\]$/g, "");
       if (url.protocol === "http:" && (host === "127.0.0.1" || host === "localhost" || host === "::1")) {
         return url.origin;
       }
     } catch (e) {}
-    return LINK_DEFAULT;
+    return null;
   }
 
   // Chrome and Edge hold a public page's first fetch to loopback while they
@@ -492,15 +498,18 @@
     // that knows neither throws the unknown value back as a TypeError. The
     // spelling that works is remembered, so the player answers the prompt
     // once, not once per call. No credentials, ever.
+    // `init.wait` is the caller's own limit in milliseconds; five seconds
+    // otherwise. A failure thrown before any request left carries `unsent`.
     const permission = await loopbackPermission();
-    if (permission === "denied") throw linkBlocked();
+    if (permission === "denied") throw Object.assign(linkBlocked(), {unsent: true});
     const asking = permission === "prompt";
     if (asking && attempt) state("busy", "Allow Big Copilot to reach the game", "your browser is asking, at the top of the window");
     const spaces = linkSpace === null ? ["loopback", "local", ""] : [linkSpace];
+    const {wait, ...rest} = init || {};
     for (const space of spaces) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), asking ? PROMPT_WAIT_MS : 5000);
-      const options = Object.assign({credentials: "omit"}, init, {signal: controller.signal});
+      const timer = setTimeout(() => controller.abort(), asking ? Math.max(PROMPT_WAIT_MS, wait || 0) : wait || 5000);
+      const options = Object.assign({credentials: "omit"}, rest, {signal: controller.signal});
       if (space) options.targetAddressSpace = space;
       let res;
       try {
@@ -807,6 +816,9 @@
   const PAIR_KEY = "ledger_pair";
   const PAIR_CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/;
   const WRITE_BUSY_RETRIES = 3;
+  // The mod always finishes a write it has started, however long the game
+  // takes over it, so a write waits far longer for its answer than a read.
+  const WRITE_WAIT_MS = 30000;
   let pairMemo = "";      // the code, where the browser keeps no sessionStorage
   let pairAsking = null;  // the open prompt, shared by every write waiting on it
   function pairCode() {
@@ -868,8 +880,11 @@
 
   // One write. Never throws: resolves to {status, error, body}, where error is
   // null on a 200, the mod's own error name otherwise, "cancelled" when the
-  // player closed the pairing prompt and "unreachable" (with message) when the
-  // game did not answer at all.
+  // player closed the pairing prompt and "unreachable" (with message) when a
+  // dry run got no answer at all. An apply or an undo that got no answer may
+  // have been applied or not: "uncertain", with `reread`, a promise that
+  // settles once the board has read the game again, so the page can look
+  // before it offers anything else.
   async function gameWrite(kind, body, opts) {
     const dryRun = !!(opts && opts.dryRun);
     if (!linkUrl) return {status: 0, error: "not_linked", body: null};
@@ -881,10 +896,11 @@
       if (!code) return {status: 0, error: "cancelled", body: null};
       let res, answer = null;
       try {
-        res = await linkFetch(path, {method: "POST", body: payload,
+        res = await linkFetch(path, {method: "POST", body: payload, wait: WRITE_WAIT_MS,
           headers: {"Content-Type": "application/json", Authorization: `Bearer ${code}`}});
       } catch (err) {
-        return {status: 0, error: "unreachable", message: err.message, body: null};
+        if (dryRun || err.unsent) return {status: 0, error: "unreachable", message: err.message, body: null};
+        return {status: 0, error: "uncertain", message: err.message, body: null, reread: rereadGame()};
       }
       try { answer = await res.json(); } catch (e) {}
       const error = res.status === 200 ? null : (answer && answer.error) || `http_${res.status}`;
@@ -907,13 +923,35 @@
   }
 
   // The mod refreshes after an apply; the board follows the stamp as it does
-  // after Update. A read already under way reads the old stamp, and the
-  // watcher's next look catches the new one.
+  // after Update. A read already under way may have read the bytes before
+  // the change, so the follow waits for it to finish and then looks: an apply
+  // and its undo in quick succession must leave the board on the undo. One
+  // follow waits at a time, for the newest write's stamp.
+  // Until no read is under way. A poll on the real clock, not linkWait: the
+  // tests that swap that one in resolve it at once, and this must yield.
+  async function whenIdle(gen) {
+    while ((busy || attempt) && gen === sourceGen && linkUrl) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  let followBefore = null;
   async function followWrite(before) {
     const gen = sourceGen;
-    if (busy || attempt || !startAttempt(gen)) return;
+    const waiting = followBefore !== null;
+    followBefore = before || lastLinkStamp;
+    if (waiting) return;
+    await whenIdle(gen);
+    const stamp = followBefore;
+    followBefore = null;
+    if (gen !== sourceGen || !linkUrl || !startAttempt(gen)) return;
     state("busy", "Reading the game after the change", linkUrl);
-    await awaitNewStamp(before || lastLinkStamp, gen);
+    await awaitNewStamp(stamp, gen);
+  }
+
+  // A write that got no answer: ask the game for its state, as Update does,
+  // once whatever read is under way has finished.
+  async function rereadGame() {
+    const gen = sourceGen;
+    await whenIdle(gen);
+    if (gen === sourceGen && linkUrl) await refreshFromGame();
   }
 
   async function checkLink() {
@@ -1897,7 +1935,10 @@
     // its note on screen; Update retries it and the folder button takes over.
     const rememberedLink = stored.get(LINK_KEY);
     if (rememberedLink) {
-      linkUrl = rememberedLink;
+      // Stored by this page, but storage is the browser's to edit: the same
+      // check as an address in the hash, so writes and their pairing code
+      // only ever go to this machine.
+      linkUrl = loopbackOrigin(rememberedLink) || LINK_DEFAULT;
       place();
       paintStrip();
       await loadFromLink("Opening the game link", resumeGen);

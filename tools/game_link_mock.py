@@ -16,11 +16,13 @@ The writes (POST /write/uniforms, /imports, /schedule, /undo) are checked
 against the save as ba_save reads it, as far as the bytes allow: addresses,
 contract ids and amounts, the shift print, uniforms already set, who is
 assigned where, which stations exist. What the game alone knows (importer caps,
-prices, the Uniforms window's skill list) is not checked. The mock never
+prices, the Uniforms window's skill list) is not checked, except the caps and
+prices POST /debug/config names per contract ("importTerms"). The mock never
 rewrites the file: an apply is kept in memory, over the bytes, so a later write
 sees it, answers the state it left, and moves the stamp as /refresh does.
 GET /debug/writes lists the applies; POST /debug/config changes the error
-switches while it runs, for the page's tests. --code sets the pairing code
+switches while it runs, for the page's tests (and the game's day and hour, and
+those contract terms). --code sets the pairing code
 (else one is drawn and printed), --refuse-write <error>[:<detail>] makes every
 apply answer that refusal, --busy-writes <n> answers the next n writes busy,
 --writes names the kinds /health lists ("" for a 0.1.0 mod that lists none).
@@ -52,6 +54,7 @@ EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
 WRITE_KINDS = ("uniforms", "imports", "schedule")
 PAIR_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 MAX_BODY = 256 * 1024
+DRAIN_LIMIT = 4 * 1024 * 1024  # the most of a refused body read off the wire
 ENDPOINTS = ["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open"}
@@ -98,6 +101,7 @@ class Link:
         self.path = path
         self.character, self.company = character, company
         self.day, self.hour, self.cash, self.build = day, hour, cash, build
+        self._clock = (day, hour)  # what a reset puts back
         self.schema, self.throttle, self.refuse = schema, throttle, refuse
         self.code = code or pairing_code()
         self.writes = writes  # None: the key is left out, as a 0.1.0 mod does
@@ -120,6 +124,9 @@ class Link:
         self.schedules: dict = {}   # address -> [entries], as schedule_entries()
         self.opened: set = set()    # addresses a write opened 0 to 24
         self.undo: dict = {}
+        # What the items bundle would tell the game per contract, set by
+        # /debug/config: {id: {"unitPrice": float, "cap": int}}.
+        self.terms: dict = {}
         self.refresh(force=True)
 
     def refresh(self, force: bool = False) -> tuple[int, dict]:
@@ -181,7 +188,9 @@ class Link:
             return body
 
     def paired(self, header: str | None) -> bool:
-        return bool(header) and header.strip() == f"Bearer {self.code}"
+        """The mod's test: "Bearer " and the code, trimmed and upper-cased."""
+        text = (header or "").strip()
+        return text.startswith("Bearer ") and text[len("Bearer "):].strip().upper() == self.code
 
     # --- the save, as ba_save reads it ---------------------------------------
     def _save(self) -> ba_save.Save:
@@ -268,8 +277,9 @@ class Link:
     # uniforms ---------------------------------------------------------------------
     def _uniforms(self, save, body, dry):
         sites = body.get("sites")
-        if not isinstance(sites, list) or not sites:
-            raise BadRequest("sites must be a non-empty list")
+        if not isinstance(sites, list):
+            raise BadRequest("sites must be a list")
+        seen = set()
         presets = [{"id": p.get("id"), "name": p.get("name")}
                    for p in save.items(save.root.get("employeePresets"))]
         rows, writes = [], []
@@ -277,6 +287,9 @@ class Link:
             if not isinstance(site, dict):
                 raise BadRequest("sites[] must be objects")
             address = _address(site.get("address"), "sites[].address")
+            if address in seen:
+                raise BadRequest("sites[] names a site twice")
+            seen.add(address)
             skills = site.get("skills")
             if skills is not None and not (isinstance(skills, list) and all(isinstance(s, str) for s in skills)):
                 raise BadRequest("sites[].skills must be null or a list of skill ids")
@@ -307,7 +320,8 @@ class Link:
                 row["error"] = error
                 continue
             row["presetId"], row["presetName"] = preset["id"], preset["name"]
-            have = {e.get("$k") for e in save.items(reg.get("uniformsBySkill"))}
+            # An empty preset id is no uniform, as the mod's HasUniform reads it.
+            have = {e.get("$k") for e in save.items(reg.get("uniformsBySkill")) if e.get("$v")}
             have |= set(self.uniforms.get(address, {}))
             offered = self._offered(save, reg, address)
             # null asks for every offered skill; a list is a filter over them.
@@ -391,6 +405,11 @@ class Link:
             raise BadRequest("contracts must be a list")
         if order is not None and not (isinstance(order, list) and all(isinstance(i, str) for i in order)):
             raise BadRequest("order must be null or a list of contract ids")
+        if order is not None and len(set(order)) != len(order):
+            raise BadRequest("order names a contract twice")
+        asked = [ask.get("id") for ask in wanted if isinstance(ask, dict)]
+        if len(set(asked)) != len(asked):
+            raise BadRequest("contracts[] names a contract twice")
         contracts = {c.get("id"): c for c in save.items(save.root.get("importPartnerships"))}
         current = self.order or list(contracts)
         rows, changes = [], []
@@ -414,17 +433,22 @@ class Link:
             if ask.get("activate") and not state["active"]:
                 after.update(active=True, repeating=True, nextDeliveryDay=self._monday())
                 row["reactivated"] = True
-            amounts = {}
+            amounts, named = {}, set()
             for want in ask.get("products", []):
                 if not (isinstance(want, dict) and isinstance(want.get("itemName"), str)):
                     raise BadRequest("products[] must carry itemName")
                 warehouse = _address(want.get("warehouse"), "products[].warehouse")
+                if (want["itemName"], warehouse) in named:
+                    raise BadRequest("products[] names a product twice")
+                named.add((want["itemName"], warehouse))
                 product = next((p for p in save.items(contract.get("products"))
                                 if p.get("itemName") == want["itemName"]
                                 and self._product_address(p) == warehouse), None)
+                terms = self.terms.get(ask["id"], {})
                 line = {"itemName": want["itemName"], "warehouse": _wire(warehouse), "before": None,
                         "amount": want.get("amount"), "smart": bool(contract.get("isTarget")),
-                        "unitPrice": None, "cap": None, "orderedThisWeek": None, "error": None, "max": None}
+                        "unitPrice": terms.get("unitPrice"), "cap": terms.get("cap"),
+                        "orderedThisWeek": None, "error": None, "max": None}
                 row["products"].append(line)
                 if product is None:
                     line["error"] = "not_found"
@@ -439,6 +463,11 @@ class Link:
                     line["error"] = "bad_amount"
                 elif self._site_error(self._registration(save, warehouse)):
                     line["error"] = "no_warehouse"
+                elif (line["cap"] is not None and not line["smart"]
+                      and want["amount"] > max(0, line["cap"] - line["orderedThisWeek"])):
+                    # A Smart Delivery amount is a stock level, never over the cap.
+                    line["error"] = "over_cap"
+                    line["max"] = max(0, line["cap"] - line["orderedThisWeek"])
                 else:
                     amounts[(ask["id"], want["itemName"], warehouse)] = (before, want["amount"])
             named = {(line["itemName"], (line["warehouse"]["street"], line["warehouse"]["number"]))
@@ -459,6 +488,9 @@ class Link:
             written = [amounts.get((ask["id"], p.get("itemName"), self._product_address(p)),
                                    (None, self._amount(ask["id"], p)))[1]
                        for p in save.items(contract.get("products"))]
+            price = self.terms.get(ask["id"], {}).get("unitPrice")
+            if price is not None:
+                row["nextDeliveryTotal"] = round(sum(written) * price, 2)
             first = next((line["error"] for line in row["products"] if line["error"]), None)
             if first:
                 row["error"] = first  # a row can be judged without reading its products
@@ -538,13 +570,15 @@ class Link:
                 if not isinstance(shift, dict):
                     raise BadRequest("shifts[] must be objects")
                 shifts.append((day["d"], i, shift))
-        if answer["siteError"]:
-            return self._schedule_refused(answer, dry)
-        before = self.schedules.get(address, schedule_entries(save, reg))
+        # `changed` comes before every rule, the site's own included: a building
+        # the bytes do not hold has no shifts, so its print is the empty one.
+        before = self.schedules.get(address, schedule_entries(save, reg) if reg else [])
         answer["before"] = {"shifts": len(before), "print": shift_print(before)}
         if expect != answer["before"]["print"]:
             answer["siteError"] = "changed"
             return (200, answer) if dry else (409, {"error": "changed", "rows": []})
+        if answer["siteError"]:
+            return self._schedule_refused(answer, dry)
         if reg.get("businessTypeName") == HQ_TYPE:
             # The game ties a headquarters' shifts to its opening slot and clears
             # plans and contracts when someone is unassigned there: never written.
@@ -553,6 +587,9 @@ class Link:
         staff = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances"))}
         stations = {h.get("$k"): (save.deref(h.get("$v")) or {}).get("itemName")
                     for h in save.items(reg.get("itemInstances")) if isinstance(h, dict)}
+
+        def skills(person):
+            return {k.get("name") for k in save.items((save.deref(person.get("characterData")) or {}).get("skills"))}
         after, taken = [], []
         for d, i, shift in shifts:
             f, t = shift.get("f"), shift.get("t")
@@ -561,8 +598,11 @@ class Link:
             error = None
             if not person or save.address(person.get("assignedAddress")) != address:
                 error = "not_assigned"
-            elif post not in stations:
+            elif stations.get(post) not in STATION_SKILLS:
+                # No such item here, or one nobody works at, as far as the bytes tell.
                 error = "no_station"
+            elif not skills(person) & set(STATION_SKILLS[stations[post]]):
+                error = "no_skill"  # HasSkillForWorkstation, read off the station's skills
             elif not (_whole(f) and _whole(t) and 0 <= f < t <= 24 and t - f <= 12):
                 error = "bad_hours"
             elif any(d == d2 and f < t2 and f2 < t and who == w2 for d2, f2, t2, w2, _p in taken):
@@ -575,7 +615,8 @@ class Link:
             taken.append((d, f, t, who, post))
             after.append((d, f, t, who, post, 0 if stations[post] == CLEANING_STATION else 1))
         answer["ok"] = answer["siteError"] is None and not answer["rows"]
-        self._schedule_answer(answer, save, before, after, open_all)
+        self._schedule_answer(answer, save, before, after, open_all,
+                              self._open_days(reg, address, open_all))
         if dry or not answer["ok"]:
             return self._schedule_refused(answer, dry)
         self.schedules[address] = after
@@ -598,8 +639,16 @@ class Link:
         rows = ([{"error": answer["siteError"]}] if answer["siteError"] else []) + answer["rows"]
         return 409, {"error": "refused", "rows": rows}
 
+    def _open_days(self, reg, address, open_all) -> set:
+        """The weekdays the business is open after the write: every day when it
+        opens all hours, or an earlier write did; else the days the bytes open."""
+        if open_all or address in self.opened:
+            return set(range(7))
+        return {(sd.get("day") or 0) % 7 for sd in self._save().items((reg or {}).get("scheduleDays"))
+                if sd.get("isOpen")}
+
     @staticmethod
-    def _schedule_answer(answer, save, before, after, open_all):
+    def _schedule_answer(answer, save, before, after, open_all, open_days):
         names = {e.get("id"): (save.deref(e.get("characterData")) or {}).get("name")
                  for e in save.items(save.root.get("EmployeeInstances"))}
         answer["before"] = {"shifts": len(before), "print": shift_print(before)}
@@ -612,8 +661,9 @@ class Link:
         hours = {}
         for d, f, t, who, _post, _type in after:
             hours[(who, d)] = hours.get((who, d), 0) + t - f
+        # GetOverworkedDays counts the days the business is open.
         answer["warnings"] = [{"type": "overworked", "employeeId": who, "name": names.get(who), "d": d, "hours": h}
-                              for (who, d), h in sorted(hours.items()) if h > 14]
+                              for (who, d), h in sorted(hours.items()) if h > 14 and d in open_days]
 
     # undo -----------------------------------------------------------------------
     def _undo(self, body, dry):
@@ -626,6 +676,10 @@ class Link:
         rows = json.loads(json.dumps(record.get("rows", [])))  # a dry run leaves the record alone
         if kind == "uniforms":
             rows = [dict(row, skipped=[]) for row in rows]
+            # Only where every skill it set still holds the preset it set.
+            if any(self.uniforms.get((row["address"]["street"], row["address"]["number"]), {}).get(skill)
+                   != row["presetId"] for row in rows for skill in row["set"]):
+                return 409, {"error": "changed"}
             answer = {"ok": True, "kind": kind, "dryRun": dry, "undo": True, "rows": rows}
             if not dry:
                 for row in rows:
@@ -665,7 +719,10 @@ class Link:
                 return 409, {"error": "changed"}
             answer = {"ok": True, "kind": kind, "dryRun": dry, "undo": True, "address": _wire(address),
                       "business": record["business"], "siteError": None, "rows": []}
-            self._schedule_answer(answer, self._save(), record["after"], record["before"], False)
+            # Open after the undo: as the bytes have it where the write opened the
+            # days, else as it was.
+            self._schedule_answer(answer, save, record["after"], record["before"], False,
+                                  self._open_days(reg, None if record["opened"] else address, False))
             answer["openedHours"] = record["opened"]
             if not dry:
                 self.schedules[address] = record["before"]
@@ -681,7 +738,14 @@ class Link:
             if body.get("reset"):  # forget every apply, as a reloaded city would
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
-                self.opened = set()
+                self.opened, self.terms = set(), {}
+                self.day, self.hour = self._clock
+            if "importTerms" in body:
+                self.terms = dict(body["importTerms"] or {})
+            if "day" in body:
+                self.day = int(body["day"])
+            if "hour" in body:
+                self.hour = int(body["hour"])
             if "refuseWrite" in body:
                 self.refuse_write = body["refuseWrite"] or None
             if "busyWrites" in body:
@@ -740,7 +804,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._save()
         elif route == "/debug/writes":
             with self.link.lock:
-                self._json(200, {"writes": self.link.applied, "code": self.link.code})
+                self._json(200, {"writes": self.link.applied})
         elif route in ENDPOINTS:
             self._json(405, {"error": "method_not_allowed"})
         else:
@@ -799,14 +863,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return None
         return body
 
+    def _drain(self) -> None:
+        """Read and drop a body the answer does not look at, up to a bound. A
+        body left unread when the socket closes can reset the connection, and
+        the client would see the reset instead of the answer."""
+        left = min(int(self.headers.get("Content-Length") or 0), DRAIN_LIMIT)
+        while left > 0:
+            chunk = self.rfile.read(min(left, 65536))
+            if not chunk:
+                break
+            left -= len(chunk)
+
     def _write(self, kind: str):
-        # Refused before the body is read, as the mod does; the unread body
-        # would be the next request on this connection, so it is closed.
+        # Refused before the body is parsed, as the mod does. The body is read
+        # off the wire and dropped, and the connection closed: anything past
+        # the bound would be the next request on it.
         if not self.link.paired(self.headers.get("Authorization")):
+            self._drain()
             self.close_connection = True
             self._json(401, {"error": "not_paired"}, {"Connection": "close"})
             return
         if int(self.headers.get("Content-Length") or 0) > MAX_BODY:
+            self._drain()
             self.close_connection = True
             self._json(413, {"error": "too_large"}, {"Connection": "close"})
             return

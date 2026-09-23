@@ -194,13 +194,35 @@ class MockWrites(unittest.TestCase):
             status, body = self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}, code)
             self.assertEqual((status, body), (401, {"error": "not_paired"}))
         self.assertEqual(self.link.applied, [])
+        # The mod trims the code and reads it upper-cased.
+        self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []}, f" {CODE.lower()} ")[0], 200)
+        # The applies the tests read back never carry the code.
+        self.assertNotIn("code", json.loads(call(self.url + "/debug/writes")[2]))
+
+    def test_a_refusal_before_the_body_still_reads_it(self):
+        # A large unread body could reset the socket under the answer.
+        for code, size, status in ((None, 200 * 1024, 401), (CODE, 256 * 1024 + 1, 413)):
+            headers = {"Authorization": f"Bearer {code}"} if code else {}
+            got, _, raw = call(self.url + "/write/uniforms", "POST", headers, b"x" * size)
+            self.assertEqual(got, status)
+            self.assertIn("error", json.loads(raw))
 
     def test_bad_bodies_are_bad_requests(self):
-        for body in ({"sites": []}, {"sites": [{"address": {"street": "x"}, "skills": []}]},
-                     {"dryRun": "yes", "sites": [{"address": GIFTS, "skills": []}]}):
+        for body in ({"sites": None}, {"sites": [{"address": {"street": "x"}, "skills": []}]},
+                     {"dryRun": "yes", "sites": [{"address": GIFTS, "skills": []}]},
+                     {"sites": [{"address": GIFTS, "skills": []}, {"address": GIFTS, "skills": []}]}):
             status, answer = self.post("uniforms", body)
             self.assertEqual(status, 400, body)
             self.assertEqual(answer["error"], "bad_request")
+        # No site at all is a well-formed request that sets nothing, as the mod answers it.
+        self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []})[1]["rows"], [])
+        # The same contract, product or order entry twice is refused whole.
+        product = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 4200, "expect": 3800}
+        for body in ({"contracts": [{"id": "CONTRACTone", "products": [product]},
+                                    {"id": "CONTRACTone", "products": []}]},
+                     {"contracts": [{"id": "CONTRACTone", "products": [product, product]}]},
+                     {"contracts": [], "order": ["CONTRACTone", "CONTRACTone"]}):
+            self.assertEqual(self.post("imports", dict(body, dryRun=True))[0], 400, body)
         status, _, raw = call(self.url + "/write/uniforms", "POST",
                               {"Authorization": f"Bearer {CODE}"}, b"not json")
         self.assertEqual((status, json.loads(raw)["error"]), (400, "bad_request"))
@@ -285,7 +307,7 @@ class MockWrites(unittest.TestCase):
         status, answer = self.post("imports", {"contracts": [
             {"id": "CONTRACTone", "activate": False, "products": [product]}], "order": ["CONTRACTtwo", "CONTRACTone"]})
         self.assertEqual(status, 200)
-        self.assertEqual(self.link.order, ["CONTRACTtwo", "CONTRACTone"])
+        self.assertEqual(self.link.order, ["CONTRACTtwo", "CONTRACTone", "CONTRACTthree"])
         _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [product]}]})
         self.assertEqual(answer["rows"][0]["error"], "changed", "the amount written is the new expect")
         self.assertEqual(self.post("undo", {"kind": "imports"})[0], 200)
@@ -451,6 +473,67 @@ class MockWrites(unittest.TestCase):
         ana = self.link._save().items(self.link._save().root["EmployeeInstances"])[0]
         ana["assignedAddress"] = {"streetName": "ba:street_broadway", "streetNumber": 2}  # moved since
         self.assertEqual(self.post("undo", {"kind": "schedule"}), (409, {"error": "changed"}))
+
+    def test_an_empty_uniform_is_no_uniform_and_undo_needs_the_preset_still_set(self):
+        reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[0]
+        self.link._save().items(reg["uniformsBySkill"])[0]["$v"] = ""  # cleaning, set to nothing
+        _, answer = self.post("uniforms", {"dryRun": True, "sites": [{"address": GIFTS, "skills": None}]})
+        self.assertEqual(answer["rows"][0]["set"], ["ba:skill_cleaning", "ba:skill_customerservice"])
+        self.assertEqual(self.post("uniforms", {"sites": [{"address": GIFTS, "skills": None}]})[0], 200)
+        self.link.uniforms[("ba:street_secondavenue", 10)]["ba:skill_cleaning"] = "PRESETotherAAAAAAAAAAAA=="
+        self.assertEqual(self.post("undo", {"kind": "uniforms"}), (409, {"error": "changed"}))
+
+    def test_schedule_refuses_what_is_no_workstation_and_who_lacks_its_skill(self):
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        locker = "LOCKERllllllllllllllll==ue"
+        _, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": fixture_print, "days": [
+            {"d": 3, "shifts": [{"f": 8, "t": 20, "employeeId": ANA, "itemInstanceId": locker},
+                                {"f": 8, "t": 20, "employeeId": BEN, "itemInstanceId": CLEAN}]}]})
+        self.assertEqual([r["error"] for r in answer["rows"]], ["no_station", "no_skill"])
+
+    def test_schedule_checks_changed_before_the_site(self):
+        nowhere = {"street": "ba:street_nowhere", "number": 1}
+        _, answer = self.post("schedule", {"dryRun": True, "address": nowhere, "expect": "9f86d081", "days": []})
+        self.assertEqual(answer["siteError"], "changed")
+        _, answer = self.post("schedule", {"dryRun": True, "address": nowhere, "expect": "811c9dc5", "days": []})
+        self.assertEqual(answer["siteError"], "not_found")
+
+    def test_overworked_counts_the_days_the_shop_is_open(self):
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        long_day = [{"f": 0, "t": 12, "employeeId": ANA, "itemInstanceId": CLEAN},
+                    {"f": 12, "t": 20, "employeeId": ANA, "itemInstanceId": REGISTER}]
+        body = {"dryRun": True, "address": GIFTS, "expect": fixture_print,
+                "days": [{"d": 1, "shifts": long_day}, {"d": 3, "shifts": long_day}]}
+        _, answer = self.post("schedule", body)
+        # Gifts opens Sunday and Monday only; Wednesday is closed and not counted.
+        self.assertEqual([(w["d"], w["hours"]) for w in answer["warnings"]], [(1, 20)])
+        _, answer = self.post("schedule", dict(body, openAllHours=True))
+        self.assertEqual([(w["d"], w["hours"]) for w in answer["warnings"]], [(1, 20), (3, 20)])
+
+    def test_import_terms_cap_a_plain_amount_and_price_the_next_delivery(self):
+        status, _, _ = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
+                            json.dumps({"importTerms": {"CONTRACTthree": {"unitPrice": 2.5, "cap": 400}},
+                                        "day": 35, "hour": 9}).encode())
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["day"], 35)
+        candle = {"itemName": "ba:itemname_candle", "warehouse": DEPOT, "amount": 600, "expect": 500}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTthree", "activate": True, "products": [candle]}]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["products"][0]["max"], row["products"][0]["cap"]), ("over_cap", 400, 400))
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTthree", "activate": True, "products": [dict(candle, amount=400)]}]})
+        row = answer["rows"][0]
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual((row["reactivated"], row["nextDeliveryTotal"], row["products"][0]["unitPrice"]),
+                         (True, 1000.0, 2.5))
+        # A Smart Delivery amount is a stock level: never over the cap.
+        self.link.terms["CONTRACTone"] = {"cap": 100}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [
+            {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 4200, "expect": 3800}]}]})
+        self.assertTrue(answer["ok"])
+        self.link.configure({"reset": True})
+        self.assertEqual((self.link.day, self.link.terms), (34, {}))
 
 
 if __name__ == "__main__":
