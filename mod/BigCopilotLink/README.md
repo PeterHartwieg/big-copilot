@@ -71,7 +71,9 @@ under "Writes":
   then 30, then 120 for repeats within ten minutes, back to 10 after an approval. A confirm
   within a second of the popup opening counts as a Deny, because the game also confirms on
   its Confirm key. No popup is shown while the city map is open. The browser name the page
-  sends is shown stripped of markup and invisible formatting characters. A token works only
+  sends is shown with only ASCII letters, digits, spaces and `. , - ( ) / +` kept, at most
+  40 characters ("a browser" when nothing is left); opening the map over the popup counts
+  as Deny. A token works only
   from the origin it was issued to. At most 10 browsers are kept (one approved but never
   used goes first, then the one used longest ago), and one unused for 90 days expires. **Forget approved
   browsers** in the mod's options withdraws every approval. Reads (`/health`, `/save`,

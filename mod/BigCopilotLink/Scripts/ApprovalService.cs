@@ -60,6 +60,13 @@ namespace BigCopilotLink
         private static readonly FieldInfo PopupConfirmAction = typeof(global::HudConfirmUi)
             .GetField("_onConfirmAction", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        // Which HudConfirmUi is the one on screen: its container is active, and it is the
+        // phone's (showInFullMenu) exactly when the phone is open (HudConfirmUi.ShouldShow).
+        private static readonly FieldInfo PopupContainer = typeof(global::HudConfirmUi)
+            .GetField("container", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo PopupInFullMenu = typeof(global::HudConfirmUi)
+            .GetField("showInFullMenu", BindingFlags.Instance | BindingFlags.NonPublic);
+
         /// <summary>One approved browser. Immutable: a change is a new entry in a new array.</summary>
         private sealed class Entry
         {
@@ -147,7 +154,9 @@ namespace BigCopilotLink
             {
                 if (!FixedTimeEquals(entry.Hash, hash)) continue;
                 if (!string.Equals(entry.Origin, origin, StringComparison.Ordinal) || Idle(entry, now)) return false;
-                if (now - entry.LastUsed > TouchEveryMinutes * 60L)
+                // The first use always goes back (an approval in use is never "never
+                // used" to the eviction), later ones at most once an hour.
+                if (entry.LastUsed == entry.Created || now - entry.LastUsed > TouchEveryMinutes * 60L)
                 {
                     var used = entry;
                     MainThreadDispatcher.Enqueue(delegate { Touch(used, NowSeconds()); });
@@ -226,22 +235,32 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// Strips what TextMeshPro would read as markup, control characters and Unicode
-        /// format characters (bidirectional overrides, zero-width marks: text that could
-        /// make the popup read other than it is); at most 40 characters.
+        /// The page's name for the browser, as the popup may show it. A whitelist, since
+        /// every blacklist leaked: TextMeshPro reads tags, decodes literal \uXXXX escapes
+        /// whatever the text (PopulateTextProcessingArray), and Unicode has bidirectional
+        /// and invisible characters in several planes. Only ASCII letters, digits, space
+        /// and . , - ( ) / + are kept; runs of spaces become one; at most 39 characters, so
+        /// the locale-key suffix (StartOnMainThread) keeps it within 40; nothing left is
+        /// "a browser".
         /// </summary>
         private static string CleanName(string name)
         {
-            if (name == null) return "";
             var sb = new StringBuilder();
-            foreach (var ch in name)
+            if (name != null)
             {
-                if (ch == '<' || ch == '>' || char.IsControl(ch) ||
-                    char.GetUnicodeCategory(ch) == UnicodeCategory.Format) continue;
-                sb.Append(ch);
+                foreach (var ch in name)
+                {
+                    var keep = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+                               ch == ' ' || ch == '.' || ch == ',' || ch == '-' || ch == '(' || ch == ')' ||
+                               ch == '/' || ch == '+';
+                    if (!keep) continue;
+                    if (ch == ' ' && (sb.Length == 0 || sb[sb.Length - 1] == ' ')) continue;
+                    sb.Append(ch);
+                }
             }
             var clean = sb.ToString().Trim();
-            return clean.Length > MaxNameLength ? clean.Substring(0, MaxNameLength).Trim() : clean;
+            if (clean.Length > MaxNameLength - 1) clean = clean.Substring(0, MaxNameLength - 1).Trim();
+            return clean.Length == 0 ? "a browser" : clean;
         }
 
         private WriteAnswer StartOnMainThread(string origin, string name)
@@ -268,7 +287,7 @@ namespace BigCopilotLink
 
             // A name that is itself a localisation key would show as the game's text for
             // that key: change it so it cannot.
-            if (name.Length > 0 && Localizor.LocalizorManager.IsLocalizedKey(name)) name = name + "_";
+            if (Localizor.LocalizorManager.IsLocalizedKey(name)) name = name + "_";
             var request = new Request { Id = NewId(), Origin = origin, Name = name, ShownAt = now };
             request.OnConfirm = delegate { OnConfirm(request); };
 
@@ -276,8 +295,8 @@ namespace BigCopilotLink
             {
                 var header = Localizor.LocalizorManager.Localize("bigcopilotlink_pair_title", null);
                 var body = origin.Length == 0
-                    ? Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body_local", new { name = ShownName(name) })
-                    : Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body", new { origin = origin, name = ShownName(name) });
+                    ? Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body_local", new { name = name })
+                    : Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body", new { origin = origin, name = name });
                 global::HudConfirm.Show(header, body, request.OnConfirm, delegate { OnCancel(request); },
                     "bigcopilotlink_pair_allow", "bigcopilotlink_pair_deny", false, false);
             }
@@ -303,11 +322,6 @@ namespace BigCopilotLink
             w.Prop("expiresIn", PopupSeconds);
             w.EndObject();
             return new WriteAnswer(202, w.ToString());
-        }
-
-        private static string ShownName(string name)
-        {
-            return name.Length == 0 ? "?" : name;
         }
 
         private static WriteAnswer Throttled(double seconds)
@@ -346,7 +360,8 @@ namespace BigCopilotLink
             // decision, so it counts as a dismissal. One after the deadline is too late:
             // the pump may simply not have run yet.
             var shownFor = Clock.Elapsed.TotalSeconds - request.ShownAt;
-            if (shownFor < FastConfirmSeconds)
+            // Over the city map the player cannot be looking at our popup.
+            if (shownFor < FastConfirmSeconds || global::CityMap.IsOpen)
             {
                 End(request, "denied");
                 return;
@@ -460,10 +475,22 @@ namespace BigCopilotLink
                         old.Add(pair.Key);
                 foreach (var id in old) _requests.Remove(id);
             }
+            // The city map opened over our popup: the player cannot see it, so it ends as a
+            // dismissal and closes, like Escape would.
+            Request hidden = null;
+            if (expired == null && global::CityMap.IsOpen)
+            {
+                lock (_gate) hidden = _pending;
+            }
             if (expired != null) End(expired, "expired");
+            if (hidden != null)
+            {
+                End(hidden, "denied");
+                expired = hidden;
+            }
 
-            // Its state is already "expired", so the cancel callback closing it fires
-            // changes nothing.
+            // Its state is already set, so the cancel callback closing it fires changes
+            // nothing.
             if (expired != null && OurPopupIsOpen(expired))
             {
                 try
@@ -479,17 +506,25 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// True when the open confirm popup is this request's: a HudConfirmUi holding its
-        /// confirm action. Without the private field (a later build) nothing proves it is
+        /// True when the popup on screen is this request's: the displayed HudConfirmUi (its
+        /// container active, and the phone's copy exactly when the phone is open) holds
+        /// its confirm action. Without the private fields (a later build) nothing proves it is
         /// ours, so it is left open: closing the player's own popup would be worse than
         /// leaving ours to them.
         /// </summary>
         private static bool OurPopupIsOpen(Request request)
         {
-            if (!global::HudConfirm.isOpen || PopupConfirmAction == null) return false;
+            if (!global::HudConfirm.isOpen || PopupConfirmAction == null || PopupContainer == null || PopupInFullMenu == null)
+                return false;
             // Inactive ones too: which popup draws depends on whether the phone is open.
             foreach (var ui in UnityEngine.Resources.FindObjectsOfTypeAll<global::HudConfirmUi>())
-                if (ReferenceEquals(PopupConfirmAction.GetValue(ui), request.OnConfirm)) return true;
+            {
+                if (!ReferenceEquals(PopupConfirmAction.GetValue(ui), request.OnConfirm)) continue;
+                var container = PopupContainer.GetValue(ui) as UnityEngine.RectTransform;
+                if (container == null || !container.gameObject.activeInHierarchy) continue;
+                if ((bool)PopupInFullMenu.GetValue(ui) != global::UI.Smartphone.FullMenu.IsOpen) continue;
+                return true;
+            }
             return false;
         }
 
@@ -535,7 +570,9 @@ namespace BigCopilotLink
             var list = new List<Entry>(_entries);
             var i = list.IndexOf(used);
             if (i < 0) return; // forgotten or replaced meanwhile
-            list[i] = new Entry(used.Hash, used.Origin, used.Name, used.Created, now);
+            // One second on at least, so a first use in the second of approval still
+            // differs from the creation time.
+            list[i] = new Entry(used.Hash, used.Origin, used.Name, used.Created, Math.Max(now, used.Created + 1));
             _entries = list.ToArray();
             Save();
         }

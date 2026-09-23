@@ -230,7 +230,9 @@ for that browser across game launches.
 1. `POST /pair/request {"name": "Chrome on Windows"}`, no token, from an allowed origin
    (a request with no `Origin`, such as the CLI watcher, is its own origin, shown as "a
    program on this computer"). `name` is the page's own short label for the browser: the
-   mod strips `<`, `>`, control and invisible formatting characters and cuts it at 40 characters. The mod shows the game's own confirm
+   mod keeps only ASCII letters, digits, spaces and `. , - ( ) / +`, collapses runs of spaces,
+   cuts it at 39 characters (and appends `_` if that is one of the game's text keys), and
+   uses "a browser" when nothing is left. The mod shows the game's own confirm
    popup (`HudConfirm`), "Allow Big Copilot to change your game?", naming the origin and the
    name, with Allow and Deny, and answers `202 {"requestId": "...", "expiresIn": 60}`.
 2. `GET /pair/status?id=<requestId>` answers `{"state": "pending"}`, `{"state": "denied"}`
