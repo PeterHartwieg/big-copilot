@@ -230,7 +230,7 @@ for that browser across game launches.
 1. `POST /pair/request {"name": "Chrome on Windows"}`, no token, from an allowed origin
    (a request with no `Origin`, such as the CLI watcher, is its own origin, shown as "a
    program on this computer"). `name` is the page's own short label for the browser: the
-   mod strips `<` and `>` and cuts it at 40 characters. The mod shows the game's own confirm
+   mod strips `<`, `>`, control and invisible formatting characters and cuts it at 40 characters. The mod shows the game's own confirm
    popup (`HudConfirm`), "Allow Big Copilot to change your game?", naming the origin and the
    name, with Allow and Deny, and answers `202 {"requestId": "...", "expiresIn": 60}`.
 2. `GET /pair/status?id=<requestId>` answers `{"state": "pending"}`, `{"state": "denied"}`
@@ -249,7 +249,10 @@ Refusals of `POST /pair/request`:
 | `409` | `{"error":"cannot_pair","reason":"popup_open"}` | The game's confirm popup is already open |
 | `409` | `{"error":"cannot_pair","reason":"no_ui"}` | The game has no popup to show right now |
 | `409` | `{"error":"cannot_pair","reason":"saving"}` | As `cannot_write`: `saving`, `placement`, `interior`, `casino`, `other` |
-| `429` | `{"error":"throttled","retryAfter":<s>}` | A request is already pending, or this origin was denied in the last 10 s |
+| `429` | `{"error":"throttled","retryAfter":<s>}` | A request is already pending, or this origin was just denied or let one expire (10 s, then 30 s, then 120 s on repeats) |
+| `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist: no popup is shown |
+| `400` / `413` | `bad_request` / `too_large` | Not JSON, or a body over 4 KiB |
+| `503` | `{"error":"busy"}` / `{"error":"main_thread_unavailable"}` | The game's main thread did not take the request within three seconds; no popup was shown |
 
 Rules the mod keeps:
 
@@ -260,7 +263,7 @@ Rules the mod keeps:
   pressing for something else.
 - Approved browsers are stored in `PlayerPrefs` (`BigCopilotLink.approved`) as the SHA-256
   of each token with its origin, name, and when it was made and last used; never the token
-  itself. At most 10 are kept (the oldest goes); one unused for 90 days expires. The mod's
+  itself. At most 10 are kept (a never-used one goes first, else the one used longest ago); one unused for 90 days expires. The mod's
   options panel has "Forget approved browsers".
 
 #### `POST /write/uniforms`
