@@ -63,6 +63,10 @@ namespace BigCopilotLink
         public static Request Parse(Dictionary<string, object> root)
         {
             var req = new Request();
+            // One row per site: two rows for one site would each plan against the state
+            // before either applied, and the second's undo entry would record the first
+            // row's preset as the old value.
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             var sites = JsonReader.Arr(JsonReader.Get(root, "sites"), "body.sites");
             for (var i = 0; i < sites.Count; i++)
             {
@@ -85,6 +89,8 @@ namespace BigCopilotLink
                         if (!site.Skills.Contains(skill)) site.Skills.Add(skill);
                     }
                 }
+                if (!seen.Add(site.Address.Street + "|" + site.Address.Number))
+                    throw new BadRequestException(path + ".address repeats a site");
                 req.Sites.Add(site);
             }
             return req;
@@ -187,8 +193,10 @@ namespace BigCopilotLink
 
             foreach (var row in rows)
             {
-                foreach (var entry in state.Entries)
+                // Newest first, so a skill recorded twice ends at its oldest value.
+                for (var i = state.Entries.Count - 1; i >= 0; i--)
                 {
+                    var entry = state.Entries[i];
                     if (!entry.Address.Is(row.Address.Street, row.Address.Number)) continue;
                     Restore(row.Registration, entry);
                     AfterChange(row.Registration, new List<string> { entry.Skill }, entry.HadKey ? entry.OldValue : null);

@@ -441,12 +441,16 @@ namespace BigCopilotLink
                 row.ReopenDay = ReopenDay();
             }
 
+            // The delivery these amounts are for: Start picks it on a restart.
+            var deliveryDay = row.Activates || (ip.isActive && row.AmountsChange)
+                ? DeliveryHelper.GetNextDeliveryDay()
+                : ip.nextDeliveryDay;
             foreach (var pr in row.Products)
             {
                 if (pr.Error != null || pr.Product == null || !(pr.Changes || row.Activates)) continue;
                 int left;
                 if (pr.Changes && pr.Amount > 0 && InBackorder(pr.ItemName)) pr.Error = "backorder";
-                else if (!ip.isTarget && TryRemainingCap(ip, pr.ItemName, out left) && pr.Amount > left)
+                else if (!ip.isTarget && TryRemainingCap(ip, pr.ItemName, deliveryDay, out left) && pr.Amount > left)
                 {
                     // A Smart Delivery amount is a stock level, so only a plain one is capped.
                     pr.Error = "over_cap";
@@ -661,7 +665,7 @@ namespace BigCopilotLink
         /// orders included (DoAllDeliveries clears the tally only after that Monday's
         /// deliveries, so it counts against them). False when no cap applies.
         /// </summary>
-        private static bool TryRemainingCap(ImportPartnership ip, string itemName, out int left)
+        private static bool TryRemainingCap(ImportPartnership ip, string itemName, int deliveryDay, out int left)
         {
             left = 0;
             int cap;
@@ -669,7 +673,12 @@ namespace BigCopilotLink
             int ordered;
             try
             {
-                ordered = ImportPartnership.GetItemAmountOrderedThisWeek(ip.importAddress, itemName);
+                // Inside the lock window the delivery Start picks is the Monday after the
+                // imminent one, and the imminent Monday's DoAllDeliveries clears the tally
+                // first: nothing ordered this week counts against it.
+                ordered = DeliveryHelper.IsLockPeriod() && deliveryDay > ReopenDay()
+                    ? 0
+                    : ImportPartnership.GetItemAmountOrderedThisWeek(ip.importAddress, itemName);
             }
             catch (Exception)
             {
