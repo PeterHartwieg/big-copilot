@@ -240,8 +240,8 @@ namespace BigCopilotLink
         /// whatever the text (PopulateTextProcessingArray), and Unicode has bidirectional
         /// and invisible characters in several planes. Only ASCII letters, digits, space
         /// and . , - ( ) / + are kept; runs of spaces become one; at most 39 characters, so
-        /// the locale-key suffix (StartOnMainThread) keeps it within 40; nothing left is
-        /// "a browser".
+        /// the locale-key suffix (StartOnMainThread) keeps it within 40. Nothing left is
+        /// "" here; StartOnMainThread words that.
         /// </summary>
         private static string CleanName(string name)
         {
@@ -260,7 +260,7 @@ namespace BigCopilotLink
             }
             var clean = sb.ToString().Trim();
             if (clean.Length > MaxNameLength - 1) clean = clean.Substring(0, MaxNameLength - 1).Trim();
-            return clean.Length == 0 ? "a browser" : clean;
+            return clean;
         }
 
         private WriteAnswer StartOnMainThread(string origin, string name)
@@ -287,7 +287,10 @@ namespace BigCopilotLink
 
             // A name that is itself a localisation key would show as the game's text for
             // that key: change it so it cannot.
-            if (Localizor.LocalizorManager.IsLocalizedKey(name)) name = name + "_";
+            // Nameless: a browser page is "a browser"; a program with no origin is already
+            // "a program on this computer" and gets no name at all.
+            if (name.Length == 0 && origin.Length > 0) name = "a browser";
+            if (name.Length > 0 && Localizor.LocalizorManager.IsLocalizedKey(name)) name = name + "_";
             var request = new Request { Id = NewId(), Origin = origin, Name = name, ShownAt = now };
             request.OnConfirm = delegate { OnConfirm(request); };
 
@@ -295,7 +298,9 @@ namespace BigCopilotLink
             {
                 var header = Localizor.LocalizorManager.Localize("bigcopilotlink_pair_title", null);
                 var body = origin.Length == 0
-                    ? Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body_local", new { name = name })
+                    ? (name.Length == 0
+                        ? Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body_local_unnamed", null)
+                        : Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body_local", new { name = name }))
                     : Localizor.LocalizorManager.Localize("bigcopilotlink_pair_body", new { origin = origin, name = name });
                 global::HudConfirm.Show(header, body, request.OnConfirm, delegate { OnCancel(request); },
                     "bigcopilotlink_pair_allow", "bigcopilotlink_pair_deny", false, false);

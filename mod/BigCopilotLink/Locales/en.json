@@ -19,6 +19,7 @@
   "bigcopilotlink_pair_title": "Allow Big Copilot to change your game?",
   "bigcopilotlink_pair_body": "{origin} ({name}) asks to set uniforms, imports and staff schedules in this game when you confirm them on the board. Allow once for this browser; Mod options can forget it.",
   "bigcopilotlink_pair_body_local": "A program on this computer ({name}) asks to set uniforms, imports and staff schedules in this game. Allow once for it; Mod options can forget it.",
+  "bigcopilotlink_pair_body_local_unnamed": "A program on this computer asks to set uniforms, imports and staff schedules in this game. Allow once for it; Mod options can forget it.",
   "bigcopilotlink_pair_allow": "Allow",
   "bigcopilotlink_pair_deny": "Deny",
 
