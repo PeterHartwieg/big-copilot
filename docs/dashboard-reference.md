@@ -1069,8 +1069,12 @@ inviting cell leads.
 The product list for each type is its primary range from the game's own F1 help page,
 what the type "primarily sells" and not what it "can additionally sell". A product with no
 demand reading in the save cannot be averaged; today that is only the nightclub's cover
-charge, so a nightclub averages its other five. For a type the help pages do not cover,
-the range is learned from the city's own shops of that type instead.
+charge, so a nightclub averages its other five.
+
+The types themselves are the ones the F1 help lists under *Business Types*, which is every
+type a player can open, listed whether or not anybody in the city runs one yet. The city's
+own gas stations, wholesalers and casino sell products too, but have no help page, because
+nobody can open one, so they never appear.
 
 ### Offices
 
