@@ -9,11 +9,14 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+sys.path.insert(0, os.path.dirname(__file__))
+import es3_fixture  # noqa: E402
 import game_link_mock  # noqa: E402
+from ba_dashboard import shift_print  # noqa: E402
 
 
-def call(url, method="GET", headers=None):
-    req = urllib.request.Request(url, method=method, headers=headers or {})
+def call(url, method="GET", headers=None, data=None):
+    req = urllib.request.Request(url, method=method, headers=headers or {}, data=data)
     try:
         with urllib.request.urlopen(req) as res:
             return res.status, dict(res.headers), res.read()
@@ -43,7 +46,7 @@ class MockContract(unittest.TestCase):
         health = json.loads(body)
         self.assertEqual(status, 200)
         for key in ("ok", "schemaVersion", "source", "build", "character", "company", "day",
-                    "hour", "minute", "cash", "stamp", "busy", "size", "refreshedAt"):
+                    "hour", "minute", "cash", "stamp", "busy", "size", "refreshedAt", "writes", "paired"):
             self.assertIn(key, health)
         self.assertEqual(health["source"], "mock")
         self.assertEqual(health["schemaVersion"], 1)
@@ -83,7 +86,8 @@ class MockContract(unittest.TestCase):
         self.assertEqual((status, json.loads(body)), (409, {"error": "cannot_save", "reason": "placement"}))
         status, _, body = call(self.url + "/nothing")
         self.assertEqual(status, 404)
-        self.assertEqual(json.loads(body)["endpoints"], ["/health", "/save", "/refresh"])
+        self.assertEqual(json.loads(body)["endpoints"], [
+            "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/undo"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
             self.assertEqual(call(self.url + route, method)[0], 405, f"{method} {route}")
@@ -116,6 +120,7 @@ class MockContract(unittest.TestCase):
             "Access-Control-Request-Private-Network": "true"})
         self.assertEqual(status, 204)
         self.assertEqual(headers.get("Access-Control-Allow-Private-Network"), "true")
+        self.assertIn("Authorization", headers.get("Access-Control-Allow-Headers", ""))
         self.assertIn("GET", headers.get("Access-Control-Allow-Methods", ""))
 
     def test_no_save_yet_before_the_first_refresh(self):
@@ -134,6 +139,235 @@ class MockContract(unittest.TestCase):
             if self.link.stamp != before:
                 break
         self.assertNotEqual(self.link.stamp, before)
+
+
+CODE = "ABC234"
+GIFTS = {"street": "ba:street_secondavenue", "number": 10}
+CORNER = {"street": "ba:street_broadway", "number": 2}
+BARE = {"street": "ba:street_fifthavenue", "number": 4}
+DEPOT = {"street": "ba:street_pier", "number": 9}
+ANA, BEN = "AAAAemployeeAAAAAAAAAAAA", "BBBBemployeeBBBBBBBBBBBB"
+REGISTER, CLEAN = "REGISTERaaaaaaaaaaaaaa==ue", "CLEANcccccccccccccccccc==ue"
+
+
+class MockWrites(unittest.TestCase):
+    """POST /write/*: checked against the synthetic company in es3_fixture."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.dir.name, "link.hsg")
+        es3_fixture.write_link_save(self.path)
+        self.link = game_link_mock.Link(
+            self.path, character="abc", company="Mock Co", day=34, hour=14, cash=1.5,
+            build=3680, schema=1, throttle=False, refuse=None, code=CODE,
+        )
+        self.server = game_link_mock.MockServer(self.link, port=0).start(follow=False)
+        self.url = self.server.url
+
+    def tearDown(self):
+        self.server.stop()
+        self.dir.cleanup()
+
+    def post(self, kind, body, code=CODE):
+        headers = {"Content-Type": "application/json"}
+        if code:
+            headers["Authorization"] = f"Bearer {code}"
+        status, _, raw = call(f"{self.url}/write/{kind}", "POST", headers, json.dumps(body).encode())
+        return status, json.loads(raw)
+
+    def stamp(self):
+        return json.loads(call(self.url + "/health")[2])["stamp"]
+
+    def test_health_lists_the_writes_and_says_paired_only_with_the_code(self):
+        health = json.loads(call(self.url + "/health")[2])
+        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule"])
+        self.assertIs(health["paired"], False)
+        health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {CODE}"})[2])
+        self.assertIs(health["paired"], True)
+        self.link.writes = None  # a 0.1.0 mod sends neither key
+        health = json.loads(call(self.url + "/health")[2])
+        self.assertNotIn("writes", health)
+        self.assertNotIn("paired", health)
+
+    def test_a_write_without_the_code_is_not_paired_and_writes_nothing(self):
+        for code in (None, "WRONG2"):
+            status, body = self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}, code)
+            self.assertEqual((status, body), (401, {"error": "not_paired"}))
+        self.assertEqual(self.link.applied, [])
+
+    def test_bad_bodies_are_bad_requests(self):
+        for body in ({"sites": []}, {"sites": [{"address": {"street": "x"}, "skills": []}]},
+                     {"dryRun": "yes", "sites": [{"address": GIFTS, "skills": []}]}):
+            status, answer = self.post("uniforms", body)
+            self.assertEqual(status, 400, body)
+            self.assertEqual(answer["error"], "bad_request")
+        status, _, raw = call(self.url + "/write/uniforms", "POST",
+                              {"Authorization": f"Bearer {CODE}"}, b"not json")
+        self.assertEqual((status, json.loads(raw)["error"]), (400, "bad_request"))
+        status, _, raw = call(self.url + "/write/uniforms", "POST",
+                              {"Authorization": f"Bearer {CODE}"}, b"x" * (256 * 1024 + 1))
+        self.assertEqual((status, json.loads(raw)), (413, {"error": "too_large"}))
+        status, _, _ = call(self.url + "/write/everything", "POST", {"Authorization": f"Bearer {CODE}"}, b"{}")
+        self.assertEqual(status, 404)
+        self.assertEqual(call(self.url + "/write/uniforms")[0], 405)
+
+    def test_uniforms_dry_run_sets_the_gaps_skips_what_is_set_and_names_refusals(self):
+        before = self.stamp()
+        status, answer = self.post("uniforms", {"dryRun": True, "sites": [
+            {"address": GIFTS, "skills": ["ba:skill_customerservice", "ba:skill_cleaning"], "presetId": None},
+            {"address": BARE, "skills": ["ba:skill_customerservice"], "presetId": None},
+            {"address": {"street": "ba:street_nowhere", "number": 1}, "skills": [], "presetId": None},
+        ]})
+        self.assertEqual(status, 200)
+        self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"]), (False, "uniforms", True))
+        self.assertEqual(answer["presets"], [{"id": "PRESETdefaultAAAAAAAAAA==", "name": "Default"}])
+        gifts, bare, nowhere = answer["rows"]
+        self.assertEqual(gifts["business"], "HART. Gifts")
+        self.assertEqual(gifts["presetName"], "Default")
+        self.assertEqual(gifts["set"], ["ba:skill_customerservice"])
+        self.assertEqual(gifts["skipped"], [{"skill": "ba:skill_cleaning", "reason": "already_set"}])
+        self.assertIsNone(gifts["error"])
+        self.assertEqual(bare["error"], "no_locker")
+        self.assertEqual(nowhere["error"], "not_found")
+        self.assertEqual(self.stamp(), before, "a dry run moves nothing")
+        self.assertEqual(self.link.applied, [])
+
+    def test_a_refused_apply_writes_nothing(self):
+        status, answer = self.post("uniforms", {"sites": [
+            {"address": GIFTS, "skills": ["ba:skill_customerservice"]},
+            {"address": BARE, "skills": ["ba:skill_customerservice"]}]})
+        self.assertEqual(status, 409)
+        self.assertEqual(answer["error"], "refused")
+        self.assertEqual([row["error"] for row in answer["rows"]], [None, "no_locker"])
+        self.assertEqual(self.link.applied, [])
+
+    def test_uniforms_apply_moves_the_stamp_is_kept_and_undoes(self):
+        before = self.stamp()
+        body = {"sites": [{"address": GIFTS, "skills": ["ba:skill_customerservice"], "presetId": None}]}
+        status, answer = self.post("uniforms", body)
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"])
+        self.assertEqual(answer["stamp"], before, "the stamp before the refresh the apply started")
+        self.assertNotEqual(self.stamp(), before)
+        applied = json.loads(call(self.url + "/debug/writes")[2])["writes"]
+        self.assertEqual([w["kind"] for w in applied], ["uniforms"])
+        # The mock keeps what it wrote: the same skill is now already set.
+        _, again = self.post("uniforms", dict(body, dryRun=True))
+        self.assertEqual(again["rows"][0]["skipped"], [{"skill": "ba:skill_customerservice", "reason": "already_set"}])
+        status, undone = self.post("undo", {"kind": "uniforms", "dryRun": False})
+        self.assertEqual(status, 200)
+        self.assertTrue(undone["undo"])
+        self.assertEqual(undone["rows"][0]["set"], ["ba:skill_customerservice"])
+        _, again = self.post("uniforms", dict(body, dryRun=True))
+        self.assertEqual(again["rows"][0]["set"], ["ba:skill_customerservice"])
+        status, answer = self.post("undo", {"kind": "uniforms"})
+        self.assertEqual((status, answer), (409, {"error": "nothing_to_undo"}), "an undo is not undoable")
+
+    def test_imports_compare_and_set_activation_and_order(self):
+        product = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 4200, "expect": 3800}
+        status, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTone", "activate": True, "products": [product]}]})
+        self.assertEqual(status, 200)
+        row = answer["rows"][0]
+        self.assertTrue(answer["ok"])
+        self.assertEqual((row["products"][0]["before"], row["products"][0]["amount"]), (3800, 4200))
+        self.assertTrue(row["products"][0]["smart"])
+        # A stale expect is changed: a dry run says so per row, an apply is a 409.
+        stale = dict(product, expect=3000)
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [stale]}]})
+        self.assertEqual((answer["ok"], answer["rows"][0]["error"]), (False, "changed"))
+        status, answer = self.post("imports", {"contracts": [{"id": "CONTRACTone", "products": [stale]}]})
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        # No purchasing agent on the paused contract.
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTtwo", "activate": True, "products": []}]})
+        self.assertEqual(answer["rows"][0]["error"], "no_agent")
+        status, answer = self.post("imports", {"contracts": [
+            {"id": "CONTRACTone", "activate": False, "products": [product]}], "order": ["CONTRACTtwo", "CONTRACTone"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.link.order, ["CONTRACTtwo", "CONTRACTone"])
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [product]}]})
+        self.assertEqual(answer["rows"][0]["error"], "changed", "the amount written is the new expect")
+        self.assertEqual(self.post("undo", {"kind": "imports"})[0], 200)
+        self.assertIsNone(self.link.order)
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [product]}]})
+        self.assertTrue(answer["ok"])
+
+    def test_imports_inside_the_lock_window_is_locked_with_the_reopen_time(self):
+        self.link.day, self.link.hour = 35, 21  # Sunday 21:00; the contract delivers on day 36
+        product = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 4200, "expect": 3800}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [product]}]})
+        self.assertEqual(answer["rows"][0]["error"], "locked")
+        self.assertEqual(answer["rows"][0]["reopens"], {"day": 36, "hour": 8})
+
+    def test_schedule_checks_the_print_and_the_grid(self):
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        shifts = [{"f": 8, "t": 20, "employeeId": ANA, "itemInstanceId": REGISTER}]
+        body = {"dryRun": True, "address": GIFTS, "expect": fixture_print, "openAllHours": False,
+                "days": [{"d": 1, "shifts": shifts}]}
+        status, answer = self.post("schedule", body)
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["before"], {"shifts": 2, "print": fixture_print})
+        self.assertEqual(answer["after"]["shifts"], 1)
+        self.assertEqual((answer["removed"], answer["added"]), (2, 1))
+        # A stale print is changed.
+        _, answer = self.post("schedule", dict(body, expect="811c9dc5"))
+        self.assertEqual(answer["error"], "changed")
+        status, answer = self.post("schedule", dict(body, dryRun=False, expect="811c9dc5"))
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        # Every rule of the grid, one shift each.
+        bad = [{"f": 8, "t": 20, "employeeId": "nobody", "itemInstanceId": REGISTER},
+               {"f": 8, "t": 20, "employeeId": BEN, "itemInstanceId": "not-here"},
+               {"f": 6, "t": 20, "employeeId": BEN, "itemInstanceId": REGISTER},
+               {"f": 8, "t": 20, "employeeId": ANA, "itemInstanceId": REGISTER},
+               {"f": 10, "t": 12, "employeeId": ANA, "itemInstanceId": CLEAN},
+               {"f": 10, "t": 12, "employeeId": BEN, "itemInstanceId": REGISTER}]
+        _, answer = self.post("schedule", dict(body, days=[{"d": 3, "shifts": bad}]))
+        self.assertEqual([(r["i"], r["error"]) for r in answer["rows"]], [
+            (0, "not_assigned"), (1, "no_station"), (2, "bad_hours"), (4, "overlap_person"), (5, "overlap_station")])
+        self.assertFalse(answer["ok"])
+
+    def test_schedule_apply_names_who_is_left_and_undoes(self):
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        body = {"address": GIFTS, "expect": fixture_print, "openAllHours": True,
+                "days": [{"d": 2, "shifts": [{"f": 8, "t": 20, "employeeId": BEN, "itemInstanceId": REGISTER}]}]}
+        status, answer = self.post("schedule", body)
+        self.assertEqual(status, 200)
+        self.assertEqual(answer["leftWithout"], [{"employeeId": ANA, "name": "Ana Silva"}])
+        self.assertTrue(answer["openedHours"])
+        new_print = answer["after"]["print"]
+        self.assertEqual(new_print, shift_print([(2, 8, 20, BEN, REGISTER, 1)]))
+        # The next write expects the print the last one left.
+        _, answer = self.post("schedule", dict(body, dryRun=True, expect=new_print))
+        self.assertTrue(answer["ok"])
+        status, undone = self.post("undo", {"kind": "schedule"})
+        self.assertEqual(status, 200)
+        self.assertEqual(undone["after"]["print"], fixture_print)
+
+    def test_refuse_write_and_busy_answer_every_apply_but_not_the_dry_run(self):
+        body = {"sites": [{"address": GIFTS, "skills": ["ba:skill_customerservice"]}]}
+        self.link.refuse_write = "cannot_write:placement"
+        self.assertEqual(self.post("uniforms", body), (409, {"error": "cannot_write", "reason": "placement"}))
+        self.assertEqual(self.post("uniforms", dict(body, dryRun=True))[0], 200)
+        self.link.refuse_write = "refused"
+        status, answer = self.post("uniforms", body)
+        self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "no_locker"))
+        self.link.refuse_write = "changed"
+        status, answer = self.post("uniforms", body)
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.link.refuse_write = None
+        self.link.busy_writes = 2
+        self.assertEqual(self.post("uniforms", body), (503, {"error": "busy"}))
+        self.assertEqual(self.post("uniforms", body), (503, {"error": "busy"}))
+        self.assertEqual(self.post("uniforms", body)[0], 200)
+
+    def test_debug_config_switches_while_running(self):
+        status, _, raw = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
+                              json.dumps({"refuseWrite": "busy", "writes": ["imports"]}).encode())
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["writes"], ["imports"])
+        self.assertEqual(self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}), (503, {"error": "busy"}))
 
 
 if __name__ == "__main__":

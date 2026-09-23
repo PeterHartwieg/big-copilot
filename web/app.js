@@ -753,8 +753,13 @@
       note("warn", `The mod did not take the refresh (answered ${res.status}). Try Update again in a moment.`);
       return;
     }
+    await awaitNewStamp(before, gen);
+  }
+
+  async function awaitNewStamp(before, gen) {
     // The mod serializes at its own pace; its health fields say when the
-    // stamp has moved and the bytes are worth fetching.
+    // stamp has moved and the bytes are worth fetching. After Update, and
+    // after a write the mod applied.
     // Forty-five seconds for a slow serialize; thirty for answers that were
     // never health, the same bound as the first read's, so a wrong service on
     // the port is named in the same time whichever way the page met it.
@@ -789,6 +794,126 @@
       return;
     }
     await loadFromLink("Reading the game", gen);
+  }
+
+  /* --- writes (docs/game-link-api.md, "Writes") ------------------------- */
+  // Mod 0.2.0 can change the game as well as read it: uniforms, imports, the
+  // schedule, and an undo of the last write of a kind. The board asks through
+  // LEDGER_SOURCE.write(), and this is the one way out. A write carries the
+  // pairing code the player copies from the mod's options, kept for this tab
+  // only (the game draws a new one at every launch), is retried while the
+  // game is busy serializing, and an apply is followed by a read of the game,
+  // as Update does, so the board shows what the game now holds.
+  const PAIR_KEY = "ledger_pair";
+  const PAIR_CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/;
+  const WRITE_BUSY_RETRIES = 3;
+  let pairMemo = "";      // the code, where the browser keeps no sessionStorage
+  let pairAsking = null;  // the open prompt, shared by every write waiting on it
+  function pairCode() {
+    try { return sessionStorage.getItem(PAIR_KEY) || ""; } catch (e) { return pairMemo; }
+  }
+  function keepPairCode(code) {
+    pairMemo = code || "";
+    try {
+      if (code) sessionStorage.setItem(PAIR_KEY, code);
+      else sessionStorage.removeItem(PAIR_KEY);
+    } catch (e) {}
+  }
+  // The kinds the linked mod takes; a mod before 0.2.0 lists none.
+  const linkWrites = () => (linkUrl && linkHealth && Array.isArray(linkHealth.writes) ? linkHealth.writes.slice() : []);
+
+  // Asked once, by whichever write needs it first; the rest wait on the same
+  // answer. Resolves to the code, or "" when the player cancels.
+  function askPairCode(wrong) {
+    if (!pairAsking) pairAsking = pairPrompt(wrong).finally(() => { pairAsking = null; });
+    return pairAsking;
+  }
+  function pairPrompt(wrong) {
+    return new Promise((resolve) => {
+      const dlg = document.createElement("dialog");
+      dlg.className = "gw-dlg gw-pair";
+      dlg.setAttribute("aria-labelledby", "gwPairTitle");
+      dlg.innerHTML = '<form method="dialog">'
+        + '<h2 id="gwPairTitle">Pair with the game</h2>'
+        + `<p>${wrong ? "That code is no longer the game's. " : ""}In the game, open the Big Copilot Link options and click <b>Copy pairing code</b>, then paste it here. The game draws a new one each time it starts.</p>`
+        + '<input id="gwPairCode" autocomplete="off" spellcheck="false" maxlength="10" aria-label="Pairing code" placeholder="ABC234">'
+        + '<p class="gw-err" id="gwPairErr" role="alert"></p>'
+        + '<div class="gw-foot"><button type="button" class="btn2" data-pair="cancel">Cancel</button>'
+        + '<button type="submit" class="btn2 primary" data-pair="ok">Pair</button></div></form>';
+      const input = dlg.querySelector("input"), err = dlg.querySelector(".gw-err");
+      let answer = "";
+      dlg.querySelector('[data-pair="cancel"]').addEventListener("click", () => dlg.close());
+      dlg.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const code = input.value.replace(/[\s-]+/g, "").toUpperCase();
+        if (!PAIR_CODE.test(code)) { err.textContent = "Six letters and digits, as the game shows them."; return; }
+        // The mod says whether a code is its own on any /health that carries
+        // one, so a mistyped code is caught here and not on the write.
+        let paired = null;
+        try {
+          const res = await linkFetch("/health", {headers: {Authorization: `Bearer ${code}`}});
+          if (res.status === 200) paired = (await res.json()).paired;
+        } catch (e2) {}
+        if (paired === false) { err.textContent = "That is not the code the game shows now. Copy it again from the mod's options."; return; }
+        answer = code;
+        keepPairCode(code);
+        dlg.close();
+      });
+      dlg.addEventListener("close", () => { dlg.remove(); resolve(answer); });
+      document.body.appendChild(dlg);
+      if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+      input.focus();
+    });
+  }
+
+  // One write. Never throws: resolves to {status, error, body}, where error is
+  // null on a 200, the mod's own error name otherwise, "cancelled" when the
+  // player closed the pairing prompt and "unreachable" (with message) when the
+  // game did not answer at all.
+  async function gameWrite(kind, body, opts) {
+    const dryRun = !!(opts && opts.dryRun);
+    if (!linkUrl) return {status: 0, error: "not_linked", body: null};
+    const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
+    const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
+    let code = pairCode() || await askPairCode(false);
+    let busyLeft = WRITE_BUSY_RETRIES, askedAgain = false;
+    for (;;) {
+      if (!code) return {status: 0, error: "cancelled", body: null};
+      let res, answer = null;
+      try {
+        res = await linkFetch(path, {method: "POST", body: payload,
+          headers: {"Content-Type": "application/json", Authorization: `Bearer ${code}`}});
+      } catch (err) {
+        return {status: 0, error: "unreachable", message: err.message, body: null};
+      }
+      try { answer = await res.json(); } catch (e) {}
+      const error = res.status === 200 ? null : (answer && answer.error) || `http_${res.status}`;
+      if (res.status === 401) {
+        // A new game launch drew a new code: forget this one and ask once more.
+        keepPairCode("");
+        if (askedAgain) return {status: 401, error: "not_paired", body: answer};
+        askedAgain = true;
+        code = await askPairCode(true);
+        continue;
+      }
+      if (res.status === 503 && error === "busy" && busyLeft > 0) {
+        busyLeft--;
+        await linkWait(1000);
+        continue;
+      }
+      if (res.status === 200 && !dryRun && answer) followWrite(answer.stamp);
+      return {status: res.status, error, body: answer};
+    }
+  }
+
+  // The mod refreshes after an apply; the board follows the stamp as it does
+  // after Update. A read already under way reads the old stamp, and the
+  // watcher's next look catches the new one.
+  async function followWrite(before) {
+    const gen = sourceGen;
+    if (busy || attempt || !startAttempt(gen)) return;
+    state("busy", "Reading the game after the change", linkUrl);
+    await awaitNewStamp(before || lastLinkStamp, gen);
   }
 
   async function checkLink() {
@@ -1423,6 +1548,13 @@
     // Resolves to the rebuilt data; the board swaps it in itself.
     name: (rid, slug) => ask({kind: "name", rid, slug: slug || null, history: stored.get(HISTORY_KEY)}),
     watch: (h) => { handlers = h; },
+    // The game link, for the board's write buttons: the kinds the mod takes
+    // and whose company it is, or null when the board is not linked.
+    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || ""} : null),
+    // Resolves to {status, error, body}; see gameWrite().
+    write: (kind, body, opts) => gameWrite(kind, body, opts),
+    // Update, for a board that learns the game has moved on.
+    refresh: () => update(),
   };
 
   /* --- the landing: reveal, the drop zone, the sphere ------------------ */

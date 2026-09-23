@@ -1849,6 +1849,42 @@ def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
     return sorted(gaps)
 
 
+def schedule_entries(save: Save, registration: dict) -> list:
+    """A business's shifts as the shift print reads them: (weekday, from, to,
+    employee id, station id, type), every field at its default when the save
+    leaves it out."""
+    return [
+        (
+            (scheduled.get("day") or 0) % 7,
+            shift.get("startingHour") or 0,
+            shift.get("endingHour") or 0,
+            shift.get("employeeId") or "",
+            shift.get("itemInstanceId") or "",
+            shift.get("type") or 0,
+        )
+        for scheduled in save.items(registration.get("scheduleDays"))
+        for shift in save.items(scheduled.get("workShifts"))
+    ]
+
+
+def shift_print(entries) -> str:
+    """The schedule write's compare-and-set: docs/game-link-api.md, "Shift print".
+
+    The mod computes the same from live state, so this is the contract's
+    algorithm to the letter: one line per shift, sorted by ordinal string order,
+    joined with newlines, FNV-1a 32-bit over the UTF-8 bytes. No shifts at all
+    is the print of the empty string, 811c9dc5.
+    """
+    lines = sorted(
+        "|".join((str(int(d)), str(int(f)), str(int(t)), e, s, str(int(k))))
+        for d, f, t, e, s, k in entries
+    )
+    value = 0x811C9DC5
+    for byte in "\n".join(lines).encode("utf-8"):
+        value = ((value ^ byte) * 0x01000193) & 0xFFFFFFFF
+    return f"{value:08x}"
+
+
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
     st = latest.get(addr, {})
     name = b.get("BusinessName")
@@ -2031,6 +2067,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         # same skills as the game's ids, in the same order.
         "uniformGaps": [names.label(skill) for skill in uniform_gaps],
         "uniformGapSkills": uniform_gaps,
+        # What a schedule write sends as `expect`: the shifts as these bytes
+        # hold them, printed the way the mod prints its live ones.
+        "shiftPrint": shift_print(schedule_entries(save, b)),
         # The locker is what the player manages uniforms from, so it is checked
         # directly rather than through any demand; one still in cargo is boxed.
         # A type whose customers never ask about uniforms needs neither.
@@ -9424,6 +9463,38 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .find .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .find:hover .go{color:var(--accent);transform:translateX(3px)}
 .find.hide{display:none}
+
+/* writes to the game: the buttons, the confirm dialog, the pairing prompt and
+   the undo strip. The dialogs are <dialog>s on <body>, in the top layer. */
+.gw-acts{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:10px;vertical-align:middle;font-weight:400}
+.gw-acts.gw-panel{display:flex;margin:10px 0 0}
+.gw-btn{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12px/1.4 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,color .15s}
+.gw-btn:hover{border-color:var(--accent);color:var(--accent)}
+.gw-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gw-btn.off{opacity:.5;cursor:not-allowed}
+.gw-btn.off:hover{border-color:var(--rule);color:var(--ink)}
+.gw-dlg{width:min(640px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto;padding:18px 20px;border:1px solid var(--rule);border-radius:12px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055}
+.gw-dlg::backdrop{background:#0009}
+.gw-dlg h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.gw-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.gw-dlg p{margin:0 0 10px;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+.gw-dlg p.gw-ok{color:var(--pos);font-weight:600}
+.gw-dlg p.gw-bad{color:var(--neg);font-weight:600}
+.gw-dlg p.gw-err{color:var(--neg);min-height:1.5em;margin:6px 0 0}
+.gw-dlg select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:1px 6px}
+.gw-table{width:100%;border-collapse:collapse;font-size:13px;margin:4px 0 12px}
+.gw-table th{text-align:left;font-weight:500;font-size:11.5px;color:var(--ink-3);padding:4px 8px 4px 0;border-bottom:1px solid var(--rule)}
+.gw-table td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+.gw-table td small{display:block;font-size:11.5px;color:var(--ink-3)}
+.gw-table tr.skip td{color:var(--ink-3)}
+.gw-table tr.bad td{color:var(--neg)}
+.gw-refusals{list-style:none;margin:0 0 10px;padding:0;font-size:13px}
+.gw-refusals li{padding:7px 10px;margin-bottom:6px;border-left:3px solid var(--neg);border-radius:0 6px 6px 0;background:var(--surface)}
+.gw-refusals span{display:block;color:var(--ink-2)}
+.gw-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:14px}
+.gw-foot .btn2:disabled{opacity:.45;cursor:default;transform:none}
+.gw-pair input{font:600 20px/1.2 "IBM Plex Mono",monospace;letter-spacing:.2em;text-transform:uppercase;width:11ch;max-width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink)}
+#gwToast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:8px 10px 8px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--raised);color:var(--ink);box-shadow:0 8px 30px #0005;font-size:13px}
 .silenced{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);display:none}
 .silenced.on{display:block}
 
@@ -12219,16 +12290,21 @@ function findingAmount(a){
    its kind's name so it is clear why it is down there. */
 const kindLabel = id => ((typeof ALERT_GROUPS !== "undefined" && ALERT_GROUPS.find(g => g.id === id)) || {}).label || id;
 const kindOff = a => alertGroupPrefs[a.group] === false;
-function findingRow(a){
+function findingRow(a, i, list){
   const b = alertSite(a);
   const {what, more} = splitFinding(a);
+  /* In linked mode a shop's missing uniforms can be set from here; the first
+     such row also offers every shop at once. */
+  const dressable = x => { const s = x.group === "uniform" && alertSite(x); return !!s && gwUniformSites().includes(s); };
+  const writes = dressable(a) ? gwUniformButtons(b, !list || list.findIndex(dressable) === i) : "";
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   const site = !b ? a.site : b.code ? hoodHtml(b) + baseName(b) : shortName(b);
   return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
     <span class="site"><a class="finding-link" href="#${alertPage(a)}">${site}</a>${b ? mapButton(b.key,b.name) : ""}</span>
-    <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</span>
+    <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}${
+      writes ? `<span class="gw-acts">${writes}</span>` : ""}</span>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
     <span class="more">${more}</span>` : ""}</div>`;
@@ -13270,7 +13346,9 @@ function spStandards(b){
   return `${eq}
     <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
       `${spEsc(r)} <b>has no uniform set</b>`)}">${spEsc(roleCode(r))}</span>`).join("")}</div></div></div>
-    <div class="sp-read sp-readout">${read}</div>`;
+    <div class="sp-read sp-readout">${read}</div>${
+    roles.length && !b.missingUniformLocker && (b.uniformGapSkills || []).length
+      ? `<div class="gw-acts gw-panel">${gwUniformButtons(b, false)}</div>` : ""}`;
 }
 const SP_AMENITY_ICON = {bathroom: "toilet", toiletprivacy: "door", sink: "sink",
                          music: "music", interior: "interior"};
@@ -17660,6 +17738,260 @@ function wireKinds(){
   if(kindsPop && kindsPop.classList.contains("on")) drawKindRows();
 }
 
+/* --- writing to the game (docs/game-link-api.md, "Writes") -------------- */
+/* In linked mode the board can change the game, and SOURCE.write() is the only
+   way there: web/app.js owns the pairing code, retries a busy game and reads
+   the game again after an apply. Every write goes through gwConfirm(): a dry
+   run as the dialog opens, the game's verdict row by row, Apply, then Undo.
+   Outside linked mode SOURCE.link is missing or answers null, and nothing here
+   draws. */
+const gwLink = () => (typeof SOURCE.link === "function" && SOURCE.link()) || null;
+const GW_DOES = {uniforms: "set uniforms", imports: "change imports", schedule: "write schedules"};
+let gwUndoable = null;  // {spec, text, character}: the last apply, until undone or replaced
+let gwOpen = null;      // the dialog on screen
+
+/* A write button. None outside linked mode; with the link on but a mod that
+   cannot take this kind, disabled with the reason, never hidden. `data` is the
+   attribute markup the click handler reads. */
+function gwButton(kind, label, data){
+  const link = gwLink();
+  if(!link) return "";
+  const why = (link.writes || []).includes(kind) ? ""
+    : `Update the Big Copilot Link mod to ${GW_DOES[kind]} from here`;
+  return `<button type="button" class="gw-btn${why ? " off" : ""}" data-gw="${kind}" ${data}${
+    why ? ` aria-disabled="true" data-tip="${attr(why)}" aria-label="${attr(`${label}: ${why}`)}"` : ""}>${label}</button>`;
+}
+
+/* Uniforms: the shops with a role to dress and a locker to dress it from. */
+const gwUniformSites = () => (D.businesses || []).filter(b => (b.uniformGapSkills || []).length && !b.missingUniformLocker);
+function gwUniformButtons(b, all){
+  const one = gwButton("uniforms", "Set Default uniforms", `data-gw-sites="${attr(JSON.stringify([b.key]))}"`);
+  const sites = all ? gwUniformSites() : [];
+  return one + (one && sites.length > 1 ? gwButton("uniforms", `Set for all ${sites.length} shops`,
+    `data-gw-sites="${attr(JSON.stringify(sites.map(s => s.key)))}"`) : "");
+}
+/* The wire address is the site key taken apart: "<street>#<number>". */
+const gwAddress = key => ({street: key.slice(0, key.lastIndexOf("#")), number: Number(key.slice(key.lastIndexOf("#") + 1))});
+const gwSiteOf = address => address && (D.businesses || []).find(b => b.key === `${address.street}#${address.number}`) || null;
+const gwSiteName = row => { const b = gwSiteOf(row.address); return spEsc(b ? shortName(b) : row.business || "A shop"); };
+function gwSkillName(skill){
+  for(const b of D.businesses || []){
+    const i = (b.uniformGapSkills || []).indexOf(skill);
+    if(i >= 0 && b.uniformGaps?.[i]) return spEsc(b.uniformGaps[i]);
+  }
+  return spEsc(String(skill).replace(/^ba:skill_/, ""));
+}
+const GW_SKIP = {already_set: "already has a uniform; left as it is",
+                 not_offered: "not in this shop's Uniforms window"};
+
+function gwUniforms(keys){
+  const sites = keys.map(k => (D.businesses || []).find(b => b.key === k)).filter(Boolean);
+  if(!sites.length) return;
+  let presetId = null;
+  gwConfirm({
+    kind: "uniforms",
+    title: sites.length === 1 ? "Set Default uniforms" : `Set Default uniforms at ${sites.length} shops`,
+    body: () => ({sites: sites.map(b => ({address: gwAddress(b.key), skills: b.uniformGapSkills, presetId}))}),
+    head: ["Shop", "Role", "Now", "After"],
+    rows: answer => (answer.rows || []).flatMap(r => r.error
+      ? [{state: "bad", cells: [gwSiteName(r), "", "", "Refused"]}]
+      : [...(r.set || []).map(s => ({state: "set", cells: answer.undo
+          ? [gwSiteName(r), gwSkillName(s), spEsc(r.presetName || "Set"), "No uniform"]
+          : [gwSiteName(r), gwSkillName(s), "No uniform", spEsc(r.presetName || "")]})),
+         ...(r.skipped || []).map(s => ({state: "skip", cells: [gwSiteName(r), gwSkillName(s.skill),
+           s.reason === "already_set" ? "Set" : "—", `Unchanged<small>${GW_SKIP[s.reason] || spEsc(s.reason)}</small>`]}))]),
+    object: gwSiteName,
+    lead: answer => {
+      const presets = answer.presets || [];
+      const name = (answer.rows || []).find(r => r.presetName)?.presetName || "Default";
+      const pick = presets.length > 1 ? ` <select class="gw-preset" aria-label="Uniform">${presets.map(p =>
+        `<option value="${attr(p.id)}"${p.name === name ? " selected" : ""}>${spEsc(p.name)}</option>`).join("")}</select>` : "";
+      return `<p>Sets the <b>${spEsc(name)}</b> uniform${pick} on every role below that has none. A uniform already set is never changed.</p>`;
+    },
+    bind: (dlg, replan) => {
+      const select = dlg.querySelector(".gw-preset");
+      if(select) select.onchange = () => { presetId = select.value; replan(); };
+    },
+    applyLabel: "Set uniforms",
+    done: answer => {
+      const rows = (answer.rows || []).filter(r => (r.set || []).length);
+      const n = rows.reduce((s, r) => s + r.set.length, 0);
+      const name = spEsc(rows[0]?.presetName || "Default");
+      if(answer.undo) return n ? `Undone: ${n} role${n === 1 ? "" : "s"} back to no uniform.` : "Undone.";
+      return n ? `${name} uniform set for ${n} role${n === 1 ? "" : "s"} at ${rows.length} shop${rows.length === 1 ? "" : "s"}.`
+        : "Nothing to set: every role already has a uniform.";
+    },
+  });
+}
+
+/* Why a row was refused, in plain words: the rule, then the fix. An entry may
+   be a function of the row, for a refusal that carries its own numbers. */
+const GW_REFUSE = {
+  any: {
+    not_found: {rule: "No building at this address any more", fix: "Refresh the board: the shop may have closed or moved."},
+    not_rented: {rule: "You no longer rent this building", fix: "Refresh the board."},
+    changed: {rule: "Changed in the game since this board was read", fix: "Refresh the board, then try again."},
+    screen_open: {rule: "Open in BizMan right now", fix: "Close that BizMan screen in the game, then try again."},
+  },
+  uniforms: {
+    no_business: {rule: "No business is set up here", fix: "Set one up in BizMan first."},
+    no_locker: {rule: "No uniform locker: the game sets uniforms only where one stands", fix: "Place a uniform locker in the shop, then try again."},
+    no_preset: {rule: "The game has no uniform to set", fix: "Create one in the game's uniform settings, then try again."},
+  },
+};
+function gwRefusals(spec, answer){
+  const items = (answer.rows || []).filter(r => r && r.error).map(r => {
+    const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
+    const say = typeof known === "function" ? known(r) : known || {rule: `The game refused this (${spEsc(r.error)})`, fix: ""};
+    return `<li><b>${spec.object ? spec.object(r) : ""}</b>${spec.object ? ": " : ""}${say.rule}.${say.fix ? `<span>${say.fix}</span>` : ""}</li>`;
+  });
+  return items.length ? `<ul class="gw-refusals">${items.join("")}</ul>` : "";
+}
+function gwTable(spec, answer){
+  const rows = spec.rows(answer);
+  return rows.length ? `<table class="gw-table"><thead><tr>${spec.head.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r => `<tr class="${r.state || ""}">${r.cells.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>` : "";
+}
+const GW_CANNOT = {
+  saving: "The game is saving right now",
+  placement: "The game takes no changes while you are placing items",
+  interior: "The game takes no changes while the interior designer is open",
+  casino: "The game takes no changes on the casino boat",
+  other: "The game takes no changes right now",
+};
+/* What a failed write says, and what the dialog offers next. */
+function gwProblem(res){
+  const body = res.body || {};
+  switch(res.error){
+    case "changed": return {text: "The game has moved on since this board was read. Nothing was changed.", sub: "Refresh the board, then try again.", refresh: true};
+    case "refused": return {text: "The game refused this. Nothing was changed."};
+    case "cannot_write": return {text: `${GW_CANNOT[body.reason] || GW_CANNOT.other}. Nothing was changed.`, sub: "Try again in a moment.", retry: true};
+    case "busy": return {text: "The game stayed busy saving its state. Nothing was changed.", sub: "Try again in a moment.", retry: true};
+    case "main_thread_unavailable": return {text: "The game did not take the change: no city is loaded.", retry: true};
+    case "nothing_to_undo": return {text: "There is nothing left to undo: a later change replaced it, or the city was loaded again."};
+    case "cancelled": case "not_paired": return {text: "Not paired with the game, so nothing was sent.", sub: "The pairing code is in the Big Copilot Link options in the game.", retry: true};
+    case "unreachable": return {text: res.message || "The game did not answer.", retry: true};
+    case "not_linked": return {text: "Link to the game to apply this."};
+    default: return {text: `The game answered ${res.status}${body.detail ? ` (${spEsc(body.detail)})` : ""}. Nothing was changed.`};
+  }
+}
+
+/* The dialog hangs off <body> in the top layer, so no section's paint
+   containment can clip it; one at a time. */
+function gwDialog(title){
+  if(gwOpen) gwOpen.close();
+  const dlg = document.createElement("dialog");
+  dlg.className = "gw-dlg";
+  dlg.setAttribute("aria-labelledby", "gwTitle");
+  dlg.innerHTML = `<div class="gw-head"><h2 id="gwTitle"></h2><button type="button" class="ibtn" data-gw-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
+    <div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
+  dlg.querySelector("h2").textContent = title;
+  dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
+  dlg.addEventListener("close", () => { dlg.remove(); if(gwOpen === dlg) gwOpen = null; gwToast(); });
+  document.body.appendChild(dlg);
+  dlg.showModal();
+  gwOpen = dlg;
+  gwToast();
+  return dlg;
+}
+/* `buttons`: [label, onclick, {primary, disabled, why}] each. */
+function gwPaint(dlg, html, buttons){
+  dlg.querySelector(".gw-body").innerHTML = html;
+  dlg.querySelector(".gw-foot").replaceChildren(...buttons.map(([label, fn, o = {}]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn2" + (o.primary ? " primary" : "");
+    b.textContent = label;
+    if(o.disabled){ b.disabled = true; if(o.why) b.title = o.why; }
+    b.onclick = fn;
+    return b;
+  }));
+}
+function gwFailed(dlg, spec, res, retry){
+  const p = gwProblem(res);
+  const rows = res.error === "refused" && res.body ? gwTable(spec, res.body) + gwRefusals(spec, res.body) : "";
+  gwPaint(dlg, `<p class="gw-bad">${p.text}</p>${p.sub ? `<p>${p.sub}</p>` : ""}${rows}`, [
+    ["Close", () => dlg.close()],
+    ...(p.refresh ? [["Refresh the board", () => { dlg.close(); if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {primary: true}]]
+      : p.retry && retry ? [["Try again", retry, {primary: true}]] : []),
+  ]);
+}
+
+/* One write, confirmed. The spec is the kind's whole say:
+     kind, title, applyLabel   the write and the words on it
+     body()                    the request without dryRun, built at each call
+     head, rows(answer)        the before → after table: column labels, and
+                               [{cells: [html], state: "set" | "skip" | "bad"}]
+     object(row)               the name a refused row is about
+     lead(answer), bind(dlg, replan)   optional: a line over the table, and
+                               wiring for any control in it (replan() dry-runs again)
+     done(answer)              one line after an apply, and after its undo
+   The dialog dry-runs as it opens, offers Apply only when the game would take
+   every row, and after an apply offers Undo until the next write of the kind. */
+function gwConfirm(spec){
+  const dlg = gwDialog(spec.title);
+  const cancel = ["Cancel", () => dlg.close()];
+  const plan = async () => {
+    gwPaint(dlg, "<p>Asking the game what it would do…</p>", [cancel]);
+    const res = await SOURCE.write(spec.kind, spec.body(), {dryRun: true});
+    if(!dlg.open) return;
+    if(res.error) return gwFailed(dlg, spec, res, plan);
+    const answer = res.body || {};
+    gwPaint(dlg, (spec.lead ? spec.lead(answer) : "") + gwTable(spec, answer) + gwRefusals(spec, answer), [
+      cancel,
+      [spec.applyLabel || "Apply", apply, {primary: true, disabled: !answer.ok, why: "The game would refuse this; see above"}],
+    ]);
+    if(spec.bind) spec.bind(dlg, plan);
+  };
+  const apply = async () => {
+    gwPaint(dlg, "<p>Applying in the game…</p>", []);
+    const res = await SOURCE.write(spec.kind, spec.body(), {dryRun: false});
+    if(res.error) return dlg.open && gwFailed(dlg, spec, res, plan);
+    const answer = res.body || {};
+    gwUndoable = {spec, text: spec.done(answer), character: gwLink()?.character};
+    if(!dlg.open) return gwToast();
+    gwPaint(dlg, `<p class="gw-ok">${spec.done(answer)}</p>${gwTable(spec, answer)}<p>The board reads the game again to show it.</p>`, [
+      ["Undo", () => gwUndo(spec, dlg)], ["Close", () => dlg.close(), {primary: true}],
+    ]);
+  };
+  plan();
+}
+async function gwUndo(spec, dlg){
+  if(!(dlg && dlg.open)) dlg = gwDialog(`Undo: ${spec.title}`);
+  gwPaint(dlg, "<p>Undoing in the game…</p>", []);
+  const res = await SOURCE.write("undo", {kind: spec.kind}, {dryRun: false});
+  /* Gone for good once the game says so; kept for a retry when it only could
+     not take it now. */
+  if(!res.error || res.error === "changed" || res.error === "nothing_to_undo") gwUndoable = null;
+  if(!dlg.open) return gwToast();
+  if(res.error) return gwFailed(dlg, spec, res, () => gwUndo(spec, dlg));
+  gwPaint(dlg, `<p class="gw-ok">${spec.done(res.body || {})}</p>${gwTable(spec, res.body || {})}`,
+    [["Close", () => dlg.close(), {primary: true}]]);
+}
+/* Undo, once the dialog is closed: a strip at the foot of the window until
+   the next write of that kind, or until the board is another company's. */
+function gwToast(){
+  const link = gwLink();
+  if(gwUndoable && (!link || link.character !== gwUndoable.character)) gwUndoable = null;
+  let bar = $("gwToast");
+  if(!gwUndoable || gwOpen){ if(bar) bar.remove(); return; }
+  if(!bar){
+    bar = document.createElement("div");
+    bar.id = "gwToast"; bar.setAttribute("role", "status");
+    document.body.appendChild(bar);
+  }
+  const {spec, text} = gwUndoable;
+  bar.innerHTML = `<span>${text}</span><button type="button" class="btn2" data-gw-undo>Undo</button><button type="button" class="ibtn" data-gw-dismiss aria-label="Dismiss"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>`;
+  bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
+  bar.querySelector("[data-gw-dismiss]").onclick = () => { gwUndoable = null; gwToast(); };
+}
+const bindWrites = once(() => on("click", "[data-gw]", (btn, e) => {
+  /* Capture phase: a button inside a finding row must not open the row. */
+  e.preventDefault(); e.stopPropagation();
+  if(btn.getAttribute("aria-disabled") === "true") return;
+  if(btn.dataset.gw === "uniforms") gwUniforms(JSON.parse(btn.dataset.gwSites || "[]"));
+}, true));
+function wireWrites(){ bindWrites(); gwToast(); }
+
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
 function wireAll(){
@@ -17668,7 +18000,7 @@ function wireAll(){
   wireChart(); wirePortfolio(); wireSiteReads();
   wireFlow();
   wireHeat(); wirePlan();
-  wireReveal();
+  wireReveal(); wireWrites();
 }
 
 /* The board with no numbers in it: the Wiki reads straight from the game's own
