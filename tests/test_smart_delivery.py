@@ -114,13 +114,45 @@ class SmartSupplyTests(unittest.TestCase):
         self.assertEqual([c["order"] for c in line["contracts"]], [0, 1])
 
     def test_a_mixed_depot_is_modelled_in_the_games_delivery_order(self):
-        # Plain first: the level tops up what the plain delivery left short.
+        # Plain first: the level tops up what the plain delivery left short,
+        # so the 400 lands inside the 1,000 and nothing comes on top of it.
         _, line = self.depot([contract(400), smart(1000, pier=2)], routed=True)
-        self.assertEqual((line["smart"], line["target"], line["plain"], line["weekly"]),
-                         (True, 1000, 400, 1000))
+        self.assertEqual((line["smart"], line["target"], line["plainAfter"], line["weekly"]),
+                         (True, 1000, 0, 1000))
         # Level first: the plain amount lands on top.
         _, line = self.depot([smart(1000, pier=2), contract(400)], routed=True)
-        self.assertEqual(line["weekly"], 1400)
+        self.assertEqual((line["target"], line["plainAfter"], line["weekly"]), (1000, 400, 1400))
+
+    def test_a_mixed_line_names_the_level_and_sizes_the_raise_net_of_what_comes_on_top(self):
+        # The factory eats 1,680 a week. A level of 700 with 400 a week after
+        # it brings 1,100: the level has to rise to 1,300, not 1,700.
+        data = self.routes.build([smart(700, destination=("factory", 0)),
+                                  contract(400, pier=2, destination=("factory", 0))])
+        need = self.routes.need(data)
+        self.assertEqual((need["importWeekly"], need["importTarget"], need["importPlainAfter"]),
+                         (1100, 700, 400))
+        self.assertEqual(need["raiseImport"], 1300)
+        [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
+        self.assertIn("Smart Delivery keeps 700 in stock plus 400 a week", note["text"])
+        self.assertNotIn("1,100 in stock", note["text"])
+        # Plain first, the same contracts read as the level alone.
+        data = self.routes.build([contract(400, pier=2, destination=("factory", 0)),
+                                  smart(700, destination=("factory", 0))])
+        need = self.routes.need(data)
+        self.assertEqual((need["importWeekly"], need["importTarget"], need["importPlainAfter"]),
+                         (700, 700, 0))
+        self.assertEqual(need["raiseImport"], 1700)
+
+    def test_a_contract_set_to_zero_is_listed_but_supplies_nothing(self):
+        order = smart(0)
+        order["id"] = "z-1"
+        data = self.routes.build([order], routed=True)
+        line = data["supply"]["factories"]["depots"][1][WATER]
+        self.assertEqual((line["weekly"], line["zeroOnly"]), (0, True))
+        self.assertEqual([c["id"] for c in line["contracts"]], ["z-1"])
+        # The factory line still reads as fed by no import, as before.
+        self.assertIsNone(self.routes.need(data)["importWeekly"])
+        self.assertFalse(any(r["s"] == 1 for r in data["supply"]["imports"]))
 
     def test_an_importer_delivers_all_its_contracts_in_the_place_of_its_first(self):
         # Pier 1 is first in the plan, so both its contracts deliver before
@@ -129,8 +161,12 @@ class SmartSupplyTests(unittest.TestCase):
         orders = [contract(400), smart(1000, pier=2), contract(700)]
         _, line = self.depot(orders, routed=True)
         self.assertEqual(line["weekly"], 1100)
-        # The list itself stays in plan order.
-        self.assertEqual([c["order"] for c in line["contracts"]], [0, 1, 2])
+        # The list reads in that delivery order, A1, A2, B1, and each contract
+        # keeps its raw place in the plan for a later reorder.
+        self.assertEqual([(c["order"], c["importer"]) for c in line["contracts"]],
+                         [(0, "1 Pier"), (2, "1 Pier"), (1, "2 Pier")])
+        # Both plain amounts land before the level, inside it.
+        self.assertEqual((line["target"], line["plainAfter"]), (1000, 0))
 
     def test_paused_contracts_count_in_what_arrived_but_not_in_supply(self):
         _, line = self.depot([smart(3000, last=900), smart(8000, last=500, active=False, pier=2)],

@@ -2354,9 +2354,10 @@ def _import_setting(supply: dict) -> dict:
 
     `smart` and `target` say whether the line runs on Smart Delivery and the
     stock level that holds; `plain` is what plain contracts beside it bring a
-    week. `arrivedLastWeek` sums every contract's amountOrderedLastWeek, paused
+    week, and `plainAfter` the part of it delivered after the level, which
+    comes on top of it (a plain amount delivered first lands inside it). `arrivedLastWeek` sums every contract's amountOrderedLastWeek, paused
     ones too, since those goods did arrive. `contracts` lists each contract on
-    the line in plan order.
+    the line in the order the game delivers them.
     """
     # A hand-built supply (tests of the factory view) may carry only the
     # weekly figures; it reads as plain contracts with nothing more known.
@@ -2364,6 +2365,7 @@ def _import_setting(supply: dict) -> dict:
         "smart": supply.get("smart", False),
         "target": supply.get("target"),
         "plain": supply.get("plain", supply.get("weekly", 0)),
+        "plainAfter": supply.get("plainAfter", 0),
         "arrivedLastWeek": supply.get("arrived", supply.get("lastWeek", 0)),
         "contracts": supply.get("contracts", []),
     }
@@ -2384,14 +2386,50 @@ def _import_ranks(save: Save, partnerships: list) -> list:
     ]
 
 
+def _contract_list(contracts: list) -> list:
+    """A line's contracts in the order the game delivers them.
+
+    The rank (importer group first) orders the list and is then dropped; each
+    contract keeps its raw place in importPartnerships as `order`, which is
+    what a later reorder writes.
+    """
+    return [
+        {k: v for k, v in c.items() if k != "rank"}
+        for c in sorted(contracts, key=lambda c: c["rank"])
+    ]
+
+
+def _import_level(drops: list) -> tuple:
+    """How a line's contracts read in game: (smart, level, plain after it).
+
+    `drops` is in delivery order. The level is the highest Smart Delivery
+    amount, the one that holds. A plain amount delivered before it lands
+    inside the level; only what is delivered after it comes on top, so that
+    is the "plus N a week" a player sees beside the level.
+    """
+    levels = [d["amount"] for d in drops if d["smart"]]
+    if not levels:
+        return False, None, 0
+    level = max(levels)
+    at = next(i for i, d in enumerate(drops) if d["smart"] and d["amount"] == level)
+    return True, level, sum(d["amount"] for d in drops[at + 1:] if not d["smart"])
+
+
+def _smart_words(level, plain_after) -> str:
+    """A Smart Delivery setting in words, as the findings say it."""
+    return f"Smart Delivery keeps {level:,} in stock" + (
+        f" plus {plain_after:,} a week" if plain_after else "")
+
+
 def _import_drop(stock, drops):
     """Units one delivery day brings to one depot line, the game's way.
 
-    DeliveryHelper walks the contracts in plan order. A plain contract brings
+    DeliveryHelper walks the contracts in delivery order. A plain contract brings
     its amount. A Smart Delivery one (isTarget) brings what tops the depot up
     to its amount, max(0, amount - stock), and counts what an earlier contract
     delivered the same morning. So two Smart Delivery contracts on one item
-    hold the larger of their two levels, not the sum. `drops` is in plan order.
+    hold the larger of their two levels, not the sum. `drops` is in delivery
+    order (_import_ranks).
     """
     brought = 0
     for drop in drops:
@@ -2628,7 +2666,7 @@ def _supply(
             # write to address; after a delivery a contract stays on only if
             # it repeats, so a paused one may be a finished one-off.
             contracts_at[(warehouse, product["itemName"])].append({
-                "order": order, "id": partnership.get("id"), "importer": who,
+                "order": order, "rank": rank, "id": partnership.get("id"), "importer": who,
                 "smart": smart, "amount": amount, "lastWeek": ordered, "active": active,
                 "repeating": bool(partnership.get("isRepeatingOrder")),
                 "agent": partnership.get("employeeInstanceId") is not None,
@@ -2671,12 +2709,21 @@ def _supply(
         if group == "paused":
             supply["active"] = False
         # How the line is set in game: Smart Delivery where any contract of the
-        # group that counts is, at the highest level, which is the one that holds.
+        # group that counts is, at the highest level, which is the one that
+        # holds, and what plain contracts deliver on top of it.
         lead = supply["drops"][group]
-        supply["smart"] = any(d["smart"] for d in lead)
-        supply["target"] = max((d["amount"] for d in lead if d["smart"]), default=None)
+        supply["smart"], supply["target"], supply["plainAfter"] = _import_level(lead)
         supply["plain"] = sum(d["amount"] for d in lead if not d["smart"])
-        supply["contracts"] = sorted(contracts_at[line], key=lambda c: c["order"])
+        supply["contracts"] = _contract_list(contracts_at[line])
+
+    # A line whose every contract is set to zero and brought nothing last
+    # week supplies nothing, so it stays out of the sums above; the page still
+    # lists it, at zero, so a contract set up but never filled in is not read
+    # as no contract at all.
+    configured = {
+        line: _contract_list(contracts)
+        for line, contracts in contracts_at.items() if line not in imports
+    }
 
     days_to_import = (next_day - day) if next_day is not None else None
     # The delivery lands at the start of its day, so the stock has to reach it
@@ -2954,6 +3001,7 @@ def _supply(
         "held": held,
         "targets": target_at,
         "imports": imports,
+        "configured": configured,
         "edges": edges,
         "shipped": shipped_per_day,
         "received": received_per_day,
@@ -3381,6 +3429,15 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
                 "weekly": supply["weekly"], "pausedWeekly": supply.get("pausedWeekly", 0),
                 **_import_setting(supply),
             }
+    # Contracts set up at zero that brought nothing: listed at zero for the
+    # page, marked so the factory view does not take them for a supply.
+    for (depot, slug), contracts in flow.get("configured", {}).items():
+        if depot in index:
+            depots[index[depot]][slug] = {
+                "weekly": 0, "pausedWeekly": 0, "zeroOnly": True,
+                "smart": any(c["smart"] for c in contracts), "target": None,
+                "plain": 0, "plainAfter": 0, "arrivedLastWeek": 0, "contracts": contracts,
+            }
     # A depot's outflow that is not a factory's intake: the shops it also
     # serves, so an import order can be sized to the whole of what leaves.
     # Matched day by day: a single 2,500 of hops sent on Sunday must not turn
@@ -3697,8 +3754,11 @@ def _factories(
             row["perWeek"] = round(per_day * 7)
             row["depotNeed"] = round(weekly_need)
             row["importWeekly"] = supply["weekly"] if supply else None
-            # Smart Delivery keeps importWeekly in stock rather than bringing it.
+            # A Smart Delivery line keeps importTarget in stock, plus any plain
+            # amount delivered after it; importWeekly is what a week can bring.
             row["importSmart"] = bool(supply and supply.get("smart"))
+            row["importTarget"] = supply.get("target") if row["importSmart"] else None
+            row["importPlainAfter"] = supply.get("plainAfter", 0) if row["importSmart"] else 0
             row["importPaused"] = bool(supply and not supply["weekly"] and supply.get("pausedWeekly"))
             row["importFit"] = (
                 "short" if weekly_need and not supply["weekly"] else _fit(weekly_need, supply["weekly"])
@@ -3711,7 +3771,7 @@ def _factories(
                 if row["importFit"] in ("short", "tight"):
                     status, level = "import", "critical" if row["importFit"] == "short" else "warn"
                     if row["importFit"] == "short":
-                        row["raiseImport"] = _ceil_hundred(weekly_need)
+                        row["raiseImport"] = _ceil_hundred(weekly_need - row["importPlainAfter"])
                 else:
                     status, level = "ok", "ok"
             elif not row["target"]:
@@ -3731,7 +3791,7 @@ def _factories(
                     status, level = "idle", "warn"
             elif supply and row["importFit"] == "short":
                 status, level = "import", "critical"
-                row["raiseImport"] = _ceil_hundred(weekly_need)
+                row["raiseImport"] = _ceil_hundred(weekly_need - row["importPlainAfter"])
             elif supply and row["importFit"] == "tight":
                 status, level = "import", "warn"
             elif not supply and row["madeAt"]:
@@ -7257,8 +7317,11 @@ def _plan(
     # bringing its amount, so a depot's week is what one delivery brings into
     # it empty, as _supply() counts it: two levels on one depot hold the
     # higher, and a level beside a plain order follows the delivery order.
-    # "ordered" is that week summed over depots; "target" the levels kept,
-    # "plain" the plain amounts beside them, "smart" whether any level counts.
+    # "ordered" is that week summed over depots, the one company-wide total
+    # the target needs. A level belongs to its depot and is never summed:
+    # "depots" says per depot how the line is set (level, plain amount on top
+    # of it, or a weekly amount), and "smart" whether any counted depot runs
+    # on a level.
     partnerships = save.items(save.root["importPartnerships"])
     ranks = _import_ranks(save, partnerships)
     sources, drops = {}, collections.defaultdict(lambda: {"active": [], "paused": []})
@@ -7294,14 +7357,17 @@ def _plan(
         row["paused"] += _import_drop(0, groups["paused"])
     for item, row in sources.items():
         lead = "active" if row["active"] else "paused"
-        counted = [d for (name, _w), g in drops.items() if name == item for d in g[lead]]
-        levels = collections.defaultdict(int)
+        row["depots"] = []
         for (name, warehouse), groups in drops.items():
-            if name == item:
-                levels[warehouse] = max((d["amount"] for d in groups[lead] if d["smart"]), default=0)
-        row["smart"] = any(d["smart"] and d["amount"] for d in counted)
-        row["target"] = sum(levels.values()) if row["smart"] else None
-        row["plain"] = sum(d["amount"] for d in counted if not d["smart"])
+            counted = [d for d in groups[lead] if d["amount"]]
+            if name != item or not counted:
+                continue
+            smart, level, plain_after = _import_level(counted)
+            row["depots"].append({
+                "warehouse": names.addr(warehouse), "smart": smart, "level": level,
+                "plainAfter": plain_after, "weekly": _import_drop(0, counted),
+            })
+        row["smart"] = any(d["smart"] for d in row["depots"])
         row["from"] = ", ".join(dict.fromkeys(c["from"] for c in row["contracts"]))
         row["warehouse"] = ", ".join(
             dict.fromkeys(c["warehouse"] for c in row["contracts"])
@@ -7773,7 +7839,7 @@ def _alerts(
                 site,
                 "order",
                 (
-                    f"{row['item']}: Smart Delivery keeps {row['weekly']:,} in stock against a "
+                    f"{row['item']}: {_smart_words(row['target'], row['plainAfter'])} against a "
                     if row.get("smart")
                     else f"{row['item']} orders {row['weekly']:,} a week against a "
                 )
@@ -8012,8 +8078,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
             elif status == "import" and row["raiseImport"] and row.get("importSmart"):
                 text = (
                     f"{row['item']}: this import needs to cover {row['depotNeed']:,} a week and "
-                    f"Smart Delivery keeps {row['importWeekly']:,} in stock; raise the stock "
-                    f"level to {row['raiseImport']:,}"
+                    f"{_smart_words(row['importTarget'], row['importPlainAfter'])}; raise the "
+                    f"stock level to {row['raiseImport']:,}"
                 )
             elif status == "import" and row["raiseImport"]:
                 text = (
@@ -8022,8 +8088,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                 )
             elif status == "import" and row.get("importSmart"):
                 text = (
-                    f"{row['item']}: Smart Delivery keeps {row['importWeekly']:,} in stock, within "
-                    f"5% of the {row['depotNeed']:,} it needs to cover a week"
+                    f"{row['item']}: {_smart_words(row['importTarget'], row['importPlainAfter'])}, "
+                    f"within 5% of the {row['depotNeed']:,} it needs to cover a week"
                 )
             elif status == "import":
                 text = (
@@ -10650,8 +10716,10 @@ const SUPPLY_VIEWS = {
         ? r.runsOut.slice(0,3) : `${r.cover}d`}</span><span class="sub"> ${r.cover}d${
         due ? ` of ${due}` : ""}${r.coverFit === "tight"
           ? `, ${r.shortBy}d early` : ""}</span></td>
-      <td>${r.weekly.toLocaleString()}${r.smart
-        ? `<span class="sub" data-tip="Smart Delivery: the purchasing agent tops the depot up to this level each Monday">in stock</span>` : ""}</td>
+      <td>${r.smart
+        ? `${(r.target ?? r.weekly).toLocaleString()}<span class="sub" data-tip="Smart Delivery: the purchasing agent tops the depot up to this level each Monday">in stock${
+            r.plainAfter ? `, plus ${r.plainAfter.toLocaleString()} a week` : ""}</span>`
+        : r.weekly.toLocaleString()}</td>
       <td>${r.basis === "order"
         ? `<span class="chip dim" data-tip="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
         : `${r.weekNeed.toLocaleString()}${r.orderFit !== "ok"
@@ -10785,7 +10853,7 @@ const SUPPLY_VIEWS = {
         idle: () => `${chip("warn", "not drawn")} ${depot} holds ${r.depotStock.toLocaleString()} but the line takes ${
                        Math.round(r.arrives / r.perDay * 100)}% of its need`,
         import: () => r.raiseImport
-          ? `${chip("bad", "import short")} raise the weekly import to ${r.raiseImport.toLocaleString()}`
+          ? `${chip("bad", "import short")} raise the ${r.importSmart ? "Smart Delivery stock level" : "weekly import"} to ${r.raiseImport.toLocaleString()}`
           : `${chip("warn", "import tight")} within 5% of what the factories eat`,
         noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.depotNeed, 1)).toFixed(1)} weeks of it`,
         made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => mapRef(D.businesses[i])).join(", ")}`,
@@ -10876,7 +10944,7 @@ function feedVerdict(n){
   else if(n.directImport){
     n.known = false; n.stalled = false;
     if(n.importFit === "short"){
-      status = "import"; level = "critical"; n.raiseImport = ceil100(n.depotNeed);
+      status = "import"; level = "critical"; n.raiseImport = ceil100(Math.max(0, n.depotNeed - (n.importPlainAfter || 0)));
     } else if(n.importFit === "tight"){ status = "import"; level = "warn"; }
     else { status = "ok"; level = "ok"; }
   }
@@ -10887,7 +10955,7 @@ function feedVerdict(n){
       : n.arrives >= n.perDay * (n.staffedShare ?? 1) * 0.85 ? ["staffing", "warn"]
       : n.depotStock < n.perDay ? ["dry", "critical"] : ["idle", "warn"]; }
   else if(n.importWeekly !== null && n.importFit === "short"){
-    status = "import"; level = "critical"; n.raiseImport = ceil100(n.depotNeed); }
+    status = "import"; level = "critical"; n.raiseImport = ceil100(Math.max(0, n.depotNeed - (n.importPlainAfter || 0))); }
   else if(n.importWeekly !== null && n.importFit === "tight"){ status = "import"; level = "warn"; }
   else if(n.importWeekly === null && n.madeAt.length){ status = "made"; level = "ok"; }
   else if(n.importWeekly === null && n.depotStock < n.depotNeed){ status = "noimport"; level = "warn"; }
@@ -10909,10 +10977,17 @@ function syncLocalNames(view){
     .catch(() => {});
 }
 
+/* A depot's import line as a supply, or nothing. A line whose contracts are
+   all set to zero and brought nothing is listed for the imports table only
+   (zeroOnly) and supplies nothing, as _factories() reads it. */
+const importLine = (view, s, slug) => {
+  const line = (view.depots[s] || {})[slug];
+  return line && !line.zeroOnly ? line : undefined;
+};
 /* Recompute the split after recipe choices change total input consumption. */
 function feedRoute(site, n, view, held){
   const t = site.targets?.[n.slug], target = t ? t[0] : 0, source = t ? t[1] : null;
-  const own = (view.depots[site.s] || {})[n.slug];
+  const own = importLine(view, site.s, n.slug);
   const mixed = !!(own && target && source !== null);
   n.factoryImportSite = own ? site.s : null;
   n.directWeekly = own ? own.weekly : null;
@@ -10925,9 +11000,11 @@ function feedRoute(site, n, view, held){
   n.dailyNeed = n.perDay; // Fill-to level still has to cover a full day.
   n.known = !own && site.known;
   n.depotStock = n.from !== null ? held(n.from, n.slug) : 0;
-  const supply = n.importSite !== null ? (view.depots[n.importSite] || {})[n.slug] : null;
+  const supply = n.importSite !== null ? importLine(view, n.importSite, n.slug) : null;
   n.importWeekly = supply ? supply.weekly : null;
   n.importSmart = !!(supply && supply.smart);
+  n.importTarget = supply && supply.smart ? supply.target : null;
+  n.importPlainAfter = supply && supply.smart ? supply.plainAfter || 0 : 0;
   n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly);
 }
 
@@ -10960,7 +11037,7 @@ function factoryView(){
         const islug = view.aliases[ing.slug] || ing.slug, perDay = u.machines * ing.per * 24;
         let row = s.needs.find(n => n.slug === islug);
         if(!row){
-          const t = s.targets[islug], direct = !(t && t[0]) && (view.depots[s.s] || {})[islug];
+          const t = s.targets[islug], direct = !(t && t[0]) && importLine(view, s.s, islug);
           const from = direct ? null : t ? t[1] : null;
           const importSite = direct ? s.s : from;
           row = {item: ing.item, slug: islug, perDay: 0, perWeek: 0, lines: [],
@@ -10968,10 +11045,12 @@ function factoryView(){
             known: !direct && s.known, arrives: s.arrivals[islug] || 0,
             stock: held(s.s, islug), depotStock: 0, importWeekly: null, depotNeed: 0, madeAt: []};
           if(importSite !== null){
-            const d = (view.depots[importSite] || {})[islug];
+            const d = importLine(view, importSite, islug);
             row.depotStock = from !== null ? held(from, islug) : 0;
             row.importWeekly = d ? d.weekly : null;
             row.importSmart = !!(d && d.smart);
+            row.importTarget = d && d.smart ? d.target : null;
+            row.importPlainAfter = d && d.smart ? d.plainAfter || 0 : 0;
             row.importPaused = !!(d && !d.weekly && d.pausedWeekly);
           }
           s.needs.push(row);
@@ -13193,6 +13272,12 @@ const spTruckDay = (arrives, today) => {
   return away >= 0 && away < SP_RAIL_DAYS ? away : null;
 };
 
+/* A Smart Delivery setting on the panel: the level kept in stock, and any
+   plain amount delivered after it, which comes on top. */
+const spKeeps = (level, after) => `Smart Delivery keeps <b>${spNum(level)}</b> in stock${
+  after ? `, plus <b>${spNum(after)}</b> a week` : ""}`;
+const spLevelCell = (level, after, small) => `${spNum(level)}<small ${small}>in stock${
+  after ? ` +${spNum(after)}/wk` : ""}</small>`;
 /* The depot's Stock table: an import row knows its cover and its next truck; a
    holding that nothing draws on knows only that it is standing still. */
 function spStockRows(b){
@@ -13224,18 +13309,22 @@ function spStockRows(b){
         : "";
     /* A paused contract orders nothing this week; what it used to bring is the
        only figure there is, and the chip beside it says it is not coming. */
-    /* A Smart Delivery figure is a stock level, not a week's delivery, and
-       says so beside the number. */
-    const order = (r.paused ? spNum(r.weekly || r.lastWeek)
+    /* A Smart Delivery figure is its stock level, not a week's delivery, and
+       says so beside the number; a plain amount delivered after the level
+       comes on top of it, so the level it needs is the week less that. */
+    const plainAfter = r.smart ? r.plainAfter || 0 : 0;
+    const shown = r.smart && Number.isFinite(r.target) ? r.target : r.weekly;
+    const order = (r.paused ? spNum(r.smart && Number.isFinite(r.target) ? r.target : r.weekly || r.lastWeek)
       : r.orderFit === "short" || r.orderFit === "tight"
-        ? spUp(spNum(r.weekly), spNum(r.weekNeed), r.orderFit === "short")
-        : spNum(r.weekly)) + (r.smart ? `<small ${SMALL}>in stock</small>` : "");
+        ? spUp(spNum(shown), spNum(Math.max(0, r.weekNeed - plainAfter)), r.orderFit === "short")
+        : spNum(shown)) + (r.smart ? `<small ${SMALL}>in stock${plainAfter ? ` +${spNum(plainAfter)}/wk` : ""}</small>` : "");
     const read = r.paused ? `Import <b>paused</b>; <b>${spNum(r.cover)}</b> days left`
       : r.coverFit === "short" && r.runsOut
         ? `Runs dry <b>${spEsc(r.runsOut)}</b>${truck !== null ? `, the truck lands <b>${
             SP_WEEK_FULL_DAY(today + truck)}</b>` : ""}`
       : r.orderFit === "short" && r.smart
-        ? `A week draws <b>${spNum(r.weekNeed)}</b>; Smart Delivery keeps <b>${spNum(r.weekly)}</b> in stock`
+        ? `A week draws <b>${spNum(r.weekNeed)}</b>; Smart Delivery keeps <b>${spNum(shown)}</b> in stock${
+            plainAfter ? `, plus <b>${spNum(plainAfter)}</b> a week` : ""}`
       : r.orderFit === "short"
         ? `A week draws <b>${spNum(r.weekNeed)}</b>; the order brings <b>${spNum(r.weekly)}</b>`
       : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? "Covered through the week"
@@ -13300,14 +13389,15 @@ function spStockRows(b){
     const unfed = n.status === "noimport" || n.status === "unplanned";
     const order = n.status === "paused"
       ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
-      : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>${n.importSmart ? "in stock" : "/wk"}</small>`
+      : importing && n.importSmart ? spLevelCell(n.importTarget ?? n.importWeekly, n.importPlainAfter, SMALL)
+      : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>/wk</small>`
       : made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
       : unfed ? `<span class="sp-noplan">${spIcon("route")}no import</span>`
       : "—";
     const read = n.status === "paused"
       ? `Import <b>paused</b>; <b>nothing</b> on hand`
       : importing && n.importSmart
-        ? `Smart Delivery keeps <b>${spNum(n.importWeekly)}</b> in stock; <b>nothing</b> on hand yet`
+        ? `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter)}; <b>nothing</b> on hand yet`
       : importing
         ? `<b>${spNum(n.importWeekly)}</b> a week is on order; <b>nothing</b> on hand yet`
       : made ? `Made at <b>${spEsc(shortName(made))}</b>; <b>nothing</b> on hand here`
@@ -13418,7 +13508,7 @@ function spNeedRead(n){
     case "waiting": return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
     case "import": case "noimport":
       if(n.importSmart)
-        return `Smart Delivery keeps <b>${spNum(n.importWeekly)}</b> in stock against the <b>${spNum(n.depotNeed)}</b> a week`;
+        return `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter)} against the <b>${spNum(n.depotNeed)}</b> a week`;
       return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(n.depotNeed)}</b> a week`;
     case "made": return "Made in-house";
     default: return "In step";
@@ -13437,7 +13527,8 @@ function spInputs(site){
     const el = [spKeyTok(n.slug, n.item), SP_NEED_EL[n.status] || "",
                 n.stalled ? "stalled" : ""].filter(Boolean);
     const top = n.directImport
-      ? (Number.isFinite(n.importWeekly) ? `${spNum(n.importWeekly)}<small>${n.importSmart ? "in stock" : "/wk"}</small>` : "—")
+      ? (Number.isFinite(n.importWeekly) ? n.importSmart ? spLevelCell(n.importTarget ?? n.importWeekly, n.importPlainAfter, "")
+        : `${spNum(n.importWeekly)}<small>/wk</small>` : "—")
       : !n.target ? `<span class="sp-noplan">${spIcon("route")}no plan</span>`
       : n.raiseTarget ? spUp(spNum(n.target), spNum(n.raiseTarget), true)
       : spNum(n.target);
@@ -14040,20 +14131,29 @@ function importSetting(total, contract, edit){
   const paused = !current && pausedWeekly > 0;
   const fit = paused ? "paused" : current === undefined ? (total ? "none" : "idle")
     : current === 0 && total > 0 ? "short" : feedFit(total, current);
-  const setTo = total ? ceil100(total) : null;
+  /* A plain amount the game delivers after the level comes on top of it, so
+     the level a week needs is the week less that amount. One delivered before
+     the level lands inside it and changes nothing here. */
+  const plainAfter = smart ? contract.plainAfter || 0 : 0;
+  const setTo = total ? ceil100(Math.max(0, total - plainAfter)) : null;
   // The number in the game's own box: the level for Smart Delivery, the amount otherwise.
+  const level = smart && Number.isFinite(contract.target) ? contract.target : null;
   const inGame = current === undefined ? null
-    : paused ? pausedWeekly
-    : smart && Number.isFinite(contract.target) ? contract.target : current;
+    : level !== null ? level
+    : paused ? pausedWeekly : current;
   const wants = !paused && setTo !== null
     && (fit === "none" || fit === "short" || fit === "tight" || current === 0);
   const suggested = wants ? setTo : inGame;
-  const edited = Number.isFinite(edit) && edit >= 0 && edit !== suggested;
+  /* A figure the game now holds has been entered: it is no longer an edit,
+     and the row goes back to the board's own verdict. The caller forgets it. */
+  const typed = Number.isFinite(edit) && edit >= 0;
+  const entered = typed && inGame !== null && edit === inGame && edit !== suggested;
+  const edited = typed && !entered && edit !== suggested;
   const value = edited ? edit : suggested;
   // A weekly order carries a buffer by design; only half again over is worth a word.
   const surplus = !smart && current !== undefined && !!total && current > total * 1.5;
   return {smart, current, pausedWeekly, paused, fit, setTo, inGame, suggested, value, edited,
-          changed: value !== null && value !== inGame, surplus};
+          entered, plainAfter, changed: value !== null && value !== inGame, surplus};
 }
 
 /* A checklist of existing recommendations, not a second forecasting engine.
@@ -14079,7 +14179,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const yours = `Your own figure${r.setTo !== null && r.setTo !== undefined
       ? `; the board suggests ${r.setTo.toLocaleString()}` : ""}.`;
     if(r.paused && (r.total > 0 || r.edited)){
-      const now = r.smart ? `set to keep ${r.pausedWeekly.toLocaleString()} in stock`
+      const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString()} in stock`
         : `configured for ${r.pausedWeekly.toLocaleString()} units/week`;
       add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
@@ -14352,8 +14452,10 @@ function drawLogistics(){
       const total = r.factoryWeek + otherWeek;
       const contract = (depotsKnown[si] || {})[r.slug] || {};
       const impId = impSetId(D.businesses[s] ? D.businesses[s].key : si, r.slug);
-      return {...r, s, otherWeek, total, ...importSetting(total, contract, edits[impId]), impId,
-              plain: contract.plain || 0, arrived: contract.arrivedLastWeek,
+      let setting = importSetting(total, contract, edits[impId]);
+      // The game now holds the figure that was typed: it has been entered.
+      if(setting.entered){ impSetKeep(impId, null); setting = importSetting(total, contract, undefined); }
+      return {...r, s, otherWeek, total, ...setting, impId, arrived: contract.arrivedLastWeek,
               contracts: contract.contracts || [], stock: held(s, r.slug)};
     }).sort((a, b) => b.total - a.total);
     importRows.push({s, rows});
@@ -14391,7 +14493,8 @@ function drawLogistics(){
     : `<small class="imp-unit">a week</small>`;
   const amount = (n, smart) => `${n.toLocaleString()} ${unit(smart)}`;
   const gameCell = r => r.inGame === null ? chipHtml("bad", "not imported")
-    : `${amount(r.inGame, r.smart)}${r.smart && r.plain ? `<span class="sub">plus ${r.plain.toLocaleString()} a week</span>` : ""}${
+    : `${amount(r.inGame, r.smart)}${r.smart && r.plainAfter ? `<span class="sub" data-tip="${attr(
+        "A plain contract the game delivers after the level brings this on top of it")}">plus ${r.plainAfter.toLocaleString()} a week</span>` : ""}${
         r.paused ? ` ${chipHtml("warn", "paused")}` : ""}`;
   /* What the box is about: the board's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
@@ -14403,12 +14506,27 @@ function drawLogistics(){
     : r.fit === "tight" ? up("raise", "Within 5% of the week it has to cover")
     : r.surplus ? chipHtml("dim", "could lower", `More than half again what leaves in a week; ${r.setTo.toLocaleString()} would do`)
     : chipHtml("ok", "covered");
+  /* What the box holds, said per state: the board's suggestion, the figure
+     already in game, or the player's own. */
+  const boardSays = r => r.smart
+    ? `the stock that runs everything this depot feeds at full capacity for a week${
+        r.plainAfter ? `, less the ${r.plainAfter.toLocaleString()} a week delivered on top of it` : ""}`
+    : "a week of everything this depot feeds at full capacity";
+  const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
+  const boxTip = r => r.edited
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${r.suggested.toLocaleString()}` : `The game holds ${r.inGame.toLocaleString()}`}`
+    : suggests(r) ? `The board suggests ${r.value.toLocaleString()}: ${boardSays(r)}`
+    : "The figure in game; nothing here asks for a change";
+  const resetTo = r => suggests(r) ? `the board's suggestion, ${r.suggested.toLocaleString()}`
+    : `the figure in game, ${(r.inGame ?? 0).toLocaleString()}`;
   const setCell = r => `<td class="imp-to">${r.value === null ? "" : `<span class="imp-set"><input type="number" min="0" step="1" inputmode="numeric"
-      class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
-      r.edited ? `<button type="button" class="imp-reset" data-imp-reset="${attr(r.impId)}" aria-label="${attr(`Back to the suggestion for ${r.item}`)}"
-        data-tip="${attr(`Back to ${r.suggested === null ? "the figure in game" : r.suggested.toLocaleString()}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}</td>`;
-  /* Two or more contracts on one line: each is listed in plan order under the
-     material, with its importer, how it is set and whether it runs. */
+      class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
+      r.edited ? `<button type="button" class="imp-reset" data-imp-reset="${attr(r.impId)}" aria-label="${attr(`Back to ${resetTo(r)}, for ${r.item}`)}"
+        data-tip="${attr(`Back to ${resetTo(r)}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}</td>`;
+  /* Two or more contracts on one line: each is listed under the material in
+     the order the game delivers them (importer by importer, each in the place
+     of its first contract in the plan), with its importer, how it is set and
+     whether it runs. */
   const contractLines = r => r.contracts.length < 2 ? ""
     : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
         c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}</span>`).join("")}</span>`;
@@ -14441,7 +14559,7 @@ function drawLogistics(){
     ["Used / week", r => (r.total ?? r.week) || null, "", "What leaves the depot in a week, factory lines and shops together; hover a figure for the split"],
     ["Arrived last week", r => r.arrived ?? null, "", "What the importers delivered here last week, every contract together"],
     ["Set in game", r => r.inGame ?? null, "", "The figure in the purchasing agent's plan: a stock level with Smart Delivery, else the amount each week"],
-    ["Set to", null, "", "What to enter in game: a week of everything this depot feeds at full capacity, as a stock level with Smart Delivery or a weekly amount without. Type your own figure to change it"],
+    ["Set to", null, "", "What to enter in game: the board's suggestion where the setting falls short of the week, as a stock level with Smart Delivery or a weekly amount without, else the figure in game. Enter your own figure to change it"],
     ["At depot", r => r.stock ?? null]];
   const importOrder = supplySort.imports, importHead = supplyHead(importCols, importOrder);
   const importTable = shown.map((d, i) => supplyLocation("imports", d.s, d.rows.length,
@@ -14928,13 +15046,18 @@ function drawPlan(){
       const paused = src ? src.paused || 0 : 0;
       const contracts = src ? (src.contracts || []).length : 0;
       /* A Smart Delivery line is a stock level the purchasing agent tops up to
-         each Monday, not an amount on order; a level of N supplies at most N a
-         week, which is why it counts as ordered below. */
+         each Monday at one depot, not an amount on order, so it is said depot
+         by depot and never summed; a level of N supplies at most N a week,
+         which is why it counts toward what is ordered below. */
+      const units = v => v.toLocaleString("en-US");
+      const perDepot = (src, would) => (src.depots || []).map(d => d.smart
+        ? `Smart Delivery ${would ? "would keep" : "keeps"} ${units(d.level)} in stock at ${d.warehouse}${
+            d.plainAfter ? `, plus ${units(d.plainAfter)} a week` : ""}`
+        : `${units(d.weekly)} a week to ${d.warehouse}`).join("; ");
       const on = !src ? "Not on any import contract yet"
-        : src.active && src.smart ? `Smart Delivery keeps ${(src.target ?? src.ordered).toLocaleString("en-US")} in stock${
-            src.plain ? `, plus ${src.plain.toLocaleString("en-US")} a week on order,` : ""} from ${src.from} to ${src.warehouse}`
+        : src.active && src.smart ? `${perDepot(src, false)}, from ${src.from}`
         : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
-        : paused && src.smart ? `Paused Smart Delivery contracts would keep ${paused.toLocaleString("en-US")} in stock, from ${src.from} to ${src.warehouse}; nothing active`
+        : paused && src.smart ? `Paused: ${perDepot(src, true)}, from ${src.from}; nothing active`
         : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
         : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
@@ -16303,7 +16426,7 @@ function planDraw(){
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
       `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
-        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-instock" data-tip="Smart Delivery: a stock level the purchasing agent tops up to each Monday, so at most this much a week">in stock</span>` : ""
+        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level">a week at most, Smart Delivery</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")

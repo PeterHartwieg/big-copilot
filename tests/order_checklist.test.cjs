@@ -197,9 +197,10 @@ test('the player\'s figure replaces the suggestion; typing the suggestion is no 
   const mine = setting(1400, {weekly:900, smart:true, target:900}, 2000);
   assert.deepEqual([mine.edited, mine.value, mine.suggested, mine.changed], [true, 2000, 1400, true]);
   assert.equal(setting(1400, {weekly:900}, 1400).edited, false);
-  // A figure equal to the one in game says "leave it": no change to make.
-  const keep = setting(1400, {weekly:900}, 900);
-  assert.deepEqual([keep.edited, keep.changed], [true, false]);
+  // A figure the game now holds has been entered: no longer an edit, and
+  // the row goes back to the board's own verdict and suggestion.
+  const entered = setting(1400, {weekly:900}, 900);
+  assert.deepEqual([entered.entered, entered.edited, entered.value, entered.changed], [true, false, 1400, true]);
   // Not a number, or below zero, is not a figure.
   assert.equal(setting(1400, {weekly:900}, -5).edited, false);
   assert.equal(setting(1400, {weekly:900}, NaN).edited, false);
@@ -227,8 +228,10 @@ test('an edited figure feeds the checklist, including on a row the board finds c
   // An edit on a short row replaces the suggestion.
   const short = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 2500)]}]});
   assert.equal(short[0].proposed, 2500);
-  // An edit back to the figure in game leaves nothing to do.
-  assert.deepEqual(build({imports:[{s:0, rows:[row(1400, {weekly:900}, 900)]}]}), []);
+  // A figure the game already holds is no longer the player's: the board's
+  // suggestion comes back.
+  const back = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 900)]}]});
+  assert.deepEqual([back[0].current, back[0].proposed], [900, 1400]);
   // A new figure is a new action: an old tick does not carry over.
   const other = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 2600)]}]});
   assert.notEqual(short[0].key, other[0].key);
@@ -241,4 +244,30 @@ test('a paused contract with a typed figure resumes at that figure', () => {
   assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3[,.]000 in stock\. Set Smart Delivery stock to 1[,.]600\./);
   const untouched = build({imports:[{s:0, rows:[row(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000})]}]});
   assert.equal(untouched[0].proposed, null);
+});
+
+test('a figure entered in game on a tight row goes back to the tight verdict', () => {
+  // 1,350 a week against a level of 1,300: tight. The player typed 1,300 and
+  // the game now holds it, so the row is tight again, with the suggestion.
+  const tight = setting(1350, {weekly:1300, smart:true, target:1300}, 1300);
+  assert.deepEqual([tight.fit, tight.entered, tight.edited, tight.value], ['tight', true, false, 1400]);
+  const rows = build({imports:[{s:0, rows:[row(1350, {weekly:1300, smart:true, target:1300}, 1300)]}]});
+  assert.deepEqual([rows[0].current, rows[0].proposed], [1300, 1400]);
+});
+
+test('a level with a plain amount after it shows the level and asks for the week less that amount', () => {
+  // Delivered level first, then 400 plain: a week brings 1,400 at most.
+  const after = setting(1800, {weekly:1400, smart:true, target:1000, plainAfter:400});
+  assert.deepEqual([after.inGame, after.plainAfter, after.fit, after.setTo, after.value], [1000, 400, 'short', 1400, 1400]);
+  const rows = build({imports:[{s:0, rows:[row(1800, {weekly:1400, smart:true, target:1000, plainAfter:400})]}]});
+  assert.deepEqual([rows[0].current, rows[0].proposed], [1000, 1400]);
+  assert.match(rows[0].reason, /^Set Smart Delivery stock to 1[,.]400\./);
+  // Plain first, the 400 lands inside the level: the level alone is the week.
+  const inside = setting(1800, {weekly:1000, smart:true, target:1000, plainAfter:0});
+  assert.deepEqual([inside.inGame, inside.setTo], [1000, 1800]);
+});
+
+test('a paused level shows the level in game', () => {
+  const paused = setting(1400, {weekly:0, pausedWeekly:1400, smart:true, target:1000, plainAfter:400});
+  assert.deepEqual([paused.paused, paused.inGame], [true, 1000]);
 });

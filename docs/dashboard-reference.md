@@ -1004,14 +1004,18 @@ Two tables, one per number a logistics manager is set with.
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
   *Set to* is a box: where the setting falls short of the week it holds the
   suggestion, the used week rounded up to the hundred (for Smart Delivery, the stock
-  that runs everything the depot feeds at full capacity for a week); elsewhere it
-  holds the figure in game. Type your own figure and it is kept in this browser per
-  character, depot and material until you reset it; a row whose box differs from the
+  that runs everything the depot feeds at full capacity for a week, less any plain
+  amount the game delivers after the level, which comes on top of it); elsewhere it
+  holds the figure in game. A plain amount delivered before the level lands inside it,
+  so only one delivered after it shows as "plus N a week". Enter your own figure and it
+  is kept in this browser per character, depot and material until you reset it or the
+  game holds it; a row whose box differs from the
   game is marked, stays in *Needs a change*, and goes into the Plan imports checklist
   as "Set Smart Delivery stock to N" or "Set the weekly order to N". A high Smart
   Delivery level only holds stock, so it is never marked *could lower*. A material
-  with two or more contracts at the depot lists them under its name in plan order,
-  with importer, kind and amount. Materials a factory line needs that no depot's plan
+  with two or more contracts at the depot lists them under its name in delivery order,
+  with importer, kind and amount. A contract set to zero that brought nothing is listed
+  at zero and counts toward nothing. Materials a factory line needs that no depot's plan
   carries are listed at the foot: those need a top-up added on some depot and an
   import there.
 - **Daily top-ups, per factory**: every material each factory eats a day, the lines that

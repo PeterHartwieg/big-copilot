@@ -52,15 +52,16 @@ const fixture = () => ({
   },
 });
 
-async function board({width = 1280, view = 'all', storage = true, page: given} = {}){
+async function board({width = 1280, view = 'all', storage = true, page: given, data = fixture(), before = null} = {}){
   const page = given || await browser.newPage({viewport: {width, height: 1000}});
   if(!given){
     await page.route('https://**', route => route.abort());
     await page.route('http://board.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
     await page.goto('http://board.test/');
   }
-  await page.evaluate(([data, view, storage]) => {
+  await page.evaluate(([data, view, storage, before]) => {
     if(!storage) Object.defineProperty(window, 'localStorage', {get(){ throw new Error('denied'); }});
+    if(before) localStorage.setItem(before[0], before[1]);
     D = data; logisticsView = view; supplySort = {};
     document.body.classList.add('has-board');
     document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
@@ -68,7 +69,7 @@ async function board({width = 1280, view = 'all', storage = true, page: given} =
     const draw = drawOrderChecklist;
     drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
     drawLogistics(); wireAll();
-  }, [fixture(), view, storage]);
+  }, [data, view, storage, before]);
   return page;
 }
 const cells = page => page.$$eval('#importPlan tbody tr', rows => rows.map(r => ({
@@ -179,16 +180,87 @@ for(const smart of [true, false]){
         return {tip: meta.Water.tip, cell: row ? row.cells[5].textContent.replace(/\s+/g, ' ').trim() : null};
       }, plan);
       if(smart){
-        assert.match(water.tip, /^Smart Delivery keeps 3,000 in stock from /);
+        // Said at its depot, never summed across depots into a level none has.
+        assert.match(water.tip, /^Smart Delivery keeps 3,000 in stock at 1 Depot, from /);
         assert.doesNotMatch(water.tip, /a week on order/);
-        assert.match(water.cell, /^3,000 in stock/);
+        assert.match(water.cell, /^3,000 a week at most, Smart Delivery/);
       } else {
         assert.match(water.tip, /^3,000 a week on order now from /);
-        assert.doesNotMatch(water.cell, /in stock/);
+        assert.doesNotMatch(water.cell, /Smart Delivery/);
       }
     } finally { await page.close(); }
   });
 }
+
+/* Review round 1: mixed lines, a contract at zero, an entered figure, and
+   what the box says it holds. */
+const mixed = () => {
+  const data = fixture();
+  Object.assign(data.businesses[0].lines, [...data.businesses[0].lines,
+    {slug: 'hops', item: 'Hops', units: 0}, {slug: 'malt', item: 'Malt', units: 0},
+    {slug: 'yeast', item: 'Yeast', units: 0}]);
+  Object.assign(data.supply.factories.depots[0], {
+    // Level first, then a plain 400 on top: at most 1,400 a week.
+    hops: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainAfter: 400, arrivedLastWeek: 1400,
+      contracts: [contractOf(4, 'Pier 1', true, 1000), contractOf(5, 'Pier 2', false, 400)]},
+    // Plain first: the 400 lands inside the level.
+    malt: {weekly: 1000, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainAfter: 0, arrivedLastWeek: 1000,
+      contracts: [contractOf(6, 'Pier 2', false, 400), contractOf(7, 'Pier 1', true, 1000)]},
+    // Set up at zero, nothing brought.
+    yeast: {weekly: 0, pausedWeekly: 0, zeroOnly: true, smart: false, target: null, plain: 0, plainAfter: 0,
+      arrivedLastWeek: 0, contracts: [contractOf(8, 'Pier 1', false, 0)]},
+  });
+  Object.assign(data.supply.factories.depotOther[0], {hops: 1800, malt: 1800, yeast: 300});
+  return data;
+};
+
+test('a mixed line shows its level, and only a plain amount after it comes on top', async () => {
+  const page = await board({data: mixed()});
+  try{
+    const rows = Object.fromEntries((await cells(page)).map(r => [r.item, r]));
+    assert.match(rows.Hops.inGame, /^1,000 in stock\s*plus 400 a week$/);
+    assert.match(rows.Malt.inGame, /^1,000 in stock$/);
+    // The level a week needs is the week less what comes on top of it.
+    assert.equal(rows.Hops.box, '1400');
+    assert.equal(rows.Malt.box, '1800');
+    // A contract set up at zero is a contract, at zero.
+    assert.match(rows.Yeast.inGame, /^0 a week$/);
+    assert.equal(rows.Yeast.box, '300');
+    const hops = (await actions(page)).find(a => a[0] === 'Hops');
+    assert.deepEqual(hops, ['Hops', 1000, 1400, 'smart']);
+  } finally { await page.close(); }
+});
+
+test('a figure the game now holds is forgotten and the row reads as the board sees it', async () => {
+  const page = await board({before: ['ba_import_set_v1:set-fixture', JSON.stringify({'["depot#0","sugar"]': 900})]});
+  try{
+    const sugar = (await cells(page)).find(r => r.item === 'Sugar');
+    assert.deepEqual([sugar.box, sugar.changed], ['1400', true]);
+    assert.match(sugar.verdict, /raise/);
+    assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v1:set-fixture')), '{}');
+  } finally { await page.close(); }
+});
+
+test('the box and its reset say what they hold in each state', async () => {
+  const page = await board();
+  try{
+    const tip = item => box(page, item).getAttribute('data-tip');
+    assert.match(await tip('Sugar'), /^The board suggests 1,?400: the stock that runs everything/);
+    assert.match(await tip('Flour'), /^The figure in game/);
+    await box(page, 'Flour').fill('6000');
+    await box(page, 'Flour').press('Enter');
+    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+    assert.match(await tip('Flour'), /^Your own figure\. The game holds 5,?000/);
+    const reset = page.locator('#importPlan .imp-reset');
+    assert.match(await reset.getAttribute('aria-label'), /^Back to the figure in game, 5,?000, for Flour$/);
+    await box(page, 'Sugar').fill('2000');
+    await box(page, 'Sugar').press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('#importPlan .imp-reset').length === 2);
+    const sugarReset = page.locator('#importPlan tbody tr', {hasText: 'Sugar'}).locator('.imp-reset');
+    assert.match(await sugarReset.getAttribute('aria-label'), /^Back to the board's suggestion, 1,?400, for Sugar$/);
+    assert.match(await page.locator('#importPlan thead th', {hasText: 'Set to'}).first().getAttribute('data-tip'), /Enter your own figure/);
+  } finally { await page.close(); }
+});
 
 test('the imports table scrolls inside its box, not the page, on a phone', async () => {
   const page = await board({width: 390});
