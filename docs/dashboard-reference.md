@@ -1006,10 +1006,14 @@ Two tables, one per number a logistics manager is set with.
   suggestion, the used week rounded up to the hundred (for Smart Delivery, the stock
   that runs everything the depot feeds at full capacity for a week, less any plain
   amount the game delivers after the level, which comes on top of it); elsewhere it
-  holds the figure in game. A plain amount delivered before the level lands inside it,
-  so only one delivered after it shows as "plus N a week". Enter your own figure and it
-  is kept in this browser per character, depot and material until you reset it or the
-  game holds it; a row whose box differs from the
+  holds the figure in game. The level and the "plus N a week" beside it come from the
+  game's delivery pass into an empty depot, so together they are always what a week can
+  bring: the level shown is the last one that still brings something, a plain amount
+  delivered before it lands inside it, and whatever arrives after it is the plus. Enter
+  your own figure and it is kept in this browser per character, depot and material,
+  with the figure the game held when you entered it, until you reset it or the game's
+  figure moves to it. Entering the figure the game already holds turns the suggestion
+  down until the game's figure moves; a row whose box differs from the
   game is marked, stays in *Needs a change*, and goes into the Plan imports checklist
   as "Set Smart Delivery stock to N" or "Set the weekly order to N". A high Smart
   Delivery level only holds stock, so it is never marked *could lower*. A material

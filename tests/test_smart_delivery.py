@@ -8,7 +8,8 @@ import unittest
 from unittest.mock import patch
 
 import test_import_routes as fixtures
-from ba_dashboard import _alerts, _feed_notes, _import_drop, _scheduled_import_gap, _supply
+from ba_dashboard import (_alerts, _feed_notes, _import_drop, _import_level, _scheduled_import_gap,
+                          _supply)
 from test_import_routes import contract
 from test_recipe_identity import WATER
 
@@ -46,6 +47,35 @@ class ImportDropTests(unittest.TestCase):
         self.assertEqual(_import_drop(0, [drop(1400), drop(1000, True)]), 1400)
         # Smart Delivery first: the plain amount comes on top of the level.
         self.assertEqual(_import_drop(0, [drop(1000, True), drop(400)]), 1400)
+
+
+class ImportLevelTests(unittest.TestCase):
+    """What the page says of a line always equals what a delivery pass brings."""
+
+    CASES = [
+        # (delivery order, level shown, plain on top of it)
+        ([drop(1000, True)], 1000, 0),
+        ([drop(400), drop(1000, True)], 1000, 0),
+        ([drop(1000, True), drop(400)], 1000, 400),
+        # A second equal level finds the depot at 1,400 and brings nothing.
+        ([drop(1000, True), drop(400), drop(1000, True)], 1000, 400),
+        # A higher level after a plain amount can bring nothing too: 500 + 300
+        # is 800 before the 600 is asked for, so 500 is the level that holds.
+        ([drop(500, True), drop(300), drop(600, True)], 500, 300),
+        ([drop(500, True), drop(300), drop(900, True)], 900, 0),
+        ([drop(1000, True), drop(1500, True)], 1500, 0),
+        # Plain amounts first already fill the level: the rest is on top.
+        ([drop(1400), drop(1000, True)], 1000, 400),
+        ([drop(700)], None, 0),
+    ]
+
+    def test_level_and_plain_after_add_up_to_the_delivery_pass(self):
+        for drops, level, after in self.CASES:
+            with self.subTest(drops=[(d["amount"], d["smart"]) for d in drops]):
+                smart, shown, plain_after = _import_level(drops)
+                self.assertEqual((shown, plain_after), (level, after))
+                if smart:
+                    self.assertEqual(shown + plain_after, _import_drop(0, drops))
 
 
 class ScheduledGapTests(unittest.TestCase):
@@ -143,6 +173,16 @@ class SmartSupplyTests(unittest.TestCase):
                          (700, 700, 0))
         self.assertEqual(need["raiseImport"], 1700)
 
+    def test_a_depot_line_reads_as_its_delivery_pass(self):
+        for orders, level, after, week in (
+            ([smart(1000), contract(400, pier=2), smart(1000)], 1000, 400, 1400),
+            ([smart(500), contract(300, pier=2), smart(600, pier=3)], 500, 300, 800),
+        ):
+            with self.subTest(level=level):
+                _, line = self.depot(orders, routed=True)
+                self.assertEqual((line["target"], line["plainAfter"], line["weekly"]),
+                                 (level, after, week))
+
     def test_a_contract_set_to_zero_is_listed_but_supplies_nothing(self):
         order = smart(0)
         order["id"] = "z-1"
@@ -165,8 +205,9 @@ class SmartSupplyTests(unittest.TestCase):
         # keeps its raw place in the plan for a later reorder.
         self.assertEqual([(c["order"], c["importer"]) for c in line["contracts"]],
                          [(0, "1 Pier"), (2, "1 Pier"), (1, "2 Pier")])
-        # Both plain amounts land before the level, inside it.
-        self.assertEqual((line["target"], line["plainAfter"]), (1000, 0))
+        # Both plain amounts land before the level and already pass it, so
+        # the level brings nothing and 100 sits on top of it.
+        self.assertEqual((line["target"], line["plainAfter"]), (1000, 100))
 
     def test_paused_contracts_count_in_what_arrived_but_not_in_supply(self):
         _, line = self.depot([smart(3000, last=900), smart(8000, last=500, active=False, pier=2)],

@@ -2355,7 +2355,8 @@ def _import_setting(supply: dict) -> dict:
     `smart` and `target` say whether the line runs on Smart Delivery and the
     stock level that holds; `plain` is what plain contracts beside it bring a
     week, and `plainAfter` the part of it delivered after the level, which
-    comes on top of it (a plain amount delivered first lands inside it). `arrivedLastWeek` sums every contract's amountOrderedLastWeek, paused
+    comes on top of it (_import_level: level + plainAfter is always what one
+    delivery brings into an empty depot). `arrivedLastWeek` sums every contract's amountOrderedLastWeek, paused
     ones too, since those goods did arrive. `contracts` lists each contract on
     the line in the order the game delivers them.
     """
@@ -2402,17 +2403,30 @@ def _contract_list(contracts: list) -> list:
 def _import_level(drops: list) -> tuple:
     """How a line's contracts read in game: (smart, level, plain after it).
 
-    `drops` is in delivery order. The level is the highest Smart Delivery
-    amount, the one that holds. A plain amount delivered before it lands
-    inside the level; only what is delivered after it comes on top, so that
-    is the "plus N a week" a player sees beside the level.
+    `drops` is in delivery order. Both figures come from the same pass
+    _import_drop() makes into an empty depot, so level + plain after is always
+    what that pass delivers. The level is the last Smart Delivery contract
+    that still brings something: every later level finds the depot already
+    at or above it and brings nothing. What arrives after it is the plain
+    amount on top, the "plus N a week" beside the level; a plain amount
+    delivered before it lands inside the level. Where no level brings
+    anything (plain amounts delivered first already fill them), the last
+    level is named and everything beyond it is on top.
     """
-    levels = [d["amount"] for d in drops if d["smart"]]
-    if not levels:
+    stock, holds, last = 0, None, None
+    for i, drop in enumerate(drops):
+        if drop["smart"]:
+            last = i
+            brought = max(0, drop["amount"] - max(stock, 0))
+            if brought > 0:
+                holds = i
+        else:
+            brought = drop["amount"]
+        stock += brought
+    if last is None:
         return False, None, 0
-    level = max(levels)
-    at = next(i for i, d in enumerate(drops) if d["smart"] and d["amount"] == level)
-    return True, level, sum(d["amount"] for d in drops[at + 1:] if not d["smart"])
+    level = drops[holds if holds is not None else last]["amount"]
+    return True, level, stock - level
 
 
 def _smart_words(level, plain_after) -> str:
@@ -14124,16 +14138,16 @@ let logisticsView = "changes";
    T of use through a week, and the fit compares it with the week as a plain
    order's amount is compared. `weekly` is that capacity, `target` the level
    the box in game shows. A high level only holds stock, so a Smart Delivery
-   row is never told it could lower. `edit` is the player's own figure, if any. */
+   row is never told it could lower. `edit` is the player's own figure, if any,
+   as {value, inGame}: what they typed and what the game held when they did. */
 function importSetting(total, contract, edit){
   const smart = !!contract.smart;
   const current = contract.weekly, pausedWeekly = contract.pausedWeekly || 0;
   const paused = !current && pausedWeekly > 0;
   const fit = paused ? "paused" : current === undefined ? (total ? "none" : "idle")
     : current === 0 && total > 0 ? "short" : feedFit(total, current);
-  /* A plain amount the game delivers after the level comes on top of it, so
-     the level a week needs is the week less that amount. One delivered before
-     the level lands inside it and changes nothing here. */
+  /* What the delivery pass brings beyond the level comes on top of it
+     (_import_level), so the level a week needs is the week less that amount. */
   const plainAfter = smart ? contract.plainAfter || 0 : 0;
   const setTo = total ? ceil100(Math.max(0, total - plainAfter)) : null;
   // The number in the game's own box: the level for Smart Delivery, the amount otherwise.
@@ -14144,12 +14158,15 @@ function importSetting(total, contract, edit){
   const wants = !paused && setTo !== null
     && (fit === "none" || fit === "short" || fit === "tight" || current === 0);
   const suggested = wants ? setTo : inGame;
-  /* A figure the game now holds has been entered: it is no longer an edit,
-     and the row goes back to the board's own verdict. The caller forgets it. */
-  const typed = Number.isFinite(edit) && edit >= 0;
-  const entered = typed && inGame !== null && edit === inGame && edit !== suggested;
-  const edited = typed && !entered && edit !== suggested;
-  const value = edited ? edit : suggested;
+  /* A typed figure has been entered once the game's own figure has moved
+     since it was typed and now equals it: it is no longer an edit, the row
+     goes back to the board's own verdict, and the caller forgets it. Typing
+     the figure the game already holds, to turn a suggestion down, is an edit
+     that lasts until the game's figure moves. */
+  const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
+  const entered = typed && inGame !== null && edit.inGame !== inGame && edit.value === inGame;
+  const edited = typed && !entered;
+  const value = edited ? edit.value : suggested;
   // A weekly order carries a buffer by design; only half again over is worth a word.
   const surplus = !smart && current !== undefined && !!total && current > total * 1.5;
   return {smart, current, pausedWeekly, paused, fit, setTo, inGame, suggested, value, edited,
@@ -14376,7 +14393,9 @@ function drawOrderChecklist(rows, factories){
 }
 
 /* The Set to figures the player typed, per character, depot and material,
-   kept until reset. Storage may be missing or refuse (a private window, a
+   each with the game's figure at the moment it was typed ({value, inGame}),
+   kept until reset or entered in game. Version 1 stored bare numbers and is
+   not read. Storage may be missing or refuse (a private window, a
    preview); every read and write is guarded, and without it the figures last
    as long as the page. No character id means nothing is written, so two
    unknown companies never share figures. */
@@ -14384,20 +14403,23 @@ const impSetMemo = new Map();
 const impSetId = (depotKey, slug) => JSON.stringify([depotKey, slug]);
 function impSetEdits(){
   const character = D.supply && D.supply.factories && D.supply.factories.character;
-  const key = character ? `ba_import_set_v1:${character}` : null;
+  const key = character ? `ba_import_set_v2:${character}` : null;
   if(!impSetMemo.has(key)){
     let saved = null;
     if(key) try{ saved = JSON.parse(localStorage.getItem(key)); }catch(e){}
     const edits = {};
     if(saved && typeof saved === "object" && !Array.isArray(saved))
-      Object.entries(saved).forEach(([id, n]) => { if(Number.isFinite(n) && n >= 0) edits[id] = Math.round(n); });
+      Object.entries(saved).forEach(([id, e]) => {
+        if(e && Number.isFinite(e.value) && e.value >= 0)
+          edits[id] = {value: Math.round(e.value), inGame: Number.isFinite(e.inGame) ? e.inGame : null};
+      });
     impSetMemo.set(key, edits);
   }
   return {key, edits: impSetMemo.get(key)};
 }
-function impSetKeep(id, value){
+function impSetKeep(id, entry){
   const {key, edits} = impSetEdits();
-  if(value === null) delete edits[id]; else edits[id] = value;
+  if(entry === null) delete edits[id]; else edits[id] = entry;
   if(key) try{ localStorage.setItem(key, JSON.stringify(edits)); }catch(e){}
 }
 
@@ -14515,12 +14537,13 @@ function drawLogistics(){
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
     ? `Your own figure. ${suggests(r) ? `The board suggests ${r.suggested.toLocaleString()}` : `The game holds ${r.inGame.toLocaleString()}`}`
+    : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
     : suggests(r) ? `The board suggests ${r.value.toLocaleString()}: ${boardSays(r)}`
     : "The figure in game; nothing here asks for a change";
   const resetTo = r => suggests(r) ? `the board's suggestion, ${r.suggested.toLocaleString()}`
     : `the figure in game, ${(r.inGame ?? 0).toLocaleString()}`;
   const setCell = r => `<td class="imp-to">${r.value === null ? "" : `<span class="imp-set"><input type="number" min="0" step="1" inputmode="numeric"
-      class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
+      class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-imp-ingame="${r.inGame ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
       r.edited ? `<button type="button" class="imp-reset" data-imp-reset="${attr(r.impId)}" aria-label="${attr(`Back to ${resetTo(r)}, for ${r.item}`)}"
         data-tip="${attr(`Back to ${resetTo(r)}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}</td>`;
   /* Two or more contracts on one line: each is listed under the material in
@@ -14642,8 +14665,9 @@ function wireImportSet(host, redraw){
   };
   host.querySelectorAll("input[data-imp]").forEach(box => box.onchange = () => {
     const n = Math.round(Number(box.value));
+    const inGame = box.dataset.impIngame === "" ? null : Number(box.dataset.impIngame);
     impSetKeep(box.dataset.imp, box.value.trim() === "" || !Number.isFinite(n) || n < 0
-      || String(n) === box.dataset.impSuggested ? null : n);
+      || String(n) === box.dataset.impSuggested ? null : {value: n, inGame});
     // After the change event the focus has moved on; redraw once it has landed.
     setTimeout(() => {
       const next = document.activeElement && document.activeElement.dataset

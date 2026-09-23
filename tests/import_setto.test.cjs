@@ -124,8 +124,9 @@ for(const storage of [true, false]){
       await page.locator('#logisticsTools').getByText('Needs a change').click();
       assert.deepEqual((await cells(page)).map(r => r.item), ['Sugar', 'Flour']);
       if(storage){
-        const saved = await page.evaluate(() => localStorage.getItem('ba_import_set_v1:set-fixture'));
-        assert.deepEqual(JSON.parse(saved), {'["depot#0","flour"]': 6000});
+        const saved = await page.evaluate(() => localStorage.getItem('ba_import_set_v2:set-fixture'));
+        // What was typed, and what the game held when it was.
+        assert.deepEqual(JSON.parse(saved), {'["depot#0","flour"]': {value: 6000, inGame: 5000}});
       }
       // Reset puts the suggestion back and the row leaves the view.
       await page.locator('#importPlan .imp-reset').click();
@@ -148,7 +149,7 @@ test('a typed figure survives a reload, and typing the suggestion is no edit', a
     await box(page, 'Sugar').fill('1400');
     await box(page, 'Sugar').press('Enter');
     await page.waitForFunction(() => !document.querySelector('#importPlan .imp-reset'));
-    assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v1:set-fixture')), '{}');
+    assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v2:set-fixture')), '{}');
   } finally { await page.close(); }
 });
 
@@ -231,13 +232,51 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
   } finally { await page.close(); }
 });
 
+const KEY = 'ba_import_set_v2:set-fixture';
 test('a figure the game now holds is forgotten and the row reads as the board sees it', async () => {
-  const page = await board({before: ['ba_import_set_v1:set-fixture', JSON.stringify({'["depot#0","sugar"]': 900})]});
+  // 900 was typed when the game held 700; the game has since moved to 900.
+  const page = await board({before: [KEY, JSON.stringify({'["depot#0","sugar"]': {value: 900, inGame: 700}})]});
   try{
     const sugar = (await cells(page)).find(r => r.item === 'Sugar');
     assert.deepEqual([sugar.box, sugar.changed], ['1400', true]);
     assert.match(sugar.verdict, /raise/);
-    assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v1:set-fixture')), '{}');
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), KEY), '{}');
+  } finally { await page.close(); }
+});
+
+test('typing the figure in game turns the suggestion down and it stays down', async () => {
+  const page = await board();
+  try{
+    await box(page, 'Sugar').fill('900');
+    await box(page, 'Sugar').press('Enter');
+    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+    let sugar = (await cells(page)).find(r => r.item === 'Sugar');
+    assert.deepEqual([sugar.box, sugar.changed], ['900', false]);
+    assert.deepEqual(await actions(page), []);
+    // A redraw keeps it: the game has not moved since it was typed.
+    await page.evaluate(() => { drawLogistics(); wireAll(); });
+    sugar = (await cells(page)).find(r => r.item === 'Sugar');
+    assert.equal(sugar.box, '900');
+    assert.deepEqual(JSON.parse(await page.evaluate(key => localStorage.getItem(key), KEY)),
+      {'["depot#0","sugar"]': {value: 900, inGame: 900}});
+  } finally { await page.close(); }
+});
+
+test('figures stored by the first version are not read', async () => {
+  const page = await board({before: ['ba_import_set_v1:set-fixture', JSON.stringify({'["depot#0","flour"]': 6000})]});
+  try{
+    assert.equal((await cells(page)).find(r => r.item === 'Flour').box, '5000');
+  } finally { await page.close(); }
+});
+
+test('a paused row says it is paused, not that nothing asks for a change', async () => {
+  const data = fixture();
+  data.supply.factories.depots[0].salt = {...data.supply.factories.depots[0].salt, weekly: 0, pausedWeekly: 700};
+  const page = await board({data});
+  try{
+    const tip = await box(page, 'Salt').getAttribute('data-tip');
+    assert.match(tip, /paused contract: resume it in game/);
+    assert.doesNotMatch(tip, /nothing here asks/);
   } finally { await page.close(); }
 });
 
