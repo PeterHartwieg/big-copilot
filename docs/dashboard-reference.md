@@ -510,6 +510,41 @@ they appear in that site's `bench`, count towards that site's `headcount.have`, 
 gone from every later site's pool. One person's week is one week across the whole save, so
 nobody is rostered at two shops in the same hour.
 
+**Who has to be added first.** `addPeople` says, per plan, who the plan counts on that does
+not work at the site yet: `assign`, the unassigned staff it draws on (`id`, `name`, `skill`,
+`role` and `p`), `hire`, one `{skill, role, people}` per role still short of people, `people`,
+the two added up, and `hoursUncovered`, the weekly hours of the entries that belong to them.
+Assigning and hiring stay the player's job, and a week can only be set for people already
+working at the site, so those hours stay empty in the game until they are added. The count
+agrees with the plan by construction: `assign` is the plan's `bench` and `hire` its
+`headcount.hire`.
+
+**The demand test.** A shop with no measured weeks gets a demand plan of cleaning and
+security alone, because nothing is known about its queues. `fullCover` is the other plan
+for every retail site, and the way to find out: every station of every role staffed every
+hour of every day, 168 hours a week each, for two weeks, so no customer is turned away by an
+empty station and the hours that come back are the demand. It is a different need curve
+put through the same placer with every rule above unchanged (twelve-hour entries, the
+14-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
+server on cleaning, the fewest people first) and the same people: the site's staff, the
+unassigned bench and hires. It is placed on its own copy of everybody's week and never
+written back, so it takes nobody off the bench a later site's demand plan could use. It
+carries the same keys as the demand plan, plus `open` (0 to 24 every day, the hours it
+assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
+an hour it is shut is an hour the test never measures) and `inGame`. On a shop with no
+serving station the two plans are the same week, and the page offers no choice.
+
+**When the test is done.** `fullCover.inGame` is whether the schedule in the game already is a
+full-cover week: every serving station staffed for at least nine tenths of the week's 168
+hours, and the doors open for at least nine tenths of it. Nine tenths lets through what a
+hand-set week really looks like, the two-hour scraps and an hour lost at a hand-over, and
+turns away a shop shut at night (open 6 to 24 is three quarters of the week) or a register
+empty for a whole day. `demandTestDone` is that, plus two measured weeks behind every
+weekday, plus a demand plan that asks for fewer serving hours than the test: a shop busy
+every hour is already on its demand plan and has nothing to switch to. The board does not
+know when the schedule was set, so a measured shop that has always run every station
+around the clock counts as done too, which is the right advice for it anyway.
+
 ## Staff demands
 
 Each employee holds up to three demands, and an ignored one wears their satisfaction down
@@ -734,6 +769,17 @@ and dims the rest; clicking scrolls there.
   The block leads with a line naming the shop and saying what the week below is for, so
   a player arriving from the *Optimize staffing* card knows what they are looking at and
   that the ticks change nothing in the save.
+
+  Under the heading, a two-way pick between the site's two plans: *Cover only* (or *Demand
+  plan* on a shop measured enough to cut serving hours) and *Full cover 24/7*, the demand
+  test. The first is the default; the pick is remembered per shop in this browser, and each
+  plan keeps its own ticks. The test's view says in one line what it is for (run it for two
+  weeks, then switch to the demand plan), draws every station every hour, and puts *Open
+  every day 0 to 24* first among its steps on a shop that is not open that long already.
+  Once the test is done, one line says *Demand test done: switch to the demand plan*, on the
+  block and on the *Optimize staffing* card, which then points at that shop before any other.
+  The people a plan needs added come as one step, *Add N people to fill this plan: assign ...
+  (unassigned) and hire ...*, with the hours that wait on them in its tip.
 
   A shop whose plan holds no serving shift at all still gets the block, because its
   cleaning and security cover does not wait on anything — and it is exactly the shop whose
