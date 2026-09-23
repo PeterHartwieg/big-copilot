@@ -302,9 +302,9 @@ named "Default", else the first of `GameInstance.employeePresets`; a string name
   with `max`), `changed`, `bad_amount` (negative or not a whole number). A Smart Delivery
   amount is a stock level, never `over_cap`. `max` is what the importer still allows,
   `max(0, cap - orderedThisWeek)`: urgent orders during the week count against the next
-  Monday's delivery, which is the one the amount is for. Inside the lock window a restart's
-  first delivery is the Monday after, when the week's count has reset, so `max` is the full
-  cap. `max` ignores the player's other contracts with the same importer and item; the game
+  Monday's delivery, which is the one the amount is for. Inside the lock window the amount can only
+  be delivered on the Monday after, when the week's count has reset, so `max` is the full cap
+  (a restart, an activation or an edit to a stopped contract alike). `max` ignores the player's other contracts with the same importer and item; the game
   trims those at delivery in plan order.
 - Activation lists, as extra product rows, products the request did not name that the
   game's Start would refuse (`no_warehouse`). Rows also carry `reordered` (true when `order`
