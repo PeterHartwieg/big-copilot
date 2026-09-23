@@ -188,9 +188,9 @@ class Link:
             return body
 
     def paired(self, header: str | None) -> bool:
-        """The mod's test: "Bearer " and the code, trimmed and upper-cased."""
+        """The mod's test: the Bearer scheme in any case, and the code trimmed and upper-cased."""
         text = (header or "").strip()
-        return text.startswith("Bearer ") and text[len("Bearer "):].strip().upper() == self.code
+        return text[:7].lower() == "bearer " and text[7:].strip().upper() == self.code
 
     # --- the save, as ba_save reads it ---------------------------------------
     def _save(self) -> ba_save.Save:
@@ -398,6 +398,29 @@ class Link:
         where = product.get("assignedWarehouse")
         return (where.get("streetName"), where.get("streetNumber", 0)) if isinstance(where, dict) else None
 
+    def _allowed(self, cap: int, ordered: int) -> int:
+        """What the importer still allows for the delivery an amount is for:
+        the whole cap inside the lock window, whose delivery comes after the
+        week's count resets; else the cap less this week's orders."""
+        return cap if self._lock_window() else max(0, cap - ordered)
+
+    def _contract_row(self, save, cid, contract) -> dict:
+        """A contract's answer row before any product, as the game holds it."""
+        row = {"id": cid, "importer": None, "active": None, "repeating": None,
+               "reactivated": False, "nextDeliveryDay": None, "nextDeliveryTotal": None,
+               "error": None, "reopens": None, "reordered": False, "products": []}
+        if contract is None:
+            row["error"] = "not_found"
+            return row
+        source = save.address(contract.get("importAddress"))
+        state = self._contract_state(contract)
+        price = self.terms.get(cid, {}).get("unitPrice")
+        row.update(importer=f"{source[1]} {source[0]}" if source else None, active=state["active"],
+                   repeating=state["repeating"], nextDeliveryDay=state["nextDeliveryDay"],
+                   nextDeliveryTotal=None if price is None else round(
+                       sum(self._amount(cid, p) for p in save.items(contract.get("products"))) * price, 2))
+        return row
+
     def _imports(self, save, body, dry):
         wanted = body.get("contracts")
         order = body.get("order")
@@ -419,15 +442,10 @@ class Link:
                     and isinstance(ask.get("activate", False), bool) and isinstance(ask.get("products", []), list)):
                 raise BadRequest("contracts[] must be {id, activate, products}")
             contract = contracts.get(ask["id"])
-            row = {"id": ask["id"], "importer": None, "active": None, "repeating": None,
-                   "reactivated": False, "nextDeliveryDay": None, "nextDeliveryTotal": None,
-                   "error": None, "reopens": None, "reordered": False, "products": []}
+            row = self._contract_row(save, ask["id"], contract)
             rows.append(row)
             if contract is None:
-                row["error"] = "not_found"
                 continue
-            source = save.address(contract.get("importAddress"))
-            row["importer"] = f"{source[1]} {source[0]}" if source else None
             state = self._contract_state(contract)
             after = dict(state)
             if ask.get("activate") and not state["active"]:
@@ -464,10 +482,10 @@ class Link:
                 elif self._site_error(self._registration(save, warehouse)):
                     line["error"] = "no_warehouse"
                 elif (line["cap"] is not None and not line["smart"]
-                      and want["amount"] > max(0, line["cap"] - line["orderedThisWeek"])):
+                      and want["amount"] > self._allowed(line["cap"], line["orderedThisWeek"])):
                     # A Smart Delivery amount is a stock level, never over the cap.
                     line["error"] = "over_cap"
-                    line["max"] = max(0, line["cap"] - line["orderedThisWeek"])
+                    line["max"] = self._allowed(line["cap"], line["orderedThisWeek"])
                 else:
                     amounts[(ask["id"], want["itemName"], warehouse)] = (before, want["amount"])
             named = {(line["itemName"], (line["warehouse"]["street"], line["warehouse"]["number"]))
@@ -492,32 +510,44 @@ class Link:
             if price is not None:
                 row["nextDeliveryTotal"] = round(sum(written) * price, 2)
             first = next((line["error"] for line in row["products"] if line["error"]), None)
-            if first:
-                row["error"] = first  # a row can be judged without reading its products
+            edits = any(b != a for b, a in amounts.values())
+            # The mod's precedence: changed, screen_open, no_agent, locked,
+            # no_amounts, then the first product error, which the row repeats
+            # so it can be judged without reading its products.
+            if any(line["error"] == "changed" for line in row["products"]):
+                row["error"] = "changed"
             elif not contract.get("employeeInstanceId"):
                 row["error"] = "no_agent"
-            elif row["reactivated"] and not any(written):
-                row["error"] = "no_amounts"
-            elif (state["active"] and any(b != a for b, a in amounts.values())
-                  and self._lock_window() and state["nextDeliveryDay"] == self._imminent_monday()):
+            elif (state["active"] and edits and self._lock_window()
+                  and state["nextDeliveryDay"] == self._imminent_monday()):
                 row["error"] = "locked"
                 row["reopens"] = {"day": state["nextDeliveryDay"], "hour": 8}
+            elif (row["reactivated"] or (state["active"] and edits)) and not any(written):
+                # Start refuses nothing to order: a restart, and a running
+                # contract whose every amount goes to 0 (Cancel, edit, Start).
+                row["error"] = "no_amounts"
+            elif first:
+                row["error"] = first
             row.update(active=after["active"], repeating=after["repeating"],
                        nextDeliveryDay=after["nextDeliveryDay"])
             changes.append((ask["id"], state, after, amounts))
         new_order = None
         if order is not None:
+            # Every id in `order` answers a row: a contract moved by order alone
+            # too, with no products and no agent needed.
             for cid in order:
-                if cid not in contracts:
-                    rows.append({"id": cid, "importer": None, "error": "not_found", "reordered": False, "products": []})
+                if cid not in asked:
+                    rows.append(self._contract_row(save, cid, contracts.get(cid)))
             if all(cid in contracts for cid in order):
                 slots = sorted(current.index(cid) for cid in order)
                 new_order = list(current)
                 for slot, cid in zip(slots, order):
                     new_order[slot] = cid
+                # Reordered, all of them, when their relative sequence changes.
+                moved = [cid for cid in current if cid in order] != list(order)
                 for row in rows:
-                    if row["id"] in contracts:
-                        row["reordered"] = new_order.index(row["id"]) != current.index(row["id"])
+                    if row["id"] in order:
+                        row["reordered"] = moved
         ok = all(row["error"] is None for row in rows)
         answer = {"ok": ok, "kind": "imports", "dryRun": dry, "cash": self.cash, "rows": rows}
         if dry:
@@ -570,9 +600,11 @@ class Link:
                 if not isinstance(shift, dict):
                     raise BadRequest("shifts[] must be objects")
                 shifts.append((day["d"], i, shift))
-        # `changed` comes before every rule, the site's own included: a building
-        # the bytes do not hold has no shifts, so its print is the empty one.
-        before = self.schedules.get(address, schedule_entries(save, reg) if reg else [])
+        # not_found first (there is nothing to compare without the building),
+        # then `changed`, then every other rule, the site's own included.
+        if reg is None:
+            return self._schedule_refused(answer, dry)
+        before = self.schedules.get(address, schedule_entries(save, reg))
         answer["before"] = {"shifts": len(before), "print": shift_print(before)}
         if expect != answer["before"]["print"]:
             answer["siteError"] = "changed"

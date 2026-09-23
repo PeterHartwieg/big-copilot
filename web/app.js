@@ -894,7 +894,8 @@
     let busyLeft = WRITE_BUSY_RETRIES, askedAgain = false;
     for (;;) {
       if (!code) return {status: 0, error: "cancelled", body: null};
-      let res, answer = null;
+      let res;
+      const sentAt = Date.now();
       try {
         res = await linkFetch(path, {method: "POST", body: payload, wait: WRITE_WAIT_MS,
           headers: {"Content-Type": "application/json", Authorization: `Bearer ${code}`}});
@@ -902,7 +903,14 @@
         if (dryRun || err.unsent) return {status: 0, error: "unreachable", message: err.message, body: null};
         return {status: 0, error: "uncertain", message: err.message, body: null, reread: rereadGame()};
       }
-      try { answer = await res.json(); } catch (e) {}
+      // The answer's body is part of the answer: the same thirty seconds
+      // cover it, and an apply whose answer cannot be read is as unknown as
+      // one with none. A 401 is refused before the body, so it is certain.
+      const answer = await readAnswer(res, WRITE_WAIT_MS - (Date.now() - sentAt));
+      if (!answer && res.status !== 401) {
+        if (dryRun) return {status: res.status, error: "unreachable", message: "The game's answer could not be read.", body: null};
+        return {status: res.status, error: "uncertain", message: "The game's answer could not be read.", body: null, reread: rereadGame()};
+      }
       const error = res.status === 200 ? null : (answer && answer.error) || `http_${res.status}`;
       if (res.status === 401) {
         // A new game launch drew a new code: forget this one and ask once more.
@@ -922,16 +930,27 @@
     }
   }
 
-  // The mod refreshes after an apply; the board follows the stamp as it does
-  // after Update. A read already under way may have read the bytes before
-  // the change, so the follow waits for it to finish and then looks: an apply
-  // and its undo in quick succession must leave the board on the undo. One
-  // follow waits at a time, for the newest write's stamp.
+  // A write's JSON answer, or null when it is not an object or does not come
+  // within `ms`.
+  function readAnswer(res, ms) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), Math.max(0, ms));
+      res.json().then((v) => (v && typeof v === "object" && !Array.isArray(v) ? v : null), () => null)
+        .then((v) => { clearTimeout(timer); resolve(v); });
+    });
+  }
+
   // Until no read is under way. A poll on the real clock, not linkWait: the
   // tests that swap that one in resolve it at once, and this must yield.
   async function whenIdle(gen) {
     while ((busy || attempt) && gen === sourceGen && linkUrl) await new Promise((resolve) => setTimeout(resolve, 250));
   }
+
+  // The mod refreshes after an apply; the board follows the stamp as it does
+  // after Update. A read already under way may have read the bytes before
+  // the change, so the follow waits for it to finish and then looks: an apply
+  // and its undo in quick succession must leave the board on the undo. One
+  // follow waits at a time, for the newest write's stamp.
   let followBefore = null;
   async function followWrite(before) {
     const gen = sourceGen;
@@ -1587,8 +1606,10 @@
     name: (rid, slug) => ask({kind: "name", rid, slug: slug || null, history: stored.get(HISTORY_KEY)}),
     watch: (h) => { handlers = h; },
     // The game link, for the board's write buttons: the kinds the mod takes
-    // and whose company it is, or null when the board is not linked.
-    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || ""} : null),
+    // and whose company it is, and the game's day and hour at the last
+    // health (the import lock window), or null when the board is not linked.
+    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || "",
+      day: linkHealth.day, hour: linkHealth.hour} : null),
     // Resolves to {status, error, body}; see gameWrite().
     write: (kind, body, opts) => gameWrite(kind, body, opts),
     // Update, for a board that learns the game has moved on.

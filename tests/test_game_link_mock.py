@@ -194,8 +194,11 @@ class MockWrites(unittest.TestCase):
             status, body = self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}, code)
             self.assertEqual((status, body), (401, {"error": "not_paired"}))
         self.assertEqual(self.link.applied, [])
-        # The mod trims the code and reads it upper-cased.
+        # The mod trims the code and reads it upper-cased, and the scheme in any case.
         self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []}, f" {CODE.lower()} ")[0], 200)
+        status, _, _ = call(f"{self.url}/write/uniforms", "POST", {"Authorization": f"bEARER {CODE}"},
+                            json.dumps({"dryRun": True, "sites": []}).encode())
+        self.assertEqual(status, 200)
         # The applies the tests read back never carry the code.
         self.assertNotIn("code", json.loads(call(self.url + "/debug/writes")[2]))
 
@@ -491,12 +494,17 @@ class MockWrites(unittest.TestCase):
                                 {"f": 8, "t": 20, "employeeId": BEN, "itemInstanceId": CLEAN}]}]})
         self.assertEqual([r["error"] for r in answer["rows"]], ["no_station", "no_skill"])
 
-    def test_schedule_checks_changed_before_the_site(self):
+    def test_schedule_checks_not_found_then_changed_then_the_site(self):
         nowhere = {"street": "ba:street_nowhere", "number": 1}
-        _, answer = self.post("schedule", {"dryRun": True, "address": nowhere, "expect": "9f86d081", "days": []})
+        for expect in ("9f86d081", "811c9dc5"):  # nothing to compare without the building
+            _, answer = self.post("schedule", {"dryRun": True, "address": nowhere, "expect": expect, "days": []})
+            self.assertEqual(answer["siteError"], "not_found")
+        reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[2]
+        reg["RentedByPlayer"] = False  # the Bare shop, no shifts: print 811c9dc5
+        _, answer = self.post("schedule", {"dryRun": True, "address": BARE, "expect": "9f86d081", "days": []})
         self.assertEqual(answer["siteError"], "changed")
-        _, answer = self.post("schedule", {"dryRun": True, "address": nowhere, "expect": "811c9dc5", "days": []})
-        self.assertEqual(answer["siteError"], "not_found")
+        _, answer = self.post("schedule", {"dryRun": True, "address": BARE, "expect": "811c9dc5", "days": []})
+        self.assertEqual(answer["siteError"], "not_rented")
 
     def test_overworked_counts_the_days_the_shop_is_open(self):
         fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
@@ -534,6 +542,42 @@ class MockWrites(unittest.TestCase):
         self.assertTrue(answer["ok"])
         self.link.configure({"reset": True})
         self.assertEqual((self.link.day, self.link.terms), (34, {}))
+
+    def test_order_alone_answers_a_row_per_contract_and_needs_no_agent(self):
+        status, answer = self.post("imports", {"dryRun": True, "contracts": [],
+                                               "order": ["CONTRACTtwo", "CONTRACTone"]})
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"], answer)  # CONTRACTtwo has no agent, and may still move
+        two, one = answer["rows"]
+        self.assertEqual((two["id"], two["importer"], two["active"], two["repeating"], two["nextDeliveryDay"]),
+                         ("CONTRACTtwo", "2 ba:street_pier", False, False, 29))
+        self.assertEqual((one["active"], one["nextDeliveryDay"], one["products"], one["reactivated"]),
+                         (True, 36, [], False))
+        self.assertEqual([r["reordered"] for r in answer["rows"]], [True, True])
+        # The same relative sequence moves nothing.
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [], "order": ["CONTRACTone", "CONTRACTtwo"]})
+        self.assertEqual([r["reordered"] for r in answer["rows"]], [False, False])
+
+    def test_the_lock_window_allows_the_whole_cap(self):
+        contracts = {c["id"]: c for c in self.link._save().items(self.link._save().root["importPartnerships"])}
+        self.link._save().items(contracts["CONTRACTthree"]["products"])[0]["amountOrderedThisWeek"] = 300
+        self.link.terms["CONTRACTthree"] = {"cap": 400}
+        candle = {"itemName": "ba:itemname_candle", "warehouse": DEPOT, "amount": 400, "expect": 500}
+        body = {"dryRun": True, "contracts": [{"id": "CONTRACTthree", "activate": True, "products": [candle]}]}
+        _, answer = self.post("imports", body)
+        self.assertEqual((answer["rows"][0]["error"], answer["rows"][0]["products"][0]["max"]), ("over_cap", 100))
+        self.link.day, self.link.hour = 35, 21  # Sunday 21:00: the next delivery is after the reset
+        _, answer = self.post("imports", body)
+        self.assertTrue(answer["ok"], answer)
+
+    def test_a_running_contract_set_to_nothing_is_no_amounts_and_changed_comes_first(self):
+        zero = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 0, "expect": 3800}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [zero]}]})
+        self.assertEqual(answer["rows"][0]["error"], "no_amounts")
+        # A stale expect on an agent-less contract is changed, not no_agent.
+        stale = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 10, "expect": 99}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTtwo", "products": [stale]}]})
+        self.assertEqual(answer["rows"][0]["error"], "changed")
 
 
 if __name__ == "__main__":

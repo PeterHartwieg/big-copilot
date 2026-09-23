@@ -290,8 +290,12 @@ test('a busy game is retried a second apart, three times, then named', async (t)
 test('an apply that gets no answer is not sent again: the board reads the game, then asks afresh', async (t) => {
   const page = await linked(t, {code: CODE});
   // The apply reaches nothing; the dry runs go through.
-  await page.route(`${mockUrl}/write/uniforms`, (route) =>
-    JSON.parse(route.request().postData() || '{}').dryRun ? route.continue() : route.abort());
+  let applies = 0;
+  await page.route(`${mockUrl}/write/uniforms`, (route) => {
+    if (JSON.parse(route.request().postData() || '{}').dryRun) return route.continue();
+    applies++;
+    return route.abort();
+  });
   const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
   await button(page, GIFTS).click();
   await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
@@ -299,10 +303,54 @@ test('an apply that gets no answer is not sent again: the board reads the game, 
   await refresh;  // the board asks the game for its state first
   await dialog(page).getByText('Sets the Default uniform').waitFor({timeout: 20000});
   assert.equal(await dialog(page).getByRole('button', {name: 'Set uniforms'}).isEnabled(), true);
-  assert.equal((await applied()).length, 0, 'never sent twice on its own');
+  assert.equal(applies, 1, 'never sent twice on its own');
+  assert.equal((await applied()).length, 0);
   assert.equal(await page.locator('#gwToast').count(), 0);
 });
 
+test('an apply whose answer cannot be read is uncertain too', async (t) => {
+  const page = await linked(t, {code: CODE});
+  let applies = 0;
+  await page.route(`${mockUrl}/write/uniforms`, async (route) => {
+    if (JSON.parse(route.request().postData() || '{}').dryRun) return route.continue();
+    applies++;
+    const res = await route.fetch();  // applied in the mock, then the answer is garbled
+    return route.fulfill({response: res, body: '{"ok": tr'});
+  });
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
+  await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+  await dialog(page).getByText('Sets the Default uniform').waitFor({timeout: 20000});
+  assert.equal(applies, 1);
+  // The fresh dry run shows what the game now holds: the role is dressed.
+  await dialog(page).getByText('already has a uniform; left as it is').first().waitFor();
+});
+
+test('an undo right after an apply is read once the read under way is done', async (t) => {
+  const page = await linked(t, {code: CODE});
+  let saves = 0, release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route(`${mockUrl}/save`, async (route) => {
+    saves++;
+    const res = await route.fetch();
+    if (saves === 1) await held;  // the read after the apply, still under way
+    await route.fulfill({response: res});
+  });
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
+  await dialog(page).getByText('Default uniform set for 1 role at 1 shop.').waitFor();
+  const until = async (test, ms) => {
+    const end = Date.now() + ms;
+    while (!test() && Date.now() < end) await new Promise((resolve) => setTimeout(resolve, 50));
+  };
+  await until(() => saves >= 1, 8000);
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  assert.equal(saves, 1, 'the first read still holds');
+  release();
+  await until(() => saves >= 2, 8000);
+  assert.equal(saves, 2, 'the undo is read as soon as the first read is done');
+});
 test('Apply clicked twice sends one write', async (t) => {
   const page = await linked(t, {code: CODE});
   await button(page, GIFTS).click();
@@ -365,7 +413,7 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   await dialog(page).getByRole('button', {name: 'Apply in game'}).click();
   await dialog(page).getByText('1 amount set in the game.').waitFor();
   const writes = await applied();
-  assert.deepEqual(writes[0].body, {dryRun: false, order: null, contracts: [{id: 'CONTRACTone', activate: false,
+  assert.deepEqual(writes[0].body, {dryRun: false, contracts: [{id: 'CONTRACTone', activate: false,
     products: [{itemName: 'ba:itemname_paperbag', warehouse: DEPOT_ADDRESS, amount: 4200, expect: 3800}]}]});
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
@@ -385,72 +433,93 @@ test('imports: inside the lock window the dry run refuses, in the game\'s words'
   assert.equal(await dialog(page).getByRole('button', {name: 'Apply in game'}).isDisabled(), true);
 });
 
-test('imports: a reordered ranking is written as the plan order, from the keyboard too', async (t) => {
+test('imports: the ranked list is the game\'s order, read only, and a write sends no order', async (t) => {
   const page = await linked(t, {code: CODE});
   await supply(page);
   const list = importRow(page, 'Paperbag').locator('.imp-contracts');
   // textContent: a section off screen skips its rendering, and innerText with it.
-  assert.match(await list.textContent(), /1\. 1 Pier · keeps 3,800 in stock.*2\. 2 Pier · 0 a week · paused/);
-  const down = list.getByRole('button', {name: 'Move 1 Pier down for Paperbag'});
-  await down.focus();
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /1\. 2 Pier/.test(document.querySelector('#importPlan .imp-contracts').textContent));
-  // Its down move is spent; the focus is on its way back up.
-  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Move 1 Pier up for Paperbag');
-  assert.match(await list.textContent(), /New delivery order, sent with the next write/);
+  assert.match(await list.textContent(),
+    /1\. 1 Pier · keeps 3,800 in stock.*2\. 2 Pier · 0 a week · paused.*In delivery order, set at the headquarters in game/);
+  assert.equal(await list.locator('button').count(), 0);
+  await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();
-  await dialog(page).getByText('New delivery order for Paperbag at HART. Depot: 1. 2 Pier, 2. 1 Pier.').waitFor();
+  // A Smart Delivery write sets the level alone; it says the plain contract stays.
+  await dialog(page).getByText('The plain contract for Paperbag at HART. Depot (2 Pier) is left as it is: the level counts what it brings.').waitFor();
   await dialog(page).getByRole('button', {name: 'Apply in game'}).click();
-  await dialog(page).getByText('The delivery order changed in the game.').waitFor();
-  const writes = await applied();
-  assert.deepEqual(writes[0].body, {dryRun: false, contracts: [], order: ['CONTRACTtwo', 'CONTRACTone']});
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
+  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  assert.equal('order' in (await applied())[0].body, false);
 });
 
-test('imports: a stopped contract is started, with its next delivery against cash; over the cap is refused', async (t) => {
+test('imports: Apply sends only what the dry run judged', async (t) => {
+  const page = await linked(t, {code: CODE});
+  await supply(page);
+  await setTo(page, 'Paperbag', 4200);
+  await applyImports(page).click();
+  await dialog(page).getByRole('button', {name: 'Apply in game'}).waitFor();
+  // The figure moves under the open dialog, as a re-read board would move it.
+  await page.evaluate(() => {
+    const r = gwImportRows.find((x) => x.slug === 'ba:itemname_paperbag');
+    impSetKeep(r.impId, {value: 4300, inGame: 3800});
+    drawLogistics();
+  });
+  await dialog(page).getByRole('button', {name: 'Apply in game'}).click();
+  await dialog(page).locator('tbody tr').first().getByText('4,300').waitFor();
+  assert.equal((await applied()).length, 0, 'asked again, not applied');
+  await dialog(page).getByRole('button', {name: 'Apply in game'}).click();
+  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4300);
+});
+test('imports: a stopped contract is started, with its next delivery against cash; what the cap leaves is said', async (t) => {
   const page = await linked(t, {code: CODE});
   await configure({importTerms: {CONTRACTthree: {unitPrice: 2.5, cap: 400}}});
   await supply(page);
   await setTo(page, 'Candle', 600);
   await applyImports(page).click();
-  await dialog(page).getByText('More than the importer still allows this week (400).').waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Apply in game'}).isDisabled(), true);
+  // The first dry run names the cap; the write is made again within it, and the rest is said.
+  await dialog(page).getByText('200 a week of Candle at HART. Depot not covered: the importers\' caps are reached.').waitFor();
+  assert.match(await dialog(page).locator('tbody tr').first().innerText(), /400\s+a week/);
+  assert.equal(await dialog(page).getByRole('button', {name: 'Apply in game'}).isEnabled(), true);
   await dialog(page).getByRole('button', {name: 'Cancel'}).click();
   await configure({importTerms: {CONTRACTthree: {unitPrice: 2.5, cap: 1000}}});
   await applyImports(page).click();
   await dialog(page).getByText('3 Pier is stopped: this starts it again, with Repeating on. Its next delivery, on day 36, costs $1,500, against $10,000 in cash.').waitFor();
+  assert.equal(await dialog(page).getByText(/not covered/).count(), 0);
   assert.match(await dialog(page).locator('tbody tr').first().innerText(), /started, Repeating on/);
   await dialog(page).getByRole('button', {name: 'Apply in game'}).click();
   await dialog(page).getByText('1 amount set, 1 contract started in the game.').waitFor();
   assert.deepEqual((await applied())[0].body.contracts, [{id: 'CONTRACTthree', activate: true,
     products: [{itemName: 'ba:itemname_candle', warehouse: DEPOT_ADDRESS, amount: 600, expect: 500}]}]);
 });
-
-test('imports: plain amounts fill the ranking up to each importer\'s cap', async (t) => {
+test('imports: plain amounts share one cap budget per importer across the whole write', async (t) => {
   const page = await linked(t, {code: CODE});
   const got = await page.evaluate(() => {
-    const depot = D.businesses[3].key;
-    const r = {s: 3, slug: 'ba:itemname_x', item: 'X', value: 2400, smart: false, impId: 'x', contracts: [
-      {id: 'A', importer: 'A', smart: false, amount: 1000, active: true, agent: true, order: 2},
-      {id: 'B', importer: 'B', smart: false, amount: 1000, active: true, agent: true, order: 5},
-      {id: 'C', importer: 'C', smart: false, amount: 0, active: false, agent: true, order: 7}]};
-    const split = () => gwImportLine(r).contracts.map(({c, amount}) => [c.id, amount]);
-    // No cap known: the first asks for everything, and B, running, keeps its 1,000
-    // rather than be set to nothing.
-    const first = [split(), gwImportLine(r).kept.map((c) => c.id)];
-    gwTerms.set(`A|ba:itemname_x|${depot}`, {cap: 1500, orderedThisWeek: 300, max: null});
-    const capped = split();
-    gwRankings.set('x', ['B', 'A', 'C']);
-    const body = gwImportBody([gwImportLine(r)]);
-    gwRankings.delete('x'); gwTerms.clear();
-    return {first, capped, order: body.order};
+    const saved = gwImportRows;
+    const [gifts, depot] = [D.businesses[0].key, D.businesses[3].key];
+    const line = (s, value, contracts) => ({s, slug: 'ba:itemname_x', item: 'X', value, smart: false, changed: true,
+                                            paused: false, total: value, impId: `x${s}`, contracts});
+    const c = (id, importer, order, amount, active = true) => ({id, importer, order, amount, active, smart: false, agent: true});
+    const run = (rows) => {
+      gwImportRows = rows;
+      const plan = gwImportPlan(null);
+      return plan.map((l) => ({at: l.depot.key, set: l.contracts.map(({c, amount}) => [c.id, amount]), uncovered: l.uncovered}));
+    };
+    gwTerms.clear();
+    gwTerms.set(`A|ba:itemname_x|${depot}`, {cap: 1000, orderedThisWeek: 0, max: null});
+    // Importer P allows 1,000 a week: A (ahead in plan order) takes 800 at the
+    // depot, so B at the shop gets the 200 left and Q's C the rest. D, stopped
+    // and given nothing, is not written at all.
+    const shared = run([line(3, 800, [c('A', 'P', 1, 500)]),
+                        line(0, 600, [c('B', 'P', 3, 400), c('C', 'Q', 4, 0, false), c('D', 'P', 5, 300, false)])]);
+    // With nobody after B, the cap leaves 400 of the shop's week uncovered.
+    const capped = run([line(3, 800, [c('A', 'P', 1, 500)]), line(0, 600, [c('B', 'P', 3, 400)])]);
+    gwImportRows = saved; gwTerms.clear();
+    return {shared, capped, depot, gifts};
   });
-  assert.deepEqual(got.first, [[['A', 1400]], ['B']]);
-  assert.deepEqual(got.capped, [['A', 1200], ['B', 1200]]);
-  assert.deepEqual(got.order, ['B', 'A', 'C'], 'the same plan places, in the new order');
+  assert.deepEqual(got.shared, [{at: got.depot, set: [['A', 800]], uncovered: 0},
+                                {at: got.gifts, set: [['B', 200], ['C', 400]], uncovered: 0}]);
+  assert.deepEqual(got.capped, [{at: got.depot, set: [['A', 800]], uncovered: 0},
+                                {at: got.gifts, set: [['B', 200]], uncovered: 400}]);
 });
-
 /* --- the schedule --------------------------------------------------------- */
 const ANA = 'AAAAemployeeAAAAAAAAAAAA', BEN = 'BBBBemployeeBBBBBBBBBBBB', DEE = 'DDDDemployeeDDDDDDDDDDDD';
 const REGISTER = 'REGISTERaaaaaaaaaaaaaa==ue', CLEAN = 'CLEANcccccccccccccccccc==ue';
@@ -563,4 +632,38 @@ test('schedule: every planned shop, one after another', async (t) => {
   assert.deepEqual(writes.map((w) => w.body.address), [{street: 'ba:street_broadway', number: 2}, GIFTS_ADDRESS]);
   assert.deepEqual(writes[0].body.days, [{d: 3, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC',
     itemInstanceId: 'REGISTERaaaaaaaaaaaaaa==ay'}]}]);
+});
+
+test('schedule: a shop can be skipped, and one the game already holds is left out', async (t) => {
+  const page = await linked(t, {code: CODE, data: withRosters()});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
+  await dialog(page).getByRole('heading', {name: 'Schedule at HART. Corner (1 of 2)'}).waitFor();
+  await dialog(page).getByRole('button', {name: 'Skip this shop'}).click();
+  await dialog(page).getByRole('heading', {name: 'Schedule at HART. Gifts (2 of 2)'}).waitFor();
+  await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  assert.equal((await applied()).length, 0);
+  // The Corner's game schedule made the plan: it drops out of "all".
+  const left = await page.evaluate((corner) => {
+    const row = D.staffing.find((r) => r.key === corner);
+    row.current.list = [{d: 3, s: 1, f: 8, t: 20, p: 0}];
+    return gwScheduleSites();
+  }, CORNER);
+  assert.deepEqual(left, [GIFTS]);
+});
+
+test('schedule: a cover-only plan keeps the serving entries in the game', async (t) => {
+  const data = JSON.parse(withRosters());
+  const gifts = data.staffing.find((r) => r.key === GIFTS);
+  gifts.shifts = [{d: 3, s: 0, f: 0, t: 12, p: 0, k: 'clean'}];
+  Object.assign(gifts, {bench: [], addPeople: {assign: [], hire: [], people: 0, hoursUncovered: 0}});
+  const page = await linked(t, {code: CODE, data: JSON.stringify(data)});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write this roster to the game'}).click();
+  await dialog(page).getByText('Replaces every entry of the week at HART. Gifts with the cleaning and security plan: 1 entry for the people working here, and the 1 serving entry in the game as they stand.').waitFor();
+  await dialog(page).getByRole('button', {name: 'Write schedule'}).click();
+  await dialog(page).getByText(/^HART\. Gifts: 2 entries set in place of 2\./).waitFor();
+  assert.deepEqual((await applied())[0].body.days, [
+    {d: 1, shifts: [{f: 8, t: 20, employeeId: ANA, itemInstanceId: REGISTER}]},
+    {d: 3, shifts: [{f: 0, t: 12, employeeId: ANA, itemInstanceId: CLEAN}]}]);
 });

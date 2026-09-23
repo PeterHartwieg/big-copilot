@@ -9501,12 +9501,6 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .gw-check{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;font-size:13.5px;cursor:pointer}
 .gw-check input{margin-top:3px}
 .gw-check small{display:block;color:var(--ink-3);font-size:12px}
-.gw-rank{display:inline-grid;place-items:center;width:20px;height:18px;padding:0;margin-left:3px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);font:600 11px/1 Archivo,sans-serif;cursor:pointer;vertical-align:middle}
-.gw-rank:hover,.gw-rank:focus-visible{border-color:var(--accent);color:var(--accent)}
-.gw-rank:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.gw-rank:disabled{opacity:.35;cursor:default;border-color:var(--rule);color:var(--ink-2)}
-.gw-reordered{color:var(--accent)}
-.gw-rank-reset{padding:0;border:0;background:none;color:inherit;font:inherit;text-decoration:underline;cursor:pointer}
 #gwToast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:8px 10px 8px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--raised);color:var(--ink);box-shadow:0 8px 30px #0005;font-size:13px}
 .silenced{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);display:none}
 .silenced.on{display:block}
@@ -9632,6 +9626,7 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 #importPlan td.imp-to > .chip{margin-left:6px}
 #importPlan .imp-contracts{min-width:12rem}
 #importPlan .imp-contracts > span{display:block}
+#importPlan .imp-contracts > .imp-order{font-style:italic}
 
 /* tables ----------------------------------------------------------------- */
 table{width:100%;border-collapse:collapse;font-size:13.5px}
@@ -15631,20 +15626,11 @@ function drawLogistics(){
   /* Two or more contracts on one line: each is listed under the material in
      the order the game delivers them (importer by importer, each in the place
      of its first contract in the plan), with its importer, how it is set and
-     whether it runs. In linked mode the list is a ranking the player can
-     reorder, and the next write sends it as the plan order. */
-  const contractLines = r => {
-    if(r.contracts.length < 2) return "";
-    const rank = gwRankable(), list = rank ? gwRanking(r) : r.contracts;
-    const move = (c, i, by, glyph, word) => `<button type="button" class="gw-rank" data-gw-rank="${attr(r.impId)}" data-gw-id="${
-      attr(c.id)}" data-gw-move="${by}"${i + by < 0 || i + by >= list.length ? " disabled" : ""} aria-label="${
-      attr(`Move ${c.importer || "this contract"} ${word} for ${r.item}`)}">${glyph}</button>`;
-    return `<span class="sub imp-contracts">${list.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
-        c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}${
-        rank ? move(c, i, -1, "↑", "up") + move(c, i, 1, "↓", "down") : ""}</span>`).join("")}${
-      rank && gwReordered(r) ? `<span class="gw-reordered">New delivery order, sent with the next write · <button type="button" class="gw-rank-reset" data-gw-rank-reset="${
-        attr(r.impId)}">back to the game's</button></span>` : ""}</span>`;
-  };
+     whether it runs. The order is the player's to change, at the headquarters
+     in game. */
+  const contractLines = r => r.contracts.length < 2 ? ""
+    : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
+        c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
   /* Who draws the material, and how the week splits between the factory
      lines and the shops, stay on hover: the material name says who, the
      Used / week figure says how much of each. */
@@ -15653,7 +15639,7 @@ function drawLogistics(){
     ? `Factories ${r.factoryWeek.toLocaleString()} · shops ${r.otherWeek.toLocaleString()} a week`
     : r.factoryWeek ? `All ${r.factoryWeek.toLocaleString()} a week to the factory lines`
     : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "";
-  const importRow = r => `<tr${r.changed || gwReordered(r) ? ` class="imp-changed"` : ""}>
+  const importRow = r => `<tr${r.changed ? ` class="imp-changed"` : ""}>
       <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}${contractLines(r)}</td>
       <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
       <td>${Number.isFinite(r.arrived) ? r.arrived.toLocaleString() : "—"}</td>
@@ -15682,7 +15668,13 @@ function drawLogistics(){
   const toGame = gwImportLines(null);
   const toGameAt = key => toGame.filter(l => l.depot.key === key).length;
   const applyHere = (n, key) => {
-    const btn = n ? gwButton("imports", `Apply ${plural(n, "change")} in game`, `data-gw-depot="${attr(key || "")}"`) : "";
+    /* With nothing that could be written, a change only agent-less contracts
+       could carry is said on a disabled button rather than left unoffered. */
+    const blocked = !key && !n ? gwImportBlocked(null) : [];
+    const btn = n ? gwButton("imports", `Apply ${plural(n, "change")} in game`, `data-gw-depot="${attr(key || "")}"`)
+      : blocked.length ? gwButton("imports", `Apply ${plural(blocked.length, "change")} in game`, `data-gw-depot=""`,
+        `No purchasing agent runs the contracts for ${blocked.map(l => l.r.item).join(", ")}: assign one at the headquarters first`)
+      : "";
     return btn ? `<div class="gw-acts gw-panel">${btn}</div>` : "";
   };
   const depotsToGame = new Set(toGame.map(l => l.depot.key)).size;
@@ -18052,11 +18044,14 @@ function gwConfirm(spec){
   const cancel = ["Cancel", () => dlg.close()];
   const skip = spec.next ? [[spec.next.skip || "Skip", spec.next.go]] : [];
   let applying = false;  // one apply per go: a second click must not send a second write
+  let judged = "";       // the body the last dry run answered for, as sent
   const plan = async () => {
     const none = spec.nothing ? spec.nothing() : "";
     if(none) return gwPaint(dlg, `<p>${none}</p>`, [["Close", () => dlg.close(), {primary: !spec.next}], ...skip]);
     gwPaint(dlg, "<p>Asking the game what it would do…</p>", [cancel, ...skip]);
-    const res = await SOURCE.write(spec.kind, spec.body(), {dryRun: true});
+    const body = spec.body();
+    judged = JSON.stringify(body);
+    const res = await SOURCE.write(spec.kind, body, {dryRun: true});
     if(!dlg.open) return;
     if(res.error) return gwFailed(dlg, spec, res, plan, plan);
     const answer = res.body || {};
@@ -18071,9 +18066,12 @@ function gwConfirm(spec){
     /* The board may have been read again since the dry run. */
     const none = spec.nothing ? spec.nothing() : "";
     if(none) return gwPaint(dlg, `<p>${none}</p>`, [["Close", () => dlg.close(), {primary: !spec.next}], ...skip]);
+    /* Apply sends only what the game has judged: a board read again since, or
+       a changed control, asks the game again first. */
+    if(JSON.stringify(spec.body()) !== judged) return plan();
     applying = true;
     gwPaint(dlg, "<p>Applying in the game…</p>", []);
-    const res = await SOURCE.write(spec.kind, spec.body(), {dryRun: false});
+    const res = await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false});
     if(res.error){
       /* No answer: whether the game holds it is unknown, and so is what an
          undo would restore. */
@@ -18100,7 +18098,7 @@ async function gwUndo(spec, dlg){
   const res = await SOURCE.write("undo", {kind: spec.kind}, {dryRun: false});
   /* Gone for good once the game says so; kept for a retry when it only could
      not take it now. */
-  if(!res.error || res.error === "changed" || res.error === "nothing_to_undo") delete gwUndoable[spec.kind];
+  if(!res.error || ["changed", "nothing_to_undo", "uncertain"].includes(res.error)) delete gwUndoable[spec.kind];
   if(!dlg.open) return gwToast();
   /* A run of dialogs does not go on from an undo; and an undo that got no
      answer is never sent again on its own. */
@@ -18131,88 +18129,113 @@ function gwToast(){
 /* --- imports: the Weekly imports table's Set to figures, written ---------- */
 /* drawLogistics() leaves its rows here: per depot and material, the Set to
    figure, the figure in game and the line's contracts in the order the game
-   delivers them. */
+   delivers them. The order itself is the player's to set at the headquarters
+   in game; a write never sends one. */
 let gwImportRows = [];
-/* A ranking the player reordered, per line (the Set to box's id), until the
-   game's own order is the same again or the line's contracts change. */
-const gwRankings = new Map();
 /* What the dry runs said of each contract's product, keyed "<contract id>|
    <item>|<depot key>": the importer's cap, what was ordered of the item this
-   week and, after an over_cap, what the importer still allows. */
+   week and, after an over_cap, what the importer still allows. Cleared with
+   every new board. */
 const gwTerms = new Map();
-const gwRankable = () => ((gwLink() || {}).writes || []).includes("imports");
-function gwRanking(r){
-  const kept = gwRankings.get(r.impId);
-  if(!kept) return r.contracts;
-  const ids = r.contracts.map(c => c.id);
-  if(kept.length !== ids.length || !ids.every(id => kept.includes(id)) || kept.every((id, i) => id === ids[i])){
-    gwRankings.delete(r.impId);
-    return r.contracts;
-  }
-  return kept.map(id => r.contracts.find(c => c.id === id));
+const gwDepotKey = r => (D.businesses[r.s] || {}).key;
+const gwLineKey = (c, slug, depotKey) => `${c.id}|${slug}|${depotKey}`;
+
+/* Sunday 20:00 to Monday 08:00, by the game's clock as the link last read it:
+   an amount set then is for the Monday after the week's count resets, so the
+   importer allows its whole cap. */
+function gwLockWindow(){
+  const link = gwLink() || {};
+  const day = Number(link.day), hour = Number(link.hour);
+  if(!Number.isFinite(day) || !Number.isFinite(hour)) return false;
+  return (day % 7 === 0 && hour >= 20) || (day % 7 === 1 && hour < 8);
 }
-const gwReordered = r => gwRanking(r) !== r.contracts;
-function gwRedrawImports(impId, id, move){
-  drawLogistics(); wireAll();
-  const moves = [...$("importPlan").querySelectorAll("[data-gw-rank]")].filter(b => b.dataset.gwRank === impId && !b.disabled);
-  const same = moves.filter(b => b.dataset.gwId === id);
-  const to = same.find(b => b.dataset.gwMove === move) || same[0] || moves[0];
-  if(to) to.focus({preventScroll: true});
+/* What an importer still allows of an item for the delivery a write is for,
+   from what the last dry run said of any contract with it; with no cap named
+   yet, no bound (the dry run then names one, and the split is made again). */
+function gwAllowance(importer, slug){
+  let least = Infinity;
+  gwImportRows.filter(r => r.slug === slug).forEach(r => r.contracts.forEach(c => {
+    if((c.importer || c.id) !== importer) return;
+    const t = gwTerms.get(gwLineKey(c, slug, gwDepotKey(r)));
+    if(!t || !Number.isFinite(t.cap)) return;
+    least = Math.min(least, Number.isFinite(t.max) ? t.max
+      : gwLockWindow() ? t.cap : Math.max(0, t.cap - (t.orderedThisWeek || 0)));
+  }));
+  return least;
 }
 
-/* One line's part of the write: each contract's amount of this material for
-   this depot. Smart Delivery puts the Set to level on every Smart Delivery
-   contract of the ranking, so a backup brings only what the ones before it
-   could not. Plain amounts fill the ranking in order, each contract up to
-   what its importer still allows this week as the last dry run said (the
-   first dry run knows no cap, so the first contract asks for everything),
-   the last taking the rest, so a figure no importer allows is refused out
-   loud. A running contract the fill would leave at 0 keeps its amount, since
-   the game runs no contract with nothing to order and a write never stops
-   one; the others fill what is left. A contract with no purchasing agent
-   cannot deliver and is left out. A stopped contract given an amount starts. */
-function gwImportLine(r){
-  const depot = D.businesses[r.s];
-  if(!depot || !Number.isFinite(r.value)) return null;
-  const ranking = gwRanking(r);
-  const usable = ranking.filter(c => c.agent !== false && !!c.smart === !!r.smart);
-  const amounts = new Map(), kept = [];
-  if(r.smart) usable.forEach(c => amounts.set(c.id, r.value));
-  else for(;;){
-    const fill = usable.filter(c => !kept.includes(c));
-    let rest = Math.max(0, r.value - kept.reduce((n, c) => n + c.amount, 0));
-    const room = {};
-    amounts.clear();
-    kept.forEach(c => amounts.set(c.id, c.amount));
-    fill.forEach((c, i) => {
-      const t = gwTerms.get(`${c.id}|${r.slug}|${depot.key}`) || {};
-      const who = c.importer || c.id;
-      if(!(who in room)) room[who] = Number.isFinite(t.max) ? t.max
-        : Number.isFinite(t.cap) ? Math.max(0, t.cap - (t.orderedThisWeek || 0)) : Infinity;
-      const n = i === fill.length - 1 ? rest : Math.min(rest, room[who]);
-      room[who] -= n; rest -= n;
-      amounts.set(c.id, n);
+/* The whole write, one line per depot and material with a change: each
+   contract's new amount.
+
+   Smart Delivery puts the Set to level on every Smart Delivery contract of
+   the line, so a backup brings only what the ones before it could not; the
+   plain contracts on that line keep their amounts, which the level counts.
+
+   Plain amounts fill the line in delivery order under one cap budget per
+   importer and item across the whole write, every depot in it: a contract
+   may take what its importer still allows less what the player's other
+   contracts with that importer and item order ahead of it in plan order (the
+   new amounts of contracts in this write, the standing amounts of the rest).
+   Every contract is held to that budget, the last one too, and what the caps
+   leave of the week is the line's `uncovered`, said in the dialog. A running
+   contract the fill would leave at 0 keeps its amount, since the game runs
+   no contract with nothing to order and a write never stops one; the others
+   fill what is left. A contract with no purchasing agent cannot deliver and
+   is left out. A stopped contract is written only to be started. */
+function gwImportPlan(depotKey){
+  const lines = gwImportRows
+    .filter(r => Number.isFinite(r.value) && (r.changed || (r.paused && r.total > 0)) && D.businesses[r.s]
+      && (!depotKey || gwDepotKey(r) === depotKey))
+    .map(r => ({r, depot: D.businesses[r.s], uncovered: 0, kept: [],
+                usable: r.contracts.filter(c => c.agent !== false && !!c.smart === !!r.smart),
+                left: r.contracts.filter(c => c.agent === false && !!c.smart === !!r.smart)}));
+  /* Every amount a budget reads: planned for the contracts in this write,
+     standing (running plain contracts only) for the rest. */
+  const planned = new Map();
+  lines.forEach(l => l.usable.forEach(c => planned.set(gwLineKey(c, l.r.slug, l.depot.key),
+    l.r.smart ? l.r.value : c.active ? c.amount : 0)));
+  const ahead = (c, slug) => gwImportRows.filter(r => r.slug === slug).reduce((n, r) => n + r.contracts
+    .filter(d => !d.smart && (d.importer || d.id) === (c.importer || c.id) && d.order < c.order)
+    .reduce((m, d) => {
+      const key = gwLineKey(d, slug, gwDepotKey(r));
+      return m + (planned.has(key) ? planned.get(key) : d.active ? d.amount : 0);
+    }, 0), 0);
+  const fill = l => {
+    const {r, depot} = l;
+    let rest = Math.max(0, r.value - l.kept.reduce((n, c) => n + c.amount, 0));
+    l.usable.filter(c => !l.kept.includes(c)).forEach(c => {
+      const budget = Math.max(0, gwAllowance(c.importer || c.id, r.slug) - ahead(c, r.slug));
+      const n = Math.min(rest, budget);
+      planned.set(gwLineKey(c, r.slug, depot.key), n);
+      rest -= n;
     });
-    const zeroed = fill.filter(c => c.active && c.amount > 0 && amounts.get(c.id) === 0);
-    if(!zeroed.length) break;
-    kept.push(...zeroed);
+    l.uncovered = rest;
+  };
+  /* A budget reads the lines around it, so the fill runs until it settles. */
+  const plain = lines.filter(l => !l.r.smart);
+  for(let pass = 0; pass < 8; pass++){
+    const was = JSON.stringify([...planned]);
+    plain.forEach(l => {
+      l.kept.forEach(c => planned.set(gwLineKey(c, l.r.slug, l.depot.key), c.amount));
+      fill(l);
+      const zeroed = l.usable.filter(c => !l.kept.includes(c) && c.active && c.amount > 0
+        && planned.get(gwLineKey(c, l.r.slug, l.depot.key)) === 0);
+      if(zeroed.length){ l.kept.push(...zeroed); zeroed.forEach(c => planned.set(gwLineKey(c, l.r.slug, l.depot.key), c.amount)); fill(l); }
+    });
+    if(JSON.stringify([...planned]) === was) break;
   }
-  const contracts = usable.map(c => ({c, amount: amounts.get(c.id)}))
-    .filter(({c, amount}) => amount !== c.amount || (!c.active && amount > 0));
-  return {r, depot, contracts, kept, left: ranking.filter(c => c.agent === false && !!c.smart === !!r.smart), reordered: gwReordered(r)};
+  lines.forEach(l => {
+    l.contracts = l.usable.map(c => ({c, amount: planned.get(gwLineKey(c, l.r.slug, l.depot.key))}))
+      .filter(({c, amount}) => c.active ? amount !== c.amount : amount > 0);
+  });
+  return lines;
 }
-/* The lines a write would change, at one depot or at all of them: a Set to
-   figure that differs from the game's, a paused line something draws on, or a
-   ranking the player changed. What the "Apply N changes" buttons count. */
-function gwImportLines(depotKey){
-  return gwImportRows
-    .filter(r => r.value !== null && (r.changed || (r.paused && r.total > 0) || gwReordered(r))
-      && (!depotKey || (D.businesses[r.s] || {}).key === depotKey))
-    .map(gwImportLine).filter(l => l && (l.contracts.length || l.reordered));
-}
-/* The request: one entry per contract, its products from every line it
-   serves. A reordered line hands its contracts the plan places they already
-   hold, in the new order, so no other contract moves. */
+/* The lines a write would change: what the "Apply N changes" buttons count. */
+const gwImportLines = depotKey => gwImportPlan(depotKey).filter(l => l.contracts.length);
+/* Lines with a change to make and no contract that could make it: every one
+   of theirs lacks a purchasing agent. */
+const gwImportBlocked = depotKey => gwImportPlan(depotKey).filter(l => !l.contracts.length && l.left.length);
+/* The request: one entry per contract, its products from every line it serves. */
 function gwImportBody(lines){
   const byId = new Map();
   lines.forEach(({r, depot, contracts}) => contracts.forEach(({c, amount}) => {
@@ -18221,22 +18244,20 @@ function gwImportBody(lines){
     row.activate = row.activate || (!c.active && amount > 0);
     row.products.push({itemName: r.slug, warehouse: gwAddress(depot.key), amount, expect: c.amount});
   }));
-  const slot = new Map();
-  lines.filter(l => l.reordered).forEach(({r}) => {
-    const places = r.contracts.map(c => slot.has(c.id) ? slot.get(c.id) : c.order).sort((a, b) => a - b);
-    gwRanking(r).forEach((c, i) => slot.set(c.id, places[i]));
-  });
-  return {contracts: [...byId.values()],
-          order: slot.size ? [...slot].sort((a, b) => a[1] - b[1]).map(([id]) => id) : null};
+  return {contracts: [...byId.values()]};
 }
 function gwLearnTerms(answer){
   (answer.rows || []).forEach(row => (row.products || []).forEach(p => {
     if(!p || !p.warehouse) return;
     const key = `${row.id}|${p.itemName}|${p.warehouse.street}#${p.warehouse.number}`;
     const was = gwTerms.get(key) || {};
-    gwTerms.set(key, {cap: Number.isFinite(p.cap) ? p.cap : null,
-                      orderedThisWeek: Number.isFinite(p.orderedThisWeek) ? p.orderedThisWeek : 0,
-                      max: Number.isFinite(p.max) ? p.max : Number.isFinite(was.max) ? was.max : null});
+    const cap = Number.isFinite(p.cap) ? p.cap : null;
+    const orderedThisWeek = Number.isFinite(p.orderedThisWeek) ? p.orderedThisWeek : 0;
+    /* A later answer names `max` only with an over_cap; the one before still
+       stands while the cap and the week's orders it came with do. */
+    const same = was.cap === cap && was.orderedThisWeek === orderedThisWeek;
+    gwTerms.set(key, {cap, orderedThisWeek,
+                      max: Number.isFinite(p.max) ? p.max : same && Number.isFinite(was.max) ? was.max : null});
   }));
 }
 const gwContract = id => {
@@ -18248,16 +18269,42 @@ const gwQty = (n, smart) => Number.isFinite(n) ? `${n.toLocaleString()}<small>${
 function gwImportLead(answer, lines){
   const cash = answer.cash === null || answer.cash === undefined ? NaN : Number(answer.cash);
   const items = [];
-  (answer.rows || []).filter(r => r.reactivated).forEach(r => {
-    const total = r.nextDeliveryTotal === null || r.nextDeliveryTotal === undefined ? NaN : Number(r.nextDeliveryTotal);
+  const totalOf = r => r.nextDeliveryTotal === null || r.nextDeliveryTotal === undefined ? NaN : Number(r.nextDeliveryTotal);
+  /* What the caps leave of a week, before anything is applied. */
+  lines.filter(l => l.uncovered > 0).forEach(l => items.push(`<b>${Math.round(l.uncovered).toLocaleString()} a week of ${
+    spEsc(l.r.item)} at ${spEsc(l.depot.name)} not covered</b>: the importers' caps are reached.`));
+  const started = (answer.rows || []).filter(r => r.reactivated);
+  started.forEach(r => {
+    const total = totalOf(r);
     const day = Number(r.nextDeliveryDay);
+    /* Start runs the whole contract: its products on other lines start too. */
+    const named = new Set((r.products || []).filter(p => p && p.warehouse)
+      .map(p => `${p.itemName}|${p.warehouse.street}#${p.warehouse.number}`));
+    const others = gwImportRows.flatMap(x => (x.contracts || []).filter(c => c.id === r.id)
+      .map(c => ({x, c}))).filter(({x}) => !named.has(`${x.slug}|${gwDepotKey(x)}`));
     items.push(`<b>${gwContractName(r)}</b> is stopped: this starts it again, with Repeating on. Its next delivery${
       day > 0 ? `, on day ${day},` : ""} costs ${Number.isFinite(total) ? fmt(total) : "an amount the game did not give"}${
       Number.isFinite(cash) ? `, against ${fmt(cash)} in cash` : ""}.${Number.isFinite(total) && Number.isFinite(cash) && total > cash
-        ? " <b>That is more than you hold</b>: the game stops a contract it cannot pay for at delivery." : ""}`);
+        ? " <b>That is more than you hold</b>: the game stops a contract it cannot pay for at delivery." : ""}${others.length
+        ? ` Starting it also starts its other ${others.length === 1 ? "product" : "products"}: ${others.map(({x, c}) =>
+          `${spEsc(x.item)} at ${spEsc((D.businesses[x.s] || {}).name || "a depot")}, ${c.smart ? `keeping ${c.amount.toLocaleString()} in stock`
+            : `${c.amount.toLocaleString()} a week`}`).join("; ")}.` : ""}`);
   });
-  lines.filter(l => l.reordered).forEach(l => items.push(`New delivery order for ${spEsc(l.r.item)} at ${spEsc(l.depot.name)}: ${
-    gwRanking(l.r).map((c, i) => `${i + 1}. ${spEsc(c.importer || "Importer")}`).join(", ")}.`));
+  /* Each start is weighed on its own above; together they can still be more. */
+  const totals = started.map(totalOf);
+  const sum = totals.reduce((n, v) => n + v, 0);
+  if(started.length > 1 && totals.every(Number.isFinite) && Number.isFinite(cash) && sum > cash)
+    items.push(`<b>Together the ${started.length} started contracts' next deliveries cost ${fmt(sum)}</b>, more than the ${
+      fmt(cash)} you hold: the game stops a contract it cannot pay for at delivery.`);
+  /* A Smart Delivery write sets the level alone; the plain contracts on the
+     line keep their amounts, which the level already counts. */
+  lines.filter(l => l.r.smart).forEach(l => {
+    const plain = l.r.contracts.filter(c => !c.smart);
+    if(plain.length) items.push(`The plain ${plain.length === 1 ? "contract" : "contracts"} for ${spEsc(l.r.item)} at ${
+      spEsc(l.depot.name)} (${plain.map(c => spEsc(c.importer || "Importer")).join(", ")}) ${
+      plain.length === 1 ? "is" : "are"} left as ${plain.length === 1 ? "it is" : "they are"}: the level counts what ${
+      plain.length === 1 ? "it brings" : "they bring"}.`);
+  });
   lines.forEach(l => l.kept.forEach(c => items.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${
     c.amount.toLocaleString()} a week of ${spEsc(l.r.item)}: the game runs no contract with nothing to order, and this never stops one. Stop it in BizMan if the others cover the week.`)));
   const left = new Map();
@@ -18278,36 +18325,31 @@ function gwImports(depotKey){
     body: () => { sent = gwImportBody(lines()); return sent; },
     head: ["Contract", "Material", "Now", "After", "Cap"],
     rows: answer => (answer.rows || []).flatMap(row => {
-      const note = [row.reactivated ? "started, Repeating on" : "", row.reordered ? "moved in the delivery order" : ""]
-        .filter(Boolean).join(" · ");
-      const who = gwContractName(row) + (note ? `<small>${note}</small>` : "");
+      const who = gwContractName(row) + (row.reactivated ? "<small>started, Repeating on</small>" : "");
       const products = row.products || [];
-      if(!products.length) return [{state: row.error ? "bad" : "set", cells: [who, "", "", "", ""]}];
+      if(!products.length) return [{state: row.error ? "bad" : "skip", cells: [who, "", "", "", ""]}];
       return products.map(p => ({
-        state: p.error ? "bad" : p.before === p.amount && !row.reactivated && !row.reordered ? "skip" : "set",
+        state: p.error ? "bad" : p.before === p.amount && !row.reactivated ? "skip" : "set",
         cells: [who, `${spEsc(itemName(p.itemName))}${p.warehouse ? `<small>${gwSiteName({address: p.warehouse})}</small>` : ""}`,
                 gwQty(p.before, p.smart), gwQty(p.amount, p.smart),
                 `${Number.isFinite(p.cap) ? `cap ${p.cap.toLocaleString()}` : "no cap"}${
                   Number.isFinite(p.unitPrice) ? `<small>$${p.unitPrice.toFixed(2)} each</small>` : ""}`]}));
     }),
     object: gwContractName,
-    lead: answer => { gwLearnTerms(answer); return gwImportLead(answer, lines()); },
+    lead: answer => { gwLearnTerms(answer); return gwImportLead(answer, gwImportPlan(depotKey).filter(l => l.contracts.length || l.uncovered)); },
     /* A dry run that named a cap can change how plain amounts split: ask again
        with the split it allows, a few times at most. */
     bind: (dlg, replan) => {
       if(replans < 3 && JSON.stringify(gwImportBody(lines())) !== JSON.stringify(sent)){ replans++; replan(); }
     },
     applyLabel: "Apply in game",
-    /* A new order alone names no contract, so the answer has no row to say it. */
-    changed: answer => (answer.rows || []).some(r => r.reactivated || r.reordered
-      || (r.products || []).some(p => p.before !== p.amount)) || !!(sent && sent.order),
+    changed: answer => (answer.rows || []).some(r => r.reactivated || (r.products || []).some(p => p.before !== p.amount)),
     done: answer => {
       if(answer.undo) return "Undone: the imports are back as they were.";
       const rows = answer.rows || [];
       const n = rows.reduce((k, r) => k + (r.products || []).filter(p => p.before !== p.amount).length, 0);
       const started = rows.filter(r => r.reactivated).length;
-      const parts = [n ? `${plural(n, "amount")} set` : "", started ? `${plural(started, "contract")} started` : "",
-                     sent && sent.order ? "the delivery order changed" : ""].filter(Boolean);
+      const parts = [n ? `${plural(n, "amount")} set` : "", started ? `${plural(started, "contract")} started` : ""].filter(Boolean);
       return parts.length ? `${parts.join(", ").replace(/^./, c => c.toUpperCase())} in the game.`
         : "Nothing to change: the game already holds these figures.";
     },
@@ -18349,9 +18391,22 @@ function gwRosterWeek(row){
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
   return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept};
 }
+/* Whether the game's schedule already is this week, entry for entry (and
+   open around the clock where the plan wants that). */
+function gwRosterMatches(row, week){
+  const line = (d, s) => [d, s.f, s.t, s.employeeId, s.itemInstanceId].join("|");
+  const want = week.days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
+  const have = ((row.current || {}).list || []).map(s => {
+    const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
+    return line(s.d, {f: s.f, t: s.t, employeeId: (who || {}).id, itemInstanceId: (st || {}).id});
+  }).sort();
+  return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
+}
 const gwScheduleSites = () => (D.staffing || []).map(r => r.key).filter(key => {
   const row = gwRosterPlan(key);
-  return !!row && gwRosterWeek(row).sent > 0;
+  if(!row) return false;
+  const week = gwRosterWeek(row);
+  return week.sent > 0 && !gwRosterMatches(row, week);
 });
 /* The roster's own write, and every planned shop's in turn. How many people
    the plan still waits on stays beside it until they are added, so a partial
@@ -18459,25 +18514,6 @@ const bindWrites = once(() => {
     else if(kind === "imports") gwImports(btn.dataset.gwDepot || null);
     else if(kind === "schedule") gwSchedule(JSON.parse(btn.dataset.gwSites || "[]"));
   }, true);
-  /* A contract moved up or down its line's ranking. The table is drawn again,
-     and the focus goes back to the same move, or to the other one where this
-     one has reached the end. */
-  on("click", "[data-gw-rank]", (btn, e) => {
-    e.preventDefault();
-    const r = gwImportRows.find(x => x.impId === btn.dataset.gwRank);
-    if(!r) return;
-    const ids = gwRanking(r).map(c => c.id);
-    const at = ids.indexOf(btn.dataset.gwId), to = at + Number(btn.dataset.gwMove);
-    if(at < 0 || to < 0 || to >= ids.length) return;
-    [ids[at], ids[to]] = [ids[to], ids[at]];
-    gwRankings.set(r.impId, ids);
-    gwRedrawImports(r.impId, btn.dataset.gwId, btn.dataset.gwMove);
-  });
-  on("click", "[data-gw-rank-reset]", (btn, e) => {
-    e.preventDefault();
-    gwRankings.delete(btn.dataset.gwRankReset);
-    gwRedrawImports(btn.dataset.gwRankReset, null, null);
-  });
 });
 function wireWrites(){ bindWrites(); gwToast(); }
 
@@ -18563,6 +18599,7 @@ function startWatching(){
     changed(data){
       const first = !D;
       D = data;
+      gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       if(first) boot(); else renderAll();
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
