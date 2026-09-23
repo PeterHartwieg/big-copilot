@@ -5545,11 +5545,11 @@ def _days_open(save: Save, building: dict) -> int:
     report: the game files a report for an hour the shop was open and served
     somebody, and none for an hour it was shut or empty. The order history
     keeps about sixteen days, so a shop older than that counts from the
-    earliest day it still holds, which is past DEMAND_RUN_DAYS already. Where
-    the window holds no report at all but no longer reaches back to the day
-    the shop was created, its first open day has left the window, and the
-    shop counts from its creation instead. A save without a day counts to the
-    last day on file.
+    earliest day it still holds, which is past DEMAND_RUN_DAYS already. A
+    window with no report at all is not complete, whatever the shop's age: a
+    shop fitted out and left shut, or one nobody visits, has measured nothing,
+    and a demand plan of no customers anywhere would be a guess, not data. A
+    save without a day counts to the last day on file.
     """
     today = save.root.get("Day")
     served, held = [], []
@@ -5563,43 +5563,47 @@ def _days_open(save: Save, building: dict) -> int:
     if not held:
         return 0
     end = today if today is not None else max(held) + 1
-    if served:
-        return end - min(served)
-    created = building.get("creationDay")
-    if created is not None and min(held) > created:
-        return end - created
-    return 0
+    return end - min(served) if served else 0
 
 
-def _open_day_average(save: Save, building: dict) -> list:
+def _open_day_average(save: Save, building: dict, slots: list) -> list:
     """Customers per weekday and hour, averaged over the days the shop was open.
 
     The board's customer grid averages an hour over the reports filed for it,
-    and the game files none for an hour nobody came, so a quiet day drops out
+    and the game files none for an hour nobody came, so a quiet hour drops out
     and the average is the busy days' alone: 3 one Tuesday at 03:00 and nobody
-    the next reads 3. Here an hour is averaged over every day on that weekday
-    the shop was open at all (any report that day), a missing hour counting as
-    none: that Tuesday reads 1.5. Today, unfinished, is left out. A weekday the
-    shop never opened is None throughout.
+    the next reads 3. Here an hour is averaged over every open day on that
+    weekday, a missing hour counting as none: that Tuesday reads 1.5.
+
+    An open day is a finished day in `orderHistory` -- the game keeps an entry
+    for every day, reports or not -- on a weekday the shop's current schedule
+    (`slots`) opens, from the first day the shop served anybody: the days
+    before it were the fit-out, not trade. A day nobody came all day files an
+    entry with no report and counts as a day of none. Today, unfinished, is
+    left out. A weekday with no open day yet, or one the schedule keeps shut,
+    is none throughout.
     """
     today = save.root.get("Day")
-    sums = [[0.0] * 24 for _ in range(7)]
-    days = [0] * 7
+    entries = []
     for entry in save.items(building.get("orderHistory")):
         number = entry.get("dayNumber")
         if number is None or (today is not None and number >= today):
             continue
-        reports = save.items(entry.get("hourReports"))
-        if not reports:
-            continue
+        entries.append((number, save.items(entry.get("hourReports"))))
+    served = [number for number, reports in entries if reports]
+    sums = [[0.0] * 24 for _ in range(7)]
+    days = [0] * 7
+    for number, reports in entries:
         wd = number % 7
+        if not served or number < min(served) or not slots[wd]:
+            continue
         days[wd] += 1
         for report in reports:
             hour = report.get("hour")
             if hour is not None and 0 <= hour < 24:
                 sums[wd][hour] += report.get("customers", 0) or 0
     return [
-        [round(total / days[wd], 1) for total in sums[wd]] if days[wd] else None
+        [round(total / days[wd], 1) for total in sums[wd]] if days[wd] else [0.0] * 24
         for wd in range(7)
     ]
 
@@ -5616,8 +5620,10 @@ def _run_measured(grid: dict, run: int, daily: list | None = None) -> dict:
     either way nobody is staffed for it. A weekday it never opened is no demand
     all day. `daily`, from _open_day_average(), replaces each hour's average
     over its reports with the average over the days the shop was open, so a
-    day nobody came at that hour counts as none rather than dropping out; this
-    copy only, the board's own customer grid is left as it is. A shop without
+    day nobody came at that hour counts as none rather than dropping out, and
+    a weekday with no finished open day is none rather than whatever today's
+    unfinished day has filed so far; this copy only, the board's own customer
+    grid is left as it is. A shop without
     the nine days keeps the grid, and the gate, as it is.
     """
     if run < DEMAND_RUN_DAYS:
@@ -5626,7 +5632,7 @@ def _run_measured(grid: dict, run: int, daily: list | None = None) -> dict:
         [0.0 if value is None else value for value in row] for row in grid["customers"]
     ]
     for wd in range(7):
-        if daily and daily[wd] is not None:
+        if daily is not None:
             customers[wd] = list(daily[wd])
     return dict(grid, thin=[False] * 7, customers=customers)
 
@@ -6159,7 +6165,7 @@ def _plan_site(
     for station in grid["stations"]:
         rates[station["skill"]].append(station["rate"])
     run = _days_open(save, building)
-    daily = _open_day_average(save, building) if run >= DEMAND_RUN_DAYS else None
+    daily = _open_day_average(save, building, grid["open"]) if run >= DEMAND_RUN_DAYS else None
     need = _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
                        rates=dict(rates))
 
@@ -13382,14 +13388,16 @@ function spRosterWeekdays(key, need){
    serving hours. The demand test is offered on both and pushed on neither.
    Once the demand data is complete, one line says so, and on the test's own
    view it switches back. */
-/* Hours as the player reads them: "22-8" for 22:00 to 08:00, runs joined
-   across midnight, several runs by commas. */
-function spHourRanges(hours){
+/* Hours as the player reads them, several runs by commas. With `wrap`, a run
+   crosses midnight ("22-8" for 22:00 to 08:00), which is right for hours that
+   hold every day; within one weekday it would read as running into the next,
+   so there the day's own runs are listed ("0-2, 22-24"). */
+function spHourRanges(hours, wrap = true){
   const on = new Set(hours);
   if(!on.size) return "";
   if(on.size === 24) return "0-24";
   let start = 0;
-  while(on.has((start + 23) % 24) || !on.has(start)) start = (start + 1) % 24;
+  while(wrap ? on.has((start + 23) % 24) || !on.has(start) : !on.has(start)) start = (start + 1) % 24;
   const runs = [];
   for(let k = 0; k < 24; k++){
     const h = (start + k) % 24;
@@ -13406,16 +13414,18 @@ function spHourRanges(hours){
    none may be an empty hour or one the shop was shut, and either way it is
    counted as none. Weekdays with the same hours share one entry. */
 function spUnmeasuredLine(row){
-  const days = HOUR_ROWS.map(wd => [wd, spHourRanges((row.unmeasured || [])[wd] || [])])
-    .filter(([, text]) => text);
+  const days = HOUR_ROWS.map(wd => [wd, (row.unmeasured || [])[wd] || []])
+    .filter(([, hours]) => hours.length);
   if(!days.length) return "";
   const groups = [];
-  days.forEach(([wd, text]) => {
-    const same = groups.find(g => g.text === text);
-    if(same) same.days.push(wd); else groups.push({text, days: [wd]});
+  days.forEach(([wd, hours]) => {
+    const key = spHourRanges(hours, false);
+    const same = groups.find(g => g.key === key);
+    if(same) same.days.push(wd); else groups.push({key, hours, days: [wd]});
   });
-  const words = groups.map(g => `${g.days.length === 7 ? "every day"
-    : g.days.map(wd => WEEK_SHORT[wd]).join(", ")} ${g.text}`).join("; ");
+  /* Only hours that hold every day may run across midnight. */
+  const words = groups.map(g => g.days.length === 7 ? `every day ${spHourRanges(g.hours)}`
+    : `${g.days.map(wd => WEEK_SHORT[wd]).join(", ")} ${g.key}`).join("; ");
   return `<p class="sp-unmline">${spI("clock")}<span><b>No customers on file: ${words}.</b> Counted as none.</span></p>`;
 }
 
@@ -13624,7 +13634,7 @@ function spRosterBlock(b){
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
         ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop first opened, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
-        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for the shop's first 9 days, closed days included, and the count stops being a count of what you turned away.`}`})}
+        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed until 9 days after the shop first opened, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}

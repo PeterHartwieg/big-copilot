@@ -369,12 +369,21 @@ class HandOverTest(unittest.TestCase):
             entries[:] = [e for e in entries if e["dayNumber"] >= 40]
         self.assertEqual(self.days_open(55, today=56, edit=window), 16)
 
-    def test_a_window_with_no_reports_left_is_complete(self):
-        """The first open day has left the order history, and nobody came since."""
+    def test_a_window_with_no_reports_is_not_complete(self):
+        """Nobody came in the whole window: nothing measured, whatever the age."""
         def quiet(entries):
             entries[:] = [dict(e, hourReports={"$items": []}) for e in entries
                           if e["dayNumber"] >= 40]
-        self.assertEqual(self.days_open(55, today=56, edit=quiet), 55)
+        self.assertEqual(self.days_open(55, today=56, edit=quiet), 0)
+
+    def test_a_shop_fitted_out_and_left_shut_gets_no_hand_over(self):
+        """Twenty days on file, no report, the 24/7 test entered today."""
+        # The schedule opens every day now; the fit-out filed nothing.
+        row = plan(HandOverTest.ITEMS, crew(), {}, days=20, day=21,
+                   shifts=game_week((1, 2)))
+        self.assertIs(row["fullCover"]["inGame"], True)
+        self.assertEqual(row["fullCover"]["daysMeasured"], 0)
+        self.assertIs(row["demandDataComplete"], False)
 
     def test_no_reports_and_the_window_reaches_creation_is_not(self):
         """Created within the window and never served: not opened yet."""
@@ -514,7 +523,7 @@ class NineDayGateTest(unittest.TestCase):
         second = next(e for e in reg["orderHistory"]["$items"] if e["dayNumber"] == 9)
         second["hourReports"] = {"$items": [{"hour": 12, "customers": 10}]}
         save = Save({"Day": 15}, {}, "t.hsg")
-        daily = _open_day_average(save, reg)
+        daily = _open_day_average(save, reg, ALL_DAY_OPEN)
         self.assertEqual(daily[2][3], 1.5)
         self.assertEqual(daily[2][12], 10.0)
         self.assertEqual(daily[3][3], 3.0)
@@ -531,10 +540,42 @@ class NineDayGateTest(unittest.TestCase):
         # Without the nine days the grid is untouched.
         self.assertIs(_run_measured(grid, DEMAND_RUN_DAYS - 1, daily), grid)
 
+    def test_a_day_nobody_came_all_day_counts(self):
+        """Tuesday 03:00: 3 one week, and the next Tuesday filed no report at all."""
+        reg = registration([(1, REGISTER)], {3: 3, 12: 10}, days=14)
+        second = next(e for e in reg["orderHistory"]["$items"] if e["dayNumber"] == 9)
+        second["hourReports"] = {"$items": []}
+        daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg, ALL_DAY_OPEN)
+        self.assertEqual((daily[2][3], daily[2][12]), (1.5, 5.0))
+        # A weekday the schedule keeps shut is not averaged over its days.
+        shut = [[[0, 24]] if wd != 2 else [] for wd in range(7)]
+        daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg, shut)
+        self.assertEqual(daily[2], [0.0] * 24)
+
+    def test_the_fit_out_before_the_first_customer_is_not_averaged(self):
+        """Days on file before the shop first served anybody are not open days."""
+        reg = registration([(1, REGISTER)], {3: 3}, days=14)
+        for entry in reg["orderHistory"]["$items"]:
+            if entry["dayNumber"] <= 2:
+                entry["hourReports"] = {"$items": []}
+        daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg, ALL_DAY_OPEN)
+        self.assertEqual(daily[2][3], 3.0)  # day 9 alone; day 2 was the fit-out
+        self.assertEqual(daily[1][3], 3.0)
+
     def test_a_weekday_never_opened_averages_to_nothing(self):
         reg = registration([(1, REGISTER)], {12: 10}, days=14, open_days=(0, 1, 2, 4, 5, 6))
-        daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg)
-        self.assertIsNone(daily[3])
+        slots = [[] if wd == 3 else [[0, 24]] for wd in range(7)]
+        daily = _open_day_average(Save({"Day": 15}, {}, "t.hsg"), reg, slots)
+        self.assertEqual(daily[3], [0.0] * 24)
+
+    def test_todays_partial_day_cannot_set_a_weekday(self):
+        """A weekday with no finished open day is none, not today's partial count."""
+        grid = {"customers": [[None] * 24 for _ in range(7)], "weeks": [1] * 7,
+                "thin": [False] * 7}
+        grid["customers"][4][10] = 25.0  # filed so far today, the first Thursday
+        daily = [[0.0] * 24 for _ in range(7)]
+        measured = _run_measured(grid, DEMAND_RUN_DAYS, daily)
+        self.assertEqual(measured["customers"][4][10], 0.0)
 
     def test_the_threshold_directly(self):
         stations = [{"id": 1}, {"id": 2}]

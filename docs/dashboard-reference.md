@@ -555,8 +555,9 @@ shop first opened (`DEMAND_RUN_DAYS`, Peter, 23 September 2026): the first open 
 earliest day in `orderHistory` with a report, and today, being unfinished, is left out. Not
 nine in a row and not around the clock: a nightclub shut every Monday completes on its
 ninth day like any other shop. The order history keeps about sixteen days, so a shop older
-than that is complete, including one whose window holds no report at all: if the window no
-longer reaches back to the registration's `creationDay`, the days count from that. The count is read from the days as they were staffed, whoever was
+than that is complete. A window with no report at all is not complete, whatever the shop's
+age: a shop fitted out and left shut, or one nobody visits, has measured nothing, and a
+plan of no customers anywhere would be a guess. The count is read from the days as they were staffed, whoever was
 on; there is no clock tying it to when full cover started. `fullCover.daysMeasured` is the
 days so far and `fullCover.daysNeeded` the 9, and the full-cover view shows them as its
 progress line: *Demand data: 5 of 9 days.*
@@ -568,14 +569,19 @@ the same way. For a shop with complete data no weekday is thin, and an hour with
 counts as no customers: the shop was shut then, or empty, so no serving station is staffed
 for it (cleaning and security cover every open hour as before). A weekday it never opened
 is no demand all day. And an hour is averaged over the days the shop was open on that
-weekday, a day nobody came at that hour counting as none: the board's customer grid
-averages over the reports filed, so a quiet day drops out and the busy days alone set the
-figure (3 one Tuesday at 03:00 and nobody the next reads 3 there, 1.5 here). This is the
+weekday, a missing hour counting as none: the board's customer grid averages over the
+reports filed, so a quiet day drops out and the busy days alone set the figure (3 one
+Tuesday at 03:00 and nobody the next reads 3 there, 1.5 here). An open day is a finished
+day in `orderHistory` (the game keeps an entry for every day, reports or not) on a weekday
+the current schedule opens, from the first day the shop served anybody; a day nobody came
+all day is an entry with no report and a day of none. A weekday with no finished open day
+yet is none too, so today's unfinished day never sets it. This is the
 demand plan's copy only; the board-wide customer counts keep that upward bias. Where the
 schedule opens hours with no report on file, `unmeasured` lists them per weekday and the
 Staffing block says so in one line, worded as what is known (*No customers on file: Fri
 0-1, 7-8. Counted as none.*: an hour with no report was empty or shut), with the hours
-marked on the need strip. A shop without complete data keeps the two-week gate as it was.
+marked on the need strip. A weekday's runs stay inside the day (*Mon 0-2, 22-24*); only
+hours that hold every day run across midnight (*every day 22-2*). A shop without complete data keeps the two-week gate as it was.
 
 `fullCover.inGame` is whether the schedule in the game staffs every serving station every
 hour the shop is open, whatever its hours are. Nothing less inside them counts, because an

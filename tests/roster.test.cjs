@@ -1990,8 +1990,14 @@ test('the line names the weekdays, and weekdays with the same hours share an ent
   });
   try {
     assert.equal(await page.locator('#sp-roster .sp-unmline').innerText(),
-      'No customers on file: Mon, Tue 22-2; Fri 0-1, 7-8. Counted as none.');
+      'No customers on file: Mon, Tue 0-2, 22-24; Fri 0-1, 7-8. Counted as none.');
   } finally { await page.close(); }
+  // Hours that hold every day may run across midnight.
+  const every = await shop('quiet', row => { row.unmeasured = Array(7).fill([22, 23, 0, 1]); });
+  try {
+    assert.equal(await every.locator('#sp-roster .sp-unmline').innerText(),
+      'No customers on file: every day 22-2. Counted as none.');
+  } finally { await every.close(); }
 });
 
 test('a shorter day busy all its hours has nothing to switch to', async () => {
@@ -2023,6 +2029,10 @@ test('hours read as the player reads them, runs joined across midnight', async (
       spHourRanges([]),
     ]);
     assert.deepEqual(got, ['22-8', '8-20', '5-6, 20-2', '0-24', '']);
+    // Within one weekday a run does not cross midnight.
+    const day = await page.evaluate(() => [
+      spHourRanges([0, 1, 22, 23], false), spHourRanges([22, 23, 0, 1, 2, 3, 4, 5, 6, 7], false)]);
+    assert.deepEqual(day, ['0-2, 22-24', '0-8, 22-24']);
   } finally { await page.close(); }
 });
 
