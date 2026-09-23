@@ -320,11 +320,13 @@ test('a day the doors never open says so rather than reporting a measurement', a
 
 test('the need strip stops at the doors, and the shut hours are marked in every lane', async () => {
   // `shut` opens 08-12 and 14-20: the hour in the middle is the doors closed,
-  // not trade dipping, and the need curve still carries a number for it.
-  const page = await shop('shut');
+  // not trade dipping. The planner counts it as no customers, since the game
+  // files no report for it; a need carried there anyway must still not draw.
+  const page = await shop('shut', row => {
+    row.need['ba:skill_customerservice'][1][12] = 1;
+    row.basis['ba:skill_customerservice'][1][12] = 'measured';
+  });
   try {
-    assert.equal(ROWS.shut.need['ba:skill_customerservice'][1][12], 1,
-      'the payload does ask for somebody at 12:00');
     const columns = await page.$$eval(mon + '.sp-need',
       els => els.map(e => e.style.gridColumn));
     assert.ok(columns.length, 'the open hours are still drawn');
@@ -911,6 +913,7 @@ test('the note says how new the shop is, what the plan covers, and what not to c
     // Straight out of the planner: opened five days ago, and not one hour
     // report filed yet.
     assert.match(text, /Open 5 days, no hour reports on file/);
+    assert.match(text, /arrives after 9 days of trading/);
     assert.match(text, /2 reports of that same weekday/);
     assert.match(text, /cleaning and security cover only/);
     // 56 shifts in the game, 28 of them cleaning: the other 28 are the ones
@@ -997,7 +1000,7 @@ test('a measured shop whose hours ask for nobody is still a cover-only plan', as
     assert.equal(await note.count(), 1);
     assert.match(await note.innerText(), /Cover only/);
     assert.match(await note.innerText(), /ask for nobody on its serving stations/);
-    assert.doesNotMatch(await note.innerText(), /fortnight of trading/);
+    assert.doesNotMatch(await note.innerText(), /days of trading/);
     assert.match(await note.innerText(), /Do not clear the whole schedule/);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
@@ -1012,7 +1015,10 @@ test('a measured shop whose hours ask for nobody is still a cover-only plan', as
 });
 
 test('the Today card sizes that shop on its cover shifts, and names the reason', async () => {
-  const page = await shop('quiet');
+  /* Its own hours are covered in the game and its data is complete, so the
+     planner would also say to switch; that line comes first on the card, and
+     this test is about the line under it. */
+  const page = await shop('quiet', row => { row.demandDataComplete = false; });
   try {
     const shown = await page.evaluate(() => {
       drawOptimizeStaffing();
@@ -1777,9 +1783,8 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
     assert.match(steps[0], /^Open every day 0 to 24/);
     assert.match(await page.locator('#sp-roster .sp-pickwhy').innerText(),
-      /^Run it until every hour is measured, then switch to the demand plan\. Demand data: 0 of 7 days measured around the clock\.$/);
-    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(),
-      'Demand data: 0 of 7 days measured around the clock.');
+      /^Run it for the shop's first 9 days, then switch to the demand plan\. Demand data: 0 of 9 days\.$/);
+    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(), 'Demand data: 0 of 9 days.');
     assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
       /Every station, every hour/);
     // The payload carries no need for the test; the strip is read off the
@@ -1916,23 +1921,83 @@ test('complete demand data on full cover says so on the block and on the Today c
   } finally { await page.close(); }
 });
 
-test('the progress line counts weekdays measured around the clock', async () => {
-  const page = await shop('newshop', row => { row.fullCover.daysMeasured = 5; });
-  try {
-    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
-    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(),
-      'Demand data: 5 of 7 days measured around the clock.');
-    // Not on the other view, and not once the data is complete.
-    await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
-    assert.equal(await page.locator('#sp-roster .sp-progress').count(), 0);
-  } finally { await page.close(); }
-  const done = await shop('handover');
-  try {
-    await done.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
-    assert.equal(await done.locator('#sp-roster .sp-progress').count(), 0);
-  } finally { await done.close(); }
-});
-
+test('the progress line counts the days since the shop first opened', async () => {
+  const page = await shop('newshop', row => { row.fullCover.daysMeasured = 5; });
+  try {
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(),
+      'Demand data: 5 of 9 days.');
+    // Not on the other view, and not once the data is complete.
+    await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-progress').count(), 0);
+  } finally { await page.close(); }
+  const done = await shop('handover');
+  try {
+    await done.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
+    assert.equal(await done.locator('#sp-roster .sp-progress').count(), 0);
+  } finally { await done.close(); }
+});
+
+test('complete data with no hand-over says why, in one line', async () => {
+  // The demand plan wants every station every hour as well: nothing to switch to.
+  const same = await shop('handover', row => {
+    row.demandDataComplete = false;
+    row.shifts = JSON.parse(JSON.stringify(row.fullCover.shifts));
+  });
+  try {
+    await same.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
+    assert.equal(await same.locator('#sp-roster .sp-pickwhy').innerText(),
+      'The demand plan also needs every station every hour: keep this staffing.');
+    assert.equal(await same.locator('#sp-roster .sp-progress').count(), 0);
+    assert.equal(await same.locator('#sp-roster .sp-handover').count(), 0);
+  } finally { await same.close(); }
+  // Nine days since first open, but not on full cover in the game.
+  const off = await shop('handover', row => {
+    row.demandDataComplete = false;
+    row.fullCover.inGame = false;
+  });
+  try {
+    await off.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
+    assert.equal(await off.locator('#sp-roster .sp-pickwhy').innerText(),
+      'Demand data complete, as staffed: an empty station may have turned customers away.');
+  } finally { await off.close(); }
+});
+
+test('open hours no report has measured are named in one line and marked on the strip', async () => {
+  // `quiet` was measured at night and now opens 8 to 20: its day hours are
+  // counted as no customers until reports arrive.
+  const page = await shop('quiet');
+  try {
+    const line = page.locator('#sp-roster .sp-unmline');
+    assert.equal(await line.count(), 1);
+    assert.equal(await line.innerText(), 'Not measured yet: 8-20. Counted as no customers until they are.');
+    assert.equal(await page.locator(mon + '.sp-unmh').count(), 12);
+    // The test staffs every hour anyway: not on its view.
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-unmline').count(), 0);
+    assert.equal(await page.locator(mon + '.sp-unmh').count(), 0);
+  } finally { await page.close(); }
+  // `shut` was measured in the hours it opens now: nothing to name.
+  const none = await shop('shut');
+  try {
+    assert.equal(await none.locator('#sp-roster .sp-unmline').count(), 0);
+  } finally { await none.close(); }
+});
+
+test('hours read as the player reads them, runs joined across midnight', async () => {
+  const page = await shop('full');
+  try {
+    const got = await page.evaluate(() => [
+      spHourRanges([22, 23, 0, 1, 2, 3, 4, 5, 6, 7]),
+      spHourRanges([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]),
+      spHourRanges([0, 1, 5, 20, 21, 22, 23]),
+      spHourRanges([...Array(24).keys()]),
+      spHourRanges([]),
+    ]);
+    assert.deepEqual(got, ['22-8', '8-20', '5-6, 20-2', '0-24', '']);
+  } finally { await page.close(); }
+});
+
 test('no hand-over line on a shop whose demand data is not complete', async () => {
   for(const which of ['full', 'newshop']){
     const page = await shop(which);

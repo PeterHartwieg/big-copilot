@@ -5455,17 +5455,20 @@ def _staffing(
     # The full-cover plans, against what the demand plans left on the bench.
     # A bench member's week is shared across these plans the same way it is
     # across the demand plans, and written back only once a site's row is built.
-    # The sites where the test is the live choice go first -- a shop whose
-    # demand data is not complete yet, or one already running full cover -- so
-    # a fully measured shop's full cover, which nobody is following, cannot
-    # take the unassigned staff a new shop's test needs. Site order within each.
+    # The sites where the test is the live choice go first -- a shop with
+    # neither HOUR_WEEKS_THIN weeks on every weekday it opens nor complete data,
+    # or one already running full cover -- so a measured shop's full
+    # cover, which nobody is following, cannot take the unassigned staff a
+    # new shop's test needs. Site order within each.
     def live(entry):
         business, site = entry[1]
         if site is None:
             return 1
         grid = site["grid"]
+        opens = [wd for wd in range(7) if grid["open"][wd]]
+        thin = not opens or min(grid["weeks"][wd] for wd in opens) < HOUR_WEEKS_THIN
         return 0 if (
-            _days_measured(site["coverage"]) < 7
+            (thin and site["run"] < DEMAND_RUN_DAYS)
             or _full_cover_in_game(site["current"]["list"], grid["stations"], grid["open"])
         ) else 1
 
@@ -5523,49 +5526,102 @@ def _full_need(grid: dict) -> dict:
 # the shop is shut is an hour the demand test never measures, so opening every
 # day around the clock is the plan's first step, not an option beside it.
 ALL_DAY_OPEN = [[[0, 24]] for _ in range(7)]
-def _hour_coverage(save: Save, building: dict) -> list:
-    """Hour reports on file for every hour of every weekday, [weekday][hour].
 
-    The game files a report only for an hour the shop was open, so a shop open
-    8 to 22 never has one for 3 in the morning. An hour with HOUR_WEEKS_THIN
-    reports is one the demand plan reads as measured.
+
+# How many finished days since the shop first opened make the demand data good
+# enough for the demand plan (Peter, 23 September 2026): nine covers every
+# weekday once and two of them twice, a week and a bit of game time rather than
+# the fortnight HOUR_WEEKS_THIN would take. Not nine in a row: a nightclub shut
+# every Monday still completes on its ninth day, and its Mondays are no demand.
+DEMAND_RUN_DAYS = 9
+
+
+def _days_open(save: Save, building: dict) -> int:
+    """Finished days since the shop first opened, today's unfinished day left out.
+
+    The first open day is the earliest day on file with at least one hour
+    report: the game files a report for an hour the shop was open and served
+    somebody, and none for an hour it was shut or empty. The order history
+    keeps about sixteen days, so a shop older than that counts from the
+    earliest day it still holds, which is past DEMAND_RUN_DAYS already. A save
+    without a day counts to the last day on file.
     """
-    counts = [[0] * 24 for _ in range(7)]
+    today = save.root.get("Day")
+    served, last = [], None
     for entry in save.items(building.get("orderHistory")):
         number = entry.get("dayNumber")
-        if number is None:
+        if number is None or (today is not None and number >= today):
             continue
-        for report in save.items(entry.get("hourReports")):
-            hour = report.get("hour")
-            if hour is not None and 0 <= hour < 24:
-                counts[number % 7][hour] += 1
-    return counts
+        last = number if last is None else max(last, number)
+        if save.items(entry.get("hourReports")):
+            served.append(number)
+    if not served:
+        return 0
+    end = today if today is not None else last + 1
+    return end - min(served)
 
 
-def _days_measured(coverage: list) -> int:
-    """Weekdays measured around the clock: all 24 hours at HOUR_WEEKS_THIN reports."""
-    return sum(1 for day in coverage if min(day) >= HOUR_WEEKS_THIN)
+def _run_measured(grid: dict, run: int) -> dict:
+    """The hour grid the demand plan reads, for a shop with complete data.
+
+    The demand plan calls a weekday thin below HOUR_WEEKS_THIN weeks and reads
+    a thin weekday off another through the game's day curve, or not at all; an
+    hour with no report it reads off another weekday the same way. Nine days
+    since the shop first opened are what Peter decided is enough (23 September
+    2026). So for such a shop no weekday is thin, and every hour with no report
+    on file counts as no customers: the shop was shut then, or empty, and
+    either way nobody is staffed for it. A weekday it never opened is no demand
+    all day. A shop without the nine days keeps the grid, and the gate, as it
+    is.
+    """
+    if run < DEMAND_RUN_DAYS:
+        return grid
+    customers = [
+        [0.0 if value is None else value for value in row] for row in grid["customers"]
+    ]
+    return dict(grid, thin=[False] * 7, customers=customers)
 
 
-def _demand_data_complete(coverage, week, full, in_game) -> bool:
+def _unmeasured(grid: dict, run: int) -> list:
+    """Hours the current schedule opens that no report has measured, per weekday.
+
+    Only for a shop with complete data, where such an hour counts as no
+    customers: it is the missing data the page points at, so a player who
+    measured 8 to 22 and now opens around the clock knows the night is a guess
+    of nobody until the reports arrive.
+    """
+    if run < DEMAND_RUN_DAYS:
+        return [[] for _ in range(7)]
+    return [
+        sorted(
+            hour
+            for start, end in grid["open"][wd]
+            for hour in range(max(0, start), min(24, end))
+            if grid["customers"][wd][hour] is None
+        )
+        for wd in range(7)
+    ]
+
+
+def _demand_data_complete(run, week, full, in_game) -> bool:
     """Whether to tell the player to switch from full cover to the demand plan.
 
     All of it, straight from the save:
 
-    - the demand data is complete: every hour of every weekday has
-      HOUR_WEEKS_THIN hour reports, the same bar the demand plan uses to call a
-      weekday measured rather than thin;
-    - the game runs a full-cover schedule now (`in_game`, see
-      _full_cover_in_game(): every station every hour, open 0 to 24), so this
-      is advice to a shop on the test, not to one already on a demand plan;
+    - the demand data is complete: at least DEMAND_RUN_DAYS finished days since
+      the shop first opened (_days_open()), read from the days as they were
+      staffed, whoever was on;
+    - the game staffs every serving station every hour the shop is open now
+      (`in_game`, see _full_cover_in_game()), so this is advice to a shop on
+      the test, not to one already on a demand plan;
     - and the demand plan asks for fewer serving hours than full cover: a shop
-      busy every hour is already on its demand plan, and switching changes
-      nothing.
+      busy every open hour is already on its demand plan, and switching
+      changes nothing.
 
-    No age: an older shop run around the clock at full cover with complete
-    data gets the same advice, and it is right for it too.
+    No age and no clock: an older shop run at full cover with complete data
+    gets the same advice, and it is right for it too.
     """
-    if not in_game or _days_measured(coverage) < 7:
+    if not in_game or run < DEMAND_RUN_DAYS:
         return False
     return _serving_hours(week["shifts"]) < _serving_hours(full["shifts"])
 
@@ -5580,16 +5636,22 @@ def _open_all_hours(slots: list) -> bool:
 
 
 def _full_cover_in_game(current: list, stations: list, slots: list) -> bool:
-    """Whether the schedule in the game is a full-cover demand test.
+    """Whether the schedule in the game is full cover of the shop's own hours.
 
-    Every serving station staffed every hour of the week, and the doors open 0
-    to 24 every day. Nothing less: an hour a register stands empty is an hour
-    whose customers were turned away by the schedule rather than by demand,
-    and a test that claimed it would hand the demand plan a number it never
-    measured. A site with no serving station has no demand to test, so it
-    never is one.
+    Every serving station staffed every hour the shop is open, whatever those
+    hours are (Peter, 23 September 2026: the player may keep a shorter day, and
+    the plan counts its shut hours as no demand). Nothing less inside them: an
+    hour a register stands empty is an hour whose customers were turned away by
+    the schedule rather than by demand. A site with no serving station, or one
+    open no hour at all, has no demand to test, so it never is one.
     """
-    if not stations or not _open_all_hours(slots):
+    opened = {
+        (wd, hour)
+        for wd in range(7)
+        for start, end in slots[wd]
+        for hour in range(max(0, start), min(24, end))
+    }
+    if not stations or not opened:
         return False
     covered = {station["id"]: set() for station in stations}
     for row in current:
@@ -5597,7 +5659,7 @@ def _full_cover_in_game(current: list, stations: list, slots: list) -> bool:
             covered[row["station"]].update(
                 (row["wd"], hour) for hour in range(row["from"], row["to"])
             )
-    return all(len(hours) == 7 * 24 for hours in covered.values())
+    return all(opened <= hours for hours in covered.values())
 
 
 def _serving_hours(shifts: list) -> int:
@@ -6033,7 +6095,9 @@ def _plan_site(
     rates = collections.defaultdict(list)
     for station in grid["stations"]:
         rates[station["skill"]].append(station["rate"])
-    need = _need_curve(grid, day=curve.get("d"), ceiling=ceiling, rates=dict(rates))
+    run = _days_open(save, building)
+    need = _need_curve(_run_measured(grid, run), day=curve.get("d"), ceiling=ceiling,
+                       rates=dict(rates))
 
     cover_posts = _cover_posts(save, building, names)
     pool = _site_pool(people, business, bench)
@@ -6062,7 +6126,7 @@ def _plan_site(
         # Keyed the way a shift names a station, so _current_roster() can tell
         # a guard on a locker from a cashier on a register.
         "current": _current_roster(save, building, {**stations, **cover_stations}),
-        "coverage": _hour_coverage(save, building),
+        "run": run,
     }
 
 
@@ -6134,14 +6198,20 @@ def _finish_site(site, full, names, people) -> dict:
             "openAllHours": True,
             "openNow": _open_all_hours(grid["open"]),
             "inGame": in_game,
-            # Weekdays with all 24 hours measured, out of 7: the test's progress.
-            "daysMeasured": _days_measured(site["coverage"]),
+            # Finished days since the shop first opened, and the days that make
+            # the demand data complete: the test's progress.
+            "daysMeasured": site["run"],
+            "daysNeeded": DEMAND_RUN_DAYS,
         },
         # The hand-over: the demand data is complete while the game runs full
         # cover, and the demand plan would change something. See
         # _demand_data_complete().
         "demandDataComplete": _demand_data_complete(
-            site["coverage"], week, full, in_game),
+            site["run"], week, full, in_game),
+        # Hours the schedule opens with no report behind them, per weekday, on
+        # a shop whose demand plan counts them as no customers. See
+        # _unmeasured(); empty lists everywhere else.
+        "unmeasured": _unmeasured(grid, site["run"]),
         "current": {
             "shifts": current["shifts"],
             "fragments": current["fragments"],
@@ -9524,6 +9594,11 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-handover .sp-i{color:var(--accent)}
 .sp-handover b{font-weight:600}
 .sp-handover a{color:inherit}
+/* open hours with no report yet: one line, and a mark on the need strip */
+.sp-unmline{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.sp-unmline .sp-i{color:var(--warn)}
+.sp-unmline b{color:var(--ink);font-weight:600}
+.sp-unmh{grid-row:1;align-self:end;height:6px;border-bottom:2px dotted var(--warn);cursor:default}
 /* who to add first: one sentence, so it may wrap */
 .sp-step.sp-add{white-space:normal;text-align:left;line-height:1.4;padding:7px 12px 7px 9px}
 .sp-step.sp-add small{display:block;margin-top:3px}
@@ -12899,6 +12974,13 @@ function spRosterDay(c, wd, on){
      weekday the day curve could not scale keeps its own `none` while the rest
      of the row is measured, and one it could is a reading of another weekday
      rather than of this one. */
+  /* Open hours no report has measured yet, on the demand plan: marked on the
+     strip, since the plan reads them as no customers. */
+  const unmeasured = [];
+  if(!c.full) ((c.row.unmeasured || [])[wd] || []).forEach(h => {
+    unmeasured.push(`<i class="sp-unmh" style="grid-column:${h + 2}" data-read="${attr(
+      `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> not measured yet: counted as no customers`)}"></i>`);
+  });
   const bases = Object.values(c.row.basis || {}).flatMap(days => (days || [])[wd] || []);
   const readDay = bases.some(b => b === "measured" || b === "censored") ? "measured"
     : bases.some(b => b === "scaled") ? "scaled" : "none";
@@ -12914,7 +12996,7 @@ function spRosterDay(c, wd, on){
         : readDay === "scaled"
           ? `Read off the best measured weekday through the game's day curve, and it asks for nobody here`
           : `Not enough hour reports to read this weekday yet, so nothing is asked for`)}">${
-    spI("person")}</span>${cells.join("")}</div>`;
+    spI("person")}</span>${cells.join("")}${unmeasured.join("")}</div>`;
   /* The hours the doors are shut, marked once and reused down the lanes: a
      two-slot day used to paint the whole 00-24 lane as trading. */
   let shutMarks = "", run = null;
@@ -13182,11 +13264,13 @@ function spRosterNew(c, counts){
   /* Each row opens on the words that carry it, so the bold alone reads as the
      whole note: when the shop's own week arrives, what to do until then, what
      the plan below is, and what clearing would cost. */
+  /* The days since first open that make the demand data complete. */
+  const days = (c.row.fullCover || {}).daysNeeded || 9;
   const why = c.measured
     ? [["clock", `<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.`]]
-    : [["clock", `<b>Its own week arrives after about a fortnight of trading.</b> A weekday's hours are only read once the save holds ${
+    : [["clock", `<b>Its own week arrives after ${days} days of trading.</b> Until then a weekday's hours are only read once the save holds ${
         need} reports of that same weekday.`],
-       ["crew", `<b>Staff every station for those two weeks</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.${
+       ["crew", `<b>Staff every station for those ${days} days</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.${
          spOffersFull(c.row) ? ` Full cover 24/7, above, is that week.` : ""}`]];
   /* The border marks a note the player has to read before they touch the
      game's own schedule, which is either of the two warnings above. */
@@ -13198,7 +13282,7 @@ function spRosterNew(c, counts){
      that has to be read in full is a note that is not read. */
   const sum = c.measured
     ? `No serving hours to suggest yet, so this plan is <b>cleaning and security only</b>.`
-    : `Until this shop has about two weeks of hour reports, the plan is <b>cleaning and security only</b>.`;
+    : `Until this shop has traded ${days} days, the plan is <b>cleaning and security only</b>.`;
   const head = counts.now && !counts.staffed
     ? `<b>Hire before you clear.</b> Every entry here waits on somebody.`
     : kept
@@ -13234,16 +13318,53 @@ function spRosterWeekdays(key, need){
    serving hours. The demand test is offered on both and pushed on neither.
    Once the demand data is complete, one line says so, and on the test's own
    view it switches back. */
+/* Hours as the player reads them: "22-8" for 22:00 to 08:00, runs joined
+   across midnight, several runs by commas. */
+function spHourRanges(hours){
+  const on = new Set(hours);
+  if(!on.size) return "";
+  if(on.size === 24) return "0-24";
+  let start = 0;
+  while(on.has((start + 23) % 24) || !on.has(start)) start = (start + 1) % 24;
+  const runs = [];
+  for(let k = 0; k < 24; k++){
+    const h = (start + k) % 24;
+    if(!on.has(h)) continue;
+    const last = runs[runs.length - 1];
+    if(last && last[1] % 24 === h) last[1] = h + 1;
+    else runs.push([h, h + 1]);
+  }
+  return runs.map(([a, b]) => `${a}-${b}`).join(", ");
+}
+/* The hours the schedule opens with no report behind them, on a shop whose
+   demand plan counts them as no customers, as one line. */
+function spUnmeasuredLine(row){
+  const hours = [...new Set((row.unmeasured || []).flat())];
+  if(!hours.length) return "";
+  return `<p class="sp-unmline">${spI("clock")}<span><b>Not measured yet: ${spHourRanges(hours)}.</b> Counted as no customers until they are.</span></p>`;
+}
+
 function spPlanPick(base, full){
   const first = spCoverOnly(base) ? "Cover only" : "Demand plan";
-  /* Progress, on the test's own view: a weekday counts once all 24 of its
-     hours have the two reports the demand plan reads a weekday by. */
-  const measured = (base.fullCover || {}).daysMeasured;
+  /* Progress, on the test's own view: finished days since the shop first
+     opened, against the days that make the data complete. */
+  const fc = base.fullCover || {};
+  const measured = fc.daysMeasured, needed = fc.daysNeeded || 9;
+  const complete = Number.isFinite(measured) && measured >= needed;
+  const serving = rows => (rows || []).filter(s => !s.k).reduce((n, s) => n + s.t - s.f, 0);
   const done = base.demandDataComplete
-    ? `<span class="sp-handover">${spI("tick")}<span><b>Demand data complete:</b> ${full
+    ? `<span class="sp-handover" data-tip="${attr(`Read from the ${needed} days since the shop first opened, as they were staffed. An hour with no customers files no report and counts as none.`)}">${spI("tick")}<span><b>Demand data complete:</b> ${full
       ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
-    : full ? `<span class="sp-pickwhy">Run it until every hour is measured, then switch to the demand plan.${
-      Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${measured} of 7 days measured around the clock.</b>` : ""}</span>` : "";
+    : !full ? ""
+    /* Complete data and no hand-over: either the demand plan wants every
+       station every open hour too, or the game does not staff every station
+       every open hour, so the count was taken with stations empty. */
+    : complete && fc.inGame && serving(base.shifts) >= serving(fc.shifts)
+      ? `<span class="sp-pickwhy">The demand plan also needs every station every hour: keep this staffing.</span>`
+    : complete && !fc.inGame
+      ? `<span class="sp-pickwhy">Demand data complete, as staffed: an empty station may have turned customers away.</span>`
+    : `<span class="sp-pickwhy">Run it for the shop's first ${needed} days, then switch to the demand plan.${
+      Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${Math.min(measured, needed)} of ${needed} days.</b>` : ""}</span>`;
   return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
     full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
     full ? ` class="sp-on" aria-current="true"` : ""}>Full cover 24/7</a></span>${done}</div>`;
@@ -13421,11 +13542,12 @@ function spRosterBlock(b){
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
-        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it until every hour of every weekday has two reports, about two weeks, then switch to the demand plan, which is cut from what those weeks measured.`
+        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it for the shop's first nine days, then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
         : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
+    ${c.full ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
       <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security hours" : "Hours"

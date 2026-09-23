@@ -32,8 +32,10 @@ fresh    the same, five days open, with a schedule already in the game: half
 pinned   every person on the counters holds a scheduling demand, so every
          shift they are given is one the plan placed because of it: the pin.
 quiet    a shop measured in every hour and asked for by nobody: two weeks of
-         reports, every one of them zero customers, so its basis is `measured`
-         throughout and its plan is still cover alone. Its cashier is full time
+         reports, all of them filed at night when it used to open around the
+         clock, and it now opens 8 to 20. The game files no report for an
+         empty hour, so its day hours are no customers: its basis is
+         `measured` throughout and its plan is still cover alone. Its cashier is full time
          and there is nothing here for them, which is not the same as waiting
          to be measured. The block has to be as
          careful here as with a shop that has never been measured, and only the
@@ -244,8 +246,10 @@ def quiet_row():
             employee("p0", [SERVICE], demands=("ba:jobdemand_fulltime",)),
             employee("c0", [CLEANING]),
         ],
-        {h: 0 for h in range(24)},
+        {h: 3 for h in range(0, 6)},
         shifts=scraps,
+        opens=((8, 20),),
+        report_opens=((0, 24),),
     )
 
 
