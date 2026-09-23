@@ -500,11 +500,14 @@
     // once, not once per call. No credentials, ever.
     // `init.wait` is the caller's own limit in milliseconds; five seconds
     // otherwise; `init.link` the mod address a write or an ask is bound to,
-    // else the current one. Only ever an address on this computer: a token
-    // must never go to "null/write/..." on the site's own server. A failure
-    // thrown before any request left carries `unsent`.
-    const {wait, link, ...rest} = init || {};
+    // else the current one; `init.bound` the write's binding (bindSource()),
+    // checked again right before each request goes out. Only ever an address
+    // on this computer: a token must never go to "null/write/..." on the
+    // site's own server. A failure thrown before any request left carries
+    // `unsent`, and `moved` where the binding no longer held.
+    const {wait, link, bound, ...rest} = init || {};
     const base = link || linkUrl;
+    const moved = () => Object.assign(new Error("The board is no longer linked to the same game."), {unsent: true, moved: true});
     if (!loopbackOrigin(base || "")) throw Object.assign(new Error("Not linked to the game on this computer."), {unsent: true});
     const permission = await loopbackPermission();
     if (permission === "denied") throw Object.assign(linkBlocked(), {unsent: true});
@@ -516,6 +519,7 @@
       const timer = setTimeout(() => controller.abort(), asking ? Math.max(PROMPT_WAIT_MS, wait || 0) : wait || 5000);
       const options = Object.assign({credentials: "omit"}, rest, {signal: controller.signal});
       if (space) options.targetAddressSpace = space;
+      if (bound && !bound.holds()) { clearTimeout(timer); throw moved(); }
       let res;
       try {
         res = await fetch(base + path, options);
@@ -818,8 +822,9 @@
   // (once; "Approving a browser"), is retried while the game is busy
   // serializing, and an apply is followed by a read of the game, as Update
   // does, so the board shows what the game now holds.
-  // The approval, kept for this site's origin under the mod address it came
-  // from, so it is only ever sent back to that mod on this computer.
+  // The approvals, kept for this site's origin as one entry per mod address
+  // ({"http://127.0.0.1:8322": token}), so a token only ever goes back to the
+  // mod on this computer that issued it.
   const APPROVAL_KEY = "ledger_link_approval";
   const APPROVAL_POLL_MS = 1000;
   const APPROVAL_GRACE_S = 5;   // a request's own 60 s, and a little for the clocks
@@ -828,33 +833,47 @@
   // The mod always finishes a write it has started, however long the game
   // takes over it, so a write waits far longer for its answer than a read.
   const WRITE_WAIT_MS = 30000;
-  let approvalMemo = null;   // {link, token}: the same, for a browser whose storage refuses or loses it
+  const approvalMemo = {};   // the same, for a browser whose storage refuses or loses it
   let approving = null;      // the open ask, shared by every write waiting on it
   let approvalOpen = null;   // {link, id, until}: a request the game may still be asking about
   let approvalLast = "";     // how the last ask ended, for the 429 that follows a refusal
+  // A token the player approved and no write has used yet: a 401 on it
+  // within the same click asks the game no second time.
+  let approvalFresh = "";
+  function approvals() {
+    try {
+      const kept = JSON.parse(localStorage.getItem(APPROVAL_KEY) || "null");
+      if (kept && typeof kept === "object" && !Array.isArray(kept)) return kept;
+    } catch (e) {}
+    return {};
+  }
   function approvalToken(link) {
-    let kept = null;
-    try { kept = JSON.parse(localStorage.getItem(APPROVAL_KEY) || "null"); } catch (e) {}
-    if (!(kept && kept.link === link && typeof kept.token === "string")) kept = approvalMemo;
-    return kept && kept.link === link && typeof kept.token === "string" && kept.token ? kept.token : "";
+    const kept = approvals()[link];
+    if (typeof kept === "string" && kept) return kept;
+    return approvalMemo[link] || "";
   }
   function keepApproval(link, token) {
-    approvalMemo = {link, token};
-    try { localStorage.setItem(APPROVAL_KEY, JSON.stringify(approvalMemo)); } catch (e) {}
+    approvalMemo[link] = token;
+    try { localStorage.setItem(APPROVAL_KEY, JSON.stringify(Object.assign(approvals(), {[link]: token}))); } catch (e) {}
   }
   // Only the token the game turned down goes: one another write stored since stays.
   function dropApproval(link, token) {
-    if (approvalMemo && approvalMemo.link === link && approvalMemo.token === token) approvalMemo = null;
+    if (approvalMemo[link] === token) delete approvalMemo[link];
     try {
-      const kept = JSON.parse(localStorage.getItem(APPROVAL_KEY) || "null");
-      if (kept && kept.link === link && kept.token === token) localStorage.removeItem(APPROVAL_KEY);
+      const kept = approvals();
+      if (kept[link] === token) {
+        delete kept[link];
+        if (Object.keys(kept).length) localStorage.setItem(APPROVAL_KEY, JSON.stringify(kept));
+        else localStorage.removeItem(APPROVAL_KEY);
+      }
     } catch (e) {}
   }
   // The kinds the linked mod takes; a mod before 0.2.0 lists none.
   const linkWrites = () => (linkUrl && linkHealth && Array.isArray(linkHealth.writes) ? linkHealth.writes.slice() : []);
 
   // What a write or an ask is bound to: the mod address, the source and the
-  // company it started with. Any of them moving ends it before its next fetch.
+  // company it started with. Any of them moving ends it before its next
+  // request; linkFetch checks right before each one goes out.
   function bindSource() {
     const bound = {link: linkUrl, gen: sourceGen, character: linkHealth ? linkHealth.character || "" : ""};
     bound.holds = () => linkUrl === bound.link && sourceGen === bound.gen && !!loopbackOrigin(bound.link || "")
@@ -911,66 +930,93 @@
       document.body.appendChild(dlg);
       if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
       const gone = () => done || !bound.holds();
-      (async () => {
-        const WAITING = "Waiting for you in the game: click Allow on “Allow Big Copilot to change your game?”";
-        let open = approvalOpen && approvalOpen.link === bound.link && Date.now() < approvalOpen.until ? approvalOpen : null;
-        if (open) say.textContent = `The question is still open in the game. ${WAITING}`;
+      const left = () => finish({error: done ? "cancelled" : "not_linked"});
+      const WAITING = "Waiting for you in the game: click Allow on “Allow Big Copilot to change your game?”";
+      // A fetch the binding stopped, or one the game never answered.
+      const failed = (err) => finish(err && err.moved ? {error: "not_linked"} : {error: "unreachable", message: err && err.message});
+
+      // Ask: a new request, or the one still open from an earlier ask.
+      async function request() {
         let waited = false;
-        while (!open) {
-          if (gone()) return finish({error: done ? "cancelled" : "not_linked"});
+        for (;;) {
+          if (gone()) return null;
           let res, answer = null;
           try {
-            res = await linkFetch("/pair/request", {method: "POST", link: bound.link,
+            res = await linkFetch("/pair/request", {method: "POST", link: bound.link, bound,
               body: JSON.stringify({name: browserLabel()}), headers: {"Content-Type": "application/json"}});
             answer = await res.json();
           } catch (err) {
-            if (!res) return finish({error: "unreachable", message: err.message});
+            if (!res) { failed(err); return null; }
           }
-          if (gone()) return finish({error: done ? "cancelled" : "not_linked"});
+          // The game is asking now whether this page still waits or not: kept,
+          // so the next ask waits on this question and does not raise another.
           if (res.status === 202 && answer && answer.requestId) {
             const life = Math.max(1, Number(answer.expiresIn) || 60) + APPROVAL_GRACE_S;
-            open = approvalOpen = {link: bound.link, id: answer.requestId, until: Date.now() + life * 1000};
-            say.textContent = WAITING;
-            break;
+            return (approvalOpen = {link: bound.link, id: answer.requestId, until: Date.now() + life * 1000});
           }
-          if (res.status === 409) return finish({error: "cannot_pair", reason: (answer && answer.reason) || "other"});
+          if (gone()) return null;
+          if (res.status === 409) { finish({error: "cannot_pair", reason: (answer && answer.reason) || "other"}); return null; }
           if (res.status === 429) {
             // One short wait, and only when this page was not just refused:
             // the wait after a denial is the player's to sit out, and said.
             const wait = Math.max(1, Math.ceil(Number(answer && answer.retryAfter) || 5));
-            if (waited || wait > APPROVAL_AUTO_WAIT_S || approvalLast === "denied" || approvalLast === "expired")
-              return finish({error: "throttled", retryAfter: wait});
+            if (waited || wait > APPROVAL_AUTO_WAIT_S || approvalLast === "denied" || approvalLast === "expired") {
+              finish({error: "throttled", retryAfter: wait});
+              return null;
+            }
             waited = true;
             say.textContent = `The game is still answering an earlier request. Asking again in ${wait} s…`;
             await linkWait(wait * 1000);
             continue;
           }
-          if (res.status === 403) return finish({error: "origin_not_allowed"});
-          if (res.status === 503) return finish({error: "not_taken"});
-          return finish({error: "unreachable", message: `The game did not take the request (answered ${res.status}).`});
+          if (res.status === 403) finish({error: "origin_not_allowed"});
+          else if (res.status === 503) finish({error: "not_taken"});
+          else finish({error: "unreachable", message: `The game did not take the request (answered ${res.status}).`});
+          return null;
         }
-        while (true) {
+      }
+
+      (async () => {
+        let open = approvalOpen && approvalOpen.link === bound.link && Date.now() < approvalOpen.until ? approvalOpen : null;
+        let resumed = !!open;
+        if (resumed) say.textContent = `The question is still open in the game. ${WAITING}`;
+        for (;;) {
+          if (!open) {
+            open = await request();
+            if (!open) return gone() ? left() : undefined;
+            if (gone()) return left();
+            say.textContent = WAITING;
+          }
           await linkWait(APPROVAL_POLL_MS);
-          if (gone()) return finish({error: done ? "cancelled" : "not_linked"});
+          if (gone()) return left();
           if (Date.now() >= open.until) {
             if (approvalOpen === open) approvalOpen = null;
             return finish({error: "expired"});
           }
           let res, answer = null;
           try {
-            res = await linkFetch(`/pair/status?id=${encodeURIComponent(open.id)}`, {link: bound.link});
+            res = await linkFetch(`/pair/status?id=${encodeURIComponent(open.id)}`, {link: bound.link, bound});
             answer = await res.json();
           } catch (err) {
-            if (!res) return finish({error: "unreachable", message: err.message});
+            if (!res) return failed(err);
           }
-          // Cancelled or moved on while the answer was on its way: not kept.
-          if (gone()) return finish({error: done ? "cancelled" : "not_linked"});
           const state = res.status === 404 ? "expired" : answer && answer.state;
           if (state === "pending") continue;
           if (approvalOpen === open) approvalOpen = null;
+          // A token is the player's answer, kept whatever this page did since;
+          // only a write that still holds its binding goes on to use it.
           if (state === "approved" && typeof answer.token === "string" && answer.token) {
             keepApproval(bound.link, answer.token);
-            return finish({token: answer.token});
+            approvalFresh = answer.token;
+            return gone() ? left() : finish({token: answer.token});
+          }
+          if (gone()) return left();
+          // A question left open from an earlier ask that has since ended
+          // unanswered: this ask never put it, so it asks afresh.
+          if (resumed && state === "expired") {
+            open = null;
+            resumed = false;
+            continue;
           }
           if (state === "approved") return finish({error: "lost"});
           if (state === "denied" || state === "expired") return finish({error: state});
@@ -982,14 +1028,14 @@
 
   // One write. Never throws: resolves to {status, error, body}, where error is
   // null on a 200, the mod's own error name otherwise; with no approval,
-  // askApproval()'s error; "reapproved" when the game asked for approval
-  // again during an apply or an undo, which is then not sent a second time
-  // (the page asks the game again what it would do); "not_linked" when the
-  // source or company changed under it; "unreachable" (with message) when a
-  // dry run got no answer at all. An apply or an undo that got no answer may
-  // have been applied or not: "uncertain", with `reread`, a promise that
-  // settles once the board has read the game again, so the page can look
-  // before it offers anything else.
+  // askApproval()'s error; "reapproved" when the game had to approve this
+  // browser before an apply or an undo, which is then not sent (the page
+  // asks the game again what it would do, for the player to review);
+  // "not_linked" when the source or company changed under it; "unreachable"
+  // (with message) when a dry run got no answer at all. An apply or an undo
+  // that got no answer may have been applied or not: "uncertain", with
+  // `reread`, a promise that settles once the board has read the game again,
+  // so the page can look before it offers anything else.
   async function gameWrite(kind, body, opts) {
     const dryRun = !!(opts && opts.dryRun);
     if (!linkUrl || !loopbackOrigin(linkUrl)) return {status: 0, error: "not_linked", body: null};
@@ -1002,14 +1048,16 @@
       return got.token ? {token: got.token}
         : {status: 0, error: got.error, reason: got.reason, retryAfter: got.retryAfter, message: got.message, body: null};
     };
-    // One click asks the game at most once: a token from this write's own ask
-    // that the game then turns down is not asked for again.
-    let token = approvalToken(bound.link), asked = false;
+    // One click asks the game at most once: a token the player has just
+    // approved, and that no write has used yet, is not asked for again.
+    let token = approvalToken(bound.link);
     if (!token) {
       const got = await approve();
       if (!got.token) return got;
+      // An apply or an undo is not sent on an approval given for it: the
+      // player sees what the game would do first.
+      if (!dryRun) return {status: 0, error: "reapproved", body: null};
       token = got.token;
-      asked = true;
     }
     let busyLeft = WRITE_BUSY_RETRIES;
     for (;;) {
@@ -1017,9 +1065,10 @@
       let res;
       const sentAt = Date.now();
       try {
-        res = await linkFetch(path, {method: "POST", body: payload, wait: WRITE_WAIT_MS, link: bound.link,
+        res = await linkFetch(path, {method: "POST", body: payload, wait: WRITE_WAIT_MS, link: bound.link, bound,
           headers: {"Content-Type": "application/json", Authorization: `Bearer ${token}`}});
       } catch (err) {
+        if (err.moved) return notLinked;
         if (dryRun || err.unsent) return {status: 0, error: "unreachable", message: err.message, body: null};
         return {status: 0, error: "uncertain", message: err.message, body: null, reread: rereadGame()};
       }
@@ -1034,18 +1083,18 @@
       const error = res.status === 200 ? null : (answer && answer.error) || `http_${res.status}`;
       if (res.status === 401) {
         // The game no longer knows this approval (forgotten, expired, another
-        // install): drop it and ask the game once more, unless this write
-        // already asked. An apply or an undo is never sent again on its own:
-        // the page asks the game afresh what it would do first.
+        // install): drop it and ask the game once more, unless the player
+        // approved it just now. An apply or an undo is never sent again on
+        // its own: the page asks the game afresh what it would do first.
         dropApproval(bound.link, token);
-        if (asked) return {status: 401, error: "not_paired", body: answer};
+        if (token === approvalFresh) return {status: 401, error: "not_paired", body: answer};
         const got = await approve();
         if (!got.token) return got;
         token = got.token;
-        asked = true;
         if (!dryRun) return {status: 0, error: "reapproved", body: null};
         continue;
       }
+      if (token === approvalFresh) approvalFresh = "";  // used: a later 401 on it may ask again
       if (res.status === 503 && error === "busy" && busyLeft > 0) {
         busyLeft--;
         await linkWait(1000);

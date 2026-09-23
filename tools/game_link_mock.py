@@ -1038,12 +1038,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status, body = self.link.refresh()
             self._json(status, body)
         elif route == "/pair/request":
+            # As the mod: an origin off the allowlist is turned away before the body is read.
+            origin = origin_of(self.headers.get("Origin"))
+            if origin and not allowed_origin(origin):
+                self._drain()
+                self.close_connection = True
+                self._json(403, {"error": "origin_not_allowed"}, {"Connection": "close"})
+                return
             if int(self.headers.get("Content-Length") or 0) > PAIR_MAX_BODY:
                 self._drain()
                 self.close_connection = True
                 self._json(413, {"error": "too_large"}, {"Connection": "close"})
                 return
-            body = {} if int(self.headers.get("Content-Length") or 0) == 0 else self._body()
+            body = self._pair_body()
             if body is not None:
                 try:
                     self._json(*self.link.pair_request(self.headers.get("Origin"), body))
@@ -1057,6 +1064,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._json(200, self.link.configure(body))
         else:
             self._other_method()
+
+    def _pair_body(self) -> dict | None:
+        """A pair request's body: none, or only whitespace, is a request with no name."""
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length else b""
+        if not raw.strip():
+            return {}
+        try:
+            body = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            body = None
+        if not isinstance(body, dict):
+            self._json(400, {"error": "bad_request", "detail": "the body is not a JSON object"})
+            return None
+        return body
 
     def _body(self) -> dict | None:
         """The JSON object in the request, or None with a 400 already sent."""

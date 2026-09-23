@@ -258,6 +258,15 @@ class MockWrites(unittest.TestCase):
             self.assertEqual(self.pair(), (503, {"error": error}))
         self.assertEqual(self.link.pair_requests, {})
 
+    def test_an_origin_off_the_list_is_refused_before_its_body_and_a_blank_body_names_nothing(self):
+        status, _, raw = call(self.url + "/pair/request", "POST",
+                              {"Content-Type": "application/json", "Origin": "https://evil.example"}, b"x" * 5000)
+        self.assertEqual((status, json.loads(raw)), (403, {"error": "origin_not_allowed"}))
+        status, _, raw = call(self.url + "/pair/request", "POST",
+                              {"Content-Type": "application/json", "Origin": "http://localhost:9321"}, b"  \n ")
+        self.assertEqual(status, 202)
+        self.assertEqual(self.link.pair_requests[json.loads(raw)["requestId"]]["name"], "a browser")
+
     def test_the_wait_after_a_denial_grows_on_repeats_within_ten_minutes(self):
         self.link.pair_delay, self.link.pair = 0, "deny"
         page = "http://localhost:9321"
