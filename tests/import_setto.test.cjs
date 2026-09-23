@@ -199,7 +199,8 @@ const mixed = () => {
   const data = fixture();
   Object.assign(data.businesses[0].lines, [...data.businesses[0].lines,
     {slug: 'hops', item: 'Hops', units: 0}, {slug: 'malt', item: 'Malt', units: 0},
-    {slug: 'yeast', item: 'Yeast', units: 0}, {slug: 'rye', item: 'Rye', units: 0}]);
+    {slug: 'yeast', item: 'Yeast', units: 0}, {slug: 'rye', item: 'Rye', units: 0},
+    {slug: 'oats', item: 'Oats', units: 0}]);
   Object.assign(data.supply.factories.depots[0], {
     // Level first, then a plain 400 on top: at most 1,400 a week.
     hops: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainBefore: 0, plainAfter: 400,
@@ -213,6 +214,10 @@ const mixed = () => {
     rye: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 1400, plainBefore: 1400, plainAfter: 0,
       levelImporter: 'Pier 1', levelAt: 1, pass: [{amount: 1400, smart: false}, {amount: 1000, smart: true}],
       arrivedLastWeek: 1400, contracts: [contractOf(9, 'Pier 2', false, 1400), contractOf(10, 'Pier 1', true, 1000)]},
+    // Plain 1,000 first exactly reaches the level of 1,000.
+    oats: {weekly: 1000, pausedWeekly: 0, smart: true, target: 1000, plain: 1000, plainBefore: 1000, plainAfter: 0,
+      levelImporter: 'Pier 1', levelAt: 1, pass: [{amount: 1000, smart: false}, {amount: 1000, smart: true}],
+      arrivedLastWeek: 1000, contracts: [contractOf(11, 'Pier 2', false, 1000), contractOf(12, 'Pier 1', true, 1000)]},
     // Set up at zero, nothing brought.
     yeast: {weekly: 0, pausedWeekly: 0, zeroOnly: true, smart: false, target: null, plain: 0, plainAfter: 0,
       arrivedLastWeek: 0, contracts: [contractOf(8, 'Pier 1', false, 0)]},
@@ -232,6 +237,8 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
     // Delivered first and already above the level: the level brings nothing.
     assert.match(rows.Rye.inGame, /1,400 a week delivered first already passes it$/);
     assert.doesNotMatch(rows.Rye.inGame, /plus/);
+    // Exactly equal: it reaches the level rather than passing it.
+    assert.match(rows.Oats.inGame, /1,000 a week delivered first already reaches it$/);
     // The level a week needs is the pass replayed, never the plain taken off.
     assert.equal(rows.Hops.box, '1400');
     assert.equal(rows.Malt.box, '1800');

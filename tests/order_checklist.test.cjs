@@ -315,9 +315,9 @@ test('the checklist names the contract that holds the level', () => {
 });
 
 test('an importer with two contracts on the line is named with the contract number', () => {
-  const held = {...line([[500, true], [600, true], [300]], 1, '1 Pier'), levelName: '1 Pier, contract 2 of 3'};
+  const held = {...line([[500, true], [600, true], [300]], 1, '1 Pier'), levelName: '1 Pier, its 2nd of 2 contracts here'};
   const rows = build({imports:[{s:0, rows:[row(1100, held)]}]});
-  assert.match(rows[0].reason, /^Set Smart Delivery stock at 1 Pier, contract 2 of 3 to 800\./);
+  assert.match(rows[0].reason, /^Set Smart Delivery stock at 1 Pier, its 2nd of 2 contracts here to 800\./);
 });
 
 test('without a pass the page and the board fall back the same way', () => {

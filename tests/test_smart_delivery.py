@@ -243,7 +243,12 @@ class SmartSupplyTests(unittest.TestCase):
         high["id"] = "c-3"
         _, line = self.depot([low, plain, high], routed=True)
         self.assertEqual((line["target"], line["levelId"]), (600, "c-3"))
-        self.assertEqual(line["levelName"], "1 Pier, contract 2 of 3")
+        self.assertEqual(line["levelName"], "1 Pier, its 2nd of 2 contracts here")
+        # The number counts that importer's own contracts, paused and zero
+        # ones too: plain 0, level 500, level 600 at 1 Pier, 300 at 2 Pier.
+        zero, low, high = contract(0, last=0), smart(500), smart(600)
+        _, line = self.depot([zero, low, high, contract(300, pier=2)], routed=True)
+        self.assertEqual(line["levelName"], "1 Pier, its 3rd of 3 contracts here")
         # One contract per importer needs no number.
         _, line = self.depot([smart(1000), contract(400, pier=2)], routed=True)
         self.assertEqual(line["levelName"], "1 Pier")
@@ -255,6 +260,11 @@ class SmartSupplyTests(unittest.TestCase):
         self.assertEqual(_smart_words(1000, 200, 600),
                          "Smart Delivery keeps 1,000 in stock, counting the 600 a week delivered "
                          "before it, plus 200 a week on top")
+
+    def test_plain_delivered_first_that_equals_the_level_reaches_it(self):
+        self.assertEqual(_smart_words(1000, 0, 1000),
+                         "Smart Delivery keeps 1,000 in stock, but the 1,000 a week delivered "
+                         "before it already reaches the 1,000 level")
 
     def test_a_raise_without_a_pass_falls_back_as_the_page_does(self):
         self.assertEqual(_raise_import({"smart": True, "plainAfter": 400}, 1800), 1400)

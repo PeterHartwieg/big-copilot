@@ -23,9 +23,9 @@ class SaveStub:
         return value
 
 
-def contract(amount, active=True, warehouse=("Depot", 1), smart=False):
+def contract(amount, active=True, warehouse=("Depot", 1), smart=False, importer=("Importer", 2)):
     return {
-        "importAddress": ("Importer", 2), "isActive": active,
+        "importAddress": importer, "isActive": active,
         **({"isTarget": True} if smart else {}),
         "products": [{"itemName": ITEM + "water", "amount": amount,
                       "assignedWarehouse": warehouse}],
@@ -95,6 +95,15 @@ class PlannerRegressions(unittest.TestCase):
         self.assertEqual(plain_first["ordered"], 1000)
         self.assertEqual([(d["level"], d["plainBefore"], d["plainAfter"]) for d in plain_first["depots"]],
                          [(1000, 400, 0)])
+
+    def test_the_contract_holding_the_level_is_numbered_as_on_the_logistics_page(self):
+        # Plain 0, level 500, level 600 from one importer, 300 from another:
+        # the 600 holds, and it is that importer's 3rd of 3 contracts, zero
+        # one included, as the Logistics page counts them (_level_name).
+        source = self.water([contract(0), contract(500, smart=True), contract(600, smart=True),
+                             contract(300, importer=("Other", 3))])
+        [depot] = source["depots"]
+        self.assertEqual((depot["level"], depot["name"]), (600, "2 Importer, its 3rd of 3 contracts here"))
 
     def test_a_paused_level_is_kept_apart_and_named_as_one(self):
         source = self.water([contract(3000, active=False, smart=True)])

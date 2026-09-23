@@ -2479,19 +2479,29 @@ def _raise_import(supply: dict, need) -> int:
     return _ceil_hundred(need)
 
 
-def _level_name(contracts: list, importer, at, by: str = "order"):
+def _level_name(contracts: list, importer, order):
     """How the page names the contract holding a level: its importer, and,
-    where that importer has several contracts on the line, the contract's
-    number in delivery order ("1 Pier, contract 2 of 3"). `at` is the
-    contract's `order` in importPartnerships, or with by="index" its place in
-    `contracts` itself."""
+    where that importer has several contracts on the line, which of them
+    ("1 Pier, its 2nd of 2 contracts here").
+
+    `contracts` is every contract on the line, paused and zero ones too, in
+    delivery order, each with its `importer` and its `order` in
+    importPartnerships; `order` names the one holding the level. Only that
+    importer's own contracts are counted, from that one full list, so the
+    Logistics and Plan pages give the same contract the same number.
+    """
     if importer is None:
         return None
-    if sum(1 for c in contracts if c["importer"] == importer) < 2:
+    own = [c["order"] for c in contracts if c["importer"] == importer]
+    if len(own) < 2 or order not in own:
         return importer
-    k = at if by == "index" else next(
-        (i for i, c in enumerate(contracts) if c["order"] == at), None)
-    return importer if k is None else f"{importer}, contract {k + 1} of {len(contracts)}"
+    return f"{importer}, its {_ordinal(own.index(order) + 1)} of {len(own)} contracts here"
+
+
+def _ordinal(n: int) -> str:
+    """1st, 2nd, 3rd, 4th ... 11th, 12th, 13th, 21st."""
+    last = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{last}"
 
 
 def _smart_words(level, plain_after, plain_before=0) -> str:
@@ -2499,8 +2509,9 @@ def _smart_words(level, plain_after, plain_before=0) -> str:
     amount delivered first that already reaches the level leaves the level
     nothing to bring, and says so."""
     before = (
-        f", but the {plain_before:,} a week delivered before it already passes the "
-        f"{level:,} level" if plain_before >= level
+        f", but the {plain_before:,} a week delivered before it already "
+        f"{'passes' if plain_before > level else 'reaches'} the {level:,} level"
+        if plain_before >= level
         else f", counting the {plain_before:,} a week delivered before it"
     ) if plain_before else ""
     return (f"Smart Delivery keeps {level:,} in stock" + before
@@ -7477,8 +7488,11 @@ def _plan(
             row["depots"].append({
                 "warehouse": names.addr(warehouse), "smart": held["smart"], "level": held["level"],
                 "importer": counted[held["at"]]["importer"] if held["smart"] else None,
-                "name": _level_name(counted, counted[held["at"]]["importer"], held["at"], by="index")
-                if held["smart"] else None,
+                "name": _level_name(
+                    [{"importer": d["importer"], "order": d["rank"][1]}
+                     for d in sorted(groups["active"] + groups["paused"], key=lambda d: d["rank"])],
+                    counted[held["at"]]["importer"], counted[held["at"]]["rank"][1],
+                ) if held["smart"] else None,
                 "plainBefore": held["plainBefore"], "plainAfter": held["plainAfter"],
                 "weekly": _import_drop(0, counted),
             })
@@ -10836,7 +10850,7 @@ const SUPPLY_VIEWS = {
       <td>${r.smart
         ? `${(r.target ?? r.weekly).toLocaleString()}<span class="sub" data-tip="Smart Delivery: the purchasing agent tops the depot up to this level each Monday">in stock${
             !r.plainBefore ? "" : r.plainBefore >= (r.target ?? r.weekly)
-              ? `, but ${r.plainBefore.toLocaleString()} a week delivered first already passes it`
+              ? `, but ${r.plainBefore.toLocaleString()} a week delivered first already ${r.plainBefore > (r.target ?? r.weekly) ? "passes" : "reaches"} it`
               : `, counting ${r.plainBefore.toLocaleString()} a week delivered first`}${
             r.plainAfter ? `, plus ${r.plainAfter.toLocaleString()} a week` : ""}</span>`
         : r.weekly.toLocaleString()}</td>
@@ -13431,7 +13445,7 @@ const spTruckDay = (arrives, today) => {
    plain amount delivered after it, which comes on top. */
 const spKeeps = (level, after, before) => `Smart Delivery keeps <b>${spNum(level)}</b> in stock${
   !before ? "" : before >= level
-    ? `, but the <b>${spNum(before)}</b> a week delivered before it already passes the <b>${spNum(level)}</b> level`
+    ? `, but the <b>${spNum(before)}</b> a week delivered before it already ${before > level ? "passes" : "reaches"} the <b>${spNum(level)}</b> level`
     : `, counting the <b>${spNum(before)}</b> a week delivered before it`}${
   after ? `, plus <b>${spNum(after)}</b> a week on top` : ""}`;
 const spLevelCell = (level, after, small) => `${spNum(level)}<small ${small}>in stock${
@@ -14675,8 +14689,8 @@ function drawLogistics(){
     : (r.levelName && (r.contracts || []).length > 1 ? `<span class="sub">at ${attr(r.levelName)}</span>` : "")
     + (!r.plainBefore ? "" : r.plainBefore >= r.inGame
       ? `<span class="sub" data-tip="${attr(
-        "A plain contract the game delivers before the level already brings more than the level, so the level brings nothing")}">${
-        r.plainBefore.toLocaleString()} a week delivered first already passes it</span>`
+        "A plain contract the game delivers before the level already brings the level or more, so the level brings nothing")}">${
+        r.plainBefore.toLocaleString()} a week delivered first already ${r.plainBefore > r.inGame ? "passes" : "reaches"} it</span>`
       : `<span class="sub" data-tip="${attr(
         "A plain contract the game delivers before the level: it counts toward the level, and the level only tops up what is still missing")}">${
         r.plainBefore.toLocaleString()} a week delivered first counts toward it</span>`)
@@ -15243,7 +15257,7 @@ function drawPlan(){
         ? `Smart Delivery ${would ? "would keep" : "keeps"} ${units(d.level)} in stock at ${d.warehouse}${
             d.name && d.name !== d.importer ? ` (${d.name})` : ""}${
             !d.plainBefore ? "" : d.plainBefore >= d.level
-              ? `, but the ${units(d.plainBefore)} a week delivered before it already passes the ${units(d.level)} level`
+              ? `, but the ${units(d.plainBefore)} a week delivered before it already ${d.plainBefore > d.level ? "passes" : "reaches"} the ${units(d.level)} level`
               : `, counting the ${units(d.plainBefore)} a week delivered before it`}${
             d.plainAfter ? `, plus ${units(d.plainAfter)} a week on top` : ""}`
         : `${units(d.weekly)} a week to ${d.warehouse}`).join("; ");

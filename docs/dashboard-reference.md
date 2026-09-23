@@ -1016,9 +1016,10 @@ Two tables, one per number a logistics manager is set with.
   dropped. Entering the figure the game already holds turns the suggestion down until
   then. A row whose box differs from the game is marked, stays in *Needs a change*, and
   goes into the Plan imports checklist as "Set Smart Delivery stock at <importer> to N"
-  (with the contract's number, "contract 2 of 3", where that importer has several on the
-  line) or "Set the weekly order to N". Where a plain amount delivered first already
-  passes the level, the board says so: the level then brings nothing. A high Smart
+  (with "its 2nd of 2 contracts here" where that importer has several on the line,
+  counted over all its contracts there, paused and zero ones too, the same on the Plan
+  page) or "Set the weekly order to N". Where a plain amount delivered first already
+  reaches or passes the level, the board says so: the level then brings nothing. A high Smart
   Delivery level only holds stock, so it is never marked *could lower*. A material
   with two or more contracts at the depot lists them under its name in delivery order,
   with importer, kind and amount. A contract set to zero that brought nothing is listed
