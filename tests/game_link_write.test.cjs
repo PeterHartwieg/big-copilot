@@ -517,15 +517,20 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
                                       c('D', 'P', 0, 5, 300, {active: false})])]);
     // With nobody after B, the cap leaves 400 of the shop's week uncovered.
     const capped = run([line(3, 800, [c('A', 'P', 0, 1, 500)]), line(0, 600, [c('B', 'P', 0, 3, 400)])]);
-    // One contract holding the item for two depots: its first product takes
-    // the budget first.
+    // Defensive: the game holds one product per importer and item, but should a
+    // contract hold the item for two depots, its first product takes the
+    // budget first.
     gwTerms.set(`E|ba:itemname_x|${depot}`, {cap: 500, orderedThisWeek: 0, max: null});
     const twice = run([line(3, 400, [c('E', 'P', 0, 0, 300)]), line(0, 400, [c('E', 'P', 0, 0, 300, {product: 1})])]);
     // A stopped contract started by one line writes all its products here, 0 included.
     const started = run([line(3, 400, [c('F', 'Q', 0, 0, 300, {active: false})]),
                          line(0, 0, [c('F', 'Q', 0, 0, 300, {active: false, product: 1})])]);
+    // A running contract the walk would zero keeps its 300, but with the cap
+    // spent ahead of it that counts for nothing: the gap stays the line's.
+    gwTerms.set(`A|ba:itemname_x|${depot}`, {cap: 500, orderedThisWeek: 0, max: null});
+    const kept = run([line(3, 500, [c('A', 'P', 0, 1, 400)]), line(0, 200, [c('G', 'P', 0, 2, 300)])]);
     gwImportRows = saved; gwTerms.clear();
-    return {shared, capped, twice, started, depot, gifts};
+    return {shared, capped, twice, started, kept, depot, gifts};
   });
   assert.deepEqual(got.shared, [{at: got.depot, set: [['A', 800]], uncovered: 0, ahead: ['S']},
                                 {at: got.gifts, set: [['B', 200], ['C', 400]], uncovered: 0, ahead: ['S']}]);
@@ -533,6 +538,8 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
                                 {at: got.gifts, set: [['B', 200]], uncovered: 400, ahead: []}]);
   assert.deepEqual(got.twice, [{at: got.depot, set: [['E', 400]], uncovered: 0, ahead: []},
                                {at: got.gifts, set: [['E', 100]], uncovered: 300, ahead: []}]);
+  assert.deepEqual(got.kept, [{at: got.depot, set: [['A', 500]], uncovered: 0, ahead: []},
+                              {at: got.gifts, set: [], uncovered: 200, ahead: []}]);
   assert.deepEqual(got.started, [{at: got.depot, set: [['F', 400]], uncovered: 0, ahead: []},
                                  {at: got.gifts, set: [['F', 0]], uncovered: 0, ahead: []}]);
 });
@@ -547,6 +554,9 @@ test('imports: a week the caps leave short with nothing to write is said, and no
   await dialog(page).getByRole('button', {name: 'Close'}).last().click();
   await page.evaluate(() => { drawLogistics(); wireAll(); });
   assert.equal(await applyImports(page).count(), 0);
+  // The row keeps the reason once the cap is known.
+  assert.equal(await importRow(page, 'Candle').locator('.gw-short').textContent(),
+    "600 a week not covered: the importers' caps are reached");
   assert.equal((await applied()).length, 0);
 });
 /* --- the schedule --------------------------------------------------------- */

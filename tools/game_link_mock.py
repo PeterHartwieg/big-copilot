@@ -507,14 +507,16 @@ class Link:
             # What the contract would hold: the amounts asked for, refused or not,
             # and the rest as they stand.
             asked_for = {(line["itemName"], (line["warehouse"]["street"], line["warehouse"]["number"])): line["amount"]
-                         for line in row["products"] if line["before"] is not None and _whole(line["amount"])}
+                         for line in row["products"]
+                         if line["before"] is not None and line["error"] != "bad_amount" and _whole(line["amount"])}
             written = [asked_for.get((p.get("itemName"), self._product_address(p)), self._amount(ask["id"], p))
                        for p in save.items(contract.get("products"))]
             price = self.terms.get(ask["id"], {}).get("unitPrice")
             if price is not None:
                 row["nextDeliveryTotal"] = round(sum(written) * price, 2)
             first = next((line["error"] for line in row["products"] if line["error"]), None)
-            edits = any(line["before"] is not None and line["amount"] != line["before"] for line in row["products"])
+            edits = any(line["before"] is not None and line["error"] != "bad_amount" and line["amount"] != line["before"]
+                        for line in row["products"])
             # The mod's precedence: changed, screen_open, no_agent, locked,
             # no_amounts, then the first product error, which the row repeats
             # so it can be judged without reading its products.
@@ -655,7 +657,8 @@ class Link:
         # a day already open stays the player's, and openedHours says whether
         # any was opened.
         opens = {d for d in self._days(reg) if not self._all_day(reg, address, d)} if open_all else set()
-        self._schedule_answer(answer, save, before, after, bool(opens),
+        # openedHours only for a write that would go through.
+        self._schedule_answer(answer, save, before, after, bool(opens) and answer["ok"],
                               self._open_days(reg, address, open_all))
         if dry or not answer["ok"]:
             return self._schedule_refused(answer, dry)

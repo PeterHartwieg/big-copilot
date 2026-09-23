@@ -15626,7 +15626,10 @@ function drawLogistics(){
   const setCell = r => `<td class="imp-to">${r.value === null ? "" : `<span class="imp-set"><input type="number" min="0" step="1" inputmode="numeric"
       class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-imp-ingame="${r.inGame ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
       r.edited ? `<button type="button" class="imp-reset" data-imp-reset="${attr(r.impId)}" aria-label="${attr(`Back to ${resetTo(r)}, for ${r.item}`)}"
-        data-tip="${attr(`Back to ${resetTo(r)}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}</td>`;
+        data-tip="${attr(`Back to ${resetTo(r)}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}${
+      shortOf.has(r) ? `<span class="sub gw-short">${shortOf.get(r).uncovered > 0
+        ? `${Math.round(shortOf.get(r).uncovered).toLocaleString()} a week not covered: ${GW_UNCOVERED[shortOf.get(r).cause]}`
+        : GW_UNCOVERED[shortOf.get(r).cause].replace(/^./, x => x.toUpperCase())}</span>` : ""}</td>`;
   /* Two or more contracts on one line: each is listed under the material in
      the order the game delivers them (importer by importer, each in the place
      of its first contract in the plan), with its importer, how it is set and
@@ -15671,15 +15674,11 @@ function drawLogistics(){
      section, and one in each depot where two or more depots have changes.
      A line whose week the caps leave short with nothing to change is no change. */
   const toGame = gwImportLines(null);
+  const shortOf = new Map(gwLink() && gwImportsWritable() ? gwImportPlan(null)
+    .filter(l => !l.contracts.length && (l.uncovered > 0 || l.cause !== "caps")).map(l => [l.r, l]) : []);
   const toGameAt = key => gwImportLines(key).length;  // the depot's own plan, as its dialog makes it
   const applyHere = (n, key) => {
-    /* With nothing that could be written, a change only agent-less contracts
-       could carry is said on a disabled button rather than left unoffered. */
-    const blocked = !key && !n ? gwImportBlocked(null) : [];
-    const btn = n ? gwButton("imports", `Apply ${plural(n, "change")} in game`, `data-gw-depot="${attr(key || "")}"`)
-      : blocked.length ? gwButton("imports", `Apply ${plural(blocked.length, "change")} in game`, `data-gw-depot=""`,
-        `No purchasing agent runs the contracts for ${blocked.map(l => l.r.item).join(", ")}: assign one at the headquarters first`)
-      : "";
+    const btn = n ? gwButton("imports", `Apply ${plural(n, "change")} in game`, `data-gw-depot="${attr(key || "")}"`) : "";
     return btn ? `<div class="gw-acts gw-panel">${btn}</div>` : "";
   };
   const depotsToGame = new Set(toGame.map(l => l.depot.key)).size;
@@ -18143,6 +18142,7 @@ let gwImportRows = [];
    every new board. */
 const gwTerms = new Map();
 const gwDepotKey = r => (D.businesses[r.s] || {}).key;
+const gwImportsWritable = () => ((gwLink() || {}).writes || []).includes("imports");
 const gwLineKey = (c, slug, depotKey) => `${c.id}|${slug}|${depotKey}`;
 
 /* Sunday 20:00 to Monday 08:00, by the game's clock as the link last read it:
@@ -18200,6 +18200,7 @@ function gwImportPlan(depotKey){
                 usable: r.contracts.filter(c => c.agent !== false && !!c.smart === !!r.smart),
                 left: r.contracts.filter(c => c.agent === false && !!c.smart === !!r.smart)}));
   const lineOf = new Map(lines.filter(l => !l.r.smart).map(l => [l.r, l]));
+  const smartLineOf = new Map(lines.filter(l => l.r.smart).map(l => [l.r, l]));
   const amounts = new Map();  // "<id>|<item>|<depot key>" -> the amount written
   const started = new Set();
 
@@ -18223,10 +18224,11 @@ function gwImportPlan(depotKey){
         need.set(e.line, want - n); left.set(k, room - n);
         return n;
       }
-      if(e.line){
-        need.set(e.line, Math.max(0, (need.has(e.line) ? need.get(e.line) : e.line.need) - e.c.amount));
-      }
-      left.set(k, Math.max(0, room - e.c.amount));
+      /* A standing amount (or one a kept contract keeps) is sent as it is, but
+         the game delivers only what the importer still allows of it. */
+      const n = Math.min(e.c.amount, room);
+      if(e.line) need.set(e.line, Math.max(0, (need.has(e.line) ? need.get(e.line) : e.line.need) - n));
+      left.set(k, room - n);
       return e.c.amount;
     });
     return {got, left, need};
@@ -18244,17 +18246,22 @@ function gwImportPlan(depotKey){
     group.forEach(e => { e.depotKey = gwDepotKey(e.r); });
     const c = group[0].c;
     if(c.smart){
-      /* Named for the plain products after it with the same importer and item. */
-      if(c.active && c.agent !== false) group.forEach(e => {
+      /* Named for the plain products after it with the same importer and item,
+         at the level it will hold: the one a Smart line here sets, which
+         also starts it. */
+      if(c.agent !== false) group.forEach(e => {
+        const here = smartLineOf.get(e.r);
+        const level = here && here.usable.includes(e.c) ? here.r.value : e.c.amount;
+        if(!(c.active || (here && here.usable.includes(e.c) && level > 0))) return;
         const k = capKey(e);
         if(!smartSeen.has(k)) smartSeen.set(k, []);
-        smartSeen.get(k).push(e);
+        smartSeen.get(k).push({c: e.c, r: e.r, level});
       });
       continue;
     }
     if(c.agent === false) continue;
     group.filter(e => e.line).forEach(e => (smartSeen.get(capKey(e)) || []).forEach(s => {
-      if(!e.line.smartAhead.includes(s)) e.line.smartAhead.push(s);
+      if(!e.line.smartAhead.some(x => x.c.id === s.c.id)) e.line.smartAhead.push(s);
     }));
     if(!c.active){
       const t = tryContract(group, false);
@@ -18271,14 +18278,14 @@ function gwImportPlan(depotKey){
 
   lines.forEach(l => {
     const {r, depot} = l;
+    /* Why a week is left uncovered: the caps, no contract that runs, or none at all. */
+    l.cause = l.usable.length ? "caps" : r.contracts.length ? "agent" : "none";
     if(r.smart){
       l.contracts = l.usable.map(c => ({c, amount: r.value}))
         .filter(({c, amount}) => c.active ? amount !== c.amount : amount > 0);
       return;
     }
     l.uncovered = l.need;
-    /* Why a week is left uncovered: the caps, or no contract here that runs. */
-    l.cause = l.usable.length ? "caps" : "agent";
     l.contracts = l.usable.map(c => ({c, amount: amounts.has(gwLineKey(c, r.slug, depot.key))
         ? amounts.get(gwLineKey(c, r.slug, depot.key)) : c.active ? c.amount : 0}))
       .filter(({c, amount}) => started.has(c.id) || (c.active && amount !== c.amount));
@@ -18289,11 +18296,10 @@ function gwImportPlan(depotKey){
 const gwImportLines = depotKey => gwImportPlan(depotKey).filter(l => l.contracts.length);
 /* What a plan leaves uncovered, said the same way in the dialog and when
    there is nothing to write. */
+const GW_UNCOVERED = {caps: "the importers' caps are reached", agent: "no contract for it here has a purchasing agent",
+                     none: "no contract here"};
 const gwUncovered = l => `<b>${Math.round(l.uncovered).toLocaleString()} a week of ${spEsc(l.r.item)} at ${spEsc(l.depot.name)} not covered</b>: ${
-  l.cause === "agent" ? "no contract for it here has a purchasing agent" : "the importers' caps are reached"}.`;
-/* Lines with a change to make and no contract that could make it: every one
-   of theirs lacks a purchasing agent. */
-const gwImportBlocked = depotKey => gwImportPlan(depotKey).filter(l => !l.contracts.length && l.left.length);
+  GW_UNCOVERED[l.cause] || GW_UNCOVERED.caps}.`;
 /* The request: one entry per contract, its products from every line it serves. */
 function gwImportBody(lines){
   const byId = new Map();
@@ -18332,9 +18338,10 @@ function gwImportLead(answer, lines){
   /* What the caps leave of a week, before anything is applied, and the
      Smart Delivery contracts that order first under the same caps. */
   lines.filter(l => l.uncovered > 0).forEach(l => items.push(gwUncovered(l)));
-  lines.forEach(l => (l.smartAhead || []).forEach(e => items.push(`${spEsc(e.c.importer || "An importer")}'s Smart Delivery contract for ${
+  const named = new Set();
+  lines.forEach(l => (l.smartAhead || []).filter(e => !named.has(e.c.id) && named.add(e.c.id)).forEach(e => items.push(`${spEsc(e.c.importer || "An importer")}'s Smart Delivery contract for ${
     spEsc(e.r.item)} at ${spEsc((D.businesses[e.r.s] || {}).name || "a depot")} orders first and can use up to ${
-    e.c.amount.toLocaleString()} of the cap.`)));
+    e.level.toLocaleString()} of the cap.`)));
   const started = (answer.rows || []).filter(r => r.reactivated);
   started.forEach(r => {
     const total = totalOf(r);
