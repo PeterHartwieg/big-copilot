@@ -236,7 +236,7 @@ for that browser across game launches.
    popup (`HudConfirm`), "Allow Big Copilot to change your game?", naming the origin and the
    name, with Allow and Deny, and answers `202 {"requestId": "...", "expiresIn": 60}`.
 2. `GET /pair/status?id=<requestId>` answers `{"state": "pending"}`, `{"state": "denied"}`
-   (Deny, or the popup dismissed: Escape, opening the phone), `{"state": "expired"}` (60 s
+   (Deny, or the popup dismissed: Escape, opening the phone or the city map), `{"state": "expired"}` (60 s
    without an answer; the mod closes its own popup), or `{"state": "approved", "token":
    "..."}`. The token is 32 random bytes, base64url, and is answered exactly once; later
    polls of an approved request answer `{"state": "approved"}` without it. The page polls
