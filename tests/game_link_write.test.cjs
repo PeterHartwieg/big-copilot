@@ -138,14 +138,17 @@ test('a dry run, the pairing prompt, an apply that rebuilds the board, and undo'
   assert.equal(await page.evaluate(() => localStorage.getItem('ledger_pair')), null, 'and never beyond it');
   const row = dialog(page).locator('tbody tr');
   assert.deepEqual(await row.first().locator('td').allInnerTexts(), ['HART. Gifts', 'Customerservice', 'No uniform', 'Default']);
+  assert.match(await row.nth(1).innerText(), /Cleaning\s+Set\s+Unchanged\s+already has a uniform; left as it is/,
+    'a role already dressed is shown and left alone');
   assert.equal((await applied()).length, 0, 'the dry run wrote nothing');
   const builds = await page.evaluate(() => window.builds);
   await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
   await dialog(page).getByText('Default uniform set for 1 role at 1 shop.').waitFor();
   const writes = await applied();
   assert.equal(writes.length, 1);
+  // skills null: every skill the shop's Uniforms window offers.
   assert.deepEqual(writes[0].body.sites, [{address: {street: 'ba:street_secondavenue', number: 10},
-    skills: ['ba:skill_customerservice'], presetId: null}]);
+    skills: null, presetId: null}]);
   assert.equal(writes[0].body.dryRun, false);
   // The stamp moved; the board reads the game again, the dialog stays.
   await page.waitForFunction((n) => window.builds > n, builds);
@@ -163,7 +166,7 @@ test('set for all shops, and undo from the strip once the dialog is closed', asy
   await all.click();
   assert.equal(await pair(page).count(), 0, 'the kept code is used, no prompt');
   await dialog(page).getByText('Sets the Default uniform').waitFor();
-  assert.deepEqual(await dialog(page).locator('tbody td:first-child').allInnerTexts(), ['HART. Gifts', 'HART. Corner']);
+  assert.deepEqual([...new Set(await dialog(page).locator('tbody td:first-child').allInnerTexts())], ['HART. Gifts', 'HART. Corner']);
   await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
   await dialog(page).getByText('Default uniform set for 2 roles at 2 shops.').waitFor();
   await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
@@ -172,6 +175,22 @@ test('set for all shops, and undo from the strip once the dialog is closed', asy
   await strip.getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: 2 roles back to no uniform.').waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
+});
+
+test('an apply that changes nothing says so and offers no undo', async (t) => {
+  const page = await linked(t, {code: CODE});
+  for (const expected of ['Default uniform set for 1 role at 1 shop.', 'Nothing to set: every role already has a uniform.']) {
+    await button(page, GIFTS).click();
+    await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
+    await dialog(page).getByText(expected).waitFor();
+    if (expected.startsWith('Nothing')) break;
+    await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+    await dialog(page).waitFor({state: 'detached'});
+  }
+  assert.equal(await dialog(page).getByRole('button', {name: 'Undo'}).count(), 0);
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  await dialog(page).waitFor({state: 'detached'});
+  assert.equal(await page.locator('#gwToast').count(), 0, 'the kind has nothing left to undo');
 });
 
 test('the site panel offers the write for its one shop', async (t) => {
@@ -233,6 +252,15 @@ test('a refusal names the rule, the shop and the fix, and Apply stays off', asyn
   assert.match(await refusal.innerText(), /Place a uniform locker in the shop, then try again\./);
   assert.equal(await dialog(page).getByRole('button', {name: 'Set uniforms'}).isDisabled(), true);
   await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  // A schedule answer's own refusal is read from siteError, and a 409's leading row is not said twice.
+  const said = await page.evaluate(() => [
+    gwRefusals({kind: 'schedule', object: () => 'HART. Gifts'}, {siteError: 'headquarters', rows: []}),
+    gwRefusals({kind: 'schedule', object: () => 'HART. Gifts'}, {siteError: 'headquarters', rows: [{error: 'headquarters'}]}),
+  ]);
+  for (const html of said) {
+    assert.equal((html.match(/<li>/g) || []).length, 1);
+    assert.match(html, /A headquarters' schedule is not written from here/);
+  }
   // And an apply the game refuses after a clean dry run.
   await configure({refuseWrite: 'cannot_write:placement'});
   await button(page, GIFTS).click();

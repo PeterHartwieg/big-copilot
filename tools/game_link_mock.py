@@ -545,8 +545,10 @@ class Link:
         if expect != answer["before"]["print"]:
             answer["siteError"] = "changed"
             return (200, answer) if dry else (409, {"error": "changed", "rows": []})
-        if open_all and reg.get("businessTypeName") == HQ_TYPE:
-            answer["siteError"] = "hq_hours"
+        if reg.get("businessTypeName") == HQ_TYPE:
+            # The game ties a headquarters' shifts to its opening slot and clears
+            # plans and contracts when someone is unassigned there: never written.
+            answer["siteError"] = "headquarters"
             return self._schedule_refused(answer, dry)
         staff = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances"))}
         stations = {h.get("$k"): (save.deref(h.get("$v")) or {}).get("itemName")
@@ -650,6 +652,17 @@ class Link:
                 self.order = state["order"]
         else:
             address = record["address"]
+            # The shifts come back only if they would pass as a write: a person
+            # moved away or a station sold since is the game having moved on.
+            save = self._save()
+            reg = self._registration(save, address)
+            staff = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances"))}
+            stations = {h.get("$k") for h in save.items((reg or {}).get("itemInstances")) if isinstance(h, dict)}
+            if self._site_error(reg) or any(
+                    post not in stations or who not in staff
+                    or save.address(staff[who].get("assignedAddress")) != address
+                    for _d, _f, _t, who, post, _k in record["before"]):
+                return 409, {"error": "changed"}
             answer = {"ok": True, "kind": kind, "dryRun": dry, "undo": True, "address": _wire(address),
                       "business": record["business"], "siteError": None, "rows": []}
             self._schedule_answer(answer, self._save(), record["after"], record["before"], False)

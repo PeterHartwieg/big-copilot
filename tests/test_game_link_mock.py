@@ -313,7 +313,7 @@ class MockWrites(unittest.TestCase):
         self.assertEqual((answer["removed"], answer["added"]), (2, 1))
         # A stale print is changed.
         _, answer = self.post("schedule", dict(body, expect="811c9dc5"))
-        self.assertEqual(answer["error"], "changed")
+        self.assertEqual((answer["ok"], answer["siteError"]), (False, "changed"))
         status, answer = self.post("schedule", dict(body, dryRun=False, expect="811c9dc5"))
         self.assertEqual((status, answer["error"]), (409, "changed"))
         # Every rule of the grid, one shift each.
@@ -368,6 +368,89 @@ class MockWrites(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(call(self.url + "/health")[2])["writes"], ["imports"])
         self.assertEqual(self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}), (503, {"error": "busy"}))
+
+    def test_uniforms_null_asks_for_every_offered_skill_and_a_list_filters(self):
+        _, answer = self.post("uniforms", {"dryRun": True, "sites": [{"address": GIFTS, "skills": None}]})
+        row = answer["rows"][0]
+        # The register and the cleaning station stand in for the Uniforms window.
+        self.assertEqual(row["set"], ["ba:skill_customerservice"])
+        self.assertEqual(row["skipped"], [{"skill": "ba:skill_cleaning", "reason": "already_set"}])
+        _, answer = self.post("uniforms", {"dryRun": True, "sites": [
+            {"address": GIFTS, "skills": ["ba:skill_securityguard", "ba:skill_customerservice"]}]})
+        row = answer["rows"][0]
+        self.assertEqual(row["set"], ["ba:skill_customerservice"])
+        self.assertEqual(row["skipped"], [{"skill": "ba:skill_securityguard", "reason": "not_offered"}])
+
+    def test_an_apply_that_changes_nothing_answers_a_stamp_and_clears_the_undo(self):
+        body = {"sites": [{"address": GIFTS, "skills": None}]}
+        self.assertEqual(self.post("uniforms", body)[0], 200)
+        self.assertIn("uniforms", self.link.undo)
+        before = self.stamp()
+        status, answer = self.post("uniforms", body)  # everything is set now
+        self.assertEqual((status, answer["rows"][0]["set"], answer["stamp"]), (200, [], before))
+        self.assertNotEqual(self.stamp(), before)
+        self.assertEqual(self.post("undo", {"kind": "uniforms"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_imports_activation_needs_amounts_and_rows_say_what_moved(self):
+        # The paused contract gets an agent in memory only for this check.
+        self.link.contracts["CONTRACTtwo"] = {"active": False, "repeating": False, "nextDeliveryDay": 29}
+        contracts = {c["id"]: c for c in self.link._save().items(self.link._save().root["importPartnerships"])}
+        contracts["CONTRACTtwo"]["employeeInstanceId"] = "AGENTbbbb"
+        zero = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 0, "expect": 0}
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTtwo", "activate": True, "products": [zero]}]})
+        self.assertEqual(answer["rows"][0]["error"], "no_amounts")
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTtwo", "activate": True, "products": [dict(zero, amount=500)]}],
+            "order": ["CONTRACTtwo", "CONTRACTone"]})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual((answer["rows"][0]["reordered"], answer["rows"][0]["reactivated"]), (True, True))
+        # A product error is repeated on its contract row.
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [
+            {"id": "CONTRACTone", "products": [{"itemName": "ba:itemname_paperbag", "warehouse": DEPOT,
+                                                "amount": -1, "expect": 3800}]}]})
+        self.assertEqual((answer["rows"][0]["error"], answer["rows"][0]["products"][0]["error"]),
+                         ("bad_amount", "bad_amount"))
+
+    def test_imports_activation_lists_a_product_with_no_warehouse(self):
+        contract = self.link._save().items(self.link._save().root["importPartnerships"])[1]
+        contract["employeeInstanceId"] = "AGENTbbbb"
+        contract["products"]["$items"].append(
+            {"itemName": "ba:itemname_burger", "amount": 10,
+             "assignedWarehouse": {"streetName": "ba:street_nowhere", "streetNumber": 1}})
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTtwo", "activate": True, "products": [
+            {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": 500, "expect": 0}]}]})
+        row = answer["rows"][0]
+        self.assertEqual([(p["itemName"], p["error"]) for p in row["products"]],
+                         [("ba:itemname_paperbag", None), ("ba:itemname_burger", "no_warehouse")])
+        self.assertEqual(row["error"], "no_warehouse")
+
+    def test_schedule_refusals_lead_with_the_site_error(self):
+        body = {"address": BARE, "expect": "811c9dc5", "openAllHours": False, "days": []}
+        self.link.refuse_write = "refused:screen_open"
+        status, answer = self.post("schedule", body)
+        self.assertEqual((status, answer), (409, {"error": "refused", "rows": [{"error": "screen_open"}]}))
+        self.link.refuse_write = None
+        status, answer = self.post("schedule", dict(body, address={"street": "ba:street_nowhere", "number": 1}))
+        self.assertEqual((status, answer), (409, {"error": "refused", "rows": [{"error": "not_found"}]}))
+        _, answer = self.post("schedule", dict(body, dryRun=True, address={"street": "ba:street_nowhere", "number": 1}))
+        self.assertEqual((answer["ok"], answer["siteError"]), (False, "not_found"))
+
+    def test_a_headquarters_is_never_written(self):
+        reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[0]
+        reg["businessTypeName"] = "ba:businesstype_headquarters"
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        _, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": fixture_print, "days": []})
+        self.assertEqual((answer["ok"], answer["siteError"]), (False, "headquarters"))
+
+    def test_a_schedule_undo_whose_shifts_no_longer_hold_is_changed(self):
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        body = {"address": GIFTS, "expect": fixture_print,
+                "days": [{"d": 2, "shifts": [{"f": 8, "t": 20, "employeeId": BEN, "itemInstanceId": REGISTER}]}]}
+        self.assertEqual(self.post("schedule", body)[0], 200)
+        ana = self.link._save().items(self.link._save().root["EmployeeInstances"])[0]
+        ana["assignedAddress"] = {"streetName": "ba:street_broadway", "streetNumber": 2}  # moved since
+        self.assertEqual(self.post("undo", {"kind": "schedule"}), (409, {"error": "changed"}))
 
 
 if __name__ == "__main__":

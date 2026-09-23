@@ -17747,7 +17747,7 @@ function wireKinds(){
    draws. */
 const gwLink = () => (typeof SOURCE.link === "function" && SOURCE.link()) || null;
 const GW_DOES = {uniforms: "set uniforms", imports: "change imports", schedule: "write schedules"};
-let gwUndoable = null;  // {spec, text, character}: the last apply, until undone or replaced
+const gwUndoable = {};  // kind -> {spec, text, character, at}: its last apply, until undone or replaced
 let gwOpen = null;      // the dialog on screen
 
 /* A write button. None outside linked mode; with the link on but a mod that
@@ -17774,12 +17774,17 @@ function gwUniformButtons(b, all){
 const gwAddress = key => ({street: key.slice(0, key.lastIndexOf("#")), number: Number(key.slice(key.lastIndexOf("#") + 1))});
 const gwSiteOf = address => address && (D.businesses || []).find(b => b.key === `${address.street}#${address.number}`) || null;
 const gwSiteName = row => { const b = gwSiteOf(row.address); return spEsc(b ? shortName(b) : row.business || "A shop"); };
+/* The game's name for a skill, from wherever the payload carries one: the
+   uniform gaps, then the roles of the hour grid and the staffing plan. */
 function gwSkillName(skill){
   for(const b of D.businesses || []){
     const i = (b.uniformGapSkills || []).indexOf(skill);
     if(i >= 0 && b.uniformGaps?.[i]) return spEsc(b.uniformGaps[i]);
   }
-  return spEsc(String(skill).replace(/^ba:skill_/, ""));
+  for(const site of [...(D.hours || []), ...(D.staffing || [])])
+    for(const r of site.roles || []) if(r.skill === skill && r.label) return spEsc(r.label);
+  const slug = String(skill).replace(/^ba:skill_/, "");
+  return spEsc(slug.charAt(0).toUpperCase() + slug.slice(1));
 }
 const GW_SKIP = {already_set: "already has a uniform; left as it is",
                  not_offered: "not in this shop's Uniforms window"};
@@ -17791,7 +17796,9 @@ function gwUniforms(keys){
   gwConfirm({
     kind: "uniforms",
     title: sites.length === 1 ? "Set Default uniforms" : `Set Default uniforms at ${sites.length} shops`,
-    body: () => ({sites: sites.map(b => ({address: gwAddress(b.key), skills: b.uniformGapSkills, presetId}))}),
+    /* skills null: every skill the shop's Uniforms window offers, not only the
+       roles on shift now, so the warning cannot come back with the roster. */
+    body: () => ({sites: sites.map(b => ({address: gwAddress(b.key), skills: null, presetId}))}),
     head: ["Shop", "Role", "Now", "After"],
     rows: answer => (answer.rows || []).flatMap(r => r.error
       ? [{state: "bad", cells: [gwSiteName(r), "", "", "Refused"]}]
@@ -17813,6 +17820,7 @@ function gwUniforms(keys){
       if(select) select.onchange = () => { presetId = select.value; replan(); };
     },
     applyLabel: "Set uniforms",
+    changed: answer => (answer.rows || []).some(r => (r.set || []).length),
     done: answer => {
       const rows = (answer.rows || []).filter(r => (r.set || []).length);
       const n = rows.reduce((s, r) => s + r.set.length, 0);
@@ -17838,9 +17846,33 @@ const GW_REFUSE = {
     no_locker: {rule: "No uniform locker: the game sets uniforms only where one stands", fix: "Place a uniform locker in the shop, then try again."},
     no_preset: {rule: "The game has no uniform to set", fix: "Create one in the game's uniform settings, then try again."},
   },
+  imports: {
+    no_agent: {rule: "No purchasing agent runs this contract", fix: "Assign a purchasing agent at the headquarters, then try again."},
+    no_amounts: {rule: "Every amount is 0, and the game will not start a contract with nothing to order", fix: "Set an amount first."},
+    locked: r => ({rule: "Orders for Monday's delivery closed Sunday 20:00", fix: r.reopens
+      ? `They reopen on day ${r.reopens.day} at ${String(r.reopens.hour).padStart(2, "0")}:00.` : "They reopen Monday 08:00."}),
+    no_warehouse: {rule: "A product on this contract has no warehouse to deliver to", fix: "Pick a warehouse for it on the contract in BizMan."},
+    backorder: {rule: "The item is on backorder at the importer this week", fix: "Try again once the market event is over."},
+    over_cap: r => ({rule: `More than the importer still allows this week${Number.isFinite(r.max) ? ` (${r.max.toLocaleString()})` : ""}`,
+      fix: "Lower the amount, or bring the rest through another importer."}),
+    bad_amount: {rule: "An amount is not a whole number of 0 or more", fix: "Correct it, then try again."},
+  },
+  schedule: {
+    headquarters: {rule: "A headquarters' schedule is not written from here", fix: "Change it in BizMan in the game."},
+    not_assigned: {rule: "Someone on the plan is not assigned to this business", fix: "Assign them in BizMan, or refresh the board."},
+    no_station: {rule: "A station on the plan is no longer here", fix: "Refresh the board."},
+    no_skill: {rule: "Someone on the plan lacks the skill for their station", fix: "Refresh the board."},
+    bad_hours: {rule: "A shift is not whole hours, at most 12, within the day", fix: "Refresh the board."},
+    overlap_person: {rule: "Someone would work two shifts at once", fix: "Refresh the board."},
+    overlap_station: {rule: "Two people would share one station", fix: "Refresh the board."},
+  },
 };
 function gwRefusals(spec, answer){
-  const items = (answer.rows || []).filter(r => r && r.error).map(r => {
+  /* A schedule answer names its business's own refusal apart from the rows;
+     a 409's rows already lead with it. */
+  const site = answer.siteError && !(answer.rows || []).some(r => r && r.error === answer.siteError && r.d === undefined)
+    ? [Object.assign({}, answer, {error: answer.siteError})] : [];
+  const items = site.concat(answer.rows || []).filter(r => r && r.error).map(r => {
     const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
     const say = typeof known === "function" ? known(r) : known || {rule: `The game refused this (${spEsc(r.error)})`, fix: ""};
     return `<li><b>${spec.object ? spec.object(r) : ""}</b>${spec.object ? ": " : ""}${say.rule}.${say.fix ? `<span>${say.fix}</span>` : ""}</li>`;
@@ -17925,6 +17957,8 @@ function gwFailed(dlg, spec, res, retry){
      lead(answer), bind(dlg, replan)   optional: a line over the table, and
                                wiring for any control in it (replan() dry-runs again)
      done(answer)              one line after an apply, and after its undo
+     changed(answer)           optional: false when an apply changed nothing,
+                               which leaves nothing to undo
    The dialog dry-runs as it opens, offers Apply only when the game would take
    every row, and after an apply offers Undo until the next write of the kind. */
 function gwConfirm(spec){
@@ -17947,10 +17981,13 @@ function gwConfirm(spec){
     const res = await SOURCE.write(spec.kind, spec.body(), {dryRun: false});
     if(res.error) return dlg.open && gwFailed(dlg, spec, res, plan);
     const answer = res.body || {};
-    gwUndoable = {spec, text: spec.done(answer), character: gwLink()?.character};
+    /* An apply replaces its kind's undo, with nothing when it changed nothing. */
+    const undoable = !spec.changed || spec.changed(answer);
+    if(undoable) gwUndoable[spec.kind] = {spec, text: spec.done(answer), character: gwLink()?.character, at: Date.now()};
+    else delete gwUndoable[spec.kind];
     if(!dlg.open) return gwToast();
     gwPaint(dlg, `<p class="gw-ok">${spec.done(answer)}</p>${gwTable(spec, answer)}<p>The board reads the game again to show it.</p>`, [
-      ["Undo", () => gwUndo(spec, dlg)], ["Close", () => dlg.close(), {primary: true}],
+      ...(undoable ? [["Undo", () => gwUndo(spec, dlg)]] : []), ["Close", () => dlg.close(), {primary: true}],
     ]);
   };
   plan();
@@ -17961,7 +17998,7 @@ async function gwUndo(spec, dlg){
   const res = await SOURCE.write("undo", {kind: spec.kind}, {dryRun: false});
   /* Gone for good once the game says so; kept for a retry when it only could
      not take it now. */
-  if(!res.error || res.error === "changed" || res.error === "nothing_to_undo") gwUndoable = null;
+  if(!res.error || res.error === "changed" || res.error === "nothing_to_undo") delete gwUndoable[spec.kind];
   if(!dlg.open) return gwToast();
   if(res.error) return gwFailed(dlg, spec, res, () => gwUndo(spec, dlg));
   gwPaint(dlg, `<p class="gw-ok">${spec.done(res.body || {})}</p>${gwTable(spec, res.body || {})}`,
@@ -17971,18 +18008,21 @@ async function gwUndo(spec, dlg){
    the next write of that kind, or until the board is another company's. */
 function gwToast(){
   const link = gwLink();
-  if(gwUndoable && (!link || link.character !== gwUndoable.character)) gwUndoable = null;
+  for(const kind of Object.keys(gwUndoable))
+    if(!link || link.character !== gwUndoable[kind].character) delete gwUndoable[kind];
+  /* The newest apply's undo; an older kind's comes back once that one is gone. */
+  const last = Object.values(gwUndoable).sort((a, b) => b.at - a.at)[0];
   let bar = $("gwToast");
-  if(!gwUndoable || gwOpen){ if(bar) bar.remove(); return; }
+  if(!last || gwOpen){ if(bar) bar.remove(); return; }
   if(!bar){
     bar = document.createElement("div");
     bar.id = "gwToast"; bar.setAttribute("role", "status");
     document.body.appendChild(bar);
   }
-  const {spec, text} = gwUndoable;
+  const {spec, text} = last;
   bar.innerHTML = `<span>${text}</span><button type="button" class="btn2" data-gw-undo>Undo</button><button type="button" class="ibtn" data-gw-dismiss aria-label="Dismiss"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>`;
   bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
-  bar.querySelector("[data-gw-dismiss]").onclick = () => { gwUndoable = null; gwToast(); };
+  bar.querySelector("[data-gw-dismiss]").onclick = () => { delete gwUndoable[spec.kind]; gwToast(); };
 }
 const bindWrites = once(() => on("click", "[data-gw]", (btn, e) => {
   /* Capture phase: a button inside a finding row must not open the row. */
