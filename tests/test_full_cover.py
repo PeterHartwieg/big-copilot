@@ -11,6 +11,7 @@ import unittest
 
 from ba_dashboard import (
     ALL_DAY_OPEN,
+    DEMAND_TEST_DAYS,
     FULL_COVER_SHARE,
     FULL_TIME,
     JOB_DEMANDS,
@@ -84,7 +85,9 @@ class FullNeedTest(unittest.TestCase):
         row = plan([(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)], crew(), BUSY,
                    weeks=0, opens=((8, 20),))
         full = row["fullCover"]
-        self.assertEqual(full["need"][SERVICE], [[2] * 24 for _ in range(7)])
+        # The need is constant, so the payload leaves it to the page.
+        self.assertNotIn("need", full)
+        self.assertNotIn("basis", full)
         # The demand plan beside it is still cover only.
         self.assertEqual(serving(row), [])
         # Every register every hour, whatever the doors say today.
@@ -238,6 +241,18 @@ class HandOverTest(unittest.TestCase):
         row = self.row()
         self.assertIs(row["fullCover"]["inGame"], True)
         self.assertIs(row["demandTestDone"], True)
+
+    def test_done_only_on_a_new_shop(self):
+        """Six weeks open is the edge: a shop older than that has its demand plan."""
+        self.assertEqual(DEMAND_TEST_DAYS, 42)
+        young = self.row(days_open=DEMAND_TEST_DAYS - 1)
+        self.assertIs(young["demandTestDone"], True)
+        old = self.row(days_open=DEMAND_TEST_DAYS)
+        self.assertIs(old["fullCover"]["inGame"], True)
+        self.assertIs(old["demandTestDone"], False)
+
+    def test_not_done_where_the_age_is_unknown(self):
+        self.assertIs(self.row(days_open=None)["demandTestDone"], False)
 
     def test_not_done_before_two_weeks_are_measured(self):
         row = self.row(weeks=1)

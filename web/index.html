@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=7dbb972753">
+<link rel="stylesheet" href="community.css?v=92c0e8d7c9">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=7dbb972753">
+<link rel="stylesheet" href="fonts/fonts.css?v=92c0e8d7c9">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2692,8 +2692,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "7dbb972753";</script>
-<script>window.LEDGER_RELEASE = {"version":"7dbb972753","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "92c0e8d7c9";</script>
+<script>window.LEDGER_RELEASE = {"version":"92c0e8d7c9","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2762,8 +2762,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=7dbb972753"></script>
-<script src="community.js?v=7dbb972753"></script>
+<script src="app.js?v=92c0e8d7c9"></script>
+<script src="community.js?v=92c0e8d7c9"></script>
 
 <script>
 
@@ -4960,8 +4960,21 @@ const spOffersFull = row => !!(row && !row.failed && row.fullCover
   && (row.roles || []).some(r => (r.stations || []).length));
 /* The full-cover plan as a row the block draws like any other: the site's
    tables, schedule and readings, with the plan's own fields laid over them.
-   The tables are shared, so every index in it points where it should. */
-const spFullRow = row => Object.assign({}, row, row.fullCover, {fullCover: null, full: true});
+   The tables are shared, so every index in it points where it should. Its
+   need is every station of every role, every hour, so the payload leaves it
+   out and it is read off the role's station list here; the demand plan's own
+   need must not show through. */
+const spFullNeed = row => {
+  const need = {}, basis = {};
+  (row.roles || []).forEach(r => {
+    const n = (r.stations || []).length;
+    need[r.skill] = [...Array(7)].map(() => Array(24).fill(n));
+    basis[r.skill] = [...Array(7)].map(() => Array(24).fill("full"));
+  });
+  return {need, basis};
+};
+const spFullRow = row => Object.assign({}, row, spFullNeed(row), row.fullCover,
+  {fullCover: null, full: true});
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
    entry typed for the other. */
 const spTickKey = row => row.full ? `${row.key}#full` : row.key;

@@ -529,7 +529,8 @@ put through the same placer with every rule above unchanged (twelve-hour entries
 server on cleaning, the fewest people first) and the same people: the site's staff, the
 unassigned bench and hires. It is placed on its own copy of everybody's week and never
 written back, so it takes nobody off the bench a later site's demand plan could use. It
-carries the same keys as the demand plan, plus `open` (0 to 24 every day, the hours it
+carries the same keys as the demand plan except `need` and `basis`, which would say every
+station every hour and which the page reads off `roles` instead, plus `open` (0 to 24 every day, the hours it
 assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
 an hour it is shut is an hour the test never measures) and `inGame`. On a shop with no
 serving station the two plans are the same week, and the page offers no choice.
@@ -540,10 +541,13 @@ hours, and the doors open for at least nine tenths of it. Nine tenths lets throu
 hand-set week really looks like, the two-hour scraps and an hour lost at a hand-over, and
 turns away a shop shut at night (open 6 to 24 is three quarters of the week) or a register
 empty for a whole day. `demandTestDone` is that, plus two measured weeks behind every
-weekday, plus a demand plan that asks for fewer serving hours than the test: a shop busy
-every hour is already on its demand plan and has nothing to switch to. The board does not
-know when the schedule was set, so a measured shop that has always run every station
-around the clock counts as done too, which is the right advice for it anyway.
+weekday, plus a demand plan that asks for fewer serving hours than the test (a shop busy
+every hour is already on its demand plan and has nothing to switch to), plus a shop open
+fewer than 42 days (`DEMAND_TEST_DAYS`, by the same days-open figure as `measure.open`): two
+weeks of test and slack for a player who starts it late or runs it longer. The board does
+not know when the schedule was set, so the age is what keeps an established shop that has
+always run around the clock from being told its test is done. A shop whose age the save
+does not give is never called done.
 
 ## Staff demands
 

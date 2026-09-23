@@ -1779,6 +1779,12 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
       /^Run it for two weeks to measure demand, then switch to the demand plan\.$/);
     assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
       /Every station, every hour/);
+    // The payload carries no need for the test; the strip is read off the
+    // station list: both registers, every hour of the day.
+    assert.equal(ROWS.newshop.fullCover.need, undefined);
+    const strip = await page.locator(mon + '.sp-need')
+      .evaluateAll(n => n.map(x => x.style.getPropertyValue('--n')));
+    assert.deepEqual(strip, Array(24).fill('2'));
     // Its own hours, headcount and wages, in the tiles the demand plan uses.
     const hoursTile = await page.locator('#sp-roster .sp-ba > div').first().innerText();
     const full = ROWS.newshop.fullCover;

@@ -5320,6 +5320,20 @@ ALL_DAY_OPEN = [[[0, 24]] for _ in range(7)]
 # shut at night (open 6 to 24 is three quarters of the week) or one register
 # left empty for a day (a whole day is a seventh).
 FULL_COVER_SHARE = 0.9
+# How long a shop counts as new for the hand-over: six weeks open, the same
+# days-open figure `measure.open` carries. The test itself is two weeks; the
+# rest is slack for a player who starts it late or runs it longer.
+DEMAND_TEST_DAYS = 42
+
+
+def _is_new_shop(business: dict) -> bool:
+    """Whether the shop has been open fewer than DEMAND_TEST_DAYS days.
+
+    A shop whose age the save does not give is not called new: the hand-over
+    line is only worth saying where it is sure to be about a demand test.
+    """
+    days = business.get("daysOpen")
+    return days is not None and days < DEMAND_TEST_DAYS
 
 
 def _open_all_hours(slots: list) -> bool:
@@ -5841,9 +5855,14 @@ def _plan_site(
         # with the opening hours it assumes -- 0 to 24 every day -- and whether
         # the shop already opens that long, because an hour it is shut is an
         # hour the test never measures. `inGame` is whether the schedule in the
-        # game already is one; see _full_cover_in_game().
+        # game already is one; see _full_cover_in_game(). Its need is every
+        # station every hour, which the page reads off `roles`, so the two
+        # grids that would say so 168 times a role are left out.
         "fullCover": {
-            **_plan_fields(full, table, names, people, cost),
+            key: value
+            for key, value in _plan_fields(full, table, names, people, cost).items()
+            if key not in ("need", "basis")
+        } | {
             "open": ALL_DAY_OPEN,
             "openAllHours": True,
             "openNow": _open_all_hours(grid["open"]),
@@ -5853,8 +5872,12 @@ def _plan_site(
         # schedule: the test has done its job and the demand plan can take over.
         # Only where the demand plan asks for fewer serving hours than the test:
         # a shop busy enough to want every station every hour is already on
-        # its demand plan, and telling it to switch would change nothing.
+        # its demand plan, and telling it to switch would change nothing. And
+        # only on a new shop: an established one that has always run around the
+        # clock has its demand plan to speak for it, and a line calling that a
+        # finished test would be a nag.
         "demandTestDone": measured and in_game
+        and _is_new_shop(business)
         and _serving_hours(week["shifts"]) < _serving_hours(full["shifts"]),
         "current": {
             "shifts": current["shifts"],
@@ -12049,8 +12072,21 @@ const spOffersFull = row => !!(row && !row.failed && row.fullCover
   && (row.roles || []).some(r => (r.stations || []).length));
 /* The full-cover plan as a row the block draws like any other: the site's
    tables, schedule and readings, with the plan's own fields laid over them.
-   The tables are shared, so every index in it points where it should. */
-const spFullRow = row => Object.assign({}, row, row.fullCover, {fullCover: null, full: true});
+   The tables are shared, so every index in it points where it should. Its
+   need is every station of every role, every hour, so the payload leaves it
+   out and it is read off the role's station list here; the demand plan's own
+   need must not show through. */
+const spFullNeed = row => {
+  const need = {}, basis = {};
+  (row.roles || []).forEach(r => {
+    const n = (r.stations || []).length;
+    need[r.skill] = [...Array(7)].map(() => Array(24).fill(n));
+    basis[r.skill] = [...Array(7)].map(() => Array(24).fill("full"));
+  });
+  return {need, basis};
+};
+const spFullRow = row => Object.assign({}, row, spFullNeed(row), row.fullCover,
+  {fullCover: null, full: true});
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
    entry typed for the other. */
 const spTickKey = row => row.full ? `${row.key}#full` : row.key;

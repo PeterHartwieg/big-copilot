@@ -916,12 +916,13 @@ class PayloadTest(unittest.TestCase):
                 "current", "measure", "addPeople", "fullCover", "demandTestDone",
             },
         )
-        # The full-cover plan is the same shape as the demand plan, plus the
-        # opening hours it assumes and whether the game already runs it.
+        # The full-cover plan is the same shape as the demand plan, less the need
+        # grids (every station every hour, read off `roles` on the page), plus
+        # the opening hours it assumes and whether the game already runs it.
         self.assertEqual(
             set(row["fullCover"]),
             {
-                "need", "basis", "shifts", "headcount", "shortHours", "shortDays",
+                "shifts", "headcount", "shortHours", "shortDays",
                 "placed", "bench", "slack", "cost", "addPeople",
                 "open", "openAllHours", "openNow", "inGame",
             },
