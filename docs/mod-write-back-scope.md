@@ -400,6 +400,16 @@ differ:
 - The plan still places unassigned staff and hires (`addPeople`). The schedule write sends only the
   entries of people assigned to the site and says how many people to add; a second write fills the
   holes once the player has assigned or hired them.
+- No reordering on the board (Peter, 23 September 2026). The game delivers grouped by importer, a
+  group placed by its first contract in the whole plan, so moving one contract within a line often
+  cannot be expressed without moving that importer's deliveries of other items too. The board shows a
+  line's contracts read-only in delivery order; the plan order is set at the headquarters in game. The
+  mod keeps `order` in `/write/imports` for later.
+- Plain contracts on one line split cap-aware (Peter, 23 September 2026): one budget per importer and
+  item across the whole write, walked in the game's delivery order; demand the caps leave is shown
+  before Apply. A Smart Delivery contract ahead in that order is named in the dialog, not budgeted.
+- Schedule writes are refused at a headquarters (its shifts follow the day's opening slot on every
+  open day, and unassigning people there clears plans and import agents).
 - Offices get a default plan of their own (a board branch, not the mod): computers staffed 24/7 = 3
   in a 50-capacity building, proportionally fewer in smaller ones (at least 1); every computer 8 to 22
   on weekdays; half the computers 8 to 22 on weekends. The game's office demand formula is exact
