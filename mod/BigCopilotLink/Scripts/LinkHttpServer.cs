@@ -12,8 +12,9 @@ namespace BigCopilotLink
     /// Loopback-only HTTP listener: one accept thread, each request handled on a pool
     /// thread, serving the contract in docs/game-link-api.md. Handlers touch nothing
     /// but the volatile fields of HealthState and the immutable Snapshot — never
-    /// Unity, never the game. The one thing that has to reach the game, POST
-    /// /refresh, goes through MainThreadDispatcher and waits with a timeout.
+    /// Unity, never the game. What has to reach the game, POST /refresh and the
+    /// writes (WriteService), goes through MainThreadDispatcher and waits with a
+    /// timeout.
     /// </summary>
     public sealed class LinkHttpServer
     {
@@ -41,18 +42,23 @@ namespace BigCopilotLink
             "https://www.bigcopilot.com"
         };
 
+        private const string EndpointsJson =
+            "[\"/health\",\"/save\",\"/refresh\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/undo\"]";
+
         private readonly int _port;
         private readonly SaveService _saves;
         private readonly HealthState _health;
+        private readonly WriteService _writes;
         private HttpListener _listener;
         private Thread _thread;
         private volatile bool _running;
 
-        public LinkHttpServer(int port, SaveService saves, HealthState health)
+        public LinkHttpServer(int port, SaveService saves, HealthState health, WriteService writes)
         {
             _port = port;
             _saves = saves;
             _health = health;
+            _writes = writes;
         }
 
         public int Port { get { return _port; } }
@@ -157,7 +163,8 @@ namespace BigCopilotLink
             {
                 // A HEAD answer carries no body, or a kept-alive client reads the
                 // leftover bytes as its next status line. 405 on the known paths.
-                var known = path == "" || path == "/health" || path == "/save" || path == "/refresh";
+                var known = path == "" || path == "/health" || path == "/save" || path == "/refresh" ||
+                            WriteKind(path) != null;
                 WriteNoBody(context, known ? 405 : 404);
                 return;
             }
@@ -168,7 +175,7 @@ namespace BigCopilotLink
                 case "/health":
                     if (method != "GET") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
                     _health.MarkHealthPolled();
-                    WriteJson(context, 200, HealthJson());
+                    WriteJson(context, 200, HealthJson(PairingCode.Matches(request.Headers["Authorization"])));
                     return;
 
                 case "/save":
@@ -182,9 +189,29 @@ namespace BigCopilotLink
                     return;
 
                 default:
-                    WriteJson(context, 404,
-                        "{\"error\":\"not_found\",\"endpoints\":[\"/health\",\"/save\",\"/refresh\"]}");
+                    var kind = WriteKind(path);
+                    if (kind == null)
+                    {
+                        WriteJson(context, 404, "{\"error\":\"not_found\",\"endpoints\":" + EndpointsJson + "}");
+                        return;
+                    }
+                    if (method != "POST") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+                    var answer = _writes.Handle(request, kind);
+                    WriteJson(context, answer.Status, answer.Json);
                     return;
+            }
+        }
+
+        /// <summary>"uniforms", "imports", "schedule" or "undo" for a write path, else null.</summary>
+        private static string WriteKind(string path)
+        {
+            switch (path)
+            {
+                case "/write/uniforms": return "uniforms";
+                case "/write/imports": return "imports";
+                case "/write/schedule": return "schedule";
+                case "/write/undo": return "undo";
+                default: return null;
             }
         }
 
@@ -223,7 +250,9 @@ namespace BigCopilotLink
             if (corsAllowed)
             {
                 response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                response.AddHeader("Access-Control-Allow-Headers", "Content-Type, If-None-Match");
+                // Authorization carries the pairing code; Content-Type: application/json
+                // is what makes a write preflight at all.
+                response.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match");
                 response.AddHeader("Access-Control-Max-Age", "600");
 
                 // Chrome's private-network gate: answer it only when it was asked.
@@ -236,7 +265,7 @@ namespace BigCopilotLink
 
         // ---- endpoints -----------------------------------------------------------
 
-        private string HealthJson()
+        private string HealthJson(bool paired)
         {
             var w = new JsonWriter();
             w.BeginObject();
@@ -259,6 +288,13 @@ namespace BigCopilotLink
 
             if (snap.RefreshedAtUtcIso == null) w.PropNull("refreshedAt");
             else w.Prop("refreshedAt", snap.RefreshedAtUtcIso);
+
+            // Additive in 0.2.0: which writes this mod takes, and whether this request
+            // carried the pairing code (a code-free poll always reads false).
+            w.BeginArray("writes");
+            foreach (var kind in WriteService.Kinds) w.Value(kind);
+            w.EndArray();
+            w.Prop("paired", paired);
             w.EndObject();
             return w.ToString();
         }

@@ -4,7 +4,10 @@ This mod lets [Big Copilot](https://bigcopilot.com) read the game you are playin
 instead of a save file you picked by hand. While a city is loaded it serializes the
 running game with the game's own serializer settings, on a thread of its own, and
 serves the resulting bytes — a `.hsg` as the game would write it — over loopback
-HTTP. It holds no model of the game and changes nothing in it.
+HTTP. It holds no model of the game. From 0.2.0 it also makes three changes the board
+proposes, and only when you confirm them on the board with the mod's pairing code:
+default uniforms, import contract amounts, and a business's staff schedule (see
+"What it changes" below).
 
 **Players:** subscribe on the Steam Workshop,
 [Big Copilot Link: Live Business Dashboard](https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395)
@@ -40,6 +43,42 @@ Mod Builder.
   "<name> (Modded)". No achievement text mentions mods (build 3680).
 - **Nothing on disk.** The mod writes nothing to disk: the bytes are produced in
   memory and only ever leave the process over the loopback listener.
+
+## What it changes (0.2.0)
+
+Four `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
+under "Writes":
+
+| Endpoint | What it changes |
+| --- | --- |
+| `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet. A skill you dressed yourself is never touched. |
+| `/write/imports` | Sets purchasing-agent contract amounts, switches a stopped contract back on (with Repeating), and reorders contracts in the plan order. It never stops a contract, and never adds or removes a product. |
+| `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. |
+| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. |
+
+- **The pairing code.** Every write needs `Authorization: Bearer <code>`. The code is
+  six characters, drawn with a cryptographic random generator once per game launch
+  (loading another save keeps it; restarting the game draws a new one). **Copy pairing
+  code** in the mod's options puts it on the clipboard and shows it in a notification;
+  Big Copilot asks for it once per browser tab. It never appears in the log. Reads
+  (`/health`, `/save`, `/refresh`) never need it.
+- **The game's own rules.** Every write is checked on the game's main thread against
+  the rules the game's own screens enforce (build 3680 IL), and is all or nothing: one
+  refused row and nothing is written. A dry run (`"dryRun": true`) runs every check and
+  changes nothing; the board runs one when its confirm dialog opens.
+- **Compare-and-set.** Each write carries what the board read from the last refresh
+  (an amount, the shift print of a business); if the game has moved on since, the
+  write is refused as `changed` and the board refreshes.
+- **Not while you are looking at it.** A schedule write is refused while the BizMan
+  schedule is open on that business (or the game's auto-fill is still filling it), an
+  imports write while the purchasing-agent plan screen shows that contract or, for a
+  reorder, while a headquarters' purchasing-agent list is on screen.
+- **After a write** the mod marks the game as changed (as the game's own screens do),
+  shows "Big Copilot updated … at …", and refreshes the served bytes so the board
+  rebuilds from what the game now holds. It does not save the game.
+- **Threading.** A write never runs while a refresh walk is in flight on the worker
+  thread: the main thread turns the job away without touching anything, and the
+  request asks again every 100 ms for up to three seconds before answering `503 busy`.
 
 ## How a refresh runs
 
@@ -118,7 +157,7 @@ the worker thread failed again on its second chance; serializing on the main thr
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.1.0` |
+   | Version | `0.2.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -158,7 +197,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.1.0","source":"game",…}` and a
+Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.2.0","source":"game",…,"writes":["uniforms","imports","schedule"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -186,6 +225,79 @@ and Firefox linked from a local page. The bytes are not identical to the game's 
 (one Odin reference id and a 367-byte block after the `Minute` field differ, likely
 `CreateSaveSnapshot` versus serializing `Current`); nothing the board reads differs.
 
+### Writes by hand
+
+Take the code from **Copy pairing code** (`ABC234` below), then send a dry run first.
+`-d` and `--data-binary @file` set `Content-Length` for you:
+
+```
+curl -H "Authorization: Bearer ABC234" http://127.0.0.1:8322/health
+curl -X POST -H "Authorization: Bearer ABC234" -H "Content-Type: application/json" \
+  -d '{"dryRun":true,"sites":[{"address":{"street":"ba:street_secondavenue","number":12},"skills":["ba:skill_customerservice"],"presetId":null}]}' \
+  http://127.0.0.1:8322/write/uniforms
+curl -X POST -H "Authorization: Bearer ABC234" -H "Content-Type: application/json" \
+  --data-binary @imports.json http://127.0.0.1:8322/write/imports
+curl -X POST -H "Authorization: Bearer ABC234" -H "Content-Type: application/json" \
+  -d '{"kind":"uniforms","dryRun":false}' http://127.0.0.1:8322/write/undo
+```
+
+The first answers `"paired":true`. A POST with no body needs
+`-H "Content-Length: 0"`, as for `/refresh`. In PowerShell use `curl.exe` and put the
+body in a file: PowerShell's quoting mangles inline JSON.
+
+### In-game checklist for 0.2.0
+
+Built into `ModsLocal`, a save loaded, the board linked and paired. After each apply,
+check the notification, that `/health`'s stamp moved, and that the board rebuilt from
+the new bytes.
+
+1. **Pairing.** Copy pairing code: the notification shows the code and the clipboard
+   holds it; a write with a wrong code answers 401; `/health` with the right code says
+   `"paired":true`, without it `false`. Load another save: same code. Restart the
+   game: a new one. The mod options' labels and the notifications read as in
+   `Locales/en.json`, not as raw keys.
+2. **Uniforms.** On a shop with a uniform locker and the "No staff uniforms set"
+   warning: dry run, then apply. The Uniforms window (BizMan → business → Settings)
+   shows Default on every skill it offers that had none; a skill you had set keeps
+   yours. The warning clears at once, not at midnight. Standing in the shop, staff at
+   their stations change into the uniform. A shop without a locker answers
+   `no_locker`.
+3. **Imports across the lock window.** Change a running contract's amount on a weekday:
+   applied, and the plan screen shows the new amount with the next Monday's delivery.
+   Sunday after 20:00 (or Monday before 08:00): the same change answers `locked` with
+   `reopens` on that Monday at 8, and nothing changes.
+4. **A capped item with a backup contract.** Two contracts bring one item to one depot
+   from two importers. A plain amount above the first importer's cap answers `over_cap`
+   with `max` in the dry run. Reorder the two with `order`; the headquarters'
+   purchasing-agent list shows the new order when it is opened again. With both on
+   Smart Delivery, check after Monday's delivery that the second contract brought only
+   what the first left short (scope section 7 item 5).
+5. **A reactivated one-off.** A stopped contract without Repeating: `activate: true`
+   switches it on with Repeating on and the next Monday as its delivery day; the dry
+   run's `nextDeliveryTotal` matches the plan screen's next-delivery total. One with
+   every amount at 0 answers `no_amounts`.
+6. **Schedule.** Write a roster to a shop, then open BizMan → Schedule on it and
+   compare every day with the board's plan: same people, stations and hours; cleaning
+   stations carry the cleaning type. Anyone left without a shift gets the "employee
+   idle" to-do. Standing in the shop, the stations staff up for the current hour. With
+   the schedule screen open on that shop the write answers `screen_open`; on another
+   shop it goes through.
+7. **A partial write, then the holes.** A plan that needs a hire: the write sends only
+   the assigned staff's shifts and the board says how many people to add. Hire and
+   assign them in game, let the board refresh, write again: the holes fill, and the
+   second write's `expect` matched the first write's result.
+8. **Full cover.** `openAllHours` on a shop opens every day 0 to 24 in BizMan; at a
+   headquarters it answers `hq_hours`.
+9. **Undo, each kind.** After each of 2, 3 and 6, undo: uniforms go back to unassigned
+   only where they still hold the preset the write set; amounts, running state,
+   Repeating, next delivery day and plan order come back; the schedule and, after a
+   full-cover write, the opening hours come back. Change one of the written values by
+   hand first and undo answers `changed`. A second undo answers `nothing_to_undo`, and
+   so does any undo after loading another save.
+10. **Busy.** With "Refresh every game hour" on, apply just as the hour turns: the
+    write waits for the walk (up to three seconds) and applies, or answers `503 busy`
+    with nothing written; never a half-written state.
+
 ## Publish to the Workshop
 
 The Workshop item is 3806322395, owned by Peter's Steam account; its page, art and
@@ -210,6 +322,7 @@ In the game's mod options, under **Big Copilot Link**:
 | Refresh when a building loads | off | A backup: the hourly and game-save refreshes already keep the board fresh with no cost, so this buys at most one game hour. On, entering or leaving a building fades the screen to black while the game loads the other side and the serialize runs on the main thread under that black, about 250 ms added to the load that you do not see. |
 | Refresh every game hour | on | The refresh runs on a worker thread, so it costs nothing you can see. If the mod has fallen back to the main thread (see the log), it is a short stall every game hour, a minute of play at normal speed, until the worker is tried again; switch it off here if that bothers you. The other triggers stay: a completed game save, `POST /refresh`, a five-minute floor, and a building load if that option is on. |
 | Copy address | — | Puts `http://127.0.0.1:<port>/` on the clipboard. |
+| Copy pairing code | — | Puts this game launch's pairing code on the clipboard and shows it in a notification, for Big Copilot's first write. |
 
 Nothing refreshes unless something fetched `/health` in the last 120 seconds, so an
 installed mod with the board closed does no work at all.
@@ -230,6 +343,13 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `UI.InteriorDesigner.InteriorDesignerUI.IsOpen`, `BigAmbitions.PlacementSystem.PlacementSystem.IsInPlacementMode`, `CasinoBoatManager.IsOnCasinoBoat`, `PlayerActivity.PlayerActivityUI.IsPanelOpen` | the refusal reason, and the fallback when `CanSave` is not found |
 | `BAModAPI`: `RegisterModClass`, `ModEntryOnCityLoad`, `IModBigAmbitions`, `ModContext`, `IModLogger` | the entry point |
 | `BigAmbitions.Mods.ModOptions`, static `OptionsService.Register/RemoveModOptions` | the options panel (compiles; the panel itself is not yet checked in-game) |
+| `SaveGameManager.MarkChange()`, `UI.Notification.Notifications.Show(...)` | after every write; the pairing code |
+| `GameInstance.BuildingRegistrations`, `employeePresets`, `importPartnerships`; `BuildingRegistration` fields `StreetName`, `StreetNumber`, `RentedByPlayer`, `businessTypeName`, `BusinessName`, `itemInstances`, `uniformsBySkill`, `scheduleDays`, `GetAssignableItems(list)` | finding and reading the target. A registration is found by searching the list, never with `BuildingHelper.GetBuildingRegistration`, which creates one for a building that has none |
+| `BusinessTypeHelper.GetData(reg).employeePrimarySkills`, `BuildingTypeHelper.GetData(reg).requiredBuildingSkills`, `ItemsGetter.GetByName` + `TagRef.Itemtag.isuniformlocker`, `CustomerDemandHelper.ReloadCachedFulfilled(reg)`, `BuildingManager.Instance.onUniformChanged`, `GameEvent.Invoke` | uniforms, as `SetUpUniformsWindow` does it |
+| `ImportPartnership` fields and `NextDeliveryTotal`, `GetDiscount`, static `GetItemAmountOrderedThisWeek`; `ImportProduct.Price`; `DeliveryHelper.CanModifyContract`, `GetNextDeliveryDay`, `ShouldLimitImporterMaxAmount`, `AreWholesaleAndImportLimitsDisabled`; `ProductMarketHelper.IsProductInMarketEvent`; `EmployeeHelper.GetEmployeeById(id, false)` | imports. `ImportPartnership.GetMaxOrderAmountPerImporter` is **private static**: by reflection, with its build-3680 body (the item's `maxOrderAmountPerImporter`, ×0.66 rounded in a shortage) as the fallback |
+| `PurchasingAgentPlanUI._currentImportPartnership` (**private**, reflection), reached through `UIs.Instance.fullMenu.bizMan.business.purchasingAgentsPlanList.purchasingAgentPlanUISettings` | "is the plan screen open on this contract" |
+| `UIs.Instance.fullMenu.schedule` (`BizManSchedule`), `ScheduleHelper.Business`, `BizManSchedule._activeAutoFillers` (**private**, reflection), `ScheduleAutoFiller.Registration` | "is the schedule screen open on this business, or its auto-fill running" |
+| `ScheduleDay`, `WorkShift`, `OpeningHourSlot` fields; `ScheduleHelper.IsCleaningStation(ItemInstance)`; `EmployeeInstance.UpdateWeeklyHoursAndDays`, `UpdateAssignedWorkStationItems`, `IsAssignedToAnyWorkShift`, `UnAssignWork`, `AddTodoTask`, `HasAnySkillWithTag`; `BusinessSecurityHelper.UpdateSecurityLevel`; the five headquarters plan helpers; `TasksUI.forceCheckForCompletedTodoTasks`; `CustomerEntriesHelper.UpdateCustomerEntriesForPlayerBusiness`, `BusinessHelper.CheckIfTheaterHasNoActors`, `IsMissingEmployeeTaskActive`, `ForceRecheckMissingEmployeeAlert`, `GlobalEvents.onBuildingRegistrationChange` | the schedule. `ScheduleHelper.UpdateEmployeeAfterWorkShiftChange` is **private** and `UpdateHQPlans` reads the open BizMan business, so both are re-implemented from their IL |
 
 Whether the game restores persisted option values by calling the change callbacks at
 registration is unverified. It is safe either way: restarting the listener is

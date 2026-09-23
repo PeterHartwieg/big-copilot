@@ -16,13 +16,13 @@ namespace BigCopilotLink
     /// connect reads that as "the game is not running or no save is loaded".
     ///
     /// This class owns the wiring and the log; the work is in SaveService (when to
-    /// serialize and what the bytes are), HealthState (the cached live values) and
-    /// LinkHttpServer (the contract).
+    /// serialize and what the bytes are), HealthState (the cached live values),
+    /// WriteService (the writes, from 0.2.0) and LinkHttpServer (the contract).
     /// </summary>
     [ModEntryOnCityLoad]
     public class LinkMod : IModBigAmbitions
     {
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
         /// <summary>docs/game-link-api.md. Bump on any breaking change.</summary>
         public const int SchemaVersion = 1;
@@ -49,6 +49,7 @@ namespace BigCopilotLink
         private MainThreadDispatcher _dispatcher;
         private HealthState _health;
         private SaveService _saves;
+        private WriteService _writes;
         private LinkHttpServer _http;
 
         // Written by the options panel, read by the pump and the listener. Volatile
@@ -74,6 +75,7 @@ namespace BigCopilotLink
 
             _health = new HealthState();
             _saves = new SaveService();
+            _writes = new WriteService(_saves);
 
             _quitting = false;
             Application.quitting += OnQuitting;
@@ -108,6 +110,13 @@ namespace BigCopilotLink
             {
                 _dispatcher.Uninstall();
                 _dispatcher = null;
+            }
+
+            if (_writes != null)
+            {
+                // Undo holds references into this city's game state.
+                _writes.Clear();
+                _writes = null;
             }
 
             if (_saves != null)
@@ -158,7 +167,7 @@ namespace BigCopilotLink
             }
 
             var port = Ports[ClampPortIndex(_portIndex)];
-            var server = new LinkHttpServer(port, _saves, _health);
+            var server = new LinkHttpServer(port, _saves, _health, _writes);
             try
             {
                 server.Start();
@@ -209,7 +218,8 @@ namespace BigCopilotLink
                 .AddToggle("onbuilding", "bigcopilotlink_onbuilding_label", _onBuildingLoad, OnBuildingLoadChanged)
                 .AddToggle("hourly", "bigcopilotlink_hourly_label", _hourly, OnHourlyChanged)
                 .AddSplitter()
-                .AddButton("bigcopilotlink_copy_label", CopyAddress);
+                .AddButton("bigcopilotlink_copy_label", CopyAddress)
+                .AddButton("bigcopilotlink_pairing_label", CopyPairingCode);
 
             try
             {
@@ -251,6 +261,28 @@ namespace BigCopilotLink
                       Ports[ClampPortIndex(_portIndex)].ToString(CultureInfo.InvariantCulture) + "/";
             GUIUtility.systemCopyBuffer = url;
             LogInfo("copied " + url + " to the clipboard.");
+        }
+
+        /// <summary>
+        /// The code Big Copilot asks for before its first write: on the clipboard, and on
+        /// screen for a player who would rather type it. Never written to the log, which
+        /// players paste into bug reports.
+        /// </summary>
+        private void CopyPairingCode()
+        {
+            GUIUtility.systemCopyBuffer = PairingCode.Code;
+            try
+            {
+                global::UI.Notification.Notifications.Show(
+                    global::UI.Notification.NotificationType.Info, "bigcopilotlink_pairing_notification",
+                    new System.Collections.Generic.Dictionary<string, string> { { "code", PairingCode.Code } },
+                    15f, "bigcopilotlink_pairing", null, true, false);
+            }
+            catch (Exception e)
+            {
+                LogError("could not show the pairing code: " + e.Message);
+            }
+            LogInfo("copied the pairing code to the clipboard.");
         }
 
         // ---- logging -------------------------------------------------------------
