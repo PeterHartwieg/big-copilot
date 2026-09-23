@@ -377,3 +377,49 @@ are still open.
 8. **New businesses**: a full-cover 24/7 plan with the fewest people, as a two-week demand
    test, then the demand plan. The write also opens every day 0 to 24, with an opt-out in the
    dialog (confirmed by Peter).
+
+## 9. Status and hand-over (23 September 2026)
+
+**Step 1 (board only) is shipped.** PR #76 (imports) and the staffing PR that carries this section
+are live on bigcopilot.com. The mod is unchanged: still 0.1.0, Workshop item 3806322395, read only.
+Steps 2 to 5 of section 6 are next; they are mod work plus the page buttons.
+
+**Rules settled after sections 5 and 8 were written.** These supersede the text above where they
+differ:
+
+- Full cover means 100%: every serving station staffed every hour the shop is open. The full-cover
+  plan opens 0 to 24 every day, with an opt-out in the dialog.
+- There is no demand-test clock. Demand data is complete 9 finished days after the shop's first
+  customer (the first `orderHistory` day with an hour report), open days or not, consecutive or not.
+  The game files no hour report for an open hour with 0 customers, so every hour and weekday without
+  a report counts as 0 demand. A shop with complete data gets the full demand plan even with fewer
+  than `HOUR_WEEKS_THIN` weeks.
+- "Demand data complete: switch to the demand plan" shows when the data is complete, every serving
+  station is staffed every hour the shop is open now, and the demand plan asks for fewer serving
+  hours than that.
+- The plan still places unassigned staff and hires (`addPeople`). The schedule write sends only the
+  entries of people assigned to the site and says how many people to add; a second write fills the
+  holes once the player has assigned or hired them.
+- Offices get a default plan of their own (a board branch, not the mod): computers staffed 24/7 = 3
+  in a 50-capacity building, proportionally fewer in smaller ones (at least 1); every computer 8 to 22
+  on weekdays; half the computers 8 to 22 on weekends. The game's office demand formula is exact
+  (`docs/staffing-assistant-scope.md`), so an exact office plan can follow.
+
+**What the page already sends the writes.** `supply.imports[]` and `supply.factories.depots` rows
+carry `smart`, `target`, `plainAfter`, `plainBefore`, `levelName`, `levelId` and `contracts[]`
+(`order` = index in `importPartnerships`, `id`, importer, `smart`, `amount`, `active`, `repeating`,
+`agent`) in delivery order; the Set to box value is the figure to write. Businesses carry
+`uniformGapSkills` (raw skill ids). Each retail site carries the demand plan and `fullCover` (with
+`openAllHours`, `addPeople`), shifts as `{wd, station (itemInstances id), from, to, employee,
+kind}` via the compressed rows `_shift_row()` writes.
+
+**Still open from section 7:** item 2 (telling a BizMan screen is open on the target), item 3
+(`onUniformChanged` re-dressing), item 5 (a backup Smart Delivery contract sees the first one's
+cargo; the board already assumes it).
+
+**Tooling.** Game IL and reflection: `research/il_dump.py Type.Method ...` (dnfile/dncil from
+`research/probe-deps`), `research/reflect_types.ps1 -Pattern <regex>` and
+`research/member_visibility.ps1` in the main folder (local, not committed). The mod builds only on
+the Mac (mod README; SSH and headless Unity build notes in the game-link memory). Review panel:
+Opus 5.5 subagent + gpt-6-sol through `codex exec` (Codex CLI 0.156.1 or later); Grok was out of
+usage balance on 23 September.
