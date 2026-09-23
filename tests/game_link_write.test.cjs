@@ -351,6 +351,34 @@ test('an undo right after an apply is read once the read under way is done', asy
   await until(() => saves >= 2, 8000);
   assert.equal(saves, 2, 'the undo is read as soon as the first read is done');
 });
+test('an apply answering ok false, or for another kind, is uncertain and sent once each', async (t) => {
+  const page = await linked(t, {code: CODE});
+  let applies = 0, answer = {ok: false, kind: 'uniforms', dryRun: false, stamp: 'x', rows: []};
+  await page.route(`${mockUrl}/write/uniforms`, (route) => {
+    if (JSON.parse(route.request().postData() || '{}').dryRun) return route.continue();
+    applies++;
+    return route.fulfill({status: 200, json: answer, headers: {'Access-Control-Allow-Origin': ORIGIN}});
+  });
+  await button(page, GIFTS).click();
+  for (const wrong of [{ok: false, kind: 'uniforms'}, {ok: true, kind: 'imports'}]) {
+    answer = {...wrong, dryRun: false, stamp: 'x', rows: []};
+    const sent = applies;
+    await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
+    await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+    await dialog(page).getByRole('button', {name: 'Set uniforms'}).waitFor({timeout: 30000});
+    assert.equal(applies, sent + 1, JSON.stringify(wrong));
+  }
+});
+
+test('a dry run answering for another kind cannot be read', async (t) => {
+  const page = await linked(t, {code: CODE});
+  await page.route(`${mockUrl}/write/uniforms`, (route) => route.fulfill({status: 200,
+    json: {ok: true, kind: 'schedule', dryRun: true, rows: []}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
+  await button(page, GIFTS).click();
+  await dialog(page).getByText("The game's answer could not be read.").waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).count(), 1);
+});
+
 test('Apply clicked twice sends one write', async (t) => {
   const page = await linked(t, {code: CODE});
   await button(page, GIFTS).click();
@@ -556,7 +584,7 @@ test('imports: a week the caps leave short with nothing to write is said, and no
   assert.equal(await applyImports(page).count(), 0);
   // The row keeps the reason once the cap is known.
   assert.equal(await importRow(page, 'Candle').locator('.gw-short').textContent(),
-    "600 a week not covered: the importers' caps are reached");
+    "600 a week not covered: the importers' caps are reached.");
   assert.equal((await applied()).length, 0);
 });
 /* --- the schedule --------------------------------------------------------- */

@@ -629,6 +629,17 @@ class MockWrites(unittest.TestCase):
         _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTtwo", "products": [stale]}]})
         self.assertEqual(answer["rows"][0]["error"], "changed")
 
+    def test_a_bad_amount_touches_nothing_and_a_refused_dry_run_opens_nothing(self):
+        bad = {"itemName": "ba:itemname_paperbag", "warehouse": DEPOT, "amount": -1, "expect": 0}
+        # CONTRACTtwo has no agent, but a refused amount does not touch it.
+        _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTtwo", "products": [bad]}]})
+        self.assertEqual(answer["rows"][0]["error"], "bad_amount")
+        fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+        _, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": fixture_print, "openAllHours": True,
+                                           "days": [{"d": 1, "shifts": [{"f": 8, "t": 20, "employeeId": "nobody",
+                                                                        "itemInstanceId": REGISTER}]}]})
+        self.assertEqual((answer["ok"], answer["openedHours"]), (False, False))
+
 
 if __name__ == "__main__":
     unittest.main()
