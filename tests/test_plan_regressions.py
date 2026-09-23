@@ -23,9 +23,10 @@ class SaveStub:
         return value
 
 
-def contract(amount, active=True, warehouse=("Depot", 1)):
+def contract(amount, active=True, warehouse=("Depot", 1), smart=False, importer=("Importer", 2)):
     return {
-        "importAddress": ("Importer", 2), "isActive": active,
+        "importAddress": importer, "isActive": active,
+        **({"isTarget": True} if smart else {}),
         "products": [{"itemName": ITEM + "water", "amount": amount,
                       "assignedWarehouse": warehouse}],
     }
@@ -57,6 +58,56 @@ class PlannerRegressions(unittest.TestCase):
         self.assertEqual(source["ordered"], 0)
         self.assertEqual(source["paused"], 900)
         self.assertFalse(source["active"])
+
+    def water(self, contracts):
+        return self.plan(contracts)["sources"][ITEM + "water"]
+
+    def test_a_smart_delivery_line_is_a_stock_level(self):
+        source = self.water([contract(3000, smart=True)])
+        self.assertEqual((source["ordered"], source["smart"]), (3000, True))
+        self.assertEqual(source["depots"], [{"warehouse": "1 Depot", "smart": True, "level": 3000,
+                                             "importer": "2 Importer", "name": "2 Importer",
+                                             "plainBefore": 0,
+                                             "plainAfter": 0, "weekly": 3000}])
+        self.assertTrue(source["contracts"][0]["smart"])
+        plain = self.water([contract(3000)])
+        self.assertEqual(plain["smart"], False)
+        self.assertEqual(plain["depots"], [{"warehouse": "1 Depot", "smart": False, "level": None,
+                                            "importer": None, "name": None, "plainBefore": 0,
+                                            "plainAfter": 0, "weekly": 3000}])
+
+    def test_two_levels_hold_the_higher_at_one_depot_and_stay_apart_across_depots(self):
+        same = self.water([contract(3000, smart=True), contract(1000, smart=True)])
+        self.assertEqual(same["ordered"], 3000)
+        self.assertEqual([d["level"] for d in same["depots"]], [3000])
+        apart = self.water([contract(3000, smart=True),
+                            contract(1000, smart=True, warehouse=("Other", 3))])
+        # The week adds up across depots; the levels are each depot's own.
+        self.assertEqual(apart["ordered"], 4000)
+        self.assertEqual([(d["warehouse"], d["level"]) for d in apart["depots"]],
+                         [("1 Depot", 3000), ("3 Other", 1000)])
+
+    def test_a_level_beside_a_plain_order_follows_the_delivery_order(self):
+        level_first = self.water([contract(1000, smart=True), contract(400)])
+        self.assertEqual(level_first["ordered"], 1400)
+        self.assertEqual([(d["level"], d["plainAfter"]) for d in level_first["depots"]], [(1000, 400)])
+        plain_first = self.water([contract(400), contract(1000, smart=True)])
+        self.assertEqual(plain_first["ordered"], 1000)
+        self.assertEqual([(d["level"], d["plainBefore"], d["plainAfter"]) for d in plain_first["depots"]],
+                         [(1000, 400, 0)])
+
+    def test_the_contract_holding_the_level_is_numbered_as_on_the_logistics_page(self):
+        # Plain 0, level 500, level 600 from one importer, 300 from another:
+        # the 600 holds, and it is that importer's 3rd of 3 contracts, zero
+        # one included, as the Logistics page counts them (_level_name).
+        source = self.water([contract(0), contract(500, smart=True), contract(600, smart=True),
+                             contract(300, importer=("Other", 3))])
+        [depot] = source["depots"]
+        self.assertEqual((depot["level"], depot["name"]), (600, "2 Importer, its 3rd of 3 contracts here"))
+
+    def test_a_paused_level_is_kept_apart_and_named_as_one(self):
+        source = self.water([contract(3000, active=False, smart=True)])
+        self.assertEqual((source["ordered"], source["paused"], source["smart"]), (0, 3000, True))
 
     def test_service_sales_do_not_become_consumable_demand(self):
         business = {"status": "retail", "revenue": 1000, "typeSlug": HAIR,

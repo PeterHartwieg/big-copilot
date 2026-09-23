@@ -104,7 +104,8 @@ the map.
   - *Change checklist*: open **Plan imports** on Today, or expand the checklist
     under Supply / Orders. It groups recommended weekly orders, factory top-ups,
     existing shop-route top-ups and delivery checks by site. Saved and proposed
-    settings stay separate. Tick actions as you carry them out in-game, or copy
+    settings stay separate; an import figure you typed in the Weekly imports table
+    replaces the board's suggestion. Tick actions as you carry them out in-game, or copy
     the remaining list. Marks are local to this browser and character, and clear
     when their setting or recommendation changes; they are not confirmation from
     the game. Factory quantities use the existing full-rate model. Storage,
@@ -115,6 +116,16 @@ the map.
     the rows back.
     Current active contracts are added by destination and material, even before
     the first delivery; paused contracts do not count toward weekly supply.
+    A contract with Smart Delivery on (`isTarget` in the save) keeps a stock level
+    rather than bringing a fixed amount: each Monday the purchasing agent brings what
+    tops the depot up to that level. A level of 5,000 therefore supplies at most 5,000
+    of use a week, and the board judges it against the week as it judges a plain
+    order's amount. Two Smart Delivery contracts on one material hold the higher
+    level, not the sum. Where a depot mixes the two kinds, the board follows the
+    game's delivery order: importer by importer, each in the place of its first
+    contract in the plan, a Smart Delivery contract counting what an earlier one
+    brought that morning. The stock walk to a later delivery charges a Smart
+    Delivery drop only for the top-up it will bring, so a full depot gets less.
     A factory supplied directly by an importer is checked against its weekly
     input requirement. If it also has a warehouse route, active direct imports
     cover the factory's demand first, and the warehouse's weekly order covers
@@ -577,7 +588,9 @@ parsed tables across.
 
 The ingredient table separates this range's usage from the **company target**. Active
 import contracts are added together, including contracts at different depots; paused
-amounts are shown separately. Changing machines adds or removes this range's ingredient
+amounts are shown separately. A Smart Delivery contract counts as its stock level, which is the
+most it can supply in a week, and reads "Smart Delivery keeps N in stock"; two levels at
+one depot count the higher. Changing machines adds or removes this range's ingredient
 usage from the company's standing orders, preserving the orders used by other ranges.
 The target must still cover this range's full requirement. Allocate the company target
 across the appropriate importer contracts in-game; it is not a target for each depot.
@@ -841,6 +854,9 @@ daily distribution round, dashed lines the weekly import, an amber dot marks a s
 an order running tight, and a red dot one whose order cannot cover its own cycle. A site
 earns a node by being on a plan or by holding something worth drawing; head office
 keeping a dozen paper bags in a drawer is not a depot.
+A Smart Delivery import is drawn at the week it tops up, not at its stock level: in a
+steady week the depot starts Monday at the level less the week's use, so the top-up is
+that use (the depot's measured draw, else what arrived last week), up to the level.
 
 Clicking a site dims everything it does not touch and opens its detail: what comes in
 and where from, what goes out and to whom, and a per-product table of **on hand** against
@@ -980,11 +996,37 @@ walked at a flat daily rate: the machines take the same on a Saturday as on a Tu
 Two tables, one per number a logistics manager is set with.
 
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
-  What all the factories drawing on it eat in a week (from their lines, machines times
-  recipe draw times 24 times 7), what else leaves for the shops (measured from the
-  delivery log), the total, the order as it stands, and the order to set, rounded up to
-  the hundred. Materials a factory line needs that no depot's plan carries are listed at
-  the foot: those need a top-up added on some depot and an import there.
+  *Used / week* is what all the factories drawing on it eat in a week (from their lines,
+  machines times recipe draw times 24 times 7) plus what else leaves for the shops
+  (measured from the delivery log). *Arrived last week* sums every contract's
+  `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
+  cap shows as an order cut short. *Set in game* is the figure in the purchasing
+  agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
+  *Set to* is a box: where the setting falls short of the week it holds the
+  suggestion, elsewhere the figure in game. For a plain order the suggestion is the used
+  week rounded up to the hundred. For Smart Delivery it names one contract, the one
+  whose level holds: the last that still brings something when the game's delivery pass
+  runs into an empty depot. A plain amount delivered before that level counts toward it
+  (the level only tops up what is missing), one delivered after it comes on top as
+  "plus N a week". The suggested level is the least, in hundreds, at which that pass,
+  replayed with it, brings the week, so a plain amount that already passes the level is
+  never taken off it. Enter your own figure and it is kept in this browser per character,
+  depot and material, with the figure the game held when you entered it, until you reset
+  it or the game's figure moves; once the game has changed, the earlier answer is
+  dropped. Entering the figure the game already holds turns the suggestion down until
+  then. A row whose box differs from the game is marked, stays in *Needs a change*, and
+  goes into the Plan imports checklist as "Set Smart Delivery stock at <importer> to N"
+  (with "its 2nd of 2 contracts here" where that importer has several on the line,
+  counted over all its contracts there, paused and zero ones too, the same on the Plan
+  page) or "Set the weekly order to N". Where a plain amount delivered first already
+  reaches or passes the level, the board says so: the level then brings nothing. A high Smart
+  Delivery level only holds stock, so it is never marked *could lower*. A material
+  with two or more contracts at the depot lists them under its name in delivery order,
+  with importer, kind and amount. A contract set to zero that brought nothing is listed
+  at zero and counts toward nothing; a Smart Delivery one is still named, the first in
+  delivery order, an active one first. Materials a factory line needs that no depot's plan
+  carries are listed at the foot: those need a top-up added on some depot and an
+  import there.
 - **Daily top-ups, per factory**: every material each factory eats a day, the lines that
   eat it (with machine counts), the top-up now on the plan feeding it, and the top-up to
   set. A top-up below the day's need starves the machines before midnight; one far above

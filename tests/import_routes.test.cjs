@@ -43,7 +43,7 @@ for (const scenario of [
       const actions = await page.evaluate(() => window.fixtureActions);
       const imports = await page.locator('#importPlan').textContent();
       if (scenario.name === 'paused direct') {
-        assert.match(imports, /2[,.\s]?000\s*paused/);
+        assert.match(imports, /2[,.\s]?000\s*a week\s*paused/);
         assert.match(imports, /resume import/);
         assert.equal(actions.length, 1);
         assert.match(actions[0].reason, /Resume the paused import/);
