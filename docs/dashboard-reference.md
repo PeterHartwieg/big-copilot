@@ -478,7 +478,16 @@ take it. No shift ever breaks a demand: a slot nobody may legally work becomes a
 instead, one total per role — and a security locker nobody staffs is real new spending
 rather than another shift, which is why `headcount` says which kind each line is. A hiring
 line counts people, not hours: four uncovered twelve-hour weekend shifts are 48 hours but
-need two hires, because nobody may work two of them on the same day.
+need two hires, because nobody may work two of them on the same day. It is the fewest
+people who can work those lines: the count is searched upwards from the least the hours
+and the busiest day allow, spreading the lines evenly over the hires at each count, so two
+registers open around the clock are seven people and not the eight a first-come fill
+needs, and never more than first fit in either order gave. The placer realises that count: a
+line the one-at-a-time fill leaves open is offered to somebody on the roster who is free
+that day but full for the week, if they can hand one of their own entries to somebody else
+on the roster with room for it, both moves tested against every rule, and the giver kept at
+or above their hours floor and day count. The week with those swaps is kept only if it
+leaves nobody short of hours or days whom the week without them would not.
 
 **Everybody rostered gets a full week, because nobody works two businesses.** An employee is
 posted to one building, so the thirty hours full time asks for have to come from that site
@@ -520,6 +529,87 @@ offered to each site in turn, and the first site to give a bench member hours ke
 they appear in that site's `bench`, count towards that site's `headcount.have`, and are
 gone from every later site's pool. One person's week is one week across the whole save, so
 nobody is rostered at two shops in the same hour.
+
+**Who has to be added first.** `addPeople` says, per plan, who the plan counts on that does
+not work at the site yet: `assign`, the unassigned staff it draws on (`id`, `name`, `skill`,
+`role` and `p`), `hire`, one `{skill, role, people}` per role still short of people, `people`,
+the two added up, and `hoursUncovered`, the weekly hours of the entries that belong to them.
+Assigning and hiring stay the player's job, and a week can only be set for people already
+working at the site, so those hours stay empty in the game until they are added. The count
+agrees with the plan by construction: `assign` is the plan's `bench` and `hire` its
+`headcount.hire`.
+
+**The demand test.** A shop with no measured weeks gets a demand plan of cleaning and
+security alone, because nothing is known about its queues. `fullCover` is the other plan
+for every retail site, and the way to find out: every station of every role staffed every
+hour of every day, 168 hours a week each, for two weeks, so no customer is turned away by an
+empty station and the hours that come back are the demand. It is a different need curve
+put through the same placer with every rule above unchanged (twelve-hour entries, the
+14-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
+server on cleaning, the fewest people first) and the same people: the site's staff, the
+unassigned bench and hires. Every site's demand plan is placed first; then every
+full-cover plan, against the unassigned staff the demand plans left, each taking whom it
+uses off a shared copy, plus whoever its own site's demand plan took. The sites where the
+test is the live choice go first (fewer than two measured weeks on a weekday it opens and
+no complete data, or already running the 24/7 test: open 0 to 24 with every station on), then the rest, in site order within each, so a fully measured shop's full cover that
+nobody follows cannot take the people a new shop's test needs. So no unassigned person is promised to two shops by the plans a player follows. It
+carries the same keys as the demand plan except `need` and `basis`, which would say every
+station every hour and which the page reads off `roles` instead, plus `open` (0 to 24 every day, the hours it
+assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
+an hour it is shut is an hour the test never measures), `inGame`, `daysMeasured` and `daysNeeded`. On a shop with no
+serving station the two plans are the same week, and the page offers no choice.
+
+**When the demand data is complete.** The count starts at the shop's first customer, not
+at the day it was rented, so it is not the *Open N days* figure beside it; wherever the
+payload carries it, the page shows the progress (*Demand data: 7 of 9 days*) rather than
+a date. The game files an hour report only for an hour the
+shop was open and served somebody: none for an hour it was shut, and none for an hour
+nobody came. The data is complete when at least 9 finished days have passed since the
+shop's first customer (`DEMAND_RUN_DAYS`, Peter, 23 September 2026): the first open day is the
+earliest day in `orderHistory` with a report, and today, being unfinished, is left out. Not
+nine in a row and not around the clock: a nightclub shut every Monday completes on its
+ninth day like any other shop. The order history keeps about sixteen days, so a shop older
+than that is complete. A window with no report at all is not complete, whatever the shop's
+age: a shop fitted out and left shut, or one nobody visits, has measured nothing, and a
+plan of no customers anywhere would be a guess. The count is read from the days as they were staffed, whoever was
+on; there is no clock tying it to when full cover started. `fullCover.daysMeasured` is the
+days so far and `fullCover.daysNeeded` the 9, and the full-cover view shows them as its
+progress line: *Demand data: 5 of 9 days.*
+
+A shop with complete data gets the whole demand plan. The demand plan calls a weekday with
+fewer than two weeks of reports (`HOUR_WEEKS_THIN`) thin and reads it off the best measured
+weekday through the game's day curve, and reads an hour with no report off another weekday
+the same way. For a shop with complete data no weekday is thin, and an hour with no report
+counts as no customers: the shop was shut then, or empty, so no serving station is staffed
+for it (cleaning and security cover every open hour as before). A weekday it never opened
+is no demand all day. And an hour is averaged over the days the shop was open on that
+weekday, a missing hour counting as none: the board's customer grid averages over the
+reports filed, so a quiet day drops out and the busy days alone set the figure (3 one
+Tuesday at 03:00 and nobody the next reads 3 there, 1.5 here). An open day is a finished
+day in `orderHistory` (the game keeps an entry for every day, reports or not) on a weekday
+the current schedule opens, from the first day the shop served anybody; a day nobody came
+all day is an entry with no report and a day of none. A weekday with no finished open day
+yet is none too, so today's unfinished day never sets it. This is the
+demand plan's copy only; the board-wide customer counts keep that upward bias. Where the
+schedule opens hours with no report on file, `unmeasured` lists them per weekday and the
+Staffing block says so in one line, worded as what is known (*No customers on file: Fri
+0-1, 7-8. Counted as none.*: an hour with no report was empty or shut), with the hours
+marked on the need strip. A weekday's runs stay inside the day (*Mon 0-2, 22-24*); only
+hours that hold every day run across midnight (*every day 22-2*). A shop without complete data keeps the two-week gate as it was.
+
+`fullCover.inGame` is whether the schedule in the game staffs every serving station every
+hour the shop is open, whatever its hours are. Nothing less inside them counts, because an
+hour a register stands empty is an hour whose customers the schedule turned away.
+`demandDataComplete` is the hand-over, and it needs all three: the data is complete, the
+game covers the shop's own hours in full now, and the demand plan asks for fewer serving
+hours than full cover of those same hours (every serving station, every hour the schedule
+opens now). The 24/7 full-cover plan is not the measure, or every shop shut some hour would
+seem to save the hours it is shut. There is no
+age condition. The full-cover plan itself still opens 0 to 24 unless the player keeps
+shorter hours. Where the data is complete and there is no hand-over, the full-cover view
+says why in one line instead of the progress: the demand plan also needs every station
+every hour (keep this staffing), or the game does not staff every station every open hour
+(the data is complete as staffed, and an empty station may have turned customers away).
 
 ## Staff demands
 
@@ -747,6 +837,18 @@ and dims the rest; clicking scrolls there.
   The block leads with a line naming the shop and saying what the week below is for, so
   a player arriving from the *Optimize staffing* card knows what they are looking at and
   that the ticks change nothing in the save.
+
+  Under the heading, a two-way pick between the site's two plans: *Cover only* (or *Demand
+  plan* on a shop measured enough to cut serving hours) and *Full cover 24/7*, the demand
+  test. The first is the default; the pick is remembered per shop in this browser, and each
+  plan keeps its own ticks, both per company. The test's view says in one line what it is for
+  and how far it has got (*Demand data: 5 of 9 days*), draws every
+  station every hour, and puts *Open every day 0 to 24* first among its steps on a shop that
+  is not open that long already. Once the data is complete on a shop running full cover, one
+  line says *Demand data complete: switch to the demand plan*, on the block and on the
+  *Optimize staffing* card, which then points at that shop before any other.
+  The people a plan needs added come as one step, *Add N people to fill this plan: assign ...
+  (unassigned) and hire ...*, with the hours that wait on them in its tip.
 
   A shop whose plan holds no serving shift at all still gets the block, because its
   cleaning and security cover does not wait on anything — and it is exactly the shop whose
