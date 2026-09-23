@@ -444,16 +444,12 @@ namespace BigCopilotLink
                 row.ReopenDay = ReopenDay();
             }
 
-            // The delivery these amounts are for: the day a Start issued now would pick.
-            // A restart picks it here; a stopped contract edited now delivers only after
-            // some later Start, which cannot pick an earlier day.
-            var deliveryDay = DeliveryHelper.GetNextDeliveryDay();
             foreach (var pr in row.Products)
             {
                 if (pr.Error != null || pr.Product == null || !(pr.Changes || row.Activates)) continue;
                 int left;
                 if (pr.Changes && pr.Amount > 0 && InBackorder(pr.ItemName)) pr.Error = "backorder";
-                else if (!ip.isTarget && TryRemainingCap(ip, pr.ItemName, deliveryDay, out left) && pr.Amount > left)
+                else if (!ip.isTarget && TryRemainingCap(ip, pr.ItemName, out left) && pr.Amount > left)
                 {
                     // A Smart Delivery amount is a stock level, so only a plain one is capped.
                     pr.Error = "over_cap";
@@ -666,11 +662,13 @@ namespace BigCopilotLink
         /// What the importer still allows for the Monday delivery: the weekly cap less what
         /// the player's contracts with it already ordered of the item this week, urgent
         /// orders included (DoAllDeliveries clears the tally only after that Monday's
-        /// deliveries, so it counts against them). Inside the lock window a
-        /// <paramref name="deliveryDay"/> after the imminent Monday comes after that reset,
-        /// so the tally counts as 0 and the whole cap is left. False when no cap applies.
+        /// deliveries, so it counts against them). The amounts are for the delivery a
+        /// Start issued now would pick (a restart picks it; a stopped contract delivers
+        /// only after some later Start). Inside the lock window that is the Monday after
+        /// the imminent one, which comes after the reset, so the tally counts as 0 and the
+        /// whole cap is left. False when no cap applies.
         /// </summary>
-        private static bool TryRemainingCap(ImportPartnership ip, string itemName, int deliveryDay, out int left)
+        private static bool TryRemainingCap(ImportPartnership ip, string itemName, out int left)
         {
             left = 0;
             int cap;
@@ -681,7 +679,7 @@ namespace BigCopilotLink
                 // Inside the lock window the delivery Start picks is the Monday after the
                 // imminent one, and the imminent Monday's DoAllDeliveries clears the tally
                 // first: nothing ordered this week counts against it.
-                ordered = DeliveryHelper.IsLockPeriod() && deliveryDay > ReopenDay()
+                ordered = DeliveryHelper.IsLockPeriod()
                     ? 0
                     : ImportPartnership.GetItemAmountOrderedThisWeek(ip.importAddress, itemName);
             }

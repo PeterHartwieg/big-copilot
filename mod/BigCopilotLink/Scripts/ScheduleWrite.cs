@@ -206,7 +206,10 @@ namespace BigCopilotLink
 
             AfterShiftChange(reg, Employees(before, after));
             undo.PrintAfter = Print(Lines(liveDays));
-            ws.ScheduleUndo = undo;
+            // The last write of the kind is what undo restores, even one that changed
+            // nothing: same shifts, and no hours opened that were not open already.
+            var changedAnything = undo.PrintAfter != beforePrint || (req.OpenAllHours && !WasAllOpen(undo));
+            ws.ScheduleUndo = changedAnything ? undo : null;
             var stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
             return Answer(req.Address, reg, false, false, false, stamp, null, checks, before, after, openAfter, req.OpenAllHours);
         }
@@ -406,6 +409,16 @@ namespace BigCopilotLink
             if (sd.openingHourSlots == null) sd.openingHourSlots = new List<OpeningHourSlot>();
             sd.openingHourSlots.Clear();
             sd.openingHourSlots.Add(new OpeningHourSlot(0, 24));
+        }
+
+        private static bool WasAllOpen(UndoState undo)
+        {
+            for (var i = 0; i < undo.Days.Count; i++)
+            {
+                var slots = undo.Slots[i];
+                if (!undo.WasOpen[i] || slots.Count != 1 || slots[0].startingHour != 0 || slots[0].endingHour != 24) return false;
+            }
+            return true;
         }
 
         private static bool StillOpenAllDay(List<ScheduleDay> days)
