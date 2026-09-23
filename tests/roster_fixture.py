@@ -328,9 +328,11 @@ def handover_row():
         for n, start in enumerate((0, 12))
     ]
     # Four weeks of reports; the board saw the test in the game on day 14 and
-    # again on day 28, so it has held two weeks and those weeks are measured.
+    # every third day after it up to day 28, so it has held two weeks unbroken
+    # and those weeks are measured.
     history = History(None)
-    plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=14)
+    for day in range(14, 28, 3):
+        plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=day)
     return plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=28)
 
 

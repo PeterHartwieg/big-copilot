@@ -471,10 +471,12 @@ need two hires, because nobody may work two of them on the same day. It is the f
 people who can work those lines: the count is searched upwards from the least the hours
 and the busiest day allow, spreading the lines evenly over the hires at each count, so two
 registers open around the clock are seven people and not the eight a first-come fill
-needs. The placer realises that count: a line the one-at-a-time fill leaves open is offered
-to somebody on the roster who is free that day but full for the week, if they can hand one
-of their own entries to somebody else on the roster with room for it, both moves tested
-against every rule.
+needs, and never more than first fit in either order gave. The placer realises that count: a
+line the one-at-a-time fill leaves open is offered to somebody on the roster who is free
+that day but full for the week, if they can hand one of their own entries to somebody else
+on the roster with room for it, both moves tested against every rule, and the giver kept at
+or above their hours floor and day count. The week with those swaps is kept only if it
+leaves nobody short of hours or days whom the week without them would not.
 
 **Everybody rostered gets a full week, because nobody works two businesses.** An employee is
 posted to one building, so the thirty hours full time asks for have to come from that site
@@ -535,9 +537,11 @@ put through the same placer with every rule above unchanged (twelve-hour entries
 14-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
 server on cleaning, the fewest people first) and the same people: the site's staff, the
 unassigned bench and hires. Every site's demand plan is placed first; then every
-full-cover plan, in the same site order, against the unassigned staff the demand plans
-left, each taking whom it uses off a shared copy, plus whoever its own site's demand plan
-took. So no unassigned person is promised to two shops by the plans a player follows. It
+full-cover plan, against the unassigned staff the demand plans left, each taking whom it
+uses off a shared copy, plus whoever its own site's demand plan took. The sites where the
+test is the live choice go first (not yet measured, new, or already running full cover),
+then the rest, in site order within each, so an established shop's full cover that nobody
+follows cannot take the people a new shop's test needs. So no unassigned person is promised to two shops by the plans a player follows. It
 carries the same keys as the demand plan except `need` and `basis`, which would say every
 station every hour and which the page reads off `roles` instead, plus `open` (0 to 24 every day, the hours it
 assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
@@ -545,21 +549,26 @@ an hour it is shut is an hour the test never measures) and `inGame`. On a shop w
 serving station the two plans are the same week, and the page offers no choice.
 
 **When the test is done.** `fullCover.inGame` is whether the schedule in the game already is a
-full-cover week: every serving station staffed for at least nine tenths of the week's 168
-hours, and the doors open for at least nine tenths of it. Nine tenths lets through what a
-hand-set week really looks like, the two-hour scraps and an hour lost at a hand-over, and
-turns away a shop shut at night (open 6 to 24 is three quarters of the week) or a register
-empty for a whole day; a gap of an hour or two does not spoil a demand test. The save does
-not say when a schedule was set, so the board keeps it: the history file records, per
-character and site, the first game day it saw `inGame`, and forgets it the first build it
-does not. `demandTestDone` needs all of: full cover in the game now, held for at least 14
-game days since that first day (`DEMAND_TEST_HELD`), hour reports filed after that day for
-every weekday at least twice (`HOUR_WEEKS_THIN`), so the weeks the demand plan reads are the
-test's own; a demand plan that asks for fewer serving hours than the test (a shop busy
-every hour is already on its demand plan); and a shop open fewer than 42 days
-(`DEMAND_TEST_DAYS`), counted from the registration's `creationDay`: two weeks of test and
-slack for a player who starts it late or runs it longer. With no record, because no board
-was built while the test ran, or no `creationDay`, nothing is claimed.
+full-cover week: every serving station staffed every hour of the week, and the doors open 0
+to 24 every day. Nothing less counts, because an hour a register stands empty is an hour
+whose customers the schedule turned away, and the demand plan would read it as demand the
+test measured. The save does not say when a schedule was set, so the board keeps it: the
+history file records, per character and site, the first and the latest game day it saw
+`inGame`, and forgets the record the first build it does not. The board sees the game only
+when it is built, so a run it has not seen for more than 3 game days (`FULL_COVER_GAP`)
+cannot be shown to be unbroken and starts again that day: **during a demand test the
+player needs the board open, or the game link running, at least every 3 game days.** A
+build whose day is before the latest sighting is another timeline (an older save loaded):
+nothing is claimed and the record is left as it was. `demandTestDone` needs all of: full
+cover in the game now, held for at least 14 game days since the run began
+(`DEMAND_TEST_HELD`), hour reports filed after that day for every weekday at least twice
+(`HOUR_WEEKS_THIN`), so the weeks the demand plan reads are the test's own; a demand plan
+that asks for fewer serving hours than the test (a shop busy every hour is already on its
+demand plan); and a shop that was open fewer than 42 days (`DEMAND_TEST_DAYS`, from the
+registration's `creationDay`) on the day the run began: two weeks of test and slack for a
+player who starts it late or runs it longer. An established shop that has always run around
+the clock stays out, because its run begins on the first build that saw it. With no record,
+because no board was built while the test ran, or no `creationDay`, nothing is claimed.
 
 ## Staff demands
 
