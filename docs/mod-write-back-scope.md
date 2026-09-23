@@ -305,29 +305,59 @@ Rough size: mod ~700 lines C# (plumbing 250, uniforms 80, imports 150, schedule 
 
 ## 7. To verify before building
 
-1. Visibility of every game member each write calls (`IsPublic` per member, not the listing):
-   `CustomerDemandHelper.ReloadCachedFulfilled`, `BuildingManager.onUniformChanged`,
-   `DeliveryHelper.CanModifyContract` / `GetNextDeliveryDay` / `ShouldLimitImporterMaxAmount`,
-   `ImportPartnership.GetItemAmountOrderedThisWeek`, `Item.maxOrderAmountPerImporter`,
-   `ScheduleHelper.HasSkillForWorkstation`, the four post-shift-change calls. Private ones go
-   through reflection as `CanSave()` does, or are re-implemented from IL.
+Items 1, 4, 6 and 8 were checked on 23 September 2026 (build 3680, reflection and IL); the rest
+are still open.
+
+1. **Visibility (checked).** Public: `CustomerDemandHelper.ReloadCachedFulfilled(Address |
+   BuildingRegistration)`, `BuildingManager.onUniformChanged` (instance; `BuildingManager.Instance`
+   comes from its `InstanceBehavior<T>` base), `DeliveryHelper.CanModifyContract`,
+   `GetNextDeliveryDay`, `ShouldLimitImporterMaxAmount`, `IsLockPeriod`,
+   `AreWholesaleAndImportLimitsDisabled`, `GetNextLockPeriodStart`,
+   `ImportPartnership.GetItemAmountOrderedThisWeek`, `GetImportProductTotalPrice`,
+   `NextDeliveryTotal`, `PurchasingAgentInstance`, `ImportProduct.Price`,
+   `BigAmbitions.Items.Item.maxOrderAmountPerImporter` (assembly `BigAmbitions.Items`),
+   `ScheduleHelper.HasSkillForWorkstation`, `Business`, `GetOverworkedDays`, `UpdateHQPlans`,
+   `IsHeadquarters`, `EmployeeInstance.UpdateWeeklyHoursAndDays`, `UpdateAssignedWorkStationItems`,
+   `UnAssignWork`, `AddTodoTask(TodoTaskType, bool)`, `IsAssignedToAnyWorkShift`,
+   `HasAnySkillWithTag`, `BusinessSecurityHelper.UpdateSecurityLevel`,
+   `BizManBusiness.UpdateSecurityInfo`, `TasksUI.forceCheckForCompletedTodoTasks`,
+   `GameEvent.Invoke`, `SaveGameManager.MarkChange`, `GameInstance.employeePresets` and
+   `importPartnerships`, `EmployeeHelper.GetEmployeeById`, `Notifications.Show` / `ShowError`,
+   `BuildingHelper.CountResourcesInPallets`, `ProductMarketHelper.IsProductInMarketEvent`,
+   `ScheduleDay.isOpen` / `openingHourSlots`, `WorkShift.type`.
+   Private, so reflection or a re-implementation: `ImportPartnership.GetMaxOrderAmountPerImporter`
+   (the item's `maxOrderAmountPerImporter`, times 0.66 rounded while the item is in a shortage
+   market event, type 3), `ScheduleHelper.UpdateEmployeeAfterWorkShiftChange` (bound to the open
+   BizMan business; re-implement), `PurchasingAgentPlanUI._currentImportPartnership`,
+   `PurchasingAgentsPlanList.OnPlanReordered` (re-implement: Remove and Insert in
+   `importPartnerships`).
+   The exact sequence after a shift change (`UpdateEmployeeAfterWorkShiftChange(emp, true)`):
+   `UpdateWeeklyHoursAndDays(scheduleDays)`; `UpdateAssignedWorkStationItems()`; when the employee
+   has a skill tagged `affectssecurity`, `BusinessSecurityHelper.UpdateSecurityLevel(registration)`
+   and `BizManBusiness.UpdateSecurityInfo()` (only where a BizMan business object exists); when
+   `!IsAssignedToAnyWorkShift()`, `UnAssignWork()` and `AddTodoTask(5, true)`; at an HQ
+   `UpdateHQPlans(null)`; `UIs.tasksUI.forceCheckForCompletedTodoTasks = true`; `MarkChange()`.
 2. How the mod tells that a BizMan screen is open on a given business or contract
-   (`ScheduleHelper.Business`, `PurchasingAgentPlanUI._currentImportPartnership`).
+   (`ScheduleHelper.Business`, `PurchasingAgentPlanUI._currentImportPartnership`). Open.
 3. That `onUniformChanged` re-dresses staff already in the loaded building, or that nothing
-   visible needs it.
-4. `TimeHelper.GetDayOfWeek` numbering (7 = Sunday is what `IsLockPeriod` implies).
-5. Smart Delivery with a backup contract: that the second contract's `GetAmountToBuy` sees the
-   stock the first delivered in the same `DoAllDeliveries` pass (delivery straight into
-   pallets), else both deliver against the old stock and the backup overfills. Check in game
-   with two contracts on one item, or in `DoDeliveries` IL past offset 0x180.
-6. Where `NextDeliveryTotal` and the unit price come from (`GetImportProductTotalPrice`,
-   discount) so the dry run reports the cost the game will charge.
+   visible needs it. Open.
+4. **Weekday numbering (checked).** Game day 1 is a Monday; `IsLockPeriod` treats 7 as Sunday.
+5. Smart Delivery with a backup contract. `DoDeliveries` computes `GetAmountToBuy` for all of one
+   contract's products, then delivers them in the same call through
+   `ItemHelper.DeliverCargoToBuilding`, synchronously, and contracts run one after another. So a
+   later contract should see the earlier one's cargo if `DeliverCargoToBuilding` puts it on pallets
+   at once. Likely; confirm in game with two contracts on one item. The board already assumes it
+   (`_import_drop()`).
+6. **Price (checked).** Per unit, `ImportProduct.Price` times `ImportPartnership.GetDiscount`; urgent
+   orders times `DeliveryHelper.GetImporterUrgentFeeMultiplier`. `NextDeliveryTotal` is public.
 7. The saves on this Windows machine predate build 3680 in places (one contract carries a
-   `minimumOrder` field the class no longer has). Validate the Smart Delivery fix on Peter's
-   current save.
-8. Opening hours: what the game does when they change (`openingHourSlots` edits in the BizMan
-   schedule, any rule or cost on 24-hour opening, what it recomputes), so the full-cover write
-   calls the same things.
+   `minimumOrder` field the class no longer has). The Smart Delivery fix was validated on Peter's
+   newest save on 23 September 2026 (all 8 import lines are Smart Delivery).
+8. **Opening hours (checked).** `ScheduleDayButton.OnOpenToggleChange` refuses at a headquarters
+   (`bizman_schedule_cannot_toggle_open`), otherwise sets `isOpen` and runs the post-change updates
+   for that day's employees. The hour toggles only edit `openingHourSlots` (merge, split, sort): no
+   cost and no rule. Opening 0 to 24 is `isOpen = true` with one slot `{0, 24}`, followed by the
+   shift write's per-employee updates.
 
 ## 8. Decisions (settled by Peter, 22 September 2026)
 
