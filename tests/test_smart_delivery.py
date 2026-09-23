@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import test_import_routes as fixtures
 from ba_dashboard import (_alerts, _feed_notes, _import_drop, _import_level, _import_pass, _level_for,
-                          _scheduled_import_gap, _supply)
+                          _raise_import, _scheduled_import_gap, _smart_words, _supply)
 from test_import_routes import contract
 from test_recipe_identity import WATER
 
@@ -218,6 +218,47 @@ class SmartSupplyTests(unittest.TestCase):
                 _, line = self.depot(orders, routed=True)
                 self.assertEqual((line["target"], line["plainAfter"], line["weekly"]),
                                  (level, after, week))
+
+    def test_a_line_at_zero_names_its_smart_delivery_contract(self):
+        # Two levels at zero, nothing delivered: the active one is named, even
+        # though the paused one comes first in the plan.
+        paused, live = smart(0, active=False), smart(0, pier=2)
+        paused["id"], live["id"] = "p-1", "a-1"
+        data = self.routes.build([paused, live], routed=True)
+        line = data["supply"]["factories"]["depots"][1][WATER]
+        self.assertEqual((line["zeroOnly"], line["smart"], line["target"]), (True, True, 0))
+        self.assertEqual((line["levelImporter"], line["levelId"], line["levelName"]),
+                         ("2 Pier", "a-1", "2 Pier"))
+        self.assertEqual((line["pass"], line["levelAt"]), ([{"amount": 0, "smart": True}], 0))
+        # With both active, the first in delivery order.
+        first, second = smart(0), smart(0, pier=2)
+        first["id"], second["id"] = "f-1", "s-1"
+        line = self.routes.build([first, second], routed=True)["supply"]["factories"]["depots"][1][WATER]
+        self.assertEqual((line["levelId"], line["levelAt"]), ("f-1", 0))
+
+    def test_an_importer_with_two_contracts_on_the_line_names_which(self):
+        # Pier 1 holds two levels; its second (plan place 2) is the one that
+        # tops up last, and it is the 2nd of 3 in delivery order.
+        low, plain, high = smart(500), contract(300, pier=2), smart(600)
+        high["id"] = "c-3"
+        _, line = self.depot([low, plain, high], routed=True)
+        self.assertEqual((line["target"], line["levelId"]), (600, "c-3"))
+        self.assertEqual(line["levelName"], "1 Pier, contract 2 of 3")
+        # One contract per importer needs no number.
+        _, line = self.depot([smart(1000), contract(400, pier=2)], routed=True)
+        self.assertEqual(line["levelName"], "1 Pier")
+
+    def test_plain_delivered_first_that_passes_the_level_says_so(self):
+        self.assertEqual(_smart_words(1000, 0, 1400),
+                         "Smart Delivery keeps 1,000 in stock, but the 1,400 a week delivered "
+                         "before it already passes the 1,000 level")
+        self.assertEqual(_smart_words(1000, 200, 600),
+                         "Smart Delivery keeps 1,000 in stock, counting the 600 a week delivered "
+                         "before it, plus 200 a week on top")
+
+    def test_a_raise_without_a_pass_falls_back_as_the_page_does(self):
+        self.assertEqual(_raise_import({"smart": True, "plainAfter": 400}, 1800), 1400)
+        self.assertEqual(_raise_import({"smart": False, "plainAfter": 0}, 1800), 1800)
 
     def test_a_contract_set_to_zero_is_listed_but_supplies_nothing(self):
         order = smart(0)

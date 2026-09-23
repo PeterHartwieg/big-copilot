@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=a7e243db27">
+<link rel="stylesheet" href="community.css?v=43e7d650c4">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=a7e243db27">
+<link rel="stylesheet" href="fonts/fonts.css?v=43e7d650c4">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2695,8 +2695,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "a7e243db27";</script>
-<script>window.LEDGER_RELEASE = {"version":"a7e243db27","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "43e7d650c4";</script>
+<script>window.LEDGER_RELEASE = {"version":"43e7d650c4","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2765,8 +2765,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=a7e243db27"></script>
-<script src="community.js?v=a7e243db27"></script>
+<script src="app.js?v=43e7d650c4"></script>
+<script src="community.js?v=43e7d650c4"></script>
 
 <script>
 
@@ -3569,7 +3569,9 @@ const SUPPLY_VIEWS = {
           ? `, ${r.shortBy}d early` : ""}</span></td>
       <td>${r.smart
         ? `${(r.target ?? r.weekly).toLocaleString()}<span class="sub" data-tip="Smart Delivery: the purchasing agent tops the depot up to this level each Monday">in stock${
-            r.plainBefore ? `, counting ${r.plainBefore.toLocaleString()} a week delivered first` : ""}${
+            !r.plainBefore ? "" : r.plainBefore >= (r.target ?? r.weekly)
+              ? `, but ${r.plainBefore.toLocaleString()} a week delivered first already passes it`
+              : `, counting ${r.plainBefore.toLocaleString()} a week delivered first`}${
             r.plainAfter ? `, plus ${r.plainAfter.toLocaleString()} a week` : ""}</span>`
         : r.weekly.toLocaleString()}</td>
       <td>${r.basis === "order"
@@ -3812,7 +3814,7 @@ function importLevelFor(pass, at, need){
    replayed, or the week rounded up to the hundred for a plain order. */
 const importRaise = n => n.importSmart && (n.importPass || []).length && Number.isInteger(n.importLevelAt)
   ? importLevelFor(n.importPass, n.importLevelAt, n.depotNeed)
-  : Math.ceil(n.depotNeed / 100) * 100;
+  : Math.ceil(Math.max(0, n.depotNeed - (n.importSmart ? n.importPlainAfter || 0 : 0)) / 100) * 100;
 /* The same verdict the board gives a factory input, for rows the page built. */
 function feedVerdict(n){
   const ceil100 = v => Math.ceil(v / 100) * 100;
@@ -3888,6 +3890,7 @@ function feedRoute(site, n, view, held){
   n.importPlainAfter = supply && supply.smart ? supply.plainAfter || 0 : 0;
   n.importPlainBefore = supply && supply.smart ? supply.plainBefore || 0 : 0;
   n.importLevelImporter = supply && supply.smart ? supply.levelImporter ?? null : null;
+  n.importLevelName = supply && supply.smart ? supply.levelName ?? supply.levelImporter ?? null : null;
   n.importPass = supply && supply.smart ? supply.pass || [] : [];
   n.importLevelAt = supply && supply.smart ? supply.levelAt ?? null : null;
   n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly);
@@ -6161,7 +6164,9 @@ const spTruckDay = (arrives, today) => {
 /* A Smart Delivery setting on the panel: the level kept in stock, and any
    plain amount delivered after it, which comes on top. */
 const spKeeps = (level, after, before) => `Smart Delivery keeps <b>${spNum(level)}</b> in stock${
-  before ? `, counting the <b>${spNum(before)}</b> a week delivered before it` : ""}${
+  !before ? "" : before >= level
+    ? `, but the <b>${spNum(before)}</b> a week delivered before it already passes the <b>${spNum(level)}</b> level`
+    : `, counting the <b>${spNum(before)}</b> a week delivered before it`}${
   after ? `, plus <b>${spNum(after)}</b> a week on top` : ""}`;
 const spLevelCell = (level, after, small) => `${spNum(level)}<small ${small}>in stock${
   after ? ` +${spNum(after)}/wk` : ""}</small>`;
@@ -7050,6 +7055,7 @@ function importSetting(total, contract, edit){
   const surplus = !smart && current !== undefined && !!total && current > total * 1.5;
   return {smart, current, pausedWeekly, paused, fit, setTo, inGame, suggested, value, edited,
           stale, plainAfter, plainBefore, levelImporter: smart ? contract.levelImporter ?? null : null,
+          levelName: smart ? contract.levelName ?? contract.levelImporter ?? null : null,
           changed: value !== null && value !== inGame, surplus};
 }
 
@@ -7072,7 +7078,8 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const value = r.value !== undefined ? r.value : r.setTo;
     const mode = r.smart ? "smart" : "weekly";
     // A level is set on one contract: the one that holds it is named.
-    const setting = n => r.smart ? `Set Smart Delivery stock${r.levelImporter ? ` at ${r.levelImporter}` : ""} to ${n.toLocaleString()}.`
+    const where = r.levelName ?? r.levelImporter;
+    const setting = n => r.smart ? `Set Smart Delivery stock${where ? ` at ${where}` : ""} to ${n.toLocaleString()}.`
       : `Set the weekly order to ${n.toLocaleString()}.`;
     const yours = `Your own figure${r.setTo !== null && r.setTo !== undefined
       ? `; the board suggests ${r.setTo.toLocaleString()}` : ""}.`;
@@ -7399,10 +7406,14 @@ function drawLogistics(){
      it (which counts toward the level, as the top-up is only what is
      missing), and one delivered after it (which comes on top). */
   const aroundLevel = r => !r.smart ? ""
-    : (r.levelImporter && (r.contracts || []).length > 1 ? `<span class="sub">at ${attr(r.levelImporter)}</span>` : "")
-    + (r.plainBefore ? `<span class="sub" data-tip="${attr(
+    : (r.levelName && (r.contracts || []).length > 1 ? `<span class="sub">at ${attr(r.levelName)}</span>` : "")
+    + (!r.plainBefore ? "" : r.plainBefore >= r.inGame
+      ? `<span class="sub" data-tip="${attr(
+        "A plain contract the game delivers before the level already brings more than the level, so the level brings nothing")}">${
+        r.plainBefore.toLocaleString()} a week delivered first already passes it</span>`
+      : `<span class="sub" data-tip="${attr(
         "A plain contract the game delivers before the level: it counts toward the level, and the level only tops up what is still missing")}">${
-        r.plainBefore.toLocaleString()} a week delivered first counts toward it</span>` : "")
+        r.plainBefore.toLocaleString()} a week delivered first counts toward it</span>`)
     + (r.plainAfter ? `<span class="sub" data-tip="${attr(
         "A plain contract the game delivers after the level brings this on top of it")}">plus ${r.plainAfter.toLocaleString()} a week</span>` : "");
   const gameCell = r => r.inGame === null ? chipHtml("bad", "not imported")
@@ -7420,7 +7431,7 @@ function drawLogistics(){
   /* What the box holds, said per state: the board's suggestion, the figure
      already in game, or the player's own. */
   const boardSays = r => r.smart
-    ? `the level${r.levelImporter ? ` at ${r.levelImporter}` : ""} at which the week's deliveries, in the game's order, run everything this depot feeds at full capacity`
+    ? `the level${r.levelName ? ` at ${r.levelName}` : ""} at which the week's deliveries, in the game's order, run everything this depot feeds at full capacity`
     : "a week of everything this depot feeds at full capacity";
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
@@ -7964,7 +7975,10 @@ function drawPlan(){
       const units = v => v.toLocaleString("en-US");
       const perDepot = (src, would) => (src.depots || []).map(d => d.smart
         ? `Smart Delivery ${would ? "would keep" : "keeps"} ${units(d.level)} in stock at ${d.warehouse}${
-            d.plainBefore ? `, counting the ${units(d.plainBefore)} a week delivered before it` : ""}${
+            d.name && d.name !== d.importer ? ` (${d.name})` : ""}${
+            !d.plainBefore ? "" : d.plainBefore >= d.level
+              ? `, but the ${units(d.plainBefore)} a week delivered before it already passes the ${units(d.level)} level`
+              : `, counting the ${units(d.plainBefore)} a week delivered before it`}${
             d.plainAfter ? `, plus ${units(d.plainAfter)} a week on top` : ""}`
         : `${units(d.weekly)} a week to ${d.warehouse}`).join("; ");
       const on = !src ? "Not on any import contract yet"

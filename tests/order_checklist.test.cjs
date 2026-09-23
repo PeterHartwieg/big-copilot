@@ -314,6 +314,21 @@ test('the checklist names the contract that holds the level', () => {
   assert.ok(context.importPassDelivers(held.pass, 2, 800) < 1100);
 });
 
+test('an importer with two contracts on the line is named with the contract number', () => {
+  const held = {...line([[500, true], [600, true], [300]], 1, '1 Pier'), levelName: '1 Pier, contract 2 of 3'};
+  const rows = build({imports:[{s:0, rows:[row(1100, held)]}]});
+  assert.match(rows[0].reason, /^Set Smart Delivery stock at 1 Pier, contract 2 of 3 to 800\./);
+});
+
+test('without a pass the page and the board fall back the same way', () => {
+  // importSetting and importRaise both take the plain amount after the
+  // level off the week, as _raise_import does.
+  assert.equal(setting(1800, {weekly:1400, smart:true, target:1000, plainAfter:400}).setTo, 1400);
+  const importRaise = vm.runInContext('importRaise', context);  // a const, not a global property
+  assert.equal(importRaise({importSmart:true, importPlainAfter:400, depotNeed:1800}), 1400);
+  assert.equal(importRaise({importSmart:false, importPlainAfter:0, depotNeed:1800}), 1800);
+});
+
 test('the level search matches a plain replay over many orders', () => {
   let seed = 3680;
   const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;

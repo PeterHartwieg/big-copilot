@@ -229,7 +229,8 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
     // before or after it as the game delivers them.
     assert.match(rows.Hops.inGame, /^1,000 in stock\s*at Pier 1\s*plus 400 a week$/);
     assert.match(rows.Malt.inGame, /^1,000 in stock\s*at Pier 1\s*400 a week delivered first counts toward it$/);
-    assert.match(rows.Rye.inGame, /1,400 a week delivered first counts toward it$/);
+    // Delivered first and already above the level: the level brings nothing.
+    assert.match(rows.Rye.inGame, /1,400 a week delivered first already passes it$/);
     assert.doesNotMatch(rows.Rye.inGame, /plus/);
     // The level a week needs is the pass replayed, never the plain taken off.
     assert.equal(rows.Hops.box, '1400');

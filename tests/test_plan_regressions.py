@@ -66,13 +66,14 @@ class PlannerRegressions(unittest.TestCase):
         source = self.water([contract(3000, smart=True)])
         self.assertEqual((source["ordered"], source["smart"]), (3000, True))
         self.assertEqual(source["depots"], [{"warehouse": "1 Depot", "smart": True, "level": 3000,
-                                             "importer": "2 Importer", "plainBefore": 0,
+                                             "importer": "2 Importer", "name": "2 Importer",
+                                             "plainBefore": 0,
                                              "plainAfter": 0, "weekly": 3000}])
         self.assertTrue(source["contracts"][0]["smart"])
         plain = self.water([contract(3000)])
         self.assertEqual(plain["smart"], False)
         self.assertEqual(plain["depots"], [{"warehouse": "1 Depot", "smart": False, "level": None,
-                                            "importer": None, "plainBefore": 0,
+                                            "importer": None, "name": None, "plainBefore": 0,
                                             "plainAfter": 0, "weekly": 3000}])
 
     def test_two_levels_hold_the_higher_at_one_depot_and_stay_apart_across_depots(self):
