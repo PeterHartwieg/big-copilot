@@ -186,13 +186,17 @@ at most 256 KiB, else `413 {"error":"too_large"}`) and the header
 - **Apply** (`"dryRun": false` or absent) is all or nothing: every row passes or nothing
   is written.
 - **Compare-and-set.** Rows carry `expect`, the value the page read from the bytes. A
-  mismatch refuses the whole write with `409 {"error":"changed", ...}`; the page refreshes
-  and re-plans. `changed` is checked before any rule.
+  mismatch refuses an apply with `409 {"error":"changed", ...}` (a dry run answers `200`,
+  `ok` false, the row's error `changed`); the page refreshes and re-plans. `changed` is
+  checked before any rule.
 - **Threading.** The mod runs the whole check-and-apply on the game's main thread. While a
   refresh walk is in flight on the worker thread the main thread holds the write until the
-  walk has published; if that is not done within three seconds the answer is
-  `503 {"error":"busy"}` and nothing was written. The page retries after a second, up to
+  walk has published; if the write has not started within three seconds it is withdrawn
+  and the answer is `503 {"error":"busy"}`: nothing was written. A write that has started
+  is always waited for and answered with its result. The page retries after a second, up to
   three times.
+- **An apply that changes nothing** still answers `200` with a `stamp` and a refresh, so
+  the page's wait ends; it replaces the kind's undo with nothing.
 - **After an apply** the mod calls `SaveGameManager.MarkChange()`, shows an in-game
   notification ("Big Copilot updated <what> at <business>"), and starts a refresh that may
   pass the fifteen-second window (never an in-flight one). The answer carries `stamp`,
@@ -208,7 +212,7 @@ at most 256 KiB, else `413 {"error":"too_large"}`) and the header
 | `401` | `{"error":"not_paired"}` | Pairing code missing or wrong |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
-| `409` | `{"error":"cannot_write","reason":"saving"}` | The game is saving, or `CanSave()` is false; `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`) |
+| `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`) |
 | `413` | `{"error":"too_large"}` | Body over 256 KiB |
 | `503` | `{"error":"busy"}` or `{"error":"main_thread_unavailable"}` | Walk in flight past three seconds, or no city loaded |
 
@@ -225,7 +229,9 @@ the two fields of the building registration as the save holds them.
             "presetId": null}]}
 ```
 
-`skills` is the site's `uniformGapSkills` from the payload. `presetId` null means the preset
+`skills` null (the page's default) means every skill the site's Uniforms window offers, so
+the warning cannot come back when the roster changes; a list limits the write to those
+skills. `presetId` null means the preset
 named "Default", else the first of `GameInstance.employeePresets`; a string names one.
 
 ```json
@@ -237,8 +243,8 @@ named "Default", else the first of `GameInstance.employeePresets`; a string name
            "error": null}]}
 ```
 
-- `set` is what the write fills (a dry run: would fill): every requested skill the site's
-  Uniforms window offers that has no uniform yet. A skill with a uniform is skipped as
+- `set` is what the write fills (a dry run: would fill): every requested (or, for `skills`
+  null, offered) skill that has no uniform yet. A skill with a uniform is skipped as
   `already_set` and never overwritten; a skill the window does not offer is skipped as
   `not_offered`. Neither is a refusal.
 - Row `error`: `not_found` (no registration at that address), `not_rented`, `no_business`
@@ -286,11 +292,18 @@ named "Default", else the first of `GameInstance.employeePresets`; a string name
   that importer already ordered of it this week.
 - Contract `error`: `not_found`, `no_agent` (no purchasing agent, or one who left),
   `locked` (with `reopens: {"day": <game day>, "hour": 8}`), `screen_open` (the BizMan
-  plan screen is open on this contract), `changed`.
+  plan screen is open on this contract, or the headquarters' purchasing-agent list while
+  `order` would reorder it), `no_amounts` (activating a contract whose amounts are all 0,
+  which the game's Start refuses), `changed`. A contract row's `error` repeats its first
+  product error, so a row can be judged without reading its products.
 - Product `error`: `not_found`, `no_warehouse`, `backorder` (the item is in a backorder
   market event), `over_cap` (a plain contract's amount above what the importer allows,
   with `max`), `changed`, `bad_amount` (negative or not a whole number). A Smart Delivery
-  amount is a stock level, never `over_cap`.
+  amount is a stock level, never `over_cap`. `max` is the importer's full weekly cap: the
+  week's count resets at the Monday delivery the amount is for.
+- Activation lists, as extra product rows, products the request did not name that the
+  game's Start would refuse (`no_warehouse`). Rows also carry `reordered` (true when `order`
+  moved this contract).
 
 #### `POST /write/schedule`
 
@@ -319,13 +332,15 @@ One business per call: its seven days of shifts are replaced.
  "removed": 84, "added": 90, "openedHours": false,
  "leftWithout": [{"employeeId": "…", "name": "Ana Silva"}],
  "warnings": [{"type": "overworked", "employeeId": "…", "name": "…", "d": 3, "hours": 14}],
- "error": null, "rows": []}
+ "siteError": null, "rows": []}
 ```
 
 - `leftWithout`: people with a shift here before and none after; the game unassigns their
   work and adds a to-do, as its own screen does.
-- Site `error` (in `error`): `not_found`, `not_rented`, `screen_open` (the BizMan schedule is
-  open on this business), `hq_hours`, `changed`.
+- `siteError`, the business's own refusal: `not_found`, `not_rented`, `screen_open` (the
+  BizMan schedule is open on this business, or an auto-fill is running on it), `hq_hours`,
+  `changed`. In a `409 refused` the rows lead with `{"error": <siteError>}` (no `d`, `i`); a
+  `409 changed` has empty rows.
 - Shift `error`s in `rows`, each `{"d", "i" (index in that day's list), "error"}`:
   `not_assigned` (the employee is not assigned to this business), `no_station` (no such item
   here, or not a workstation), `no_skill` (`HasSkillForWorkstation` false), `bad_hours`
@@ -353,7 +368,9 @@ Restores what the last applied write of that kind changed, in this city session,
 the target still holds what that write left there: uniforms only on the skills it set and
 still holding its preset; imports the amounts, running state, Repeating, urgent flag, next
 delivery day and plan order; the schedule the shifts and, when it opened them, the
-opening hours. Answers like the write it undoes, with `"undo": true`;
+opening hours. Answers like the write it undoes, with `"undo": true`: uniforms list the
+skills it cleared in `set`; imports and schedule answer `before` as the state the undo
+found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
 game has moved on. An undo is not itself undoable; a new write of the kind replaces what
 undo would restore.
