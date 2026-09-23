@@ -809,96 +809,160 @@
   // Mod 0.2.0 can change the game as well as read it: uniforms, imports, the
   // schedule, and an undo of the last write of a kind. The board asks through
   // LEDGER_SOURCE.write(), and this is the one way out. A write carries the
-  // pairing code the player copies from the mod's options, kept for this tab
-  // only (the game draws a new one at every launch), is retried while the
-  // game is busy serializing, and an apply is followed by a read of the game,
-  // as Update does, so the board shows what the game now holds.
-  const PAIR_KEY = "ledger_pair";
-  const PAIR_CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/;
+  // token the game issued this browser when the player approved it in game
+  // (once; "Approving a browser"), is retried while the game is busy
+  // serializing, and an apply is followed by a read of the game, as Update
+  // does, so the board shows what the game now holds.
+  // The approval, kept for this site's origin with the mod address it came
+  // from, so it is only ever sent back to that mod on this computer.
+  const APPROVAL_KEY = "ledger_link_approval";
+  const APPROVAL_POLL_MS = 1000;
   const WRITE_BUSY_RETRIES = 3;
   // The mod always finishes a write it has started, however long the game
   // takes over it, so a write waits far longer for its answer than a read.
   const WRITE_WAIT_MS = 30000;
-  let pairMemo = "";      // the code, where the browser keeps no sessionStorage
-  let pairAsking = null;  // the open prompt, shared by every write waiting on it
-  function pairCode() {
-    try { return sessionStorage.getItem(PAIR_KEY) || ""; } catch (e) { return pairMemo; }
+  let approvalMemo = null;  // {link, token}, where the browser keeps no localStorage
+  let approving = null;     // the open request, shared by every write waiting on it
+  function approvalToken() {
+    let kept = approvalMemo;
+    try { kept = JSON.parse(localStorage.getItem(APPROVAL_KEY) || "null"); } catch (e) {}
+    return kept && kept.link === linkUrl && typeof kept.token === "string" ? kept.token : "";
   }
-  function keepPairCode(code) {
-    pairMemo = code || "";
+  function keepApproval(token) {
+    approvalMemo = token ? {link: linkUrl, token} : null;
     try {
-      if (code) sessionStorage.setItem(PAIR_KEY, code);
-      else sessionStorage.removeItem(PAIR_KEY);
+      if (token) localStorage.setItem(APPROVAL_KEY, JSON.stringify(approvalMemo));
+      else localStorage.removeItem(APPROVAL_KEY);
     } catch (e) {}
   }
   // The kinds the linked mod takes; a mod before 0.2.0 lists none.
   const linkWrites = () => (linkUrl && linkHealth && Array.isArray(linkHealth.writes) ? linkHealth.writes.slice() : []);
 
-  // Asked once, by whichever write needs it first; the rest wait on the same
-  // answer. Resolves to the code, or "" when the player cancels.
-  function askPairCode(wrong) {
-    if (!pairAsking) pairAsking = pairPrompt(wrong).finally(() => { pairAsking = null; });
-    return pairAsking;
+  // How the game's popup names this browser: "Chrome on Windows".
+  function browserLabel() {
+    const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+    const browser = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+      : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "A browser";
+    const system = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS"
+      : /Mac OS X/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "";
+    // Plain text, as the popup shows it: no markup, control or invisible formatting characters.
+    return (system ? `${browser} on ${system}` : browser).replace(/[<>\p{Cc}\p{Cf}]/gu, "").slice(0, 40);
   }
-  function pairPrompt(wrong) {
+
+  // Asked once, by whichever write needs it first; the rest wait on the same
+  // answer. Resolves to {token}, or {error, reason?, retryAfter?, message?}
+  // when there is none: "cancelled", "denied", "expired", "cannot_pair" (with
+  // its reason), "throttled" (a cooldown longer than is worth waiting in the
+  // dialog), "origin_not_allowed", "busy" or "main_thread_unavailable" (the
+  // game did not take the request; no popup shown), "unreachable".
+  function askApproval() {
+    if (!approving) approving = approvalRequest().finally(() => { approving = null; });
+    return approving;
+  }
+  function approvalRequest() {
     return new Promise((resolve) => {
       const dlg = document.createElement("dialog");
       dlg.className = "gw-dlg gw-pair";
       dlg.setAttribute("aria-labelledby", "gwPairTitle");
-      dlg.innerHTML = '<form method="dialog">'
-        + '<h2 id="gwPairTitle">Pair with the game</h2>'
-        + `<p>${wrong ? "That code is no longer the game's. " : ""}In the game, open the Big Copilot Link options and click <b>Copy pairing code</b>, then paste it here. The game draws a new one each time it starts.</p>`
-        + '<input id="gwPairCode" autocomplete="off" spellcheck="false" maxlength="10" aria-label="Pairing code" placeholder="ABC234">'
-        + '<p class="gw-err" id="gwPairErr" role="alert"></p>'
-        + '<div class="gw-foot"><button type="button" class="btn2" data-pair="cancel">Cancel</button>'
-        + '<button type="submit" class="btn2 primary" data-pair="ok">Pair</button></div></form>';
-      const input = dlg.querySelector("input"), err = dlg.querySelector(".gw-err");
-      let answer = "";
-      dlg.querySelector('[data-pair="cancel"]').addEventListener("click", () => dlg.close());
-      dlg.querySelector("form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const code = input.value.replace(/[\s-]+/g, "").toUpperCase();
-        if (!PAIR_CODE.test(code)) { err.textContent = "Six letters and digits, as the game shows them."; return; }
-        // The mod says whether a code is its own on any /health that carries
-        // one, so a mistyped code is caught here and not on the write.
-        let paired = null;
-        try {
-          const res = await linkFetch("/health", {headers: {Authorization: `Bearer ${code}`}});
-          if (res.status === 200) paired = (await res.json()).paired;
-        } catch (e2) {}
-        if (paired === false) { err.textContent = "That is not the code the game shows now. Copy it again from the mod's options."; return; }
-        answer = code;
-        keepPairCode(code);
-        dlg.close();
-      });
-      dlg.addEventListener("close", () => { dlg.remove(); resolve(answer); });
+      dlg.innerHTML = '<h2 id="gwPairTitle">Allow this browser in the game</h2>'
+        + '<p class="gw-pair-say" role="status">Asking the game…</p>'
+        + '<div class="gw-foot"><button type="button" class="btn2" data-pair="cancel">Cancel</button></div>';
+      const say = dlg.querySelector(".gw-pair-say");
+      let done = false;
+      const finish = (outcome) => {
+        if (done) return;
+        done = true;
+        if (dlg.open) dlg.close();
+        dlg.remove();
+        resolve(outcome);
+      };
+      dlg.querySelector('[data-pair="cancel"]').addEventListener("click", () => finish({error: "cancelled"}));
+      dlg.addEventListener("close", () => finish({error: "cancelled"}));
       document.body.appendChild(dlg);
       if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
-      input.focus();
+      (async () => {
+        let id = null;
+        while (!done && !id) {
+          let res, answer = null;
+          try {
+            res = await linkFetch("/pair/request", {method: "POST", body: JSON.stringify({name: browserLabel()}),
+              headers: {"Content-Type": "application/json"}});
+            answer = await res.json();
+          } catch (err) {
+            if (!res) return finish({error: "unreachable", message: err.message});
+          }
+          if (done) return;
+          if (res.status === 202 && answer && answer.requestId) { id = answer.requestId; break; }
+          if (res.status === 409) return finish({error: "cannot_pair", reason: (answer && answer.reason) || "other"});
+          if (res.status === 429) {
+            // A request already open, or a denial moments ago: a short wait is
+            // waited out here; the longer ones after repeated denials are said.
+            const wait = Math.max(1, Math.ceil(Number(answer && answer.retryAfter) || 5));
+            if (wait > 10) return finish({error: "throttled", retryAfter: wait});
+            say.textContent = `The game is still answering an earlier request. Asking again in ${wait} s…`;
+            await linkWait(wait * 1000);
+            continue;
+          }
+          if (res.status === 403) return finish({error: "origin_not_allowed"});
+          if (res.status === 503) return finish({error: (answer && answer.error) === "main_thread_unavailable" ? "main_thread_unavailable" : "busy"});
+          return finish({error: "unreachable", message: `The game did not take the request (answered ${res.status}).`});
+        }
+        say.textContent = "Waiting for you in the game: click Allow on “Allow Big Copilot to change your game?”";
+        while (!done) {
+          await linkWait(APPROVAL_POLL_MS);
+          if (done) return;
+          let res, answer = null;
+          try {
+            res = await linkFetch(`/pair/status?id=${encodeURIComponent(id)}`);
+            answer = await res.json();
+          } catch (err) {
+            if (!res) return finish({error: "unreachable", message: err.message});
+          }
+          if (res.status === 404) return finish({error: "expired"});
+          const state = answer && answer.state;
+          if (state === "approved" && typeof answer.token === "string" && answer.token) {
+            keepApproval(answer.token);
+            return finish({token: answer.token});
+          }
+          // An approval whose token was already handed out is not this page's.
+          if (state === "approved") return finish({error: "denied"});
+          if (state === "denied" || state === "expired") return finish({error: state});
+        }
+      })();
     });
   }
 
   // One write. Never throws: resolves to {status, error, body}, where error is
-  // null on a 200, the mod's own error name otherwise, "cancelled" when the
-  // player closed the pairing prompt and "unreachable" (with message) when a
-  // dry run got no answer at all. An apply or an undo that got no answer may
-  // have been applied or not: "uncertain", with `reread`, a promise that
-  // settles once the board has read the game again, so the page can look
-  // before it offers anything else.
+  // null on a 200, the mod's own error name otherwise; with no approval,
+  // askApproval()'s error ("cancelled", "denied", "expired", "cannot_pair"
+  // with its reason); "unreachable" (with message) when a dry run got no
+  // answer at all. An apply or an undo that got no answer may have been
+  // applied or not: "uncertain", with `reread`, a promise that settles once
+  // the board has read the game again, so the page can look before it offers
+  // anything else.
   async function gameWrite(kind, body, opts) {
     const dryRun = !!(opts && opts.dryRun);
     if (!linkUrl) return {status: 0, error: "not_linked", body: null};
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
     const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
-    let code = pairCode() || await askPairCode(false);
+    const approve = async () => {
+      const got = await askApproval();
+      return got.token ? {token: got.token}
+        : {status: 0, error: got.error, reason: got.reason, retryAfter: got.retryAfter, message: got.message, body: null};
+    };
+    let token = approvalToken();
+    if (!token) {
+      const got = await approve();
+      if (!got.token) return got;
+      token = got.token;
+    }
     let busyLeft = WRITE_BUSY_RETRIES, askedAgain = false;
     for (;;) {
-      if (!code) return {status: 0, error: "cancelled", body: null};
       let res;
       const sentAt = Date.now();
       try {
         res = await linkFetch(path, {method: "POST", body: payload, wait: WRITE_WAIT_MS,
-          headers: {"Content-Type": "application/json", Authorization: `Bearer ${code}`}});
+          headers: {"Content-Type": "application/json", Authorization: `Bearer ${token}`}});
       } catch (err) {
         if (dryRun || err.unsent) return {status: 0, error: "unreachable", message: err.message, body: null};
         return {status: 0, error: "uncertain", message: err.message, body: null, reread: rereadGame()};
@@ -913,11 +977,14 @@
       }
       const error = res.status === 200 ? null : (answer && answer.error) || `http_${res.status}`;
       if (res.status === 401) {
-        // A new game launch drew a new code: forget this one and ask once more.
-        keepPairCode("");
+        // The game no longer knows this approval (forgotten, expired, another
+        // install): drop it and ask the game once more.
+        keepApproval("");
         if (askedAgain) return {status: 401, error: "not_paired", body: answer};
         askedAgain = true;
-        code = await askPairCode(true);
+        const got = await approve();
+        if (!got.token) return got;
+        token = got.token;
         continue;
       }
       if (res.status === 503 && error === "busy" && busyLeft > 0) {

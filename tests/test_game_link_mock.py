@@ -87,7 +87,8 @@ class MockContract(unittest.TestCase):
         status, _, body = call(self.url + "/nothing")
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
-            "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/undo"])
+            "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/undo",
+            "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
             self.assertEqual(call(self.url + route, method)[0], 405, f"{method} {route}")
@@ -141,7 +142,7 @@ class MockContract(unittest.TestCase):
         self.assertNotEqual(self.link.stamp, before)
 
 
-CODE = "ABC234"
+TOKEN = "approvedTokenForTheTestsAAAAAAAAAAAAAAAAAA"  # issued to requests with no Origin
 GIFTS = {"street": "ba:street_secondavenue", "number": 10}
 CORNER = {"street": "ba:street_broadway", "number": 2}
 BARE = {"street": "ba:street_fifthavenue", "number": 4}
@@ -159,8 +160,9 @@ class MockWrites(unittest.TestCase):
         es3_fixture.write_link_save(self.path)
         self.link = game_link_mock.Link(
             self.path, character="abc", company="Mock Co", day=34, hour=14, cash=1.5,
-            build=3680, schema=1, throttle=False, refuse=None, code=CODE,
+            build=3680, schema=1, throttle=False, refuse=None,
         )
+        self.link.tokens[TOKEN] = ""  # this browser, approved before
         self.server = game_link_mock.MockServer(self.link, port=0).start(follow=False)
         self.url = self.server.url
 
@@ -168,43 +170,110 @@ class MockWrites(unittest.TestCase):
         self.server.stop()
         self.dir.cleanup()
 
-    def post(self, kind, body, code=CODE):
+    def post(self, kind, body, token=TOKEN, origin=None):
         headers = {"Content-Type": "application/json"}
-        if code:
-            headers["Authorization"] = f"Bearer {code}"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if origin:
+            headers["Origin"] = origin
         status, _, raw = call(f"{self.url}/write/{kind}", "POST", headers, json.dumps(body).encode())
         return status, json.loads(raw)
 
     def stamp(self):
         return json.loads(call(self.url + "/health")[2])["stamp"]
 
-    def test_health_lists_the_writes_and_says_paired_only_with_the_code(self):
+    def test_health_lists_the_writes_and_says_paired_only_with_a_token_for_its_origin(self):
         health = json.loads(call(self.url + "/health")[2])
         self.assertEqual(health["writes"], ["uniforms", "imports", "schedule"])
         self.assertIs(health["paired"], False)
-        health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {CODE}"})[2])
+        health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}"})[2])
         self.assertIs(health["paired"], True)
+        health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}",
+                                                                 "Origin": "https://bigcopilot.com"})[2])
+        self.assertIs(health["paired"], False, "a token is its origin's alone")
         self.link.writes = None  # a 0.1.0 mod sends neither key
         health = json.loads(call(self.url + "/health")[2])
         self.assertNotIn("writes", health)
         self.assertNotIn("paired", health)
 
-    def test_a_write_without_the_code_is_not_paired_and_writes_nothing(self):
-        for code in (None, "WRONG2"):
-            status, body = self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}, code)
+    def test_a_write_without_an_approved_token_is_not_paired_and_writes_nothing(self):
+        for token, origin in ((None, None), ("unknown", None), (TOKEN, "https://bigcopilot.com")):
+            status, body = self.post("uniforms", {"sites": [{"address": GIFTS, "skills": []}]}, token, origin)
             self.assertEqual((status, body), (401, {"error": "not_paired"}))
         self.assertEqual(self.link.applied, [])
-        # The mod trims the code and reads it upper-cased, and the scheme in any case.
-        self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []}, f" {CODE.lower()} ")[0], 200)
-        status, _, _ = call(f"{self.url}/write/uniforms", "POST", {"Authorization": f"bEARER {CODE}"},
+        # The scheme in any case.
+        status, _, _ = call(f"{self.url}/write/uniforms", "POST", {"Authorization": f"bEARER {TOKEN}"},
                             json.dumps({"dryRun": True, "sites": []}).encode())
         self.assertEqual(status, 200)
-        # The applies the tests read back never carry the code.
-        self.assertNotIn("code", json.loads(call(self.url + "/debug/writes")[2]))
+        # The applies the tests read back never carry a token.
+        self.assertNotIn(TOKEN, call(self.url + "/debug/writes")[2].decode())
+
+    def pair(self, origin=None, name="Chrome on Windows"):
+        headers = {"Content-Type": "application/json", **({"Origin": origin} if origin else {})}
+        status, _, raw = call(self.url + "/pair/request", "POST", headers, json.dumps({"name": name}).encode())
+        return status, json.loads(raw)
+
+    def status(self, rid):
+        status, _, raw = call(f"{self.url}/pair/status?id={rid}")
+        return status, json.loads(raw)
+
+    def test_approving_a_browser_issues_a_token_once_for_its_origin(self):
+        self.link.pair_delay = 0.2
+        status, answer = self.pair("http://localhost:9321", "<b>Chrome</b> on Windows" + "x" * 60)
+        self.assertEqual((status, answer["expiresIn"]), (202, 60))
+        rid = answer["requestId"]
+        self.assertEqual(self.link.pair_requests[rid]["name"], ("bChrome/b on Windows" + "x" * 60)[:40])
+        self.assertEqual(self.status(rid), (200, {"state": "pending"}))
+        self.assertEqual(self.pair()[0], 429, "one request at a time")
+        time.sleep(0.3)
+        status, answer = self.status(rid)
+        self.assertEqual(answer["state"], "approved")
+        token = answer["token"]
+        self.assertEqual(self.status(rid), (200, {"state": "approved"}), "the token is handed out once")
+        # Good for its origin, and no other.
+        self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []}, token, "http://localhost:9321")[0], 200)
+        self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []}, token)[0], 401)
+        self.assertEqual(self.status("nothing"), (404, {"error": "not_found"}))
+
+    def test_a_denied_expired_or_blocked_request_issues_nothing(self):
+        self.link.pair_delay, self.link.pair_cooldowns = 0, [0]
+        for outcome, state in (("deny", "denied"), ("expire", "expired")):
+            self.link.pair = outcome
+            _, answer = self.pair()
+            self.assertEqual(self.status(answer["requestId"]), (200, {"state": state}))
+        for reason in ("popup_open", "no_ui"):
+            self.link.pair = reason
+            self.assertEqual(self.pair(), (409, {"error": "cannot_pair", "reason": reason}))
+        self.assertEqual(self.link.tokens, {TOKEN: ""})
+
+    def test_a_pair_request_refused_before_any_popup(self):
+        self.assertEqual(self.pair("https://evil.example"), (403, {"error": "origin_not_allowed"}))
+        status, _, raw = call(self.url + "/pair/request", "POST", {"Content-Type": "application/json"}, b"x" * 5000)
+        self.assertEqual((status, json.loads(raw)), (413, {"error": "too_large"}))
+        status, _, raw = call(self.url + "/pair/request", "POST", {"Content-Type": "application/json"}, b"not json")
+        self.assertEqual(status, 400)
+        for error in ("busy", "main_thread_unavailable"):
+            self.link.pair = error
+            self.assertEqual(self.pair(), (503, {"error": error}))
+        self.assertEqual(self.link.pair_requests, {})
+
+    def test_the_wait_after_a_denial_grows_on_repeats(self):
+        self.link.pair_delay, self.link.pair = 0, "deny"
+        waits = []
+        for _ in range(3):
+            _, answer = self.pair("http://localhost:9321", "Chrome\u200b on\x07 Windows<>")
+            self.assertEqual(self.link.pair_requests[answer["requestId"]]["name"], "Chrome on Windows")
+            self.status(answer["requestId"])
+            status, refused = self.pair("http://localhost:9321")
+            waits.append((status, refused["retryAfter"]))
+            self.link.pair_cooldown["http://localhost:9321"] = (self.link.pair_cooldown["http://localhost:9321"][0], 0)
+        self.assertEqual(waits, [(429, 10), (429, 30), (429, 120)])
+        # Another origin is not held back by this one's denials.
+        self.assertEqual(self.pair()[0], 202)
 
     def test_a_refusal_before_the_body_still_reads_it(self):
         # A large unread body could reset the socket under the answer.
-        for code, size, status in ((None, 200 * 1024, 401), (CODE, 256 * 1024 + 1, 413)):
+        for code, size, status in ((None, 200 * 1024, 401), (TOKEN, 256 * 1024 + 1, 413)):
             headers = {"Authorization": f"Bearer {code}"} if code else {}
             got, _, raw = call(self.url + "/write/uniforms", "POST", headers, b"x" * size)
             self.assertEqual(got, status)
@@ -227,12 +296,12 @@ class MockWrites(unittest.TestCase):
                      {"contracts": [], "order": ["CONTRACTone", "CONTRACTone"]}):
             self.assertEqual(self.post("imports", dict(body, dryRun=True))[0], 400, body)
         status, _, raw = call(self.url + "/write/uniforms", "POST",
-                              {"Authorization": f"Bearer {CODE}"}, b"not json")
+                              {"Authorization": f"Bearer {TOKEN}"}, b"not json")
         self.assertEqual((status, json.loads(raw)["error"]), (400, "bad_request"))
         status, _, raw = call(self.url + "/write/uniforms", "POST",
-                              {"Authorization": f"Bearer {CODE}"}, b"x" * (256 * 1024 + 1))
+                              {"Authorization": f"Bearer {TOKEN}"}, b"x" * (256 * 1024 + 1))
         self.assertEqual((status, json.loads(raw)), (413, {"error": "too_large"}))
-        status, _, _ = call(self.url + "/write/everything", "POST", {"Authorization": f"Bearer {CODE}"}, b"{}")
+        status, _, _ = call(self.url + "/write/everything", "POST", {"Authorization": f"Bearer {TOKEN}"}, b"{}")
         self.assertEqual(status, 404)
         self.assertEqual(call(self.url + "/write/uniforms")[0], 405)
 

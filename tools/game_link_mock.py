@@ -22,8 +22,13 @@ rewrites the file: an apply is kept in memory, over the bytes, so a later write
 sees it, answers the state it left, and moves the stamp as /refresh does.
 GET /debug/writes lists the applies; POST /debug/config changes the error
 switches while it runs, for the page's tests (and the game's day and hour, and
-those contract terms). --code sets the pairing code
-(else one is drawn and printed), --refuse-write <error>[:<detail>] makes every
+those contract terms, the approval answer and the approved tokens).
+
+Approving a browser (POST /pair/request, GET /pair/status) answers after about
+a second as --pair says: approve (the default), deny, expire, or popup_open
+(refused at once); a token is issued per origin, as the mod issues them, and
+/health's `paired` and every write check it against the request's Origin.
+--refuse-write <error>[:<detail>] makes every
 apply answer that refusal, --busy-writes <n> answers the next n writes busy,
 --writes names the kinds /health lists ("" for a 0.1.0 mod that lists none).
 """
@@ -33,12 +38,15 @@ import argparse
 import gzip
 import http.server
 import json
+import math
 import os
 import re
 import secrets
 import sys
 import threading
 import time
+import unicodedata
+import urllib.parse
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -52,10 +60,14 @@ ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
 LOCAL_ORIGIN = re.compile(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$")
 EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
 WRITE_KINDS = ("uniforms", "imports", "schedule")
-PAIR_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
+PAIR_DELAY = 1.0  # seconds before the mock's player answers the popup
+PAIR_COOLDOWNS = (10, 30, 120)  # seconds an origin waits after a denial or an expiry, then a repeat, then more
+PAIR_MAX_BODY = 4 * 1024
 MAX_BODY = 256 * 1024
 DRAIN_LIMIT = 4 * 1024 * 1024  # the most of a refused body read off the wire
-ENDPOINTS = ["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
+ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
+             + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open"}
 HQ_TYPE = "ba:businesstype_headquarters"
@@ -67,8 +79,9 @@ def allowed_origin(origin: str | None) -> bool:
     return bool(origin) and (origin in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin)))
 
 
-def pairing_code() -> str:
-    return "".join(secrets.choice(PAIR_ALPHABET) for _ in range(6))
+def new_token() -> str:
+    """32 random bytes, base64url, as the mod draws them."""
+    return secrets.token_urlsafe(32)
 
 
 class BadRequest(Exception):
@@ -96,14 +109,20 @@ class Link:
 
     def __init__(self, path: str, *, character: str, company: str, day: int, hour: int,
                  cash: float, build: int, schema: int, throttle: bool, refuse: str | None,
-                 code: str | None = None, writes: list | None = list(WRITE_KINDS),
+                 pair: str = "approve", writes: list | None = list(WRITE_KINDS),
                  refuse_write: str | None = None, busy_writes: int = 0):
         self.path = path
         self.character, self.company = character, company
         self.day, self.hour, self.cash, self.build = day, hour, cash, build
         self._clock = (day, hour)  # what a reset puts back
         self.schema, self.throttle, self.refuse = schema, throttle, refuse
-        self.code = code or pairing_code()
+        # Approving a browser: how the mock's player answers, the open
+        # requests, and the tokens issued, each with the origin it is for.
+        self.pair, self.pair_delay = pair, PAIR_DELAY
+        self.pair_cooldowns = list(PAIR_COOLDOWNS)
+        self.pair_cooldown: dict = {}  # origin -> (denials and expiries in a row, until)
+        self.pair_requests: dict = {}  # id -> {origin, name, at, state, token, handed}
+        self.tokens: dict = {}         # token -> origin
         self.writes = writes  # None: the key is left out, as a 0.1.0 mod does
         self.refuse_write, self.busy_writes = refuse_write, busy_writes
         self.lock = threading.Lock()
@@ -187,10 +206,69 @@ class Link:
                 body["paired"] = paired
             return body
 
-    def paired(self, header: str | None) -> bool:
-        """The mod's test: the Bearer scheme in any case, and the code trimmed and upper-cased."""
+    def paired(self, header: str | None, origin: str | None) -> bool:
+        """A Bearer token (the scheme in any case) the game issued to this origin."""
         text = (header or "").strip()
-        return text[:7].lower() == "bearer " and text[7:].strip().upper() == self.code
+        token = text[7:].strip() if text[:7].lower() == "bearer " else ""
+        with self.lock:
+            return bool(token) and self.tokens.get(token) == (origin or "")
+
+    # --- approving a browser ------------------------------------------------------
+    def pair_request(self, origin: str | None, body: dict) -> tuple[int, dict]:
+        """POST /pair/request: open the game's popup, as far as a mock has one."""
+        if origin and not allowed_origin(origin):
+            return 403, {"error": "origin_not_allowed"}
+        name = body.get("name")
+        if not isinstance(name, str):
+            raise BadRequest("name must be a string")
+        with self.lock:
+            if self.pair in ("busy", "main_thread_unavailable"):
+                return 503, {"error": self.pair}  # no popup shown
+            if self.pair in ("popup_open", "no_ui"):
+                return 409, {"error": "cannot_pair", "reason": self.pair}
+            if self.pair.startswith("cannot:"):
+                return 409, {"error": "cannot_pair", "reason": self.pair.split(":", 1)[1]}
+            now = time.monotonic()
+            self._settle(now)
+            if any(r["state"] == "pending" for r in self.pair_requests.values()):
+                return 429, {"error": "throttled", "retryAfter": 1}
+            # After a denial or an expiry the origin waits, longer on each repeat.
+            until = self.pair_cooldown.get(origin or "", (0, 0))[1]
+            if now < until:
+                return 429, {"error": "throttled", "retryAfter": max(1, math.ceil(until - now))}
+            rid = secrets.token_hex(8)
+            # Plain text: no < or >, no control or invisible formatting characters.
+            clean = "".join(ch for ch in name if ch not in "<>" and unicodedata.category(ch) not in ("Cc", "Cf"))
+            self.pair_requests[rid] = {"origin": origin or "", "name": clean[:40],
+                                       "at": now, "state": "pending", "token": None, "handed": False}
+            return 202, {"requestId": rid, "expiresIn": 60}
+
+    def _settle(self, now: float) -> None:
+        """The mock's player answers a pending popup once PAIR_DELAY has passed."""
+        for request in self.pair_requests.values():
+            if request["state"] != "pending" or now - request["at"] < self.pair_delay:
+                continue
+            if self.pair == "approve":
+                request["state"], request["token"] = "approved", new_token()
+                self.tokens[request["token"]] = request["origin"]
+                self.pair_cooldown.pop(request["origin"], None)
+            else:
+                request["state"] = "denied" if self.pair == "deny" else "expired"
+                repeats = self.pair_cooldown.get(request["origin"], (0, 0))[0]
+                wait = self.pair_cooldowns[min(repeats, len(self.pair_cooldowns) - 1)]
+                self.pair_cooldown[request["origin"]] = (repeats + 1, now + wait)
+
+    def pair_status(self, rid: str | None) -> tuple[int, dict]:
+        """GET /pair/status?id=: the answer, the token exactly once."""
+        with self.lock:
+            self._settle(time.monotonic())
+            request = self.pair_requests.get(rid or "")
+            if request is None:
+                return 404, {"error": "not_found"}
+            answer = {"state": request["state"]}
+            if request["state"] == "approved" and not request["handed"]:
+                answer["token"], request["handed"] = request["token"], True
+            return 200, answer
 
     # --- the save, as ba_save reads it ---------------------------------------
     def _save(self) -> ba_save.Save:
@@ -794,6 +872,8 @@ class Link:
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
+                self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
+                self.pair_cooldowns, self.pair_cooldown = list(PAIR_COOLDOWNS), {}
                 self.day, self.hour = self._clock
             if "importTerms" in body:
                 self.terms = dict(body["importTerms"] or {})
@@ -807,8 +887,14 @@ class Link:
                 self.busy_writes = int(body["busyWrites"] or 0)
             if "writes" in body:
                 self.writes = body["writes"]
-            if body.get("code"):
-                self.code = body["code"]
+            if "pair" in body:  # how the mock's player answers the next popup
+                self.pair = body["pair"] or "approve"
+            if "pairDelay" in body:
+                self.pair_delay = float(body["pairDelay"])
+            if "pairCooldowns" in body:  # the waits after a denial or an expiry, in seconds
+                self.pair_cooldowns = [float(v) for v in body["pairCooldowns"]]
+            if "tokens" in body:  # approvals already given: {token: origin}
+                self.tokens = dict(body["tokens"] or {})
             return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
                     "writes": self.writes, "applied": len(self.applied)}
 
@@ -854,7 +940,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         if route in ("/", "/health"):
-            self._json(200, self.link.health(self.link.paired(self.headers.get("Authorization"))))
+            self._json(200, self.link.health(self.link.paired(self.headers.get("Authorization"), self.headers.get("Origin"))))
+        elif route == "/pair/status":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            self._json(*self.link.pair_status((query.get("id") or [None])[0]))
         elif route == "/save":
             self._save()
         elif route == "/debug/writes":
@@ -897,6 +986,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if route == "/refresh":
             status, body = self.link.refresh()
             self._json(status, body)
+        elif route == "/pair/request":
+            if int(self.headers.get("Content-Length") or 0) > PAIR_MAX_BODY:
+                self._drain()
+                self.close_connection = True
+                self._json(413, {"error": "too_large"}, {"Connection": "close"})
+                return
+            body = self._body()
+            if body is not None:
+                try:
+                    self._json(*self.link.pair_request(self.headers.get("Origin"), body))
+                except BadRequest as err:
+                    self._json(400, {"error": "bad_request", "detail": str(err)})
         elif route in ENDPOINTS and route.startswith("/write/"):
             self._write(route[len("/write/"):])
         elif route == "/debug/config":
@@ -933,7 +1034,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Refused before the body is parsed, as the mod does. The body is read
         # off the wire and dropped, and the connection closed: anything past
         # the bound would be the next request on it.
-        if not self.link.paired(self.headers.get("Authorization")):
+        if not self.link.paired(self.headers.get("Authorization"), self.headers.get("Origin")):
             self._drain()
             self.close_connection = True
             self._json(401, {"error": "not_paired"}, {"Connection": "close"})
@@ -1023,7 +1124,8 @@ def main() -> None:
     ap.add_argument("--schema", type=int, default=SCHEMA_VERSION, help="advertise another schema version")
     ap.add_argument("--throttle", action="store_true", help="answer every POST /refresh with 429")
     ap.add_argument("--refuse", choices=["saving", "placement", "interior", "casino"], help="answer every POST /refresh with 409")
-    ap.add_argument("--code", help="the pairing code (default: drawn at start and printed)")
+    ap.add_argument("--pair", choices=PAIR_OUTCOMES, default="approve",
+                    help="how the player answers the game's approval popup, about a second after it opens")
     ap.add_argument("--writes", default=",".join(WRITE_KINDS),
                     help='the write kinds /health lists, comma-separated; "" leaves the key out, as mod 0.1.0 does')
     ap.add_argument("--refuse-write", metavar="ERROR[:DETAIL]",
@@ -1033,15 +1135,12 @@ def main() -> None:
     args = ap.parse_args()
     if not os.path.isfile(args.save):
         raise SystemExit(f"{args.save} is not a file")
-    if args.code and not re.fullmatch(f"[{PAIR_ALPHABET}]{{6}}", args.code):
-        raise SystemExit(f"--code takes six characters from {PAIR_ALPHABET}")
     writes = [k for k in args.writes.split(",") if k] if args.writes else None
     link = Link(args.save, character=args.character, company=args.company, day=args.day, hour=args.hour,
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
-                code=args.code, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes)
+                pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes)
     server = MockServer(link, args.port).start()
     print(f"Serving {args.save} as the game link at {server.url}/  (Ctrl+C to stop)", flush=True)
-    print(f"Pairing code: {link.code}", flush=True)
     try:
         while True:
             time.sleep(3600)

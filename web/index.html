@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=020c057ab7">
+<link rel="stylesheet" href="community.css?v=5b15d0fb12">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=020c057ab7">
+<link rel="stylesheet" href="fonts/fonts.css?v=5b15d0fb12">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1041,7 +1041,7 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .find:hover .go{color:var(--accent);transform:translateX(3px)}
 .find.hide{display:none}
 
-/* writes to the game: the buttons, the confirm dialog, the pairing prompt and
+/* writes to the game: the buttons, the confirm dialog, the approval wait and
    the undo strip. The dialogs are <dialog>s on <body>, in the top layer. */
 .gw-acts{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:10px;vertical-align:middle;font-weight:400}
 .gw-acts.gw-panel{display:flex;margin:10px 0 0}
@@ -1070,7 +1070,6 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .gw-refusals span{display:block;color:var(--ink-2)}
 .gw-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:14px}
 .gw-foot .btn2:disabled{opacity:.45;cursor:default;transform:none}
-.gw-pair input{font:600 20px/1.2 "IBM Plex Mono",monospace;letter-spacing:.2em;text-transform:uppercase;width:11ch;max-width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink)}
 .gw-note{align-self:center;font-size:12px;color:var(--warn)}
 .gw-dlg p.gw-warn{color:var(--warn)}
 .gw-dlg ul.gw-list{margin:0 0 10px;padding-left:18px;font-size:13px;line-height:1.5;color:var(--ink-2)}
@@ -2751,8 +2750,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "020c057ab7";</script>
-<script>window.LEDGER_RELEASE = {"version":"020c057ab7","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "5b15d0fb12";</script>
+<script>window.LEDGER_RELEASE = {"version":"5b15d0fb12","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2821,8 +2820,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=020c057ab7"></script>
-<script src="community.js?v=020c057ab7"></script>
+<script src="app.js?v=5b15d0fb12"></script>
+<script src="community.js?v=5b15d0fb12"></script>
 
 <script>
 
@@ -13440,7 +13439,7 @@ function wireKinds(){
 
 /* --- writing to the game (docs/game-link-api.md, "Writes") -------------- */
 /* In linked mode the board can change the game, and SOURCE.write() is the only
-   way there: web/app.js owns the pairing code, retries a busy game and reads
+   way there: web/app.js owns the game's approval of this browser, retries a busy game and reads
    the game again after an apply. Every write goes through gwConfirm(): a dry
    run as the dialog opens, the game's verdict row by row, Apply, then Undo.
    Outside linked mode SOURCE.link is missing or answers null, and nothing here
@@ -13629,7 +13628,15 @@ function gwProblem(res){
     case "busy": return {text: "The game stayed busy saving its state. Nothing was changed.", sub: "Try again in a moment.", retry: true};
     case "main_thread_unavailable": return {text: "The game did not take the change: no city is loaded.", retry: true};
     case "nothing_to_undo": return {text: "There is nothing left to undo: a later change replaced it, or the city was loaded again."};
-    case "cancelled": case "not_paired": return {text: "Not paired with the game, so nothing was sent.", sub: "The pairing code is in the Big Copilot Link options in the game.", retry: true};
+    /* The game's approval of this browser, asked for on the first write. */
+    case "cancelled": return {text: "Not approved in the game, so nothing was sent.", retry: true};
+    case "denied": case "expired": return {text: "Not approved in the game. Try again.", retry: true};
+    case "throttled": return {text: `The game asked you a moment ago. Try again in ${Number(res.retryAfter) || 10} s.`, retry: true};
+    case "origin_not_allowed": return {text: "The mod does not take changes from this site. Nothing was sent."};
+    case "not_paired": return {text: "The game no longer knows this browser's approval. Nothing was changed.", sub: "Try again to ask the game once more.", retry: true};
+    case "cannot_pair": return {text: res.reason === "popup_open" ? "Close the open question in the game first."
+      : res.reason === "no_ui" ? "The game cannot ask you right now. Nothing was sent."
+      : `${GW_CANNOT[res.reason] || GW_CANNOT.other}. Nothing was sent.`, sub: res.reason === "no_ui" ? "Go back into the game, then try again." : "", retry: true};
     case "unreachable": return {text: spEsc(res.message || "The game did not answer."), retry: true};
     case "uncertain": return {text: "The game did not answer, so this may or may not have been applied.",
       sub: "Reading the game again before anything else is offered…", uncertain: true};

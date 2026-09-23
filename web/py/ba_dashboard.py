@@ -9468,7 +9468,7 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .find:hover .go{color:var(--accent);transform:translateX(3px)}
 .find.hide{display:none}
 
-/* writes to the game: the buttons, the confirm dialog, the pairing prompt and
+/* writes to the game: the buttons, the confirm dialog, the approval wait and
    the undo strip. The dialogs are <dialog>s on <body>, in the top layer. */
 .gw-acts{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:10px;vertical-align:middle;font-weight:400}
 .gw-acts.gw-panel{display:flex;margin:10px 0 0}
@@ -9497,7 +9497,6 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .gw-refusals span{display:block;color:var(--ink-2)}
 .gw-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:14px}
 .gw-foot .btn2:disabled{opacity:.45;cursor:default;transform:none}
-.gw-pair input{font:600 20px/1.2 "IBM Plex Mono",monospace;letter-spacing:.2em;text-transform:uppercase;width:11ch;max-width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink)}
 .gw-note{align-self:center;font-size:12px;color:var(--warn)}
 .gw-dlg p.gw-warn{color:var(--warn)}
 .gw-dlg ul.gw-list{margin:0 0 10px;padding-left:18px;font-size:13px;line-height:1.5;color:var(--ink-2)}
@@ -17770,7 +17769,7 @@ function wireKinds(){
 
 /* --- writing to the game (docs/game-link-api.md, "Writes") -------------- */
 /* In linked mode the board can change the game, and SOURCE.write() is the only
-   way there: web/app.js owns the pairing code, retries a busy game and reads
+   way there: web/app.js owns the game's approval of this browser, retries a busy game and reads
    the game again after an apply. Every write goes through gwConfirm(): a dry
    run as the dialog opens, the game's verdict row by row, Apply, then Undo.
    Outside linked mode SOURCE.link is missing or answers null, and nothing here
@@ -17959,7 +17958,15 @@ function gwProblem(res){
     case "busy": return {text: "The game stayed busy saving its state. Nothing was changed.", sub: "Try again in a moment.", retry: true};
     case "main_thread_unavailable": return {text: "The game did not take the change: no city is loaded.", retry: true};
     case "nothing_to_undo": return {text: "There is nothing left to undo: a later change replaced it, or the city was loaded again."};
-    case "cancelled": case "not_paired": return {text: "Not paired with the game, so nothing was sent.", sub: "The pairing code is in the Big Copilot Link options in the game.", retry: true};
+    /* The game's approval of this browser, asked for on the first write. */
+    case "cancelled": return {text: "Not approved in the game, so nothing was sent.", retry: true};
+    case "denied": case "expired": return {text: "Not approved in the game. Try again.", retry: true};
+    case "throttled": return {text: `The game asked you a moment ago. Try again in ${Number(res.retryAfter) || 10} s.`, retry: true};
+    case "origin_not_allowed": return {text: "The mod does not take changes from this site. Nothing was sent."};
+    case "not_paired": return {text: "The game no longer knows this browser's approval. Nothing was changed.", sub: "Try again to ask the game once more.", retry: true};
+    case "cannot_pair": return {text: res.reason === "popup_open" ? "Close the open question in the game first."
+      : res.reason === "no_ui" ? "The game cannot ask you right now. Nothing was sent."
+      : `${GW_CANNOT[res.reason] || GW_CANNOT.other}. Nothing was sent.`, sub: res.reason === "no_ui" ? "Go back into the game, then try again." : "", retry: true};
     case "unreachable": return {text: spEsc(res.message || "The game did not answer."), retry: true};
     case "uncertain": return {text: "The game did not answer, so this may or may not have been applied.",
       sub: "Reading the game again before anything else is offered…", uncertain: true};
