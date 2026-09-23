@@ -408,6 +408,10 @@ differ:
 - Plain contracts on one line split cap-aware (Peter, 23 September 2026): one budget per importer and
   item across the whole write, walked in the game's delivery order; demand the caps leave is shown
   before Apply. A Smart Delivery contract ahead in that order is named in the dialog, not budgeted.
+- No pairing code (Peter, 23 September 2026, after trying it in game: a code every launch is too
+  annoying). The first write from a browser shows the game's own confirm popup; the player approves
+  once per browser, remembered across launches (game-link-api.md, "Approving a browser"). This
+  replaces section 2's pairing code and sessionStorage.
 - Schedule writes are refused at a headquarters (its shifts follow the day's opening slot on every
   open day, and unassigning people there clears plans and import agents).
 - Offices get a default plan of their own (a board branch, not the mod): computers staffed 24/7 = 3

@@ -116,7 +116,8 @@ state from the listener's threads.
   than the served bytes.
 - `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
   sends no `writes`, which a client reads as `[]`. `paired` is true only when this request
-  carried the right pairing code, so a code-free poll always says false. Both are
+  carried a token the game approved for its origin, so a poll without one always says
+  false. Both are
   additive: `schemaVersion` stays 1.
 
 ### `GET /save`
@@ -172,14 +173,14 @@ and a fourth undoes the last write of a kind. The scope and the game rules behin
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
 at most 256 KiB, else `413 {"error":"too_large"}`) and the header
-`Authorization: Bearer <code>`.
+`Authorization: Bearer <token>`, the token the game issued this browser when the player
+approved it (see "Approving a browser" below).
 
 - A request that names the same site, contract or product twice is `400 bad_request`.
-- **Pairing code.** Six characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, drawn once per
-  game launch (a city reload keeps it). The mod shows it on demand: the options panel's
-  "Copy pairing code" button puts it on the clipboard and shows it in an in-game
-  notification. A missing or wrong code answers `401 {"error":"not_paired"}` before the
-  body is read. Reads (`/health`, `/save`, `/refresh`) never need it.
+- **Approval.** A missing, unknown, expired or forgotten token, or one used from another
+  origin than the one it was issued to, answers `401 {"error":"not_paired"}` before the body
+  is read; the page drops its token and asks the game again. Reads (`/health`, `/save`,
+  `/refresh`) never need one.
 - **Dry run.** `"dryRun": true` in the body runs every check and answers the verdict and
   the values the game would hold, applying nothing. A well-formed, paired dry run always
   answers `200`, with `"ok": false` and the per-row `error`s when the real write would be
@@ -210,7 +211,7 @@ at most 256 KiB, else `413 {"error":"too_large"}`) and the header
 | --- | --- | --- |
 | `200` | `{"ok": true, "kind", "dryRun", ...}` | Applied, or a dry run's verdict (`ok` false when an apply would be refused) |
 | `400` | `{"error":"bad_request","detail":"<what>"}` | Not JSON, a missing or mistyped field |
-| `401` | `{"error":"not_paired"}` | Pairing code missing or wrong |
+| `401` | `{"error":"not_paired"}` | No valid token for this origin: ask the game to approve this browser |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
 | `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`) |
@@ -220,6 +221,47 @@ at most 256 KiB, else `413 {"error":"too_large"}`) and the header
 `rows` in a `409` has the same shape as in the dry run's `200`, so the page renders both
 the same way. An address on the wire is `{"street": "<StreetName>", "number": <StreetNumber>}`,
 the two fields of the building registration as the save holds them.
+
+#### Approving a browser
+
+The first write from a browser asks the player in the game, once; the answer is remembered
+for that browser across game launches.
+
+1. `POST /pair/request {"name": "Chrome on Windows"}`, no token, from an allowed origin
+   (a request with no `Origin`, such as the CLI watcher, is its own origin, shown as "a
+   program on this computer"). `name` is the page's own short label for the browser: the
+   mod strips `<` and `>` and cuts it at 40 characters. The mod shows the game's own confirm
+   popup (`HudConfirm`), "Allow Big Copilot to change your game?", naming the origin and the
+   name, with Allow and Deny, and answers `202 {"requestId": "...", "expiresIn": 60}`.
+2. `GET /pair/status?id=<requestId>` answers `{"state": "pending"}`, `{"state": "denied"}`
+   (Deny, or the popup dismissed: Escape, opening the phone), `{"state": "expired"}` (60 s
+   without an answer; the mod closes its own popup), or `{"state": "approved", "token":
+   "..."}`. The token is 32 random bytes, base64url, and is answered exactly once; later
+   polls of an approved request answer `{"state": "approved"}` without it. The page polls
+   every second. An unknown id answers `404 {"error": "not_found"}`.
+3. The page keeps the token in `localStorage` for its origin and sends it as
+   `Authorization: Bearer <token>` on every write.
+
+Refusals of `POST /pair/request`:
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `409` | `{"error":"cannot_pair","reason":"popup_open"}` | The game's confirm popup is already open |
+| `409` | `{"error":"cannot_pair","reason":"no_ui"}` | The game has no popup to show right now |
+| `409` | `{"error":"cannot_pair","reason":"saving"}` | As `cannot_write`: `saving`, `placement`, `interior`, `casino`, `other` |
+| `429` | `{"error":"throttled","retryAfter":<s>}` | A request is already pending, or this origin was denied in the last 10 s |
+
+Rules the mod keeps:
+
+- The popup is never skippable (`allowConfirmationSkip` false), and the mod refuses to call
+  it when no popup UI is registered, since the game would then confirm unseen.
+- A confirm that lands within one second of the popup opening is taken as a dismissal, not
+  an approval: the game also confirms on its Confirm key, which the player may have been
+  pressing for something else.
+- Approved browsers are stored in `PlayerPrefs` (`BigCopilotLink.approved`) as the SHA-256
+  of each token with its origin, name, and when it was made and last used; never the token
+  itself. At most 10 are kept (the oldest goes); one unused for 90 days expires. The mod's
+  options panel has "Forget approved browsers".
 
 #### `POST /write/uniforms`
 
