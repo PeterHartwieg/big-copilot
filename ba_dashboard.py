@@ -18199,7 +18199,7 @@ function gwImportPlan(depotKey){
   const lineOf = new Map(lines.filter(l => !l.r.smart).map(l => [l.r, l]));
   const smartLineOf = new Map(lines.filter(l => l.r.smart).map(l => [l.r, l]));
   const amounts = new Map();  // "<id>|<item>|<depot key>" -> the amount written
-  const started = new Set();
+  const started = new Set(), smartStarted = new Set();
 
   /* Every product of every contract the payload places, in delivery order. */
   const walk = gwImportRows.flatMap(r => r.contracts.map(c => ({c, r, line: lineOf.get(r) || null})))
@@ -18250,6 +18250,7 @@ function gwImportPlan(depotKey){
       const setHere = e => { const here = smartLineOf.get(e.r); return here && here.usable.includes(e.c) ? here : null; };
       /* Started when a Smart line here gives any of its products a level. */
       if(!c.active && !group.some(e => setHere(e) && setHere(e).r.value > 0)) continue;
+      if(!c.active) smartStarted.add(c.id);
       group.forEach(e => {
         const level = setHere(e) ? setHere(e).r.value : e.c.amount;
         if(!(level > 0)) return;
@@ -18279,10 +18280,12 @@ function gwImportPlan(depotKey){
   lines.forEach(l => {
     const {r, depot} = l;
     /* Why a week is left uncovered: the caps, no contract that runs, or none at all. */
-    l.cause = l.usable.length ? "caps" : r.contracts.length ? "agent" : "none";
+    l.cause = l.usable.length ? "caps"
+      : r.contracts.some(c => !!c.smart === !!r.smart) ? (r.smart ? "smartAgent" : "agent") : "none";
     if(r.smart){
+      /* A Smart contract this write starts is written on every line here, 0 included. */
       l.contracts = l.usable.map(c => ({c, amount: r.value}))
-        .filter(({c, amount}) => c.active ? amount !== c.amount : amount > 0);
+        .filter(({c, amount}) => c.active ? amount !== c.amount : smartStarted.has(c.id));
       return;
     }
     l.uncovered = l.need;
@@ -18297,7 +18300,7 @@ const gwImportLines = depotKey => gwImportPlan(depotKey).filter(l => l.contracts
 /* What a plan leaves uncovered, said the same way in the dialog and when
    there is nothing to write. */
 const GW_UNCOVERED = {caps: "the importers' caps are reached", agent: "no contract for it here has a purchasing agent",
-                     none: "no contract here"};
+                     smartAgent: "no Smart Delivery contract here has a purchasing agent", none: "no contract here"};
 /* A line a write leaves short, or leaves as it is when the Set to box asks
    otherwise: the row, the dialog and the empty dialog all say why, and the
    same way. */
@@ -18311,11 +18314,13 @@ function gwLineWords(l, place){
     : `${Math.round(l.uncovered).toLocaleString()} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
   else if(l.cause !== "caps") words.push(place ? `<b>${at}</b>: ${GW_UNCOVERED[l.cause]}.`
     : `${GW_UNCOVERED[l.cause].replace(/^./, x => x.toUpperCase())}.`);
+  /* Stopping it is the advice only where the others cover the week; short of
+     it, the cap is what leaves the kept contract nothing to bring. */
   l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${c.amount.toLocaleString()} a week${
-    place ? ` of ${at}` : ""}: a write never stops a contract; stop it in BizMan.`));
+    place ? ` of ${at}` : ""}: ${l.uncovered > 0 ? "its importer's cap leaves it nothing this week"
+      : "a write never stops a contract; stop it in BizMan"}.`));
   return words;
 }
-const gwUncovered = l => gwLineWords(l, true)[0] || "";
 /* The request: one entry per contract, its products from every line it serves. */
 function gwImportBody(lines){
   const byId = new Map();
@@ -18384,7 +18389,7 @@ function gwImportLead(answer, lines){
       fmt(cash)} you hold: the game stops a contract it cannot pay for at delivery.`);
   /* A Smart Delivery write sets the level alone; the plain contracts on the
      line keep their amounts, which the level already counts. */
-  lines.filter(l => l.r.smart).forEach(l => {
+  lines.filter(l => l.r.smart && l.contracts.length).forEach(l => {
     const plain = l.r.contracts.filter(c => !c.smart);
     if(plain.length) items.push(`The plain ${plain.length === 1 ? "contract" : "contracts"} for ${spEsc(l.r.item)} at ${
       spEsc(l.depot.name)} (${plain.map(c => spEsc(c.importer || "Importer")).join(", ")}) ${

@@ -572,6 +572,52 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
                                  {at: got.gifts, set: [['F', 0]], uncovered: 0, ahead: []}]);
 });
 
+test('imports: Smart Delivery contracts the write starts, and the lines it leaves as they are', async (t) => {
+  const page = await linked(t, {code: CODE});
+  const got = await page.evaluate(() => {
+    const saved = gwImportRows;
+    const row = (s, slug, value, contracts, {smart = false, changed = true} = {}) => ({s, slug, item: slug.slice(-1).toUpperCase(),
+      value, smart, changed, paused: false, total: value, impId: `${s}${slug}`, contracts});
+    const c = (id, importer, order, amount, {active = true, product = 0, smart = false, agent = true} = {}) =>
+      ({id, importer, group: 0, order, product, amount, active, smart, agent});
+    const plan = (rows) => { gwImportRows = rows; return gwImportPlan(null); };
+    const said = (lines) => gwImportLead({rows: []}, lines.filter((l) => l.contracts.length || gwNeedsWord(l)));
+    gwTerms.clear();
+    // S, stopped, is started by its X line at 500: its Y line, at 0 here, is
+    // written too. Its Z product, at no line here, orders ahead of B at its
+    // standing 300; T, started as well, holds Z at 0 and is not named.
+    const S = (product, amount) => c('S', 'P', 0, amount, {active: false, smart: true, product});
+    const T = (product, amount) => c('T', 'P', 1, amount, {active: false, smart: true, product});
+    const lines = plan([
+      row(3, 'ba:itemname_x', 500, [S(0, 100), T(0, 100)], {smart: true}),
+      row(1, 'ba:itemname_y', 0, [S(1, 200)], {smart: true}),
+      row(2, 'ba:itemname_z', 0, [S(2, 300), T(1, 0)], {smart: true, changed: false}),
+      row(0, 'ba:itemname_z', 400, [c('B', 'P', 5, 100)]),
+      row(1, 'ba:itemname_z', 400, [c('C', 'P', 6, 100)]),
+    ]);
+    const smart = lines.filter((l) => l.r.smart).map((l) => l.contracts.map(({c, amount}) => [c.id, amount]));
+    const ahead = lines.filter((l) => !l.r.smart).map((l) => l.smartAhead.map((e) => [e.c.id, e.level]));
+    const lead = said(lines);
+    // A kept contract with the week covered, and a Smart line with no agent on its contract.
+    gwTerms.set(`A|ba:itemname_q|${D.businesses[3].key}`, {cap: 500, orderedThisWeek: 0, max: null});
+    const quiet = plan([row(3, 'ba:itemname_q', 0, [c('G', 'P', 2, 300)]),
+                        row(0, 'ba:itemname_w', 700, [c('H', 'P', 3, 100, {smart: true, agent: false})], {smart: true})]);
+    const words = quiet.map((l) => [gwNeedsWord(l), l.cause]);
+    const lead2 = said(quiet);
+    gwImportRows = saved; gwTerms.clear();
+    return {smart, ahead, lead, words, lead2};
+  });
+  assert.deepEqual(got.smart, [[['S', 500], ['T', 500]], [['S', 0]]]);
+  // S is named once per item for B and C, at its standing Z level; T's 0 is not named.
+  assert.deepEqual(got.ahead, [[['S', 300]], [['S', 300]]]);
+  assert.equal((got.lead.match(/orders first/g) || []).length, 1);
+  assert.match(got.lead, /P's Smart Delivery contract for Z at HART\. Bare orders first and can use up to 300 of the cap\./);
+  assert.deepEqual(got.words, [[true, 'caps'], [true, 'smartAgent']]);
+  assert.match(got.lead2, /<b>P<\/b> keeps its 300 a week of Q at HART\. Depot: a write never stops a contract; stop it in BizMan\./);
+  assert.match(got.lead2, /<b>W at HART\. Gifts<\/b>: no Smart Delivery contract here has a purchasing agent\./);
+  assert.doesNotMatch(got.lead2, /not covered/);
+});
+
 test('imports: a week the caps leave short with nothing to write is said, and not counted', async (t) => {
   const page = await linked(t, {code: CODE});
   await configure({importTerms: {CONTRACTthree: {unitPrice: 2.5, cap: 0}}});

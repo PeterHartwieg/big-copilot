@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=3a283ff9ec">
+<link rel="stylesheet" href="community.css?v=020c057ab7">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=3a283ff9ec">
+<link rel="stylesheet" href="fonts/fonts.css?v=020c057ab7">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2751,8 +2751,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "3a283ff9ec";</script>
-<script>window.LEDGER_RELEASE = {"version":"3a283ff9ec","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "020c057ab7";</script>
+<script>window.LEDGER_RELEASE = {"version":"020c057ab7","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2821,8 +2821,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=3a283ff9ec"></script>
-<script src="community.js?v=3a283ff9ec"></script>
+<script src="app.js?v=020c057ab7"></script>
+<script src="community.js?v=020c057ab7"></script>
 
 <script>
 
@@ -13869,7 +13869,7 @@ function gwImportPlan(depotKey){
   const lineOf = new Map(lines.filter(l => !l.r.smart).map(l => [l.r, l]));
   const smartLineOf = new Map(lines.filter(l => l.r.smart).map(l => [l.r, l]));
   const amounts = new Map();  // "<id>|<item>|<depot key>" -> the amount written
-  const started = new Set();
+  const started = new Set(), smartStarted = new Set();
 
   /* Every product of every contract the payload places, in delivery order. */
   const walk = gwImportRows.flatMap(r => r.contracts.map(c => ({c, r, line: lineOf.get(r) || null})))
@@ -13920,6 +13920,7 @@ function gwImportPlan(depotKey){
       const setHere = e => { const here = smartLineOf.get(e.r); return here && here.usable.includes(e.c) ? here : null; };
       /* Started when a Smart line here gives any of its products a level. */
       if(!c.active && !group.some(e => setHere(e) && setHere(e).r.value > 0)) continue;
+      if(!c.active) smartStarted.add(c.id);
       group.forEach(e => {
         const level = setHere(e) ? setHere(e).r.value : e.c.amount;
         if(!(level > 0)) return;
@@ -13949,10 +13950,12 @@ function gwImportPlan(depotKey){
   lines.forEach(l => {
     const {r, depot} = l;
     /* Why a week is left uncovered: the caps, no contract that runs, or none at all. */
-    l.cause = l.usable.length ? "caps" : r.contracts.length ? "agent" : "none";
+    l.cause = l.usable.length ? "caps"
+      : r.contracts.some(c => !!c.smart === !!r.smart) ? (r.smart ? "smartAgent" : "agent") : "none";
     if(r.smart){
+      /* A Smart contract this write starts is written on every line here, 0 included. */
       l.contracts = l.usable.map(c => ({c, amount: r.value}))
-        .filter(({c, amount}) => c.active ? amount !== c.amount : amount > 0);
+        .filter(({c, amount}) => c.active ? amount !== c.amount : smartStarted.has(c.id));
       return;
     }
     l.uncovered = l.need;
@@ -13967,7 +13970,7 @@ const gwImportLines = depotKey => gwImportPlan(depotKey).filter(l => l.contracts
 /* What a plan leaves uncovered, said the same way in the dialog and when
    there is nothing to write. */
 const GW_UNCOVERED = {caps: "the importers' caps are reached", agent: "no contract for it here has a purchasing agent",
-                     none: "no contract here"};
+                     smartAgent: "no Smart Delivery contract here has a purchasing agent", none: "no contract here"};
 /* A line a write leaves short, or leaves as it is when the Set to box asks
    otherwise: the row, the dialog and the empty dialog all say why, and the
    same way. */
@@ -13981,11 +13984,13 @@ function gwLineWords(l, place){
     : `${Math.round(l.uncovered).toLocaleString()} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
   else if(l.cause !== "caps") words.push(place ? `<b>${at}</b>: ${GW_UNCOVERED[l.cause]}.`
     : `${GW_UNCOVERED[l.cause].replace(/^./, x => x.toUpperCase())}.`);
+  /* Stopping it is the advice only where the others cover the week; short of
+     it, the cap is what leaves the kept contract nothing to bring. */
   l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${c.amount.toLocaleString()} a week${
-    place ? ` of ${at}` : ""}: a write never stops a contract; stop it in BizMan.`));
+    place ? ` of ${at}` : ""}: ${l.uncovered > 0 ? "its importer's cap leaves it nothing this week"
+      : "a write never stops a contract; stop it in BizMan"}.`));
   return words;
 }
-const gwUncovered = l => gwLineWords(l, true)[0] || "";
 /* The request: one entry per contract, its products from every line it serves. */
 function gwImportBody(lines){
   const byId = new Map();
@@ -14054,7 +14059,7 @@ function gwImportLead(answer, lines){
       fmt(cash)} you hold: the game stops a contract it cannot pay for at delivery.`);
   /* A Smart Delivery write sets the level alone; the plain contracts on the
      line keep their amounts, which the level already counts. */
-  lines.filter(l => l.r.smart).forEach(l => {
+  lines.filter(l => l.r.smart && l.contracts.length).forEach(l => {
     const plain = l.r.contracts.filter(c => !c.smart);
     if(plain.length) items.push(`The plain ${plain.length === 1 ? "contract" : "contracts"} for ${spEsc(l.r.item)} at ${
       spEsc(l.depot.name)} (${plain.map(c => spEsc(c.importer || "Importer")).join(", ")}) ${
