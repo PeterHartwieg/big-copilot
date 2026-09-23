@@ -6066,7 +6066,7 @@ def _market(
     by_item_hood = {
         (row["slug"], cell["hood"]): cell for row in rows for cell in row["cells"]
     }
-    catalogue = _type_catalogue(save, names, {row["slug"] for row in rows})
+    catalogue = _type_catalogue(names, {row["slug"] for row in rows})
     mine_types = {
         b["typeSlug"] for b in businesses if b["status"] in ("retail", "office")
     }
@@ -6242,49 +6242,19 @@ def _group_movers(singles: list, family: dict, opened_in: dict) -> list:
     return out[:6]
 
 
-def _type_catalogue(save: Save, names: Names, tradeable: set) -> dict:
-    """Which products each kind of business sells.
+def _type_catalogue(names: Names, tradeable: set) -> dict:
+    """Which products each kind of business the player can open sells.
 
-    The game's own F1 help page for a type is the answer wherever it has one
-    — see _type_catalogue_from_help() — so a store restocked with something
-    unrelated to its licence can never skew it. For a type that page does not
-    cover (a license this city has not built, or the game files are not on
-    this machine), the range is learned from the city itself instead: every
-    rival shop of that type contributes its price list, and an item only
-    counts once at least two of them carry it — one repurposed shop cannot
-    flood a type's whole range with its own one-off restock. A type with only
-    one business in the city keeps whatever that one business has, for lack
-    of anything to check it against.
+    The game's F1 help lists every business type a player can open, each with
+    its own page — see _type_catalogue_from_help() — and the game text shipped
+    with the board carries those pages too, so the list never has to be
+    guessed. It holds a type whether or not anybody in the city runs one. The
+    city's own gas stations, wholesalers and casino sell products as well but
+    have no page, because nobody can open one; learning types from the city's
+    shops once let them rank as a business to open.
     """
-    known = _type_catalogue_from_help(names)
-
-    counts = collections.defaultdict(collections.Counter)
-    carriers = collections.Counter()
-    for b in save.items(save.root["BuildingRegistrations"]):
-        kind = b.get("businessTypeName")
-        if not kind or kind == "ba:businesstype_empty" or kind in known:
-            continue
-        items = set()
-        for price in save.items(b.get("retailPrices")):
-            if price and price["itemName"] in tradeable and price["itemName"] not in AMENITY_ITEMS:
-                items.add(price["itemName"])
-        for item in save.items(b.get("cachedAvailableProducts")):
-            if isinstance(item, str) and item in tradeable and item not in AMENITY_ITEMS:
-                items.add(item)
-        if not items:
-            continue
-        carriers[kind] += 1
-        for item in items:
-            counts[kind][item] += 1
-
     catalogue = {}
-    for kind, item_counts in counts.items():
-        threshold = min(2, carriers[kind])
-        kept = {item for item, n in item_counts.items() if n >= threshold}
-        if kept:
-            catalogue[kind] = kept
-
-    for kind, items in known.items():
+    for kind, items in _type_catalogue_from_help(names).items():
         kept = items & tradeable
         if kept:
             catalogue[kind] = kept
