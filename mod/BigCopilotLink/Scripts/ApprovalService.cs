@@ -29,7 +29,12 @@ namespace BigCopilotLink
         private const int MaxApproved = 10;
         private const int IdleDaysBeforeExpiry = 90;
         private const int PopupSeconds = 60;
-        private const int DeniedCooldownSeconds = 10;
+        /// <summary>
+        /// How long an origin waits after a refusal or an expiry: longer each time within
+        /// <see cref="StrikeMemoryMinutes"/>, back to the first step after an approval.
+        /// </summary>
+        private static readonly int[] CooldownSeconds = { 10, 30, 120 };
+        private const int StrikeMemoryMinutes = 10;
 
         /// <summary>A confirm faster than this after the popup opened is a dismissal: the game also confirms on a key.</summary>
         private const double FastConfirmSeconds = 1.0;
@@ -45,6 +50,10 @@ namespace BigCopilotLink
         private const int MainThreadWaitMs = 3000;
 
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        // The popup's one-second and sixty-second rules run on a monotonic clock: a wall
+        // clock the player changes (or that the system corrects) must not stretch them.
+        private static readonly System.Diagnostics.Stopwatch Clock = System.Diagnostics.Stopwatch.StartNew();
 
         // HudConfirmUi keeps the confirm action of the popup it shows in a private field;
         // comparing it with ours tells our popup from another one.
@@ -77,7 +86,8 @@ namespace BigCopilotLink
             public string Name;
             public string State = "pending";
             public string Token;
-            public DateTime ShownUtc;
+            /// <summary>Seconds on <see cref="Clock"/> when the popup opened.</summary>
+            public double ShownAt;
             public Action OnConfirm;
         }
 
@@ -88,7 +98,13 @@ namespace BigCopilotLink
         private readonly Dictionary<string, Request> _requests = new Dictionary<string, Request>(StringComparer.Ordinal);
         private Request _pending;
         // Main thread only.
-        private readonly Dictionary<string, DateTime> _deniedAt = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        private sealed class Strikes
+        {
+            public int Count;
+            public double At;
+        }
+
+        private readonly Dictionary<string, Strikes> _strikes = new Dictionary<string, Strikes>(StringComparer.Ordinal);
         private bool _cleared;
 
         /// <summary>Main thread, at city load: the approvals of earlier launches, the expired ones dropped.</summary>
@@ -209,14 +225,19 @@ namespace BigCopilotLink
             return task.Result;
         }
 
-        /// <summary>Strips what TextMeshPro would read as markup and control characters; at most 40 characters.</summary>
+        /// <summary>
+        /// Strips what TextMeshPro would read as markup, control characters and Unicode
+        /// format characters (bidirectional overrides, zero-width marks: text that could
+        /// make the popup read other than it is); at most 40 characters.
+        /// </summary>
         private static string CleanName(string name)
         {
             if (name == null) return "";
             var sb = new StringBuilder();
             foreach (var ch in name)
             {
-                if (ch == '<' || ch == '>' || char.IsControl(ch)) continue;
+                if (ch == '<' || ch == '>' || char.IsControl(ch) ||
+                    char.GetUnicodeCategory(ch) == UnicodeCategory.Format) continue;
                 sb.Append(ch);
             }
             var clean = sb.ToString().Trim();
@@ -226,29 +247,29 @@ namespace BigCopilotLink
         private WriteAnswer StartOnMainThread(string origin, string name)
         {
             if (_cleared) return WriteAnswer.Error(503, "main_thread_unavailable");
-            var now = DateTime.UtcNow;
+            var now = Clock.Elapsed.TotalSeconds;
 
             lock (_gate)
             {
-                if (_pending != null)
-                {
-                    var left = PopupSeconds - (now - _pending.ShownUtc).TotalSeconds;
-                    return Throttled(left);
-                }
+                if (_pending != null) return Throttled(PopupSeconds - (now - _pending.ShownAt));
             }
-            DateTime denied;
-            if (_deniedAt.TryGetValue(origin, out denied) && (now - denied).TotalSeconds < DeniedCooldownSeconds)
-                return Throttled(DeniedCooldownSeconds - (now - denied).TotalSeconds);
+            var wait = CooldownLeft(origin, now);
+            if (wait > 0) return Throttled(wait);
 
             // HudConfirm.Show confirms unseen when no popup UI is registered, and drops
             // the call without a callback when one is already open: refuse both first.
-            if (global::HudConfirm.onShow == null) return CannotPair("no_ui");
+            // Over the city map no popup is known to show (the map swaps the camera's
+            // culling mask and its own UI in), so the page asks again once it is closed.
+            if (global::HudConfirm.onShow == null || global::CityMap.IsOpen) return CannotPair("no_ui");
             if (global::HudConfirm.isOpen) return CannotPair("popup_open");
             if (SaveGameManager.SavingGameInProgress) return CannotPair("saving");
             if (!SaveService.CanSaveNow()) return CannotPair(SaveService.RefusalReason());
             if (SaveGameManager.Current == null) return CannotPair("other");
 
-            var request = new Request { Id = NewId(), Origin = origin, Name = name, ShownUtc = now };
+            // A name that is itself a localisation key would show as the game's text for
+            // that key: change it so it cannot.
+            if (name.Length > 0 && Localizor.LocalizorManager.IsLocalizedKey(name)) name = name + "_";
+            var request = new Request { Id = NewId(), Origin = origin, Name = name, ShownAt = now };
             request.OnConfirm = delegate { OnConfirm(request); };
 
             try
@@ -322,24 +343,36 @@ namespace BigCopilotLink
 
             // The game confirms on its Confirm key too; a confirm this soon after the
             // popup opened is more likely a key pressed for something else than a
-            // decision, so it counts as a dismissal.
-            if ((DateTime.UtcNow - request.ShownUtc).TotalSeconds < FastConfirmSeconds)
+            // decision, so it counts as a dismissal. One after the deadline is too late:
+            // the pump may simply not have run yet.
+            var shownFor = Clock.Elapsed.TotalSeconds - request.ShownAt;
+            if (shownFor < FastConfirmSeconds)
             {
-                Deny(request);
+                End(request, "denied");
+                return;
+            }
+            if (shownFor >= PopupSeconds)
+            {
+                End(request, "expired");
                 return;
             }
 
             var token = NewToken();
             var now = NowSeconds();
             var list = new List<Entry>(_entries);
-            list.Add(new Entry(Sha256(token), request.Origin, request.Name, now, now));
-            // At most ten: the one used longest ago goes.
+            var added = new Entry(Sha256(token), request.Origin, request.Name, now, now);
+            list.Add(added);
+            // At most ten. A browser approved and never used goes first (the oldest such),
+            // then the one used longest ago; never the one approved just now.
             while (list.Count > MaxApproved)
             {
-                var oldest = 0;
-                for (var i = 1; i < list.Count; i++)
-                    if (list[i].LastUsed < list[oldest].LastUsed) oldest = i;
-                list.RemoveAt(oldest);
+                var victim = -1;
+                for (var i = 0; i < list.Count; i++)
+                {
+                    if (ReferenceEquals(list[i], added)) continue;
+                    if (victim < 0 || Worse(list[i], list[victim])) victim = i;
+                }
+                list.RemoveAt(victim);
             }
             _entries = list.ToArray();
             Save();
@@ -350,25 +383,62 @@ namespace BigCopilotLink
                 request.Token = token;
                 if (_pending == request) _pending = null;
             }
+            _strikes.Remove(request.Origin);
             LinkMod.LogInfo("approved a browser (" + (request.Origin.Length == 0 ? "no origin" : request.Origin) + ").");
         }
 
-        private void OnCancel(Request request)
+        /// <summary>Evicted before the other: never used after approval, then used longer ago.</summary>
+        private static bool Worse(Entry a, Entry b)
         {
-            if (_cleared) return;
-            Deny(request);
+            var aUnused = a.LastUsed == a.Created;
+            var bUnused = b.LastUsed == b.Created;
+            if (aUnused != bUnused) return aUnused;
+            return a.LastUsed < b.LastUsed;
         }
 
         /// <summary>Deny, Escape, the phone opening: the game gives them all the one cancel callback.</summary>
-        private void Deny(Request request)
+        private void OnCancel(Request request)
+        {
+            if (_cleared) return;
+            End(request, "denied");
+        }
+
+        /// <summary>
+        /// Main thread. A request ends unapproved ("denied" or "expired"), and its origin
+        /// waits before it may ask again, longer on each repeat.
+        /// </summary>
+        private void End(Request request, string state)
         {
             lock (_gate)
             {
                 if (request.State != "pending") return;
-                request.State = "denied";
+                request.State = state;
                 if (_pending == request) _pending = null;
             }
-            _deniedAt[request.Origin] = DateTime.UtcNow;
+            Strike(request.Origin);
+        }
+
+        private void Strike(string origin)
+        {
+            var now = Clock.Elapsed.TotalSeconds;
+            Strikes strikes;
+            if (!_strikes.TryGetValue(origin, out strikes) || now - strikes.At > StrikeMemoryMinutes * 60.0)
+            {
+                strikes = new Strikes();
+                _strikes[origin] = strikes;
+            }
+            strikes.Count++;
+            strikes.At = now;
+        }
+
+        /// <summary>Seconds this origin must still wait; 0 when it may ask.</summary>
+        private double CooldownLeft(string origin, double now)
+        {
+            Strikes strikes;
+            if (!_strikes.TryGetValue(origin, out strikes) || strikes.Count == 0) return 0;
+            var step = Math.Min(strikes.Count, CooldownSeconds.Length) - 1;
+            var left = CooldownSeconds[step] - (now - strikes.At);
+            return left > 0 ? left : 0;
         }
 
         /// <summary>
@@ -378,23 +448,19 @@ namespace BigCopilotLink
         public void PumpOnMainThread()
         {
             if (_cleared) return;
-            var now = DateTime.UtcNow;
+            var now = Clock.Elapsed.TotalSeconds;
             Request expired = null;
             lock (_gate)
             {
-                if (_pending != null && (now - _pending.ShownUtc).TotalSeconds >= PopupSeconds)
-                {
-                    expired = _pending;
-                    expired.State = "expired";
-                    _pending = null;
-                }
+                if (_pending != null && now - _pending.ShownAt >= PopupSeconds) expired = _pending;
 
                 var old = new List<string>();
                 foreach (var pair in _requests)
-                    if (pair.Value.State != "pending" && (now - pair.Value.ShownUtc).TotalMinutes > RememberRequestMinutes)
+                    if (pair.Value.State != "pending" && now - pair.Value.ShownAt > RememberRequestMinutes * 60.0)
                         old.Add(pair.Key);
                 foreach (var id in old) _requests.Remove(id);
             }
+            if (expired != null) End(expired, "expired");
 
             // Its state is already "expired", so the cancel callback closing it fires
             // changes nothing.
@@ -414,13 +480,13 @@ namespace BigCopilotLink
 
         /// <summary>
         /// True when the open confirm popup is this request's: a HudConfirmUi holding its
-        /// confirm action. Without the private field (a later build), an open popup
-        /// counts as ours, which it is unless ours vanished without an answer.
+        /// confirm action. Without the private field (a later build) nothing proves it is
+        /// ours, so it is left open: closing the player's own popup would be worse than
+        /// leaving ours to them.
         /// </summary>
         private static bool OurPopupIsOpen(Request request)
         {
-            if (!global::HudConfirm.isOpen) return false;
-            if (PopupConfirmAction == null) return true;
+            if (!global::HudConfirm.isOpen || PopupConfirmAction == null) return false;
             // Inactive ones too: which popup draws depends on whether the phone is open.
             foreach (var ui in UnityEngine.Resources.FindObjectsOfTypeAll<global::HudConfirmUi>())
                 if (ReferenceEquals(PopupConfirmAction.GetValue(ui), request.OnConfirm)) return true;
@@ -538,9 +604,10 @@ namespace BigCopilotLink
                         (long)JsonReader.Num(o, "lastUsed", "approved[]")));
                 }
             }
-            catch (BadRequestException e)
+            catch (Exception e)
             {
-                // A value this mod did not write: start over rather than fail every write.
+                // A value this mod did not write (or one cut short): start over rather than
+                // fail every write, and never fail the city load.
                 LinkMod.LogWarn("the stored approved browsers could not be read (" + e.Message + "); starting with none.");
                 list.Clear();
             }

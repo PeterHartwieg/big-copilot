@@ -66,11 +66,14 @@ under "Writes":
   the game gives a browser once you allow it. The first write from a browser asks in the
   game, with the game's own confirm popup: "Allow Big Copilot to change your game?",
   naming the page's origin and the browser. **Allow** approves that browser for good, across
-  game launches; **Deny**, Escape or opening the phone refuses (the same page can ask again
-  after 10 seconds); a popup left for 60 seconds closes itself. A confirm within a second of
-  the popup opening counts as a dismissal, because the game also confirms on its Confirm
-  key. A token works only from the origin it was issued to. At most 10 browsers are kept (the
-  one used longest ago goes), and one unused for 90 days expires. **Forget approved
+  game launches; **Deny**, Escape or opening the phone refuses, and a popup left for 60
+  seconds closes itself. After either, that page waits before it may ask again: 10 seconds,
+  then 30, then 120 for repeats within ten minutes, back to 10 after an approval. A confirm
+  within a second of the popup opening counts as a Deny, because the game also confirms on
+  its Confirm key. No popup is shown while the city map is open. The browser name the page
+  sends is shown stripped of markup and invisible formatting characters. A token works only
+  from the origin it was issued to. At most 10 browsers are kept (one approved but never
+  used goes first, then the one used longest ago), and one unused for 90 days expires. **Forget approved
   browsers** in the mod's options withdraws every approval. Reads (`/health`, `/save`,
   `/refresh`) never need a token.
 - **The game's own rules.** Every write is checked on the game's main thread against
@@ -274,15 +277,17 @@ the new bytes.
      `/health` from that page says `"paired":true`. Restart the game: the same browser
      writes without asking.
    - *Deny.* Deny: the page says it was not approved; asking again within 10 seconds
-     answers 429, after that the popup shows again.
+     answers 429, after that the popup shows again. Deny twice more: the waits grow to 30
+     and then 120 seconds.
    - *Escape.* Escape (and, separately, opening the phone) while the popup is up counts as
      Deny.
    - *Expiry.* Leave the popup for 60 seconds: it closes itself and the page hears
      `expired`.
-   - *The Confirm key.* Hold the game's Confirm key while the page asks: the popup closes
-     at once and counts as a dismissal, not an approval.
+   - *The Confirm key.* Press the game's Confirm key within one second of the popup
+     appearing: it closes and counts as Deny.
    - *Where it shows.* Ask while paused, inside a building and with BizMan open: the popup
-     shows each time. In placement mode or the interior designer the page hears
+     shows each time. With the city map open the page hears `cannot_pair` `no_ui`; close
+     the map and ask again. In placement mode or the interior designer the page hears
      `cannot_pair` with the reason, and no popup appears.
    - *A second browser.* Another browser (or a private window) asks on its own; the first
      stays approved. A token copied from one origin to another answers 401.
@@ -380,7 +385,7 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `BAModAPI`: `RegisterModClass`, `ModEntryOnCityLoad`, `IModBigAmbitions`, `ModContext`, `IModLogger` | the entry point |
 | `BigAmbitions.Mods.ModOptions`, static `OptionsService.Register/RemoveModOptions` | the options panel (compiles; the panel itself is not yet checked in-game) |
 | `SaveGameManager.MarkChange()`, `UI.Notification.Notifications.Show(...)` | after every write; Forget approved browsers |
-| `HudConfirm.Show(LanguageChangeEventDataHolder, LanguageChangeEventDataHolder, Action, Action, string, string, bool, bool)`, `HudConfirm.isOpen`, `onShow`, `onClose`; `Localizor.LocalizorManager.Localize(key, args)`; `HudConfirmUi._onConfirmAction` (**private**, reflection, to tell our popup from another); `UnityEngine.PlayerPrefs` (not the game's own `PlayerPrefs` class) | approving a browser. `Show` confirms unseen when no popup UI is registered (`onShow` null) and drops the call when one is already open, so the mod checks both first |
+| `HudConfirm.Show(LanguageChangeEventDataHolder, LanguageChangeEventDataHolder, Action, Action, string, string, bool, bool)`, `HudConfirm.isOpen`, `onShow`, `onClose`; `Localizor.LocalizorManager.Localize(key, args)`; `HudConfirmUi._onConfirmAction` (**private**, reflection, to tell our popup from another); `UnityEngine.PlayerPrefs` (not the game's own `PlayerPrefs` class) | approving a browser. `Show` confirms unseen when no popup UI is registered (`onShow` null) and drops the call when one is already open, so the mod checks both first. Also `CityMap.IsOpen` (no popup over the map), `LocalizorManager.IsLocalizedKey` (a browser name must not expand to game text) |
 | `GameInstance.BuildingRegistrations`, `employeePresets`, `importPartnerships`; `BuildingRegistration` fields `StreetName`, `StreetNumber`, `RentedByPlayer`, `businessTypeName`, `BusinessName`, `itemInstances`, `uniformsBySkill`, `scheduleDays`, `GetAssignableItems(list)` | finding and reading the target. A registration is found by searching the list, never with `BuildingHelper.GetBuildingRegistration`, which creates one for a building that has none |
 | `BusinessTypeHelper.GetData(reg).employeePrimarySkills`, `BuildingTypeHelper.GetData(reg).requiredBuildingSkills`, `ItemsGetter.GetByName` + `TagRef.Itemtag.isuniformlocker`, `CustomerDemandHelper.ReloadCachedFulfilled(reg)`, `BuildingManager.Instance.onUniformChanged`, `GameEvent.Invoke` | uniforms, as `SetUpUniformsWindow` does it |
 | `ImportPartnership` fields and `NextDeliveryTotal`, `GetDiscount`, static `GetItemAmountOrderedThisWeek`; `ImportProduct.Price`; `DeliveryHelper.CanModifyContract`, `GetNextDeliveryDay`, `IsLockPeriod`, `ShouldLimitImporterMaxAmount`, `AreWholesaleAndImportLimitsDisabled`; `ProductMarketHelper.IsProductInMarketEvent`; `EmployeeHelper.GetEmployeeById(id, false)` | imports. `ImportPartnership.GetMaxOrderAmountPerImporter` is **private static**: by reflection, with its build-3680 body (the item's `maxOrderAmountPerImporter`, ×0.66 rounded in a shortage) as the fallback |
