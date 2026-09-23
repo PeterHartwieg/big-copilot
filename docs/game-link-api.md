@@ -339,6 +339,9 @@ invariant decimal, a missing id as the empty string, a missing field at its defa
 Sort the lines by ordinal string order, join them with `\n`, and take FNV-1a 32-bit
 (offset basis `0x811c9dc5`, prime `0x01000193`) over the UTF-8 bytes; the print is eight
 lowercase hex digits. No shifts at all is the print of the empty string, `811c9dc5`.
+A test vector both sides pin: the two lines
+`0|0|12|AAAAemployeeAAAAAAAAAAAA|CCCCcleanCCCCCCCCCCCCCCC|0` and
+`1|8|20|AAAAemployeeAAAAAAAAAAAA|BBBBstationBBBBBBBBBBBBB|1` print as `ee01ac86`.
 
 #### `POST /write/undo`
 
