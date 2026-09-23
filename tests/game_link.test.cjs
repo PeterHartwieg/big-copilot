@@ -86,11 +86,23 @@ function harness({routes = {}} = {}) {
   });
   vm.runInContext(section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
+  // linkFetch only ever reaches an address on this computer; the tests that
+  // call it directly talk to the default one.
+  vm.runInContext('linkUrl = "http://127.0.0.1:8322";', context);
   return {
     context, seen, els, routes, remembered, waits,
     run: (expr) => vm.runInContext(expr, context),
   };
 }
+
+test('linkFetch reaches only an address on this computer', async () => {
+  for (const link of ['null', 'https://evil.example', '']) {
+    const h = harness({routes: {health: HEALTH}});
+    h.run(`linkUrl = ${JSON.stringify(link) === '""' ? 'null' : JSON.stringify(link)}`);
+    await assert.rejects(h.run('linkFetch("/write/uniforms", {method: "POST"})'), (err) => err.unsent === true);
+    assert.deepEqual(h.seen.calls, [], link);
+  }
+});
 
 test('linkFetch tries loopback, then local, then no annotation, and remembers', async () => {
   const h = harness({routes: {health: HEALTH}});

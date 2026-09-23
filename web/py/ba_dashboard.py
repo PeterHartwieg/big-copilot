@@ -17961,7 +17961,11 @@ function gwProblem(res){
     /* The game's approval of this browser, asked for on the first write. */
     case "cancelled": return {text: "Not approved in the game, so nothing was sent.", retry: true};
     case "denied": case "expired": return {text: "Not approved in the game. Try again.", retry: true};
-    case "throttled": return {text: `The game asked you a moment ago. Try again in ${Number(res.retryAfter) || 10} s.`, retry: true};
+    case "throttled": return {text: `The game asked you a moment ago. Try again in ${Number(res.retryAfter) || 10} s.`, retry: true,
+      wait: Number(res.retryAfter) || 10};
+    case "lost": return {text: "Approved, but the game's answer was lost: click again.", retry: true};
+    case "not_taken": return {text: "The game did not take the request. Nothing was sent.", sub: "Try again in a moment.", retry: true};
+    case "reapproved": return {text: "This browser is approved again. Nothing was changed yet.", sub: "Try again to send it.", retry: true};
     case "origin_not_allowed": return {text: "The mod does not take changes from this site. Nothing was sent."};
     case "not_paired": return {text: "The game no longer knows this browser's approval. Nothing was changed.", sub: "Try again to ask the game once more.", retry: true};
     case "cannot_pair": return {text: res.reason === "popup_open" ? "Close the open question in the game first."
@@ -17970,7 +17974,7 @@ function gwProblem(res){
     case "unreachable": return {text: spEsc(res.message || "The game did not answer."), retry: true};
     case "uncertain": return {text: "The game did not answer, so this may or may not have been applied.",
       sub: "Reading the game again before anything else is offered…", uncertain: true};
-    case "not_linked": return {text: "Link to the game to apply this."};
+    case "not_linked": return {text: "The board is no longer linked to the same game. Nothing was sent."};
     default: return {text: `The game answered ${res.status}${body.detail ? ` (${spEsc(body.detail)})` : ""}. Nothing was changed.`};
   }
 }
@@ -18022,12 +18026,17 @@ function gwFailed(dlg, spec, res, retry, recheck){
     return;
   }
   const rows = res.error === "refused" && res.body ? gwTable(spec, res.body) + gwRefusals(spec, res.body) : "";
+  /* A wait the game named keeps Try again off until it has run out. */
   gwPaint(dlg, `<p class="gw-bad">${p.text}</p>${p.sub ? `<p>${p.sub}</p>` : ""}${rows}`, [
     ["Close", () => dlg.close()],
     ...(p.refresh ? [["Refresh the board", () => { dlg.close(); if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {primary: true}]]
-      : p.retry && retry ? [["Try again", retry, {primary: true}]] : []),
+      : p.retry && retry ? [["Try again", retry, {primary: true, disabled: !!p.wait, why: p.wait ? p.text : ""}]] : []),
     ...next,
   ]);
+  if(p.wait && p.retry && retry) setTimeout(() => {
+    const again = [...dlg.querySelectorAll(".gw-foot button")].find(b => b.textContent === "Try again");
+    if(again){ again.disabled = false; again.removeAttribute("title"); }
+  }, p.wait * 1000);
 }
 
 /* One write, confirmed. The spec is the kind's whole say:
@@ -18085,6 +18094,9 @@ function gwConfirm(spec){
          undo would restore. */
       if(res.error === "uncertain") delete gwUndoable[spec.kind];
       applying = false;
+      /* Approved again mid-apply: the apply was not sent twice; the player
+         reviews the game's answer afresh first. */
+      if(res.error === "reapproved" && dlg.open) return plan();
       return dlg.open ? gwFailed(dlg, spec, res, plan, plan) : gwToast();
     }
     const answer = res.body || {};

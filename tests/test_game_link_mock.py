@@ -222,7 +222,8 @@ class MockWrites(unittest.TestCase):
         status, answer = self.pair("http://localhost:9321", "<b>Chrome</b> on Windows" + "x" * 60)
         self.assertEqual((status, answer["expiresIn"]), (202, 60))
         rid = answer["requestId"]
-        self.assertEqual(self.link.pair_requests[rid]["name"], ("bChrome/b on Windows" + "x" * 60)[:40])
+        # The mod's CleanName: letters, digits, space and . , - ( ) / + only, at most 39.
+        self.assertEqual(self.link.pair_requests[rid]["name"], ("bChrome/b on Windows" + "x" * 60)[:39])
         self.assertEqual(self.status(rid), (200, {"state": "pending"}))
         self.assertEqual(self.pair()[0], 429, "one request at a time")
         time.sleep(0.3)
@@ -257,19 +258,60 @@ class MockWrites(unittest.TestCase):
             self.assertEqual(self.pair(), (503, {"error": error}))
         self.assertEqual(self.link.pair_requests, {})
 
-    def test_the_wait_after_a_denial_grows_on_repeats(self):
+    def test_the_wait_after_a_denial_grows_on_repeats_within_ten_minutes(self):
         self.link.pair_delay, self.link.pair = 0, "deny"
+        page = "http://localhost:9321"
         waits = []
-        for _ in range(3):
-            _, answer = self.pair("http://localhost:9321", "Chrome\u200b on\x07 Windows<>")
+        for _ in range(4):
+            _, answer = self.pair(page, "Chrome\u200b  on\x07 Windows<>")
             self.assertEqual(self.link.pair_requests[answer["requestId"]]["name"], "Chrome on Windows")
             self.status(answer["requestId"])
-            status, refused = self.pair("http://localhost:9321")
+            status, refused = self.pair(page)
             waits.append((status, refused["retryAfter"]))
-            self.link.pair_cooldown["http://localhost:9321"] = (self.link.pair_cooldown["http://localhost:9321"][0], 0)
-        self.assertEqual(waits, [(429, 10), (429, 30), (429, 120)])
+            # The wait sat out; the strike is still remembered.
+            count, at = self.link.strikes[page]
+            self.link.strikes[page] = (count, at - 125)
+        self.assertEqual(waits, [(429, 10), (429, 30), (429, 120), (429, 120)])
         # Another origin is not held back by this one's denials.
+        self.link.pair = "approve"
         self.assertEqual(self.pair()[0], 202)
+        # Ten minutes on, a denial counts as the first again.
+        self.link.pair_requests.clear()
+        self.link.pair = "deny"
+        count, at = self.link.strikes[page]
+        self.link.strikes[page] = (count, at - 601)
+        _, answer = self.pair(page)
+        self.status(answer["requestId"])
+        self.assertEqual(self.pair(page), (429, {"error": "throttled", "retryAfter": 10}))
+
+    def test_a_pending_request_holds_the_rest_off_for_the_time_it_has_left(self):
+        self.link.pair_delay = 1000  # the player never answers
+        _, answer = self.pair("http://localhost:9321")
+        rid = answer["requestId"]
+        self.link.pair_requests[rid]["at"] -= 45
+        # Pending and cooldowns come before popup_open and no_ui, as in the mod.
+        self.link.pair = "popup_open"
+        self.assertEqual(self.pair("http://localhost:9321"), (429, {"error": "throttled", "retryAfter": 15}))
+        self.link.pair = "approve"
+        # Unanswered for 60 s it expires, and counts as a strike.
+        self.link.pair_requests[rid]["at"] -= 16
+        self.assertEqual(self.status(rid), (200, {"state": "expired"}))
+        self.assertEqual(self.pair("http://localhost:9321")[1]["retryAfter"], 10)
+
+    def test_the_name_and_origin_as_the_mod_reads_them(self):
+        self.link.pair_delay = 0
+        cases = [("HTTP://LOCALHOST:9321", None, "a browser"), (None, None, ""), ("http://localhost:9321", "cancel", "cancel_"),
+                 ("http://localhost:9321", "  Edge   on   macOS  ", "Edge on macOS")]
+        for origin, name, shown in cases:
+            headers = {"Content-Type": "application/json", **({"Origin": origin} if origin else {})}
+            body = b"" if name is None else json.dumps({"name": name}).encode()
+            status, _, raw = call(self.url + "/pair/request", "POST", headers, body)
+            rid = json.loads(raw)["requestId"]
+            self.assertEqual((status, self.link.pair_requests[rid]["name"]), (202, shown), (origin, name))
+            token = self.status(rid)[1]["token"]
+            # Approved for the origin trimmed and lower-cased.
+            self.assertEqual(self.link.tokens[token], (origin or "").lower())
+        self.assertEqual(self.post("uniforms", {"dryRun": True, "sites": []}, token, "http://localhost:9321")[0], 200)
 
     def test_a_refusal_before_the_body_still_reads_it(self):
         # A large unread body could reset the socket under the answer.

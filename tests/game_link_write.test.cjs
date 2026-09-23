@@ -71,7 +71,7 @@ const applied = async () => (await (await fetch(mockUrl + '/debug/writes')).json
 // quarter of a second.
 async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved = false, stored = null, link = true,
                           data = payload} = {}) {
-  await configure({reset: true, refuseWrite: null, busyWrites: 0, writes, pairDelay: 0.25, pairCooldowns: [1],
+  await configure({reset: true, refuseWrite: null, busyWrites: 0, writes, pairDelay: 0.25, pairCooldowns: [0],
                    tokens: approved ? {[TOKEN]: ORIGIN} : {}});
   const code = approved ? {link: mockUrl, token: TOKEN} : stored;
   const context = await browser.newContext({viewport: {width: 1280, height: 1000}, reducedMotion: 'reduce'});
@@ -273,32 +273,110 @@ for (const [outcome, said] of [['deny', 'Not approved in the game. Try again.'],
     await dialog(page).getByText('Sets the Default uniform').waitFor();
   });
 }
-test('the game\'s approval: a long wait after repeated denials is said, not waited out', async (t) => {
+test('the game\'s approval: the wait after repeated denials is said, and Try again waits it out', async (t) => {
   const page = await linked(t);
-  await configure({pair: 'deny', pairCooldowns: [30]});
+  // The first denial costs nothing here, the second 30 s.
+  await configure({pair: 'deny', pairCooldowns: [0, 30]});
   await button(page, GIFTS).click();
   await dialog(page).getByText('Not approved in the game. Try again.').waitFor();
   await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByText('Not approved in the game. Try again.').waitFor();
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
   await dialog(page).getByText('The game asked you a moment ago. Try again in 30 s.').waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).isDisabled(), true);
 });
 
+test('the game\'s approval: a long wait on a request still open is said, not waited out', async (t) => {
+  const page = await linked(t);
+  await page.route(`${mockUrl}/pair/request`, (route) => route.fulfill({status: 429,
+    json: {error: 'throttled', retryAfter: 50}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
+  await button(page, GIFTS).click();
+  await dialog(page).getByText('The game asked you a moment ago. Try again in 50 s.').waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).isDisabled(), true);
+});
 test('the game\'s approval: a game that does not take the request', async (t) => {
   const page = await linked(t);
-  await configure({pair: 'main_thread_unavailable'});
+  await configure({pair: 'busy'});
   await button(page, GIFTS).click();
-  await dialog(page).getByText('The game did not take the change: no city is loaded.').waitFor();
+  await dialog(page).getByText('The game did not take the request. Nothing was sent.').waitFor();
   assert.equal(await kept(page), null);
 });
 
-test('cancelling the wait sends nothing and says so', async (t) => {
+test('the game\'s approval: a site the mod does not take, and a request the game forgot', async (t) => {
+  const page = await linked(t);
+  await page.route(`${mockUrl}/pair/request`, (route) => route.fulfill({status: 403,
+    json: {error: 'origin_not_allowed'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
+  await button(page, GIFTS).click();
+  await dialog(page).getByText('The mod does not take changes from this site. Nothing was sent.').waitFor();
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  await page.unroute(`${mockUrl}/pair/request`);
+  await page.route(`${mockUrl}/pair/status**`, (route) => route.fulfill({status: 404,
+    json: {error: 'not_found'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
+  await button(page, GIFTS).click();
+  await dialog(page).getByText('Not approved in the game. Try again.').waitFor();
+});
+
+test('the game\'s approval: approved, but the one answer with the token was lost', async (t) => {
+  const page = await linked(t);
+  await page.route(`${mockUrl}/pair/status**`, (route) => route.fulfill({status: 200,
+    json: {state: 'approved'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
+  await button(page, GIFTS).click();
+  await dialog(page).getByText("Approved, but the game's answer was lost: click again.").waitFor();
+  assert.equal(await kept(page), null);
+});
+test('cancelling the wait sends nothing more, and the next ask picks the open question up', async (t) => {
   const page = await linked(t);
   await configure({pairDelay: 60});
+  const sent = [];
+  page.on('request', (req) => sent.push(new URL(req.url()).pathname));
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
   await pair(page).getByRole('button', {name: 'Cancel'}).click();
   await dialog(page).getByText('Not approved in the game, so nothing was sent.').waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).count(), 1);
+  const at = sent.length;
+  await page.waitForTimeout(2500);
+  assert.deepEqual(sent.slice(at).filter((p) => p.startsWith('/write/') || p.startsWith('/pair/')), [],
+    'no write and no further look at the request');
   assert.equal((await applied()).length, 0);
+  // The game's question is still open: asking again waits on it, not a second one.
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await pair(page).getByText('The question is still open in the game.').waitFor();
+  await configure({pairDelay: 0});
+  await dialog(page).getByText('Sets the Default uniform').waitFor();
+  assert.equal(sent.filter((p) => p === '/pair/request').length, 1);
+});
+
+test('an approval the game keeps turning down is asked for once per click', async (t) => {
+  const page = await linked(t, {approved: true});
+  await configure({rejectTokens: true});
+  const asks = [];
+  page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks.push(req.url()); });
+  await button(page, GIFTS).click();
+  await dialog(page).getByText("The game no longer knows this browser's approval. Nothing was changed.").waitFor();
+  assert.equal(asks.length, 1, 'one re-ask, then it ends');
+});
+
+test('a 401 during Apply asks for approval, then shows the game\'s answer again: the apply is not resent', async (t) => {
+  const page = await linked(t, {approved: true});
+  let applies = 0;
+  page.on('request', (req) => {
+    if (req.url().endsWith('/write/uniforms') && req.method() === 'POST' && !JSON.parse(req.postData() || '{}').dryRun) applies++;
+  });
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: 'Set uniforms'}).waitFor();
+  await configure({refuseWrite: 'not_paired'});
+  const dryRuns = page.waitForRequest((req) => req.url().endsWith('/write/uniforms')
+    && JSON.parse(req.postData() || '{}').dryRun && applies === 1);
+  await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
+  await pair(page).getByText(WAITING).waitFor();
+  await dryRuns;  // asked afresh, for the player to review
+  await dialog(page).getByRole('button', {name: 'Set uniforms'}).waitFor();
+  assert.equal(applies, 1);
+  assert.equal((await applied()).length, 0);
+  await configure({refuseWrite: null});
+  await dialog(page).getByRole('button', {name: 'Set uniforms'}).click();
+  await dialog(page).getByText('Default uniform set for 1 role at 1 shop.').waitFor();
+  assert.equal(applies, 2);
 });
 test('a game that moved on answers 409 changed, and the dialog offers a refresh', async (t) => {
   const page = await linked(t, {approved: true});

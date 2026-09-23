@@ -45,7 +45,6 @@ import secrets
 import sys
 import threading
 import time
-import unicodedata
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -63,7 +62,13 @@ WRITE_KINDS = ("uniforms", "imports", "schedule")
 PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
 PAIR_DELAY = 1.0  # seconds before the mock's player answers the popup
 PAIR_COOLDOWNS = (10, 30, 120)  # seconds an origin waits after a denial or an expiry, then a repeat, then more
+PAIR_STRIKE_MEMORY = 10 * 60    # seconds a denial or an expiry still counts toward the next wait
+PAIR_POPUP_SECONDS = 60         # the popup's life; an unanswered request then expires
 PAIR_MAX_BODY = 4 * 1024
+PAIR_NAME_MAX = 40
+# Names the game would read as its own localisation keys; the mod asks its
+# Localizor, the mock keeps a few.
+LOCALE_KEYS = frozenset({"ok", "cancel", "close", "yes", "no", "back"})
 MAX_BODY = 256 * 1024
 DRAIN_LIMIT = 4 * 1024 * 1024  # the most of a refused body read off the wire
 ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
@@ -77,6 +82,27 @@ LOCKER = "ba:itemname_uniformlocker"
 
 def allowed_origin(origin: str | None) -> bool:
     return bool(origin) and (origin in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin)))
+
+
+def origin_of(origin: str | None) -> str:
+    """The origin an approval belongs to, as the mod reads it: trimmed and
+    lower-cased, and "" for none (curl, the CLI watcher)."""
+    return (origin or "").strip().lower()
+
+
+def clean_name(name: str | None) -> str:
+    """The mod's CleanName: ASCII letters, digits, space and . , - ( ) / + only,
+    runs of spaces made one, trimmed, and at most 39 characters (so a
+    localisation-key suffix keeps it within 40)."""
+    out = []
+    for ch in name or "":
+        if not (ch.isascii() and (ch.isalnum() or ch in " .,-()/+")):
+            continue
+        if ch == " " and (not out or out[-1] == " "):
+            continue
+        out.append(ch)
+    clean = "".join(out).strip()
+    return clean[:PAIR_NAME_MAX - 1].strip() if len(clean) > PAIR_NAME_MAX - 1 else clean
 
 
 def new_token() -> str:
@@ -120,7 +146,8 @@ class Link:
         # requests, and the tokens issued, each with the origin it is for.
         self.pair, self.pair_delay = pair, PAIR_DELAY
         self.pair_cooldowns = list(PAIR_COOLDOWNS)
-        self.pair_cooldown: dict = {}  # origin -> (denials and expiries in a row, until)
+        self.strikes: dict = {}        # origin -> (denials and expiries within ten minutes, the last one's time)
+        self.reject_tokens = False     # /debug/config: every token turned down, as a game that forgot them all
         self.pair_requests: dict = {}  # id -> {origin, name, at, state, token, handed}
         self.tokens: dict = {}         # token -> origin
         self.writes = writes  # None: the key is left out, as a 0.1.0 mod does
@@ -211,52 +238,74 @@ class Link:
         text = (header or "").strip()
         token = text[7:].strip() if text[:7].lower() == "bearer " else ""
         with self.lock:
-            return bool(token) and self.tokens.get(token) == (origin or "")
+            return bool(token) and not self.reject_tokens and self.tokens.get(token) == origin_of(origin)
 
-    # --- approving a browser ------------------------------------------------------
+    # --- approving a browser (the mod's ApprovalService) ---------------------------
     def pair_request(self, origin: str | None, body: dict) -> tuple[int, dict]:
         """POST /pair/request: open the game's popup, as far as a mock has one."""
+        origin = origin_of(origin)
         if origin and not allowed_origin(origin):
             return 403, {"error": "origin_not_allowed"}
         name = body.get("name")
-        if not isinstance(name, str):
+        if name is not None and not isinstance(name, str):
             raise BadRequest("name must be a string")
+        name = clean_name(name)
         with self.lock:
             if self.pair in ("busy", "main_thread_unavailable"):
-                return 503, {"error": self.pair}  # no popup shown
+                return 503, {"error": self.pair}  # the main thread did not take it: no popup
+            now = time.monotonic()
+            self._settle(now)
+            pending = next((r for r in self.pair_requests.values() if r["state"] == "pending"), None)
+            if pending:
+                return 429, {"error": "throttled", "retryAfter": max(1, math.ceil(PAIR_POPUP_SECONDS - (now - pending["at"])))}
+            wait = self._cooldown_left(origin, now)
+            if wait > 0:
+                return 429, {"error": "throttled", "retryAfter": max(1, math.ceil(wait))}
             if self.pair in ("popup_open", "no_ui"):
                 return 409, {"error": "cannot_pair", "reason": self.pair}
             if self.pair.startswith("cannot:"):
                 return 409, {"error": "cannot_pair", "reason": self.pair.split(":", 1)[1]}
-            now = time.monotonic()
-            self._settle(now)
-            if any(r["state"] == "pending" for r in self.pair_requests.values()):
-                return 429, {"error": "throttled", "retryAfter": 1}
-            # After a denial or an expiry the origin waits, longer on each repeat.
-            until = self.pair_cooldown.get(origin or "", (0, 0))[1]
-            if now < until:
-                return 429, {"error": "throttled", "retryAfter": max(1, math.ceil(until - now))}
+            # Nameless: a browser page is "a browser"; a program with no origin gets no name.
+            if not name and origin:
+                name = "a browser"
+            if name in LOCALE_KEYS:  # would show as the game's text for that key
+                name += "_"
             rid = secrets.token_hex(8)
-            # Plain text: no < or >, no control or invisible formatting characters.
-            clean = "".join(ch for ch in name if ch not in "<>" and unicodedata.category(ch) not in ("Cc", "Cf"))
-            self.pair_requests[rid] = {"origin": origin or "", "name": clean[:40],
-                                       "at": now, "state": "pending", "token": None, "handed": False}
-            return 202, {"requestId": rid, "expiresIn": 60}
+            self.pair_requests[rid] = {"origin": origin, "name": name, "at": now, "state": "pending",
+                                       "token": None, "handed": False}
+            return 202, {"requestId": rid, "expiresIn": PAIR_POPUP_SECONDS}
 
     def _settle(self, now: float) -> None:
-        """The mock's player answers a pending popup once PAIR_DELAY has passed."""
+        """The mock's player answers a pending popup once pair_delay has passed;
+        one nobody answers expires after its 60 s, as the mod's pump ends it."""
         for request in self.pair_requests.values():
-            if request["state"] != "pending" or now - request["at"] < self.pair_delay:
+            if request["state"] != "pending":
                 continue
-            if self.pair == "approve":
+            shown = now - request["at"]
+            if shown >= PAIR_POPUP_SECONDS:
+                self._end(request, "expired", now)
+            elif shown >= self.pair_delay and self.pair == "approve":
                 request["state"], request["token"] = "approved", new_token()
                 self.tokens[request["token"]] = request["origin"]
-                self.pair_cooldown.pop(request["origin"], None)
-            else:
-                request["state"] = "denied" if self.pair == "deny" else "expired"
-                repeats = self.pair_cooldown.get(request["origin"], (0, 0))[0]
-                wait = self.pair_cooldowns[min(repeats, len(self.pair_cooldowns) - 1)]
-                self.pair_cooldown[request["origin"]] = (repeats + 1, now + wait)
+                self.strikes.pop(request["origin"], None)
+            elif shown >= self.pair_delay and self.pair in ("deny", "expire"):
+                self._end(request, "denied" if self.pair == "deny" else "expired", now)
+
+    def _end(self, request: dict, state: str, now: float) -> None:
+        """A request ends unapproved, and its origin waits, longer on each repeat
+        within ten minutes."""
+        request["state"] = state
+        count, at = self.strikes.get(request["origin"], (0, 0.0))
+        if now - at > PAIR_STRIKE_MEMORY:
+            count = 0
+        self.strikes[request["origin"]] = (count + 1, now)
+
+    def _cooldown_left(self, origin: str, now: float) -> float:
+        count, at = self.strikes.get(origin, (0, 0.0))
+        if not count:
+            return 0.0
+        step = min(count, len(self.pair_cooldowns)) - 1
+        return max(0.0, self.pair_cooldowns[step] - (now - at))
 
     def pair_status(self, rid: str | None) -> tuple[int, dict]:
         """GET /pair/status?id=: the answer, the token exactly once."""
@@ -873,7 +922,7 @@ class Link:
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
-                self.pair_cooldowns, self.pair_cooldown = list(PAIR_COOLDOWNS), {}
+                self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock
             if "importTerms" in body:
                 self.terms = dict(body["importTerms"] or {})
@@ -893,6 +942,8 @@ class Link:
                 self.pair_delay = float(body["pairDelay"])
             if "pairCooldowns" in body:  # the waits after a denial or an expiry, in seconds
                 self.pair_cooldowns = [float(v) for v in body["pairCooldowns"]]
+            if "rejectTokens" in body:
+                self.reject_tokens = bool(body["rejectTokens"])
             if "tokens" in body:  # approvals already given: {token: origin}
                 self.tokens = dict(body["tokens"] or {})
             return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
@@ -992,7 +1043,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.close_connection = True
                 self._json(413, {"error": "too_large"}, {"Connection": "close"})
                 return
-            body = self._body()
+            body = {} if int(self.headers.get("Content-Length") or 0) == 0 else self._body()
             if body is not None:
                 try:
                     self._json(*self.link.pair_request(self.headers.get("Origin"), body))
