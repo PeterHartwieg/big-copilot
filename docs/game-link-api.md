@@ -189,7 +189,7 @@ at most 256 KiB, else `413 {"error":"too_large"}`) and the header
 - **Compare-and-set.** Rows carry `expect`, the value the page read from the bytes. A
   mismatch refuses an apply with `409 {"error":"changed", ...}` (a dry run answers `200`,
   `ok` false, the row's error `changed`); the page refreshes and re-plans. `changed` is
-  checked before any rule.
+  checked before any rule, after `not_found` (there is nothing to compare without the target).
 - **Threading.** The mod runs the whole check-and-apply on the game's main thread. While a
   refresh walk is in flight on the worker thread the main thread holds the write until the
   walk has published; if the write has not started within three seconds it is withdrawn
