@@ -588,7 +588,9 @@ parsed tables across.
 
 The ingredient table separates this range's usage from the **company target**. Active
 import contracts are added together, including contracts at different depots; paused
-amounts are shown separately. Changing machines adds or removes this range's ingredient
+amounts are shown separately. A Smart Delivery contract counts as its stock level, which is the
+most it can supply in a week, and reads "Smart Delivery keeps N in stock"; two levels at
+one depot count the higher. Changing machines adds or removes this range's ingredient
 usage from the company's standing orders, preserving the orders used by other ranges.
 The target must still cover this range's full requirement. Allocate the company target
 across the appropriate importer contracts in-game; it is not a target for each depot.
@@ -852,6 +854,9 @@ daily distribution round, dashed lines the weekly import, an amber dot marks a s
 an order running tight, and a red dot one whose order cannot cover its own cycle. A site
 earns a node by being on a plan or by holding something worth drawing; head office
 keeping a dozen paper bags in a drawer is not a depot.
+A Smart Delivery import is drawn at the week it tops up, not at its stock level: in a
+steady week the depot starts Monday at the level less the week's use, so the top-up is
+that use (the depot's measured draw, else what arrived last week), up to the level.
 
 Clicking a site dims everything it does not touch and opens its detail: what comes in
 and where from, what goes out and to whom, and a per-product table of **on hand** against

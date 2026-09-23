@@ -23,9 +23,10 @@ class SaveStub:
         return value
 
 
-def contract(amount, active=True, warehouse=("Depot", 1)):
+def contract(amount, active=True, warehouse=("Depot", 1), smart=False):
     return {
         "importAddress": ("Importer", 2), "isActive": active,
+        **({"isTarget": True} if smart else {}),
         "products": [{"itemName": ITEM + "water", "amount": amount,
                       "assignedWarehouse": warehouse}],
     }
@@ -57,6 +58,35 @@ class PlannerRegressions(unittest.TestCase):
         self.assertEqual(source["ordered"], 0)
         self.assertEqual(source["paused"], 900)
         self.assertFalse(source["active"])
+
+    def water(self, contracts):
+        return self.plan(contracts)["sources"][ITEM + "water"]
+
+    def test_a_smart_delivery_line_is_a_stock_level(self):
+        source = self.water([contract(3000, smart=True)])
+        self.assertEqual((source["ordered"], source["smart"], source["target"], source["plain"]),
+                         (3000, True, 3000, 0))
+        self.assertTrue(source["contracts"][0]["smart"])
+        plain = self.water([contract(3000)])
+        self.assertEqual((plain["smart"], plain["target"], plain["plain"]), (False, None, 3000))
+
+    def test_two_levels_hold_the_higher_at_one_depot_and_add_across_depots(self):
+        same = self.water([contract(3000, smart=True), contract(1000, smart=True)])
+        self.assertEqual((same["ordered"], same["target"]), (3000, 3000))
+        apart = self.water([contract(3000, smart=True),
+                            contract(1000, smart=True, warehouse=("Other", 3))])
+        self.assertEqual((apart["ordered"], apart["target"]), (4000, 4000))
+
+    def test_a_level_beside_a_plain_order_follows_the_delivery_order(self):
+        level_first = self.water([contract(1000, smart=True), contract(400)])
+        self.assertEqual((level_first["ordered"], level_first["target"], level_first["plain"]),
+                         (1400, 1000, 400))
+        plain_first = self.water([contract(400), contract(1000, smart=True)])
+        self.assertEqual(plain_first["ordered"], 1000)
+
+    def test_a_paused_level_is_kept_apart_and_named_as_one(self):
+        source = self.water([contract(3000, active=False, smart=True)])
+        self.assertEqual((source["ordered"], source["paused"], source["smart"]), (0, 3000, True))
 
     def test_service_sales_do_not_become_consumable_demand(self):
         business = {"status": "retail", "revenue": 1000, "typeSlug": HAIR,

@@ -2369,6 +2369,21 @@ def _import_setting(supply: dict) -> dict:
     }
 
 
+def _import_ranks(save: Save, partnerships: list) -> list:
+    """Each contract's place in the game's delivery pass, by plan position.
+
+    DoAllDeliveries goes importer by importer, each importer in the place of
+    its first contract in importPartnerships, and its contracts in plan order.
+    """
+    first_of = {}
+    for order, partnership in enumerate(partnerships):
+        first_of.setdefault(save.address(partnership.get("importAddress")), order)
+    return [
+        (first_of[save.address(partnership.get("importAddress"))], order)
+        for order, partnership in enumerate(partnerships)
+    ]
+
+
 def _import_drop(stock, drops):
     """Units one delivery day brings to one depot line, the game's way.
 
@@ -2593,15 +2608,13 @@ def _supply(
     contracts_at = collections.defaultdict(list)
     next_day = None
     partnerships = save.items(save.root["importPartnerships"])
-    first_of = {}
-    for order, partnership in enumerate(partnerships):
-        first_of.setdefault(save.address(partnership.get("importAddress")), order)
+    ranks = _import_ranks(save, partnerships)
     for order, partnership in enumerate(partnerships):
         arrives = partnership.get("nextDeliveryDay") or 0
         active = bool(partnership.get("isActive"))
         smart = bool(partnership.get("isTarget"))
         importer = save.address(partnership.get("importAddress"))
-        rank = (first_of[importer], order)
+        rank = ranks[order]
         who = names.addr(importer)
         if active and arrives >= day:
             next_day = arrives if next_day is None else min(next_day, arrives)
@@ -2725,6 +2738,7 @@ def _supply(
 
     # --- 2. depots: does the holding reach the next delivery?
     import_rows = []
+    weekly_use = {}  # (depot, item) -> a week of the draw the rows below judge
     for business in businesses:
         if business["status"] not in ("overhead", "support"):
             continue
@@ -2744,6 +2758,7 @@ def _supply(
                 per_day, basis = draw(business["key"], item), "sales"
             else:
                 per_day, basis = supply["lastWeek"] / 7, "order"
+            weekly_use[(business["key"], item)] = per_day * 7
             if per_day <= 0:
                 continue
             driven = customer_driven(business["key"], item)
@@ -2985,8 +3000,28 @@ def _supply(
             business["type"],
         )
 
+    # What each contract brings in an ordinary week, for the pipe's width. A
+    # plain contract brings its amount. A Smart Delivery one brings only the
+    # top-up, max(0, level - stock on Monday), and in a steady week the stock
+    # on Monday is the level less what the week used, so the top-up is the
+    # week's use, up to the level. The use is the depot row's own draw (the
+    # delivery log, else the shops' sales, else last week's order); a line with
+    # no row takes what arrived last week, which is measured too. Today's stock
+    # would be a worse guide: it is only the Monday figure on a Monday.
+    # Contracts sharing a line split that top-up in the game's delivery order.
+    expected = {}
+    for line, supply in imports.items():
+        use = weekly_use.get(line, supply["arrived"])
+        for group in ("active", "paused"):
+            drops = supply["drops"][group]
+            stock = max(0, _import_drop(0, drops) - use)
+            for drop in drops:
+                brought = _import_drop(stock, [drop])
+                expected[(drop["rank"][1], line)] = brought
+                stock += brought
+
     # Importers sit outside the company: they are where the week's goods enter.
-    for partnership in save.items(save.root["importPartnerships"]):
+    for order, partnership in enumerate(save.items(save.root["importPartnerships"])):
         source = save.address(partnership.get("importAddress"))
         if not source:
             continue
@@ -3007,7 +3042,7 @@ def _supply(
             if warehouse not in nodes or not amount:
                 continue
             entry = moved[warehouse]
-            entry[0] += amount
+            entry[0] += expected.get((order, (warehouse, product["itemName"])), amount)
             entry[1] += 1
         for warehouse, (amount, count) in moved.items():
             links.append(
@@ -7217,31 +7252,56 @@ def _plan(
     # running totals are summed — a later contract, or a line ordered at zero,
     # adds what it has and never overwrites what came before — and every
     # contract is kept, so the shopping list can still be typed in per importer.
-    sources = {}
-    for partnership in save.items(save.root["importPartnerships"]):
+    #
+    # A Smart Delivery contract (isTarget) holds a stock level rather than
+    # bringing its amount, so a depot's week is what one delivery brings into
+    # it empty, as _supply() counts it: two levels on one depot hold the
+    # higher, and a level beside a plain order follows the delivery order.
+    # "ordered" is that week summed over depots; "target" the levels kept,
+    # "plain" the plain amounts beside them, "smart" whether any level counts.
+    partnerships = save.items(save.root["importPartnerships"])
+    ranks = _import_ranks(save, partnerships)
+    sources, drops = {}, collections.defaultdict(lambda: {"active": [], "paused": []})
+    for order, partnership in enumerate(partnerships):
         who = names.addr(save.address(partnership.get("importAddress")))
         active = bool(partnership.get("isActive"))
+        smart = bool(partnership.get("isTarget"))
         for product in save.items(partnership["products"]):
             row = sources.setdefault(
                 product["itemName"],
                 {"ordered": 0, "paused": 0, "active": False, "contracts": []},
             )
+            warehouse = save.address(product["assignedWarehouse"])
+            amount = product.get("amount", 0)
             row["contracts"].append(
                 {
                     "from": who,
-                    "warehouse": names.addr(
-                        save.address(product["assignedWarehouse"])
-                    ),
-                    "ordered": product.get("amount", 0),
+                    "warehouse": names.addr(warehouse),
+                    "ordered": amount,
                     "active": active,
+                    "smart": smart,
                 }
             )
-            if active:
-                row["ordered"] += product.get("amount", 0)
-                row["active"] = True
-            else:
-                row["paused"] += product.get("amount", 0)
-    for row in sources.values():
+            row["active"] = row["active"] or active
+            drops[(product["itemName"], warehouse)]["active" if active else "paused"].append(
+                {"amount": amount, "smart": smart, "rank": ranks[order]}
+            )
+    for (item, _warehouse), groups in drops.items():
+        row = sources[item]
+        for group in groups.values():
+            group.sort(key=lambda d: d["rank"])
+        row["ordered"] += _import_drop(0, groups["active"])
+        row["paused"] += _import_drop(0, groups["paused"])
+    for item, row in sources.items():
+        lead = "active" if row["active"] else "paused"
+        counted = [d for (name, _w), g in drops.items() if name == item for d in g[lead]]
+        levels = collections.defaultdict(int)
+        for (name, warehouse), groups in drops.items():
+            if name == item:
+                levels[warehouse] = max((d["amount"] for d in groups[lead] if d["smart"]), default=0)
+        row["smart"] = any(d["smart"] and d["amount"] for d in counted)
+        row["target"] = sum(levels.values()) if row["smart"] else None
+        row["plain"] = sum(d["amount"] for d in counted if not d["smart"])
         row["from"] = ", ".join(dict.fromkeys(c["from"] for c in row["contracts"]))
         row["warehouse"] = ", ".join(
             dict.fromkeys(c["warehouse"] for c in row["contracts"])
@@ -14867,8 +14927,14 @@ function drawPlan(){
       const base = Math.round(baseline[i.item] || 0);
       const paused = src ? src.paused || 0 : 0;
       const contracts = src ? (src.contracts || []).length : 0;
+      /* A Smart Delivery line is a stock level the purchasing agent tops up to
+         each Monday, not an amount on order; a level of N supplies at most N a
+         week, which is why it counts as ordered below. */
       const on = !src ? "Not on any import contract yet"
+        : src.active && src.smart ? `Smart Delivery keeps ${(src.target ?? src.ordered).toLocaleString("en-US")} in stock${
+            src.plain ? `, plus ${src.plain.toLocaleString("en-US")} a week on order,` : ""} from ${src.from} to ${src.warehouse}`
         : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
+        : paused && src.smart ? `Paused Smart Delivery contracts would keep ${paused.toLocaleString("en-US")} in stock, from ${src.from} to ${src.warehouse}; nothing active`
         : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
         : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
@@ -14876,7 +14942,7 @@ function drawPlan(){
           + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
           + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
-        paused, contracts, from: src ? src.from : null, baseline: base,
+        smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
       };
     });
@@ -16237,6 +16303,7 @@ function planDraw(){
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
       `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
+        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-instock" data-tip="Smart Delivery: a stock level the purchasing agent tops up to each Monday, so at most this much a week">in stock</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")

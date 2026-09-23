@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=ad43467432">
+<link rel="stylesheet" href="community.css?v=04510123ff">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=ad43467432">
+<link rel="stylesheet" href="fonts/fonts.css?v=04510123ff">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2695,8 +2695,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "ad43467432";</script>
-<script>window.LEDGER_RELEASE = {"version":"ad43467432","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "04510123ff";</script>
+<script>window.LEDGER_RELEASE = {"version":"04510123ff","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2765,8 +2765,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=ad43467432"></script>
-<script src="community.js?v=ad43467432"></script>
+<script src="app.js?v=04510123ff"></script>
+<script src="community.js?v=04510123ff"></script>
 
 <script>
 
@@ -7844,8 +7844,14 @@ function drawPlan(){
       const base = Math.round(baseline[i.item] || 0);
       const paused = src ? src.paused || 0 : 0;
       const contracts = src ? (src.contracts || []).length : 0;
+      /* A Smart Delivery line is a stock level the purchasing agent tops up to
+         each Monday, not an amount on order; a level of N supplies at most N a
+         week, which is why it counts as ordered below. */
       const on = !src ? "Not on any import contract yet"
+        : src.active && src.smart ? `Smart Delivery keeps ${(src.target ?? src.ordered).toLocaleString("en-US")} in stock${
+            src.plain ? `, plus ${src.plain.toLocaleString("en-US")} a week on order,` : ""} from ${src.from} to ${src.warehouse}`
         : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
+        : paused && src.smart ? `Paused Smart Delivery contracts would keep ${paused.toLocaleString("en-US")} in stock, from ${src.from} to ${src.warehouse}; nothing active`
         : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
         : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
@@ -7853,7 +7859,7 @@ function drawPlan(){
           + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
           + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
-        paused, contracts, from: src ? src.from : null, baseline: base,
+        smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
       };
     });
@@ -12795,6 +12801,7 @@ function planDraw(){
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
       `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
+        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-instock" data-tip="Smart Delivery: a stock level the purchasing agent tops up to each Monday, so at most this much a week">in stock</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")

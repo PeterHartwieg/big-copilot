@@ -7252,31 +7252,56 @@ def _plan(
     # running totals are summed — a later contract, or a line ordered at zero,
     # adds what it has and never overwrites what came before — and every
     # contract is kept, so the shopping list can still be typed in per importer.
-    sources = {}
-    for partnership in save.items(save.root["importPartnerships"]):
+    #
+    # A Smart Delivery contract (isTarget) holds a stock level rather than
+    # bringing its amount, so a depot's week is what one delivery brings into
+    # it empty, as _supply() counts it: two levels on one depot hold the
+    # higher, and a level beside a plain order follows the delivery order.
+    # "ordered" is that week summed over depots; "target" the levels kept,
+    # "plain" the plain amounts beside them, "smart" whether any level counts.
+    partnerships = save.items(save.root["importPartnerships"])
+    ranks = _import_ranks(save, partnerships)
+    sources, drops = {}, collections.defaultdict(lambda: {"active": [], "paused": []})
+    for order, partnership in enumerate(partnerships):
         who = names.addr(save.address(partnership.get("importAddress")))
         active = bool(partnership.get("isActive"))
+        smart = bool(partnership.get("isTarget"))
         for product in save.items(partnership["products"]):
             row = sources.setdefault(
                 product["itemName"],
                 {"ordered": 0, "paused": 0, "active": False, "contracts": []},
             )
+            warehouse = save.address(product["assignedWarehouse"])
+            amount = product.get("amount", 0)
             row["contracts"].append(
                 {
                     "from": who,
-                    "warehouse": names.addr(
-                        save.address(product["assignedWarehouse"])
-                    ),
-                    "ordered": product.get("amount", 0),
+                    "warehouse": names.addr(warehouse),
+                    "ordered": amount,
                     "active": active,
+                    "smart": smart,
                 }
             )
-            if active:
-                row["ordered"] += product.get("amount", 0)
-                row["active"] = True
-            else:
-                row["paused"] += product.get("amount", 0)
-    for row in sources.values():
+            row["active"] = row["active"] or active
+            drops[(product["itemName"], warehouse)]["active" if active else "paused"].append(
+                {"amount": amount, "smart": smart, "rank": ranks[order]}
+            )
+    for (item, _warehouse), groups in drops.items():
+        row = sources[item]
+        for group in groups.values():
+            group.sort(key=lambda d: d["rank"])
+        row["ordered"] += _import_drop(0, groups["active"])
+        row["paused"] += _import_drop(0, groups["paused"])
+    for item, row in sources.items():
+        lead = "active" if row["active"] else "paused"
+        counted = [d for (name, _w), g in drops.items() if name == item for d in g[lead]]
+        levels = collections.defaultdict(int)
+        for (name, warehouse), groups in drops.items():
+            if name == item:
+                levels[warehouse] = max((d["amount"] for d in groups[lead] if d["smart"]), default=0)
+        row["smart"] = any(d["smart"] and d["amount"] for d in counted)
+        row["target"] = sum(levels.values()) if row["smart"] else None
+        row["plain"] = sum(d["amount"] for d in counted if not d["smart"])
         row["from"] = ", ".join(dict.fromkeys(c["from"] for c in row["contracts"]))
         row["warehouse"] = ", ".join(
             dict.fromkeys(c["warehouse"] for c in row["contracts"])
@@ -14902,8 +14927,14 @@ function drawPlan(){
       const base = Math.round(baseline[i.item] || 0);
       const paused = src ? src.paused || 0 : 0;
       const contracts = src ? (src.contracts || []).length : 0;
+      /* A Smart Delivery line is a stock level the purchasing agent tops up to
+         each Monday, not an amount on order; a level of N supplies at most N a
+         week, which is why it counts as ordered below. */
       const on = !src ? "Not on any import contract yet"
+        : src.active && src.smart ? `Smart Delivery keeps ${(src.target ?? src.ordered).toLocaleString("en-US")} in stock${
+            src.plain ? `, plus ${src.plain.toLocaleString("en-US")} a week on order,` : ""} from ${src.from} to ${src.warehouse}`
         : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
+        : paused && src.smart ? `Paused Smart Delivery contracts would keep ${paused.toLocaleString("en-US")} in stock, from ${src.from} to ${src.warehouse}; nothing active`
         : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
         : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
@@ -14911,7 +14942,7 @@ function drawPlan(){
           + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
           + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
-        paused, contracts, from: src ? src.from : null, baseline: base,
+        smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
       };
     });
@@ -16272,6 +16303,7 @@ function planDraw(){
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
       `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
+        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-instock" data-tip="Smart Delivery: a stock level the purchasing agent tops up to each Monday, so at most this much a week">in stock</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")

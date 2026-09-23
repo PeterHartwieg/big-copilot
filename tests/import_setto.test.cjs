@@ -151,6 +151,45 @@ test('a typed figure survives a reload, and typing the suggestion is no edit', a
   } finally { await page.close(); }
 });
 
+/* The Plan page's ingredient table, from the real _plan() over a synthetic
+   save: water on a Smart Delivery level, a plain order of it for comparison. */
+function planData(smart){
+  const code = 'import sys, json; sys.path.insert(0, "tests")\n'
+    + 'from test_plan_regressions import PlannerRegressions, contract\n'
+    + 'PlannerRegressions.setUpClass(); t = PlannerRegressions()\n'
+    + `plan = t.plan([contract(3000, smart=${smart ? 'True' : 'False'})])\n`
+    + 'print(json.dumps(plan))';
+  const result = spawnSync(process.env.PYTHON || 'python', ['-c', code], {cwd: root, maxBuffer: 16 * 1024 * 1024});
+  assert.equal(result.status, 0, result.stderr?.toString());
+  return JSON.parse(result.stdout.toString());
+}
+for(const smart of [true, false]){
+  test(`the Plan page names ${smart ? 'a Smart Delivery level as stock kept' : 'a plain order as a weekly amount'}`, async () => {
+    const plan = planData(smart);
+    const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
+    try{
+      await page.route('https://**', route => route.abort());
+      await page.setContent(html, {waitUntil: 'load'});
+      const water = await page.evaluate(plan => {
+        D = {meta: {character: 'plan-fixture', save: 'Fixture', day: 10}, businesses: [],
+          supply: {shops: [], idle: [], imports: [], factories: {sites: [], depots: {}, depotOther: {}}}, plan};
+        planType = 'ba:businesstype_gym'; drawPlan();
+        const meta = JSON.parse(document.querySelector('[data-ingmeta]').dataset.ingmeta);
+        const row = [...document.querySelectorAll('#ingBody tr')].find(tr => tr.dataset.name === 'Water');
+        return {tip: meta.Water.tip, cell: row ? row.cells[5].textContent.replace(/\s+/g, ' ').trim() : null};
+      }, plan);
+      if(smart){
+        assert.match(water.tip, /^Smart Delivery keeps 3,000 in stock from /);
+        assert.doesNotMatch(water.tip, /a week on order/);
+        assert.match(water.cell, /^3,000 in stock/);
+      } else {
+        assert.match(water.tip, /^3,000 a week on order now from /);
+        assert.doesNotMatch(water.cell, /in stock/);
+      }
+    } finally { await page.close(); }
+  });
+}
+
 test('the imports table scrolls inside its box, not the page, on a phone', async () => {
   const page = await board({width: 390});
   try{
