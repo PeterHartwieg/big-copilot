@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c04d5f4441">
+<link rel="stylesheet" href="community.css?v=de62a063a4">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=c04d5f4441">
+<link rel="stylesheet" href="fonts/fonts.css?v=de62a063a4">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2692,8 +2692,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c04d5f4441";</script>
-<script>window.LEDGER_RELEASE = {"version":"c04d5f4441","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "de62a063a4";</script>
+<script>window.LEDGER_RELEASE = {"version":"de62a063a4","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2762,8 +2762,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=c04d5f4441"></script>
-<script src="community.js?v=c04d5f4441"></script>
+<script src="app.js?v=de62a063a4"></script>
+<script src="community.js?v=de62a063a4"></script>
 
 <script>
 
@@ -5857,14 +5857,18 @@ function spRosterWeekdays(key, need){
    first choice is named by what it is: "Cover only" on a shop whose plan is
    cleaning and security alone, "Demand plan" on one measured enough to cut
    serving hours. The demand test is offered on both and pushed on neither.
-   Once the test has run its two weeks, one line says so, and on the test's
-   own view it switches back. */
+   Once the demand data is complete, one line says so, and on the test's own
+   view it switches back. */
 function spPlanPick(base, full){
   const first = spCoverOnly(base) ? "Cover only" : "Demand plan";
-  const done = base.demandTestDone
-    ? `<span class="sp-handover">${spI("tick")}<span><b>Demand test done:</b> ${full
+  /* Progress, on the test's own view: a weekday counts once all 24 of its
+     hours have the two reports the demand plan reads a weekday by. */
+  const measured = (base.fullCover || {}).daysMeasured;
+  const done = base.demandDataComplete
+    ? `<span class="sp-handover">${spI("tick")}<span><b>Demand data complete:</b> ${full
       ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
-    : full ? `<span class="sp-pickwhy">Run it for two weeks to measure demand, then switch to the demand plan.</span>` : "";
+    : full ? `<span class="sp-pickwhy">Run it until every hour is measured, then switch to the demand plan.${
+      Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${measured} of 7 days measured around the clock.</b>` : ""}</span>` : "";
   return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
     full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
     full ? ` class="sp-on" aria-current="true"` : ""}>Full cover 24/7</a></span>${done}</div>`;
@@ -6042,7 +6046,7 @@ function spRosterBlock(b){
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
-        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it for two weeks, then switch to the demand plan, which is cut from what those weeks measured.`
+        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it until every hour of every weekday has two reports, about two weeks, then switch to the demand plan, which is cut from what those weeks measured.`
         : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
@@ -8071,15 +8075,15 @@ function drawOptimizeStaffing(){
      down, at a block neither the card nor the landing named, and a jump like
      that is one the player cannot undo in their head. */
   const go = card.querySelector(".go");
-  /* A demand test that has run its two weeks comes first: the shop is paying
-     for every station every hour, and what it measured is now its own plan.
-     The planner decides it (`demandTestDone`); ties go to the name. */
-  const done = (D.staffing || []).filter(r => !r.failed && r.demandTestDone);
+  /* A shop on full cover whose demand data is complete comes first: it is
+     paying for every station every hour, and what it measured is now its own
+     plan. The planner decides it (`demandDataComplete`); ties go to the name. */
+  const done = (D.staffing || []).filter(r => !r.failed && r.demandDataComplete);
   if(done.length){
     const row = spPickRoster(done, () => 0);
     badge.className = "soon live";
-    badge.textContent = "TEST DONE";
-    text.textContent = `Demand test done at ${row.name}${
+    badge.textContent = "DATA COMPLETE";
+    text.textContent = `Demand data complete at ${row.name}${
       done.length > 1 ? ` and ${done.length - 1} more` : ""}: switch to the demand plan.`;
     go.textContent = `Opens ${row.name} › Staffing`;
     card.dataset.site = row.key;

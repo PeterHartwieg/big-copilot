@@ -411,16 +411,18 @@ def registration(
     number=NUMBER,
     weeks=2,
     products=(),
-    creation_day=1,
+    hours=None,
 ):
     """A rented retail floor, its stations, its opening hours and a measured week.
 
     `opens` is a list of [start, end) slots, the way the game's openingHourSlots
     is a list, and `weeks` is how many weeks of hour reports are behind it: 2 is
     measured, 1 is thin, 0 is a site that has never reported at all.
-    `creation_day` None leaves the field out, as an odd save may.
+    `hours` limits the reports to those hours, the way the game files one only
+    for an hour the shop was open; by default every hour in `hourly` has one.
     """
-    reports = {"$items": [{"hour": h, "customers": c} for h, c in hourly.items()]}
+    reports = {"$items": [{"hour": h, "customers": c} for h, c in hourly.items()
+                          if hours is None or h in hours]}
     schedule = []
     for wd in range(7):
         day = 7 if wd == 0 else wd
@@ -438,12 +440,12 @@ def registration(
                 "workShifts": {"$items": [s for s in shifts if s["wd"] == wd]},
             }
         )
-    reg = {
+    return {
         "BusinessName": f"HART. Test {number}",
         "businessTypeName": SHOP,
         "StreetName": STREET,
         "StreetNumber": number,
-        "creationDay": creation_day,
+        "creationDay": 1,
         "customerCapacity": door,
         "orderHistory": {
             "$items": [
@@ -461,9 +463,6 @@ def registration(
         "cachedAvailableProducts": {"$items": list(products)},
         "scheduleDays": {"$items": schedule},
     }
-    if creation_day is None:
-        reg.pop("creationDay")
-    return reg
 
 
 def business(status="retail", number=NUMBER, days_open=14):
@@ -479,7 +478,7 @@ def business(status="retail", number=NUMBER, days_open=14):
     }
 
 
-def plan_sites(specs, employees, status="retail", history=None, day=None):
+def plan_sites(specs, employees, status="retail"):
     """Several rented sites and one staff list, planned together.
 
     A spec may carry `days_open`, which belongs to the business rather than to
@@ -506,14 +505,12 @@ def plan_sites(specs, employees, status="retail", history=None, day=None):
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
     grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
-    return _staffing(save, LABELS, sites, grids, staff, 0.55,
-                     history=history, character="test", day=day)
+    return _staffing(save, LABELS, sites, grids, staff, 0.55)
 
 
-def plan(items, employees, hourly, history=None, day=None, **kw):
+def plan(items, employees, hourly, **kw):
     """Run the whole chain one site's row comes out of, and return that row."""
-    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees,
-                      history=history, day=day)
+    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees)
     return rows[0] if rows else None
 
 
@@ -920,7 +917,7 @@ class PayloadTest(unittest.TestCase):
                 "key", "name", "typeSlug", "open", "stations", "people",
                 "roles", "need", "basis", "ceiling", "shifts", "headcount",
                 "shortHours", "shortDays", "placed", "bench", "slack", "cost",
-                "current", "measure", "addPeople", "fullCover", "demandTestDone",
+                "current", "measure", "addPeople", "fullCover", "demandDataComplete",
             },
         )
         # The full-cover plan is the same shape as the demand plan, less the need
@@ -931,7 +928,7 @@ class PayloadTest(unittest.TestCase):
             {
                 "shifts", "headcount", "shortHours", "shortDays",
                 "placed", "bench", "slack", "cost", "addPeople",
-                "open", "openAllHours", "openNow", "inGame",
+                "open", "openAllHours", "openNow", "inGame", "daysMeasured",
             },
         )
 

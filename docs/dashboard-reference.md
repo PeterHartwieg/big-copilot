@@ -539,36 +539,32 @@ server on cleaning, the fewest people first) and the same people: the site's sta
 unassigned bench and hires. Every site's demand plan is placed first; then every
 full-cover plan, against the unassigned staff the demand plans left, each taking whom it
 uses off a shared copy, plus whoever its own site's demand plan took. The sites where the
-test is the live choice go first (not yet measured, new, or already running full cover),
-then the rest, in site order within each, so an established shop's full cover that nobody
-follows cannot take the people a new shop's test needs. So no unassigned person is promised to two shops by the plans a player follows. It
+test is the live choice go first (demand data not complete yet, or already running full
+cover), then the rest, in site order within each, so a fully measured shop's full cover that
+nobody follows cannot take the people a new shop's test needs. So no unassigned person is promised to two shops by the plans a player follows. It
 carries the same keys as the demand plan except `need` and `basis`, which would say every
 station every hour and which the page reads off `roles` instead, plus `open` (0 to 24 every day, the hours it
 assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
-an hour it is shut is an hour the test never measures) and `inGame`. On a shop with no
+an hour it is shut is an hour the test never measures), `inGame` and `daysMeasured`. On a shop with no
 serving station the two plans are the same week, and the page offers no choice.
 
-**When the test is done.** `fullCover.inGame` is whether the schedule in the game already is a
-full-cover week: every serving station staffed every hour of the week, and the doors open 0
-to 24 every day. Nothing less counts, because an hour a register stands empty is an hour
-whose customers the schedule turned away, and the demand plan would read it as demand the
-test measured. The save does not say when a schedule was set, so the board keeps it: the
-history file records, per character and site, the first and the latest game day it saw
-`inGame`, and forgets the record the first build it does not. The board sees the game only
-when it is built, so a run it has not seen for more than 3 game days (`FULL_COVER_GAP`)
-cannot be shown to be unbroken and starts again that day: **during a demand test the
-player needs the board open, or the game link running, at least every 3 game days.** A
-build whose day is before the latest sighting is another timeline (an older save loaded):
-nothing is claimed and the record is left as it was. `demandTestDone` needs all of: full
-cover in the game now, held for at least 14 game days since the run began
-(`DEMAND_TEST_HELD`), hour reports filed after that day for every weekday at least twice
-(`HOUR_WEEKS_THIN`), so the weeks the demand plan reads are the test's own; a demand plan
-that asks for fewer serving hours than the test (a shop busy every hour is already on its
-demand plan); and a shop that was open fewer than 42 days (`DEMAND_TEST_DAYS`, from the
-registration's `creationDay`) on the day the run began: two weeks of test and slack for a
-player who starts it late or runs it longer. An established shop that has always run around
-the clock stays out, because its run begins on the first build that saw it. With no record,
-because no board was built while the test ran, or no `creationDay`, nothing is claimed.
+**When the demand data is complete.** The game files an hour report only for an hour the
+shop was open, so a shop open 8 to 22 has 14 a day and one open 0 to 24 has 24: how much
+of the week is measured can be read straight from `orderHistory`. The data is complete
+when every hour of every weekday, all 7 x 24 of them, has at least two reports
+(`HOUR_WEEKS_THIN`), the same bar the demand plan uses to call a weekday measured rather
+than thin. `fullCover.daysMeasured` counts the weekdays whose 24 hours all reach it, 0 to 7,
+and the full-cover view shows it as its progress line: *Demand data: 5 of 7 days measured
+around the clock.* A shop that never opens around the clock never completes.
+
+`fullCover.inGame` is whether the schedule in the game is a full-cover week: every serving
+station staffed every hour of the week, and the doors open 0 to 24 every day. Nothing less
+counts, because an hour a register stands empty is an hour whose customers the schedule
+turned away. `demandDataComplete` is the hand-over, and it needs all three: the data is
+complete, the game runs full cover now, and the demand plan asks for fewer serving hours
+than full cover (a shop busy every hour is already on its demand plan). There is no age
+condition: an older shop run around the clock at full cover with complete data gets the
+same advice, and it is right for it too.
 
 ## Staff demands
 
@@ -798,11 +794,12 @@ and dims the rest; clicking scrolls there.
   Under the heading, a two-way pick between the site's two plans: *Cover only* (or *Demand
   plan* on a shop measured enough to cut serving hours) and *Full cover 24/7*, the demand
   test. The first is the default; the pick is remembered per shop in this browser, and each
-  plan keeps its own ticks. The test's view says in one line what it is for (run it for two
-  weeks, then switch to the demand plan), draws every station every hour, and puts *Open
-  every day 0 to 24* first among its steps on a shop that is not open that long already.
-  Once the test is done, one line says *Demand test done: switch to the demand plan*, on the
-  block and on the *Optimize staffing* card, which then points at that shop before any other.
+  plan keeps its own ticks, both per company. The test's view says in one line what it is for
+  and how far it has got (*Demand data: 5 of 7 days measured around the clock*), draws every
+  station every hour, and puts *Open every day 0 to 24* first among its steps on a shop that
+  is not open that long already. Once the data is complete on a shop running full cover, one
+  line says *Demand data complete: switch to the demand plan*, on the block and on the
+  *Optimize staffing* card, which then points at that shop before any other.
   The people a plan needs added come as one step, *Add N people to fill this plan: assign ...
   (unassigned) and hire ...*, with the hours that wait on them in its tip.
 

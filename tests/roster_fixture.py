@@ -57,14 +57,12 @@ newshop  a shop five days old, open 8 to 20, with two registers, a cleaning
          unassigned: its demand plan is cover only, and its full-cover plan
          staffs both registers around the clock and draws on the unassigned
          cleaner.
-handover a shop four weeks old whose schedule in the game has staffed both
-         registers every hour of every day for the last two of them, as the
-         board saw at two builds: the demand test is done.
+handover a shop whose schedule in the game staffs both registers every
+         hour of every day, with two reports for every hour of every weekday:
+         the demand data is complete.
 """
 import json
 import sys
-
-from ba_dashboard import History
 
 from tests.test_staffing import (
     CLEAN_STATION,
@@ -327,13 +325,8 @@ def handover_row():
         for k, post in enumerate((1, 2))
         for n, start in enumerate((0, 12))
     ]
-    # Four weeks of reports; the board saw the test in the game on day 14 and
-    # every third day after it up to day 28, so it has held two weeks unbroken
-    # and those weeks are measured.
-    history = History(None)
-    for day in range(14, 28, 3):
-        plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=day)
-    return plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=28)
+    # Two weeks of reports for every hour of every weekday: the data is complete.
+    return plan(items, people, BUSY, shifts=week)
 
 
 def rows():

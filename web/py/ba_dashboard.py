@@ -1410,9 +1410,6 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         (save.deref(root.get("gameVariables")) or {}).get(
             "baseCustomerPromotionMultiplier", 0.55
         ),
-        history=history,
-        character=character,
-        day=day,
     )
     plan = _plan(
         save,
@@ -5366,9 +5363,6 @@ def _staffing(
     grids: list,
     staff: list,
     base_promotion: float,
-    history: "History | None" = None,
-    character: str = "default",
-    day: int | None = None,
 ) -> list:
     """A roster the player can type in, one row per retail site.
 
@@ -5388,12 +5382,7 @@ def _staffing(
     off a shared copy of it. A site's full-cover plan may also use whoever its
     own demand plan took, since the player follows one plan or the other there.
     So no unassigned person is promised to two shops.
-
-    `history` is where the first day of a site's full-cover schedule is kept,
-    which is what tells a finished demand test from one entered today.
     """
-    if day is None:
-        day = save.root.get("Day")
     by_key = {b["key"]: b for b in businesses}
     buildings = {
         site_key((b["StreetName"], b["StreetNumber"])): b
@@ -5466,18 +5455,17 @@ def _staffing(
     # The full-cover plans, against what the demand plans left on the bench.
     # A bench member's week is shared across these plans the same way it is
     # across the demand plans, and written back only once a site's row is built.
-    # The sites where the test is the live choice go first -- a shop not yet
-    # measured, a new one, or one already running full cover -- so an
-    # established shop's full cover, which nobody is following, cannot take
-    # the unassigned staff a new shop's test needs. Site order within each.
+    # The sites where the test is the live choice go first -- a shop whose
+    # demand data is not complete yet, or one already running full cover -- so
+    # a fully measured shop's full cover, which nobody is following, cannot
+    # take the unassigned staff a new shop's test needs. Site order within each.
     def live(entry):
         business, site = entry[1]
         if site is None:
             return 1
         grid = site["grid"]
         return 0 if (
-            min(grid["weeks"]) < HOUR_WEEKS_THIN
-            or _is_new_shop(site["building"], day)
+            _days_measured(site["coverage"]) < 7
             or _full_cover_in_game(site["current"]["list"], grid["stations"], grid["open"])
         ) else 1
 
@@ -5499,7 +5487,7 @@ def _staffing(
                 site["grid"], _full_need(site["grid"]), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
             )
-            row = _finish_site(site, full, names, people, history, character, day)
+            row = _finish_site(site, full, names, people)
         except Exception:
             out[index] = failed(business)
             continue
@@ -5535,80 +5523,49 @@ def _full_need(grid: dict) -> dict:
 # the shop is shut is an hour the demand test never measures, so opening every
 # day around the clock is the plan's first step, not an option beside it.
 ALL_DAY_OPEN = [[[0, 24]] for _ in range(7)]
-# How long a shop counts as new for the hand-over: six weeks open, the same
-# days-open figure `measure.open` carries. The test itself is two weeks; the
-# rest is slack for a player who starts it late or runs it longer.
-DEMAND_TEST_DAYS = 42
+def _hour_coverage(save: Save, building: dict) -> list:
+    """Hour reports on file for every hour of every weekday, [weekday][hour].
 
-
-def _is_new_shop(building: dict, day: int | None) -> bool:
-    """Whether the shop has been open fewer than DEMAND_TEST_DAYS days.
-
-    Read off the registration's own creationDay, the figure `daysOpen` is
-    worked out from. A registration without one is not called new: `daysOpen`
-    falls back to one day there, and a shop that is new forever would be told
-    its test is done forever.
+    The game files a report only for an hour the shop was open, so a shop open
+    8 to 22 never has one for 3 in the morning. An hour with HOUR_WEEKS_THIN
+    reports is one the demand plan reads as measured.
     """
-    created = building.get("creationDay")
-    if created is None or day is None:
-        return False
-    return day - created < DEMAND_TEST_DAYS
-
-
-# How long a full-cover schedule has to have held before the test is done: two
-# weeks of game days from the first day the board saw it in the game.
-DEMAND_TEST_HELD = 14
-# The longest the board may go without seeing a full-cover schedule and still
-# count the run as unbroken, in game days. The save keeps only today's
-# schedule, so the player needs the board open, or the game link running, at
-# least every three game days while the test runs; a longer gap starts it again.
-FULL_COVER_GAP = 3
-
-
-def _reports_since(save: Save, building: dict, since: int) -> list:
-    """Hour reports filed after `since`, counted per weekday.
-
-    The day the board first saw the schedule is left out: part of it may have
-    been traded before the schedule was entered.
-    """
-    counts = [0] * 7
+    counts = [[0] * 24 for _ in range(7)]
     for entry in save.items(building.get("orderHistory")):
         number = entry.get("dayNumber")
-        if number is None or number <= since:
+        if number is None:
             continue
-        if save.items(entry.get("hourReports")):
-            counts[number % 7] += 1
+        for report in save.items(entry.get("hourReports")):
+            hour = report.get("hour")
+            if hour is not None and 0 <= hour < 24:
+                counts[number % 7][hour] += 1
     return counts
 
 
-def _demand_test_done(save, building, week, full, in_game, since, day) -> bool:
-    """Whether the shop has run its demand test long enough to switch.
+def _days_measured(coverage: list) -> int:
+    """Weekdays measured around the clock: all 24 hours at HOUR_WEEKS_THIN reports."""
+    return sum(1 for day in coverage if min(day) >= HOUR_WEEKS_THIN)
 
-    All of it, or it is not said:
 
+def _demand_data_complete(coverage, week, full, in_game) -> bool:
+    """Whether to tell the player to switch from full cover to the demand plan.
+
+    All of it, straight from the save:
+
+    - the demand data is complete: every hour of every weekday has
+      HOUR_WEEKS_THIN hour reports, the same bar the demand plan uses to call a
+      weekday measured rather than thin;
     - the game runs a full-cover schedule now (`in_game`, see
-      _full_cover_in_game(): every station every hour);
-    - the board saw it there first `since`, at least DEMAND_TEST_HELD days
-      ago, and at least every FULL_COVER_GAP days since: the record is
-      cleared the build it is not there and restarted after a longer gap (see
-      History.full_cover()). With no record, because no board was built while
-      the test ran, nothing is claimed;
-    - the hour reports filed since then hold every weekday HOUR_WEEKS_THIN
-      times, so the weeks the demand plan will read are the test's own and not
-      the cover-only weeks before it;
-    - the shop was new (_is_new_shop()) when the test started: an established
-      one that has always run around the clock has its demand plan to speak for
-      it, and its record starts on the first build that saw it, when it was
-      already old. A test started at four weeks and finished at six still counts;
-    - and the demand plan asks for fewer serving hours than the test: a shop
+      _full_cover_in_game(): every station every hour, open 0 to 24), so this
+      is advice to a shop on the test, not to one already on a demand plan;
+    - and the demand plan asks for fewer serving hours than full cover: a shop
       busy every hour is already on its demand plan, and switching changes
       nothing.
+
+    No age: an older shop run around the clock at full cover with complete
+    data gets the same advice, and it is right for it too.
     """
-    if not in_game or since is None or day is None or day - since < DEMAND_TEST_HELD:
-        return False
-    if not _is_new_shop(building, since):
-        return False
-    if min(_reports_since(save, building, since)) < HOUR_WEEKS_THIN:
+    if not in_game or _days_measured(coverage) < 7:
         return False
     return _serving_hours(week["shifts"]) < _serving_hours(full["shifts"])
 
@@ -6105,10 +6062,11 @@ def _plan_site(
         # Keyed the way a shift names a station, so _current_roster() can tell
         # a guard on a locker from a cashier on a register.
         "current": _current_roster(save, building, {**stations, **cover_stations}),
+        "coverage": _hour_coverage(save, building),
     }
 
 
-def _finish_site(site, full, names, people, history, character, day) -> dict:
+def _finish_site(site, full, names, people) -> dict:
     """One retail site's row, from its demand plan and its full-cover plan."""
     save, business, building, grid = (
         site["save"], site["business"], site["building"], site["grid"])
@@ -6133,9 +6091,6 @@ def _finish_site(site, full, names, people, history, character, day) -> dict:
             {"list": [r for r in current["list"] if r["kind"] != "serve"]}, site["wage"])),
     }
     in_game = _full_cover_in_game(current["list"], grid["stations"], grid["open"])
-    # The first game day the full-cover schedule was seen in the game, kept
-    # across builds; forgotten as soon as it is not there.
-    since = history.full_cover(character, day, grid["key"], in_game) if history else None
     return {
         "key": grid["key"],
         "name": business["name"],
@@ -6179,9 +6134,14 @@ def _finish_site(site, full, names, people, history, character, day) -> dict:
             "openAllHours": True,
             "openNow": _open_all_hours(grid["open"]),
             "inGame": in_game,
+            # Weekdays with all 24 hours measured, out of 7: the test's progress.
+            "daysMeasured": _days_measured(site["coverage"]),
         },
-        "demandTestDone": _demand_test_done(
-            save, building, week, full, in_game, since, day),
+        # The hand-over: the demand data is complete while the game runs full
+        # cover, and the demand plan would change something. See
+        # _demand_data_complete().
+        "demandDataComplete": _demand_data_complete(
+            site["coverage"], week, full, in_game),
         "current": {
             "shifts": current["shifts"],
             "fragments": current["fragments"],
@@ -7008,33 +6968,6 @@ class History:
         for old in sorted(store, key=int)[:-HISTORY_DAYS]:
             del store[old]
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int)]
-
-    def full_cover(self, character: str, day: int | None, key: str, running: bool):
-        """The first game day of a site's unbroken full-cover run, or None.
-
-        Kept as ``{"start": day, "last": day}``: the first build that saw it
-        and the latest. Cleared the first build it is not there. The board sees
-        the game only when it is built, so a run the board did not see for more
-        than FULL_COVER_GAP game days cannot be shown to be unbroken, and it
-        starts again today. A build older than the last sighting is another
-        timeline (an older save loaded): nothing is claimed and nothing is
-        written, so going back to the newer save carries on where it was.
-        """
-        store = self._for(character).setdefault("fullCover", {})
-        if day is None:
-            return None
-        record = store.get(key)
-        if isinstance(record, int):  # an earlier shape, the start day alone
-            record = {"start": record, "last": record}
-        if record and day < record["last"]:
-            return None
-        if not running:
-            store.pop(key, None)
-            return None
-        if not record or day - record["last"] > FULL_COVER_GAP:
-            record = {"start": day, "last": day}
-        store[key] = {"start": record["start"], "last": day}
-        return record["start"]
 
     def named(self, character: str, updates: dict | None = None) -> dict:
         """Lines the player named by hand, by recipe id; a None clears one."""
@@ -13299,14 +13232,18 @@ function spRosterWeekdays(key, need){
    first choice is named by what it is: "Cover only" on a shop whose plan is
    cleaning and security alone, "Demand plan" on one measured enough to cut
    serving hours. The demand test is offered on both and pushed on neither.
-   Once the test has run its two weeks, one line says so, and on the test's
-   own view it switches back. */
+   Once the demand data is complete, one line says so, and on the test's own
+   view it switches back. */
 function spPlanPick(base, full){
   const first = spCoverOnly(base) ? "Cover only" : "Demand plan";
-  const done = base.demandTestDone
-    ? `<span class="sp-handover">${spI("tick")}<span><b>Demand test done:</b> ${full
+  /* Progress, on the test's own view: a weekday counts once all 24 of its
+     hours have the two reports the demand plan reads a weekday by. */
+  const measured = (base.fullCover || {}).daysMeasured;
+  const done = base.demandDataComplete
+    ? `<span class="sp-handover">${spI("tick")}<span><b>Demand data complete:</b> ${full
       ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
-    : full ? `<span class="sp-pickwhy">Run it for two weeks to measure demand, then switch to the demand plan.</span>` : "";
+    : full ? `<span class="sp-pickwhy">Run it until every hour is measured, then switch to the demand plan.${
+      Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${measured} of 7 days measured around the clock.</b>` : ""}</span>` : "";
   return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
     full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
     full ? ` class="sp-on" aria-current="true"` : ""}>Full cover 24/7</a></span>${done}</div>`;
@@ -13484,7 +13421,7 @@ function spRosterBlock(b){
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
-        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it for two weeks, then switch to the demand plan, which is cut from what those weeks measured.`
+        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. Run it until every hour of every weekday has two reports, about two weeks, then switch to the demand plan, which is cut from what those weeks measured.`
         : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed for two weeks, around the clock where the doors allow it, and the count stops being a count of what you turned away.`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
@@ -15513,15 +15450,15 @@ function drawOptimizeStaffing(){
      down, at a block neither the card nor the landing named, and a jump like
      that is one the player cannot undo in their head. */
   const go = card.querySelector(".go");
-  /* A demand test that has run its two weeks comes first: the shop is paying
-     for every station every hour, and what it measured is now its own plan.
-     The planner decides it (`demandTestDone`); ties go to the name. */
-  const done = (D.staffing || []).filter(r => !r.failed && r.demandTestDone);
+  /* A shop on full cover whose demand data is complete comes first: it is
+     paying for every station every hour, and what it measured is now its own
+     plan. The planner decides it (`demandDataComplete`); ties go to the name. */
+  const done = (D.staffing || []).filter(r => !r.failed && r.demandDataComplete);
   if(done.length){
     const row = spPickRoster(done, () => 0);
     badge.className = "soon live";
-    badge.textContent = "TEST DONE";
-    text.textContent = `Demand test done at ${row.name}${
+    badge.textContent = "DATA COMPLETE";
+    text.textContent = `Demand data complete at ${row.name}${
       done.length > 1 ? ` and ${done.length - 1} more` : ""}: switch to the demand plan.`;
     go.textContent = `Opens ${row.name} › Staffing`;
     card.dataset.site = row.key;

@@ -1777,7 +1777,9 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
     assert.match(steps[0], /^Open every day 0 to 24/);
     assert.match(await page.locator('#sp-roster .sp-pickwhy').innerText(),
-      /^Run it for two weeks to measure demand, then switch to the demand plan\.$/);
+      /^Run it until every hour is measured, then switch to the demand plan\. Demand data: 0 of 7 days measured around the clock\.$/);
+    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(),
+      'Demand data: 0 of 7 days measured around the clock.');
     assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
       /Every station, every hour/);
     // The payload carries no need for the test; the strip is read off the
@@ -1893,12 +1895,12 @@ test('a plan with nobody to add has no add step', async () => {
   } finally { await page.close(); }
 });
 
-test('a finished demand test says so on the block and on the Today card', async () => {
+test('complete demand data on full cover says so on the block and on the Today card', async () => {
   const page = await shop('handover');
   try {
-    assert.equal(ROWS.handover.demandTestDone, true);
+    assert.equal(ROWS.handover.demandDataComplete, true);
     const line = page.locator('#sp-roster .sp-handover');
-    assert.equal(await line.innerText(), 'Demand test done: switch to the demand plan');
+    assert.equal(await line.innerText(), 'Demand data complete: switch to the demand plan');
     // On the test's own view the line is the way back.
     await page.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
     assert.equal(await page.locator('#sp-roster .sp-pickwhy').count(), 0, 'one line, not two');
@@ -1909,22 +1911,39 @@ test('a finished demand test says so on the block and on the Today card', async 
       const c = $('optimizeStaffingCard');
       return [c.querySelector('.what').textContent, c.dataset.site];
     });
-    assert.equal(card[0], 'Demand test done at HART. Test 12: switch to the demand plan.');
+    assert.equal(card[0], 'Demand data complete at HART. Test 12: switch to the demand plan.');
     assert.equal(card[1], KEY);
   } finally { await page.close(); }
 });
 
-test('no hand-over line on a shop whose test is not done', async () => {
+test('the progress line counts weekdays measured around the clock', async () => {
+  const page = await shop('newshop', row => { row.fullCover.daysMeasured = 5; });
+  try {
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(),
+      'Demand data: 5 of 7 days measured around the clock.');
+    // Not on the other view, and not once the data is complete.
+    await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
+    assert.equal(await page.locator('#sp-roster .sp-progress').count(), 0);
+  } finally { await page.close(); }
+  const done = await shop('handover');
+  try {
+    await done.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
+    assert.equal(await done.locator('#sp-roster .sp-progress').count(), 0);
+  } finally { await done.close(); }
+});
+
+test('no hand-over line on a shop whose demand data is not complete', async () => {
   for(const which of ['full', 'newshop']){
     const page = await shop(which);
     try {
-      assert.equal(ROWS[which].demandTestDone, false, which);
+      assert.equal(ROWS[which].demandDataComplete, false, which);
       assert.equal(await page.locator('#sp-roster .sp-handover').count(), 0, which);
       const card = await page.evaluate(() => {
         drawOptimizeStaffing();
         return $('optimizeStaffingCard').querySelector('.what').textContent;
       });
-      assert.doesNotMatch(card, /Demand test done/, which);
+      assert.doesNotMatch(card, /Demand data complete/, which);
     } finally { await page.close(); }
   }
 });

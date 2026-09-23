@@ -12,21 +12,21 @@ import unittest
 import unittest.mock
 
 import ba_dashboard
+from ba_save import Save
 from ba_dashboard import (
     ALL_DAY_OPEN,
-    DEMAND_TEST_DAYS,
-    DEMAND_TEST_HELD,
-    FULL_COVER_GAP,
     HIRE_ORDERS,
+    HOUR_WEEKS_THIN,
     FULL_TIME,
-    History,
     JOB_DEMANDS,
     OVERWORK_HOURS,
     SHIFT_CAP,
     _cut_run,
+    _days_measured,
     _full_cover_in_game,
     _full_need,
     _hires_for,
+    _hour_coverage,
     _keeps_floors,
     _open_all_hours,
     _pack_hires,
@@ -49,6 +49,7 @@ from tests.test_staffing import (
     kind,
     plan,
     plan_sites,
+    registration,
     who,
 )
 
@@ -299,18 +300,18 @@ class FullCoverRulesTest(unittest.TestCase):
     def test_a_live_test_takes_the_unassigned_first(self):
         """An established shop's full cover, which nobody follows, waits its turn.
 
-        Site 12 is measured and established, and sorts first; site 14 is new and
-        unmeasured, so its test is the live choice. The one unassigned cashier
-        goes to site 14's test.
+        Site 12 has every hour of every weekday measured, and sorts first; site
+        14 is new and unmeasured, so its test is the live choice. The one
+        unassigned cashier goes to site 14's test.
         """
         hourly = {h: 10 if 10 <= h < 16 else 0 for h in range(24)}
         rows = plan_sites(
             [dict(items=[(1, REGISTER)], hourly=hourly, weeks=2, number=12,
-                  opens=((10, 16),), creation_day=-100),
+                  opens=((10, 16),)),
              dict(items=[(2, REGISTER)], hourly={}, weeks=0, number=14)],
             [employee("own1", [SERVICE], number=12), employee("free", [SERVICE], here=False)],
-            day=14,
         )
+        self.assertEqual(rows[0]["fullCover"]["daysMeasured"], 7)
         established, new = rows
         self.assertEqual(established["addPeople"]["assign"], [])
         self.assertEqual(established["fullCover"]["addPeople"]["assign"], [])
@@ -319,154 +320,98 @@ class FullCoverRulesTest(unittest.TestCase):
 
 
 class HandOverTest(unittest.TestCase):
-    """"Demand test done": full cover held for two weeks, seen, and measured."""
+    """"Demand data complete": full cover in the game, every hour measured twice."""
 
     ITEMS = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)]
 
-    def row(self, history=None, day=28, **kw):
-        # Four weeks of hour reports, days 1 to 28, from a shop created on day 1.
+    def row(self, **kw):
+        # Two weeks of reports for every hour of every weekday, by default.
         kw.setdefault("shifts", game_week((1, 2)))
-        kw.setdefault("weeks", 4)
-        return plan(self.ITEMS, crew(), BUSY, history=history, day=day, **kw)
+        return plan(self.ITEMS, crew(), BUSY, **kw)
 
-    def held(self, start=14, end=28, every=FULL_COVER_GAP, history=None, **kw):
-        """Built with the test in the game on `start`, every `every` days, and on `end`."""
-        history = history or History(None)
-        days = list(range(start, end, every)) + [end]
-        for day in days[:-1]:
-            self.row(history=history, day=day, **kw)
-        return self.row(history=history, day=end, **kw), history
-
-    def record(self, history, key):
-        return history.book["test"]["fullCover"].get(key)
-
-    def test_done_after_fourteen_recorded_days(self):
-        row, _ = self.held()
+    def test_full_cover_and_complete_data_shows_the_line(self):
+        row = self.row()
         self.assertIs(row["fullCover"]["inGame"], True)
-        self.assertIs(row["demandTestDone"], True)
+        self.assertEqual(row["fullCover"]["daysMeasured"], 7)
+        self.assertIs(row["demandDataComplete"], True)
 
-    def test_not_done_the_day_full_cover_is_entered(self):
-        """Two cover-only weeks of reports, full cover entered today: not done."""
-        history = History(None)
-        row = self.row(history=history)
+    def test_an_older_shop_gets_the_same_advice(self):
+        """No age: a shop open for months on full cover with complete data."""
+        row = self.row(weeks=12)
+        self.assertIs(row["demandDataComplete"], True)
+
+    def test_one_hour_of_one_weekday_with_a_single_report_is_not_complete(self):
+        """Two weeks of reports, but one Wednesday lost its 3 o'clock report."""
+        with unittest.mock.patch.object(
+            ba_dashboard, "_hour_coverage",
+            lambda save, building: self.coverage_without(save, building, 3, 3),
+        ):
+            row = self.row()
+        self.assertEqual(row["fullCover"]["daysMeasured"], 6)
+        self.assertIs(row["demandDataComplete"], False)
+
+    @staticmethod
+    def coverage_without(save, building, weekday, hour):
+        counts = _hour_coverage(save, building)
+        counts[weekday][hour] = HOUR_WEEKS_THIN - 1
+        return counts
+
+    def test_a_single_report_straight_from_the_save(self):
+        """The same, read off orderHistory itself rather than patched."""
+        reg = registration(self.ITEMS, BUSY)
+        entry = next(e for e in reg["orderHistory"]["$items"] if e["dayNumber"] == 3)
+        entry["hourReports"] = {"$items": [
+            r for r in entry["hourReports"]["$items"] if r["hour"] != 3]}
+        save = Save({}, {}, "t.hsg")
+        coverage = _hour_coverage(save, reg)
+        self.assertEqual(coverage[3][3], 1)
+        self.assertEqual(coverage[3][4], 2)
+        self.assertEqual(_days_measured(coverage), 6)
+
+    def test_a_shop_open_8_to_22_never_completes(self):
+        """The game files no report for an hour the shop was shut."""
+        row = self.row(opens=((8, 22),), hours=range(8, 22), weeks=8)
+        self.assertEqual(row["fullCover"]["daysMeasured"], 0)
+        self.assertIs(row["fullCover"]["inGame"], False)
+        self.assertIs(row["demandDataComplete"], False)
+
+    def test_one_week_of_reports_is_not_complete(self):
+        row = self.row(weeks=1)
         self.assertIs(row["fullCover"]["inGame"], True)
-        self.assertIs(row["demandTestDone"], False)
-        self.assertEqual(self.record(history, row["key"]), {"start": 28, "last": 28})
+        self.assertEqual(row["fullCover"]["daysMeasured"], 0)
+        self.assertIs(row["demandDataComplete"], False)
 
-    def test_not_done_a_day_short(self):
-        self.assertEqual(DEMAND_TEST_HELD, 14)
-        row, _ = self.held(end=27)
-        self.assertIs(row["demandTestDone"], False)
-
-    def test_not_done_without_the_reports_of_those_days(self):
-        """Held fourteen days, but only one week of reports filed since."""
-        row, _ = self.held(weeks=3)
-        self.assertIs(row["demandTestDone"], False)
-
-    def test_not_done_without_a_record(self):
-        """No board was built during the test, so nothing is claimed."""
-        self.assertIs(self.row(history=None)["demandTestDone"], False)
-        self.assertIs(self.row(history=History(None))["demandTestDone"], False)
-
-    def test_the_record_is_cleared_when_full_cover_stops(self):
-        history = History(None)
-        first = self.row(history=history, day=14)
-        self.assertEqual(self.record(history, first["key"]), {"start": 14, "last": 14})
-        self.row(history=history, day=16, shifts=[])
-        self.assertIsNone(self.record(history, first["key"]))
-        again, _ = self.held(start=17, end=28, history=history)
-        self.assertEqual(self.record(history, again["key"]), {"start": 17, "last": 28})
-        self.assertIs(again["demandTestDone"], False)
-
-    def test_a_gap_of_three_days_keeps_the_run(self):
-        self.assertEqual(FULL_COVER_GAP, 3)
-        row, history = self.held(every=3)
-        self.assertEqual(self.record(history, row["key"])["start"], 14)
-        self.assertIs(row["demandTestDone"], True)
-
-    def test_a_gap_of_four_days_starts_it_again(self):
-        """Built every four days: no gap can be vouched for, so each restarts the run.
-
-        Days 14, 18, 22 and 26 each start it again; 28 is two days after 26,
-        so the run it reports began on 26.
-        """
-        row, history = self.held(every=4)
-        self.assertEqual(self.record(history, row["key"]), {"start": 26, "last": 28})
-        self.assertIs(row["demandTestDone"], False)
-
-    def test_an_older_save_is_another_timeline(self):
-        """Neither claimed nor written; back on the newer save the run carries on."""
-        history = History(None)
-        history.full_cover("test", 30, "k", True)
-        self.assertIsNone(history.full_cover("test", 20, "k", True))
-        self.assertIsNone(history.full_cover("test", 20, "k", False))
-        self.assertEqual(history.book["test"]["fullCover"]["k"], {"start": 30, "last": 30})
-        self.assertEqual(history.full_cover("test", 32, "k", True), 30)
-
-    def test_an_older_save_does_not_claim_done(self):
-        row, history = self.held(start=14, end=28)
-        self.assertIs(row["demandTestDone"], True)
-        older = self.row(history=history, day=25)
-        self.assertIs(older["demandTestDone"], False)
-        self.assertEqual(self.record(history, row["key"]), {"start": 14, "last": 28})
-
-    def test_done_only_on_a_new_shop(self):
-        """Six weeks open when the test started is the edge."""
-        self.assertEqual(DEMAND_TEST_DAYS, 42)
-        young, _ = self.held(creation_day=14 - (DEMAND_TEST_DAYS - 1))
-        self.assertIs(young["demandTestDone"], True)
-        old, _ = self.held(creation_day=14 - DEMAND_TEST_DAYS)
-        self.assertIs(old["fullCover"]["inGame"], True)
-        self.assertIs(old["demandTestDone"], False)
-
-    def test_a_test_started_late_still_finishes(self):
-        """Started at four weeks old, done at six: the age is taken on the start day."""
-        row, _ = self.held(start=29, end=43, weeks=7, creation_day=1)
-        self.assertIs(row["demandTestDone"], True)
-
-    def test_an_established_shop_always_open_around_the_clock_is_not(self):
-        """Its record starts on the first build that saw it, when it was already old."""
-        row, _ = self.held(start=43, end=57, weeks=9, creation_day=1)
-        self.assertIs(row["fullCover"]["inGame"], True)
-        self.assertIs(row["demandTestDone"], False)
-
-    def test_not_done_where_the_save_gives_no_creation_day(self):
-        row, _ = self.held(creation_day=None)
-        self.assertIs(row["fullCover"]["inGame"], True)
-        self.assertIs(row["demandTestDone"], False)
-
-    def test_not_done_while_the_game_runs_something_else(self):
-        row, _ = self.held(shifts=[])
-        self.assertIs(row["demandTestDone"], False)
+    def test_complete_data_without_full_cover_in_game_is_not(self):
+        """A shop on its demand plan already needs no line telling it to switch."""
+        row = self.row(shifts=[])
+        self.assertEqual(row["fullCover"]["daysMeasured"], 7)
+        self.assertIs(row["demandDataComplete"], False)
 
     def test_two_empty_hours_a_day_are_not_full_cover(self):
         """An hour with a register empty is an hour the test never measured."""
-        row, _ = self.held(shifts=game_week((1, 2), gap=2))
+        row = self.row(shifts=game_week((1, 2), gap=2))
         self.assertIs(row["fullCover"]["inGame"], False)
-        self.assertIs(row["demandTestDone"], False)
+        self.assertIs(row["demandDataComplete"], False)
 
     def test_a_register_empty_for_a_day_is_not(self):
-        row, _ = self.held(shifts=game_week((1, 2), skip=(3, 2)))
+        row = self.row(shifts=game_week((1, 2), skip=(3, 2)))
         self.assertIs(row["fullCover"]["inGame"], False)
-        self.assertIs(row["demandTestDone"], False)
+        self.assertIs(row["demandDataComplete"], False)
 
-    def test_a_shop_shut_at_night_is_not(self):
-        row, _ = self.held(opens=((6, 24),))
-        self.assertIs(row["fullCover"]["inGame"], False)
-        self.assertIs(row["demandTestDone"], False)
-
-    def test_not_done_where_the_demand_plan_is_full_cover_too(self):
+    def test_not_shown_where_the_demand_plan_is_full_cover_too(self):
         """A shop busy every hour is already on its demand plan: nothing to switch."""
-        history = History(None)
-        busy = {h: 40 for h in range(24)}
-        kw = dict(shifts=game_week((1, 2)), weeks=4)
-        for day in range(14, 28, 3):
-            plan(self.ITEMS, crew(), busy, history=history, day=day, **kw)
-        row = plan(self.ITEMS, crew(), busy, history=history, day=28, **kw)
+        row = plan(self.ITEMS, crew(), {h: 40 for h in range(24)}, shifts=game_week((1, 2)))
         self.assertIs(row["fullCover"]["inGame"], True)
         self.assertEqual(sum(hours(s) for s in serving(row)),
                          sum(hours(s) for s in serving(row["fullCover"])))
-        self.assertIs(row["demandTestDone"], False)
+        self.assertIs(row["demandDataComplete"], False)
+
+    def test_days_measured_counts_whole_weekdays(self):
+        coverage = [[2] * 24 for _ in range(7)]
+        self.assertEqual(_days_measured(coverage), 7)
+        coverage[0][23] = 1
+        coverage[4] = [3] * 12 + [0] * 12
+        self.assertEqual(_days_measured(coverage), 5)
 
     def test_the_threshold_directly(self):
         stations = [{"id": 1}, {"id": 2}]
