@@ -1410,6 +1410,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         (save.deref(root.get("gameVariables")) or {}).get(
             "baseCustomerPromotionMultiplier", 0.55
         ),
+        history=history,
+        character=character,
+        day=day,
     )
     plan = _plan(
         save,
@@ -4408,6 +4411,49 @@ def _bridge_troughs(wanted: dict, wages: dict, budget: float, slots: list) -> tu
     return spent, cost
 
 
+def _hire_fits(slot: dict, hire: dict) -> bool:
+    """Whether one hypothetical hire, with no demands of their own, may take a slot."""
+    hours = slot["to"] - slot["from"]
+    busy = hire["busy"][slot["wd"]]
+    return (
+        hire["hours"] + hours <= FULL_TIME[1]
+        and len(busy) + hours <= OVERWORK_HOURS
+        and not any(h in busy for h in range(slot["from"], slot["to"]))
+    )
+
+
+def _pack_hires(slots: list, count: int | None) -> int | None:
+    """Pack slots onto hires; how many it took, or None if `count` hires cannot.
+
+    With `count` None it is first fit, opening a hire whenever none has room:
+    always succeeds, and was the whole count once. With a `count` it is the
+    balanced packing: every slot goes to the emptiest hire who may take it, so
+    the week spreads over all of them instead of filling the first few to their
+    ceiling and leaving the last days to people who may take one shift a day.
+    """
+    order = sorted(
+        slots,
+        key=lambda s: (s["wd"], -(s["to"] - s["from"]), s["from"], str(s["station"])),
+    )
+    hires = [{"hours": 0.0, "busy": [set() for _ in range(7)]} for _ in range(count or 0)]
+    for slot in order:
+        able = [i for i, hire in enumerate(hires) if _hire_fits(slot, hire)]
+        if count is None:
+            if able:
+                index = able[0]
+            else:
+                hires.append({"hours": 0.0, "busy": [set() for _ in range(7)]})
+                index = len(hires) - 1
+        elif able:
+            index = min(able, key=lambda i: (hires[i]["hours"], i))
+        else:
+            return None
+        hire = hires[index]
+        hire["hours"] += slot["to"] - slot["from"]
+        hire["busy"][slot["wd"]].update(range(slot["from"], slot["to"]))
+    return len(hires)
+
+
 def _hires_for(slots: list) -> int:
     """How many new people the slots nobody here may work would actually take.
 
@@ -4415,28 +4461,32 @@ def _hires_for(slots: list) -> int:
     weekend shifts are 48 hours, but two of them fall on the same day and the
     game stops anyone working more than fourteen hours in one. So the residue is
     packed onto hypothetical hires who have no demands of their own -- a full
-    week, the daily cap, and one shift at a time -- first fit in a fixed order,
-    which is deterministic and never fewer than the hours alone would say.
+    week, the daily cap, and one shift at a time.
+
+    The fewest people first, so the count is searched rather than filled: from
+    the least the hours and the busiest day allow, upwards, the first count the
+    balanced packing fits. Two registers open around the clock are 28 twelve-hour
+    entries, four a day; first fit gave four hires every entry from Monday to
+    Thursday and needed four more for the rest of the week, eight people for
+    what seven can work at 48 hours each. First fit is kept as the ceiling, so
+    the answer is never worse than it was. Deterministic throughout.
     """
-    hires = []
-    for slot in sorted(
-        slots, key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))
-    ):
-        hours = slot["to"] - slot["from"]
-        for hire in hires:
-            if hire["hours"] + hours > FULL_TIME[1]:
-                continue
-            if len(hire["busy"][slot["wd"]]) + hours > OVERWORK_HOURS:
-                continue
-            if any(h in hire["busy"][slot["wd"]] for h in range(slot["from"], slot["to"])):
-                continue
-            break
-        else:
-            hire = {"hours": 0.0, "busy": [set() for _ in range(7)]}
-            hires.append(hire)
-        hire["hours"] += hours
-        hire["busy"][slot["wd"]].update(range(slot["from"], slot["to"]))
-    return len(hires)
+    if not slots:
+        return 0
+    worst = _pack_hires(slots, None)
+    total = sum(s["to"] - s["from"] for s in slots)
+    floor = math.ceil(total / FULL_TIME[1])
+    for wd in range(7):
+        day = [s for s in slots if s["wd"] == wd]
+        if not day:
+            continue
+        floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / OVERWORK_HOURS))
+        for hour in range(24):
+            floor = max(floor, sum(1 for s in day if s["from"] <= hour < s["to"]))
+    for count in range(floor, worst):
+        if _pack_hires(slots, count) is not None:
+            return count
+    return worst
 
 
 def _current_roster(save: Save, building: dict, stations: dict) -> dict:
@@ -4673,6 +4723,61 @@ def _piece_over(shift: dict, donor: dict, taker: dict, state: dict, shifts: list
     _take_over(piece, taker, state)
     shifts.append(piece)
     return piece
+
+
+def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> None:
+    """Give a line nobody could take to somebody on the roster, by a swap.
+
+    Filling one person at a time works the first names up to their ceiling on
+    the first days of the week, and the last days are left to people who may
+    take one entry a day: two registers around the clock come out with seven
+    people and three entries still open, where seven people can work all 28.
+    So each open line is offered to somebody already on this roster who is
+    free that day but full for the week, if they can hand one of their own
+    entries to another person on the roster who has room for it. Both moves
+    are tested with `_can_work()` against the weeks as they would stand, so no
+    rule and no demand bends, and nobody new is started. Deterministic: open
+    lines by the clock, people and their entries by id and the clock.
+    """
+    by_id = {person["id"]: person for person in pool}
+    people = [by_id[pid] for pid in sorted(rostered, key=str) if pid in by_id]
+    clock = lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))  # noqa: E731
+    for hole in sorted((s for s in shifts if s["employee"] is None), key=clock):
+        placed = False
+        by_person = collections.defaultdict(list)
+        for s in shifts:
+            by_person[s["employee"]].append(s)
+        for giver in people:
+            # What no handed-over entry could change: the role, free weekends
+            # and blackout windows. Tested first, because this runs per line.
+            if (
+                not _usable(giver, hole["skill"], hole["kind"])
+                or (giver["weekendsOff"] and hole["wd"] in WEEKEND_WEEKDAYS)
+                or any(low < hole["to"] and hole["from"] < high
+                       for low, high in giver["blackouts"])
+            ):
+                continue
+            for given in sorted(by_person[giver["id"]], key=clock):
+                trial = _copy_state(state[giver["id"]])
+                trial["hours"] -= given["to"] - given["from"]
+                trial["busy"][given["wd"]].difference_update(range(given["from"], given["to"]))
+                if not trial["busy"][given["wd"]]:
+                    trial["days"].discard(given["wd"])
+                if not _can_work(giver, trial, hole):
+                    continue
+                taker = next(
+                    (q for q in people
+                     if q["id"] != giver["id"] and _can_work(q, state[q["id"]], given)),
+                    None,
+                )
+                if taker is None:
+                    continue
+                _hand_over(given, giver, taker, state, shifts)
+                _take_over(hole, giver, state)
+                placed = True
+                break
+            if placed:
+                break
 
 
 def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
@@ -5207,6 +5312,9 @@ def _staffing(
     grids: list,
     staff: list,
     base_promotion: float,
+    history: "History | None" = None,
+    character: str = "default",
+    day: int | None = None,
 ) -> list:
     """A roster the player can type in, one row per retail site.
 
@@ -5219,7 +5327,19 @@ def _staffing(
     What it optimises for, in order: cover, then the fewest lines to type, then
     nobody's demand broken, then wages. Where those pull against each other the
     slack budget decides, and its price is carried either way.
+
+    Two passes. Every site's demand plan first, in site order, each taking
+    whom it uses off the bench; then every site's full-cover plan, in the same
+    order, against the bench the demand plans left, each taking whom it uses
+    off a shared copy of it. A site's full-cover plan may also use whoever its
+    own demand plan took, since the player follows one plan or the other there.
+    So no unassigned person is promised to two shops.
+
+    `history` is where the first day of a site's full-cover schedule is kept,
+    which is what tells a finished demand test from one entered today.
     """
+    if day is None:
+        day = save.root.get("Day")
     by_key = {b["key"]: b for b in businesses}
     buildings = {
         site_key((b["StreetName"], b["StreetNumber"])): b
@@ -5228,6 +5348,7 @@ def _staffing(
     }
     people = _plan_people(save, staff)
     bench = [people[pid] for pid in _in_order(people) if not people[pid]["addr"]]
+    everyone_on_bench = list(bench)
     curves = load_demand_curves()
     table = load_buildings()
 
@@ -5248,7 +5369,21 @@ def _staffing(
         ),
         key=lambda row: (row[0]["name"] or "", row[0]["key"]),
     )
-    out = []
+
+    def failed(business):
+        # One odd site is one missing plan, not a blank board, and not a
+        # silent hole either: the row says the site could not be planned so
+        # the page can say so. Nothing of it is committed, and it fails in
+        # the same place on every run, so the payload stays the same twice
+        # over.
+        return {
+            "key": business["key"],
+            "name": business["name"],
+            "typeSlug": business["typeSlug"],
+            "failed": True,
+        }
+
+    sites = []
     for business, building, grid in planned:
         # A site is planned against its own copy of the week, and the copy is
         # only written back once the whole row is built. _plan_site() places
@@ -5263,28 +5398,47 @@ def _staffing(
             for person in _site_pool(people, business, bench)
         }
         try:
-            row = _plan_site(save, names, business, building, grid, people,
-                             list(bench), scratch, curves, table, base_promotion)
+            site = _plan_site(save, names, business, building, grid, people,
+                              list(bench), scratch, curves, table, base_promotion)
         except Exception:
-            # One odd site is one missing plan, not a blank board, and not a
-            # silent hole either: the row says the site could not be planned so
-            # the page can say so. Nothing of it is committed, and it fails in
-            # the same place on every run, so the payload stays the same twice
-            # over.
-            out.append(
-                {
-                    "key": business["key"],
-                    "name": business["name"],
-                    "typeSlug": business["typeSlug"],
-                    "failed": True,
-                }
-            )
+            sites.append((business, None))
             continue
         state.update(scratch)
-        out.append(row)
+        sites.append((business, site))
         # Whoever this site drew off the bench now works here, so they leave it.
-        taken = {p["id"] for p in row.pop("_took")}
+        taken = {p["id"] for p in site["took"]}
         bench = [person for person in bench if person["id"] not in taken]
+
+    # The full-cover plans, against what the demand plans left on the bench.
+    # A bench member's week is shared across these plans the same way it is
+    # across the demand plans, and written back only once a site's row is built.
+    left = list(bench)
+    shared = {person["id"]: _copy_state(state[person["id"]]) for person in left}
+    out = []
+    for business, site in sites:
+        if site is None:
+            out.append(failed(business))
+            continue
+        mine = {p["id"] for p in site["took"]}
+        free = {p["id"] for p in left}
+        site_bench = [p for p in everyone_on_bench if p["id"] in mine or p["id"] in free]
+        scratch = {pid: _copy_state(entry) for pid, entry in site["before"].items()
+                   if pid not in free}
+        scratch.update({pid: _copy_state(shared[pid]) for pid in free})
+        try:
+            full = _place_week(
+                site["grid"], _full_need(site["grid"]), ALL_DAY_OPEN, site["coverPosts"],
+                site["own"] + site_bench, people, business, site_bench, scratch,
+            )
+            row = _finish_site(site, full, names, people, history, character, day)
+        except Exception:
+            out.append(failed(business))
+            continue
+        for pid in free:
+            shared[pid] = scratch[pid]
+        drawn = {p["id"] for p in full["took"]}
+        left = [person for person in left if person["id"] not in drawn]
+        out.append(row)
     return out
 
 
@@ -5326,14 +5480,68 @@ FULL_COVER_SHARE = 0.9
 DEMAND_TEST_DAYS = 42
 
 
-def _is_new_shop(business: dict) -> bool:
+def _is_new_shop(building: dict, day: int | None) -> bool:
     """Whether the shop has been open fewer than DEMAND_TEST_DAYS days.
 
-    A shop whose age the save does not give is not called new: the hand-over
-    line is only worth saying where it is sure to be about a demand test.
+    Read off the registration's own creationDay, the figure `daysOpen` is
+    worked out from. A registration without one is not called new: `daysOpen`
+    falls back to one day there, and a shop that is new forever would be told
+    its test is done forever.
     """
-    days = business.get("daysOpen")
-    return days is not None and days < DEMAND_TEST_DAYS
+    created = building.get("creationDay")
+    if created is None or day is None:
+        return False
+    return day - created < DEMAND_TEST_DAYS
+
+
+# How long a full-cover schedule has to have held before the test is done: two
+# weeks of game days from the first day the board saw it in the game.
+DEMAND_TEST_HELD = 14
+
+
+def _reports_since(save: Save, building: dict, since: int) -> list:
+    """Hour reports filed after `since`, counted per weekday.
+
+    The day the board first saw the schedule is left out: part of it may have
+    been traded before the schedule was entered.
+    """
+    counts = [0] * 7
+    for entry in save.items(building.get("orderHistory")):
+        number = entry.get("dayNumber")
+        if number is None or number <= since:
+            continue
+        if save.items(entry.get("hourReports")):
+            counts[number % 7] += 1
+    return counts
+
+
+def _demand_test_done(save, building, week, full, in_game, since, day) -> bool:
+    """Whether the shop has run its demand test long enough to switch.
+
+    All of it, or it is not said:
+
+    - the game runs a full-cover schedule now (`in_game`, see
+      _full_cover_in_game(); a gap of an hour or two does not spoil a test);
+    - the board saw it there first `since`, at least DEMAND_TEST_HELD days
+      ago, and saw it at every build in between, since the record is cleared
+      the moment it is not there. With no record, because no board was built
+      while the test ran, nothing is claimed;
+    - the hour reports filed since then hold every weekday HOUR_WEEKS_THIN
+      times, so the weeks the demand plan will read are the test's own and not
+      the cover-only weeks before it;
+    - the shop is new (_is_new_shop()): an established one that has always run
+      around the clock has its demand plan to speak for it;
+    - and the demand plan asks for fewer serving hours than the test: a shop
+      busy every hour is already on its demand plan, and switching changes
+      nothing.
+    """
+    if not in_game or since is None or day is None or day - since < DEMAND_TEST_HELD:
+        return False
+    if not _is_new_shop(building, day):
+        return False
+    if min(_reports_since(save, building, since)) < HOUR_WEEKS_THIN:
+        return False
+    return _serving_hours(week["shifts"]) < _serving_hours(full["shifts"])
 
 
 def _open_all_hours(slots: list) -> bool:
@@ -5508,6 +5716,13 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
                 # the page. It is counted once in `headcount.hire` below
                 # through `uncovered`, the same as it always was.
                 shifts.append(_open_slot(slot))
+    # The lines the one-at-a-time fill could not place, offered round the
+    # roster by a swap, so the hiring count is the least the week needs.
+    _fill_by_exchange(shifts, pool, state, here["rostered"])
+    uncovered = collections.defaultdict(list)
+    for shift in shifts:
+        if shift["employee"] is None:
+            uncovered[shift["skill"]].append(shift)
     # The residue the one-at-a-time fill leaves on whoever was admitted last:
     # the same lines, a name or two different, and one fewer failed demand.
     _top_up_short(shifts, pool, state, here["rostered"])
@@ -5756,14 +5971,14 @@ def _plan_site(
     save, names, business, building, grid, people, bench, state, curves, table,
     base_promotion,
 ) -> dict:
-    """One retail site's plans: the need, the shifts, the headcount and the price.
+    """One retail site's demand plan, and what its full-cover plan will need.
 
-    Two plans from one placer. The demand plan is cut from the measured hours;
-    `fullCover` staffs every station every hour as a two-week demand test for a
-    shop with nothing measured yet (docs/mod-write-back-scope.md, section 5).
+    The demand plan is cut from the measured hours. The full-cover plan, which
+    staffs every station every hour as a two-week demand test for a shop with
+    nothing measured yet (docs/mod-write-back-scope.md, section 5), is placed
+    later by _staffing(), once every site's demand plan has taken its people
+    off the bench; _finish_site() then builds the row from both.
     """
-    stations = {row["id"]: row for row in grid["stations"]}
-
     # The arrival ceiling, for bounding a censored hour only. Never a target.
     # It is sized off the products the game itself says are on the shelves,
     # cachedAvailableProducts, which is what GetCustomersByHour reads; the
@@ -5786,23 +6001,43 @@ def _plan_site(
     need = _need_curve(grid, day=curve.get("d"), ceiling=ceiling, rates=dict(rates))
 
     cover_posts = _cover_posts(save, building, names)
-    # Keyed the way a shift names a station, so _current_roster() can tell a
-    # guard on a locker from a cashier on a register.
-    cover_stations = {post["id"]: post for post in cover_posts}
     pool = _site_pool(people, business, bench)
-    # The full-cover plan is the other choice for this site, not a second site:
-    # it works on its own copy of everybody's week, taken before the demand plan
-    # places anybody, and nothing of it is ever written back. So it draws on the
-    # same bench the demand plan does, and the next site sees only what the
-    # demand plan took.
-    full_state = {pid: _copy_state(entry) for pid, entry in state.items()}
+    # Everybody's week as it stood before this site placed anybody: the
+    # full-cover plan is the other choice for this site, not a second site, so
+    # it starts from here for the site's own staff.
+    before = {pid: _copy_state(entry) for pid, entry in state.items()}
     week = _place_week(grid, need, grid["open"], cover_posts, pool, people, business,
                        bench, state)
-    full = _place_week(grid, _full_need(grid), ALL_DAY_OPEN, cover_posts, pool, people,
-                       business, bench, full_state)
+    stations = {s["id"]: s for s in grid["stations"]}
+    cover_stations = {post["id"]: post for post in cover_posts}
+    return {
+        "save": save,
+        "business": business,
+        "building": building,
+        "grid": grid,
+        "ceiling": ceiling,
+        "need": need,
+        "coverPosts": cover_posts,
+        "own": [person for person in pool if person["addr"]],
+        "before": before,
+        "week": week,
+        # Who this site drew off the bench, for _staffing() to take off it.
+        "took": week["took"],
+        "wage": {person["id"]: person["wage"] for person in pool},
+        # Keyed the way a shift names a station, so _current_roster() can tell
+        # a guard on a locker from a cashier on a register.
+        "current": _current_roster(save, building, {**stations, **cover_stations}),
+    }
 
-    wage_of = {person["id"]: person["wage"] for person in pool}
-    current = _current_roster(save, building, {**stations, **cover_stations})
+
+def _finish_site(site, full, names, people, history, character, day) -> dict:
+    """One retail site's row, from its demand plan and its full-cover plan."""
+    save, business, building, grid = (
+        site["save"], site["business"], site["building"], site["grid"])
+    week, current, cover_posts = site["week"], site["current"], site["coverPosts"]
+    wage_of = dict(site["wage"])
+    for person in full["took"]:
+        wage_of[person["id"]] = person["wage"]
     # Two lookup tables, so the many rows below can be indices rather than
     # repeated 24-character ids. Everything a row points at is here: every
     # station either plan or the current roster posts anyone to, and everyone
@@ -5815,16 +6050,15 @@ def _plan_site(
         people,
     )
     cost = {
-        "current": money(_current_cost(current, wage_of)),
+        "current": money(_current_cost(current, site["wage"])),
         "currentCover": money(_current_cost(
-            {"list": [r for r in current["list"] if r["kind"] != "serve"]}, wage_of)),
+            {"list": [r for r in current["list"] if r["kind"] != "serve"]}, site["wage"])),
     }
-    measured = all(weeks >= HOUR_WEEKS_THIN for weeks in grid["weeks"])
     in_game = _full_cover_in_game(current["list"], grid["stations"], grid["open"])
+    # The first game day the full-cover schedule was seen in the game, kept
+    # across builds; forgotten as soon as it is not there.
+    since = history.full_cover(character, day, grid["key"], in_game) if history else None
     return {
-        # Who this site drew off the bench, for _staffing() to take off it. The
-        # demand plan's alone: the full-cover plan is a choice, not a draw.
-        "_took": week["took"],
         "key": grid["key"],
         "name": business["name"],
         "typeSlug": business["typeSlug"],
@@ -5848,7 +6082,7 @@ def _plan_site(
             }
             for role in grid["roles"]
         ],
-        "ceiling": ceiling,
+        "ceiling": site["ceiling"],
         **_plan_fields(week, table, names, people, cost),
         # The demand test: every station of every role, every hour, placed by the
         # same placer with the same rules. Same shape as the demand plan above,
@@ -5868,17 +6102,8 @@ def _plan_site(
             "openNow": _open_all_hours(grid["open"]),
             "inGame": in_game,
         },
-        # Two measured weeks behind every weekday while the game runs a full-cover
-        # schedule: the test has done its job and the demand plan can take over.
-        # Only where the demand plan asks for fewer serving hours than the test:
-        # a shop busy enough to want every station every hour is already on
-        # its demand plan, and telling it to switch would change nothing. And
-        # only on a new shop: an established one that has always run around the
-        # clock has its demand plan to speak for it, and a line calling that a
-        # finished test would be a nag.
-        "demandTestDone": measured and in_game
-        and _is_new_shop(business)
-        and _serving_hours(week["shifts"]) < _serving_hours(full["shifts"]),
+        "demandTestDone": _demand_test_done(
+            save, building, week, full, in_game, since, day),
         "current": {
             "shifts": current["shifts"],
             "fragments": current["fragments"],
@@ -6705,6 +6930,21 @@ class History:
         for old in sorted(store, key=int)[:-HISTORY_DAYS]:
             del store[old]
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int)]
+
+    def full_cover(self, character: str, day: int | None, key: str, running: bool):
+        """The first game day a site's full-cover schedule was seen, or None.
+
+        Recorded the first build it is seen and cleared the first build it is
+        not, so the day it hands back is the start of an unbroken run. A day
+        later than today (the player loaded an older save) starts the run again.
+        """
+        store = self._for(character).setdefault("fullCover", {})
+        if not running or day is None:
+            store.pop(key, None)
+            return None
+        if key not in store or store[key] > day:
+            store[key] = day
+        return store[key]
 
     def named(self, character: str, updates: dict | None = None) -> dict:
         """Lines the player named by hand, by recipe id; a None clears one."""
@@ -12030,12 +12270,14 @@ const spTickId = (row, s) => {
    board opened from a file -- and every path here ends with the block drawing
    anyway, with nothing ticked. */
 const spTicksRead = key => {
+  if(!key) return new Set();
   try {
     const kept = JSON.parse(localStorage.getItem(SP_ROSTER_STORE + key) || "[]");
     return new Set(Array.isArray(kept) ? kept.filter(x => typeof x === "string") : []);
   } catch(e){ return new Set(); }
 };
 const spTicksWrite = (key, ticks) => {
+  if(!key) return;
   try {
     if(ticks.size) localStorage.setItem(SP_ROSTER_STORE + key, JSON.stringify([...ticks]));
     else localStorage.removeItem(SP_ROSTER_STORE + key);
@@ -12051,19 +12293,30 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
    cut from the measured hours, and `fullCover`, every station staffed every
    hour as a two-week demand test. The block shows one at a time, the demand
    plan unless the player picked the other for this site, and remembers the
-   pick in this browser. Storage can be missing or refuse, and then the pick
-   lasts as long as the page does. */
+   pick in this browser, per company: every character plays the same map, so
+   an address alone would carry one company's pick into another's. Storage can
+   be missing or refuse, and a board with no character id keeps nothing; the
+   pick then lasts as long as the page does. A pick made on this page wins over
+   a stored one, so a browser that reads storage and refuses to write it still
+   switches on the click. */
 const SP_PLAN_STORE = "ba_dash_plan:";
+const spCharacter = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || null;
+const spPlanKey = key => `${spCharacter() || ""}:${key}`;
 const spPlanMem = {};
 const spPlanRead = key => {
-  try { return localStorage.getItem(SP_PLAN_STORE + key) === "full" ? "full" : "demand"; }
-  catch(e){ return spPlanMem[key] === "full" ? "full" : "demand"; }
+  const at = spPlanKey(key);
+  if(spPlanMem[at]) return spPlanMem[at];
+  if(!spCharacter()) return "demand";
+  try { return localStorage.getItem(SP_PLAN_STORE + at) === "full" ? "full" : "demand"; }
+  catch(e){ return "demand"; }
 };
 const spPlanWrite = (key, which) => {
-  spPlanMem[key] = which;
+  const at = spPlanKey(key);
+  spPlanMem[at] = which === "full" ? "full" : "demand";
+  if(!spCharacter()) return;
   try {
-    if(which === "full") localStorage.setItem(SP_PLAN_STORE + key, "full");
-    else localStorage.removeItem(SP_PLAN_STORE + key);
+    if(which === "full") localStorage.setItem(SP_PLAN_STORE + at, "full");
+    else localStorage.removeItem(SP_PLAN_STORE + at);
   } catch(e){ /* spPlanMem holds the pick for as long as the page is open */ }
 };
 /* A demand test needs a serving station to test. A site with none has
@@ -12088,8 +12341,11 @@ const spFullNeed = row => {
 const spFullRow = row => Object.assign({}, row, spFullNeed(row), row.fullCover,
   {fullCover: null, full: true});
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
-   entry typed for the other. */
-const spTickKey = row => row.full ? `${row.key}#full` : row.key;
+   entry typed for the other. The full-cover ticks are kept per company as
+   well, and not at all on a board with no character id; the demand plan's
+   keep the key they have always had. */
+const spTickKey = row => !row.full ? row.key
+  : spCharacter() ? `full:${spCharacter()}:${row.key}` : "";
 /* Who the player has to add before the plan can be filled, as one sentence:
    "assign ANA, BEN (unassigned) and hire 2 Customer Service". The planner uses
    the unassigned staff and new hires to reach its best week, but assigning and
@@ -16443,7 +16699,7 @@ const wireRoster = once(() => {
     setTimeout(() => ring.classList.remove("sp-bump"), 260);
   };
   /* Each plan keeps its own ticks: see spTickKey(). */
-  const ticksOf = s => s.dataset.ticks || s.dataset.site || "";
+  const ticksOf = s => s.dataset.ticks ?? s.dataset.site ?? "";
   const store = s => spTicksWrite(ticksOf(s),
     new Set($$(".sp-shift.sp-done", s).map(el => el.dataset.tick)));
   /* The pick between the two plans redraws this block alone, in place, and

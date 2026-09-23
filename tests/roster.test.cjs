@@ -1207,14 +1207,15 @@ test('a cover-only plan does not offer to let the shop\u2019s cashiers go', asyn
 });
 
 test('more people to hire than the hours would pay full weeks says why', async () => {
-  const page = await shop('nobody');
+  const page = await shop('weekend');
   try {
-    // The planner's own numbers: 112 station-hours are three full weeks, and
-    // the fourteen twelve-hour shifts they come in take four people.
+    // The planner's own numbers: 48 station-hours are one full week, but they
+    // come as two twelve-hour entries on each of two days, and nobody may work
+    // both of a day's, so they take two people.
     const h = await page.evaluate(() => D.staffing[0].headcount['ba:skill_cleaning']);
-    assert.deepEqual([h.max, h.hire], [3, 4]);
+    assert.deepEqual([h.min, h.max, h.hire], [1, 1, 2]);
     const read = await page.locator('#sp-roster .sp-hc > span').first().getAttribute('data-read');
-    assert.match(read, /4 to hire/);
+    assert.match(read, /2 to hire/);
     assert.match(read, /nobody may work more than twelve hours in a day/);
   } finally { await page.close(); }
 });
@@ -1790,13 +1791,13 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
     const full = ROWS.newshop.fullCover;
     const staffedHours = full.shifts.filter(s => s.p !== null).reduce((n, s) => n + s.t - s.f, 0);
     assert.match(hoursTile, new RegExp(`${staffedHours}`));
-    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:' + k), KEY), 'full');
+    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:roster-fixture:' + k), KEY), 'full');
     // The pick survives the next draw, and going back forgets it.
     await page.evaluate(() => drawSite());
     assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
     await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
     assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
-    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:' + k), KEY), null);
+    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:roster-fixture:' + k), KEY), null);
   } finally { await page.close(); }
 });
 
@@ -1820,7 +1821,7 @@ test('each plan keeps its own ticks', async () => {
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
     await page.evaluate(s => q(s).click(), mon + 'button.sp-shift');
     assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '1');
-    assert.ok(await page.evaluate(k => localStorage.getItem('ba_dash_roster:' + k + '#full'), KEY));
+    assert.ok(await page.evaluate(k => localStorage.getItem('ba_dash_roster:full:roster-fixture:' + k), KEY));
     await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
     assert.equal(await page.locator('#sp-roster .sp-count').innerText(), '0');
   } finally { await page.close(); }
@@ -1838,6 +1839,31 @@ test('the pick works without storage of any kind', async () => {
     assert.equal(await page.locator('#sp-roster').count(), 1);
     assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
     await page.evaluate(() => drawSite());
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+  } finally { await page.close(); }
+});
+
+test('the pick belongs to one company: another character on the same map starts fresh', async () => {
+  const page = await shop('newshop');
+  try {
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    // Every character plays the same map, so the same address is another
+    // company's shop there.
+    await page.evaluate(() => { D.meta.character = 'someone-else'; drawSite(); });
+    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:someone-else:' + k), KEY), null);
+    await page.evaluate(() => { D.meta.character = 'roster-fixture'; drawSite(); });
+    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+  } finally { await page.close(); }
+});
+
+test('a browser that reads storage but refuses to write it still switches on the click', async () => {
+  const page = await shop('newshop', null, () => {
+    Storage.prototype.setItem = function(){ throw new Error('quota'); };
+  });
+  try {
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
     assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
   } finally { await page.close(); }
 });

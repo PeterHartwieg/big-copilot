@@ -411,12 +411,14 @@ def registration(
     number=NUMBER,
     weeks=2,
     products=(),
+    creation_day=1,
 ):
     """A rented retail floor, its stations, its opening hours and a measured week.
 
     `opens` is a list of [start, end) slots, the way the game's openingHourSlots
     is a list, and `weeks` is how many weeks of hour reports are behind it: 2 is
     measured, 1 is thin, 0 is a site that has never reported at all.
+    `creation_day` None leaves the field out, as an odd save may.
     """
     reports = {"$items": [{"hour": h, "customers": c} for h, c in hourly.items()]}
     schedule = []
@@ -436,12 +438,12 @@ def registration(
                 "workShifts": {"$items": [s for s in shifts if s["wd"] == wd]},
             }
         )
-    return {
+    reg = {
         "BusinessName": f"HART. Test {number}",
         "businessTypeName": SHOP,
         "StreetName": STREET,
         "StreetNumber": number,
-        "creationDay": 1,
+        "creationDay": creation_day,
         "customerCapacity": door,
         "orderHistory": {
             "$items": [
@@ -459,6 +461,9 @@ def registration(
         "cachedAvailableProducts": {"$items": list(products)},
         "scheduleDays": {"$items": schedule},
     }
+    if creation_day is None:
+        reg.pop("creationDay")
+    return reg
 
 
 def business(status="retail", number=NUMBER, days_open=14):
@@ -474,7 +479,7 @@ def business(status="retail", number=NUMBER, days_open=14):
     }
 
 
-def plan_sites(specs, employees, status="retail"):
+def plan_sites(specs, employees, status="retail", history=None, day=None):
     """Several rented sites and one staff list, planned together.
 
     A spec may carry `days_open`, which belongs to the business rather than to
@@ -501,12 +506,14 @@ def plan_sites(specs, employees, status="retail"):
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
     grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
-    return _staffing(save, LABELS, sites, grids, staff, 0.55)
+    return _staffing(save, LABELS, sites, grids, staff, 0.55,
+                     history=history, character="test", day=day)
 
 
-def plan(items, employees, hourly, **kw):
+def plan(items, employees, hourly, history=None, day=None, **kw):
     """Run the whole chain one site's row comes out of, and return that row."""
-    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees)
+    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees,
+                      history=history, day=day)
     return rows[0] if rows else None
 
 

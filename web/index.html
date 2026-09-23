@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=92c0e8d7c9">
+<link rel="stylesheet" href="community.css?v=9ca4f85824">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=92c0e8d7c9">
+<link rel="stylesheet" href="fonts/fonts.css?v=9ca4f85824">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2692,8 +2692,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "92c0e8d7c9";</script>
-<script>window.LEDGER_RELEASE = {"version":"92c0e8d7c9","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
+<script>window.LEDGER_BUILD = "9ca4f85824";</script>
+<script>window.LEDGER_RELEASE = {"version":"9ca4f85824","latest":{"pr":68,"date":"2026-09-22","title":"Link to the game","summary":"A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game's own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2762,8 +2762,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=92c0e8d7c9"></script>
-<script src="community.js?v=92c0e8d7c9"></script>
+<script src="app.js?v=9ca4f85824"></script>
+<script src="community.js?v=9ca4f85824"></script>
 
 <script>
 
@@ -4918,12 +4918,14 @@ const spTickId = (row, s) => {
    board opened from a file -- and every path here ends with the block drawing
    anyway, with nothing ticked. */
 const spTicksRead = key => {
+  if(!key) return new Set();
   try {
     const kept = JSON.parse(localStorage.getItem(SP_ROSTER_STORE + key) || "[]");
     return new Set(Array.isArray(kept) ? kept.filter(x => typeof x === "string") : []);
   } catch(e){ return new Set(); }
 };
 const spTicksWrite = (key, ticks) => {
+  if(!key) return;
   try {
     if(ticks.size) localStorage.setItem(SP_ROSTER_STORE + key, JSON.stringify([...ticks]));
     else localStorage.removeItem(SP_ROSTER_STORE + key);
@@ -4939,19 +4941,30 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
    cut from the measured hours, and `fullCover`, every station staffed every
    hour as a two-week demand test. The block shows one at a time, the demand
    plan unless the player picked the other for this site, and remembers the
-   pick in this browser. Storage can be missing or refuse, and then the pick
-   lasts as long as the page does. */
+   pick in this browser, per company: every character plays the same map, so
+   an address alone would carry one company's pick into another's. Storage can
+   be missing or refuse, and a board with no character id keeps nothing; the
+   pick then lasts as long as the page does. A pick made on this page wins over
+   a stored one, so a browser that reads storage and refuses to write it still
+   switches on the click. */
 const SP_PLAN_STORE = "ba_dash_plan:";
+const spCharacter = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || null;
+const spPlanKey = key => `${spCharacter() || ""}:${key}`;
 const spPlanMem = {};
 const spPlanRead = key => {
-  try { return localStorage.getItem(SP_PLAN_STORE + key) === "full" ? "full" : "demand"; }
-  catch(e){ return spPlanMem[key] === "full" ? "full" : "demand"; }
+  const at = spPlanKey(key);
+  if(spPlanMem[at]) return spPlanMem[at];
+  if(!spCharacter()) return "demand";
+  try { return localStorage.getItem(SP_PLAN_STORE + at) === "full" ? "full" : "demand"; }
+  catch(e){ return "demand"; }
 };
 const spPlanWrite = (key, which) => {
-  spPlanMem[key] = which;
+  const at = spPlanKey(key);
+  spPlanMem[at] = which === "full" ? "full" : "demand";
+  if(!spCharacter()) return;
   try {
-    if(which === "full") localStorage.setItem(SP_PLAN_STORE + key, "full");
-    else localStorage.removeItem(SP_PLAN_STORE + key);
+    if(which === "full") localStorage.setItem(SP_PLAN_STORE + at, "full");
+    else localStorage.removeItem(SP_PLAN_STORE + at);
   } catch(e){ /* spPlanMem holds the pick for as long as the page is open */ }
 };
 /* A demand test needs a serving station to test. A site with none has
@@ -4976,8 +4989,11 @@ const spFullNeed = row => {
 const spFullRow = row => Object.assign({}, row, spFullNeed(row), row.fullCover,
   {fullCover: null, full: true});
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
-   entry typed for the other. */
-const spTickKey = row => row.full ? `${row.key}#full` : row.key;
+   entry typed for the other. The full-cover ticks are kept per company as
+   well, and not at all on a board with no character id; the demand plan's
+   keep the key they have always had. */
+const spTickKey = row => !row.full ? row.key
+  : spCharacter() ? `full:${spCharacter()}:${row.key}` : "";
 /* Who the player has to add before the plan can be filled, as one sentence:
    "assign ANA, BEN (unassigned) and hire 2 Customer Service". The planner uses
    the unassigned staff and new hires to reach its best week, but assigning and
@@ -12912,7 +12928,7 @@ const wireRoster = once(() => {
     setTimeout(() => ring.classList.remove("sp-bump"), 260);
   };
   /* Each plan keeps its own ticks: see spTickKey(). */
-  const ticksOf = s => s.dataset.ticks || s.dataset.site || "";
+  const ticksOf = s => s.dataset.ticks ?? s.dataset.site ?? "";
   const store = s => spTicksWrite(ticksOf(s),
     new Set($$(".sp-shift.sp-done", s).map(el => el.dataset.tick)));
   /* The pick between the two plans redraws this block alone, in place, and

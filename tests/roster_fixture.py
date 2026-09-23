@@ -10,7 +10,7 @@ the JSON off stdout.
 
 Synthetic saves only. `python -m tests.roster_fixture` prints them.
 
-Ten sites, each a state the block has to draw:
+Eleven sites, each a state the block has to draw:
 
 full     a measured shop: two counters, a cleaning station and a security
          locker, and a schedule already in the game as two-hour scraps. One
@@ -44,22 +44,27 @@ halfmop  the same shop with its cashier on the till as well as the mop: serving
 nobody   a shop nobody can clean: a cleaning station, sixteen open hours a day,
          a crew of one cashier, and that cashier already mopping in the game.
          Every line of its plan waits on a hire, so clearing what is there
-         would leave the shop with neither. Its cover is four hires for hours that would
-         pay three people a full week, which is the one place the headcount
-         band and the hiring line disagree on purpose.
+         would leave the shop with neither. Its cover is three hires.
 shut     the two-slot weekday: open 08-12 and 14-20 on Friday, shut on Sunday,
          so the hour in the middle is the doors closed rather than trade
          dipping and nothing may be rostered into it.
+weekend  a cleaning station open Saturday and Sunday around the clock and a
+         crew of one cashier: 48 hours, one full week, but two entries a day
+         nobody may work both of, so two hires. The one place the headcount
+         band and the hiring line disagree on purpose.
 newshop  a shop five days old, open 8 to 20, with two registers, a cleaning
          station, three cashiers, one cleaner and a second cleaner still
          unassigned: its demand plan is cover only, and its full-cover plan
          staffs both registers around the clock and draws on the unassigned
          cleaner.
-handover a measured shop whose schedule in the game already staffs both
-         registers every hour of every day: the demand test is done.
+handover a shop four weeks old whose schedule in the game has staffed both
+         registers every hour of every day for the last two of them, as the
+         board saw at two builds: the demand test is done.
 """
 import json
 import sys
+
+from ba_dashboard import History
 
 from tests.test_staffing import (
     CLEAN_STATION,
@@ -249,9 +254,7 @@ def quiet_row():
 def uncovered_row():
     """A cleaning station with nobody who may work it, on a 16-hour day.
 
-    112 station-hours: three full weeks' worth, but fourteen shifts nobody may
-    take two of in a day, so it takes four people. The board has to say that
-    without looking like it is contradicting itself.
+    112 station-hours in fourteen eight-hour entries, two a day: three people.
     """
     # The cashier is mopping, which the game allows and the plan will not do.
     # So there is cover in the game, and not one line of the plan that anybody
@@ -290,6 +293,17 @@ def shut_row():
     )
 
 
+def weekend_row():
+    """Open two days a week around the clock: more hires than full weeks."""
+    return plan(
+        [(1, REGISTER), (8, CLEAN_STATION)],
+        [employee("p0", [SERVICE])],
+        BUSY,
+        weeks=0,
+        open_days=(6, 0),
+    )
+
+
 def newshop_row():
     """A new shop: the demand plan is cover only, the full-cover plan is the test."""
     people = [
@@ -313,7 +327,11 @@ def handover_row():
         for k, post in enumerate((1, 2))
         for n, start in enumerate((0, 12))
     ]
-    return plan(items, people, BUSY, shifts=week)
+    # Four weeks of reports; the board saw the test in the game on day 14 and
+    # again on day 28, so it has held two weeks and those weeks are measured.
+    history = History(None)
+    plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=14)
+    return plan(items, people, BUSY, shifts=week, weeks=4, history=history, day=28)
 
 
 def rows():
@@ -326,6 +344,7 @@ def rows():
         "quiet": quiet_row(),
         "halfmop": halfmop_row(),
         "shut": shut_row(),
+        "weekend": weekend_row(),
         "newshop": newshop_row(),
         "handover": handover_row(),
     }

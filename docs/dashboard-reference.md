@@ -467,7 +467,14 @@ take it. No shift ever breaks a demand: a slot nobody may legally work becomes a
 instead, one total per role — and a security locker nobody staffs is real new spending
 rather than another shift, which is why `headcount` says which kind each line is. A hiring
 line counts people, not hours: four uncovered twelve-hour weekend shifts are 48 hours but
-need two hires, because nobody may work two of them on the same day.
+need two hires, because nobody may work two of them on the same day. It is the fewest
+people who can work those lines: the count is searched upwards from the least the hours
+and the busiest day allow, spreading the lines evenly over the hires at each count, so two
+registers open around the clock are seven people and not the eight a first-come fill
+needs. The placer realises that count: a line the one-at-a-time fill leaves open is offered
+to somebody on the roster who is free that day but full for the week, if they can hand one
+of their own entries to somebody else on the roster with room for it, both moves tested
+against every rule.
 
 **Everybody rostered gets a full week, because nobody works two businesses.** An employee is
 posted to one building, so the thirty hours full time asks for have to come from that site
@@ -527,8 +534,10 @@ empty station and the hours that come back are the demand. It is a different nee
 put through the same placer with every rule above unchanged (twelve-hour entries, the
 14-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
 server on cleaning, the fewest people first) and the same people: the site's staff, the
-unassigned bench and hires. It is placed on its own copy of everybody's week and never
-written back, so it takes nobody off the bench a later site's demand plan could use. It
+unassigned bench and hires. Every site's demand plan is placed first; then every
+full-cover plan, in the same site order, against the unassigned staff the demand plans
+left, each taking whom it uses off a shared copy, plus whoever its own site's demand plan
+took. So no unassigned person is promised to two shops by the plans a player follows. It
 carries the same keys as the demand plan except `need` and `basis`, which would say every
 station every hour and which the page reads off `roles` instead, plus `open` (0 to 24 every day, the hours it
 assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
@@ -540,14 +549,17 @@ full-cover week: every serving station staffed for at least nine tenths of the w
 hours, and the doors open for at least nine tenths of it. Nine tenths lets through what a
 hand-set week really looks like, the two-hour scraps and an hour lost at a hand-over, and
 turns away a shop shut at night (open 6 to 24 is three quarters of the week) or a register
-empty for a whole day. `demandTestDone` is that, plus two measured weeks behind every
-weekday, plus a demand plan that asks for fewer serving hours than the test (a shop busy
-every hour is already on its demand plan and has nothing to switch to), plus a shop open
-fewer than 42 days (`DEMAND_TEST_DAYS`, by the same days-open figure as `measure.open`): two
-weeks of test and slack for a player who starts it late or runs it longer. The board does
-not know when the schedule was set, so the age is what keeps an established shop that has
-always run around the clock from being told its test is done. A shop whose age the save
-does not give is never called done.
+empty for a whole day; a gap of an hour or two does not spoil a demand test. The save does
+not say when a schedule was set, so the board keeps it: the history file records, per
+character and site, the first game day it saw `inGame`, and forgets it the first build it
+does not. `demandTestDone` needs all of: full cover in the game now, held for at least 14
+game days since that first day (`DEMAND_TEST_HELD`), hour reports filed after that day for
+every weekday at least twice (`HOUR_WEEKS_THIN`), so the weeks the demand plan reads are the
+test's own; a demand plan that asks for fewer serving hours than the test (a shop busy
+every hour is already on its demand plan); and a shop open fewer than 42 days
+(`DEMAND_TEST_DAYS`), counted from the registration's `creationDay`: two weeks of test and
+slack for a player who starts it late or runs it longer. With no record, because no board
+was built while the test ran, or no `creationDay`, nothing is claimed.
 
 ## Staff demands
 
