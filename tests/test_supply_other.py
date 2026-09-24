@@ -15,6 +15,7 @@ from test_recipe_identity import BEER, RID, WATER, SaveStub
 DAY = 10  # the save's day; days 3 to 9 are the log's window
 FACTORY, FACTORY2 = ("factory", 0), ("factory", 1)
 HUB, DISTRIB, SHOP = ("depot", 1), ("depot", 2), ("shop", 3)
+DISTRIB2, BEER_SHOP = ("depot", 4), ("shop", 5)
 
 
 def tx(day, items):
@@ -44,7 +45,7 @@ def depot_other(log, targets, contracts):
     save.address = lambda value: value
     for number, site in enumerate((FACTORY, FACTORY2)):
         save.root["BuildingRegistrations"][number]["deliveryTransactions"] = log.get(site, [])
-    for site in (HUB, DISTRIB):
+    for site in (HUB, DISTRIB, DISTRIB2):
         save.root["BuildingRegistrations"].append({
             "RentedByPlayer": True, "StreetName": site[0], "StreetNumber": site[1],
             "itemInstances": [], "deliveryTransactions": log.get(site, []),
@@ -71,6 +72,9 @@ def depot_other(log, targets, contracts):
         business(SHOP, "Shop", "kiosk", "retail",
                  [{"slug": WATER, "item": "Water", "units": 20, "rate": 100, "price": 1}]),
         business(FACTORY2, "Factory Two", "factory", "support", factory_lines),
+        business(DISTRIB2, "Distrib Two", "warehouse", "support", []),
+        business(BEER_SHOP, "Beer Shop", "kiosk", "retail",
+                 [{"slug": BEER, "item": "Beer", "units": 20, "rate": 100, "price": 1}]),
     ]
     recipes = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
                       "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
@@ -157,6 +161,128 @@ class DepotOtherTests(unittest.TestCase):
         ship(log, 7, FACTORY, DISTRIB, {WATER: 500})
         other = depot_other(log, [(HUB, FACTORY, WATER, 300), (HUB, SHOP, WATER, 150),
                                   (FACTORY, DISTRIB, WATER, 700)], [imports(FACTORY, WATER, 500)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_two_factories_parking_at_one_depot_share_its_receipt(self):
+        """Both factories park 100 a day at the depot, 200 in all; the first
+        also sends 100 to the shops. The second (stocked from elsewhere, not
+        the hub) sends only to the depot, so its 100 is known, the first's
+        parked share is the other 100, and its 100 to the shops stays other:
+        700 a week, not nothing."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 440})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+            ship(log, day, FACTORY, None, {WATER: 100})
+            ship(log, day, FACTORY2, DISTRIB, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 500), (FACTORY, DISTRIB, WATER, 700),
+                                  (FACTORY, SHOP, WATER, 150), (FACTORY2, DISTRIB, WATER, 700)],
+                            [imports(HUB, WATER, 3080)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_parking_depot_with_its_own_import_is_read_net(self):
+        """The depot also imports water: what it received that day cannot be
+        split between the factory and the import, so the factory is read net
+        and the hub's figure is main's, 700."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        log[DISTRIB].append(tx(7, {WATER: 300}))
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700)],
+                            [imports(HUB, WATER, 2380), imports(DISTRIB, WATER, 300)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_parking_depot_the_hub_also_fills_is_read_net(self):
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        ship(log, 5, HUB, DISTRIB, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (HUB, DISTRIB, WATER, 100),
+                                  (FACTORY, DISTRIB, WATER, 700)], [imports(HUB, WATER, 2480)])
+        self.assertEqual(other[WATER], 800)
+
+    def test_a_shop_that_sells_other_goods_does_not_use_the_item(self):
+        """The depot passes the water on to a shop that sells only beer:
+        nothing uses it there either, so it is parked, not shop use."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        ship(log, 6, DISTRIB, None, {WATER: 200})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
+                                  (DISTRIB, BEER_SHOP, WATER, 200)], [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 0)
+
+    def test_a_depot_that_passes_goods_to_another_idle_depot_is_idle(self):
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        ship(log, 6, DISTRIB, DISTRIB2, {WATER: 300})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
+                                  (DISTRIB, DISTRIB2, WATER, 300)], [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 0)
+
+    def test_a_loop_between_depots_ends_and_is_read_net(self):
+        """The two depots pass the water back and forth. The walk ends; the
+        first depot then gets water from a depot as well as the factory, so
+        its receipt cannot be split and the factory is read net, as main."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        ship(log, 6, DISTRIB, DISTRIB2, {WATER: 300})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
+                                  (DISTRIB, DISTRIB2, WATER, 300), (DISTRIB2, DISTRIB, WATER, 300)],
+                            [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_chain_that_ends_on_a_shelf_still_counts(self):
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+            ship(log, day, DISTRIB, DISTRIB2, {WATER: 100})
+            ship(log, day, DISTRIB2, None, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 200),
+                                  (DISTRIB, DISTRIB2, WATER, 200), (DISTRIB2, SHOP, WATER, 150)],
+                            [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_no_more_is_added_back_than_the_depot_received(self):
+        """The factory logs 150 leaving a day, but the idle depot received
+        only 100: the other 50 stays read as leaving, 350 a week."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+            ship(log, day, FACTORY, None, {WATER: 50})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700)],
+                            [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 350)
+
+    def test_a_factory_that_eats_the_item_is_never_idle(self):
+        """The first factory passes 100 a day to the second, whose line eats
+        it and which ships none on: that is use, 700 a week, as main read it."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, FACTORY2, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, FACTORY2, WATER, 300)],
+                            [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_depot_routed_to_a_shelf_that_shipped_nothing_is_read_net(self):
+        """The depot has a route to a shop selling water but sent none in the
+        window: a shelf can use it, so the factory is read net, as main."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
+                                  (DISTRIB, SHOP, WATER, 150)], [imports(HUB, WATER, 2380)])
         self.assertEqual(other[WATER], 700)
 
 

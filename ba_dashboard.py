@@ -2693,9 +2693,10 @@ def _supply(
     shipped = collections.defaultdict(lambda: collections.defaultdict(float))
     received = collections.defaultdict(lambda: collections.defaultdict(float))
     by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
-    # What left a site day by day, gross: _depot_flow() needs a factory's
-    # forwarding on its own, apart from what reached it the same day.
+    # What left a site and what reached it, day by day and gross: _parked()
+    # needs a factory's forwarding apart from what reached it the same day.
     out_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    in_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     round_days = collections.defaultdict(set)
     inbound_days = collections.defaultdict(set)
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -2717,6 +2718,7 @@ def _supply(
                     round_days[key].add(when)
                 elif amount > 0:
                     received[key][entry["itemName"]] += amount
+                    in_by_day[key][entry["itemName"]][when] += amount
                     inbound_days[key].add(when)
                 by_day[key][entry["itemName"]][when] += amount
 
@@ -3116,7 +3118,9 @@ def _supply(
         "received": received_per_day,
         "byDay": lambda key, item: by_day[key][item],
         "outByDay": lambda key, item: out_by_day[key][item],
-        "customerDriven": customer_driven,
+        "inByDay": lambda key, item: in_by_day[key][item],
+        "sells": lambda key, item: (
+            key in index and businesses[index[key]]["status"] == "retail" and item in sold.get(key, {})),
         "roundDays": lambda key: round_days.get(key, set()),
     }
     factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
@@ -3525,6 +3529,86 @@ def _ceil_hundred(value: float) -> int:
     return int(math.ceil(value / 100.0) * 100)
 
 
+def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
+    """What each factory sent, day by day, to depots where nothing uses `slug`.
+
+    A depot is idle for the item where no shelf there sells it and every
+    route it passes the item on by leads to another idle site; one with no
+    such route must have logged none of it leaving. A factory never is.
+    The delivery log names no destination, so a factory's share of what an
+    idle depot received is worked out from both ends: a depot fed by one
+    factory whose share is still open got that share, and a factory whose
+    routes all end at idle depots sent all its outflow there. Wherever that
+    leaves a share open the factory is read net, as it is when the idle
+    depot also gets the item from anything but a factory (an import, a
+    depot's route), when the factory feeds such a depot, or when the factory
+    imports the item itself: what it sent on may have been that import.
+    Returns {factory: {day: amount}}.
+    """
+    def idle(site, seen=frozenset()):
+        if site not in index or site in machines or flow["sells"](site, slug):
+            return False
+        onward = _in_order({dest for dest, item, _ in flow["edges"].get(site, []) if item == slug})
+        if not onward:
+            return not any(flow["outByDay"](site, slug).values())
+        return all(dest in seen or idle(dest, seen | {site}) for dest in onward)
+
+    sources = collections.defaultdict(set)
+    routes = {}
+    for source, legs in flow["edges"].items():
+        for dest, item, _ in legs:
+            if item == slug:
+                sources[dest].add(source)
+                if source in machines:
+                    routes.setdefault(source, set()).add(dest)
+    idle_at = {dest for dests in routes.values() for dest in dests if idle(dest)}
+    clean = {
+        dest for dest in idle_at
+        if sources[dest] <= set(machines) and (dest, slug) not in flow["imports"]
+    }
+    feeders = {dest: [f for f in _in_order(routes) if dest in routes[f]] for dest in clean}
+    pure = {f for f, dests in routes.items() if dests <= clean}
+    counted = [
+        f for f in _in_order(routes)
+        if routes[f] & clean and not routes[f] & (idle_at - clean) and (f, slug) not in flow["imports"]
+    ]
+    days = _in_order({d for f in counted for d, v in flow["outByDay"](f, slug).items() if v > 0})
+    added = collections.defaultdict(dict)
+    for day in days:
+        sent = {f: flow["outByDay"](f, slug).get(day, 0.0) for f in routes}
+        got = {dest: flow["inByDay"](dest, slug).get(day, 0.0) for dest in clean}
+        share = {}
+
+        def spare_at(dest):
+            return got[dest] - sum(share.get((f, dest), 0.0) for f in feeders[dest])
+
+        def spare_of(f):
+            return sent[f] - sum(share.get((f, dest), 0.0) for dest in routes[f] if dest in clean)
+
+        progress = True
+        while progress:
+            progress = False
+            for dest in _in_order(clean):
+                open_ = [f for f in feeders[dest] if (f, dest) not in share]
+                if len(open_) == 1:
+                    f = open_[0]
+                    share[(f, dest)] = max(0.0, min(spare_at(dest), spare_of(f)))
+                    progress = True
+            for f in _in_order(pure):
+                open_ = [dest for dest in _in_order(routes[f]) if (f, dest) not in share]
+                if len(open_) == 1:
+                    dest = open_[0]
+                    share[(f, dest)] = max(0.0, min(spare_of(f), spare_at(dest)))
+                    progress = True
+        for f in counted:
+            legs = [dest for dest in routes[f] if dest in clean]
+            if all((f, dest) in share for dest in legs):
+                amount = sum(share[(f, dest)] for dest in legs)
+                if amount > 0:
+                    added[f][day] = amount
+    return added
+
+
 def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tuple:
     """What each depot imports a week, and what leaves it for the shops.
 
@@ -3569,30 +3653,20 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
     # and the factory's seven. What the factories took that day comes off what
     # the depot sent that day; only a remainder is the shops', and a remainder
     # too small to size an order on is nothing.
-    # One exception to reading a factory's intake net: what it sends on the
-    # same day to a depot whose draw of the item is nil (a stock target nothing
-    # uses: no round of it leaves there, and no shelf down the chain sells it)
-    # is added back. Netted, Factory Jewelry filling Jewelry Distrib. with
-    # metal bands it never ships read as 5,000 a week to the shops. Only what
-    # that depot received that day is added back, and only at a factory with
-    # no import of the item of its own: there, what it sent on may have been
-    # that import, and the day is read net as before.
-    def idle(dest, slug):
-        return (dest in index and dest not in machines
-                and not any(flow["outByDay"](dest, slug).values())
-                and not flow["customerDriven"](dest, slug))
+    # One exception to reading a factory's intake net: what it sent that day
+    # to a depot where nothing uses the item is added back (_parked()).
+    # Netted, Factory Jewelry filling Jewelry Distrib. with metal bands it
+    # never ships read as 5,000 a week to the shops.
+    parked = {}
 
     def intake(fkey, slug):
         got = flow["byDay"](fkey, slug)
-        idle_dests = {dest for dest, item, _ in flow["edges"].get(fkey, [])
-                      if item == slug and idle(dest, slug)}
-        if not idle_dests or (fkey, slug) in flow["imports"]:
+        if slug not in parked:
+            parked[slug] = _parked(flow, index, machines, slug)
+        extra = parked[slug].get(fkey)
+        if not extra:
             return got
-        got = dict(got)
-        for d, out in flow["outByDay"](fkey, slug).items():
-            parked = sum(max(0.0, flow["byDay"](dest, slug).get(d, 0.0)) for dest in idle_dests)
-            got[d] = got.get(d, 0.0) + min(out, parked)
-        return got
+        return {d: got.get(d, 0.0) + extra.get(d, 0.0) for d in set(got) | set(extra)}
 
     depot_other = collections.defaultdict(dict)
     pairs = set(flow["imports"]) | {
