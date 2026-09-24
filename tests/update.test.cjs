@@ -139,3 +139,11 @@ for (const width of [390, 1280]) test(`banner fits landing and dashboard at ${wi
   }
   if (process.env.UPDATE_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.UPDATE_SCREENSHOT_DIR, `update-${width}.png`)});
 });
+
+test('a different entry of the same date announces itself, even with a lower PR number', async t => {
+  const {page, check} = await setup(t);
+  const sameDay = {...loaded.latest, pr:loaded.latest.pr - 1, title:'Released the same day', summary:'Merged earlier, announced later.'};
+  await check({...next, latest:sameDay});
+  assert.equal(await page.locator('#releaseDetails').isVisible(), true);
+  assert.equal(await page.locator('#releaseTitle').innerText(), sameDay.title);
+});
