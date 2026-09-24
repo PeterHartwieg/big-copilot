@@ -18885,11 +18885,14 @@ function ssLand(qn, from, ticket, tries = 0){
   const strip = document.createElement("div");
   strip.className = "ss-asked"; strip.setAttribute("role", "status");
   const back = PAGES.find(p => p.id === from) || PAGES[0];
-  /* A question that opened a site's page goes back the way the page's own
-     crumb does: the browser's Back, to where it was asked. */
-  const viaSite = siteOpen && page === "company" && siteStateFrom() ? siteFrom : null;
+  /* A landing on a site's page goes back the way the page's own crumb does:
+     the browser's Back, to where it was asked, or with no way back recorded
+     (the site was open already) the portfolio. */
+  const onSite = siteOpen && page === "company";
+  const viaSite = onSite && siteStateFrom() ? siteFrom : null;
+  const backLabel = viaSite ? viaSite.label : onSite ? "Portfolio" : back.label;
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>YOU ASKED</small><br><b>${ssEsc(qn.q)}</b></span>`
-    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(viaSite ? viaSite.label : back.label)}</button>`
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(backLabel)}</button>`
     + `<button type="button" data-ss="another">Ask another</button></span>`;
   strip.addEventListener("click", e => {
     const b = e.target.closest("[data-ss]");
@@ -18897,6 +18900,7 @@ function ssLand(qn, from, ticket, tries = 0){
     if(b.dataset.ss === "another"){ ssOpen(); return; }
     ssClearAsked();
     if(viaSite && siteOpen && siteStateFrom()){ history.back(); return; }
+    if(onSite && siteOpen){ closeSite(); return; }
     showPage(back.id);
   });
   ssAsked = {qn, strip, lit: el, litId: el.id || "", host, hash: location.hash, site: siteOpen ? siteKey : null};

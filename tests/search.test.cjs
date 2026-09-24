@@ -1183,3 +1183,17 @@ test('the palette closed after a resize across 1500 px hands focus to the chip s
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
+
+test("asked on a site's page opened with no way back, the strip goes back to the portfolio, as the crumb does", async () => {
+  const page = await board();
+  try {
+    await page.evaluate(key => openSite(key), SHOP);
+    await page.evaluate(() => ssAsk('hire'));
+    const strip = page.locator('.ss-asked');
+    assert.match(await strip.innerText(), /Back to Portfolio/);
+    await strip.locator('[data-ss="back"]').click();
+    assert.deepEqual(await page.evaluate(() => [siteOpen, page]), [false, 'company']);
+    assert.equal(await page.locator('.ss-asked').count(), 0);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
