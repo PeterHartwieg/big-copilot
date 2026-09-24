@@ -3534,16 +3534,20 @@ def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
 
     A depot is idle for the item where no shelf there sells it and every
     route it passes the item on by leads to another idle site; one with no
-    such route must have logged none of it leaving. A factory never is.
-    The delivery log names no destination, so a factory's share of what an
-    idle depot received is worked out from both ends: a depot fed by one
-    factory whose share is still open got that share, and a factory whose
-    routes all end at idle depots sent all its outflow there. Wherever that
-    leaves a share open the factory is read net, as it is when the idle
-    depot also gets the item from anything but a factory (an import, a
-    depot's route), when the factory feeds such a depot, or when the factory
-    imports the item itself: what it sent on may have been that import.
-    Returns {factory: {day: amount}}.
+    such route must have logged none of it leaving in the window. A factory
+    never is. An idle depot is clean for a factory only where that factory is
+    its sole routed source of the item and it imports none: only then is what
+    it received the factory's. A factory's add-back on a day is what it sent,
+    up to what its clean idle depots received that day. It is read net for the
+    whole window, as before, where it also feeds an idle depot that is not
+    clean (another source fills it), or imports the item itself (what it sent
+    on may have been that import).
+
+    This assumes a send and its receipt carry the same dayOfDelivery. The
+    routes are today's while the log is the week's, so a route changed
+    mid-week is a known limit. A leaf depot that shipped the item once early
+    in the week stays not idle all window, and its factory is read net: a
+    safe miss. Returns {factory: {day: amount}}.
     """
     def idle(site, seen=frozenset()):
         if site not in index or site in machines or flow["sells"](site, slug):
@@ -3554,58 +3558,26 @@ def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
         return all(dest in seen or idle(dest, seen | {site}) for dest in onward)
 
     sources = collections.defaultdict(set)
-    routes = {}
+    routes = collections.defaultdict(set)
     for source, legs in flow["edges"].items():
         for dest, item, _ in legs:
             if item == slug:
                 sources[dest].add(source)
                 if source in machines:
-                    routes.setdefault(source, set()).add(dest)
-    idle_at = {dest for dests in routes.values() for dest in dests if idle(dest)}
-    clean = {
-        dest for dest in idle_at
-        if sources[dest] <= set(machines) and (dest, slug) not in flow["imports"]
-    }
-    feeders = {dest: [f for f in _in_order(routes) if dest in routes[f]] for dest in clean}
-    pure = {f for f, dests in routes.items() if dests <= clean}
-    counted = [
-        f for f in _in_order(routes)
-        if routes[f] & clean and not routes[f] & (idle_at - clean) and (f, slug) not in flow["imports"]
-    ]
-    days = _in_order({d for f in counted for d, v in flow["outByDay"](f, slug).items() if v > 0})
+                    routes[source].add(dest)
     added = collections.defaultdict(dict)
-    for day in days:
-        sent = {f: flow["outByDay"](f, slug).get(day, 0.0) for f in routes}
-        got = {dest: flow["inByDay"](dest, slug).get(day, 0.0) for dest in clean}
-        share = {}
-
-        def spare_at(dest):
-            return got[dest] - sum(share.get((f, dest), 0.0) for f in feeders[dest])
-
-        def spare_of(f):
-            return sent[f] - sum(share.get((f, dest), 0.0) for dest in routes[f] if dest in clean)
-
-        progress = True
-        while progress:
-            progress = False
-            for dest in _in_order(clean):
-                open_ = [f for f in feeders[dest] if (f, dest) not in share]
-                if len(open_) == 1:
-                    f = open_[0]
-                    share[(f, dest)] = max(0.0, min(spare_at(dest), spare_of(f)))
-                    progress = True
-            for f in _in_order(pure):
-                open_ = [dest for dest in _in_order(routes[f]) if (f, dest) not in share]
-                if len(open_) == 1:
-                    dest = open_[0]
-                    share[(f, dest)] = max(0.0, min(spare_of(f), spare_at(dest)))
-                    progress = True
-        for f in counted:
-            legs = [dest for dest in routes[f] if dest in clean]
-            if all((f, dest) in share for dest in legs):
-                amount = sum(share[(f, dest)] for dest in legs)
-                if amount > 0:
-                    added[f][day] = amount
+    for factory in _in_order(routes):
+        if (factory, slug) in flow["imports"]:
+            continue
+        idle_at = [dest for dest in _in_order(routes[factory]) if idle(dest)]
+        clean = [dest for dest in idle_at
+                 if sources[dest] == {factory} and (dest, slug) not in flow["imports"]]
+        if not clean or len(clean) < len(idle_at):
+            continue
+        for day, out in sorted(flow["outByDay"](factory, slug).items()):
+            amount = min(out, sum(flow["inByDay"](dest, slug).get(day, 0.0) for dest in clean))
+            if amount > 0:
+                added[factory][day] = amount
     return added
 
 
