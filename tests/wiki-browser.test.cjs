@@ -225,9 +225,13 @@ test('Back to the same guide with no section drops a landing still waiting for t
   await page.waitForFunction(() => page === 'wiki');
   // The prices link, then Back to the guide itself, all before the catalogue is in.
   await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
-  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop/prices');
+  // The Wiki has taken the route and holds the landing, waiting for the data.
+  await page.waitForFunction(() => wikiRoute.section === 'prices' && wikiLanding === 'prices');
+  assert.equal(await page.evaluate(() => wikiStatus), 'loading');
   await page.evaluate(() => history.back());
-  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop');
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop' && wikiRoute.section === '');
+  // Back on the sectionless route, the waiting landing is gone before the data is in.
+  assert.equal(await page.evaluate(() => wikiLanding), '');
   release();
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   await settled(page);
