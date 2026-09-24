@@ -339,17 +339,22 @@ refresh. `PAGE_ALIASES` keeps old hashes such as `#results` working after a page
 view.
 
 A live refresh of the same company enters through `renderCalm()`, which also runs the
-entrance animations the rebuild started to their end, so nothing slides in again. It draws
+entrance animations the rebuild started to their end, so nothing slides in again. Only the
+board is settled: an open dialog and the game-link write toast are left alone. It draws
 only the rows tagged for the view on screen, plus the `""` rows, and marks the rest in
 `pageStale`; `drawStale()`, called from `showPage()` and `showSub()`, draws them as their
-view opens. The first boot and another company or save draw every row.
+view opens. A row that throws there stays in `pageStale` and is tried again on the next
+visit; the page still opens, the other rows due on it still draw, and the Live dot shows
+Stale until that row draws or the next board arrives. The first boot and another company
+or save draw every row.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
 it deserves a badge — see [contributing.md](contributing.md)), and a `PAGE_DRAWS` row for
 its draw function. The same goes for a new view or draw function. Tag the row with every
 view whose DOM it writes; if other code reads state it computes from another page, tag it
 `""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
-redraw.
+redraw. A row calls its function by name, `() => drawX()`, not `drawX` itself, so a test
+that stubs `window.drawX` is the one the row runs.
 
 ### Routes
 

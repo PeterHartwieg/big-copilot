@@ -339,12 +339,67 @@ test('a draw that throws on the way in leaves the view out of date, not the read
   assert.equal(await stale(), true, 'the view is still out of date');
   assert.ok(messages.some(m => /payroll broke/.test(m)), messages.join('\n'));
   assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/);
+  // The view shows the save before; the Live dot says so.
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'payroll broke'});
 
   await page.evaluate(() => { window.drawPayroll = window.calmDraw; });
   await page.click('#nav a[data-id="today"]');
   await page.click('#nav a[data-id="company"]');
   assert.equal(await stale(), false);
   assert.match(await page.locator('#secPayroll').textContent(), /\b4 people\b/, 'drawn on the next visit');
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'Live', why: ''});
+});
+
+// The masthead's Live dot: marked Stale or not, what it says, and why.
+const liveDot = page => page.evaluate(() => {
+  const dot = document.querySelector('#live');
+  return {stale: dot.classList.contains('stale'), says: dot.querySelector('em').textContent,
+          why: dot.title.replace(/^.*: /, '')};
+});
+
+test('one row that throws on a view does not keep the others from drawing, and its mark is its own', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('company'); showSub('company', 'products'); });
+  await deliver(page, later);
+  const due = () => page.evaluate(() => [...pageStale].map(row => String(row[1]).match(/draw\w+/)[0])
+    .filter(n => ['drawChart', 'drawPortfolio', 'drawSitePicker'].includes(n)).sort());
+  assert.deepEqual(await due(), ['drawChart', 'drawPortfolio', 'drawSitePicker']);
+  await page.evaluate(() => {
+    window.calmDraw = window.drawPortfolio;
+    window.drawPortfolio = () => { throw new Error('portfolio broke'); };
+    window.calmPicked = 0;
+    const picker = window.drawSitePicker;
+    window.drawSitePicker = () => { window.calmPicked++; return picker(); };
+    showSub('company', 'results');
+  });
+  assert.equal(await page.evaluate(() => calmPicked), 1, 'the site picker, due on the same view, is drawn');
+  assert.deepEqual(await due(), ['drawPortfolio']);
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'portfolio broke'});
+
+  // A rebuild that fails meanwhile holds the dot on its own: the row drawing
+  // at last does not clear it, the source's next good read does.
+  await page.evaluate(() => {
+    window.calmWatch.stale('rebuild broke');
+    window.drawPortfolio = window.calmDraw;
+    showSub('company', 'products');
+    showSub('company', 'results');
+  });
+  assert.deepEqual(await due(), []);
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'rebuild broke'});
+  await page.evaluate(() => window.calmWatch.stale(''));
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'Live', why: ''});
+
+  // The next board clears a row's mark too; the row is tried again on its visit.
+  await page.evaluate(() => {
+    window.drawPortfolio = () => { throw new Error('portfolio broke'); };
+    showSub('company', 'products');
+  });
+  await deliver(page);
+  await page.evaluate(() => showSub('company', 'results'));
+  assert.equal((await liveDot(page)).stale, true);
+  await page.evaluate(() => { window.drawPortfolio = window.calmDraw; showSub('company', 'products'); });
+  await deliver(page, later);
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'Live', why: ''});
 });
 
 test('a refresh settles the board, not an open dialog', async t => {
@@ -367,4 +422,22 @@ test('a refresh settles the board, not an open dialog', async t => {
     return {now, later: playing()};
   }, payload);
   assert.deepEqual(nod, {now: ['running'], later: ['running']});
+});
+
+test('a refresh with the search palette open does not make its lit row hop again', async t => {
+  const page = await board(t);
+  await settle(page);
+  const hop = await page.evaluate(async p => {
+    ssOpen();
+    // The palette's own drop and the first row's hop, played out.
+    await new Promise(r => setTimeout(r, 900));
+    const hopping = () => document.getAnimations()
+      .filter(a => a.animationName === 'ss-hop' && a.playState === 'running').length;
+    const lit = ssPal.querySelectorAll('.ss-q2.on').length, before = hopping();
+    window.calmWatch.changed(JSON.parse(p));
+    const now = hopping();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return {lit, relit: ssPal.querySelectorAll('.ss-q2.on').length, before, now, later: hopping()};
+  }, payload);
+  assert.deepEqual(hop, {lit: 1, relit: 1, before: 0, now: 0, later: 0});
 });

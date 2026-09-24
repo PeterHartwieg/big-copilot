@@ -18781,7 +18781,9 @@ function renderAll(){
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
     row[1]();
+    staleDraws.delete(row);
   });
+  if(staleSource || staleDraws.size) paintStale();
   drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
@@ -18808,10 +18810,12 @@ function renderAll(){
    as well, so the finding under the pointer does not unfold again in slow
    motion. Anything else started in those frames is the reader's and plays.
    Only the board is settled: an open dialog (a game-link write's "ready
-   again" nod), the write toast and the search palette are the reader's own
-   and play through a refresh. */
+   again" nod) and the write toast are the reader's own and play through a
+   refresh. The search palette is settled too: a refresh rebuilds its list
+   (ssDataChanged()), and the lit row's hop would replay on every one; what
+   the reader set going in it before the refresh is in `was` and plays on. */
 const calmSignal = a => a.animationName === "bump";
-const CALM_OWN = "dialog[open], #gwToast, .ss-pal";
+const CALM_OWN = "dialog[open], #gwToast";
 function calmSettle(skip, only){
   let all;
   try{ all = document.getAnimations(); }catch(e){ return; }
@@ -18916,6 +18920,28 @@ const PAGE_DRAWS = [
 ];
 /* The rows a live refresh left out: drawn for older numbers than D. */
 const pageStale = new Set();
+/* The Live dot's "Stale". Two things hold it, each cleared only by its own
+   side: the source, when the save moved on but the board would not rebuild
+   (stale(why) from SOURCE.watch(), cleared by its next good read), and the
+   board, when a row left out of date by a live refresh would not draw as its
+   view was opened (drawStale(); cleared when that row draws, or by the next
+   board). drawMast() puts a fresh dot up on every render, so renderAll()
+   paints the mark back. Without a live source, or once the dot is off, it
+   does nothing. */
+let staleSource = "";
+const staleDraws = new Map();  // a PAGE_DRAWS row -> what it threw
+function markStale(why){ staleSource = why || ""; paintStale(); }
+function paintStale(){
+  const dot = $("live");
+  if(!dot || dot.classList.contains("off")) return;
+  const drew = staleDraws.size ? [...staleDraws.values()][0] : "";
+  const stale = !!(staleSource || drew);
+  dot.classList.toggle("stale", stale);
+  dot.querySelector("em").textContent = stale ? "Stale" : SOURCE.label;
+  dot.title = staleSource ? "The save moved on but the board would not rebuild: " + staleSource
+    : drew ? "A page could not be drawn with the latest numbers and shows older ones: " + drew : "";
+  window.BigCopilotCommunity?.paintOnline();
+}
 /* The page, with its view where it has views: "today", "company/payroll". */
 const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
 /* Draw what a live refresh left out of date on the page's view about to show,
@@ -18923,17 +18949,21 @@ const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
    the refresh would have drawn it, so it arrives the same way: a block rebuilt
    where an arrived block stood is simply there (rvSettle), and a view never
    visited yet still arrives when it opens. A draw that throws stays out of
-   date and is tried again on the next visit; the page still opens. */
+   date, is tried again on the next visit and marks the Live dot Stale (the
+   view shows older numbers than the dot would otherwise claim); the page
+   still opens, and the other rows due on it still draw. */
 function drawStale(pageId){
   if(!pageStale.size || !hasData()) return;
   const view = viewOf(pageId);
   const due = PAGE_DRAWS.filter(row => pageStale.has(row) && row[0].split(" ").includes(view));
   if(!due.length) return;
-  const had = new Set($$(".rv"));
+  const had = new Set($$(".rv")), marked = [...staleDraws.values()].join("\n");
   due.forEach(row => {
     pageStale.delete(row);
-    try{ row[1](); }catch(e){ pageStale.add(row); console.error(e); }
+    try{ row[1](); staleDraws.delete(row); }
+    catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
   });
+  if([...staleDraws.values()].join("\n") !== marked) paintStale();
   $$(".rv:not(.in)").forEach(el => { if(!had.has(el) && el.closest("[hidden]")) rvSettle(el); });
   wireAll();
 }
@@ -23214,15 +23244,7 @@ const sameCompany = (a, b) => !!(a && b && a.meta && b.meta)
 function startWatching(){
   /* A failing rebuild otherwise reads as "nothing has changed" -- a green
      Live dot over an hour-old board -- so the source says why it is stuck and
-     the dot shows it. The last good board stays on screen. */
-  const markStale = (why) => {
-    const dot = $("live");
-    if(!dot || dot.classList.contains("off")) return;
-    dot.classList.toggle("stale", !!why);
-    dot.querySelector("em").textContent = why ? "Stale" : SOURCE.label;
-    dot.title = why ? "The save moved on but the board would not rebuild: " + why : "";
-    window.BigCopilotCommunity?.paintOnline();
-  };
+     the dot shows it (markStale()). The last good board stays on screen. */
   SOURCE.watch({
     changed(data){
       const first = !D;
@@ -23235,6 +23257,9 @@ function startWatching(){
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
       if(first) boot(); else renderCalm(same);
+      /* A row that would not draw failed on older numbers than these: the
+         next board clears its mark, and it is tried again when it opens. */
+      if(staleDraws.size){ staleDraws.clear(); paintStale(); }
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
