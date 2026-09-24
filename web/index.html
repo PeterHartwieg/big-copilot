@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=4f816f495a">
+<link rel="stylesheet" href="community.css?v=5ad18ceb42">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=4f816f495a">
+<link rel="stylesheet" href="fonts/fonts.css?v=5ad18ceb42">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3139,8 +3139,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "4f816f495a";</script>
-<script>window.LEDGER_RELEASE = {"version":"4f816f495a","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "5ad18ceb42";</script>
+<script>window.LEDGER_RELEASE = {"version":"5ad18ceb42","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3209,8 +3209,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=4f816f495a"></script>
-<script src="community.js?v=4f816f495a"></script>
+<script src="app.js?v=5ad18ceb42"></script>
+<script src="community.js?v=5ad18ceb42"></script>
 
 <script>
 
@@ -14011,13 +14011,14 @@ function gwUniforms(keys){
     const set = r.set || [], skipped = (r.skipped || []).map(s => s.skill);
     const minis = [...set.map(s => ["to", s]), ...skipped.map(s => ["k", s])].map(([k, s], i) =>
       `<i class="${k === "k" ? "k" : ""}" style="--k:${i}">${gwSvg(k !== "k" && phase === "done" ? "tick" : "shirt")}</i>`).join("");
-    const read = `<b>${name}</b> · ${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? "→ none" : `→ ${preset}`}</em>` : "nothing to set"}${
+    const roles = `${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? "→ none" : `→ ${preset}`}</em>` : "nothing to set"}${
       skipped.length ? ` · ${skipped.map(gwSkillName).join(", ")} kept` : ""}`;
+    const read = `<b>${name}</b> · ${roles}`;
     const say = r.error ? refusal(r) : null;
-    return `<div class="gw-shop${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div><span class="gw-sr">${read}</span>${
+    return `<div class="gw-shop${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div><span class="gw-sr">: ${roles}</span>${
       `<span class="gw-minis" aria-hidden="true">${minis}</span><span class="c">${r.error ? "" : set.length}</span>`}${say ? `<div class="gw-why"><span><b>${
       say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${phase === "ready" && kept().length > 1 ? `<button type="button" class="gw-mini-b" data-gw-leave="${
-      attr(key)}" aria-label="${attr(`Leave ${b ? shortName(b) : r.business || "this shop"} out`)}">${gwSvg("skip")}Leave it out</button>` : ""}</div>` : ""}</div>`;
+      attr(key)}" aria-label="${attr(`Leave it out: ${b ? shortName(b) : r.business || "this shop"}`)}">${gwSvg("skip")}Leave it out</button>` : ""}</div>` : ""}</div>`;
   };
   const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">out</span></div>`;
   gwConfirm({
@@ -14214,7 +14215,7 @@ const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar">
    verdict carries the wire, and its body and foot are the state's. */
 function gwDialog(icon, title, where){
   /* The one before goes at once, not when its close event comes round. */
-  if(gwOpen){ const was = gwOpen; was.close(); was._gwGone(); }
+  if(gwOpen){ const was = gwOpen; was.close(); was._gwGone(true); }
   const dlg = document.createElement("dialog");
   dlg.className = "gw-dlg";
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
@@ -14223,14 +14224,17 @@ function gwDialog(icon, title, where){
     <div class="gw-verdict"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
   gwHead(dlg, title, where);
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
-  dlg._gwGone = () => {
+  /* `replaced`: another dialog takes its place, so no Undo strip comes up
+     under it; the new one's own gwToast() decides. */
+  dlg._gwGone = replaced => {
     if(!dlg.isConnected) return;
     /* Closed while the game asks the player: this page stops waiting. */
     if(dlg._gwCancel) dlg._gwCancel();
     clearInterval(dlg._gwTick);
-    dlg.remove(); if(gwOpen === dlg) gwOpen = null; gwToast();
+    dlg.remove(); if(gwOpen === dlg) gwOpen = null;
+    if(replaced !== true) gwToast();
   };
-  dlg.addEventListener("close", dlg._gwGone);
+  dlg.addEventListener("close", () => dlg._gwGone());
   document.body.appendChild(dlg);
   dlg.showModal();
   gwOpen = dlg;
@@ -14449,7 +14453,8 @@ function gwConfirm(spec){
     const sent = JSON.stringify(body), game = gwWhose();
     const res = await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof asked === "string" ? asked : ""});
     if(!dlg.open || mine !== seq) return;
-    if(res.error) return gwFailed(dlg, spec, res, () => plan(), () => plan());
+    /* "Allowed." is said once: a Try again after this does not say it again. */
+    if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
     /* The answer on screen and the body it judged go together. */
     const answer = last = res.body || {};
     judged = sent;
@@ -14486,6 +14491,7 @@ function gwConfirm(spec){
       /* Approved again mid-apply: the apply was not sent twice; the player
          reviews the game's answer afresh first, on the same approval. */
       if(res.error === "reapproved" && dlg.open) return plan(res.asked);
+      allowed = false;
       return dlg.open ? gwFailed(dlg, spec, res, () => plan(), () => plan()) : gwToast();
     }
     const answer = res.body || {};

@@ -18344,13 +18344,14 @@ function gwUniforms(keys){
     const set = r.set || [], skipped = (r.skipped || []).map(s => s.skill);
     const minis = [...set.map(s => ["to", s]), ...skipped.map(s => ["k", s])].map(([k, s], i) =>
       `<i class="${k === "k" ? "k" : ""}" style="--k:${i}">${gwSvg(k !== "k" && phase === "done" ? "tick" : "shirt")}</i>`).join("");
-    const read = `<b>${name}</b> · ${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? "→ none" : `→ ${preset}`}</em>` : "nothing to set"}${
+    const roles = `${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? "→ none" : `→ ${preset}`}</em>` : "nothing to set"}${
       skipped.length ? ` · ${skipped.map(gwSkillName).join(", ")} kept` : ""}`;
+    const read = `<b>${name}</b> · ${roles}`;
     const say = r.error ? refusal(r) : null;
-    return `<div class="gw-shop${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div><span class="gw-sr">${read}</span>${
+    return `<div class="gw-shop${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div><span class="gw-sr">: ${roles}</span>${
       `<span class="gw-minis" aria-hidden="true">${minis}</span><span class="c">${r.error ? "" : set.length}</span>`}${say ? `<div class="gw-why"><span><b>${
       say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${phase === "ready" && kept().length > 1 ? `<button type="button" class="gw-mini-b" data-gw-leave="${
-      attr(key)}" aria-label="${attr(`Leave ${b ? shortName(b) : r.business || "this shop"} out`)}">${gwSvg("skip")}Leave it out</button>` : ""}</div>` : ""}</div>`;
+      attr(key)}" aria-label="${attr(`Leave it out: ${b ? shortName(b) : r.business || "this shop"}`)}">${gwSvg("skip")}Leave it out</button>` : ""}</div>` : ""}</div>`;
   };
   const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">out</span></div>`;
   gwConfirm({
@@ -18547,7 +18548,7 @@ const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar">
    verdict carries the wire, and its body and foot are the state's. */
 function gwDialog(icon, title, where){
   /* The one before goes at once, not when its close event comes round. */
-  if(gwOpen){ const was = gwOpen; was.close(); was._gwGone(); }
+  if(gwOpen){ const was = gwOpen; was.close(); was._gwGone(true); }
   const dlg = document.createElement("dialog");
   dlg.className = "gw-dlg";
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
@@ -18556,14 +18557,17 @@ function gwDialog(icon, title, where){
     <div class="gw-verdict"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
   gwHead(dlg, title, where);
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
-  dlg._gwGone = () => {
+  /* `replaced`: another dialog takes its place, so no Undo strip comes up
+     under it; the new one's own gwToast() decides. */
+  dlg._gwGone = replaced => {
     if(!dlg.isConnected) return;
     /* Closed while the game asks the player: this page stops waiting. */
     if(dlg._gwCancel) dlg._gwCancel();
     clearInterval(dlg._gwTick);
-    dlg.remove(); if(gwOpen === dlg) gwOpen = null; gwToast();
+    dlg.remove(); if(gwOpen === dlg) gwOpen = null;
+    if(replaced !== true) gwToast();
   };
-  dlg.addEventListener("close", dlg._gwGone);
+  dlg.addEventListener("close", () => dlg._gwGone());
   document.body.appendChild(dlg);
   dlg.showModal();
   gwOpen = dlg;
@@ -18782,7 +18786,8 @@ function gwConfirm(spec){
     const sent = JSON.stringify(body), game = gwWhose();
     const res = await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof asked === "string" ? asked : ""});
     if(!dlg.open || mine !== seq) return;
-    if(res.error) return gwFailed(dlg, spec, res, () => plan(), () => plan());
+    /* "Allowed." is said once: a Try again after this does not say it again. */
+    if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
     /* The answer on screen and the body it judged go together. */
     const answer = last = res.body || {};
     judged = sent;
@@ -18819,6 +18824,7 @@ function gwConfirm(spec){
       /* Approved again mid-apply: the apply was not sent twice; the player
          reviews the game's answer afresh first, on the same approval. */
       if(res.error === "reapproved" && dlg.open) return plan(res.asked);
+      allowed = false;
       return dlg.open ? gwFailed(dlg, spec, res, () => plan(), () => plan()) : gwToast();
     }
     const answer = res.body || {};

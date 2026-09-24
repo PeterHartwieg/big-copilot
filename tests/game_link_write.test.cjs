@@ -236,7 +236,7 @@ test('uniforms at several shops: a refused shop is left out, and the rest are se
   await page.evaluate((keys) => gwUniforms(keys), [GIFTS, BARE]);
   await ready(page);
   // The refusal is said in the shop's own row, with the way out.
-  const leave = dialog(page).getByRole('button', {name: 'Leave HART. Bare out'});
+  const leave = dialog(page).getByRole('button', {name: 'Leave it out: HART. Bare'});
   await leave.waitFor();
   assert.match(await dialog(page).locator('.gw-shop.bad').textContent(), /No uniform locker/);
   assert.equal(await dialog(page).getByRole('button', {name: SET}).isDisabled(), true);
@@ -1260,25 +1260,50 @@ test('schedule: a shop can be skipped, and one the game already holds is left ou
   assert.deepEqual(left, [GIFTS]);
 });
 
-test('schedule: a run ends with its summary, whether its last shop is written, skipped or fails', async (t) => {
+test('schedule: a run ends with its summary when its last shop fails or is skipped, with no Undo strip under the next dialog', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
   const block = await roster(page, GIFTS);
+  // First run: every shop fails, the last one too.
+  await configure({refuseWrite: 'cannot_write:placement'});
   await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
   await ready(page);
-  await configure({refuseWrite: 'cannot_write:placement'});
   await dialog(page).getByRole('button', {name: 'Write the week'}).click();
   await dialog(page).getByText('The game takes no changes while you are placing items.').waitFor();
   // Going on from a failure records the shop as not written.
   await dialog(page).getByRole('button', {name: 'Next shop · 2 of 2'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText('The game takes no changes while you are placing items.').waitFor();
+  await dialog(page).getByRole('button', {name: 'End the run'}).click();
+  await dialog(page).getByText('0 shops written, 2 left out.').waitFor();
+  assert.deepEqual(await dialog(page).locator('.gw-run small').allTextContents(), ['not written', 'not written']);
+  assert.equal(await dialog(page).locator('.gw-steps').getAttribute('aria-label'), '0 written, 2 left out, 0 to go');
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  // Second run: the first shop written, the last one skipped.
+  await configure({refuseWrite: null});
+  await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText('HART. Corner: 1 entry set in place of 1.').waitFor();
+  // Any Undo strip put up while a dialog is open, even for a moment, is counted.
+  await page.evaluate(() => {
+    window.stripsUnderDialogs = 0;
+    new MutationObserver((records) => records.forEach((r) => r.addedNodes.forEach((n) => {
+      if (n.id === 'gwToast' && document.querySelector('dialog.gw-dlg[open]')) window.stripsUnderDialogs++;
+    }))).observe(document.body, {childList: true});
+  });
+  await dialog(page).getByRole('button', {name: 'Next shop · 2 of 2'}).click();
   await dialog(page).locator('.gw-where', {hasText: '2 of 2 · HART. Gifts'}).waitFor();
   await ready(page);
-  // The last shop can be skipped too, and the run is summed up after it.
   await dialog(page).getByRole('button', {name: 'Skip this shop'}).click();
   await dialog(page).getByText('All 2 seen').waitFor();
-  await dialog(page).getByText('0 shops written, 2 left out.').waitFor();
-  assert.deepEqual(await dialog(page).locator('.gw-run small').allTextContents(), ['not written', 'skipped']);
-  assert.equal(await dialog(page).locator('.gw-steps').getAttribute('aria-label'), '0 written, 2 left out, 0 to go');
-  assert.equal((await applied()).length, 0);
+  await dialog(page).getByText('1 shop written, 1 left out.').waitFor();
+  assert.equal(await page.evaluate(() => window.stripsUnderDialogs), 0, 'no Undo strip under the next shop\'s dialog, nor under the summary');
+  assert.deepEqual(await dialog(page).locator('.gw-run small').allTextContents(), ['1 entry', 'skipped']);
+  assert.equal(await dialog(page).getByRole('button', {name: 'Undo HART. Corner'}).count(), 1);
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  await page.locator('#gwToast').waitFor();  // the dialog closed: the strip is back
+  assert.equal((await applied()).length, 1);
 });
 
 test('schedule: a cover-only plan keeps the serving entries in the game', async (t) => {
