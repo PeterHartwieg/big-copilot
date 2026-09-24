@@ -1373,15 +1373,16 @@ test('a save with no home at all opens nothing and throws nothing', async () => 
 // the hours block has to tell that same week: the same staff-hours, the same
 // hours lit, the same wages. Grid, finding and Today row all come out of the
 // real Python (tests/idle_week_fixture.py), so the two halves cannot drift.
-const IDLE = (() => {
-  const r = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.idle_week_fixture'],
+const idleFixture = (...args) => {
+  const r = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.idle_week_fixture', ...args],
     {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
   assert.equal(r.status, 0, r.stderr?.toString());
   return JSON.parse(r.stdout.toString());
-})();
-const idleSite = (findings = IDLE.findings) => site({
-  shop: {key: IDLE.grid.key, name: IDLE.grid.name, type: 'Gym'},
-  hours: [IDLE.grid], hourFindings: findings, minor: [IDLE.row],
+};
+const IDLE = idleFixture();
+const idleSite = (findings = IDLE.findings, fx = IDLE) => site({
+  shop: {key: fx.grid.key, name: fx.grid.name, type: 'Gym'},
+  hours: [fx.grid], hourFindings: findings, minor: [fx.row],
 });
 // The grid's cells wearing `cls`, as "weekday:hour"; its rows run Monday first.
 const cellsWith = (page, cls) => page.evaluate(cls => {
@@ -1426,6 +1427,23 @@ test('arrived from the Today line, the hours block opens on its week', async () 
     assert.equal(await page.locator(`.sp-find.arrived`).getAttribute('data-id'), IDLE.row.id);
     assert.equal((await page.locator('#hourRead').textContent()).trim(),
       `Overstaffed · 72 staff-hours a week · 3 fitness planning boards Mon-Wed 8-20 · ${worth}/day of wages`);
+  } finally { await page.close(); }
+});
+
+test('a roster that differs by day is told one headcount at a time, on the page as on Today', async () => {
+  // Two trainers on Monday, four on Tuesday: never "4 ... Mon, Tue".
+  const MIXED = idleFixture('mixed');
+  const page = await idleSite(MIXED.findings, MIXED);
+  try {
+    const worth = await page.evaluate(w => fmt(w), MIXED.row.worth);
+    const runs = '2 fitness planning boards Mon 8-20; 4 fitness planning boards Tue 8-20';
+    assert.match(MIXED.row.text, new RegExp(`: ${runs} for `));
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(), `48 staff-hours a week · ${runs} · ${worth}/day of wages`);
+    assert.equal(await chip.getAttribute('data-tip'),
+      `${MIXED.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2], 8, 20));
   } finally { await page.close(); }
 });
 

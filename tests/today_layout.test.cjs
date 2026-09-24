@@ -84,7 +84,13 @@ test('debt joins the cash tile only once it outweighs a week of profit', async (
   let page = await today(1440, {debt: 1890000, profitSum7: 70000});
   try {
     const cash = page.locator('#kpis .kpi').nth(2);
-    assert.match(await cash.innerText(), /\$1\.89M owed on loans/);
+    // The period the chip is measured over stays; the debt joins it.
+    assert.match(await cash.innerText(), /no cash history · \$1\.89M owed on loans/);
+  } finally { await page.close(); }
+  page = await today(390, {debt: 1890000, profitSum7: 70000});
+  try {
+    assert.match(await page.locator('#kpis .kpi').nth(2).innerText(), /no cash history · \$1\.89M owed/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   } finally { await page.close(); }
   page = await today(1440, {debt: 50000, profitSum7: 70000});
   try {
@@ -98,13 +104,36 @@ test('below the gate and switched off are two lines, each with its own show', as
     const lines = await page.locator('#alertMinor .td-count').allInnerTexts();
     assert.equal(lines.length, 2);
     assert.match(lines[0], /^1 below the \$500\/day line/);
-    assert.match(lines[1], /^2 in kinds you switched off: Overstaffed hours \(2, \$400\/day\)/);
+    assert.match(lines[1], /^2 in kinds switched off: Overstaffed hours \(2, \$400\/day\)/);
     await page.click('[data-td-toggle="off"]');
     assert.equal(await page.locator('[data-td-rows="off"] .find').count(), 2);
     assert.equal(await page.locator('[data-td-rows="below"] .find').count(), 0);
     // The variant survives the headline cut.
     assert.match(await page.locator('#alerts .find .what').first().innerText(),
       /^Clothing \(Classic Expensive Female\)/);
+  } finally { await page.close(); }
+});
+
+test('Payroll says what was booked yesterday, $0 included, once a day has finished', async () => {
+  const page = await today(1440);
+  try {
+    const quiet = await page.evaluate(() => {
+      Object.assign(D.staff, {total: 2, roles: [{role: 'Cashier', count: 2, cost: 8800}],
+                              avgSatisfaction: 90, unhappy: 0, absent: 0, complaining: 0});
+      const read = wageBill => {
+        D.kpi.wageBill = wageBill; drawPayroll();
+        return document.querySelector('#secPayroll .sechead .quiet').textContent;
+      };
+      const out = [read(9000), read(0)];
+      D.daily = []; out.push(read(0));
+      return out;
+    });
+    assert.deepEqual(quiet, [
+      "2 people · $8,800/day at today's rates · $9,000 booked yesterday",
+      "2 people · $8,800/day at today's rates · $0 booked yesterday",
+      // No finished day: there is no yesterday to have booked anything.
+      "2 people · $8,800/day at today's rates",
+    ]);
   } finally { await page.close(); }
 });
 

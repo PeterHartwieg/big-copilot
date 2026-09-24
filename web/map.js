@@ -278,14 +278,16 @@ class CityMapView {
     const a = this.assets, id = this.root.id;
     const clipId = `${id}-clip`;
     // The whole header belongs to the plain map: the finder's own switch lives
-    // in the map window and its filters in the panel.
+    // in the map window and its filters in the panel. A chip's accessible name
+    // is what it shows, "Mine 2", so a spoken command matches the word on it;
+    // the note says the rest.
     const head = this.panel ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
       </span>
       <span class="why" data-tip="The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>

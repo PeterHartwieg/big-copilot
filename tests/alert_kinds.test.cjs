@@ -99,10 +99,23 @@ test('the switched-off line names each kind with its count and worth', () => {
     'At capacity (3, $136k/day), Overstaffed hours (1, $0k/day), Stock not moving (1)');
 });
 
+test('the switched-off line lists its kinds in the tune panel order', () => {
+  const kinds = vm.runInContext('switchedOffKinds', context);
+  const label = id => id;
+  const money = n => `$${n}`;
+  // Below-gate rows come first in the rows handed over; the order is the panel's.
+  const rows = [row('dead', null, 'a'), row('idlestaff', 300, 'b'), row('atcap', 900, 'c'), row('mystery', null, 'd')];
+  assert.equal(kinds(rows, label, money, ['atcap', 'idlestaff', 'dead']),
+    'atcap (1, $900/day), idlestaff (1, $300/day), dead (1), mystery (1)');
+});
+
 test('the count lines say which is which', () => {
   assert.match(DRAW, /partitionFindings\(/);
   assert.match(DRAW, /below the \$\{fmt\(gate\)\}\/day line/);
-  assert.match(DRAW, /in kinds you switched off: /);
+  // Overstaffed hours is off by default, so the line cannot say "you".
+  assert.match(DRAW, /in kinds switched off: /);
+  assert.doesNotMatch(DRAW, /you switched off/);
+  assert.match(DRAW, /switchedOffKinds\(switchedOff, kindLabel, compact, ALERT_GROUPS\.map\(g => g\.id\)\)/);
 });
 
 /* The kinds, their defaults and what a device already stores. The slice runs
@@ -140,6 +153,15 @@ test('a player who had switched At capacity on keeps it on, and an explicit off 
   assert.deepEqual(run('readKindChoices(null)'), {});
 });
 
+test('a switch set back to its default stops being a stored choice', () => {
+  assert.deepEqual(run('setKindChoice({}, "hype", false)'), {hype: false});
+  assert.deepEqual(run('setKindChoice({hype: false}, "hype", true)'), {});
+  assert.deepEqual(run('setKindChoice({}, "idlestaff", true)'), {idlestaff: true});
+  assert.deepEqual(run('setKindChoice({idlestaff: true, hype: false}, "idlestaff", false)'), {hype: false});
+  // Dropped, the kind follows its default again.
+  assert.equal(run('kindPrefs(setKindChoice({atcap: false}, "atcap", true))').atcap, true);
+});
+
 /* R2: a headline cut at a bracket used to drop the item's variant, so
    "Fabric (Expensive)" and "Fabric (Cheap)" both read "Fabric". */
 const SPLIT = source.slice(source.indexOf('/* A finding is a short verb phrase'),
@@ -163,4 +185,14 @@ test('a finding keeps the variant in its headline', () => {
 test('a bracket of words is still a place to cut a long headline', () => {
   const t = 'Revenue down 20% week on week with a very long explanation (mostly the weekend) after that';
   assert.equal(headline({site: 'X', text: t}), 'Revenue down 20% week on week with a very long explanation');
+  // Cut at the bracket, the detail loses the bracket's own ")" and nothing else.
+  assert.equal(vm.runInContext('splitFinding', splitting)({site: 'X', text: t}).more,
+    'mostly the weekend after that');
+});
+
+test('a cut at a comma leaves the variant bracket whole in the detail', () => {
+  const t = 'Shelves run dry at 3 shops, Clothing (Classic Cheap Female) sells out first every Saturday';
+  const {what, more} = vm.runInContext('splitFinding', splitting)({site: 'X', text: t});
+  assert.equal(what, 'Shelves run dry at 3 shops');
+  assert.equal(more, 'Clothing (Classic Cheap Female) sells out first every Saturday');
 });

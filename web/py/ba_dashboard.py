@@ -6804,11 +6804,13 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
 
         # Overstaffing is a property of the roster that was on, so each role is
         # read on its own: a gym's spare trainer-hours are real even on an hour
-        # when the site was held up by another role. The best run across roles
-        # and weekdays wins, first past the post on a tie. Every run of a role
-        # with a known wage is kept beside it in `runs`, so the site's one Today
-        # line and its page's hours block both price and name the whole week
-        # rather than its worst day.
+        # when the site was held up by another role. Only a role with a known
+        # wage can be priced, so only its runs are counted: the best of those
+        # across roles and weekdays leads, first past the post on a tie, and a
+        # worse run of a priced role is not lost behind a bigger one nobody can
+        # put a wage on. Every priced run is kept beside it in `runs`, so the
+        # site's one Today line and its page's hours block both price and name
+        # the whole week rather than its worst day.
         wages_here = wages.get(grid["key"], {})
         best = None
         runs_here = []
@@ -6831,21 +6833,20 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                         needed = max(1, math.ceil(seen / per_post)) if per_post else 1
                         run.append((hour, on - needed, seen, on))
                         continue
-                    if len(run) >= IDLE_RUN:
+                    role_wage = wages_here.get(role["skill"])
+                    if len(run) >= IDLE_RUN and role_wage:
                         spare = sum(r[1] for r in run)
-                        role_wage = wages_here.get(role["skill"])
-                        if role_wage:
-                            runs_here.append(
-                                {
-                                    "noun": _role_words(role, office)["noun"],
-                                    "wd": wd,
-                                    "hours": [r[0] for r in run],
-                                    "staff": max(r[3] for r in run),
-                                    "seen": [r[2] for r in run],
-                                    "spare": spare,
-                                    "worth": spare * role_wage / 7,
-                                }
-                            )
+                        runs_here.append(
+                            {
+                                "noun": _role_words(role, office)["noun"],
+                                "wd": wd,
+                                "hours": [r[0] for r in run],
+                                "staff": max(r[3] for r in run),
+                                "seen": [r[2] for r in run],
+                                "spare": spare,
+                                "worth": spare * role_wage / 7,
+                            }
+                        )
                         if not best or spare > best["spare"]:
                             best = {
                                 "wd": wd,
@@ -6855,10 +6856,11 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                                 "staff": max(r[3] for r in run),
                                 "seen": round(sum(r[2] for r in run) / len(run)),
                                 "role": role,
+                                "wage": role_wage,
                             }
                     run = []
-        wage = wages_here.get(best["role"]["skill"]) if best else None
-        if best and wage:
+        if best:
+            wage = best["wage"]
             out.append(
                 {
                     "kind": "idle",
@@ -6884,7 +6886,9 @@ def _idle_week(runs: list) -> dict:
 
     A site that runs spare counters all Tuesday usually runs them all Wednesday
     too; one cause is one line, so the runs are summed into a week and each
-    role's hours are named as a shape ("Tue, Wed 0-24"). `seen` is the
+    role's hours are named as a shape ("Tue, Wed 0-24"). A role that ran 2 on
+    Monday and 4 on Tuesday is two parts, one per headcount, so no day is said
+    to have run more people than it did. `seen` is the
     customers an hour over every hour named, each hour counted once however
     many roles were idle in it. `cells` is every weekday-hour named, as
     [weekday, hour] pairs, so the site page lights the hours the line names.
@@ -6892,8 +6896,9 @@ def _idle_week(runs: list) -> dict:
     parts = collections.OrderedDict()
     seen = {}
     for run in runs:
-        part = parts.setdefault(run["noun"], {"noun": run["noun"], "staff": 0, "hours": {}})
-        part["staff"] = max(part["staff"], run["staff"])
+        part = parts.setdefault(
+            (run["noun"], run["staff"]), {"noun": run["noun"], "staff": run["staff"], "hours": {}}
+        )
         part["hours"].setdefault(run["wd"], set()).update(run["hours"])
         for hour, customers in zip(run["hours"], run["seen"]):
             seen[(run["wd"], hour)] = customers
@@ -8707,7 +8712,9 @@ def _alerts(
                     range(finding["from"], finding["to"]))}),
             }],
         }
-        runs = " and ".join(
+        # A part's hours can end "and 5 scattered hours", so the parts are
+        # kept apart by a semicolon: "and" would read as one more part.
+        runs = "; ".join(
             f"{p['staff']} {p['noun'] or default} {p['when']}" for p in week["parts"]
         )
         note(
@@ -12090,7 +12097,8 @@ function drawKpis(){
      chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
      sub: "customers", spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
-    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip, sub: heavyDebt ? `${compact(k.debt)} owed on loans` : cashTile.sub},
+    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip,
+     sub: heavyDebt ? `${cashTile.sub} · ${compact(k.debt)} owed on loans` : cashTile.sub},
     k.netWorth === null
       ? {l: "Fixed cost / day", v: fmt(fixed),
          chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
@@ -12332,7 +12340,19 @@ function splitFinding(a){
     let at = Math.max(-1, ...cuts.filter(i => i <= HEADLINE_MAX));
     if(at < 20) at = Math.min(...cuts.filter(i => i > 0));
     if(isFinite(at) && at > 0){
-      lead(what.slice(at).replace(/^[,\s(]+/, "").replace(/\)(?=[^)]*$)/, ""));
+      /* Cut at a bracket, the detail starts inside it, so the ")" that closes
+         that bracket goes too. Cut at a comma, every bracket in the rest is
+         whole, a variant's included, and stays. */
+      let rest = what.slice(at).replace(/^[,\s]+/, "");
+      if(rest.startsWith("(")){
+        rest = rest.slice(1);
+        let depth = 1;
+        for(let i = 0; i < rest.length; i++){
+          if(rest[i] === "(") depth++;
+          else if(rest[i] === ")" && --depth === 0){ rest = rest.slice(0, i) + rest.slice(i + 1); break; }
+        }
+      }
+      lead(rest);
       what = what.slice(0, at);
     }
   }
@@ -12441,15 +12461,17 @@ function partitionFindings(alerts, minorRows, prefs){
 /* The switched-off line names each kind it holds, in the order the kinds
    popover lists them, with how many and, where they carry money, what they are
    worth: "At capacity (3, $136k/day), Overstaffed hours (15)". `label` turns a
-   kind id into its name; `money` prints a sum. */
-function switchedOffKinds(rows, label, money){
+   kind id into its name; `money` prints a sum; `order` is the popover's kind
+   ids, first to last (ALERT_GROUPS), and a kind it does not list goes last. */
+function switchedOffKinds(rows, label, money, order = []){
   const by = new Map();
   rows.forEach(r => {
     const k = by.get(r.group) || {n: 0, worth: 0};
     k.n++; k.worth += typeof r.worth === "number" ? Math.abs(r.worth) : 0;
     by.set(r.group, k);
   });
-  return [...by.entries()].map(([id, k]) =>
+  const rank = id => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
+  return [...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) =>
     `${label(id)} (${k.n}${k.worth >= 1 ? `, ${money(k.worth)}/day` : ""})`).join(", ");
 }
 
@@ -12467,7 +12489,7 @@ function drawAlerts(){
   const tune = $("alertKindsToggle");
   $("alertHead").innerHTML = sechead("Needs attention", {
     why: `A site that is not trading always makes the list. Everything else needs to be worth ${
-      fmt(gate)}/day; smaller findings are counted below, and so are the kinds you switched off.`,
+      fmt(gate)}/day; smaller findings are counted below, and so are the kinds switched off.`,
     aside: ["crit", "watch", "opp"].map(k =>
       `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
     ).join("") + `<span id="alertTuneSlot"></span>`,
@@ -12491,7 +12513,8 @@ function drawAlerts(){
     block(below, showMinor, "below",
       `${below.length} below the ${fmt(gate)}/day line${worth >= 1 ? ` · ${fmt(worth)}/day` : ""}`)
     + block(switchedOff, showSwitchedOff, "off",
-      `${switchedOff.length} in kinds you switched off: ${switchedOffKinds(switchedOff, kindLabel, compact)}`);
+      `${switchedOff.length} in kinds switched off: ${
+        switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}`);
   $$("[data-td-toggle]", host).forEach(a => a.onclick = e => {
     e.preventDefault();
     if(a.dataset.tdToggle === "below") showMinor = !showMinor; else showSwitchedOff = !showSwitchedOff;
@@ -12979,7 +13002,7 @@ function spIdleWeek(n){
              when: `${WEEK_SHORT[wd]} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
   const noun = n.office ? "workstations" : "counters";
   return {spare: w.spare, worth: w.worth, seen: w.seen, cells: w.cells || [],
-          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join(" and ")};
+          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join("; ")};
 }
 /* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
    the door if it was reached, else every role standing at the site's own
@@ -14916,11 +14939,15 @@ const xlGuideLink = (typeSlug, label, section = "") => {
   const href = typeof wikiTypeHref === "function" ? wikiTypeHref(typeSlug, section) : "";
   return href ? `<a class="link xl-guide" href="${attr(href)}">${label} ›</a>` : "";
 };
-/* The stores selling a product yesterday, the biggest seller first: the same
-   lines, by item name, that _products() adds up for the Products table. */
+/* The stores carrying a product, the biggest seller yesterday first: the same
+   lines, by item name, that _products() adds up for the Products table. A line
+   stocked but not sold yet is on that table too, so a store that only stocks
+   it follows the sellers, the most units on the shelf first, and a newly
+   stocked product still opens somewhere. */
 const xlSellers = item => D.businesses.filter(b => b.status !== "vacant")
-  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && l.revenue)}))
-  .filter(x => x.line).sort((x, y) => y.line.revenue - x.line.revenue);
+  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units))}))
+  .filter(x => x.line)
+  .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
 /* Open that store on its Shelves with the product's row pulsing. A bag or a
    drink sits among the folded odds and ends (drawSite's SHELF_MAIN_SHARE
    rule), so the fold is opened first or the row would not be there. */
@@ -16546,12 +16573,16 @@ function drawProducts(){
       <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
       <th>Avg price</th><th>Stores</th>${showPeak?`<th>Peaks</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>{
-      /* The product opens the store that sells the most of it, Shelves lit:
-         the Portfolio has no product filter, and the site panel already has
-         the landing and the lit row, so one click costs no new machinery. */
-      const top = xlSellers(p.item)[0];
-      const name = top ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.item)}" data-tip="${attr(
-        `Open ${shortName(top.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`)}">${p.item}</a>` : p.item;
+      /* The product opens the store that sells the most of it, Shelves lit,
+         or with nothing sold yet one that stocks it: the Portfolio has no
+         product filter, and the site panel already has the landing and the lit
+         row, so one click costs no new machinery. `top`, above, is the bars'
+         scale; the store is `seller`. */
+      const seller = xlSellers(p.item)[0];
+      const opens = !seller ? ""
+        : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
+        : `Open ${shortName(seller.b)}, which stocks it; no store sold any yesterday`;
+      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.item)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr>
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
@@ -16592,8 +16623,10 @@ function drawPayroll(){
        Wages total. Where they part, the ? names the sites that booked more or
        less than their people's rates and hours. */
     why: payrollWhy(),
+    /* Booked yesterday is said whenever there was a yesterday: $0 booked
+       against a payroll is exactly the gap the ? explains. */
     quiet: `${st.total} people · ${fmt(st.dailyCost)}/day at today's rates${
-      D.kpi && D.kpi.wageBill ? ` · ${fmt(D.kpi.wageBill)} booked yesterday` : ""}`,
+      D.kpi && (D.daily || []).length ? ` · ${fmt(D.kpi.wageBill || 0)} booked yesterday` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
         `Average satisfaction across ${st.total} staff`)
       + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join("") : "",
@@ -16885,6 +16918,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   /* An old page hash opens the view that replaced it. */
   if(PAGE_ALIASES[id]){ showSub(...PAGE_ALIASES[id]); id = PAGE_ALIASES[id][0]; }
   if(!PAGES.some(p => p.id === id)) id = "today";
+  const from = page;
   page = id;
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
@@ -16902,7 +16936,7 @@ function showPage(id, scroll = true, historyMode = "push"){
      page was hidden. */
   if(id === "company" && sub.company === "results" && hasData()) drawChart();
   if(id === "map") showCityMap();
-  if(id === "wiki") wikiVisit();
+  if(id === "wiki") wikiVisit(from !== "wiki");
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
@@ -16959,8 +16993,12 @@ function openHash(h, historyMode = "none"){
   showPage(id, false, historyMode);
   return true;
 }
-/* The wiki module, when the build carries it, owns everything under #wiki. */
-function wikiVisit(){ if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1)); }
+/* The wiki module, when the build carries it, owns everything under #wiki.
+   `entered` is true when the Wiki has just replaced another page, so a link
+   into one of its sections lands there however often it is followed. */
+function wikiVisit(entered = false){
+  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered);
+}
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
   /* With no save open only the wiki has anything behind it; the rest would be
@@ -17029,6 +17067,14 @@ function kindPrefs(choices){
   const prefs = {};
   ALERT_GROUPS.forEach(g => { prefs[g.id] = choices.hasOwnProperty(g.id) ? !!choices[g.id] : g.on; });
   return prefs;
+}
+/* A switch flipped back to its kind's default is no longer a choice: it is
+   dropped, so the kind follows a later change of default again. */
+function setKindChoice(choices, id, on){
+  const next = Object.assign({}, choices);
+  const g = ALERT_GROUPS.find(x => x.id === id);
+  if(g && !!on === g.on) delete next[id]; else next[id] = !!on;
+  return next;
 }
 let alertKindChoices = {};
 /* The control that opens the panel: the tune button in the Needs attention
@@ -17135,7 +17181,7 @@ function buildAlertSettingsPanel(){
   kindsPop.setAttribute("role", "dialog");
   kindsPop.setAttribute("aria-label", "Which kinds make the list");
   kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
-    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds you switched off" line under it, with "show" to read them. Saved on this device.</p>
+    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds switched off" line under it, with "show" to read them. Saved on this device.</p>
     <div class="kinds"></div>
     <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
     + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
@@ -18113,7 +18159,8 @@ const bindKinds = once(() => on("click", ".sw", s => {
      state a screen reader hears has to move with the class. */
   if(s.getAttribute("role") === "switch") s.setAttribute("aria-checked", String(s.classList.contains("on")));
   const kind = s.dataset.kind; if(!kind) return;
-  alertGroupPrefs[kind] = alertKindChoices[kind] = s.classList.contains("on");
+  alertGroupPrefs[kind] = s.classList.contains("on");
+  alertKindChoices = setKindChoice(alertKindChoices, kind, alertGroupPrefs[kind]);
   try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
   drawAlerts();
 }));

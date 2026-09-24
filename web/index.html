@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=94aa6c217f">
+<link rel="stylesheet" href="community.css?v=7debfd5508">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=94aa6c217f">
+<link rel="stylesheet" href="fonts/fonts.css?v=7debfd5508">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "94aa6c217f";</script>
-<script>window.LEDGER_RELEASE = {"version":"94aa6c217f","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "7debfd5508";</script>
+<script>window.LEDGER_RELEASE = {"version":"7debfd5508","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2851,8 +2851,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=94aa6c217f"></script>
-<script src="community.js?v=94aa6c217f"></script>
+<script src="app.js?v=7debfd5508"></script>
+<script src="community.js?v=7debfd5508"></script>
 
 <script>
 
@@ -4158,7 +4158,8 @@ function drawKpis(){
      chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
      sub: "customers", spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
-    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip, sub: heavyDebt ? `${compact(k.debt)} owed on loans` : cashTile.sub},
+    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip,
+     sub: heavyDebt ? `${cashTile.sub} · ${compact(k.debt)} owed on loans` : cashTile.sub},
     k.netWorth === null
       ? {l: "Fixed cost / day", v: fmt(fixed),
          chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
@@ -4400,7 +4401,19 @@ function splitFinding(a){
     let at = Math.max(-1, ...cuts.filter(i => i <= HEADLINE_MAX));
     if(at < 20) at = Math.min(...cuts.filter(i => i > 0));
     if(isFinite(at) && at > 0){
-      lead(what.slice(at).replace(/^[,\s(]+/, "").replace(/\)(?=[^)]*$)/, ""));
+      /* Cut at a bracket, the detail starts inside it, so the ")" that closes
+         that bracket goes too. Cut at a comma, every bracket in the rest is
+         whole, a variant's included, and stays. */
+      let rest = what.slice(at).replace(/^[,\s]+/, "");
+      if(rest.startsWith("(")){
+        rest = rest.slice(1);
+        let depth = 1;
+        for(let i = 0; i < rest.length; i++){
+          if(rest[i] === "(") depth++;
+          else if(rest[i] === ")" && --depth === 0){ rest = rest.slice(0, i) + rest.slice(i + 1); break; }
+        }
+      }
+      lead(rest);
       what = what.slice(0, at);
     }
   }
@@ -4509,15 +4522,17 @@ function partitionFindings(alerts, minorRows, prefs){
 /* The switched-off line names each kind it holds, in the order the kinds
    popover lists them, with how many and, where they carry money, what they are
    worth: "At capacity (3, $136k/day), Overstaffed hours (15)". `label` turns a
-   kind id into its name; `money` prints a sum. */
-function switchedOffKinds(rows, label, money){
+   kind id into its name; `money` prints a sum; `order` is the popover's kind
+   ids, first to last (ALERT_GROUPS), and a kind it does not list goes last. */
+function switchedOffKinds(rows, label, money, order = []){
   const by = new Map();
   rows.forEach(r => {
     const k = by.get(r.group) || {n: 0, worth: 0};
     k.n++; k.worth += typeof r.worth === "number" ? Math.abs(r.worth) : 0;
     by.set(r.group, k);
   });
-  return [...by.entries()].map(([id, k]) =>
+  const rank = id => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
+  return [...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) =>
     `${label(id)} (${k.n}${k.worth >= 1 ? `, ${money(k.worth)}/day` : ""})`).join(", ");
 }
 
@@ -4535,7 +4550,7 @@ function drawAlerts(){
   const tune = $("alertKindsToggle");
   $("alertHead").innerHTML = sechead("Needs attention", {
     why: `A site that is not trading always makes the list. Everything else needs to be worth ${
-      fmt(gate)}/day; smaller findings are counted below, and so are the kinds you switched off.`,
+      fmt(gate)}/day; smaller findings are counted below, and so are the kinds switched off.`,
     aside: ["crit", "watch", "opp"].map(k =>
       `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
     ).join("") + `<span id="alertTuneSlot"></span>`,
@@ -4559,7 +4574,8 @@ function drawAlerts(){
     block(below, showMinor, "below",
       `${below.length} below the ${fmt(gate)}/day line${worth >= 1 ? ` · ${fmt(worth)}/day` : ""}`)
     + block(switchedOff, showSwitchedOff, "off",
-      `${switchedOff.length} in kinds you switched off: ${switchedOffKinds(switchedOff, kindLabel, compact)}`);
+      `${switchedOff.length} in kinds switched off: ${
+        switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}`);
   $$("[data-td-toggle]", host).forEach(a => a.onclick = e => {
     e.preventDefault();
     if(a.dataset.tdToggle === "below") showMinor = !showMinor; else showSwitchedOff = !showSwitchedOff;
@@ -5047,7 +5063,7 @@ function spIdleWeek(n){
              when: `${WEEK_SHORT[wd]} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
   const noun = n.office ? "workstations" : "counters";
   return {spare: w.spare, worth: w.worth, seen: w.seen, cells: w.cells || [],
-          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join(" and ")};
+          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join("; ")};
 }
 /* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
    the door if it was reached, else every role standing at the site's own
@@ -6984,11 +7000,15 @@ const xlGuideLink = (typeSlug, label, section = "") => {
   const href = typeof wikiTypeHref === "function" ? wikiTypeHref(typeSlug, section) : "";
   return href ? `<a class="link xl-guide" href="${attr(href)}">${label} ›</a>` : "";
 };
-/* The stores selling a product yesterday, the biggest seller first: the same
-   lines, by item name, that _products() adds up for the Products table. */
+/* The stores carrying a product, the biggest seller yesterday first: the same
+   lines, by item name, that _products() adds up for the Products table. A line
+   stocked but not sold yet is on that table too, so a store that only stocks
+   it follows the sellers, the most units on the shelf first, and a newly
+   stocked product still opens somewhere. */
 const xlSellers = item => D.businesses.filter(b => b.status !== "vacant")
-  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && l.revenue)}))
-  .filter(x => x.line).sort((x, y) => y.line.revenue - x.line.revenue);
+  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units))}))
+  .filter(x => x.line)
+  .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
 /* Open that store on its Shelves with the product's row pulsing. A bag or a
    drink sits among the folded odds and ends (drawSite's SHELF_MAIN_SHARE
    rule), so the fold is opened first or the row would not be there. */
@@ -8614,12 +8634,16 @@ function drawProducts(){
       <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
       <th>Avg price</th><th>Stores</th>${showPeak?`<th>Peaks</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>{
-      /* The product opens the store that sells the most of it, Shelves lit:
-         the Portfolio has no product filter, and the site panel already has
-         the landing and the lit row, so one click costs no new machinery. */
-      const top = xlSellers(p.item)[0];
-      const name = top ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.item)}" data-tip="${attr(
-        `Open ${shortName(top.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`)}">${p.item}</a>` : p.item;
+      /* The product opens the store that sells the most of it, Shelves lit,
+         or with nothing sold yet one that stocks it: the Portfolio has no
+         product filter, and the site panel already has the landing and the lit
+         row, so one click costs no new machinery. `top`, above, is the bars'
+         scale; the store is `seller`. */
+      const seller = xlSellers(p.item)[0];
+      const opens = !seller ? ""
+        : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
+        : `Open ${shortName(seller.b)}, which stocks it; no store sold any yesterday`;
+      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.item)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr>
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
@@ -8660,8 +8684,10 @@ function drawPayroll(){
        Wages total. Where they part, the ? names the sites that booked more or
        less than their people's rates and hours. */
     why: payrollWhy(),
+    /* Booked yesterday is said whenever there was a yesterday: $0 booked
+       against a payroll is exactly the gap the ? explains. */
     quiet: `${st.total} people · ${fmt(st.dailyCost)}/day at today's rates${
-      D.kpi && D.kpi.wageBill ? ` · ${fmt(D.kpi.wageBill)} booked yesterday` : ""}`,
+      D.kpi && (D.daily || []).length ? ` · ${fmt(D.kpi.wageBill || 0)} booked yesterday` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
         `Average satisfaction across ${st.total} staff`)
       + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join("") : "",
@@ -9152,14 +9178,16 @@ class CityMapView {
     const a = this.assets, id = this.root.id;
     const clipId = `${id}-clip`;
     // The whole header belongs to the plain map: the finder's own switch lives
-    // in the map window and its filters in the panel.
+    // in the map window and its filters in the panel. A chip's accessible name
+    // is what it shows, "Mine 2", so a spoken command matches the word on it;
+    // the note says the rest.
     const head = this.panel ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
       </span>
       <span class="why" data-tip="The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
@@ -10506,13 +10534,16 @@ function wikiTypeHref(typeSlug, section){
   return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
-   while it is up. */
-function showWikiRoute(hash){
+   while it is up. `entered` says the Wiki was not the page on screen before:
+   the reader came from another page, by a link or by Back. */
+function showWikiRoute(hash, entered = false){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
-  /* A link into a section is a place to land once, when it is followed; a
-     redraw afterwards leaves the reader wherever they have scrolled to. */
-  if(next.section && (moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+  /* A link into a section is a place to land once, each time it is followed;
+     a redraw afterwards leaves the reader wherever they have scrolled to. The
+     route outlives a visit to another page, so following the same link a
+     second time is not a move; coming in from elsewhere is what says so. */
+  if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -12569,6 +12600,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   /* An old page hash opens the view that replaced it. */
   if(PAGE_ALIASES[id]){ showSub(...PAGE_ALIASES[id]); id = PAGE_ALIASES[id][0]; }
   if(!PAGES.some(p => p.id === id)) id = "today";
+  const from = page;
   page = id;
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
@@ -12586,7 +12618,7 @@ function showPage(id, scroll = true, historyMode = "push"){
      page was hidden. */
   if(id === "company" && sub.company === "results" && hasData()) drawChart();
   if(id === "map") showCityMap();
-  if(id === "wiki") wikiVisit();
+  if(id === "wiki") wikiVisit(from !== "wiki");
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
@@ -12643,8 +12675,12 @@ function openHash(h, historyMode = "none"){
   showPage(id, false, historyMode);
   return true;
 }
-/* The wiki module, when the build carries it, owns everything under #wiki. */
-function wikiVisit(){ if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1)); }
+/* The wiki module, when the build carries it, owns everything under #wiki.
+   `entered` is true when the Wiki has just replaced another page, so a link
+   into one of its sections lands there however often it is followed. */
+function wikiVisit(entered = false){
+  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered);
+}
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
   /* With no save open only the wiki has anything behind it; the rest would be
@@ -12713,6 +12749,14 @@ function kindPrefs(choices){
   const prefs = {};
   ALERT_GROUPS.forEach(g => { prefs[g.id] = choices.hasOwnProperty(g.id) ? !!choices[g.id] : g.on; });
   return prefs;
+}
+/* A switch flipped back to its kind's default is no longer a choice: it is
+   dropped, so the kind follows a later change of default again. */
+function setKindChoice(choices, id, on){
+  const next = Object.assign({}, choices);
+  const g = ALERT_GROUPS.find(x => x.id === id);
+  if(g && !!on === g.on) delete next[id]; else next[id] = !!on;
+  return next;
 }
 let alertKindChoices = {};
 /* The control that opens the panel: the tune button in the Needs attention
@@ -12819,7 +12863,7 @@ function buildAlertSettingsPanel(){
   kindsPop.setAttribute("role", "dialog");
   kindsPop.setAttribute("aria-label", "Which kinds make the list");
   kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
-    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds you switched off" line under it, with "show" to read them. Saved on this device.</p>
+    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds switched off" line under it, with "show" to read them. Saved on this device.</p>
     <div class="kinds"></div>
     <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
     + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
@@ -13797,7 +13841,8 @@ const bindKinds = once(() => on("click", ".sw", s => {
      state a screen reader hears has to move with the class. */
   if(s.getAttribute("role") === "switch") s.setAttribute("aria-checked", String(s.classList.contains("on")));
   const kind = s.dataset.kind; if(!kind) return;
-  alertGroupPrefs[kind] = alertKindChoices[kind] = s.classList.contains("on");
+  alertGroupPrefs[kind] = s.classList.contains("on");
+  alertKindChoices = setKindChoice(alertKindChoices, kind, alertGroupPrefs[kind]);
   try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
   drawAlerts();
 }));

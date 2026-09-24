@@ -105,6 +105,28 @@ test('a link into Prices in your save lands on that section, and only once', asy
   assert.deepEqual(errors, []);
 });
 
+test('the same section link followed again, after leaving the Wiki, lands again', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop/prices'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  const landed = () => page.waitForFunction(() => {
+    const el = document.getElementById('wk-prices');
+    return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+  });
+  await landed();
+  // Off to another page, then the shelves' link again: the route is the one
+  // the Wiki still holds, and it has to land all the same.
+  await page.evaluate(() => { showPage('today'); scrollTo(0, 0); });
+  assert.equal(await page.evaluate(() => [page, scrollY].join(' ')), 'today 0');
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  await page.waitForFunction(() => page === 'wiki');
+  await landed();
+  // A redraw while the Wiki is up still leaves the reader where they are.
+  await page.evaluate(() => { scrollTo(0, 0); drawWiki(); wikiVisit(); });
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
 test('search keeps focus when cleared and preserves mid-query edits', async t => {
   const {page, errors} = await fixture(t);
   await openFromLanding(page);

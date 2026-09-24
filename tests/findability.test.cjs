@@ -247,6 +247,8 @@ test('a Products row opens the store that sells the most of it, Shelves lit', as
     await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
     const link = page.locator('#secProducts .xl-sells', {hasText: 'Cheap Gift'});
     assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, the store that sells the most of it, one of 2');
+    // The link's seller is not the bar's scale: every bar has a real width.
+    assert.deepEqual(await page.$$eval('#secProducts .bar i', bars => bars.map(i => i.style.width)), ['100%', '1%']);
     await link.click();
     assert.equal(await page.evaluate(() => [page, sub.company, siteOpen, siteKey].join(' ')),
                  `company results true ${OTHER}`);
@@ -257,6 +259,27 @@ test('a Products row opens the store that sells the most of it, Shelves lit', as
     await page.locator('#secProducts .xl-sells', {hasText: 'Paper Bag'}).click();
     assert.equal(await page.evaluate(() => [siteKey, showAllShelves].join(' ')), `${KEY} true`);
     assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-bag')}"].sp-hit`).count(), 1);
+  } finally { await page.close(); }
+});
+
+test('a product stocked but not sold yet still opens a store that stocks it', async () => {
+  const line = (item, slug, revenue, units) => ({item, slug, revenue, rate: 0, units, price: 30, soldPerDay: 0});
+  const page = await board({
+    shop: {lines: [line('Mug', 'mug', 400, 20), line('New Gift', 'newgift', 0, 10)]},
+    peer: {lines: [line('New Gift', 'newgift', 0, 60)]},
+    products: [
+      {item: 'Mug', revenue: 400, units: 10, week: 70, stock: 20, stores: 1, price: 40, peak: null},
+      {item: 'New Gift', revenue: 0, units: 0, week: 0, stock: 70, stores: 0, price: 0, peak: null},
+    ],
+  });
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
+    const link = page.locator('#secProducts .xl-sells', {hasText: 'New Gift'});
+    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, which stocks it; no store sold any yesterday');
+    assert.deepEqual(await page.$$eval('#secProducts .bar i', bars => bars.map(i => i.style.width)), ['100%', '0%']);
+    await link.click();
+    assert.equal(await page.evaluate(() => [siteOpen, siteKey].join(' ')), `true ${OTHER}`);
+    assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-newgift')}"].sp-hit`).count(), 1);
   } finally { await page.close(); }
 });
 

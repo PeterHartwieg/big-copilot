@@ -224,6 +224,9 @@ test('the map head keeps five layer chips, a why mark, search with a count, and 
     // Each layer names itself beside its count, rather than behind the ?.
     assert.deepEqual(await page.$$eval('#cityMapPage .map-head .lay',ls=>ls.map(l=>l.innerText.replace(/\s+/g,' ').trim())),
       ['Mine 2','Owned 0','Homes 0','Findings 1','All 883']);
+    // What a chip is called out loud starts with the word printed on it.
+    for(const name of ['Mine 2','Owned 0','Homes 0','Findings 1','All 883'])
+      assert.equal(await page.locator('#cityMapPage .map-head').getByRole('button',{name,exact:true}).count(),1,name);
     assert.equal(await page.locator('#cityMapPage .map-head .why').count(),1);
     assert.equal(await page.locator('#cityMapPage .srch input[data-control="search"]').count(),1);
     assert.equal(await page.locator('#cityMapPage [data-stage] .zoomer .ibtn[data-action="in"]').count(),1);

@@ -60,20 +60,21 @@ the map.
   with where the profit went, and the daily fixed-cost base (rent plus payroll). Net
   worth takes the fourth tile whenever the game reports it again. The Profit tile opens
   Company › Results at the daily result. Bank debt appears in the cash tile's note when
-  there is some, and on its sub line ("$1.89M owed on loans") once it is more than the
-  last seven days' profit. Site and staff counts sit in the masthead. Sparklines cover
+  there is some, and on its sub line after the period ("this week · $1.89M owed on loans")
+  once it is more than the last seven days' profit. Site and staff counts sit in the masthead. Sparklines cover
   the last 61 days. On a phone the tiles pair up two by two and the Next moves cards stack.
 - **Needs attention**: only what you can act on, each line with a number and a deadline
   where one exists. Below the list, two lines, each with its own *show*: how many findings
   fall below the materiality line ("1 below the $6,239/day line"), and how many sit in kinds
-  you switched off, naming each kind with its count and worth ("15 in kinds you switched
-  off: Overstaffed hours (15, $17k/day)"). The tune button chooses which kinds of finding
+  switched off, by the player or by default, naming each kind with its count and worth in
+  the tune panel's order ("15 in kinds switched off: Overstaffed hours (15, $17k/day)"). The tune button chooses which kinds of finding
   make the list; switching one off moves its findings to the second line rather than
   hiding them, and nothing is ever dropped. *At capacity* is on by default and *Overstaffed
   hours* off; a device keeps only the kinds its player switched, so a later change of
   default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
   site: the spare staff-hours of the whole week, its wages summed, with the days and hours
-  named as a shape ("Mon-Wed 8-20"); the site's own hours block reads out the same week.
+  named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-20;
+  4 counters Tue 8-20"); the site's own hours block reads out the same week.
   A finding's headline never drops an item's variant: "Fabric (Expensive)", not "Fabric".
   Every *details ›* link opens the page and view the finding is spelt out on and scrolls
   to it.

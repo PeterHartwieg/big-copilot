@@ -287,13 +287,16 @@ function wikiTypeHref(typeSlug, section){
   return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
-   while it is up. */
-function showWikiRoute(hash){
+   while it is up. `entered` says the Wiki was not the page on screen before:
+   the reader came from another page, by a link or by Back. */
+function showWikiRoute(hash, entered = false){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
-  /* A link into a section is a place to land once, when it is followed; a
-     redraw afterwards leaves the reader wherever they have scrolled to. */
-  if(next.section && (moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+  /* A link into a section is a place to land once, each time it is followed;
+     a redraw afterwards leaves the reader wherever they have scrolled to. The
+     route outlives a visit to another page, so following the same link a
+     second time is not a move; coming in from elsewhere is what says so. */
+  if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
