@@ -15196,7 +15196,7 @@ function drawSite(){
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
   const shelves = !shelved ? []
-    : office ? b.lines.filter(l => spShelfListed(b, l))
+    : office ? shelvesAll
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";

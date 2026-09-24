@@ -293,13 +293,16 @@ function showWikiRoute(hash, entered = false){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
   /* One rule: coming into the Wiki from another page, or onto another route
-     inside it, lands on the route's section when it names one, and a
-     different page starts at its top otherwise. Back and Forward are no
-     exception. A redraw of the route on screen never lands again, so the
-     reader is left wherever they have scrolled to. The route outlives a visit
-     to another page, so following the same link a second time is not a move;
-     coming in from elsewhere is what says so. */
-  if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+     inside it, lands on the route's section when it names one, and starts at
+     the page's top when it names none. Back and Forward are no exception. A
+     redraw of the route on screen never lands again, so the reader is left
+     wherever they have scrolled to. The route outlives a visit to another
+     page, so following the same link a second time is not a move; coming in
+     from elsewhere is what says so. A landing still waiting for the catalogue
+     is dropped when the reader goes somewhere else before it arrives. */
+  const land = !!next.section && (entered || moved || next.section !== wikiRoute.section);
+  if(land) wikiLanding = next.section;
+  else if(entered || moved) wikiLanding = "";
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -308,9 +311,10 @@ function showWikiRoute(hash, entered = false){
     wikiPicked = null;
     wikiFocus = "";
     wikiShowFix = false;
-    /* A different page starts at its own top, however far down its link was. */
-    if(window.scrollY > 0) window.scrollTo(0, 0);
   }
+  /* A different page, or the Wiki come back to with no section to land on,
+     starts at its own top, however far down the reader was before. */
+  if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
   drawWiki();
 }

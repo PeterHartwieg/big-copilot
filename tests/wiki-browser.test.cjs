@@ -29,7 +29,7 @@ function currentPage() {
     fs.readFileSync(path.join(root, 'wiki.js'), 'utf8').trim());
 }
 
-async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', changeData} = {}) {
+async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', changeData, holdData} = {}) {
   const context = await browser.newContext({viewport:{width,height:900}, colorScheme:theme, reducedMotion:motion});
   t.after(() => context.close());
   await context.addInitScript(() => {
@@ -40,8 +40,9 @@ async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', c
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.route('**/*', route => {
+  await page.route('**/*', async route => {
     const url = new URL(route.request().url());
+    if(holdData && url.pathname === '/wiki-data.json') await holdData;
     if(url.hostname !== 'wiki.test') return route.abort();
     if(url.pathname.startsWith('/api/')) return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[],online:0})});
     const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
@@ -134,31 +135,85 @@ const landedOnPrices = page => page.waitForFunction(() => {
   return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
 });
 
-test('Back onto a prices entry lands on Prices, from another page and from another guide', async t => {
+// A landing scrolls for a few frames while the sections above it paint;
+// the reader's own scroll waits for that, or the landing would undo it.
+const settled = page => page.waitForTimeout(500);
+
+test('Back and Forward onto a prices entry land on Prices, and a plain guide starts at its top', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
   await landedOnPrices(page);
-  // Scrolled back up to the guide's top and paused there, off to another
-  // page, then Back: Prices again, not the top.
-  await page.waitForTimeout(500);
-  await page.evaluate(() => scrollTo(0, 0));
-  await page.waitForTimeout(400);
-  await page.evaluate(() => showPage('today'));
+  // Each step below starts from the top, so the browser's own restoration of
+  // the entry's scroll position cannot pass for a landing.
+  await settled(page);
+  await page.evaluate(() => { scrollTo(0, 0); showPage('today'); });
   await page.evaluate(() => history.back());
   await page.waitForFunction(() => page === 'wiki');
   await landedOnPrices(page);
   assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
   // Another guide, then Back: another route, so it lands on Prices again.
+  await settled(page);
+  await page.evaluate(() => scrollTo(0, 0));
   await page.evaluate(() => { location.hash = '#wiki/businesstypes-bookstore'; });
   await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
   await page.evaluate(() => history.back());
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   await landedOnPrices(page);
+  // Forward to the other guide, which names no section: its top.
+  await page.evaluate(() => history.forward());
+  await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  // Back to Prices, Back again to the plain guide entry, then Forward: Prices.
+  await page.evaluate(() => history.back());
+  await landedOnPrices(page);
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop');
+  await settled(page);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.evaluate(() => history.forward());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop/prices');
+  await landedOnPrices(page);
   // A redraw of the route on screen does not land again.
-  await page.waitForTimeout(500);
+  await settled(page);
   await page.evaluate(() => { scrollTo(0, 0); drawWiki(); wikiVisit(); });
   await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('a guide with no section, come back to from another page, starts at its top each time', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  for (let visit = 0; visit < 2; visit++) {
+    // A long Today, read well down, and then the same guide again.
+    await page.evaluate(() => {
+      showPage('today');
+      document.getElementById('pageToday').style.minHeight = '5000px';
+      scrollTo(0, 1500);
+    });
+    assert.equal(await page.evaluate(() => scrollY), 1500);
+    await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop'; });
+    await page.waitForFunction(() => page === 'wiki');
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => scrollY), 0, `visit ${visit + 1}`);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('a landing still waiting for the catalogue is dropped when the reader moves on', async t => {
+  let release;
+  const holdData = new Promise(r => { release = r; });
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop/prices', holdData});
+  // Before the catalogue is in, the reader follows a link to another guide.
+  await page.waitForFunction(() => page === 'wiki');
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-bookstore'; });
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-bookstore');
+  release();
+  await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
+  await settled(page);
+  // Its own top, not the Prices section the first link asked for.
   assert.equal(await page.evaluate(() => scrollY), 0);
   assert.deepEqual(errors, []);
 });

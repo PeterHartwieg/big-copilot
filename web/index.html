@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=6249d6a342">
+<link rel="stylesheet" href="community.css?v=10de071829">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=6249d6a342">
+<link rel="stylesheet" href="fonts/fonts.css?v=10de071829">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "6249d6a342";</script>
-<script>window.LEDGER_RELEASE = {"version":"6249d6a342","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "10de071829";</script>
+<script>window.LEDGER_RELEASE = {"version":"10de071829","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2851,8 +2851,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=6249d6a342"></script>
-<script src="community.js?v=6249d6a342"></script>
+<script src="app.js?v=10de071829"></script>
+<script src="community.js?v=10de071829"></script>
 
 <script>
 
@@ -7223,7 +7223,7 @@ function drawSite(){
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
   const shelves = !shelved ? []
-    : office ? b.lines.filter(l => spShelfListed(b, l))
+    : office ? shelvesAll
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
@@ -10560,13 +10560,16 @@ function showWikiRoute(hash, entered = false){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
   /* One rule: coming into the Wiki from another page, or onto another route
-     inside it, lands on the route's section when it names one, and a
-     different page starts at its top otherwise. Back and Forward are no
-     exception. A redraw of the route on screen never lands again, so the
-     reader is left wherever they have scrolled to. The route outlives a visit
-     to another page, so following the same link a second time is not a move;
-     coming in from elsewhere is what says so. */
-  if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+     inside it, lands on the route's section when it names one, and starts at
+     the page's top when it names none. Back and Forward are no exception. A
+     redraw of the route on screen never lands again, so the reader is left
+     wherever they have scrolled to. The route outlives a visit to another
+     page, so following the same link a second time is not a move; coming in
+     from elsewhere is what says so. A landing still waiting for the catalogue
+     is dropped when the reader goes somewhere else before it arrives. */
+  const land = !!next.section && (entered || moved || next.section !== wikiRoute.section);
+  if(land) wikiLanding = next.section;
+  else if(entered || moved) wikiLanding = "";
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -10575,9 +10578,10 @@ function showWikiRoute(hash, entered = false){
     wikiPicked = null;
     wikiFocus = "";
     wikiShowFix = false;
-    /* A different page starts at its own top, however far down its link was. */
-    if(window.scrollY > 0) window.scrollTo(0, 0);
   }
+  /* A different page, or the Wiki come back to with no section to land on,
+     starts at its own top, however far down the reader was before. */
+  if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
   drawWiki();
 }
