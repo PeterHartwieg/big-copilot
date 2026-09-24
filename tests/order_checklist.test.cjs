@@ -390,6 +390,9 @@ test('an empty checklist that could not see everything does not say ALL SET', ()
     'No changes found, but 1 factory recipe is still unnamed and not included.');
   assert.deepEqual(card([], [], {complete: false, unnamed: 0}), {badge:'NONE FOUND', live:false,
     what:"No changes found, but factory lines need the game's text to be included."});
+  // Both gaps at once are both named.
+  assert.equal(card([], [], {complete: false, unnamed: 2}).what,
+    "No changes found, but 2 factory recipes are still unnamed and not included, and factory lines need the game's text to be included.");
 });
 
 test('a paused import with a figure reads as a resume, not an order from "not set"', () => {
@@ -398,6 +401,11 @@ test('a paused import with a figure reads as a resume, not an order from "not se
     order({item:'Salt', smart:true, paused:true, total:900, edited:true, value:1200, pausedWeekly:700}),
   ]}]});
   assert.equal(rows.length, 2);
+  // The row says it is paused; the card reads that, not the reason's wording.
+  assert.deepEqual(rows.map(r => r.paused), [true, true]);
+  assert.equal(card(rows.map(r => ({...r, reason: 'Anything.'})), [rows[1].key]).what,
+    `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
+  assert.equal(build({imports:[{s:0, rows:[order({})]}]})[0].paused, undefined, 'an ordinary order carries no flag');
   assert.equal(card(rows, [rows[1].key]).what,
     `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
   assert.equal(card(rows, [rows[0].key]).what,

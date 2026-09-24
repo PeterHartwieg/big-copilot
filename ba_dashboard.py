@@ -133,8 +133,8 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>'
-                  # The difficulty chip, shown here only on a phone, where the
-                  # masthead's clock that carries it elsewhere is hidden.
+                  # The difficulty chip, shown here only at 760 px and under,
+                  # where the masthead's clock has no room left for it.
                   '<span class="fv-footdiff" id="footDiff"></span>')
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
@@ -9402,8 +9402,8 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    text, so the glow behind it is too. */
 .clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
-/* The difficulty chip (fold-views, R15): on the masthead's build line, and on a
-   phone beside the footer's game build instead, where the clock is hidden. */
+/* The difficulty chip (fold-views, R15): at the end of the clock's last line,
+   and at 760 px and under beside the footer's game build instead. */
 .fv-diff{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
   font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:0;color:var(--ink-2);text-shadow:none;
   padding:3px 7px;border-radius:4px;border:1px solid var(--rule);background:var(--surface);transition:color .15s,border-color .15s}
@@ -9422,12 +9422,14 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff.fv-plain{cursor:default}
 .fv-footdiff{display:none}
 .fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
-/* Under 1100 px the masthead's first row is the wordmark and the clock, and
-   the clock may take what the wordmark leaves rather than half the row, so the
-   chip stays on its line instead of adding one. At 760 px and under there is
-   no room left for it at all; under 500 px the clock is hidden itself. */
+/* Under 1100 px the masthead's first row is the wordmark and the clock. The
+   clock takes whatever the wordmark leaves rather than half the row, and a
+   line too long for it wraps inside the clock instead of pushing the clock
+   onto a row of its own. At 760 px and under there is no room left for the
+   chip at all, and it moves to the footer; under 500 px the clock is hidden
+   itself. */
 @media(max-width:1100px){
-  .wrap .mast .clock{max-width:calc(100% - 120px)}
+  .wrap .mast .clock{flex:1 1 0;min-width:0;max-width:none}
 }
 @media(max-width:760px){
   .clock .fv-diff{display:none}
@@ -15702,13 +15704,14 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
-  const add = (kind, s, item, current, proposed, reason, source = null, mode = null) => {
+  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false) => {
     const group = `${kind} · ${address(s)}`;
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]
                                .concat(mode === "smart" ? ["smart"] : []));
-    rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode});
+    rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode,
+               ...(paused ? {paused: true} : {})});
   };
   importRows.forEach(d => d.rows.forEach(r => {
     // The Set to box: the player's figure where they typed one, else the suggestion.
@@ -15726,7 +15729,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
           : `The estimated requirement is ${ceil100(r.total).toLocaleString()}. Review the quantity after resuming.`}`,
-        null, mode);
+        null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null
         && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
       const why = r.edited ? yours : r.factoryWeek
@@ -15802,8 +15805,10 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
      its words, and with what it could not look at (the game's text missing,
      recipes still unnamed), in which case the badge does not say ALL SET. */
   if(!rows.length){
-    const missing = gaps.unnamed ? `${gaps.unnamed} factory recipe${gaps.unnamed === 1 ? " is" : "s are"} still unnamed and not included`
-      : gaps.complete === false ? "factory lines need the game's text to be included" : "";
+    const missing = [
+      gaps.unnamed ? `${gaps.unnamed} factory recipe${gaps.unnamed === 1 ? " is" : "s are"} still unnamed and not included` : "",
+      gaps.complete === false ? "factory lines need the game's text to be included" : "",
+    ].filter(Boolean).join(", and ");
     return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
       : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
   }
@@ -15812,7 +15817,7 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
   const n = v => v === null || v === undefined ? "not set" : v.toLocaleString();
   /* A paused import the player gave a figure has no current setting: it is
      a resume, not an order going from "not set". */
-  const resume = r => r.kind === "Weekly imports" && /^Resume the paused import/.test(r.reason || "");
+  const resume = r => !!r.paused;
   const change = r => r.proposed !== null && resume(r)
     ? `resume the paused import, ${r.mode === "smart" ? `Smart Delivery stock ${n(r.proposed)}` : `${n(r.proposed)}/week`}`
     : r.proposed === null
@@ -16828,7 +16833,7 @@ function drawPayroll(){
 
 /* The career totals as a checklist, and the running totals under it. The
    difficulty used to follow here; it is the chip on the masthead's build line
-   now (the footer's on a phone), see fvDiffChip(). */
+   now (the footer's at 760 px and under), see fvDiffChip(). */
 function drawGoals(){
   const g = D.goals;
   /* The checklist is the design's: every business type run, the story rivals
@@ -17094,25 +17099,30 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
-/* The chip the popover can hang from right now: the masthead's on a desktop,
-   the footer's on a phone, whichever the stylesheet shows. */
+/* The chip the popover can hang from right now: the masthead's above 760 px,
+   the footer's at 760 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
 function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
-  /* A resize across 500 px hides the chip it hung from and shows the other:
-     move to that one, or close when neither is on screen. */
+  /* A resize across 760 px hides the chip it hung from and shows the other,
+     which may be a page away (the footer's). Following it could leave the
+     popover off screen with focus inside it, so it closes instead, and focus
+     goes to the chip now shown. */
   if(!fvDiffAnchor.getClientRects().length){
     const shown = fvShownChip();
-    if(!shown){ fvCloseDiff(false); return; }
-    fvDiffAnchor.setAttribute("aria-expanded", "false");
-    fvDiffAnchor = shown;
-    shown.setAttribute("aria-expanded", "true");
+    fvCloseDiff(false);
+    if(shown){
+      fvDiffAnchor = shown;
+      shown.focus({preventScroll: true});
+      hideTip();
+    }
+    return;
   }
   const vw = document.documentElement.clientWidth || window.innerWidth;
   const vh = document.documentElement.clientHeight || window.innerHeight;
   const r = fvDiffAnchor.getBoundingClientRect(), w = fvDiffPop.offsetWidth, h = fvDiffPop.offsetHeight;
   /* Under the chip, its right edge on the chip's; above it when the window
-     has no room below, as the footer's chip on a phone does. */
+     has no room below, as the footer's chip usually does. */
   let y = r.bottom + 10;
   if(y + h > vh - 12) y = Math.max(12, r.top - 10 - h);
   fvDiffPop.classList.toggle("fv-up", y < r.top);

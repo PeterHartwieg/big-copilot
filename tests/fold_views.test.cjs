@@ -205,45 +205,65 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
 
 test('the chip ends the clock\'s last line and never makes the masthead taller', async () => {
   const flagged = {locale: false, build: 3683};
-  for (const width of [1440, 1280, 900, 761, 760, 600, 540]) for (const flags of [false, true]) {
+  // A 20-character save name with both flags is the widest clock row there is.
+  for (const save of ['Fixture', 'Twenty Char Savename'])
+  for (const width of [1440, 1280, 900, 780, 761, 760, 600, 580, 540]) for (const flags of [false, true]) {
     const heights = [];
     for (const houseRules of [CUSTOM, null]) {
       const {page, errors} = await board({width, houseRules});
       try {
-        heights.push(await page.evaluate(([flags, flagged]) => {
-          if (flags) { Object.assign(D.meta, flagged); drawMast(); }
+        heights.push(await page.evaluate(([flags, flagged, save]) => {
+          D.meta.save = save;
+          if (flags) Object.assign(D.meta, flagged);
+          drawMast();
           return Math.round(document.querySelector('.mast').getBoundingClientRect().height);
-        }, [flags, flagged]));
+        }, [flags, flagged, save]));
         if (houseRules) {
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `${width} scrolls sideways`);
-          // On the clock's last line (the flags line when there is one), not a line of its own.
-          const lines = await page.$$eval('#clock > small', ls => ls.map(l => !!l.querySelector('.fv-diff')));
-          assert.deepEqual(lines, flags ? [false, true] : [true]);
+          // In the clock's last line and no other: never a line of its own. (The
+          // web build's live dot always adds a flags line, so no fixed count.)
+          const lines = await page.$$eval('#clock > small', ls => ls.map(l => l.querySelectorAll('.fv-diff').length));
+          assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1]);
+          assert.ok(lines.length >= (flags ? 2 : 1));
         }
         assert.deepEqual(errors, []);
       } finally { await page.close(); }
     }
-    assert.equal(heights[0], heights[1], `masthead at ${width}${flags ? ' with flags' : ''}`);
+    assert.equal(heights[0], heights[1], `masthead at ${width}${flags ? ' with flags' : ''} for ${save}`);
   }
 });
 
-test('a chip hidden by a resize hands the popover to the one now shown', async () => {
-  const {page, errors} = await board({width: 390});
+test('a resize that swaps the chip closes the popover and hands focus to the chip now shown', async () => {
+  // Desktop to phone, scrolled down the page: the footer chip is a page away,
+  // so the popover closes rather than follow it off screen.
+  const {page, errors} = await board({width: 1280,
+    products: Array.from({length: 30}, (_, i) => ({item: `Line ${i}`, revenue: 1000, units: 50, week: 350, price: 20,
+      stores: 7, peak: null, swing: 0, weeks: 0}))});
   try {
-    const foot = page.locator('#footDiff .fv-diff');
-    await foot.scrollIntoViewIfNeeded();
-    await foot.click();
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.setViewportSize({width: 844, height: 1000});
-    await page.waitForFunction(() => document.querySelector('#clock .fv-diff').getAttribute('aria-expanded') === 'true');
-    assert.equal(await foot.getAttribute('aria-expanded'), 'false');
-    const [chip, box] = await Promise.all([page.locator('#clock .fv-diff').boundingBox(), page.locator('#fvDiffPop').boundingBox()]);
-    assert.ok(box.y > chip.y + chip.height - 1, 'under the masthead chip');
-    // Esc returns focus to the chip that is on screen.
-    await page.keyboard.press('Escape');
-    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'mast');
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, 400); });
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    assert.equal(await page.locator('#fvDiffPop.on').count(), 1);
+    const scrolled = await page.evaluate(() => window.scrollY);
+    await page.setViewportSize({width: 700, height: 800});
+    await page.waitForFunction(() => !document.querySelector('#fvDiffPop').classList.contains('on'));
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'foot');
+    assert.equal(await page.evaluate(() => window.scrollY), scrolled, 'focus did not scroll the page');
+    assert.deepEqual(await page.$$eval('.fv-diff', bs => bs.map(b => b.getAttribute('aria-expanded'))), ['false', 'false']);
+    assert.equal(await page.evaluate(() => document.getElementById('tip').classList.contains('on')), false);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
+  // Phone to desktop: the same, the other way.
+  const phone = await board({width: 390});
+  try {
+    const foot = phone.page.locator('#footDiff .fv-diff');
+    await foot.scrollIntoViewIfNeeded();
+    await foot.click();
+    await phone.page.setViewportSize({width: 844, height: 1000});
+    await phone.page.waitForFunction(() => !document.querySelector('#fvDiffPop').classList.contains('on'));
+    assert.equal(await phone.page.evaluate(() => document.activeElement.dataset.fvAt), 'mast');
+    assert.deepEqual(phone.errors, []);
+  } finally { await phone.page.close(); }
 });
 
 test('on a phone the chip moves to the footer stamp', async () => {
