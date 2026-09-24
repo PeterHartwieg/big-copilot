@@ -1474,6 +1474,12 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate
     )
+    # The same findings with factory lines sized on demand, for the board's
+    # Demand switch: a second pass over the facts already built, not a second
+    # supply model.
+    alerts_demand = _alerts(
+        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem"
+    )
 
     return {
         "meta": {
@@ -1542,6 +1548,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "ledgerDays": len(ledger),
         "alerts": alerts["lines"],
         "minor": alerts["minor"],
+        "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         "goals": _goals(save, names, businesses),
         "weekly": _weekly(save),
     }

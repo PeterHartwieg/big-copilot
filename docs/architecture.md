@@ -72,7 +72,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
-| `supply` | `_supply()` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps` |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below) |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
@@ -87,12 +87,13 @@ this column is where to look when you change a key's shape — not a complete ca
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
 | `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
-| `alerts` | `_alerts()`, its `lines` | `drawAlerts`, `kindCounts`; `web/map.js` `mapFindings` |
-| `minor` | `_alerts()`, its `minor` | `drawAlerts`, `kindCounts`; `web/map.js` `mapFindings` |
+| `alerts` | `_alerts()`, its `lines`, with factory lines sized 24/7 | `alertLines()`, which `drawAlerts`, `kindCounts` and `web/map.js` `mapFindings` ask |
+| `minor` | `_alerts()`, its `minor`, sized 24/7 | `alertLines()` |
+| `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | `_goals()` | `drawGoals` |
 | `weekly` | `_weekly()` | no reader |
 
-Three indirect routes an agent would otherwise miss:
+Four indirect routes an agent would otherwise miss:
 
 - `drawStock` references no key of its own. The Checks view gets its rows through the
   `SUPPLY_VIEWS` entry selected by `stockView`, and those callbacks do the reading. Change a
@@ -102,6 +103,13 @@ Three indirect routes an agent would otherwise miss:
   `const premises = () => D?.premises || null` in `web/map.js`. Every `CityMapView` method
   that ranks, filters or describes a building goes through it, so that one line is the seam
   to follow when the key's shape changes.
+- Every supply verdict on the board reads `supply.facts` through one accessor,
+  `supplyFact(s, slug)`: the fact for a site index and an item, its 24/7 fields with the
+  fact's `dem` laid over them when the sizing switch reads Demand. Checks, Orders, Goods
+  flow and the site page all ask it, so none of them computes a verdict of its own; the
+  Python twin is `_supply_fact()`, which the findings use. The findings themselves come
+  twice, `alerts`/`minor` and `alertsDemand`, and `alertLines()` picks the pair by the same
+  switch.
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 

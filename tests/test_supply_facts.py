@@ -630,6 +630,43 @@ class DemandSizingTests(unittest.TestCase):
         self.assertEqual((fact["use"], fact["need"]), (240, 240))
 
 
+class ExtractTests(unittest.TestCase):
+    """What extract() sends: the facts, the margin and the rounding, and the
+    findings twice, the second time with factory lines sized on demand."""
+
+    def test_the_payload_carries_the_facts_and_both_passes_of_findings(self):
+        import tempfile
+        import es3_fixture
+        from ba_dashboard import extract
+        from ba_save import load_save
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "link.hsg")
+            es3_fixture.write_link_save(path)
+            data = extract(load_save(path), Names({}), None)
+        supply = data["supply"]
+        self.assertEqual((supply["margin"], supply["roundTo"]), (SUPPLY_MARGIN, 10))
+        self.assertIsInstance(supply["facts"], dict)
+        for items in supply["facts"].values():
+            for fact in items.values():
+                self.assertLessEqual(BASE_KEYS, set(fact))
+                self.assertLessEqual(set(fact), FACT_KEYS)
+        self.assertEqual(set(data["alertsDemand"]), {"lines", "minor"})
+        self.assertEqual(set(data["alertsDemand"]["minor"]), set(data["minor"]))
+        json.dumps(data)
+
+    def test_tight_is_never_a_finding_in_either_mode(self):
+        c = beer_chain(import_amount=1700, target=105)  # Demand: 105 against 100, 115 with the margin
+        seen = 0
+        for mode in ("cap", "dem"):
+            tight = {(c.business_list[int(s)]["key"], slug)
+                     for s, items in c.supply["facts"].items() for slug in items
+                     if _supply_fact(c.supply["facts"], s, slug, mode)["st"] == "tight"}
+            found = {(f["siteKey"], f.get("ev", {}).get("slug")) for f in c.findings(mode)}
+            self.assertFalse(tight & found, mode)
+            seen += len(tight)
+        self.assertTrue(seen, "the fixture holds a tight fact")
+
+
 class StableOrderTests(unittest.TestCase):
     def test_the_facts_do_not_depend_on_the_hash_seed(self):
         script = ("import json, test_supply_facts as t;"
