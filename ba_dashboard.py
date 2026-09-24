@@ -17142,73 +17142,75 @@ function openHash(h, historyMode = "none"){
 }
 
 /* --- a site's own page ------------------------------------------------- */
-/* Every site has an address on the board: #site/57-fifth-avenue, its street
-   address as a slug. It is what the address bar shows while the site is open,
-   so a reload reopens it and Back and Forward walk between sites. A home the
-   player rents has one too; it opens from its map card.
-   The slug is unique: sites that share an address, a site with no address at
-   all, and one whose address would take another site's key slug show their
-   own key's slug instead (siteSlugs() says how), so the order the save lists
-   them in decides nothing. A site with no key has no address and opens as it
+/* Every site has an address on the board, #site/<slug>, and a home the player
+   rents has one too (it opens from its map card). It is what the address bar
+   shows while the site is open, so a reload reopens it and Back and Forward
+   walk between sites. A site with no key has no address and opens as it
    always has, under #company. */
 const SITE_HASH = /^site\//;
-let siteFrom = null, siteFor, siteSlugsFor = [], siteSlugMap = {bySlug: new Map(), byKey: new Map()};
-const siteSlugText = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-/* Counted on demand, and again whenever the data object or its lists of sites
-   are replaced. */
-function siteSlugs(){
+let siteFrom = null, siteFor, siteKeysFor = [], siteKeySet = new Set();
+/* The slug is the site's key and nothing else, written so that it reads and
+   so that it can be read back: the one rule. The "ba:street_" every key
+   starts with is dropped; a-z and 0-9 stay; "#" (between the street and the
+   number) is written "-"; every other character -- a literal "-" and capitals
+   included -- is percent-encoded, UTF-8, in lower-case hex. So
+   ba:street_fifthavenue#57 is fifthavenue-57, and ba:street_a-1 is a%2d1. A
+   key without that head (none today) starts "%x", which no encoding of a
+   headed key can. Two keys never share a slug, and no other site decides a
+   site's slug: it is the same in every save that holds the site. */
+const SITE_KEY_HEAD = "ba:street_";
+function siteSlugOf(key){
+  if(typeof key !== "string" || key === "") return "";
+  const head = key.startsWith(SITE_KEY_HEAD);
+  let out = head ? "" : "%x";
+  try{
+    for(const c of head ? key.slice(SITE_KEY_HEAD.length) : key){
+      if(/^[a-z0-9]$/.test(c)) out += c;
+      else if(c === "#") out += "-";
+      else if(c.charCodeAt(0) < 128) out += "%" + c.charCodeAt(0).toString(16).padStart(2, "0");
+      else out += encodeURIComponent(c).toLowerCase();
+    }
+  }catch(e){ return ""; }  // a lone surrogate has no UTF-8
+  return out;
+}
+/* The exact inverse, read case-insensitively: a capital in a typed address is
+   only another spelling, since the slug writes none. null if it is no slug. */
+function siteKeyOf(slug){
+  let s = String(slug ?? "").toLowerCase(), key = SITE_KEY_HEAD;
+  if(s.startsWith("%x")){ key = ""; s = s.slice(2); }
+  for(let i = 0; i < s.length;){
+    const c = s[i];
+    if(/^[a-z0-9]$/.test(c)){ key += c; i++; continue; }
+    if(c === "-"){ key += "#"; i++; continue; }
+    let run = "";
+    while(s[i] === "%" && /^[0-9a-f]{2}$/.test(s.slice(i + 1, i + 3))){ run += s.slice(i, i + 3); i += 3; }
+    if(!run) return null;
+    try{ key += decodeURIComponent(run); }catch(e){ return null; }
+  }
+  return key;
+}
+/* The keys the board can open: every business and every home. Counted again
+   whenever the data object or either list is replaced. */
+function siteKeys(){
   const data = hasData() ? D : null;
   const of = [data, data && data.businesses, data && data.homes];
-  if(of.every((x, i) => x === siteSlugsFor[i])) return siteSlugMap;
-  const bySlug = new Map(), byKey = new Map();
-  const sites = [], seen = new Set();
-  const take = (key, address) => {
-    if(key === null || key === undefined || key === "" || seen.has(key)) return;
-    seen.add(key); sites.push([key, siteSlugText(address)]);
-  };
-  if(data){
-    (data.businesses || []).forEach(b => take(b.key, b.address));
-    (data.homes || []).forEach(h => take(h.key, h.address));
-  }
-  /* Every site's key slug is reserved first, so no address can take it and it
-     answers whatever else changes: fifthavenue-57 for ba:street_fifthavenue#57.
-     Two keys that come out the same carry a short hash of the key itself. */
-  const plain = key => siteSlugText(String(key).replace(/^ba:(street_)?/, "")) || "site";
-  const plains = new Map();
-  sites.forEach(([key]) => plains.set(plain(key), (plains.get(plain(key)) || 0) + 1));
-  const hash = key => { let h = 0x811c9dc5; for(const c of String(key)){ h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); };
-  const keySlug = key => plains.get(plain(key)) > 1 ? `${plain(key)}-${hash(key)}` : plain(key);
-  sites.forEach(([key]) => bySlug.set(keySlug(key), key));
-  /* The street address is the slug where it is one site's alone and names no
-     key. An address two sites share belongs to neither: both show their key's
-     slug, so neither's address depends on the order the save lists them in or
-     on the other still being there. None of this depends on order. */
-  const shared = new Map();
-  sites.forEach(([key, address]) => { if(address) shared.set(address, (shared.get(address) || []).concat([key])); });
-  sites.forEach(([key, address]) => {
-    const own = address && shared.get(address).length === 1 && !bySlug.has(address);
-    const slug = own ? address : keySlug(key);
-    bySlug.set(slug, key); byKey.set(key, slug);
+  if(of.every((x, i) => x === siteKeysFor[i])) return siteKeySet;
+  siteKeySet = new Set();
+  if(data) [...(data.businesses || []), ...(data.homes || [])].forEach(x => {
+    if(typeof x.key === "string" && x.key) siteKeySet.add(x.key);
   });
-  /* A bare address two sites share still opens one of them, the same one
-     every time: the shorter key (a building's own, before any unit in it),
-     then the lower. The page then shows that site's own slug. */
-  shared.forEach((keys, address) => {
-    if(keys.length < 2 || bySlug.has(address)) return;
-    bySlug.set(address, keys.slice().sort((x, y) => x.length - y.length || (x < y ? -1 : x > y ? 1 : 0))[0]);
-  });
-  siteSlugsFor = of;
-  return siteSlugMap = {bySlug, byKey};
+  siteKeysFor = of;
+  return siteKeySet;
 }
-/* A site's address as a link target, "#site/57-fifth-avenue", or "" for a
+/* A site's address as a link target, "#site/fifthavenue-57", or "" for a
    site the board cannot address. Anything that links to a site uses this. */
 function siteHref(key){
-  const slug = siteSlugs().byKey.get(key);
+  const slug = siteKeys().has(key) ? siteSlugOf(key) : "";
   return slug ? `#site/${slug}` : "";
 }
 function siteBySlug(slug){
-  const key = siteSlugs().bySlug.get(slug);
-  return key === undefined ? null : key;
+  const key = siteKeyOf(slug);
+  return key !== null && siteKeys().has(key) ? key : null;
 }
 /* Where a finding sent the reader from, for the crumb that leads back: the
    view's own word where the page has views ("Checks"), else the page's
@@ -17255,7 +17257,6 @@ function openSite(key, scroll = true, finding = null, historyMode = "push"){
   showPage("company", scroll, historyMode);
   showSub("company", "results");
   drawPortfolio();
-  siteAt = location.hash;
   return true;
 }
 /* Take the site's page down without going anywhere: the caller is on its way
@@ -17274,31 +17275,22 @@ function closeSite(chain = null){
   reveal("secPortfolio", "push",
     chain !== null && typeof CSS !== "undefined" ? `#portfolio tr.chain[data-chain="${CSS.escape(chain)}"]` : null);
 }
-/* The address bar follows the open site: a live refresh can change its slug
-   (a second site moving in at its address), and a key's slug or a shared
-   address, both answered, give way to the site's own once it has opened. It
-   only ever rewrites an address that is this site's -- the one it was shown
-   at, or one that opens it or nothing -- never one that belongs to another
-   site. The entry is replaced, never added, and keeps its state. */
-let siteAt = "";
+/* Another spelling of the open site's address -- capitals, upper-case hex --
+   gives way to its own. Nothing else is ever rewritten. The entry is replaced,
+   never added, and keeps its state. */
 function siteSyncAddress(){
   if(!siteOpen || page !== "company") return;
   const want = siteHref(siteKey), now = location.hash;
-  if(!want || now === want || !SITE_HASH.test(now.slice(1))) return;
-  let slug = now.slice(6);
-  try{ slug = decodeURIComponent(slug); }catch(e){}
-  const opens = siteBySlug(slug);
-  if(now !== siteAt && opens !== null && opens !== siteKey) return;
-  try{ history.replaceState(siteHistoryState(true), "", want); siteAt = want; }catch(e){}
+  if(!want || now === want || !SITE_HASH.test(now.slice(1)) || siteBySlug(now.slice(6)) !== siteKey) return;
+  try{ history.replaceState(siteHistoryState(true), "", want); }catch(e){}
 }
 /* A #site/ hash, typed, reloaded or replayed. An address that no longer
    answers -- a site given up, a link from another save -- lands on the
    portfolio, and the address bar says so. */
 function openSiteHash(h, historyMode = "none"){
   if(!SITE_HASH.test(h)) return false;
-  let slug = h.slice(5);
-  try{ slug = decodeURIComponent(slug); }catch(e){}
-  const key = siteBySlug(slug);
+  /* Never decodeURIComponent() first: the slug's own escapes are the key's. */
+  const key = siteBySlug(h.slice(5));
   if(key !== null && openSite(key, false, null, historyMode)) return true;
   siteShut();
   showSub("company", "results");

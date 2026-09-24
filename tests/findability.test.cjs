@@ -285,8 +285,7 @@ test('a chain row says what it is made of, not only how many sites', async () =>
 
 /* --- a site's own page, and the names that lead to it ------------------ */
 
-/* The fixture's two shops share 10 Second Avenue, so both answer to their
-   keys' slugs rather than to the address. */
+/* A site's address is its key's slug. */
 const HERE = '#site/secondavenue-10', THERE = '#site/broadway-2';
 const CHAIN = {name: 'Gift Shops', sites: [KEY, OTHER], count: 2, suppliedBy: [], revenue: 1400, change: null,
   last7: 0, prev7: 0, cogs: 0, wages: 600, rent: 200, marketing: 0, theft: 0, profit: 400, margin: 28.6};
@@ -417,26 +416,19 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
   } finally { await page.close(); }
 });
 
-test('a bare address two sites share opens one of them, and the bar then shows its own', async () => {
-  const page = await board();
-  try {
-    await page.evaluate(() => { siteOpen = false; drawSite(); location.hash = '#site/10-second-avenue'; });
-    await page.waitForFunction(() => siteOpen);
-    // ba:street_broadway#2 is the shorter key.
-    assert.equal(await page.evaluate(() => [siteKey, location.hash].join(' ')), `${OTHER} ${THERE}`);
-  } finally { await page.close(); }
-});
-
-test("the address bar is never rewritten to over another site's address", async () => {
+test("the address bar only ever trades another spelling of the open site's own address", async () => {
   const page = await board();
   try {
     await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
-    // Something else put the other site's address in the bar; a redraw leaves it.
-    await page.evaluate(to => { history.replaceState(history.state, '', to); drawSite(); }, THERE);
-    assert.equal(await page.evaluate(() => location.hash), THERE);
-    // An address that opens nothing is this page's to correct.
-    await page.evaluate(() => { history.replaceState(history.state, '', '#site/nowhere'); drawSite(); });
+    await page.evaluate(() => { history.replaceState({...history.state, other: 'kept'}, '', location.hash); });
+    // Capitals are another spelling of this site's address: the bar gives way
+    // to its own, and the entry keeps its state.
+    await page.evaluate(() => { history.replaceState(history.state, '', '#site/SecondAvenue-10'); drawSite(); });
     assert.equal(await page.evaluate(() => location.hash), HERE);
+    assert.equal(await page.evaluate(() => history.state && history.state.other), 'kept');
+    // Another site's address, or one that opens nothing, is left as it is.
+    for (const to of [THERE, '#site/nowhere'])
+      assert.equal(await page.evaluate(to => { history.replaceState(history.state, '', to); drawSite(); return location.hash; }, to), to);
   } finally { await page.close(); }
 });
 
@@ -504,21 +496,6 @@ test("another character's save closes the page, its crumb and its evidence with 
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')), '#company false  ');
     assert.equal(await page.locator('#secPortfolio').isVisible(), true);
     assert.equal(await page.locator('#portfolio tr.kid.on').count(), 0, 'no portfolio row is lit as the open site');
-  } finally { await page.close(); }
-});
-
-test('the address bar follows a slug that a refresh changed, and keeps the entry state', async () => {
-  const page = await board();
-  try {
-    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, OTHER);
-    assert.equal(await page.evaluate(() => location.hash), THERE);
-    await page.evaluate(() => { history.replaceState({...history.state, other: 'kept'}, '', location.hash); });
-    // The namesake at 10 Second Avenue goes: the address is its own again.
-    await page.evaluate(() => { D = {...D, businesses: D.businesses.slice(1)}; drawSite(); });
-    assert.equal(await page.evaluate(() => location.hash), '#site/10-second-avenue');
-    assert.equal(await page.evaluate(() => history.state && history.state.other), 'kept');
-    // And the link written while it was shared still opens it.
-    assert.equal(await page.evaluate(() => siteBySlug('broadway-2')), OTHER);
   } finally { await page.close(); }
 });
 

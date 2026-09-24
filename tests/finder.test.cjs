@@ -1288,7 +1288,7 @@ test('the card says who owns the place and who trades from it', async () => {
       refreshCityMaps(); cityMapPage.select(key);
     }, MT[5]);
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts a.ss-sl'));
-    assert.equal(await row('Renter').locator('a.ss-sl').getAttribute('href'), '#site/5-test-street');
+    assert.equal(await row('Renter').locator('a.ss-sl').getAttribute('href'), '#site/broadwaystreet-5');
     assert.equal(await row('Renter').textContent(), 'RenterHART. Gym (you)');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

@@ -66,9 +66,9 @@ this column is where to look when you change a key's shape — not a complete ca
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawSite`, `drawOrderChecklist`, `drawLogistics`, `drawGoals`, `drawFooter`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
 | `kpi` | `extract()` inline, with `_net_worth()` | `drawMast`, `drawKpis` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
-| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteSlugs`, `drawSite`, `drawFlowDetail`, `drawRhythm`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawFlowDetail`, `drawRhythm`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
 | `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
-| `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteSlugs`; `web/map.js` `CityMapView.update`, `openLocationMap` |
+| `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
@@ -349,23 +349,25 @@ is one of:
 | `#results` | an old page name, through `PAGE_ALIASES`, on the view that replaced it |
 | `#secPortfolio`, `#secStock`, … | a section: its page and view (`SEC_PAGE`), scrolled to it by `reveal()` |
 | `#wiki/<page>` | a wiki route, handed whole to `showWikiRoute()` in `web/wiki.js` |
-| `#site/<address>` | one site's own page, for example `#site/57-fifth-avenue` |
+| `#site/<slug>` | one site's own page, for example `#site/fifthavenue-57` |
 
 A site's page is the site panel (`drawSite()` in `#secDetail`) shown on its own on Company:
 while it is up, `#pageCompany` carries `ss-siteup` and the rest of Results and the Company
-views step aside. The address is the street address as a slug, built by `siteSlugs()` over
-`D.businesses` and then `D.homes`. Every site's key slug (`fifthavenue-57` for
-`ba:street_fifthavenue#57`; two keys that come out the same carry a short hash of the key) is
-reserved first and always answers. The street address is the site's slug where it is that
-site's alone and names no key; sites that share an address show their key slugs, and the bare
-shared address still opens one of them, the shorter key, then the lower. None of it depends on
-the order of the lists. A site with an empty key has no address and opens under `#company` as
-before. `siteSyncAddress()` keeps the address bar on the open site's own slug (after a
-refresh, or after opening through a key slug or a shared address), replacing the entry and
-keeping its state, and only ever rewrites an address that is this site's: the one it was
-shown at, or one that opens it or nothing.
+views step aside. The slug is the site's key and nothing else, by one reversible rule,
+`siteSlugOf(key)`: the `ba:street_` head every key has is dropped, `a-z` and `0-9` stay, `#`
+(between the street and the number) is written `-`, and every other character — a literal `-`
+and capitals included — is percent-encoded as UTF-8 in lower-case hex. So
+`ba:street_fifthavenue#57` is `fifthavenue-57` and `ba:street_a-1` is `a%2d1`; a key without
+that head would start `%x`, which no headed key's slug can. `siteKeyOf(slug)` is the exact
+inverse, read case-insensitively, and `siteBySlug()` is that plus a check that the save holds
+the key (`siteKeys()`: every business and home). Two keys never share a slug, and no other site
+decides a site's slug, so a site has the same address in every save that holds it. The hash is
+never passed through `decodeURIComponent()` first: the slug's escapes are the key's own. A
+site with an empty key has no address and opens under `#company` as before.
+`siteSyncAddress()` only trades another spelling of the open site's own address (capitals,
+upper-case hex) for the canonical one, replacing the entry and keeping its state.
 
-**`siteHref(key)`** is the one way to link to a site: it returns `#site/<address>`, or `""` for
+**`siteHref(key)`** is the one way to link to a site: it returns `#site/<slug>`, or `""` for
 a site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that
 link (`.ss-sl`), and a capture-phase listener, `siteLinkClick()`, turns a plain click on any
 `a[href^="#site/"]` into `openSite()`. It does not stop the click, so anything that closes on

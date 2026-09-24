@@ -340,24 +340,24 @@ const sites = () => ({
 test('a site opens at its address, on Company, with Results under it', () => {
   const b = board({data: sites()});
   b.boot();
-  assert.equal(b.context.siteHref(SHOP), '#site/57-fifth-avenue');
-  assert.equal(b.context.siteHref(FLAT), '#site/13-broadway-street', 'a home has an address too');
+  assert.equal(b.context.siteHref(SHOP), '#site/fifthavenue-57');
+  assert.equal(b.context.siteHref(FLAT), '#site/broadway-13', 'a home has an address too');
   assert.ok(b.context.openSite(SHOP));
-  assert.equal(b.context.location.hash, '#site/57-fifth-avenue');
+  assert.equal(b.context.location.hash, '#site/fifthavenue-57');
   assert.equal(b.page(), 'company');
   assert.equal(b.sub('company'), 'results');
   assert.equal(b.site(), SHOP);
-  assert.deepEqual(b.entries, ['#today', '#site/57-fifth-avenue']);
+  assert.deepEqual(b.entries, ['#today', '#site/fifthavenue-57']);
   assert.equal(b.context.openSite('ba:street_nowhere#1'), false, 'a key the save does not hold opens nothing');
 });
 
 test("a reload of a site's address reopens that site", () => {
   const b = board({data: sites()});
-  b.context.location.hash = '#site/51-second-street';
+  b.context.location.hash = '#site/secondstreet-51';
   b.boot();
   assert.equal(b.page(), 'company');
   assert.equal(b.site(), DEPOT);
-  assert.equal(b.context.location.hash, '#site/51-second-street', 'boot leaves the address as it was');
+  assert.equal(b.context.location.hash, '#site/secondstreet-51', 'boot leaves the address as it was');
   assert.equal(b.entries.length, 1, 'and adds no visit');
 });
 
@@ -366,7 +366,7 @@ test('Back and Forward walk between sites and out to the page before', () => {
   b.boot();
   b.context.openSite(SHOP);
   b.context.openSite(DEPOT);
-  assert.deepEqual(b.entries, ['#today', '#site/57-fifth-avenue', '#site/51-second-street']);
+  assert.deepEqual(b.entries, ['#today', '#site/fifthavenue-57', '#site/secondstreet-51']);
   b.move(-1);
   assert.equal(b.site(), SHOP);
   b.move(-1);
@@ -406,74 +406,59 @@ test('an address that answers nothing lands on the portfolio and says so', () =>
   assert.equal(b.context.location.hash, '#company', 'typed into an open board too');
 });
 
-test('every site gets its own address: namesakes at one address, and none at all', () => {
-  const data = sites();
-  data.businesses.push(
-    {key: 'ba:street_fifthavenue#57b', name: 'Second at 57', address: '57 Fifth Avenue', status: 'retail'},
-    {key: 'ba:street_ninthavenue#3', name: 'No address', address: '', status: 'retail'},
-    {key: '', name: 'No key', address: '', status: 'retail'});
-  const b = board({data});
+test('a slug is the key alone, written readably', () => {
+  const b = board({data: sites()});
   b.boot();
-  const hrefs = data.businesses.map(x => b.context.siteHref(x.key));
-  // A shared address belongs to neither site: both take their key's slug.
-  assert.deepEqual(hrefs, ['#site/fifthavenue-57', '#site/51-second-street',
-    '#site/fifthavenue-57b', '#site/ninthavenue-3', '']);
-  assert.equal(new Set(hrefs).size, hrefs.length, 'no two sites share an address');
-  b.context.history.pushState(null, '', '#site/fifthavenue-57b');
-  b.move(0);
-  assert.equal(b.site(), 'ba:street_fifthavenue#57b', 'the second site at an address opens itself, not its namesake');
-  // The bare shared address still opens one of them, the same one every time:
-  // the building's own key before a unit's.
-  assert.equal(b.context.siteBySlug('57-fifth-avenue'), SHOP);
-  b.context.D.businesses = data.businesses.slice().reverse();
-  assert.equal(b.context.siteBySlug('57-fifth-avenue'), SHOP, 'whatever the order');
+  for (const [key, slug] of [[SHOP, 'fifthavenue-57'], [DEPOT, 'secondstreet-51'],
+                             ['ba:street_24thstreet#6', '24thstreet-6']])
+    assert.equal(b.context.siteSlugOf(key), slug);
+  assert.equal(b.context.siteSlugOf(''), '', 'a site with no key has no address');
 });
 
-test("a namesake's address does not hang on the order of the list, or on the other staying", () => {
-  const pair = () => [
-    {key: SHOP, name: 'HART. Clothing', address: '57 Fifth Avenue', status: 'retail'},
-    {key: 'ba:street_fifthavenue#57b', name: 'Second at 57', address: '57 Fifth Avenue', status: 'retail'}];
-  const b = board({data: {businesses: pair(), homes: []}});
+test('two keys never share a slug, and every slug reads back to its key', () => {
+  const b = board({data: sites()});
   b.boot();
-  const before = [SHOP, 'ba:street_fifthavenue#57b'].map(k => b.context.siteHref(k));
-  b.context.D.businesses = pair().reverse();
-  assert.deepEqual([SHOP, 'ba:street_fifthavenue#57b'].map(k => b.context.siteHref(k)), before);
-  // The first goes: the second has its address to itself, and the link
-  // written while it was shared still opens it.
-  b.context.D.businesses = pair().slice(1);
-  assert.equal(b.context.siteHref('ba:street_fifthavenue#57b'), '#site/57-fifth-avenue');
-  b.context.history.pushState(null, '', before[1]);
-  b.move(0);
-  assert.equal(b.site(), 'ba:street_fifthavenue#57b');
-});
-
-test("no address takes another site's key slug, whatever the order", () => {
-  // "Mainstreet 5" comes out as mainstreet-5, which is also the slug of the
-  // key ba:street_mainstreet#5 -- a different site.
-  const x = {key: 'ba:street_mainstreet#5', name: 'X', address: '5 Main Street', status: 'retail'};
-  const y = {key: 'ba:street_elm#1', name: 'Y', address: 'Mainstreet 5', status: 'retail'};
-  for (const businesses of [[x, y], [y, x]]) {
-    const b = board({data: {businesses, homes: []}});
-    b.boot();
-    assert.equal(b.context.siteHref(x.key), '#site/5-main-street');
-    assert.equal(b.context.siteHref(y.key), '#site/elm-1', 'Y shows its key slug, not the one X owns');
-    assert.equal(b.context.siteBySlug('mainstreet-5'), x.key, "X's key slug always opens X");
-    assert.equal(b.context.siteBySlug('elm-1'), y.key);
-  }
-});
-
-test('two keys that slug the same are told apart, whatever the order', () => {
-  const p = {key: 'ba:street_a#1', name: 'P', address: '', status: 'retail'};
-  const q = {key: 'ba:street_a-1', name: 'Q', address: '', status: 'retail'};
-  const seen = [[p, q], [q, p]].map(businesses => {
-    const b = board({data: {businesses, homes: []}});
-    b.boot();
-    const hrefs = [p, q].map(x => b.context.siteHref(x.key));
-    assert.notEqual(hrefs[0], hrefs[1]);
-    hrefs.forEach((h, i) => assert.equal(b.context.siteBySlug(h.slice(6)), [p, q][i].key));
-    return hrefs.join(' ');
+  const keys = ['ba:street_a#1', 'ba:street_a-1', 'ba:street_a-1-k8lvph', 'ba:street_a%2d1', 'ba:street_a%1',
+    'ba:street_a 1', 'ba:street_a_1', 'ba:street_A#1', 'ba:street_é#1', 'ba:street_e\u0301#1', 'ba:street_東京#1',
+    'ba:street_😀#1', 'ba:street_', 'ba:street_#', 'ba:street_%x', 'a#1', '%x', 'x:street_a#1', 'ba:street',
+    'ba:street_a#1#', 'ba:street_a##1'];
+  const slugs = keys.map(k => b.context.siteSlugOf(k));
+  assert.equal(new Set(slugs).size, keys.length, `injective: ${slugs.join(' ')}`);
+  slugs.forEach((slug, i) => {
+    assert.match(slug, /^[a-z0-9%-]*$/, `${keys[i]} writes only a-z, 0-9, "-" and escapes`);
+    assert.equal(b.context.siteKeyOf(slug), keys[i], `${keys[i]} reads back from ${slug}`);
   });
-  assert.equal(seen[0], seen[1]);
+  assert.equal(b.context.siteSlugOf('ba:street_a-1'), 'a%2d1', 'a literal "-" is escaped, "#" is the dash');
+  assert.equal(b.context.siteKeyOf('a%zz'), null, 'a broken escape is no slug');
+  assert.equal(b.context.siteKeyOf('a%ff'), null, 'nor is a byte that is no UTF-8');
+});
+
+test('a site keeps its slug whatever else the save holds', () => {
+  const b = board({data: sites()});
+  b.boot();
+  const mine = () => b.context.siteHref(SHOP);
+  const before = mine();
+  const D = b.context.D;
+  D.businesses = [...D.businesses,
+    {key: 'ba:street_fifthavenue#57b', name: 'Same address', address: '57 Fifth Avenue', status: 'retail'},
+    {key: 'ba:street_elm#1', name: 'Its address is the other key', address: 'Fifthavenue 57', status: 'retail'}];
+  assert.equal(mine(), before, 'sites arriving change nothing');
+  D.businesses = D.businesses.slice().reverse();
+  assert.equal(mine(), before, 'nor does their order');
+  D.businesses = D.businesses.filter(x => x.key === SHOP);
+  assert.equal(mine(), before, 'nor sites leaving');
+  assert.equal(b.context.siteHref('ba:street_elm#1'), '', 'a site the save no longer holds has no address');
+  assert.equal(b.context.siteBySlug('elm-1'), null);
+});
+
+test('capitals are only another spelling of the same address', () => {
+  const b = board({data: sites()});
+  b.boot();
+  assert.equal(b.context.siteBySlug('FifthAvenue-57'), SHOP);
+  assert.equal(b.context.siteKeyOf('A%2D1'), 'ba:street_a-1', 'upper-case hex reads the same');
+  b.context.history.pushState(null, '', '#site/FIFTHAVENUE-57');
+  b.move(0);
+  assert.equal(b.site(), SHOP);
 });
 
 test('a history entry keeps what others stored on it; a new one starts clean', () => {
@@ -497,7 +482,7 @@ test('arriving from a finding names the page it was on, through Back, Forward an
   assert.deepEqual({...b.from()}, {label: 'Today', hash: '#today'});
   // A reload replays the same entry.
   const again = board({data: sites()});
-  again.context.location.hash = '#site/57-fifth-avenue';
+  again.context.location.hash = '#site/fifthavenue-57';
   again.states[0] = {ssFrom: {label: 'Today', hash: '#today'}};
   again.boot();
   assert.equal(again.from().label, 'Today');
@@ -525,7 +510,7 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
   nav.onclick({button: 0, preventDefault(){}, target:{closest: () => ({dataset:{ss:'back'}, getAttribute: () => '#today'})}});
   assert.equal(b.page(), 'today');
   assert.equal(b.site(), null);
-  assert.deepEqual(b.entries, ['#today', '#site/57-fifth-avenue'], 'Back, not a new visit');
+  assert.deepEqual(b.entries, ['#today', '#site/fifthavenue-57'], 'Back, not a new visit');
   // Without a finding the crumb is the portfolio, and a home is in no picker.
   b.context.openSite(FLAT);
   const home = b.context.siteCrumbs(FLAT, '13 Broadway Street', false);
@@ -538,13 +523,13 @@ test("a site's name opens its page; a modified click is left to the browser", ()
      tests/findability.test.cjs. */
   const b = board({data: sites()});
   b.boot();
-  const plain = b.click('#site/51-second-street');
+  const plain = b.click('#site/secondstreet-51');
   assert.ok(plain.prevented, 'the page opens here, not by the browser');
   assert.ok(!plain.stopped, 'the click still travels on: a popover closing on a click elsewhere hears it');
   assert.equal(b.site(), DEPOT);
-  assert.equal(b.context.location.hash, '#site/51-second-street');
+  assert.equal(b.context.location.hash, '#site/secondstreet-51');
   b.move(-1);
-  const tab = b.click('#site/57-fifth-avenue', {ctrlKey: true});
+  const tab = b.click('#site/fifthavenue-57', {ctrlKey: true});
   assert.ok(!tab.stopped && !tab.prevented, 'a new tab opens at the address');
   assert.equal(b.site(), null);
 });

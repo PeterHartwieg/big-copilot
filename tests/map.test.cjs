@@ -676,7 +676,7 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     assert.equal(await card.locator('.go2').isHidden(),false);
     assert.equal(await card.locator('.go2').innerText(),'its page');
     const address=await page.evaluate(k=>siteHref(k),home.key);
-    assert.match(address,/^#site\/[a-z0-9-]+$/);
+    assert.match(address,/^#site\/[a-z0-9%-]+$/);
     assert.equal(await card.locator('.go2').getAttribute('href'),address);
     assert.equal(await card.locator('h3 a.ss-sl').getAttribute('href'),address);
     await card.locator('.go2').click();
