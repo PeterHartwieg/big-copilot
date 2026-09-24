@@ -68,6 +68,17 @@ class HypeLineTests(unittest.TestCase):
         self.assertEqual(line["level"], "critical")
         self.assertEqual(line["worth"], 74624)
 
+    def test_the_baseline_is_the_first_started_wave_even_when_a_later_one_ends_sooner(self):
+        electro = [site(ELECTRO, "[IC] HART. Electro", 137636)]
+        [line], _ = hype_lines([wave(7, 13, 50, electro, baseline(63012)),
+                                wave(3, 2, 58, electro, baseline(90000, "its own 7 days before day 58"))])
+        self.assertEqual(line["text"],
+                         "Industry City hype on 10 lines (3 end in 2 days, 7 in 13 days); "
+                         "[IC] HART. Electro does $137,636/day under it against $63,012 for "
+                         "the no-hype [GD] HART. Electro; about $74,624/day of revenue rides "
+                         "on the waves.")
+        self.assertEqual(line["level"], "critical")
+
     def test_two_waves_on_one_shop_without_a_baseline_say_so_once(self):
         electro = [site(ELECTRO, "[IC] HART. Electro", 137636)]
         [line], _ = hype_lines([wave(7, 1, 50, electro, None), wave(3, 13, 58, electro, None)])
