@@ -19182,7 +19182,7 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no prices, no stock or no trading day", on:true},
+  {id:"notrading",    label:"Not trading yet",        note:"Temporarily closed, or open but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
   {id:"staff",        label:"Nobody on shift",        note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
