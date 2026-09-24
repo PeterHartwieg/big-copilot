@@ -382,6 +382,15 @@ own control is its sentence, a `<button class="what">` labelled by a hidden copy
 name and its own text, so every finding is reached from the keyboard; a silenced row is
 `inert`. A modified click is left to the browser and opens the address in a new tab.
 
+A plain click on a site's name records where it was clicked, as a finding, a search and a
+question do: the crumb reads "‹ Today", "‹ Checks" or "‹ Map", or names the other site's page
+the name sat on, and that is the browser's Back. Three places keep the portfolio as the way
+back: the Portfolio's own names, a site page's picker, and the crumb row, whose "‹ OtherSite"
+link is left to `wireSiteCrumbs()` so it goes Back rather than opening a new visit. The map's
+"its page" (its link and the card's Details action, through `siteOpenOver()`) follows the same
+rule when no palette is open; a map card opened from a Portfolio row therefore reads
+"‹ Results", the view the card was opened on, rather than "‹ Portfolio".
+
 `openSite(key, scroll, finding, historyMode, cameFrom)` writes the address, `closeSite(chain)`
 goes back to the portfolio (to one chain's row, given a chain), and `siteShut()` takes the page
 down without going anywhere. `showPage()` takes it down for any page but Company; the nav, a

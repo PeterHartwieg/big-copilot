@@ -18091,6 +18091,9 @@ function siteLinkClick(e){
   /* A site's row in the search palette opens through the palette, which
      remembers the place, closes itself and names where it was asked from. */
   if(!a || !hasData() || a.closest(".ss-pal")) return;
+  /* The crumb row's own links (its way back to another site's page) are the
+     crumb's: wireSiteCrumbs() makes that one the browser's Back. */
+  if(a.closest(".ss-crumbs") && a.dataset.ss) return;
   if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   const key = siteBySlug(a.getAttribute("href").slice(6));
   if(key === null) return;

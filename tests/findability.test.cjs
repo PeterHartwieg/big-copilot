@@ -540,6 +540,34 @@ test('the portfolio, the checks and the goods flow name a site by a link to its 
   } finally { await page.close(); }
 });
 
+test("a crumb back to another site's page is the browser's Back, not a new visit", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(f => {
+      siteOpen = false; drawSite();
+      D.alerts = [f]; drawAlerts(); showPage('today');
+    }, FINDING);
+    // Today, a site's name: its page, "‹ Today".
+    await page.locator('#alertSection .find .site a.ss-sl').click();
+    assert.equal(await page.evaluate(() => siteFrom.label), 'Today');
+    // Another site's name on that page: its page, "‹ HART. Gifts".
+    await page.evaluate(href => {
+      const a = document.createElement('a');
+      a.className = 'ss-sl'; a.href = href; a.id = 'probeOther'; a.textContent = 'HART. Other';
+      document.getElementById('sitePanel').appendChild(a);
+    }, THERE);
+    await page.click('#probeOther');
+    const first = await page.evaluate(() => shortName(D.businesses[0]));
+    assert.deepEqual(await page.evaluate(() => [location.hash, siteFrom.label]), [THERE, first]);
+    const length = await page.evaluate(() => history.length);
+    // The crumb goes back to the first site, where its own way back is still Today.
+    await page.locator('.ss-crumb.from').click();
+    await page.waitForFunction(here => location.hash === here, HERE);
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Today');
+    assert.equal(await page.evaluate(() => history.length), length, 'Back, not a new visit');
+  } finally { await page.close(); }
+});
+
 test('a click on a name still reaches whatever closes on a click elsewhere', async () => {
   const page = await board({chains: [CHAIN]});
   try {
