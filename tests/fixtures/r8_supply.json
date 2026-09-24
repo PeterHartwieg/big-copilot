@@ -187,10 +187,13 @@
     {
      "id": "import:pier",
      "name": "Importers",
+     "kind": "import",
+     "col": 0,
      "tag": "",
-     "sub": "5 contracts",
      "hood": "",
+     "sub": "5 contracts",
      "items": [],
+     "site": null,
      "stock": 0,
      "short": 0,
      "tight": 0,
@@ -200,9 +203,11 @@
     {
      "id": "hub#1",
      "name": "[IH] Import Hub",
+     "kind": "depot",
+     "col": 2,
      "tag": "IH",
-     "sub": "Warehouse",
      "hood": "",
+     "sub": "Warehouse",
      "items": [
       {
        "item": "Flour",
@@ -275,6 +280,7 @@
        "low": false
       }
      ],
+     "site": 0,
      "stock": 19700,
      "short": 0,
      "tight": 0,
@@ -284,9 +290,11 @@
     {
      "id": "factory#2",
      "name": "[FB] Bakery Factory",
+     "kind": "factory",
+     "col": 1,
      "tag": "FB",
-     "sub": "Factory",
      "hood": "",
+     "sub": "Factory",
      "items": [
       {
        "item": "Flour",
@@ -345,6 +353,7 @@
        "low": false
       }
      ],
+     "site": 1,
      "stock": 2050,
      "short": 0,
      "tight": 0,
@@ -354,9 +363,11 @@
     {
      "id": "shop#3",
      "name": "[DT] Cake Shop Downtown",
+     "kind": "shop",
+     "col": 3,
      "tag": "DT",
-     "sub": "Bakery",
      "hood": "",
+     "sub": "Bakery",
      "items": [
       {
        "item": "Cake",
@@ -401,6 +412,7 @@
        "low": false
       }
      ],
+     "site": 2,
      "stock": 250,
      "short": 0,
      "tight": 0,
@@ -410,9 +422,11 @@
     {
      "id": "shop#4",
      "name": "[MH] Cake Shop Midtown",
+     "kind": "shop",
+     "col": 3,
      "tag": "MH",
-     "sub": "Bakery",
      "hood": "",
+     "sub": "Bakery",
      "items": [
       {
        "item": "Cake",
@@ -429,6 +443,7 @@
        "low": false
       }
      ],
+     "site": 3,
      "stock": 60,
      "short": 0,
      "tight": 0,
@@ -438,9 +453,11 @@
     {
      "id": "gym#5",
      "name": "[GD] Garden Gym",
+     "kind": "shop",
+     "col": 3,
      "tag": "GD",
-     "sub": "Gym",
      "hood": "",
+     "sub": "Gym",
      "items": [
       {
        "item": "Soda Can",
@@ -457,6 +474,7 @@
        "low": false
       }
      ],
+     "site": 4,
      "stock": 30,
      "short": 0,
      "tight": 0,
