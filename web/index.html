@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=b2925cd604">
+<link rel="stylesheet" href="community.css?v=5fefb8c2c9">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=b2925cd604">
+<link rel="stylesheet" href="fonts/fonts.css?v=5fefb8c2c9">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -919,8 +919,11 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    text, so the glow behind it is too. */
 .clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
-/* The difficulty chip (fold-views, R15): at the end of the clock's last line,
-   and at 760 px and under beside the footer's game build instead. */
+/* The difficulty chip (fold-views, R15): at the end of the clock's last line
+   at 1301 px and over, where the masthead is a fixed 100 px with room to
+   spare, and at 1300 px and under beside the footer's game build instead.
+   Below the switch the clock is exactly the board's own: no width rules, and
+   its last line keeps its own glow. */
 .fv-diff{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
   font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:0;color:var(--ink-2);text-shadow:none;
   padding:3px 7px;border-radius:4px;border:1px solid var(--rule);background:var(--surface);transition:color .15s,border-color .15s}
@@ -928,29 +931,21 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .fv-diff:hover svg{transform:rotate(-12deg) scale(1.15)}
-.clock small.fv-diffline::before{display:none}
-.clock .fv-glow{position:relative}
-.clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
-  border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
-/* On the clock's line it is no taller than the text: the negative margin keeps
-   the line box the height it had without it. */
-.clock .fv-diff{margin:-4px 0 -4px 6px;padding:1px 5px;gap:4px;font-size:10px;vertical-align:middle}
-.clock .fv-diff svg{width:10px;height:10px}
+.clock .fv-diff{display:none}
 .fv-diff.fv-plain{cursor:default}
-.fv-footdiff{display:none}
+.fv-footdiff{display:inline-flex}
 .fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
-/* Under 1100 px the masthead's first row is the wordmark and the clock. The
-   clock takes whatever the wordmark leaves rather than half the row, and a
-   line too long for it wraps inside the clock instead of pushing the clock
-   onto a row of its own. At 760 px and under there is no room left for the
-   chip at all, and it moves to the footer; under 500 px the clock is hidden
-   itself. */
-@media(max-width:1100px){
-  .wrap .mast .clock{flex:1 1 0;min-width:0;max-width:none}
-}
-@media(max-width:760px){
-  .clock .fv-diff{display:none}
-  .fv-footdiff{display:inline-flex}
+@media(min-width:1301px){
+  .fv-footdiff{display:none}
+  /* On the clock's line it is no taller than the text: the negative margin
+     keeps the line box the height it had without it. The line's text carries
+     the glow, the chip its own ground. */
+  .clock .fv-diff{display:inline-flex;margin:-4px 0 -4px 6px;padding:1px 5px;gap:4px;font-size:10px;vertical-align:middle}
+  .clock .fv-diff svg{width:10px;height:10px}
+  .clock small.fv-diffline::before{display:none}
+  .clock .fv-glow{position:relative}
+  .clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
+    border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
 }
 .fv-pop{position:fixed;left:0;top:0;z-index:60;width:470px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-y:auto;
   padding:18px 20px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0007;
@@ -2860,8 +2855,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "b2925cd604";</script>
-<script>window.LEDGER_RELEASE = {"version":"b2925cd604","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "5fefb8c2c9";</script>
+<script>window.LEDGER_RELEASE = {"version":"5fefb8c2c9","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2930,8 +2925,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=b2925cd604"></script>
-<script src="community.js?v=b2925cd604"></script>
+<script src="app.js?v=5fefb8c2c9"></script>
+<script src="community.js?v=5fefb8c2c9"></script>
 
 <script>
 
@@ -8866,7 +8861,7 @@ function drawPayroll(){
 
 /* The career totals as a checklist, and the running totals under it. The
    difficulty used to follow here; it is the chip on the masthead's build line
-   now (the footer's at 760 px and under), see fvDiffChip(). */
+   now (the footer's at 1300 px and under), see fvDiffChip(). */
 function drawGoals(){
   const g = D.goals;
   /* The checklist is the design's: every business type run, the story rivals
@@ -8895,8 +8890,8 @@ function drawGoals(){
 /* The difficulty, as one chip and a popover with every setting that differs
    from the game's Normal preset. Normal is the yardstick rather than x1,
    because the presets are not x1: Normal's urgent wholesale fee is x0.2. The
-   chip ends the masthead's build line, and at 760 px and under, where the
-   clock has no room for it, sits beside the footer's game build. These three
+   chip ends the masthead's build line at 1301 px and over, and at 1300 px
+   and under sits beside the footer's game build. These three
    build markup only;
    drawDifficulty() places and wires the popover. */
 const FV_PRESETS = ["Easy", "Normal", "Hard"];
@@ -9120,7 +9115,7 @@ function drawFooter(){
     f.dataset.tip = `Board built ${m.generated}`;
   }
   $("footBuild").textContent = `Game build ${m.build}`;
-  /* On a phone, and up to 760 px where the clock has no room for it, the
+  /* At 1300 px and under, where the masthead has no room to spare, the
      difficulty chip stands beside the game build instead; the stylesheet shows
      one or the other. */
   const diff = $("footDiff");
@@ -9132,21 +9127,29 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
-/* The chip the popover can hang from right now: the masthead's above 760 px,
-   the footer's at 760 px and under, whichever the stylesheet shows. */
+/* The chip the popover can hang from right now: the masthead's at 1301 px
+   and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
 function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
-  /* A resize across 760 px hides the chip it hung from and shows the other,
+  /* A resize across 1300 px hides the chip it hung from and shows the other,
      which may be a page away (the footer's). Following it could leave the
-     popover off screen with focus inside it, so it closes instead, and focus
-     goes to the chip now shown. */
+     popover off screen, so it closes instead. Focus moves only if it was the
+     popover's or its chip's, and then to the chip now shown when that is in
+     the window, else back to the page without scrolling; focus the reader put
+     anywhere else stays where it is. */
   if(!fvDiffAnchor.getClientRects().length){
+    const active = document.activeElement;
+    const ours = !!active && (fvDiffPop.contains(active) || active === fvDiffAnchor);
     const shown = fvShownChip();
     fvCloseDiff(false);
-    if(shown){
-      fvDiffAnchor = shown;
-      shown.focus({preventScroll: true});
+    if(shown) fvDiffAnchor = shown;
+    if(ours){
+      const r = shown && shown.getBoundingClientRect();
+      const onScreen = r && r.bottom > 0 && r.right > 0
+        && r.top < (window.innerHeight || 0) && r.left < (window.innerWidth || 0);
+      if(onScreen) shown.focus({preventScroll: true});
+      else if(active && active.blur) active.blur();
       hideTip();
     }
     return;

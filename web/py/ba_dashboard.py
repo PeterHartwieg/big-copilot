@@ -133,8 +133,8 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>'
-                  # The difficulty chip, shown here only at 760 px and under,
-                  # where the masthead's clock has no room left for it.
+                  # The difficulty chip, shown here at 1300 px and under; wider
+                  # than that it ends the masthead clock's last line.
                   '<span class="fv-footdiff" id="footDiff"></span>')
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
@@ -9402,8 +9402,11 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    text, so the glow behind it is too. */
 .clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
-/* The difficulty chip (fold-views, R15): at the end of the clock's last line,
-   and at 760 px and under beside the footer's game build instead. */
+/* The difficulty chip (fold-views, R15): at the end of the clock's last line
+   at 1301 px and over, where the masthead is a fixed 100 px with room to
+   spare, and at 1300 px and under beside the footer's game build instead.
+   Below the switch the clock is exactly the board's own: no width rules, and
+   its last line keeps its own glow. */
 .fv-diff{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
   font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:0;color:var(--ink-2);text-shadow:none;
   padding:3px 7px;border-radius:4px;border:1px solid var(--rule);background:var(--surface);transition:color .15s,border-color .15s}
@@ -9411,29 +9414,21 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .fv-diff:hover svg{transform:rotate(-12deg) scale(1.15)}
-.clock small.fv-diffline::before{display:none}
-.clock .fv-glow{position:relative}
-.clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
-  border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
-/* On the clock's line it is no taller than the text: the negative margin keeps
-   the line box the height it had without it. */
-.clock .fv-diff{margin:-4px 0 -4px 6px;padding:1px 5px;gap:4px;font-size:10px;vertical-align:middle}
-.clock .fv-diff svg{width:10px;height:10px}
+.clock .fv-diff{display:none}
 .fv-diff.fv-plain{cursor:default}
-.fv-footdiff{display:none}
+.fv-footdiff{display:inline-flex}
 .fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
-/* Under 1100 px the masthead's first row is the wordmark and the clock. The
-   clock takes whatever the wordmark leaves rather than half the row, and a
-   line too long for it wraps inside the clock instead of pushing the clock
-   onto a row of its own. At 760 px and under there is no room left for the
-   chip at all, and it moves to the footer; under 500 px the clock is hidden
-   itself. */
-@media(max-width:1100px){
-  .wrap .mast .clock{flex:1 1 0;min-width:0;max-width:none}
-}
-@media(max-width:760px){
-  .clock .fv-diff{display:none}
-  .fv-footdiff{display:inline-flex}
+@media(min-width:1301px){
+  .fv-footdiff{display:none}
+  /* On the clock's line it is no taller than the text: the negative margin
+     keeps the line box the height it had without it. The line's text carries
+     the glow, the chip its own ground. */
+  .clock .fv-diff{display:inline-flex;margin:-4px 0 -4px 6px;padding:1px 5px;gap:4px;font-size:10px;vertical-align:middle}
+  .clock .fv-diff svg{width:10px;height:10px}
+  .clock small.fv-diffline::before{display:none}
+  .clock .fv-glow{position:relative}
+  .clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
+    border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
 }
 .fv-pop{position:fixed;left:0;top:0;z-index:60;width:470px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-y:auto;
   padding:18px 20px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0007;
@@ -16833,7 +16828,7 @@ function drawPayroll(){
 
 /* The career totals as a checklist, and the running totals under it. The
    difficulty used to follow here; it is the chip on the masthead's build line
-   now (the footer's at 760 px and under), see fvDiffChip(). */
+   now (the footer's at 1300 px and under), see fvDiffChip(). */
 function drawGoals(){
   const g = D.goals;
   /* The checklist is the design's: every business type run, the story rivals
@@ -16862,8 +16857,8 @@ function drawGoals(){
 /* The difficulty, as one chip and a popover with every setting that differs
    from the game's Normal preset. Normal is the yardstick rather than x1,
    because the presets are not x1: Normal's urgent wholesale fee is x0.2. The
-   chip ends the masthead's build line, and at 760 px and under, where the
-   clock has no room for it, sits beside the footer's game build. These three
+   chip ends the masthead's build line at 1301 px and over, and at 1300 px
+   and under sits beside the footer's game build. These three
    build markup only;
    drawDifficulty() places and wires the popover. */
 const FV_PRESETS = ["Easy", "Normal", "Hard"];
@@ -17087,7 +17082,7 @@ function drawFooter(){
     f.dataset.tip = `Board built ${m.generated}`;
   }
   $("footBuild").textContent = `Game build ${m.build}`;
-  /* On a phone, and up to 760 px where the clock has no room for it, the
+  /* At 1300 px and under, where the masthead has no room to spare, the
      difficulty chip stands beside the game build instead; the stylesheet shows
      one or the other. */
   const diff = $("footDiff");
@@ -17099,21 +17094,29 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
-/* The chip the popover can hang from right now: the masthead's above 760 px,
-   the footer's at 760 px and under, whichever the stylesheet shows. */
+/* The chip the popover can hang from right now: the masthead's at 1301 px
+   and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
 function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
-  /* A resize across 760 px hides the chip it hung from and shows the other,
+  /* A resize across 1300 px hides the chip it hung from and shows the other,
      which may be a page away (the footer's). Following it could leave the
-     popover off screen with focus inside it, so it closes instead, and focus
-     goes to the chip now shown. */
+     popover off screen, so it closes instead. Focus moves only if it was the
+     popover's or its chip's, and then to the chip now shown when that is in
+     the window, else back to the page without scrolling; focus the reader put
+     anywhere else stays where it is. */
   if(!fvDiffAnchor.getClientRects().length){
+    const active = document.activeElement;
+    const ours = !!active && (fvDiffPop.contains(active) || active === fvDiffAnchor);
     const shown = fvShownChip();
     fvCloseDiff(false);
-    if(shown){
-      fvDiffAnchor = shown;
-      shown.focus({preventScroll: true});
+    if(shown) fvDiffAnchor = shown;
+    if(ours){
+      const r = shown && shown.getBoundingClientRect();
+      const onScreen = r && r.bottom > 0 && r.right > 0
+        && r.top < (window.innerHeight || 0) && r.left < (window.innerWidth || 0);
+      if(onScreen) shown.focus({preventScroll: true});
+      else if(active && active.blur) active.blur();
       hideTip();
     }
     return;
