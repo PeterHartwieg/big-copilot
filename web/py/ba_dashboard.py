@@ -4380,7 +4380,7 @@ def _supply_facts(ctx: dict) -> dict:
                 "use": use, "need": need, "have": brings,
                 "setTo": _ceil_ten(need) if need and _below(brings, need) else None,
                 "parts": {"lines": round(lines_use), "sites": round(sites), "route": round(routed)},
-                "imp": False, "wholesale": True,
+                "imp": False, "wholesale": True, "day": deal["day"],
             }, "weekly"
         p = {}
         if paused and use and not covered:
@@ -4510,9 +4510,13 @@ def _supply_facts(ctx: dict) -> dict:
             if need and _below(have, need):
                 p["tight"] = "order"
             set_to = _ceil_ten(need) if need and _below(have, need) else None
-            return p, {"use": use, "need": need, "have": have, "setTo": set_to,
-                       "parts": {"lines": 0, "sites": use, "route": 0}, "imp": False,
-                       "wholesale": True}, "weekly"
+            fields = {"use": use, "need": need, "have": have, "setTo": set_to,
+                      "parts": {"lines": 0, "sites": use, "route": 0}, "imp": False,
+                      "wholesale": True, "day": deal["day"]}
+            if "shortfall" in p["short"]:
+                # What to bring in by hand to reach the delivery.
+                fields["catchUp"] = math.ceil(rate * deal["days"] - line["units"])
+            return p, fields, "weekly"
         factor, _day = ctx["peak"](business)
         peak = rate * factor if rate > 0 else 0.0
         use = round(peak)
@@ -10376,8 +10380,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if st == "short" and why == "shortfall" and row:
                 notes.append(_shortfall_note(row, item, site, key))
                 continue
-            if (st == "short" and not entry and row is None and fact["role"] == "depot"
-                    and fact.get("have")):
+            if st == "short" and fact["role"] == "depot" and fact.get("wholesale"):
                 # A depot a wholesale store delivers to: its contract, said on
                 # the depot's own page (Weekly imports does not list it).
                 notes.append(_finding(
@@ -11004,7 +11007,7 @@ tr.kid.on td{background:var(--accent-soft)}
 .seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
 .flow .pipe.paused{stroke:var(--neg);stroke-opacity:.7}
 .scrollx{overflow-x:auto;max-width:100%;min-width:0}
-#stock td.l+td.l,#importPlan td.l,#topupPlan td.l{white-space:normal}
+#stock td.l+td.l,#importPlan td.l,#topupPlan td.l,#depotTopupPlan td.l,#wholesalePlan td.l{white-space:normal}
 .flowpipes{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin:0 0 4px}
 select.linepick{
   font:inherit;font-size:12px;color:var(--ink);background:var(--surface);
@@ -14910,10 +14913,7 @@ function goToAlert(a){
         const slug = (a.ev || {}).slug;
         const line = slug ? (b.lines || []).find(l => l.slug === slug) : null;
         /* A drink or a bag sits among the folded odds and ends: open the fold. */
-        if(block === "shelves" && line){
-          const peak = Math.max(0, ...(b.lines || []).filter(l => l.item !== "Paper Bag").map(l => l.revenue || 0));
-          if(line.item === "Paper Bag" || (line.revenue || 0) < peak * SHELF_MAIN_SHARE) showAllShelves = true;
-        }
+        if(block === "shelves" && line && spShelfFolded(b, line)) showAllShelves = true;
         ssOpenSite(b.key, `#sp-${block}`, {finding: a.id, hit}); return;
       }
     }
@@ -14923,8 +14923,10 @@ function goToAlert(a){
   reveal(link.sec);
 }
 const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
-/* The site-linked kinds about a single line: they land on its row. */
-const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup"]);
+/* The kinds about a single line of a site's shelves, Stock or Inputs: a
+   link to the site lands on that line's row, lit. */
+const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "shortfall", "order",
+                                    "paused", "notrouted", "feed"]);
 
 /* Where the same findings sit when the site's own panel is open: the block to
    light, and — named by their data-el — the things inside it that carry the
@@ -15696,6 +15698,14 @@ function hourGrid(g, todayWd, lead = null, idle = []){
 /* A vending-machine side item earns a rounding error next to a store's real
    line — this is the cutoff, as a share of the best-selling line's revenue. */
 const SHELF_MAIN_SHARE = 0.02;
+/* Whether a shelf sits among the folded odds and ends: a bag, or a line
+   selling under SHELF_MAIN_SHARE of the best-selling listed shelf. One rule
+   for drawSite(), a finding's landing and the Products link. */
+function spShelfFolded(b, line){
+  const listed = ((b && b.lines) || []).filter(l => spShelfListed(b, l) && l.item !== "Paper Bag");
+  const peak = Math.max(0, ...listed.map(l => l.revenue || 0));
+  return line.item === "Paper Bag" || (line.revenue || 0) < peak * SHELF_MAIN_SHARE;
+}
 /* Whether a line gets a row in a site's Shelves block at all (folded or not):
    an office lists the fees it prices or bills, and not the phones and monitors
    boxed up in its cargo; a shop lists what it sells or holds. drawSite() draws
@@ -17452,7 +17462,7 @@ function spStockRows(b){
       : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? "Covered through the week"
       : `<b>${spNum(r.cover)}</b> days on hand`;
     const draw = spItemDraw(r.slug, r.item);
-    rows.push({chip: szChip(f), item: r.item, hand: r.stock, draw: spNum(r.perDay),
+    rows.push({chip: spWord(r.slug), item: r.item, hand: r.stock, draw: spNum(r.perDay),
                cover: paused || !Number.isFinite(r.cover) ? null : r.cover,
                short: dry,
                rail: spRail(r.cover, truck, r.paused, false, early, known), act, order: orderCell,
@@ -17461,7 +17471,7 @@ function spStockRows(b){
   idleRows().filter(r => r.s === siteTab).filter(take).forEach(r => {
     const f = szFact(siteTab, r.slug);
     const still = !r.perWeek;
-    rows.push({chip: szChip(f),
+    rows.push({chip: spWord(r.slug),
       item: r.item, hand: r.stock, draw: r.perWeek ? spNum(r.perWeek / 7) : "—",
       rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, still, null, false),
       act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
@@ -17481,7 +17491,7 @@ function spStockRows(b){
     if(!units && !perDay) return;
     const made = spMadeAt(l.slug, l.item);
     const cover = perDay ? units / perDay : 0;
-    rows.push({chip: f ? szChip(f) : "",
+    rows.push({chip: spWord(l.slug),
       item: l.item, hand: l.units, draw: perDay ? spNum(perDay) : "—",
       cover: perDay ? cover : null, short: !!f && f.st === "short",
       rail: spRail(cover, null, false, !!f && !perDay, null, false),
@@ -17527,16 +17537,37 @@ function spStockRows(b){
         ? `<b>${spNum(n.importWeekly)}</b> a week is on order; <b>nothing</b> on hand yet`
       : made ? `Made at <b>${spEsc(shortName(made))}</b>; <b>nothing</b> on hand here`
       : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
-    rows.push({chip: szChip(f),
+    rows.push({chip: spWord(n.slug),
       item: n.item, hand: 0, draw: spNum(perDay),
       rail: spRail(0, null, f.st === "paused", false, null, importing),
       act: "", feeds: draw.sites, cover: 0, short: true,
       order, el: [spKeyTok(n.slug, n.item)], read,
     });
   }));
+  /* And every other line the depot has a fact for: planned, a route or a
+     wholesale contract behind it, with nothing on the floor. A finding about
+     it lands on this row. */
+  const own = ((D.supply || {}).facts || {})[siteTab] || {};
+  Object.keys(own).forEach(slug => {
+    const f = supplyFact(siteTab, slug);
+    const item = ((D.plan && D.plan.items) || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
+    if(!f || !take({slug, item})) return;
+    const perDay = szDaily(f, 0);
+    rows.push({
+      chip: spWord(slug), item, hand: 0, draw: perDay ? spNum(perDay) : "—",
+      rail: spRail(0, null, f.st === "paused", !perDay, null, false),
+      act: "", feeds: spItemDraw(slug, item).sites, cover: perDay ? 0 : null, short: f.st === "short",
+      order: f.wholesale && Number.isFinite(f.have) ? `${spNum(f.have)}<small ${SMALL}>/wk wholesale</small>` : "—",
+      el: [spKeyTok(slug, item), szEl(f)].filter(Boolean),
+      read: `<b>${spEsc(SZ_WORD[f.st] || f.st)}</b> · ${spEsc(szTip(f))}; <b>nothing</b> on hand`,
+    });
+  });
   rows.sort((x, y) => (y.feeds || 0) - (x.feeds || 0));
   return rows;
 }
+/* A line's word on a site page, as Checks says it: a chip where Python judged
+   the line, nothing where it did not. */
+const spWord = slug => { const f = supplyFact(siteTab, slug); return f ? szChip(f) : ""; };
 /* The factories as the Supply page reads them: the board's own rows with the
    recipes the player named in this browser laid over them, so a line named
    there is named here too. factoryView() copies the whole payload, and the
@@ -17792,8 +17823,7 @@ function xlOpenSeller(item){
   const top = xlSellers(item)[0];
   if(!top) return;
   const {b, line} = top;
-  const peak = Math.max(0, ...(b.lines || []).filter(l => l.item !== "Paper Bag").map(l => l.revenue));
-  if(line.item === "Paper Bag" || line.revenue < peak * SHELF_MAIN_SHARE) showAllShelves = true;
+  if(spShelfFolded(b, line)) showAllShelves = true;
   openSite(b.key, false);
   xlArrive("#sp-shelves", spKeyTok(line.slug, line.item));
 }
@@ -17994,8 +18024,7 @@ function drawSite(){
      A depot and a factory draw no shelves, so none of this is composed for
      them: `shelved` is what says so. */
   const shelvesAll = shelved ? b.lines.filter(l => spShelfListed(b, l)) : [];
-  const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
-  const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
+  const isMainShelf = l => !spShelfFolded(b, l);
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
@@ -18438,7 +18467,7 @@ function importSetting(fact, contract, edit){
    factory's own import beside a top-up that falls short without it (its
    fact is paused at more than info). One the top-up covers stays quiet. */
 const importResumes = r => r.fit === "paused" && !!r.fact && !!r.fact.lvl && r.fact.lvl !== "info";
-function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = []){
+function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = [], wholesale = []){
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
@@ -18512,14 +18541,25 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        for example), not an item that a warehouse can deliver. A shelf on no
        plan names the depot that could send it (via). */
     const from = r.from ?? f.via ?? null;
-    /* A shelf a wholesale store delivers each week: the contract's amount. */
-    if(f.cad === "weekly" && Number.isFinite(r.wholesale) && set(f)) add("Wholesale deliveries", r.s, r.item, r.wholesale,
-      f.setTo, `Sells ${f.use.toLocaleString()} a week${margin(r.margin)}. Change the amount on the wholesale delivery contract in-game.`,
-      null, "weekly", false, f.st === "tight");
-    else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+    /* A shelf a wholesale store delivers to is the wholesale rows' (below). */
+    if(f.wholesale) return;
+    if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
       f.setTo, `From ${address(from)}. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
       from, null, false, f.st === "tight");
+  });
+  /* A shop or depot a wholesale store delivers to each week: the contract's
+     amount against the week used; or, where the stock will not reach the
+     next delivery though the contract covers the week, what to bring in by
+     hand before it. */
+  wholesale.forEach(r => {
+    const f = r.fact || {};
+    const when = f.day ? `${f.day}'s` : "the next";
+    if(set(f)) add("Wholesale deliveries", r.s, r.item, Number.isFinite(f.have) ? f.have : null, f.setTo,
+      `${f.role === "depot" ? "Uses" : "Sells"} ${(f.use || 0).toLocaleString()} a week${margin(r.margin)}. Change the amount on the wholesale delivery contract in-game.`,
+      null, "weekly", false, f.st === "tight");
+    else if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r.item, null, f.catchUp,
+      `Bring in ${f.catchUp.toLocaleString()} extra units by hand before ${when} wholesale delivery. The contract covers the week, but the stock on hand runs out before it lands.`);
   });
   /* A depot only a route from your own site feeds: the top-up that route's
      plan holds it to, against its busiest day (its fact's day figures). */
@@ -19049,15 +19089,23 @@ function drawLogistics(){
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
-  /* --- depot daily top-ups: depots fed only by a route from your own site,
+  /* --- depot daily top-ups and wholesale deliveries: plain tables of the
+     facts, with no sort and no column tips (accepted for R8); what to do
+     about each goes to the change checklist below as well.
+     Depot daily top-ups: depots fed only by a route from your own site,
      each judged on that top-up against its busiest day (a day's figures). */
   const factRows = test => Object.keys(facts).flatMap(si => Object.keys(facts[si]).map(slug => {
     const fact = szFact(+si, slug);
     return D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin} : null;
   }).filter(Boolean)).sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.fact.use || 0) - (a.fact.use || 0));
-  const toChange = r => Number.isFinite(r.fact.setTo) || r.fact.st === "short";
+  /* A row needs a change where there is a figure to set, or stock to bring
+     in by hand before the delivery. */
+  const toChange = r => Number.isFinite(r.fact.setTo) || (Number.isFinite(r.fact.catchUp) && r.fact.catchUp > 0);
   const planSetCell = (fc, word) => Number.isFinite(fc.setTo)
-    ? `${set(fc.setTo)}${up(word, fc.st === "tight" ? SZ_STATE.tight : szTip(fc))}` : "—";
+    ? `${set(fc.setTo)}${up(word, fc.st === "tight" ? SZ_STATE.tight : szTip(fc))}`
+    : Number.isFinite(fc.catchUp) && fc.catchUp > 0
+    ? `${set(fc.catchUp)}${up("bring in", `By hand, before ${fc.day ? `${fc.day}'s` : "the next"} delivery: the stock runs out before it lands`)}`
+    : "—";
   const planState = (rows, what) => {
     const shortN = rows.filter(r => r.fact.st === "short").length, tightN = rows.filter(r => r.fact.st === "tight").length;
     return !shortN && !tightN ? check(rows.length, what)
@@ -19084,12 +19132,12 @@ function drawLogistics(){
     "carry their busiest day and the margin");
   /* --- wholesale deliveries: shelves and depots a wholesale store delivers
      to each week, on a repeating delivery contract. */
-  const shopRow = new Map((D.supply.shops || []).map(r => [`${r.s}|${r.slug}`, r]));
+  const wholesaleRows = factRows(fc => !!fc.wholesale);
   planTable($("wholesalePlan"), "Wholesale deliveries",
     "Shops and depots a wholesale store delivers to each week, on a repeating delivery contract: what the delivery brings against a week of use, plus the margin. The amount is changed on the contract in-game.",
-    factRows(fc => !!fc.wholesale),
+    wholesaleRows,
     `<th class="l">Site</th><th class="l">Product</th><th>Used / week</th><th>Delivery / week</th><th>Set to</th><th class="l">Status</th>`,
-    r => { const fc = r.fact, day = (shopRow.get(`${r.s}|${r.slug}`) || {}).wholesaleDay; return `<tr>
+    r => { const fc = r.fact, day = fc.day; return `<tr>
       <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}${day ? `<span class="sub">each ${day}</span>` : ""}</td>
       <td>${(fc.use || 0).toLocaleString()}</td><td>${(fc.have || 0).toLocaleString()}</td>
@@ -19097,7 +19145,7 @@ function drawLogistics(){
     "cover the week and the margin");
   drawOrderChecklist(buildOrderChecklist(importRows, looseRows, allSites,
     (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
-    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups), f);
+    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows), f);
   wireSupplyLocations($("importPlan"));
   wireSupplyLocations($("topupPlan"));
   const redraw = () => { drawLogistics(); wireAll(); };

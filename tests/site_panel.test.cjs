@@ -847,6 +847,10 @@ test('a wholesale finding opens its shop on the shelf row, lit, and a depot on i
     }, a);
     // The drink sits in the folded odds and ends: the fold opens for it.
     assert.deepEqual(landed, {row: true, lit: true, inView: true});
+    // And its row says the word Checks says.
+    const cell = await page.$$eval('#sp-shelves tbody tr', rs => rs.map(r => r.cells[0].firstChild.textContent.trim() + ' ' +
+      (r.cells[0].querySelector('.chip') || {}).textContent));
+    assert.ok(cell.includes('Energy Drink short'), JSON.stringify(cell));
   } finally { await page.close(); }
   const depot = await site({shop: DEPOT, alerts: [finding('w2', 'wholesale', 'HART. Depot', KEY, 'warn', {slug: 'soda'})],
     supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('short', 'order', {wholesale: true})}}}});
@@ -855,6 +859,34 @@ test('a wholesale finding opens its shop on the shelf row, lit, and a depot on i
     assert.deepEqual(hit, [['stock', slugTok('soda')]]);
   } finally { await depot.close(); }
 });
+
+/* A link from Today to a line of a depot's Stock opens the depot there with
+   the line lit, even where the depot holds none of it yet. */
+for (const width of [1440, 390]) {
+  test(`a top-up or wholesale finding on a depot lands on its Stock row, lit (${width} px)`, async () => {
+    for (const [group, slug, fact] of [
+      ['topup', 'cups', sf('short', 'target', {cad: 'daily', use: 100, need: 115, have: 80, setTo: 120, from: 1})],
+      ['wholesale', 'syrup', sf('short', 'order', {use: 1680, need: 1680, have: 1000, setTo: 1680, wholesale: true, day: 'Monday'})],
+    ]) {
+      const a = finding(`l-${group}`, group, 'HART. Depot', KEY, 'critical', {slug});
+      const page = await site({shop: DEPOT, alerts: [a], viewport: {width, height: 900},
+        supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('covered'), [slug]: fact}}}});
+      try {
+        const landed = await page.evaluate(async a => {
+          showPage('today'); goToAlert(a);
+          await new Promise(r => setTimeout(r, 1200));
+          const lit = [...document.querySelectorAll('#sp-stock tbody tr.sp-hit')];
+          const r = lit[0] ? lit[0].getBoundingClientRect() : null;
+          return {lit: lit.map(tr => tr.cells[0].textContent.replace(/\s+/g, ' ').trim()),
+                  inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
+        }, a);
+        assert.equal(landed.lit.length, 1, `${group}: ${JSON.stringify(landed)}`);
+        assert.match(landed.lit[0], /short$/);
+        assert.ok(landed.inView, group);
+      } finally { await page.close(); }
+    }
+  });
+}
 
 const FACTORY_SITE = {
   s: 0, machines: 5, targets: {}, known: true, arrivals: {},

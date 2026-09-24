@@ -26,7 +26,8 @@ RID = next(rid for rid, item in RECIPE_ITEMS.items() if item == BEER)
 RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
-             "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale"}
+             "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale", "day",
+             "catchUp"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 
@@ -360,6 +361,9 @@ class WholesaleTests(unittest.TestCase):
         # 150 left, 100 a day, the delivery two and a half days off.
         c, fact = self.gym(900, units=150)
         self.assertEqual((fact["st"], fact["why"]), ("short", "shortfall"))
+        # The contract covers the week: nothing to set, 100 to bring in by
+        # hand before Tuesday's delivery.
+        self.assertEqual((fact["setTo"], fact["catchUp"], fact["day"]), (None, 100, "Tuesday"))
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(GYM)]
         self.assertIn("runs out before Tuesday's wholesale delivery", finding["text"])
         self.assertEqual(finding["group"], "wholesale")

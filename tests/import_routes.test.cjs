@@ -133,7 +133,8 @@ test("a shelf a wholesale store delivers each week reads its week, and its chang
   const data = fixture();
   // The gym's soda comes from a wholesale store each Monday: 300 a week against 371 sold.
   data.supply.facts[4].soda = {st: 'short', why: 'order', lvl: 'critical', role: 'shelf', cad: 'weekly',
-    use: 371, need: 427, have: 300, setTo: 430, parts: {lines: 0, sites: 371, route: 0}, imp: false};
+    use: 371, need: 427, have: 300, setTo: 430, parts: {lines: 0, sites: 371, route: 0}, imp: false,
+    wholesale: true, day: 'Monday'};
   Object.assign(data.supply.shops.find(r => r.slug === 'soda'), {wholesale: 300, wholesaleDay: 'Monday'});
   const page = await board(data);
   try {
@@ -199,13 +200,22 @@ test("Orders: a factory's paused contract the top-up falls short without is a ch
    tight against its busiest day. Orders lists each in a group of its own. */
 test('Orders shows Wholesale deliveries and Depot daily top-ups from facts shaped like a real save\'s', async () => {
   const data = fixture();
-  data.businesses[4].lines.push({slug: 'energy', item: 'Energy Drink', units: 1026, rate: 176, price: 5});
+  data.businesses[4].lines.push({slug: 'energy', item: 'Energy Drink', units: 1026, rate: 176, price: 5},
+                                {slug: 'chips', item: 'Chips', units: 100, rate: 100, price: 2});
   data.supply.facts[4] = {
     energy: {st: 'short', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 1232, need: 1417,
-      have: 1200, setTo: 1420, parts: {lines: 0, sites: 1232, route: 0}, imp: false, wholesale: true},
+      have: 1200, setTo: 1420, parts: {lines: 0, sites: 1232, route: 0}, imp: false, wholesale: true, day: 'Monday'},
     soda: {st: 'tight', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 883, need: 1015,
-      have: 900, setTo: 1020, parts: {lines: 0, sites: 883, route: 0}, imp: false, wholesale: true},
+      have: 900, setTo: 1020, parts: {lines: 0, sites: 883, route: 0}, imp: false, wholesale: true, day: 'Monday'},
+    // Covered for the week, but the stock runs out before Monday's delivery.
+    chips: {st: 'short', why: 'shortfall', lvl: 'critical', role: 'shelf', cad: 'weekly', use: 700, need: 805,
+      have: 900, setTo: null, catchUp: 120, parts: {lines: 0, sites: 700, route: 0}, imp: false, wholesale: true,
+      day: 'Monday'},
   };
+  // The hub takes a wholesale store's syrup for the factory lines: 1,000 a week against 1,680.
+  data.supply.facts[0].syrup = {st: 'short', why: 'order', lvl: 'critical', role: 'depot', cad: 'weekly',
+    use: 1680, need: 1680, have: 1000, setTo: 1680, parts: {lines: 1680, sites: 0, route: 0}, imp: false,
+    wholesale: true, day: 'Monday'};
   data.supply.shops = data.supply.shops.filter(r => r.s !== 4).concat([
     {s: 4, item: 'Energy Drink', slug: 'energy', sold: 176, peakSold: 192, peakDay: 'Sunday', target: 0,
      pressure: null, stock: 1026, from: null, level: 'ok', wholesale: 1200, wholesaleDay: 'Monday'},
@@ -225,19 +235,25 @@ test('Orders shows Wholesale deliveries and Depot daily top-ups from facts shape
               head: document.querySelector('#wholesalePlan .sechead').textContent};
     }, view);
     const all = await read('all');
-    assert.equal(all.wholesale.length, 2);
-    assert.match(all.wholesale[0], /Energy Drink ?each Monday \| 1,232 \| 1,200 \| 1,420 ?raise \| short$/);
-    assert.match(all.wholesale[1], /Soda Can ?each Monday \| 883 \| 900 \| 1,020 ?raise \| tight$/);
-    assert.match(all.head, /1 short/);
+    const row = text => all.wholesale.find(r => r.includes(text)) || '';
+    assert.equal(all.wholesale.length, 4);
+    assert.match(row('Energy Drink'), /Energy Drink ?each Monday \| 1,232 \| 1,200 \| 1,420 ?raise \| short$/);
+    assert.match(row('Soda Can'), /Soda Can ?each Monday \| 883 \| 900 \| 1,020 ?raise \| tight$/);
+    assert.match(row('Chips'), /\| 700 \| 900 \| 120 ?bring in \| short$/);
+    assert.match(row('Syrup'), /Import Hub.*\| Syrup ?each Monday \| 1,680 \| 1,000 \| 1,680 ?raise \| short$/);
+    assert.match(all.head, /3 short/);
     assert.equal(all.depot.length, 2);
     assert.match(all.depot[0], /\| 905 \| 1,000 \| 1,050 ?raise \| .*Bakery Factory.* \| tight$/);
     // Needs a change: the covered route-fed line drops out, both wholesale rows stay.
     const changes = await read('changes');
     assert.equal(changes.depot.length, 1);
-    assert.equal(changes.wholesale.length, 2);
-    // And the checklist has both groups.
-    const kinds = new Set((await page.evaluate(() => window.fixtureActions)).map(a => a.kind));
-    assert.ok(kinds.has('Wholesale deliveries') && kinds.has('Depot daily top-ups'), [...kinds].join());
+    assert.equal(changes.wholesale.length, 4);
+    // The checklist has the depot's wholesale contract, from its fact, and the
+    // shelf's stock to bring in before the delivery.
+    const acts = await page.evaluate(() => window.fixtureActions.map(a =>
+      [a.kind, a.site, a.item, a.current, a.proposed]));
+    assert.ok(acts.some(a => a.join() === 'Wholesale deliveries,0,Syrup,1000,1680'), JSON.stringify(acts));
+    assert.ok(acts.some(a => a.join() === 'Before the next delivery,4,Chips,,120'), JSON.stringify(acts));
   } finally { await page.close(); }
 });
 
