@@ -56,6 +56,13 @@
      "price": 0
     },
     {
+     "slug": "milk",
+     "item": "Milk",
+     "units": 3000,
+     "rate": 0,
+     "price": 0
+    },
+    {
      "slug": "soda",
      "item": "Soda Can",
      "units": 3000,
@@ -85,6 +92,13 @@
      "slug": "sugar",
      "item": "Sugar",
      "units": 450,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "milk",
+     "item": "Milk",
+     "units": 280,
      "rate": 0,
      "price": 0
     },
@@ -136,7 +150,8 @@
      "price": 0
     }
    ],
-   "opened": 10
+   "opened": 10,
+   "tradeDays": 19
   },
   {
    "key": "shop#4",
@@ -156,7 +171,8 @@
      "price": 9
     }
    ],
-   "opened": 26
+   "opened": 26,
+   "tradeDays": 3
   },
   {
    "key": "gym#5",
@@ -176,7 +192,8 @@
      "price": 3
     }
    ],
-   "opened": 5
+   "opened": 5,
+   "tradeDays": 24
   }
  ],
  "supply": {
@@ -191,7 +208,7 @@
      "col": 0,
      "tag": "",
      "hood": "",
-     "sub": "5 contracts",
+     "sub": "6 contracts",
      "items": [],
      "site": null,
      "stock": 0,
@@ -212,26 +229,30 @@
       {
        "item": "Flour",
        "slug": "flour",
+       "st": "tight",
        "stock": 6000,
-       "need": 6400,
-       "cycleNeed": 11200,
-       "provision": 12000,
+       "need": 9000,
+       "cycleNeed": 14000,
+       "provision": 14000,
        "cadence": "weekly",
        "made": false,
+       "keeps": false,
        "why": null,
-       "fit": "ok",
+       "fit": "tight",
        "short": false,
        "low": false
       },
       {
        "item": "Sugar",
        "slug": "sugar",
+       "st": "paused",
        "stock": 800,
        "need": 1600,
        "cycleNeed": 2800,
        "provision": 0,
        "cadence": "weekly",
        "made": false,
+       "keeps": false,
        "why": "paused",
        "fit": "short",
        "short": true,
@@ -240,12 +261,14 @@
       {
        "item": "Coffee",
        "slug": "coffee",
+       "st": "covered",
        "stock": 900,
        "need": 240,
        "cycleNeed": 420,
        "provision": 800,
        "cadence": "weekly",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -254,12 +277,30 @@
       {
        "item": "Paper Bag",
        "slug": "bags",
+       "st": "idle",
        "stock": 9000,
        "need": 400,
        "cycleNeed": 700,
        "provision": 9000,
        "cadence": "weekly",
        "made": false,
+       "keeps": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Milk",
+       "slug": "milk",
+       "st": "covered",
+       "stock": 3000,
+       "need": 1350,
+       "cycleNeed": 2100,
+       "provision": 2100,
+       "cadence": "weekly",
+       "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -268,12 +309,14 @@
       {
        "item": "Soda Can",
        "slug": "soda",
+       "st": "idle",
        "stock": 3000,
        "need": 0,
        "cycleNeed": 0,
        "provision": 0,
        "cadence": "weekly",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -281,11 +324,11 @@
       }
      ],
      "site": 0,
-     "stock": 19700,
-     "short": 0,
-     "tight": 0,
+     "stock": 22700,
+     "short": 1,
+     "tight": 1,
      "low": 0,
-     "unsupplied": 0
+     "unsupplied": 1
     },
     {
      "id": "factory#2",
@@ -299,12 +342,14 @@
       {
        "item": "Flour",
        "slug": "flour",
+       "st": "short",
        "stock": 900,
        "need": 1600,
        "cycleNeed": 1600,
        "provision": 1400,
        "cadence": "daily",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "short",
        "short": true,
@@ -313,26 +358,46 @@
       {
        "item": "Sugar",
        "slug": "sugar",
+       "st": "covered",
        "stock": 450,
        "need": 400,
        "cycleNeed": 400,
        "provision": 500,
        "cadence": "daily",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
        "low": false
       },
       {
+       "item": "Milk",
+       "slug": "milk",
+       "st": "stalled",
+       "stock": 280,
+       "need": 300,
+       "cycleNeed": 300,
+       "provision": 300,
+       "cadence": "daily",
+       "made": false,
+       "keeps": false,
+       "why": null,
+       "fit": "short",
+       "short": true,
+       "low": false
+      },
+      {
        "item": "Cake",
        "slug": "cake",
+       "st": "made",
        "stock": 400,
        "need": 0,
        "cycleNeed": 0,
        "provision": 0,
        "cadence": "made",
        "made": true,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -341,12 +406,14 @@
       {
        "item": "Bread",
        "slug": "bread",
+       "st": "made",
        "stock": 300,
        "need": 0,
        "cycleNeed": 0,
        "provision": 0,
        "cadence": "made",
        "made": true,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -354,8 +421,8 @@
       }
      ],
      "site": 1,
-     "stock": 2050,
-     "short": 0,
+     "stock": 2330,
+     "short": 2,
      "tight": 0,
      "low": 0,
      "unsupplied": 0
@@ -372,12 +439,14 @@
       {
        "item": "Cake",
        "slug": "cake",
+       "st": "covered",
        "stock": 120,
        "need": 240,
        "cycleNeed": 240,
        "provision": 300,
        "cadence": "daily",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -386,12 +455,14 @@
       {
        "item": "Coffee",
        "slug": "coffee",
+       "st": "covered",
        "stock": 40,
        "need": 80,
        "cycleNeed": 80,
        "provision": 100,
        "cadence": "daily",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -400,12 +471,14 @@
       {
        "item": "Paper Bag",
        "slug": "bags",
+       "st": "covered",
        "stock": 90,
        "need": 100,
        "cycleNeed": 100,
        "provision": 150,
        "cadence": "daily",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -431,12 +504,14 @@
       {
        "item": "Cake",
        "slug": "cake",
+       "st": "new",
        "stock": 60,
        "need": 30,
        "cycleNeed": 30,
        "provision": 100,
        "cadence": "daily",
        "made": false,
+       "keeps": false,
        "why": null,
        "fit": "ok",
        "short": false,
@@ -462,13 +537,15 @@
       {
        "item": "Soda Can",
        "slug": "soda",
+       "st": "noplan",
        "stock": 30,
        "need": 61,
        "cycleNeed": 61,
        "provision": 0,
        "cadence": "daily",
        "made": false,
-       "why": "unplanned",
+       "keeps": false,
+       "why": null,
        "fit": "short",
        "short": true,
        "low": false
@@ -476,7 +553,7 @@
      ],
      "site": 4,
      "stock": 30,
-     "short": 0,
+     "short": 1,
      "tight": 0,
      "low": 0,
      "unsupplied": 0
@@ -486,18 +563,20 @@
     {
      "from": "import:pier",
      "to": "hub#1",
-     "perDay": 3500,
-     "items": 5,
+     "perDay": 4200,
+     "items": 6,
      "cadence": "weekly",
-     "paused": false
+     "paused": false,
+     "arrives": 34
     },
     {
      "from": "hub#1",
      "to": "factory#2",
-     "perDay": 1700,
-     "items": 2,
+     "perDay": 1720,
+     "items": 3,
      "cadence": "daily",
-     "paused": false
+     "paused": false,
+     "arrives": null
     },
     {
      "from": "hub#1",
@@ -505,7 +584,8 @@
      "perDay": 150,
      "items": 2,
      "cadence": "daily",
-     "paused": false
+     "paused": false,
+     "arrives": null
     },
     {
      "from": "factory#2",
@@ -513,7 +593,8 @@
      "perDay": 200,
      "items": 1,
      "cadence": "daily",
-     "paused": false
+     "paused": false,
+     "arrives": null
     },
     {
      "from": "factory#2",
@@ -521,7 +602,8 @@
      "perDay": 30,
      "items": 1,
      "cadence": "daily",
-     "paused": false
+     "paused": false,
+     "arrives": null
     }
    ]
   },
@@ -652,29 +734,31 @@
     "arrives": 34,
     "from": "Sweet Co",
     "level": "critical",
-    "reason": "paused"
+    "reason": "paused",
+    "rounds": null,
+    "dueNeed": 1800
    },
    {
     "s": 0,
     "item": "Flour",
     "slug": "flour",
     "stock": 6000,
-    "perDay": 1600,
+    "perDay": 2000,
     "routed": 0,
-    "importPerDay": 1600,
+    "importPerDay": 2000,
     "covered": false,
     "basis": "shipped",
     "peakDay": "Saturday",
-    "peakPerDay": 1920,
-    "cover": 3.8,
-    "stockCover": 3.8,
-    "daysOnHand": 3.8,
+    "peakPerDay": 2400,
+    "cover": 3.0,
+    "stockCover": 3.0,
+    "daysOnHand": 3.0,
     "runsOut": null,
-    "weekly": 12000,
-    "lastWeek": 12000,
+    "weekly": 14000,
+    "lastWeek": 14000,
     "smart": false,
     "target": null,
-    "plain": 12000,
+    "plain": 14000,
     "plainAfter": 0,
     "plainBefore": 0,
     "levelImporter": null,
@@ -683,16 +767,16 @@
     "levelAt": null,
     "pass": [
      {
-      "amount": 12000,
+      "amount": 14000,
       "smart": false
      }
     ],
-    "arrivedLastWeek": 12000,
+    "arrivedLastWeek": 14000,
     "contracts": [
      {
       "id": "c1",
       "importer": "Mill Imports",
-      "amount": 12000,
+      "amount": 14000,
       "smart": false,
       "active": true,
       "agent": true,
@@ -701,7 +785,7 @@
       "product": 0
      }
     ],
-    "weekNeed": 11200,
+    "weekNeed": 14000,
     "orderFit": "ok",
     "coverFit": "ok",
     "due": 4.5,
@@ -713,7 +797,9 @@
     "arrives": 34,
     "from": "Mill Imports",
     "level": "ok",
-    "reason": null
+    "reason": null,
+    "rounds": null,
+    "dueNeed": 9000
    },
    {
     "s": 0,
@@ -774,7 +860,9 @@
     "arrives": 34,
     "from": "Bean Traders",
     "level": "ok",
-    "reason": null
+    "reason": null,
+    "rounds": null,
+    "dueNeed": 270
    },
    {
     "s": 0,
@@ -835,7 +923,72 @@
     "arrives": 34,
     "from": "Dairy Direct",
     "level": "ok",
-    "reason": null
+    "reason": null,
+    "rounds": null,
+    "dueNeed": 450
+   },
+   {
+    "s": 0,
+    "item": "Milk",
+    "slug": "milk",
+    "stock": 3000,
+    "perDay": 300,
+    "routed": 0,
+    "importPerDay": 300,
+    "covered": false,
+    "basis": "shipped",
+    "peakDay": "Saturday",
+    "peakPerDay": 360,
+    "cover": 10.0,
+    "stockCover": 10.0,
+    "daysOnHand": 10.0,
+    "runsOut": null,
+    "weekly": 2100,
+    "lastWeek": 2100,
+    "smart": false,
+    "target": null,
+    "plain": 2100,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "levelImporter": null,
+    "levelName": null,
+    "levelId": null,
+    "levelAt": null,
+    "pass": [
+     {
+      "amount": 2100,
+      "smart": false
+     }
+    ],
+    "arrivedLastWeek": 2100,
+    "contracts": [
+     {
+      "id": "c6",
+      "importer": "Dairy Direct",
+      "amount": 2100,
+      "smart": false,
+      "active": true,
+      "agent": true,
+      "order": 5,
+      "group": 5,
+      "product": 0
+     }
+    ],
+    "weekNeed": 2100,
+    "orderFit": "ok",
+    "coverFit": "ok",
+    "due": 4.5,
+    "shortBy": 0,
+    "catchUp": null,
+    "coverageUntil": 34,
+    "carry": null,
+    "paused": false,
+    "arrives": 34,
+    "from": "Dairy Direct",
+    "level": "ok",
+    "reason": null,
+    "rounds": null,
+    "dueNeed": 1350
    }
   ],
   "idle": [
@@ -850,7 +1003,19 @@
     "price": 3,
     "value": 9000,
     "dead": true,
-    "level": "warn"
+    "level": "warn",
+    "why": "notRouted",
+    "unfed": [
+     [
+      4,
+      53,
+      0.6
+     ]
+    ],
+    "modes": [
+     "cap",
+     "dem"
+    ]
    },
    {
     "s": 0,
@@ -863,10 +1028,17 @@
     "price": 0,
     "value": 0,
     "dead": false,
-    "level": "warn"
+    "level": "warn",
+    "why": "importHigh",
+    "importLevel": 9000,
+    "smart": true,
+    "modes": [
+     "cap",
+     "dem"
+    ]
    }
   ],
-  "idleWeeks": 5,
+  "idleWeeks": 4.0,
   "factories": {
    "sites": [
     {
@@ -954,7 +1126,7 @@
        "stalled": false,
        "staffedShare": 1.0,
        "depotNeed": 11200,
-       "importWeekly": 12000,
+       "importWeekly": 14000,
        "importSmart": false,
        "importTarget": null,
        "importPlainAfter": 0,
@@ -969,10 +1141,21 @@
        "importPaused": false,
        "importFit": "ok",
        "madeAt": [],
-       "raiseTarget": 1840,
+       "raiseTarget": 1600,
        "raiseImport": null,
        "status": "short",
-       "level": "critical"
+       "level": "critical",
+       "why": "target",
+       "demDay": 1160,
+       "limited": false,
+       "firstFill": false,
+       "dem": {
+        "status": "covered",
+        "why": null,
+        "level": "ok",
+        "use": 1160,
+        "setTo": null
+       }
       },
       {
        "item": "Sugar",
@@ -1017,7 +1200,63 @@
        "raiseTarget": null,
        "raiseImport": null,
        "status": "covered",
-       "level": "ok"
+       "level": "ok",
+       "why": "limit",
+       "demDay": 400,
+       "limited": true,
+       "firstFill": false
+      },
+      {
+       "item": "Milk",
+       "slug": "milk",
+       "perDay": 300,
+       "perWeek": 2100,
+       "lines": [
+        "Cake"
+       ],
+       "waitingOn": [],
+       "target": 300,
+       "from": 0,
+       "directImport": false,
+       "factoryImportSite": null,
+       "directWeekly": null,
+       "directNeed": 0,
+       "warehouseNeed": 2100,
+       "dailyNeed": 300,
+       "importSite": 0,
+       "known": true,
+       "arrives": 20,
+       "stock": 280,
+       "depotStock": 3000,
+       "stalled": false,
+       "staffedShare": 1.0,
+       "depotNeed": 2100,
+       "importWeekly": 2100,
+       "importSmart": false,
+       "importTarget": null,
+       "importPlainAfter": 0,
+       "importPlainBefore": 0,
+       "importLevelImporter": null,
+       "importLevelName": null,
+       "importRouted": 0,
+       "importCovered": false,
+       "importDrawWeek": 0,
+       "importRoutedFactories": 0,
+       "importNeed": 2100,
+       "importPaused": false,
+       "importFit": "ok",
+       "madeAt": [],
+       "raiseTarget": null,
+       "raiseImport": null,
+       "status": "stalled",
+       "level": "warn",
+       "why": "notDrawn",
+       "demDay": 210,
+       "limited": false,
+       "firstFill": false,
+       "dem": {
+        "use": 210
+       }
       }
      ],
      "targets": {
@@ -1028,12 +1267,17 @@
       "sugar": [
        500,
        0
+      ],
+      "milk": [
+       300,
+       0
       ]
      },
      "known": true,
      "arrivals": {
       "flour": 1400,
-      "sugar": 300
+      "sugar": 300,
+      "milk": 20
      }
     }
    ],
@@ -1044,14 +1288,14 @@
    "depots": {
     "0": {
      "flour": {
-      "weekly": 12000,
+      "weekly": 14000,
       "pausedWeekly": 0,
       "routed": 0,
       "covered": false,
       "drawWeek": 0,
       "smart": false,
       "target": null,
-      "plain": 12000,
+      "plain": 14000,
       "plainAfter": 0,
       "plainBefore": 0,
       "levelImporter": null,
@@ -1060,16 +1304,16 @@
       "levelAt": null,
       "pass": [
        {
-        "amount": 12000,
+        "amount": 14000,
         "smart": false
        }
       ],
-      "arrivedLastWeek": 12000,
+      "arrivedLastWeek": 14000,
       "contracts": [
        {
         "id": "c1",
         "importer": "Mill Imports",
-        "amount": 12000,
+        "amount": 14000,
         "smart": false,
         "active": true,
         "agent": true,
@@ -1217,11 +1461,48 @@
         "product": 0
        }
       ]
+     },
+     "milk": {
+      "weekly": 2100,
+      "pausedWeekly": 0,
+      "routed": 0,
+      "covered": false,
+      "drawWeek": 0,
+      "smart": false,
+      "target": null,
+      "plain": 2100,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "levelImporter": null,
+      "levelName": null,
+      "levelId": null,
+      "levelAt": null,
+      "pass": [
+       {
+        "amount": 2100,
+        "smart": false
+       }
+      ],
+      "arrivedLastWeek": 2100,
+      "contracts": [
+       {
+        "id": "c6",
+        "importer": "Dairy Direct",
+        "amount": 2100,
+        "smart": false,
+        "active": true,
+        "agent": true,
+        "order": 5,
+        "group": 5,
+        "product": 0
+       }
+      ]
      }
     }
    },
    "depotOther": {
     "0": {
+     "flour": 2800,
      "coffee": 420,
      "bags": 700
     }
@@ -1238,13 +1519,13 @@
      "lvl": "warn",
      "role": "depot",
      "cad": "weekly",
-     "use": 11200,
-     "need": 12880,
-     "have": 12000,
-     "setTo": 12880,
+     "use": 14000,
+     "need": 14420,
+     "have": 14000,
+     "setTo": 14420,
      "parts": {
       "lines": 11200,
-      "sites": 0,
+      "sites": 2800,
       "route": 0
      },
      "imp": true,
@@ -1252,12 +1533,12 @@
       "st": "covered",
       "why": null,
       "lvl": "ok",
-      "use": 8120,
-      "need": 9340,
+      "use": 10920,
+      "need": 12558,
       "setTo": null,
       "parts": {
        "lines": 8120,
-       "sites": 0,
+       "sites": 2800,
        "route": 0
       },
       "ramp": [
@@ -1272,9 +1553,9 @@
      "role": "depot",
      "cad": "weekly",
      "use": 2800,
-     "need": 3220,
+     "need": 2800,
      "have": 2800,
-     "setTo": 3220,
+     "setTo": null,
      "parts": {
       "lines": 2800,
       "sites": 0,
@@ -1289,7 +1570,7 @@
      "role": "depot",
      "cad": "weekly",
      "use": 420,
-     "need": 490,
+     "need": 483,
      "have": 800,
      "setTo": null,
      "parts": {
@@ -1307,7 +1588,7 @@
      "role": "depot",
      "cad": "weekly",
      "use": 700,
-     "need": 810,
+     "need": 805,
      "have": 9000,
      "setTo": null,
      "parts": {
@@ -1323,8 +1604,8 @@
      "lvl": "info",
      "role": "depot",
      "cad": "weekly",
-     "use": 700,
-     "need": 810,
+     "use": 0,
+     "need": 0,
      "have": 700,
      "setTo": null,
      "parts": {
@@ -1334,6 +1615,35 @@
      },
      "imp": true
     },
+    "milk": {
+     "st": "covered",
+     "why": null,
+     "lvl": "ok",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 2100,
+     "need": 2100,
+     "have": 2100,
+     "setTo": null,
+     "parts": {
+      "lines": 2100,
+      "sites": 0,
+      "route": 0
+     },
+     "imp": true,
+     "dem": {
+      "use": 1470,
+      "need": 1690,
+      "parts": {
+       "lines": 1470,
+       "sites": 0,
+       "route": 0
+      },
+      "ramp": [
+       3
+      ]
+     }
+    },
     "soda": {
      "st": "idle",
      "why": "notRouted",
@@ -1342,18 +1652,19 @@
      "cad": "weekly",
      "use": 0,
      "need": 0,
-     "have": 3000,
+     "have": null,
      "setTo": null,
      "parts": {
       "lines": 0,
       "sites": 0,
       "route": 0
      },
+     "imp": false,
      "unfed": [
       [
        4,
        53,
-       57
+       0.6
       ]
      ]
     }
@@ -1366,26 +1677,17 @@
      "role": "input",
      "cad": "daily",
      "use": 1600,
-     "need": 1840,
+     "need": 1600,
      "have": 1400,
-     "setTo": 1840,
-     "parts": {
-      "lines": 11200,
-      "sites": 0,
-      "route": 0
-     },
+     "setTo": 1600,
+     "imp": false,
      "dem": {
       "st": "covered",
       "why": null,
       "lvl": "ok",
       "use": 1160,
-      "need": 1340,
+      "need": 1334,
       "setTo": null,
-      "parts": {
-       "lines": 8120,
-       "sites": 0,
-       "route": 0
-      },
       "ramp": [
        3
       ]
@@ -1398,13 +1700,28 @@
      "role": "input",
      "cad": "daily",
      "use": 400,
-     "need": 460,
+     "need": 400,
      "have": 500,
      "setTo": null,
-     "parts": {
-      "lines": 2800,
-      "sites": 0,
-      "route": 0
+     "imp": false
+    },
+    "milk": {
+     "st": "stalled",
+     "why": "notDrawn",
+     "lvl": "warn",
+     "role": "input",
+     "cad": "daily",
+     "use": 300,
+     "need": 300,
+     "have": 300,
+     "setTo": null,
+     "imp": false,
+     "dem": {
+      "use": 210,
+      "need": 241,
+      "ramp": [
+       3
+      ]
      }
     },
     "cake": {
@@ -1413,15 +1730,11 @@
      "lvl": "ok",
      "role": "output",
      "cad": "made",
-     "use": 270,
-     "need": 320,
+     "use": 0,
+     "need": 0,
      "have": 400,
      "setTo": null,
-     "parts": {
-      "lines": 0,
-      "sites": 1890,
-      "route": 0
-     }
+     "imp": false
     },
     "bread": {
      "st": "made",
@@ -1433,45 +1746,33 @@
      "need": 0,
      "have": 300,
      "setTo": null,
-     "parts": {
-      "lines": 0,
-      "sites": 0,
-      "route": 0
-     }
+     "imp": false
     }
    },
    "2": {
     "cake": {
      "st": "covered",
-     "why": "route",
+     "why": null,
      "lvl": "ok",
      "role": "shelf",
      "cad": "daily",
      "use": 240,
-     "need": 280,
+     "need": 276,
      "have": 300,
      "setTo": null,
-     "parts": {
-      "lines": 0,
-      "sites": 1400,
-      "route": 1400
-     }
+     "imp": false
     },
     "coffee": {
-     "st": "stalled",
-     "why": "notDrawn",
-     "lvl": "warn",
+     "st": "covered",
+     "why": null,
+     "lvl": "ok",
      "role": "shelf",
      "cad": "daily",
      "use": 80,
-     "need": 100,
+     "need": 92,
      "have": 100,
      "setTo": null,
-     "parts": {
-      "lines": 0,
-      "sites": 420,
-      "route": 0
-     }
+     "imp": false
     },
     "bags": {
      "st": "covered",
@@ -1480,14 +1781,10 @@
      "role": "shelf",
      "cad": "daily",
      "use": 100,
-     "need": 120,
+     "need": 115,
      "have": 150,
      "setTo": null,
-     "parts": {
-      "lines": 0,
-      "sites": 700,
-      "route": 0
-     }
+     "imp": false
     }
    },
    "3": {
@@ -1498,32 +1795,24 @@
      "role": "shelf",
      "cad": "daily",
      "use": 30,
-     "need": 40,
+     "need": 34,
      "have": 100,
      "setTo": null,
-     "parts": {
-      "lines": 0,
-      "sites": 210,
-      "route": 210
-     }
+     "imp": false
     }
    },
    "4": {
     "soda": {
      "st": "noplan",
-     "why": "notRouted",
+     "why": "target",
      "lvl": "critical",
      "role": "shelf",
      "cad": "daily",
-     "use": 53,
+     "use": 61,
      "need": 70,
-     "have": 0,
+     "have": 30,
      "setTo": 70,
-     "parts": {
-      "lines": 0,
-      "sites": 371,
-      "route": 0
-     },
+     "imp": false,
      "via": 0
     }
    }
@@ -1546,6 +1835,11 @@
       "slug": "sugar",
       "item": "Sugar",
       "per": 8
+     },
+     {
+      "slug": "milk",
+      "item": "Milk",
+      "per": 6
      }
     ]
    },
@@ -1569,7 +1863,8 @@
    "level": "critical",
    "site": "[FB] Bakery Factory",
    "group": "feed",
-   "text": "Flour top-up of 1,400 covers 21 hours of a 1,600/day line; raise it to 1,840",
+   "text": "Flour top-up of 1,400 covers 21 hours of a 1,600/day line; raise it to 1,600",
+   "detail": null,
    "worth": null,
    "unit": "",
    "id": "r8feed",
@@ -1583,6 +1878,7 @@
    "site": "[IH] Import Hub",
    "group": "paused",
    "text": "Sugar import is paused; resume the contract supplying [IH] Import Hub",
+   "detail": null,
    "worth": null,
    "unit": "",
    "id": "r8paused",
@@ -1593,9 +1889,24 @@
   },
   {
    "level": "warn",
+   "site": "[FB] Bakery Factory",
+   "group": "feed",
+   "text": "Milk: 20/day arrives against 300 needed while [IH] Import Hub holds 3,000; the line is not drawing it",
+   "detail": null,
+   "worth": null,
+   "unit": "",
+   "id": "r8stalled",
+   "siteKey": "factory#2",
+   "ev": {
+    "slug": "milk"
+   }
+  },
+  {
+   "level": "warn",
    "site": "[IH] Import Hub",
    "group": "notrouted",
    "text": "[IH] Import Hub holds 3,000 Soda Can no plan sends on; 1 gym sells 53/day",
+   "detail": null,
    "worth": null,
    "unit": "",
    "id": "r8notrouted",
@@ -1609,6 +1920,7 @@
    "site": "[IH] Import Hub",
    "group": "dead",
    "text": "Paper Bag Smart Delivery level of 9,000 is 12.9 weeks of what leaves",
+   "detail": null,
    "worth": null,
    "unit": "",
    "id": "r8dead",
@@ -1631,6 +1943,7 @@
     "site": "[IH] Import Hub",
     "group": "paused",
     "text": "Sugar import is paused; resume the contract supplying [IH] Import Hub",
+    "detail": null,
     "worth": null,
     "unit": "",
     "id": "r8paused",
@@ -1641,9 +1954,24 @@
    },
    {
     "level": "warn",
+    "site": "[FB] Bakery Factory",
+    "group": "feed",
+    "text": "Milk: 20/day arrives against 300 needed while [IH] Import Hub holds 3,000; the line is not drawing it",
+    "detail": null,
+    "worth": null,
+    "unit": "",
+    "id": "r8stalled",
+    "siteKey": "factory#2",
+    "ev": {
+     "slug": "milk"
+    }
+   },
+   {
+    "level": "warn",
     "site": "[IH] Import Hub",
     "group": "notrouted",
     "text": "[IH] Import Hub holds 3,000 Soda Can no plan sends on; 1 gym sells 53/day",
+    "detail": null,
     "worth": null,
     "unit": "",
     "id": "r8notrouted",
@@ -1657,6 +1985,7 @@
     "site": "[IH] Import Hub",
     "group": "dead",
     "text": "Paper Bag Smart Delivery level of 9,000 is 12.9 weeks of what leaves",
+    "detail": null,
     "worth": null,
     "unit": "",
     "id": "r8dead",

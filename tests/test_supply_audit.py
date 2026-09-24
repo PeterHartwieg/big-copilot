@@ -195,6 +195,43 @@ class ProductionLimitTests(unittest.TestCase):
         self.assertEqual(f.need()["why"], "limit")
 
 
+class PacedByLimitTests(unittest.TestCase):
+    """A line whose machines stop and start at their Produce up to limit holds
+    anywhere under it through the day, and draws what it makes: held by the
+    limit while its inputs are on hand, starved once they run down."""
+
+    def run_paced(self, water_held):
+        f = Fixture()
+        f.machine = {"produceUpTo": True, "produceUpToValue": 500}
+        # 300 beer held of the 500 limit, far below what a quarter of the limit
+        # would make back; 400 of the 720 it could make leave a day.
+        f.units[FACTORY][BEER] = 300
+        f.units[FACTORY][WATER] = water_held
+        f.targets = [(HUB, FACTORY, WATER, 300)]
+        f.contracts = [import_contract(WATER, 1700, last=940)]
+        for day in range(3, 10):
+            ship(f.log, day, HUB, FACTORY, {WATER: 134})  # what 400 beer eat
+            ship(f.log, day, FACTORY, None, {BEER: 400})
+        f.run()
+        return f
+
+    def test_a_line_making_what_leaves_with_its_input_on_hand_is_held_by_its_limit(self):
+        # 200 water on hand at noon runs the machine at full rate to midnight.
+        f = self.run_paced(200)
+        line = f.supply["factories"]["sites"][0]["lines"][0]
+        self.assertTrue(line["limitHeld"])
+        need = f.need()
+        self.assertTrue(need["limited"])
+        self.assertEqual((need["status"], need["why"]), ("covered", "limit"))
+        self.assertEqual((f.fact(0)["st"], f.fact(0)["why"]), ("covered", "limit"))
+        self.assertEqual(_feed_notes(f.businesses, f.supply["factories"], set()), [])
+
+    def test_the_same_line_with_its_input_run_down_is_not_held_by_it(self):
+        f = self.run_paced(20)
+        self.assertFalse(f.supply["factories"]["sites"][0]["lines"][0]["limitHeld"])
+        self.assertEqual((f.fact(0)["st"], f.fact(0)["why"]), ("stalled", "notDrawn"))
+
+
 class RoundWalkTests(unittest.TestCase):
     """Defect 6: a depot served by a morning round is emptied a round at a time."""
 

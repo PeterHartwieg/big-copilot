@@ -61,9 +61,10 @@ test('Weekly imports lists the depot facts Python marks as import rows, with the
   try {
     const rows = Object.fromEntries((await importRows(page)).map(r => [r.item, r]));
     // Soda Can is held at the hub but imported by nobody: no import row.
-    assert.deepEqual(Object.keys(rows).sort(), ['Butter', 'Coffee', 'Flour', 'Paper Bag', 'Sugar']);
-    assert.match(rows.Flour.used, /^11,200$/);
-    assert.equal(rows.Flour.box, '12880');
+    assert.deepEqual(Object.keys(rows).sort(), ['Butter', 'Coffee', 'Flour', 'Milk', 'Paper Bag', 'Sugar']);
+    // The lines' 11,200 and the other sites' 2,800; 24/7 puts the margin on the sites' part only.
+    assert.match(rows.Flour.used, /^14,000$/);
+    assert.equal(rows.Flour.box, '14420');
     assert.match(rows.Flour.verdict, /raise/);
     assert.match(rows.Sugar.verdict, /resume import/);
     assert.equal(rows.Sugar.box, '2800', 'a paused contract resumes as it stands');
@@ -83,17 +84,19 @@ test('every change on the checklist is a fact\'s figure', async () => {
   const page = await board(fixture());
   try {
     assert.deepEqual(await actions(page), [
-      {kind: 'Weekly imports', item: 'Flour', current: 12000, proposed: 12880, tight: true, paused: false},
+      {kind: 'Weekly imports', item: 'Flour', current: 14000, proposed: 14420, tight: true, paused: false},
       {kind: 'Weekly imports', item: 'Sugar', current: null, proposed: null, tight: false, paused: true},
-      {kind: 'Factory daily top-ups', item: 'Flour', current: 1400, proposed: 1840, tight: false, paused: false},
+      // 24/7 sizes a line at capacity with no margin: a day of the machines.
+      {kind: 'Factory daily top-ups', item: 'Flour', current: 1400, proposed: 1600, tight: false, paused: false},
+      {kind: 'Check the delivery route', item: 'Milk', current: null, proposed: null, tight: false, paused: false},
       // The gym's shelf is on no plan; the hub that holds its soda could send it.
       {kind: 'Shop daily top-ups', item: 'Soda Can', current: 0, proposed: 70, tight: false, paused: false},
     ]);
     const topups = await page.locator('#topupPlan').textContent();
-    assert.match(topups, /1[,.]840/);
+    assert.match(topups, /1[,.]600/);
     assert.match(topups, /1 short/);
     // Today's card leaves the tight Flour order out.
-    assert.equal(await page.locator('#planImportsCard .soon').textContent(), '3 TO CHANGE');
+    assert.equal(await page.locator('#planImportsCard .soon').textContent(), '4 TO CHANGE');
   } finally { await page.close(); }
 });
 
@@ -101,14 +104,14 @@ test('Demand sizing reads the facts\' Demand figures, and says where a shop is s
   const page = await board(fixture(), {mode: 'dem'});
   try {
     const flour = (await importRows(page)).find(r => r.item === 'Flour');
-    assert.match(flour.used, /^8,120 may still be ramping$/);
-    assert.equal(flour.box, '12000');
+    assert.match(flour.used, /^10,920 may still be ramping$/);
+    assert.equal(flour.box, '14000');
     assert.match(flour.verdict, /covered/);
     const ramp = await page.locator('#importPlan .sz-ramp').first().getAttribute('data-tip');
     assert.match(ramp, /Cake Shop Midtown/);
     assert.match(await page.locator('#topupPlan').textContent(), /1,160\s*may still be ramping/);
     assert.deepEqual((await actions(page)).map(a => [a.kind, a.item]), [
-      ['Weekly imports', 'Sugar'], ['Shop daily top-ups', 'Soda Can']]);
+      ['Weekly imports', 'Sugar'], ['Check the delivery route', 'Milk'], ['Shop daily top-ups', 'Soda Can']]);
     // The switch sits beside the Orders tools, on Demand.
     assert.equal(await page.locator('#logisticsSizing a.on').textContent(), 'Demand');
   } finally { await page.close(); }
@@ -120,9 +123,26 @@ test('the switch remembers the sizing on the device and redraws the board', asyn
     await page.evaluate(() => { window.redrawn = 0; renderAll = () => { window.redrawn++; drawLogistics(); }; });
     await page.locator('#logisticsSizing').getByText('Demand').click();
     assert.equal(await page.evaluate(() => [sizing, localStorage.getItem('ba_dash_sizing'), window.redrawn].join()), 'dem,dem,1');
-    assert.match(await page.locator('#importPlan').textContent(), /8,120/);
+    assert.match(await page.locator('#importPlan').textContent(), /10,920/);
     await page.locator('#logisticsSizing').getByText('24/7').click();
     assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_sizing')), 'cap');
+  } finally { await page.close(); }
+});
+
+test("a shelf a wholesale store delivers each week reads its week, and its change is the contract's", async () => {
+  const data = fixture();
+  // The gym's soda comes from a wholesale store each Monday: 300 a week against 371 sold.
+  data.supply.facts[4].soda = {st: 'short', why: 'order', lvl: 'critical', role: 'shelf', cad: 'weekly',
+    use: 371, need: 427, have: 300, setTo: 430, parts: {lines: 0, sites: 371, route: 0}, imp: false};
+  Object.assign(data.supply.shops.find(r => r.slug === 'soda'), {wholesale: 300, wholesaleDay: 'Monday'});
+  const page = await board(data);
+  try {
+    assert.deepEqual((await actions(page)).find(a => a.item === 'Soda Can'),
+      {kind: 'Wholesale deliveries', item: 'Soda Can', current: 300, proposed: 430, tight: false, paused: false});
+    const shops = await page.evaluate(() => { stockView = 'shops'; drawStock(); return document.getElementById('stock').textContent; });
+    assert.match(shops, /—wholesale 300 a week/);
+    assert.match(shops, /short\s*wholesale 430 a week/);
+    assert.doesNotMatch(shops, /no plan/);
   } finally { await page.close(); }
 });
 
@@ -181,8 +201,8 @@ test('Checks, Goods flow and Today read the same facts, by sizing', async () => 
     assert.match(flow, /2 idle, 1 tight/);
     const today = async mode => page.evaluate(mode => { sizing = mode; drawAlerts();
       return [...document.querySelectorAll('#alerts .find')].map(f => f.dataset.id); }, mode);
-    assert.deepEqual(await today('cap'), ['r8feed', 'r8paused', 'r8notrouted', 'r8dead']);
-    assert.deepEqual(await today('dem'), ['r8paused', 'r8notrouted', 'r8dead']);
+    assert.deepEqual(await today('cap'), ['r8feed', 'r8paused', 'r8stalled', 'r8notrouted', 'r8dead']);
+    assert.deepEqual(await today('dem'), ['r8paused', 'r8stalled', 'r8notrouted', 'r8dead']);
     assert.doesNotMatch(await page.locator('#alerts').textContent(), /tight/i);
   } finally { await page.close(); }
 });

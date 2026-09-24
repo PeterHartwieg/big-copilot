@@ -1013,7 +1013,7 @@ first of these that fits is the word:
 | --- | --- |
 | **made here** | the site makes it, and nothing has to bring it |
 | **paused** | its import is paused and no route covers it |
-| **no plan** | nothing brings it: a shelf on no plan, a factory input with no top-up, a depot line with no import |
+| **no plan** | nothing brings it: a shelf with no top-up and no wholesale delivery contract, a factory input with no top-up, a depot line with no import |
 | **new** | too young to judge: a shop under five trading days, a factory input on its first fill, a depot with no round logged yet |
 | **short** | the figure in game is under what the week or the day uses, the stock runs out before the drop, or the depot behind a factory input has run dry |
 | **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor the roster explains it |
@@ -1037,6 +1037,25 @@ margin, never past capacity. A shop open under a week has not settled, so Demand
 its coming week off a straight line through its trading days and says the figure *may
 still be ramping*, naming the shops. Switching needs no refresh: both answers are
 already on the page.
+
+**Held by Produce up to.** A factory line whose machines all have *Produce up to* set stops
+at the limit and starts again as the morning round takes its output away, so through the
+day what it holds sits anywhere under the limit, and what it eats matches what it makes,
+not what it could make. Its inputs read **covered**, held by Produce up to, rather than
+**stalled**, when the line makes well under its roster's output (under three quarters)
+while every input it eats is on hand for the rest of the day at the full rate, as well as
+when the output held is at the limit. A starved line runs its input down instead, and
+stays **stalled**.
+
+**Wholesale deliveries.** A shop can be fed by a wholesale store instead of your own
+depots: a repeating delivery contract (the save's `DeliveryContracts`) brings a set amount
+of each item on its delivery day, once a week. Such a shelf is on a plan. It is judged as
+an import is, on the week: the contract's amount against a week of the shelf's sales plus
+the margin (**short** under the week, **tight** under the margin), and its stock against
+the days to the next delivery. Checks shows the contract beside the top-up column, Orders
+lists a change under *Wholesale deliveries*, and a short one is a finding. A one-off or
+urgent order, or a disabled contract, is no standing supply, and a shelf on a contract is
+never among the sites a **Not routed** finding names.
 
 A line named by hand in this browser reads **new** until the next refresh (the next save
 on the web board, a re-run or `--watch` locally), because only a fresh build works out
@@ -1084,7 +1103,8 @@ views ask the questions that matter instead:
   what the depot feeds), or plain overstock. Nothing drawing on it is **not moving**, or,
   where your own sites sell or need the item with no plan feeding them, **Not routed**:
   *Import Hub holds 3,000 Soda Can no plan sends on; 3 gyms sell 369/day and hold ~7
-  days*. That one line stands for those sites, whose own no-plan findings give way to it.
+  days*. That one line stands for those sites, whose own no-plan findings give way to it;
+  a shelf a wholesale delivery contract feeds is not one of them.
   A raw material a factory tops a depot up with, where nothing uses it, names the route
   to remove.
 

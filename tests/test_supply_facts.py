@@ -84,7 +84,7 @@ class Company:
     def __init__(self, day=20, hour=12):
         self.day, self.hour = day, hour
         self.sites, self.lines, self.log = [], {}, {}
-        self.targets, self.contracts = [], []
+        self.targets, self.contracts, self.deliveries = [], [], []
 
     def site(self, addr, name, status="support", kind="ba:businesstype_warehouse",
              machines=(), opened=0, trade_days=30, limit=None):
@@ -116,6 +116,15 @@ class Company:
             order["isTarget"] = True
         self.contracts.append(order)
 
+    def wholesale(self, dest, slug, amount, *, due=None, repeating=True, enabled=True):
+        """A wholesale store's delivery contract to a shop (DeliveryContracts)."""
+        self.deliveries.append({
+            "enabled": enabled, "isUrgentOrder": False, "repeatingOrder": repeating,
+            "nextDeliveryDay": due if due is not None else self.day + 3,
+            "wholesaleAddress": ("wholesale_way", 1), "businessAddress": dest,
+            "items": [{"itemName": slug, "amount": amount, "amountOrderedLastWeek": amount,
+                       "amountOrderedThisWeek": 0}]})
+
     def ship(self, day, source, dest, items):
         """One shipment, logged at both ends; a shop keeps no log."""
         self.log.setdefault(source, []).append(tx(day, {i: -a for i, a in items.items()}))
@@ -145,6 +154,7 @@ class Company:
         return Stub({"Day": self.day, "Hour": self.hour, "Minute": 0,
                      "BuildingRegistrations": registrations,
                      "importPartnerships": self.contracts,
+                     "DeliveryContracts": self.deliveries,
                      "logisticsManagerPlans": list(plans.values())})
 
     def businesses(self):
@@ -294,6 +304,65 @@ class ShelfTests(unittest.TestCase):
     def test_a_shop_under_five_trading_days_is_new(self):
         _c, fact = self.verdict(target=50, trade_days=3)
         self.assertEqual((fact["st"], fact["why"], fact["lvl"]), ("new", "young", "info"))
+
+
+class WholesaleTests(unittest.TestCase):
+    """A shelf a wholesale store delivers each week (DeliveryContracts) is on
+    a plan: its order is judged against a week of sales, plus the margin, and
+    its stock against the days to the drop, as an import is."""
+
+    def gym(self, amount, units=500, rate=100, **options):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.shop(GYM, "Gym")
+        c.hold(HUB, SODA, 3000)
+        c.hold(GYM, SODA, units, rate)
+        c.wholesale(GYM, SODA, amount, **options)
+        c.run()
+        return c, c.fact(GYM, SODA)
+
+    def test_a_weekly_order_with_the_margin_is_covered(self):
+        c, fact = self.gym(900)
+        self.assertEqual((fact["st"], fact["why"], fact["role"], fact["cad"]),
+                         ("covered", None, "shelf", "weekly"))
+        # A week's figures: 700 sold a week, 805 with the margin, 900 ordered.
+        self.assertEqual((fact["use"], fact["need"], fact["have"], fact["setTo"]), (700, 805, 900, None))
+        self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(GYM)])
+        row = next(r for r in c.supply["shops"] if r["s"] == c.index(GYM))
+        self.assertEqual((row["wholesale"], row["wholesaleDay"]), (900, "Tuesday"))
+
+    def test_an_order_under_the_margin_is_tight_and_no_finding(self):
+        c, fact = self.gym(750)
+        self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("tight", "order", 810))
+        self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(GYM)])
+
+    def test_an_order_under_a_week_of_sales_is_short_and_a_finding(self):
+        c, fact = self.gym(600)
+        self.assertEqual((fact["st"], fact["why"], fact["lvl"]), ("short", "order", "critical"))
+        [finding] = [f for f in c.findings() if f["siteKey"] == site_key(GYM)]
+        self.assertEqual((finding["group"], finding["text"]),
+                         ("outruns", "Soda's wholesale delivery brings 600 a week against the 700 it sells"))
+
+    def test_stock_that_runs_out_before_the_drop_is_short(self):
+        # 150 left, 100 a day, the delivery two and a half days off.
+        c, fact = self.gym(900, units=150)
+        self.assertEqual((fact["st"], fact["why"]), ("short", "shortfall"))
+        [finding] = [f for f in c.findings() if f["siteKey"] == site_key(GYM)]
+        self.assertIn("runs out before Tuesday's wholesale delivery", finding["text"])
+
+    def test_a_shelf_on_a_wholesale_contract_is_never_not_routed(self):
+        c, _fact = self.gym(900)
+        hub = c.fact(HUB, SODA)
+        self.assertEqual((hub["st"], hub["why"]), ("idle", "notMoving"))
+        self.assertNotIn("unfed", hub)
+        self.assertNotIn("via", c.fact(GYM, SODA))
+        self.assertFalse([f for f in c.findings() if f["group"] in ("notrouted", "unplanned")])
+
+    def test_a_one_off_order_is_no_standing_supply(self):
+        for options in ({"repeating": False}, {"enabled": False}):
+            with self.subTest(**options):
+                _c, fact = self.gym(900, units=150, **options)
+                self.assertEqual(fact["st"], "noplan")
 
 
 def two_shop_company(contracts):
@@ -682,30 +751,82 @@ class StableOrderTests(unittest.TestCase):
 
 
 class FixtureKeyTests(unittest.TestCase):
-    """The board's fixture (tests/fixtures/r8_supply.json, written by the board
-    side) and what Python sends carry the same keys."""
+    """The board's fixture (tests/fixtures/r8_supply.json) holds the board to
+    what Python sends: the same keys, the same units and the same reasons."""
+
+    # Every (status word, reason) _supply_status() can send, and the fields the
+    # rows Python sends always carry (a row may carry more).
+    WHYS = {
+        "made": {None}, "paused": {"order"}, "noplan": {"target", "order"},
+        "new": {"young", "firstFill"}, "short": {"order", "shortfall", "target", "dry"},
+        "stalled": {"notDrawn", "waiting"},
+        "idle": {"notMoving", "notRouted", "targetHigh", "importHigh", "overstock"},
+        "tight": {"order", "shortfall", "target"}, "covered": {None, "route", "limit", "staffing"},
+    }
+    OPTIONAL = {
+        "needs": {"dem"}, "idle": {"unfed", "routedFrom", "importLevel", "smart", "dem"},
+        "shops": {"wholesale", "wholesaleDay"},
+    }
+
+    @staticmethod
+    def rows(supply):
+        sites = supply["factories"]["sites"]
+        return {
+            "needs": [n for s in sites for n in s["needs"]],
+            "lines": [l for s in sites for l in s["lines"]],
+            "idle": supply["idle"], "shops": supply["shops"], "imports": supply["imports"],
+            "graph items": [i for n in supply["graph"]["nodes"] for i in n["items"]],
+        }
+
+    def companies(self):
+        c = beer_chain()
+        idle = Company()
+        idle.site(HUB, "Import Hub")
+        idle.shop(GYM, "Gym")
+        idle.hold(HUB, SODA, 3000)
+        idle.hold(GYM, SODA, 1200, 120)
+        idle.run()
+        return [c.supply, idle.supply, two_shop_company([(1500, {})]).supply]
+
+    def check_facts(self, facts, where):
+        for s, items in facts.items():
+            for slug, base in items.items():
+                for fact in (base, {**base, **base.get("dem", {})}):
+                    with self.subTest(where=where, s=s, slug=slug):
+                        self.assertLessEqual(BASE_KEYS, set(fact))
+                        self.assertLessEqual(set(fact), FACT_KEYS)
+                        self.assertLessEqual(set(base.get("dem", {})), FACT_KEYS - {"dem"})
+                        self.assertIn(fact["why"], self.WHYS[fact["st"]])
+                        # A week's figures carry the week's split; a day's none.
+                        weekly = fact["role"] == "depot" or fact["cad"] == "weekly"
+                        self.assertEqual("parts" in base, weekly)
+                        if fact["role"] == "output":
+                            self.assertEqual((fact["use"], fact["need"], fact["setTo"]), (0, 0, None))
 
     def test_the_payload_keys_match_the_boards_fixture(self):
-        path = os.path.join(HERE, "fixtures", "r8_supply.json")
-        if not os.path.exists(path):
-            self.skipTest("tests/fixtures/r8_supply.json is written by the board side; "
-                          "this check runs once both sides are merged")
-        with open(path, encoding="utf-8") as fh:
+        with open(os.path.join(HERE, "fixtures", "r8_supply.json"), encoding="utf-8") as fh:
             fixture = json.load(fh)
-        c = two_shop_company([(1500, {})])
-        mine = [fact for items in c.supply["facts"].values() for fact in items.values()]
-        theirs = [fact for items in fixture["supply"]["facts"].values() for fact in items.values()]
-        for facts in (mine, theirs):
-            for fact in facts:
-                self.assertLessEqual(BASE_KEYS, set(fact), fact)
-                self.assertLessEqual(set(fact), FACT_KEYS, fact)
-                self.assertLessEqual(set(fact.get("dem", {})), FACT_KEYS - {"dem"}, fact)
-        for key in ("facts", "margin", "roundTo"):
+        mine = self.companies()
+        for n, supply in enumerate(mine):
+            self.check_facts(supply["facts"], f"python {n}")
+        self.check_facts(fixture["supply"]["facts"], "fixture")
+        for key in ("facts", "margin", "roundTo", "idleWeeks"):
             self.assertIn(key, fixture["supply"])
-            self.assertIn(key, c.supply)
-        self.assertEqual((fixture["supply"]["margin"], fixture["supply"]["roundTo"]),
-                         (c.supply["margin"], c.supply["roundTo"]))
+            self.assertIn(key, mine[0])
+        self.assertEqual((fixture["supply"]["margin"], fixture["supply"]["roundTo"], fixture["supply"]["idleWeeks"]),
+                         (mine[0]["margin"], mine[0]["roundTo"], mine[0]["idleWeeks"]))
         self.assertEqual(set(fixture["alertsDemand"]), {"lines", "minor"})
+        theirs = self.rows(fixture["supply"])
+        for kind in theirs:
+            sent = [row for supply in mine for row in self.rows(supply)[kind]]
+            self.assertTrue(sent, kind)
+            optional = self.OPTIONAL.get(kind, set())
+            always = set.intersection(*(set(row) for row in sent)) - optional
+            optional = optional | set().union(*(set(row) for row in sent)) - always
+            for row in theirs[kind]:
+                with self.subTest(kind=kind, row=row.get("slug") or row.get("item")):
+                    self.assertLessEqual(always, set(row))
+                    self.assertLessEqual(set(row), always | optional)
 
 
 if __name__ == "__main__":
