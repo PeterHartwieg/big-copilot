@@ -127,6 +127,43 @@ test('the same section link followed again, after leaving the Wiki, lands again'
   assert.deepEqual(errors, []);
 });
 
+test('Back into the Wiki returns the reader to where they were, not to the linked section', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  // A link into the section, followed: it lands.
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  await page.waitForFunction(() => {
+    const el = document.getElementById('wk-prices');
+    return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+  });
+  // The reader scrolls back to the top, leaves for another page, and comes
+  // Back: they are where they were, not at the section again.
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.evaluate(() => showPage('today'));
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => page === 'wiki');
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
+  // Back to the guide's top and Forward onto the section entry again: a
+  // history step inside the Wiki does not land either.
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop');
+  await page.evaluate(() => history.forward());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop/prices');
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  // Following the link afresh from here still lands.
+  await page.evaluate(() => showPage('today'));
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  await page.waitForFunction(() => page === 'wiki');
+  await page.waitForFunction(() => {
+    const el = document.getElementById('wk-prices');
+    return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+  });
+  assert.deepEqual(errors, []);
+});
+
 test('search keeps focus when cleared and preserves mid-query edits', async t => {
   const {page, errors} = await fixture(t);
   await openFromLanding(page);

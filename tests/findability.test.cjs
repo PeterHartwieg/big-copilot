@@ -283,6 +283,34 @@ test('a product stocked but not sold yet still opens a store that stocks it', as
   } finally { await page.close(); }
 });
 
+test('a depot or factory holding a product is never where its Products row lands', async () => {
+  const line = (item, slug, revenue, units) => ({item, slug, revenue, rate: 0, units, price: 30, soldPerDay: 0});
+  const product = {item: 'New Gift', revenue: 0, units: 0, week: 0, stock: 5000, stores: 0, price: 0, peak: null};
+  // The depot holds far more than the shop; the shop is still the one with Shelves.
+  let page = await board({
+    shop: {lines: [line('New Gift', 'newgift', 0, 10)]},
+    extra: [{...DEPOT, key: 'd1', name: 'HART. Depot', lines: [line('New Gift', 'newgift', 0, 4000)]},
+            {...DEPOT, key: 'f1', status: 'overhead', name: 'HART. Works', lines: [line('New Gift', 'newgift', 0, 900)]}],
+    products: [product],
+  });
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
+    await page.locator('#secProducts .xl-sells', {hasText: 'New Gift'}).click();
+    assert.equal(await page.evaluate(() => siteKey), KEY);
+    assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-newgift')}"].sp-hit`).count(), 1);
+  } finally { await page.close(); }
+  // Only a depot holds it: no store to open, so the product is not a link.
+  page = await board({
+    extra: [{...DEPOT, key: 'd1', name: 'HART. Depot', lines: [line('New Gift', 'newgift', 0, 4000)]}],
+    products: [product],
+  });
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
+    assert.equal(await page.locator('#secProducts .xl-sells').count(), 0);
+    assert.match(await page.locator('#secProducts tbody').innerText(), /New Gift/);
+  } finally { await page.close(); }
+});
+
 // --- the Portfolio --------------------------------------------------------------
 
 test('a chain row says what it is made of, not only how many sites', async () => {

@@ -1447,6 +1447,35 @@ test('a roster that differs by day is told one headcount at a time, on the page 
   } finally { await page.close(); }
 });
 
+test('a week of three headcounts names the biggest two, on the page as on Today, and wraps on a phone', async () => {
+  // Two, three and four trainers on Monday, Tuesday and Wednesday.
+  const MANY = idleFixture('many');
+  const page = await idleSite(MANY.findings, MANY);
+  try {
+    const worth = await page.evaluate(w => fmt(w), MANY.row.worth);
+    const runs = '3 fitness planning boards Tue 8-20; 4 fitness planning boards Wed 8-20; and 1 more';
+    assert.match(MANY.row.text, new RegExp(`: ${runs} for `));
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(), `72 staff-hours a week · ${runs} · ${worth}/day of wages`);
+    assert.equal(await chip.getAttribute('data-tip'),
+      `${MANY.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
+    // "and 1 more": every hour of the week is still lit, Monday's included.
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2, 3], 8, 20));
+    // On a phone the chip wraps inside the page rather than pushing it sideways.
+    await page.setViewportSize({width: 390, height: 900});
+    await page.evaluate(() => drawSite());
+    const fit = await page.evaluate(() => {
+      const c = document.querySelector('#sp-hours .sp-hchip.idle').getBoundingClientRect();
+      return {right: c.right, width: innerWidth, scroll: document.documentElement.scrollWidth,
+              client: document.documentElement.clientWidth, tall: c.height > 40};
+    });
+    assert.ok(fit.right <= fit.width, `chip ends at ${fit.right} of ${fit.width}`);
+    assert.ok(fit.scroll <= fit.client, `page scrolls sideways: ${fit.scroll} > ${fit.client}`);
+    assert.equal(fit.tall, true, 'the chip wraps onto more than one line');
+  } finally { await page.close(); }
+});
+
 test('a finding written before the week existed reads as a week of its one run', async () => {
   const old = IDLE.findings.map(({week, ...f}) => f);
   const page = await idleSite(old);

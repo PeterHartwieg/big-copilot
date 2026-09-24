@@ -73,8 +73,9 @@ the map.
   hours* off; a device keeps only the kinds its player switched, so a later change of
   default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
   site: the spare staff-hours of the whole week, its wages summed, with the days and hours
-  named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-20;
-  4 counters Tue 8-20"); the site's own hours block reads out the same week.
+  named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-12;
+  4 counters Mon 12-20"), the two with the most spare hours named and the rest counted
+  ("; and 2 more"); the site's own hours block reads out the same week and lights all of it.
   A finding's headline never drops an item's variant: "Fabric (Expensive)", not "Fabric".
   Every *details ›* link opens the page and view the finding is spelt out on and scrolls
   to it.

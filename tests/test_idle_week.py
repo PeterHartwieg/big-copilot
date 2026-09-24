@@ -8,7 +8,7 @@ one line. The site page's hours block reads the same `week`, and lights its
 """
 import unittest
 
-from ba_dashboard import _alerts, _hour_findings, _service_stations, money
+from ba_dashboard import _alerts, _hour_findings, _idle_parts, _idle_week, _service_stations, money
 from tests.test_stations import (
     BOARD, EMPTY_SUPPLY, NAMES, REGISTER, SERVICE, STREET, TRAINER, grid_of, shift,
 )
@@ -16,12 +16,15 @@ from tests.test_stations import (
 MONDAY, TUESDAY, WEDNESDAY = 1, 2, 3
 
 
-def gym(days, boards=2, on=3, customers=10, start=8, end=20, cashiers=0):
+def gym(days, boards=2, on=3, customers=10, start=8, end=20, cashiers=0, spans=None):
     """`on` trainers over `boards` boards, `start`-`end` on each weekday in `days`,
     with each of those weekdays reported twice. `on` may be a {weekday: trainers}
     map for a roster that differs by day. `cashiers` adds that many people on as
-    many cash registers, a second role on the same hours."""
+    many cash registers, a second role on the same hours. `spans` gives each
+    trainer their own (start, end) instead, every day."""
     per_day = on if isinstance(on, dict) else {wd: on for wd in days}
+    if spans:
+        per_day = {wd: len(spans) for wd in days}
     most = max(per_day.values())
     items = [(i + 1, BOARD) for i in range(boards)]
     items += [(boards + i + 1, REGISTER) for i in range(cashiers)]
@@ -30,7 +33,8 @@ def gym(days, boards=2, on=3, customers=10, start=8, end=20, cashiers=0):
     cash = [shift(f"c{i + 1}", boards + i + 1, start, end) for i in range(cashiers)]
 
     def shifts(wd):
-        return [shift(str(i + 1), (i % boards) + 1, start, end) for i in range(per_day[wd])] + cash
+        return [shift(str(i + 1), (i % boards) + 1, *(spans[i] if spans else (start, end)))
+                for i in range(per_day[wd])] + cash
     hourly = {h: customers if start <= h < end else 0 for h in range(24)}
     reports = {"$items": [{"hour": h, "customers": c} for h, c in hourly.items()]}
     b = {
@@ -78,7 +82,7 @@ class IdleWeekTests(unittest.TestCase):
         self.assertEqual(week["spare"], 72)
         self.assertEqual(week["worth"], money(72 * 105.0 / 7))
         self.assertEqual(week["parts"], [
-            {"noun": "fitness planning boards", "staff": 3, "when": "Mon-Wed 8-20"}])
+            {"noun": "fitness planning boards", "staff": 3, "spare": 72, "when": "Mon-Wed 8-20"}])
         # The hours the line names, each once, for the site page to light.
         self.assertEqual(week["cells"], [
             [wd, h] for wd in (MONDAY, TUESDAY, WEDNESDAY) for h in range(8, 20)])
@@ -111,8 +115,8 @@ class IdleWeekTests(unittest.TestCase):
         [idle] = _hour_findings([grid], [business()], WAGES)
         week = idle["week"]
         self.assertEqual(week["parts"], [
-            {"noun": "fitness planning boards", "staff": 2, "when": "Mon 8-20"},
-            {"noun": "fitness planning boards", "staff": 4, "when": "Tue 8-20"}])
+            {"noun": "fitness planning boards", "staff": 2, "spare": 12, "when": "Mon 8-20"},
+            {"noun": "fitness planning boards", "staff": 4, "spare": 36, "when": "Tue 8-20"}])
         # One spare on Monday, three on Tuesday, twelve hours each.
         self.assertEqual(week["spare"], 12 + 36)
         result = _alerts([business()], EMPTY_SUPPLY, [], [], [], [idle], [], 20, 0.0)
@@ -136,6 +140,52 @@ class IdleWeekTests(unittest.TestCase):
         self.assertEqual((idle["day"], idle["spare"], idle["staff"]), ("Monday", 12, 2))
         self.assertEqual(idle["worth"], money(12 * 105.0 / 7))
         self.assertEqual([p["noun"] for p in idle["week"]["parts"]], ["fitness planning boards"])
+
+    def test_a_headcount_that_changes_mid_run_is_told_hour_by_hour(self):
+        """Two trainers from 8 and four from 12 are two parts, not "4 ... 8-20"."""
+        grid = gym([MONDAY], boards=4, spans=[(8, 20), (8, 20), (12, 20), (12, 20)])
+        [idle] = _hour_findings([grid], [business()], WAGES)
+        week = idle["week"]
+        self.assertEqual(
+            [(p["staff"], p["when"], p["spare"]) for p in week["parts"]],
+            [(2, "Mon 8-12", 4), (4, "Mon 12-20", 24)])
+        # One spare an hour for four hours, three for eight: the run's total.
+        self.assertEqual(week["spare"], 4 + 24)
+        self.assertEqual(week["cells"], [[MONDAY, h] for h in range(8, 20)])
+        # The lead is a piece of one headcount too.
+        self.assertEqual((idle["from"], idle["to"], idle["staff"]), (12, 20, 4))
+
+    def test_a_piece_shorter_than_a_run_still_counts_when_the_run_qualifies(self):
+        """Two trainers 8-10 then four 10-20: the unbroken run qualifies whole."""
+        grid = gym([MONDAY], boards=4, spans=[(8, 20), (8, 20), (10, 20), (10, 20)])
+        [idle] = _hour_findings([grid], [business()], WAGES)
+        self.assertEqual(
+            [(p["staff"], p["when"]) for p in idle["week"]["parts"]],
+            [(2, "Mon 8-10"), (4, "Mon 10-20")])
+        self.assertEqual(idle["week"]["spare"], 2 + 30)
+
+    def test_a_part_with_two_day_shapes_keeps_them_inside_the_part(self):
+        """"Mon-Wed 8-20 and Sat 10-14" is one part; "; " only ever divides parts."""
+        def run(wd, hours, staff, spare):
+            return {"noun": "counters", "wd": wd, "hours": list(hours), "staff": staff,
+                    "seen": [1] * len(hours), "spare": spare, "worth": spare * 10}
+        week = _idle_week([run(1, range(8, 20), 2, 12), run(2, range(8, 20), 2, 12),
+                           run(3, range(8, 20), 2, 12), run(6, range(10, 14), 2, 4),
+                           run(4, range(8, 20), 4, 36)])
+        self.assertEqual([(p["staff"], p["when"]) for p in week["parts"]],
+                         [(2, "Mon-Wed 8-20 and Sat 10-14"), (4, "Thu 8-20")])
+        self.assertEqual(_idle_parts(week["parts"], "counters"),
+                         "2 counters Mon-Wed 8-20 and Sat 10-14; 4 counters Thu 8-20")
+
+    def test_the_line_names_the_two_biggest_parts_and_counts_the_rest(self):
+        parts = [{"noun": "counters", "staff": 2, "when": "Mon 8-20", "spare": 12},
+                 {"noun": None, "staff": 3, "when": "Tue 8-20", "spare": 24},
+                 {"noun": "counters", "staff": 4, "when": "Wed 8-20", "spare": 36},
+                 {"noun": "counters", "staff": 5, "when": "Thu 8-9", "spare": 4}]
+        # The biggest two, in the week's own order, then how many more.
+        self.assertEqual(_idle_parts(parts, "desks"),
+                         "3 desks Tue 8-20; 4 counters Wed 8-20; and 2 more")
+        self.assertEqual(_idle_parts(parts[:2], "desks"), "2 counters Mon 8-20; 3 desks Tue 8-20")
 
     def test_a_role_with_no_wage_prices_nothing(self):
         grid = gym([MONDAY, TUESDAY])

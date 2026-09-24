@@ -13,7 +13,8 @@ week. The worst run is Monday's alone.
 
 `python -m tests.idle_week_fixture mixed` is a gym whose roster differs by day:
 two trainers on Monday and four on Tuesday, over four boards, so the week is two
-parts, one per headcount.
+parts, one per headcount. `many` runs two, three and four trainers on Monday,
+Tuesday and Wednesday: three parts, of which the line names the biggest two.
 """
 import json
 import sys
@@ -24,6 +25,8 @@ from tests.test_idle_week import EMPTY_SUPPLY, MONDAY, TUESDAY, WAGES, WEDNESDAY
 
 def fixture(kind: str = "") -> dict:
     grid = (gym([MONDAY, TUESDAY], boards=4, on={MONDAY: 2, TUESDAY: 4}) if kind == "mixed"
+            else gym([MONDAY, TUESDAY, WEDNESDAY], boards=4,
+                     on={MONDAY: 2, TUESDAY: 3, WEDNESDAY: 4}) if kind == "many"
             else gym([MONDAY, TUESDAY, WEDNESDAY]))
     findings = _hour_findings([grid], [business()], WAGES)
     result = _alerts([business()], EMPTY_SUPPLY, [], [], [], findings, [], 20, 0.0)

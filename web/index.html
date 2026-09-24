@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=7debfd5508">
+<link rel="stylesheet" href="community.css?v=62b23f35db">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=7debfd5508">
+<link rel="stylesheet" href="fonts/fonts.css?v=62b23f35db">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "7debfd5508";</script>
-<script>window.LEDGER_RELEASE = {"version":"7debfd5508","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "62b23f35db";</script>
+<script>window.LEDGER_RELEASE = {"version":"62b23f35db","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2851,8 +2851,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=7debfd5508"></script>
-<script src="community.js?v=7debfd5508"></script>
+<script src="app.js?v=62b23f35db"></script>
+<script src="community.js?v=62b23f35db"></script>
 
 <script>
 
@@ -5054,7 +5054,19 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before
-   `week` existed is a week of its one run, as _alerts() reads it. */
+   `week` existed is a week of its one run, as _alerts() reads it. The parts
+   are said as _idle_parts() says them: the SP_IDLE_PARTS with the most spare
+   staff-hours, in the week's order, apart by "; ", then how many more; every
+   hour of the week is still lit. */
+const SP_IDLE_PARTS = 2;
+function spIdleParts(parts, noun){
+  const named = parts.map((p, i) => i)
+    .sort((a, z) => ((parts[z].spare || 0) - (parts[a].spare || 0)) || a - z)
+    .slice(0, SP_IDLE_PARTS).sort((a, z) => a - z);
+  const said = named.map(i => `${parts[i].staff} ${parts[i].noun || noun} ${parts[i].when}`).join("; ");
+  const more = parts.length - named.length;
+  return more ? `${said}; and ${more} more` : said;
+}
 function spIdleWeek(n){
   const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
   const w = n.week || {spare: n.spare, worth: n.worth, seen: n.seen,
@@ -5063,7 +5075,7 @@ function spIdleWeek(n){
              when: `${WEEK_SHORT[wd]} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
   const noun = n.office ? "workstations" : "counters";
   return {spare: w.spare, worth: w.worth, seen: w.seen, cells: w.cells || [],
-          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join("; ")};
+          runs: spIdleParts(w.parts || [], noun)};
 }
 /* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
    the door if it was reached, else every role standing at the site's own
@@ -7004,8 +7016,10 @@ const xlGuideLink = (typeSlug, label, section = "") => {
    lines, by item name, that _products() adds up for the Products table. A line
    stocked but not sold yet is on that table too, so a store that only stocks
    it follows the sellers, the most units on the shelf first, and a newly
-   stocked product still opens somewhere. */
-const xlSellers = item => D.businesses.filter(b => b.status !== "vacant")
+   stocked product still opens somewhere. Only a shop or an office draws a
+   Shelves block to land on: a depot or a factory holding the goods is never
+   the answer, and with no such store the product is not a link. */
+const xlSellers = item => D.businesses.filter(b => b.status === "retail" || b.status === "office")
   .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units))}))
   .filter(x => x.line)
   .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
@@ -10534,16 +10548,19 @@ function wikiTypeHref(typeSlug, section){
   return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
-   while it is up. `entered` says the Wiki was not the page on screen before:
-   the reader came from another page, by a link or by Back. */
-function showWikiRoute(hash, entered = false){
+   while it is up. `entered` says the Wiki was not the page on screen before;
+   `step` says Back or Forward brought the reader here. */
+function showWikiRoute(hash, entered = false, step = false){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
   /* A link into a section is a place to land once, each time it is followed;
      a redraw afterwards leaves the reader wherever they have scrolled to. The
      route outlives a visit to another page, so following the same link a
-     second time is not a move; coming in from elsewhere is what says so. */
-  if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+     second time is not a move; coming in from elsewhere is what says so. Back
+     and Forward are not following a link: the reader returns to where they
+     had scrolled, not to the section the link once asked for. */
+  if(step) wikiLanding = "";
+  else if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -12264,7 +12281,7 @@ function wireWiki(){
        the Back button with a visit per letter. */
     wikiRoute = {kind: "home", id: "", query: field.value};
     wikiShowAll = false;
-    try{ history.replaceState(null, "", wikiHref(wikiRoute)); }catch(err){}
+    try{ history.replaceState(history.state, "", wikiHref(wikiRoute)); }catch(err){}
     drawWiki();
   });
   host.addEventListener("click", e => {
@@ -12573,6 +12590,10 @@ const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
 const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
 let page = "today";
+/* The stamp on a history entry the board has stood on, and whether the hash
+   change being handled is Back or Forward: see stampHistory(). */
+const HISTORY_SEEN = {baSeen: true};
+let historyStep = false;
 const sub = {};
 Object.entries(SUBS).forEach(([id, sv]) => {
   const saved = remembered(sv.key);
@@ -12612,13 +12633,13 @@ function showPage(id, scroll = true, historyMode = "push"){
   try{
     const keep = historyMode === "replace" && pageFromHash(location.hash.slice(1)) === id;
     if(historyMode !== "none" && !keep && location.hash !== "#" + id)
-      history[historyMode === "replace" ? "replaceState" : "pushState"](null, "", "#" + id);
+      history[historyMode === "replace" ? "replaceState" : "pushState"](HISTORY_SEEN, "", "#" + id);
   }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
   if(id === "company" && sub.company === "results" && hasData()) drawChart();
   if(id === "map") showCityMap();
-  if(id === "wiki") wikiVisit(from !== "wiki");
+  if(id === "wiki") wikiVisit(from !== "wiki", historyStep);
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
@@ -12677,16 +12698,34 @@ function openHash(h, historyMode = "none"){
 }
 /* The wiki module, when the build carries it, owns everything under #wiki.
    `entered` is true when the Wiki has just replaced another page, so a link
-   into one of its sections lands there however often it is followed. */
-function wikiVisit(entered = false){
-  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered);
+   into one of its sections lands there however often it is followed; `step`
+   is true when Back or Forward brought the reader here, and then the Wiki
+   leaves them where they were rather than landing again. */
+function wikiVisit(entered = false, step = false){
+  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered, step);
 }
+/* Back and Forward against a link followed. The browser fires popstate and
+   hashchange alike for both, so neither event says which it was. The entry
+   does: every entry the board has stood on is stamped in its state, an entry a
+   link has just made has none, and so a hash change onto a stamped entry is a
+   step through history (HISTORY_SEEN and historyStep sit beside `page`, since
+   showPage() reads them). */
+function stampHistory(){
+  try{
+    if(!(history.state && history.state.baSeen))
+      history.replaceState(Object.assign({}, history.state, HISTORY_SEEN), "", location.hash || location.href);
+  }catch(e){}
+}
+stampHistory();
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
+  const step = !!(history.state && history.state.baSeen);
+  stampHistory();
   /* With no save open only the wiki has anything behind it; the rest would be
      empty chrome, so the nav's own lock holds for a typed hash too. */
   if(!hasData() && pageFromHash(h) !== "wiki") return;
-  openHash(h, "none");
+  historyStep = step;
+  try{ openHash(h, "none"); }finally{ historyStep = false; }
 });
 
 /* --- which kinds of finding make the list ------------------------------- */

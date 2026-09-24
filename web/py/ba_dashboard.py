@@ -23,6 +23,7 @@ import fractions
 import hashlib
 import http.client
 import http.server
+import itertools
 import json
 import math
 import os
@@ -3452,8 +3453,11 @@ HYPE_TIGHT = 0.90  # a wave arriving at a shop already this full is being turned
 PHRASE_SHAPES = 2  # how many weekday-hour patterns to name before counting the rest
 
 
-def _hour_phrase(hours_by_day: dict) -> str:
-    """"Mon-Sun 8-11, 18-20" — the shape of a set of weekday-hours in words."""
+def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
+    """"Mon-Sun 8-11, 18-20" — the shape of a set of weekday-hours in words.
+
+    `sep` joins one day shape to the next ("Mon-Wed 8-20; Sat 10-14"); a caller
+    that lists several phrases apart by "; " passes " and " instead."""
     def runs(hours):
         out, start = [], None
         for h in range(25):
@@ -3484,7 +3488,7 @@ def _hour_phrase(hours_by_day: dict) -> str:
         else:
             label = ", ".join(WEEKDAYS[d][:3] for d in picked)
         parts.append(f"{label} {', '.join(shape)}")
-    phrase = "; ".join(parts)
+    phrase = sep.join(parts)
     # A list of every scattered hour is not a shape. Name the pattern and count
     # the rest.
     return f"{phrase} and {spare} scattered hours" if spare else phrase
@@ -6834,30 +6838,36 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                         run.append((hour, on - needed, seen, on))
                         continue
                     role_wage = wages_here.get(role["skill"])
+                    # The whole unbroken run is what qualifies, however many
+                    # were on in it; it is then told in pieces of one headcount
+                    # each, so two people 8-12 and four 12-20 never read as
+                    # four all day. The pieces add up to the run.
                     if len(run) >= IDLE_RUN and role_wage:
-                        spare = sum(r[1] for r in run)
-                        runs_here.append(
-                            {
-                                "noun": _role_words(role, office)["noun"],
-                                "wd": wd,
-                                "hours": [r[0] for r in run],
-                                "staff": max(r[3] for r in run),
-                                "seen": [r[2] for r in run],
-                                "spare": spare,
-                                "worth": spare * role_wage / 7,
-                            }
-                        )
-                        if not best or spare > best["spare"]:
-                            best = {
-                                "wd": wd,
-                                "from": run[0][0],
-                                "to": run[-1][0] + 1,
-                                "spare": spare,
-                                "staff": max(r[3] for r in run),
-                                "seen": round(sum(r[2] for r in run) / len(run)),
-                                "role": role,
-                                "wage": role_wage,
-                            }
+                        for _, piece in itertools.groupby(run, key=lambda r: r[3]):
+                            piece = list(piece)
+                            spare = sum(r[1] for r in piece)
+                            runs_here.append(
+                                {
+                                    "noun": _role_words(role, office)["noun"],
+                                    "wd": wd,
+                                    "hours": [r[0] for r in piece],
+                                    "staff": piece[0][3],
+                                    "seen": [r[2] for r in piece],
+                                    "spare": spare,
+                                    "worth": spare * role_wage / 7,
+                                }
+                            )
+                            if not best or spare > best["spare"]:
+                                best = {
+                                    "wd": wd,
+                                    "from": piece[0][0],
+                                    "to": piece[-1][0] + 1,
+                                    "spare": spare,
+                                    "staff": piece[0][3],
+                                    "seen": round(sum(r[2] for r in piece) / len(piece)),
+                                    "role": role,
+                                    "wage": role_wage,
+                                }
                     run = []
         if best:
             wage = best["wage"]
@@ -6886,9 +6896,13 @@ def _idle_week(runs: list) -> dict:
 
     A site that runs spare counters all Tuesday usually runs them all Wednesday
     too; one cause is one line, so the runs are summed into a week and each
-    role's hours are named as a shape ("Tue, Wed 0-24"). A role that ran 2 on
-    Monday and 4 on Tuesday is two parts, one per headcount, so no day is said
-    to have run more people than it did. `seen` is the
+    role's hours are named as a shape ("Tue, Wed 0-24"). Each run comes in with
+    one headcount for all its hours (_hour_findings() splits an unbroken run
+    where the number on changes), and a part is one role at one headcount: 2 on
+    Monday and 4 on Tuesday, or 2 from 8 and 4 from 12, are two parts, so no
+    hour is said to have run more people than it did. A part's own day shapes
+    are joined with " and ", since the parts are kept apart by "; ". Each part
+    carries its spare staff-hours, so the line can name the biggest. `seen` is the
     customers an hour over every hour named, each hour counted once however
     many roles were idle in it. `cells` is every weekday-hour named, as
     [weekday, hour] pairs, so the site page lights the hours the line names.
@@ -6897,8 +6911,10 @@ def _idle_week(runs: list) -> dict:
     seen = {}
     for run in runs:
         part = parts.setdefault(
-            (run["noun"], run["staff"]), {"noun": run["noun"], "staff": run["staff"], "hours": {}}
+            (run["noun"], run["staff"]),
+            {"noun": run["noun"], "staff": run["staff"], "spare": 0, "hours": {}},
         )
+        part["spare"] += run["spare"]
         part["hours"].setdefault(run["wd"], set()).update(run["hours"])
         for hour, customers in zip(run["hours"], run["seen"]):
             seen[(run["wd"], hour)] = customers
@@ -6908,10 +6924,30 @@ def _idle_week(runs: list) -> dict:
         "seen": round(sum(seen.values()) / len(seen)) if seen else 0,
         "cells": [list(cell) for cell in sorted(seen)],
         "parts": [
-            {"noun": p["noun"], "staff": p["staff"], "when": _hour_phrase(p["hours"])}
+            {"noun": p["noun"], "staff": p["staff"], "spare": p["spare"],
+             "when": _hour_phrase(p["hours"], sep=" and ")}
             for p in parts.values()
         ],
     }
+
+
+IDLE_PARTS = 2  # how many parts of an overstaffed week the line names
+
+
+def _idle_parts(parts: list, default: str) -> str:
+    """The overstaffed week's parts as the line says them: the IDLE_PARTS with
+    the most spare staff-hours, in the week's own order, then how many more.
+
+    A part's hours can end "and 5 scattered hours" and join day shapes with
+    "and", so the parts are kept apart by a semicolon. spIdleWeek() on the
+    site page says them the same way."""
+    ranked = sorted(range(len(parts)), key=lambda i: (-(parts[i].get("spare") or 0), i))
+    named = sorted(ranked[:IDLE_PARTS])
+    said = "; ".join(
+        f"{parts[i]['staff']} {parts[i]['noun'] or default} {parts[i]['when']}" for i in named
+    )
+    more = len(parts) - len(named)
+    return f"{said}; and {more} more" if more else said
 
 
 GLOBAL_HOOD = "ba:neighborhood_global"
@@ -8712,11 +8748,7 @@ def _alerts(
                     range(finding["from"], finding["to"]))}),
             }],
         }
-        # A part's hours can end "and 5 scattered hours", so the parts are
-        # kept apart by a semicolon: "and" would read as one more part.
-        runs = "; ".join(
-            f"{p['staff']} {p['noun'] or default} {p['when']}" for p in week["parts"]
-        )
+        runs = _idle_parts(week["parts"], default)
         note(
             "info",
             site,
@@ -12993,7 +13025,19 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before
-   `week` existed is a week of its one run, as _alerts() reads it. */
+   `week` existed is a week of its one run, as _alerts() reads it. The parts
+   are said as _idle_parts() says them: the SP_IDLE_PARTS with the most spare
+   staff-hours, in the week's order, apart by "; ", then how many more; every
+   hour of the week is still lit. */
+const SP_IDLE_PARTS = 2;
+function spIdleParts(parts, noun){
+  const named = parts.map((p, i) => i)
+    .sort((a, z) => ((parts[z].spare || 0) - (parts[a].spare || 0)) || a - z)
+    .slice(0, SP_IDLE_PARTS).sort((a, z) => a - z);
+  const said = named.map(i => `${parts[i].staff} ${parts[i].noun || noun} ${parts[i].when}`).join("; ");
+  const more = parts.length - named.length;
+  return more ? `${said}; and ${more} more` : said;
+}
 function spIdleWeek(n){
   const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
   const w = n.week || {spare: n.spare, worth: n.worth, seen: n.seen,
@@ -13002,7 +13046,7 @@ function spIdleWeek(n){
              when: `${WEEK_SHORT[wd]} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
   const noun = n.office ? "workstations" : "counters";
   return {spare: w.spare, worth: w.worth, seen: w.seen, cells: w.cells || [],
-          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join("; ")};
+          runs: spIdleParts(w.parts || [], noun)};
 }
 /* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
    the door if it was reached, else every role standing at the site's own
@@ -14943,8 +14987,10 @@ const xlGuideLink = (typeSlug, label, section = "") => {
    lines, by item name, that _products() adds up for the Products table. A line
    stocked but not sold yet is on that table too, so a store that only stocks
    it follows the sellers, the most units on the shelf first, and a newly
-   stocked product still opens somewhere. */
-const xlSellers = item => D.businesses.filter(b => b.status !== "vacant")
+   stocked product still opens somewhere. Only a shop or an office draws a
+   Shelves block to land on: a depot or a factory holding the goods is never
+   the answer, and with no such store the product is not a link. */
+const xlSellers = item => D.businesses.filter(b => b.status === "retail" || b.status === "office")
   .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units))}))
   .filter(x => x.line)
   .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
@@ -16891,6 +16937,10 @@ const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
 const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
 let page = "today";
+/* The stamp on a history entry the board has stood on, and whether the hash
+   change being handled is Back or Forward: see stampHistory(). */
+const HISTORY_SEEN = {baSeen: true};
+let historyStep = false;
 const sub = {};
 Object.entries(SUBS).forEach(([id, sv]) => {
   const saved = remembered(sv.key);
@@ -16930,13 +16980,13 @@ function showPage(id, scroll = true, historyMode = "push"){
   try{
     const keep = historyMode === "replace" && pageFromHash(location.hash.slice(1)) === id;
     if(historyMode !== "none" && !keep && location.hash !== "#" + id)
-      history[historyMode === "replace" ? "replaceState" : "pushState"](null, "", "#" + id);
+      history[historyMode === "replace" ? "replaceState" : "pushState"](HISTORY_SEEN, "", "#" + id);
   }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
   if(id === "company" && sub.company === "results" && hasData()) drawChart();
   if(id === "map") showCityMap();
-  if(id === "wiki") wikiVisit(from !== "wiki");
+  if(id === "wiki") wikiVisit(from !== "wiki", historyStep);
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
@@ -16995,16 +17045,34 @@ function openHash(h, historyMode = "none"){
 }
 /* The wiki module, when the build carries it, owns everything under #wiki.
    `entered` is true when the Wiki has just replaced another page, so a link
-   into one of its sections lands there however often it is followed. */
-function wikiVisit(entered = false){
-  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered);
+   into one of its sections lands there however often it is followed; `step`
+   is true when Back or Forward brought the reader here, and then the Wiki
+   leaves them where they were rather than landing again. */
+function wikiVisit(entered = false, step = false){
+  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered, step);
 }
+/* Back and Forward against a link followed. The browser fires popstate and
+   hashchange alike for both, so neither event says which it was. The entry
+   does: every entry the board has stood on is stamped in its state, an entry a
+   link has just made has none, and so a hash change onto a stamped entry is a
+   step through history (HISTORY_SEEN and historyStep sit beside `page`, since
+   showPage() reads them). */
+function stampHistory(){
+  try{
+    if(!(history.state && history.state.baSeen))
+      history.replaceState(Object.assign({}, history.state, HISTORY_SEEN), "", location.hash || location.href);
+  }catch(e){}
+}
+stampHistory();
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
+  const step = !!(history.state && history.state.baSeen);
+  stampHistory();
   /* With no save open only the wiki has anything behind it; the rest would be
      empty chrome, so the nav's own lock holds for a typed hash too. */
   if(!hasData() && pageFromHash(h) !== "wiki") return;
-  openHash(h, "none");
+  historyStep = step;
+  try{ openHash(h, "none"); }finally{ historyStep = false; }
 });
 
 /* --- which kinds of finding make the list ------------------------------- */
