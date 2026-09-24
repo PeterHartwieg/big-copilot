@@ -230,12 +230,16 @@ is the line above it said twice.
 
 What is on the list is what moves the number:
 
-- **Hype exposure.** What each running wave is carrying, per wave, with the days left and
-  a baseline: *Industry City hype on 5 lines ends tomorrow; that store does $286k/day
-  under it against $146k for the no-hype Hamptons store.* The baseline is the same shop's
-  own trading before the wave landed where the history reaches back that far, otherwise
-  the same kind of shop somewhere no wave is running. Where neither exists the board says
-  there is no baseline rather than inventing one.
+- **Hype exposure.** What the running waves are carrying, one line per shop they land
+  hardest on, with the days left and a baseline: *Industry City hype on 5 lines ends
+  tomorrow; that store does $286k/day under it against $146k for the no-hype Hamptons
+  store.* The baseline is the same shop's own trading before the wave landed where the
+  history reaches back that far, otherwise the same kind of shop somewhere no wave is
+  running. Where neither exists the board says there is no baseline rather than inventing
+  one. Two or more waves over the same shop are one line that lists each wave's lines and
+  days left, because the shop's takings under hype are one number: *hype on 10 lines (7 end
+  in 4 days, 3 in 13 days)*. The line's level follows the soonest end, and its baseline is
+  the first wave's, since the shop's days before a later wave already carry the earlier one.
 - **Week on week per site.** Any trading site whose seven-day revenue moved more than 15%
   against the seven days before it, with both figures. Sites open under two weeks have no
   previous week to be compared with and are left out.

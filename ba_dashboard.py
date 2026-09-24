@@ -8957,15 +8957,39 @@ def _alerts(
             and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * HYPE_TIGHT
         )
 
+    # A shop's takings under hype are one number however many waves carry them,
+    # so the waves are gathered by the shop they land hardest on and each shop
+    # gets one line. The waves come soonest-ending first, which the line keeps.
+    by_top = {}
     for wave in hype:
         top = max(wave["sites"], key=lambda s: s["revenue"])
-        when = (
-            "ends today"
-            if wave["daysLeft"] <= 0
-            else "ends tomorrow"
-            if wave["daysLeft"] == 1
-            else f"has {wave['daysLeft']} days left"
-        )
+        by_top.setdefault(top["key"], (top, []))[1].append(wave)
+
+    for top, waves in by_top.values():
+        waves.sort(key=lambda w: w["daysLeft"])
+        soonest = waves[0]["daysLeft"]
+        if len(waves) == 1:
+            left = waves[0]["daysLeft"]
+            lines = (
+                f"{waves[0]['count']} lines "
+                + (
+                    "ends today"
+                    if left <= 0
+                    else "ends tomorrow"
+                    if left == 1
+                    else f"has {left} days left"
+                )
+            )
+        else:
+            parts = []
+            for n, wave in enumerate(waves):
+                left = wave["daysLeft"]
+                ends = (
+                    "today" if left <= 0 else "tomorrow" if left == 1 else f"in {left} days"
+                )
+                parts.append(f"{wave['count']} {'end ' if n == 0 or left <= 1 else ''}{ends}")
+            lines = f"{sum(w['count'] for w in waves)} lines ({', '.join(parts)})"
+        wave_word = "the wave" if len(waves) == 1 else "the waves"
         # Pricing is somebody else's job in this company. When a wave lands on a
         # shop that is already full, the only lever left is capacity — and it has
         # the wave's end date on it.
@@ -8973,21 +8997,23 @@ def _alerts(
         queue = (
             f" It already runs within 10% of capacity for {full} hour"
             f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
-            f"of the wave away and capacity is the only lever left."
+            f"of {wave_word} away and capacity is the only lever left."
             if full
             else ""
         )
-        base = wave["baseline"]
+        # The baseline is the first wave's: the shop's own days before a later
+        # wave already carry the earlier one.
+        base = min(waves, key=lambda w: w["startDay"])["baseline"]
         if base:
             drop = max(top["revenue"] - base["revenue"], 0)
             note(
-                "critical" if wave["daysLeft"] <= 2 else "warn",
+                "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{waves[0]['hood']} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
                 f"${base['revenue']:,.0f} for {base['basis']}; "
-                f"about ${drop:,.0f}/day of revenue rides on the wave.{queue}",
+                f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
                 worth=drop,
                 key=top["key"],
             )
@@ -8996,11 +9022,11 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{waves[0]['hood']} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
                 f"shop of the same kind trading without a wave and no trading days "
-                f"before this one started, so there is no baseline to say what the "
-                f"drop will be",
+                f"before {'this one' if len(waves) == 1 else 'the first of them'} "
+                f"started, so there is no baseline to say what the drop will be",
                 always=True,
                 key=top["key"],
             )
