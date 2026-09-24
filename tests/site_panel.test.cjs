@@ -35,7 +35,7 @@ const finding = (id, group, site = 'HART. Gifts', siteKey = KEY, level = 'warn',
 // in. `shop` overrides the site that opens, `alerts` and `minor.rows` the two
 // finding lists it reads.
 async function site(overrides = {}) {
-  const page = await browser.newPage({viewport: {width: 1280, height: 1100}});
+  const page = await browser.newPage({viewport: overrides.viewport || {width: 1280, height: 1100}});
   await page.route('https://**', route => route.abort());
   /* The board is served from an origin of its own rather than set into a blank
      page: localStorage is denied on an opaque origin, and the panel reads the
@@ -191,6 +191,44 @@ test('a big crew folds into one row a role, a dozen still read as pills', async 
     const pills = await big.$$eval('#sitePanel .sp-rrow.open .sp-rpeople .person', els => els.length);
     assert.equal(pills, 7);
   } finally { await big.close(); }
+});
+
+// A law firm's crew: one role of eighty beside a small one. The Crew block sits
+// a third of the page wide beside Fees, and the three columns (role, dots,
+// count) left the eighty dots a single column, a dot a line, with the role and
+// its count adrift halfway down. Every role's row keeps its name and count on
+// its first line and lays its dots out in lines of many.
+test('a big role in a narrow Crew block keeps its name, its count and its dots in lines', async () => {
+  const person = n => ({name: `Person ${n}`, role: n <= 3 ? 'Cleaning' : 'Lawyer',
+                        absent: n % 17 === 0, daily: n <= 3 ? 250 : 800});
+  const people = Array.from({length: 83}, (_, i) => person(i + 1));
+  for (const viewport of [{width: 1850, height: 1100}, {width: 1440, height: 1000}, {width: 390, height: 900}]) {
+    const page = await site({viewport, shop: {status: 'office', type: 'Law Firm', basket: 387.89,
+      staff: 83, staffCost: 64750, people,
+      crew: [{role: 'Cleaning', count: 3, daily: 750, absent: 0}, {role: 'Lawyer', count: 80, daily: 64000, absent: 4}]}});
+    try {
+      const rows = await page.$$eval('#sitePanel .sp-rrow', rows => rows.map(r => {
+        const top = r.getBoundingClientRect().top;
+        const btn = r.querySelector('.sp-rbtn').getBoundingClientRect();
+        const count = r.querySelector('.sp-rcount').getBoundingClientRect();
+        return {
+          role: r.querySelector('.sp-rbtn').textContent.trim(),
+          count: r.querySelector('.sp-rcount').textContent,
+          btnTop: btn.top - top, btnWidth: btn.width, countTop: count.top - top,
+          dots: r.querySelectorAll('.sp-dot').length,
+          lines: new Set([...r.querySelectorAll('.sp-dot')].map(d => Math.round(d.getBoundingClientRect().top))).size,
+        };
+      }));
+      assert.deepEqual(rows.map(r => [r.role, r.dots]), [['CLCleaning', 3], ['LALawyer', 80]], `${viewport.width}px`);
+      for (const r of rows) {
+        assert.ok(r.btnTop < 12 && r.countTop < 30, `${viewport.width}px: ${r.role} starts its row ${JSON.stringify(r)}`);
+        assert.ok(r.btnWidth >= 90, `${viewport.width}px: ${r.role} has room for its name`);
+      }
+      assert.match(rows[1].count, /^80 · 4 off · \$64,000\/day$/);
+      // Eighty dots at 16px a dot run to a handful of lines, not eighty.
+      assert.ok(rows[1].lines <= 8, `${viewport.width}px: ${rows[1].lines} lines of dots`);
+    } finally { await page.close(); }
+  }
 });
 
 test('a silent shop shows the five pre-flight checks in the order it needs them', async () => {
