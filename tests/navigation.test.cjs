@@ -588,3 +588,18 @@ test("an old Weekly rhythm link takes an open site's page down and opens Results
   assert.equal(b.page(), 'company');
   assert.equal(b.sub('company'), 'results');
 });
+
+test('the site on screen, opened again, keeps its way back', () => {
+  const b = board({data: sites()});
+  b.boot();
+  b.context.openSite(SHOP, false, 'a1');
+  assert.equal(b.from().label, 'Today');
+  // Its name, the picker's own entry, or a search for it.
+  b.context.openSite(SHOP);
+  assert.equal(b.from().label, 'Today');
+  b.context.openSite(SHOP, true, null, 'push', true);
+  assert.equal(b.from().label, 'Today');
+  // Another site is somewhere new.
+  b.context.openSite(DEPOT);
+  assert.equal(b.from(), null);
+});

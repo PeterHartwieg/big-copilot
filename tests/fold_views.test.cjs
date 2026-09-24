@@ -35,7 +35,7 @@ const CUSTOM = {label: 'Custom', slot: 0, harder: 2, easier: 1, startingMoney: 0
   rule('Tax rate', 0, 5, 'easier', '%'), rule('Bank interest', 0.7, 0.7, 'level'),
 ]};
 
-async function board({width = 1440, recent, houseRules = CUSTOM, difficulty, businesses = [], products = [], goals} = {}) {
+async function board({width = 1600, recent, houseRules = CUSTOM, difficulty, businesses = [], products = [], goals} = {}) {
   const page = await browser.newPage({viewport: {width, height: 1000}});
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -163,12 +163,12 @@ test('Products names its peaks in units, with the weeks they come from', async (
 // --- the difficulty chip ----------------------------------------------------------
 
 test('the difficulty chip sits on the build line on a desktop and opens its settings', async () => {
-  const {page, errors} = await board({width: 1440});
+  const {page, errors} = await board({width: 1600});
   try {
     const mast = page.locator('#clock .fv-diff');
     assert.equal(await mast.textContent(), 'CUSTOM · 2 HARDER · 1 EASIER');
     assert.equal(await mast.isVisible(), true);
-    assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, 'the footer copy is for 1300 px and under');
+    assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, 'the footer copy is for 1500 px and under');
     assert.equal(await mast.getAttribute('aria-expanded'), 'false');
     await mast.click();
     const pop = page.locator('#fvDiffPop');
@@ -188,7 +188,7 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
     assert.ok(await knob(2) < 50);
     // Under its chip, inside the window.
     const [chip, box] = await Promise.all([mast.boundingBox(), pop.boundingBox()]);
-    assert.ok(box.y > chip.y + chip.height - 1 && box.x + box.width <= 1440);
+    assert.ok(box.y > chip.y + chip.height - 1 && box.x + box.width <= 1600);
     // Focus goes into the dialog, and Esc brings it back to the chip with no
     // tooltip left open over the closed popover.
     assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
@@ -222,33 +222,80 @@ const mastBoxes = (page, [save, flags]) => page.evaluate(async ([save, flags, FL
     scroll: document.documentElement.scrollWidth};
 }, [save, flags, FLAGS]);
 
-test('at 1301 px and over the chip ends the clock\'s last line, inside the masthead', async () => {
-  for (const width of [1301, 1366, 1440]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
+const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0, rules: []};
+// Where the search control starts, and where the sphere's first ball needs it
+// to start: 40 px after the nav, 100 px of ball, 12 px of gap.
+const ballRoom = page => page.evaluate(() => ({control: ssMastControl().getBoundingClientRect().left,
+  right: ssMastControl().getBoundingClientRect().right,
+  rest: document.getElementById('nav').getBoundingClientRect().right + SS_BALL_ROOM,
+  clock: document.getElementById('clock').getBoundingClientRect().left,
+  foot: document.getElementById('mast').classList.contains('fv-chipfoot')}));
+
+test("at 1501 px and over the chip ends the clock's last line, unless it would crowd the sphere", async () => {
+  const placed = {};
+  for (const width of [1501, 1530, 1600]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
     const what = `${width} ${save.length} chars${flags ? ' with flags' : ''}`;
-    const {page, errors} = await board({width});
-    try {
-      const b = await mastBoxes(page, [save, flags]);
-      assert.equal(b.scroll, width, `${what} scrolls sideways`);
-      // The clock's content box stays inside the masthead.
-      const [ml, mt, mw, mh] = b.mast, [cl, ct, cw, ch] = b.clock;
-      assert.ok(cl >= ml && ct >= mt && cl + cw <= ml + mw && ct + ch <= mt + mh, `${what}: clock ${b.clock} outside ${b.mast}`);
-      // In the clock's last line and no other, never a line of its own (the web
-      // build's live dot always adds a line, so no fixed count).
-      const lines = await page.$$eval('#clock > small', ls => ls.map(l => l.querySelectorAll('.fv-diff').length));
-      assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1], what);
-      assert.equal(await page.locator('#clock .fv-diff').isVisible(), true, what);
-      assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, what);
-      // The search field (or its icon, where the chip leaves it no room) ends before the clock.
-      const [control, clock] = await page.evaluate(() => [ssMastControl().getBoundingClientRect().right,
-        document.getElementById('clock').getBoundingClientRect().left]);
-      assert.ok(control <= clock, `${what}: search ${control} runs into the clock ${clock}`);
-      assert.deepEqual(errors, []);
-    } finally { await page.close(); }
+    const boxes = [];
+    for (const houseRules of [CUSTOM, null]) {
+      const {page, errors} = await board({width, houseRules});
+      try {
+        const b = await mastBoxes(page, [save, flags]);
+        boxes.push(b);
+        assert.equal(b.scroll, width, `${what} scrolls sideways`);
+        // The clock's content box stays inside the masthead.
+        const [ml, mt, mw, mh] = b.mast, [cl, ct, cw, ch] = b.clock;
+        assert.ok(cl >= ml && ct >= mt && cl + cw <= ml + mw && ct + ch <= mt + mh, `${what}: clock ${b.clock} outside ${b.mast}`);
+        const room = await ballRoom(page);
+        // The search field (or its icon) ends before the clock and keeps out of the ball's room.
+        assert.ok(room.right <= room.clock, `${what}: search ${room.right} runs into the clock ${room.clock}`);
+        assert.ok(room.control >= room.rest - 0.5, `${what}: search at ${room.control} is in the ball's room, which ends at ${room.rest}`);
+        if (houseRules) {
+          placed[what] = room.foot ? 'foot' : 'mast';
+          assert.equal(await page.locator('#clock .fv-diff').isVisible(), !room.foot, what);
+          assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), room.foot, what);
+          // On the clock, in its last line and no other, never a line of its own (the
+          // web build's live dot always adds a line, so no fixed count).
+          if (!room.foot) {
+            const lines = await page.$$eval('#clock > small', ls => ls.map(l => l.querySelectorAll('.fv-diff').length));
+            assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1], what);
+          }
+        }
+        assert.deepEqual(errors, []);
+      } finally { await page.close(); }
+    }
+    // With the chip in the footer the masthead is exactly the one without a chip.
+    if (placed[what] === 'foot') assert.deepEqual(boxes[0], boxes[1], what);
   }
+  // A short name keeps the chip on the clock; a long name with a long chip sends it to the footer.
+  assert.equal(placed['1600 7 chars'], 'mast');
+  assert.equal(placed['1501 36 chars'], 'foot');
 });
 
-test('at 1300 px and under the masthead is the board\'s own, and the chip is in the footer', async () => {
-  for (const width of [1300, 900, 540, 390]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
+test("the chip's place is decided once, from the clock with the chip in: nothing flips", async () => {
+  const {page, errors} = await board({width: 1501});
+  try {
+    const seen = await page.evaluate(async LONG => {
+      D.meta.save = LONG; drawMast();
+      const seen = [];
+      for (let i = 0; i < 12; i++) {
+        await new Promise(done => requestAnimationFrame(done));
+        seen.push(document.getElementById('mast').classList.contains('fv-chipfoot'));
+      }
+      ssFitMast(); ssFitMast();
+      seen.push(document.getElementById('mast').classList.contains('fv-chipfoot'));
+      return seen;
+    }, LONG);
+    // The first frame's callbacks run before the observer has measured; from then on it holds.
+    assert.deepEqual(seen.slice(1), Array(seen.length - 1).fill(true), `the class flipped: ${seen}`);
+    // Back to a short name, the chip returns to the clock.
+    await mastBoxes(page, ['Fixture', false]);
+    assert.equal(await page.locator('#clock .fv-diff').isVisible(), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test("at 1500 px and under the masthead is the board's own, and the chip is in the footer", async () => {
+  for (const width of [1500, 1440, 1301, 900, 540, 390]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
     const what = `${width} ${save.length} chars${flags ? ' with flags' : ''}`;
     const boxes = [];
     // With the difficulty (chip in the markup, hidden) and with none at all,
@@ -268,29 +315,21 @@ test('at 1300 px and under the masthead is the board\'s own, and the chip is in 
   }
 });
 
-test("at 1440 px the search icon keeps out of the sphere's resting place, closing on the chip's clock", async () => {
-  const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0, rules: []};
-  const fit = async houseRules => {
-    const {page, errors} = await board({width: 1440, houseRules});
+test("the search control keeps out of the sphere's resting place, Normal or Custom chip", async () => {
+  for (const houseRules of [NORMAL, CUSTOM]) for (const width of [1501, 1530, 1440, 1301]) for (const save of ['Fixture', LONG]) {
+    // At 1301 px a 36-character name leaves no room for the ball and the icon
+    // together, chip or no chip: the brand and the nav alone reach past it.
+    if (width === 1301 && save === LONG) continue;
+    const what = `${houseRules.label} ${width} ${save.length} chars`;
+    const {page, errors} = await board({width, houseRules});
     try {
-      await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
-      // The first ball rests 40 px after the nav, 100 px wide, 12 px clear of the search control.
-      const out = await page.evaluate(() => ({control: ssMastControl().getBoundingClientRect().left,
-        rest: document.getElementById('nav').getBoundingClientRect().right + SS_BALL_ROOM,
-        clock: document.getElementById('clock').getBoundingClientRect().left,
-        right: ssMastControl().getBoundingClientRect().right, margin: ssFieldBtn.style.marginRight}));
+      await mastBoxes(page, [save, false]);
+      const room = await ballRoom(page);
+      assert.ok(room.control >= room.rest - 0.5, `${what}: search at ${room.control} is in the ball's room, which ends at ${room.rest}`);
+      assert.ok(room.clock - room.right >= 12 - 0.5, `${what}: and stays the sphere's gap clear of the clock`);
       assert.deepEqual(errors, []);
-      return out;
     } finally { await page.close(); }
-  };
-  // A preset's chip is its name: the icon moves up to the clock and clears the ball.
-  const normal = await fit(NORMAL);
-  assert.ok(normal.control >= normal.rest - 0.5, `the icon at ${normal.control} is in the ball's room, which ends at ${normal.rest}`);
-  assert.ok(normal.clock - normal.right >= 12 - 0.5, "and stays the sphere's gap clear of the clock");
-  // A longer chip can leave less room than that: the icon gives all it can, and no more.
-  const custom = await fit(CUSTOM);
-  assert.equal(custom.margin, '-28px');
-  assert.ok(custom.clock - custom.right >= 12 - 0.5);
+  }
 });
 
 // A long page, so the footer's chip is well out of the window near the top.
@@ -307,7 +346,7 @@ const state = page => page.evaluate(() => ({
 test('a resize that swaps the chip closes the popover; focus goes only where it can be seen', async () => {
   // Desktop to narrow, near the top of a long page: the footer's chip is off
   // screen, so focus leaves the popover for the page, and nothing scrolls.
-  let {page, errors} = await board({width: 1440, ...LONG_PAGE});
+  let {page, errors} = await board({width: 1600, ...LONG_PAGE});
   try {
     await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, 400); });
     await page.locator('#clock .fv-diff').click();
@@ -319,7 +358,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
   } finally { await page.close(); }
 
   // At the bottom of the page the footer's chip is in the window: focus goes to it.
-  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
+  ({page, errors} = await board({width: 1600, ...LONG_PAGE}));
   try {
     await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
     await page.locator('#clock .fv-diff').click();
@@ -333,7 +372,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
   // Focus on the open popover's own chip, which the resize hides: the browser
   // drops it to the page before the handler runs, and it stays there (both
   // directions). The popover closes and nothing reads as open.
-  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
+  ({page, errors} = await board({width: 1600, ...LONG_PAGE}));
   try {
     await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
     const mast = page.locator('#clock .fv-diff');
@@ -355,7 +394,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await foot.focus();
     assert.equal((await state(page)).focus, 'foot');
     await page.mouse.move(5, 5);
-    await page.setViewportSize({width: 1440, height: 1000});
+    await page.setViewportSize({width: 1600, height: 1000});
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
     const s = await state(page);
     assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
@@ -363,7 +402,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
   } finally { await page.close(); }
 
   // Focus the reader put elsewhere while it was open stays there.
-  ({page, errors} = await board({width: 1440}));
+  ({page, errors} = await board({width: 1600}));
   try {
     await page.locator('#clock .fv-diff').click();
     await page.evaluate(() => document.querySelector('#nav a').focus());
@@ -380,7 +419,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await foot.scrollIntoViewIfNeeded();
     await foot.click();
     assert.deepEqual((await state(page)).expanded, ['false', 'true']);
-    await page.setViewportSize({width: 1440, height: 1000});
+    await page.setViewportSize({width: 1600, height: 1000});
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
     const s = await state(page);
     assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'mast', ['false', 'false'], false]);
@@ -399,7 +438,7 @@ const refresh = page => page.evaluate(() => {
 test('a live refresh gives focus back to the chip that had it, and to nothing else', async () => {
   // The focused chip is replaced: its replacement gets focus, the popover
   // stays open on it, and no tooltip opens.
-  let {page, errors} = await board({width: 1440});
+  let {page, errors} = await board({width: 1600});
   try {
     const mast = page.locator('#clock .fv-diff');
     await mast.click();
@@ -415,7 +454,7 @@ test('a live refresh gives focus back to the chip that had it, and to nothing el
   } finally { await page.close(); }
 
   // Focus elsewhere, or on the page itself, is left where it is.
-  ({page, errors} = await board({width: 1440}));
+  ({page, errors} = await board({width: 1600}));
   try {
     await page.evaluate(() => document.querySelector('#nav a').focus());
     await refresh(page);
@@ -428,7 +467,7 @@ test('a live refresh gives focus back to the chip that had it, and to nothing el
 
   // Focus inside the open popover (where a click on the chip puts it): the
   // refresh refills the popover and focus stays in it, still open on the new chip.
-  ({page, errors} = await board({width: 1440}));
+  ({page, errors} = await board({width: 1600}));
   try {
     await page.locator('#clock .fv-diff').click();
     assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');

@@ -259,7 +259,7 @@ class CityMapView {
       if(action === 'details' && !inSiteLink(e)){
         e.preventDefault();
         if($('locationMapDialog').open) $('locationMapDialog').close();
-        openSite(this.selected);
+        siteOpenOver(this.selected);
       }
     });
     // The column headers carry a button role, so they answer to a button's keys.

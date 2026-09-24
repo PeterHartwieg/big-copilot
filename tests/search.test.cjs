@@ -884,7 +884,7 @@ const withChip = page => page.evaluate(() => {
 });
 
 test('"What am I playing on?" opens the difficulty chip\'s settings where the reader is, lit while they are open', async () => {
-  const page = await board();
+  const page = await board({width: 1600});
   try {
     await withChip(page);
     await page.click('#ssAsk .ss-aq[data-ask="playing"]');
@@ -912,7 +912,7 @@ test('"What am I playing on?" opens the difficulty chip\'s settings where the re
   } finally { await page.close(); }
 });
 
-test('at 1300 px and under "What am I playing on?" opens the footer\'s chip, in the window', async () => {
+test('at 1500 px and under "What am I playing on?" opens the footer\'s chip, in the window', async () => {
   const page = await board({width: 1000, height: 700});
   try {
     await withChip(page);
@@ -991,6 +991,80 @@ test('By weekday is found by the old section\'s name and opens the chart on it',
     assert.equal(await lit(page), 'By weekday≈ weekly rhythm');
     await page.keyboard.press('Enter');
     assert.deepEqual(await page.evaluate(() => [page, sub.company, chartWindow]), ['company', 'results', 'wd']);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// --- integration review round 1 ---------------------------------------------------------
+
+test("a site's page opened from the map over the palette takes the palette down, and the crumb names the page under it", async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    await page.keyboard.press('Shift+Enter');
+    assert.equal(await page.locator('#locationMapDialog').evaluate(d => d.open), true);
+    // The card's "its page" is a link to the address; the map's own details action goes the same way.
+    await page.evaluate(() => {
+      const a = document.createElement('a');
+      a.href = '#site/secondavenue-2'; a.id = 'probeGo'; a.textContent = 'its page';
+      $('locationMapDialog').appendChild(a);
+    });
+    await page.click('#probeGo');
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
+    assert.equal(await page.locator('#locationMapDialog').evaluate(d => d.open), false);
+    assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, siteKey, siteFrom && siteFrom.label]),
+      ['#site/secondavenue-2', true, GYM, 'Today']);
+    // Without a palette, a name on the map is a name: the portfolio's way back.
+    await page.evaluate(() => { siteShut(); showPage('today'); siteOpenOver(D.businesses[0].key); });
+    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom]), [SHOP, null]);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('the palette opens over the difficulty popover by closing it', async () => {
+  const page = await board({width: 1600});
+  try {
+    await withChip(page);
+    await page.locator('#clock .fv-diff').click();
+    assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), true);
+    await page.keyboard.press('Control+k');
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), false);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'ssInput');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('asked again with its settings already open, the difficulty popover takes focus', async () => {
+  const page = await board({width: 1600});
+  try {
+    await withChip(page);
+    await page.evaluate(() => ssAsk('playing'));
+    await page.evaluate(() => { document.activeElement.blur(); ssAsk('playing'); });
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test("a site's link inside a palette option is hidden from a screen reader, which hears the option's own name", async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    const row = page.locator('#ssRes .ss-row.on');
+    assert.deepEqual(await row.locator('a.ss-sl').evaluate(a => [a.getAttribute('aria-hidden'), a.tabIndex]), ['true', -1]);
+    assert.equal(await row.locator('.sf-sr').textContent(), 'Test Fitness');
+    // Ctrl+click is still the browser's.
+    const ctrl = await page.evaluate(() => {
+      let prevented = null;
+      const probe = e => { prevented = e.defaultPrevented; e.preventDefault(); };
+      window.addEventListener('click', probe);
+      document.querySelector('#ssRes .ss-row.on a.ss-sl').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true}));
+      window.removeEventListener('click', probe);
+      return prevented;
+    });
+    assert.equal(ctrl, false);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
