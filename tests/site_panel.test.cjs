@@ -1503,7 +1503,7 @@ test('a factory and a depot on a phone scroll their wide blocks inside themselve
       await page.setViewportSize({width: 390, height: 844});
       await page.evaluate(() => drawSite());
       const seen = await page.evaluate(() => {
-        const W = document.documentElement.clientWidth;
+        const W = document.documentElement.getBoundingClientRect().width;
         const spill = [...document.querySelectorAll('#sitePanel *')].filter(el => {
           if (el.getBoundingClientRect().right <= W + 1) return false;
           for (let a = el.parentElement; a && a.id !== 'sitePanel'; a = a.parentElement)
@@ -1514,7 +1514,7 @@ test('a factory and a depot on a phone scroll their wide blocks inside themselve
         return {page: document.documentElement.scrollWidth, W, spill,
                 lines: lines ? lines.parentElement.scrollWidth > lines.parentElement.clientWidth : null};
       });
-      assert.equal(seen.page, seen.W, `${kind}: nothing pushes the page sideways`);
+      assert.ok(seen.page <= seen.W, `${kind}: nothing pushes the page sideways`);
       assert.deepEqual(seen.spill, [], `${kind}: nothing wider than the screen outside a scrolling box`);
       if (kind === 'factory') assert.equal(seen.lines, true, 'the lines scroll inside their own box');
     } finally { await page.close(); }

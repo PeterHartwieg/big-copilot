@@ -90,7 +90,7 @@ test('debt joins the cash tile only once it outweighs a week of profit', async (
   page = await today(390, {debt: 1890000, profitSum7: 70000});
   try {
     assert.match(await page.locator('#kpis .kpi').nth(2).innerText(), /no cash history · \$1\.89M owed/);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), true);
   } finally { await page.close(); }
   page = await today(1440, {debt: 50000, profitSum7: 70000});
   try {
@@ -165,13 +165,13 @@ test('at 390 px Today pairs its tiles, stacks its cards and never scrolls sidewa
       const site = row.querySelector('.site').getBoundingClientRect();
       const what = row.querySelector('.what').getBoundingClientRect();
       return {
-        scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth,
+        scroll: document.documentElement.scrollWidth, width: document.documentElement.getBoundingClientRect().width,
         tileTops: tiles.map(r => Math.round(r.top)), tileLefts: tiles.map(r => Math.round(r.left)),
         cardLefts: cards.map(r => Math.round(r.left)),
         sentenceBelowSite: what.top >= site.bottom - 1,
       };
     });
-    assert.equal(m.scroll, m.width, 'no sideways scroll');
+    assert.ok(m.scroll <= m.width, 'no sideways scroll');
     assert.equal(m.tileTops[0], m.tileTops[1]);
     assert.equal(m.tileTops[2], m.tileTops[3]);
     assert.ok(m.tileTops[2] > m.tileTops[0], 'two rows of two');
@@ -208,7 +208,7 @@ test('at 390 px the Growth grid narrows its names, never its cells or the page',
       const heads = [...document.querySelectorAll('#market .h')];
       const name = document.querySelector('#market .r .mk-name');
       return {
-        scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth,
+        scroll: document.documentElement.scrollWidth, width: document.documentElement.getBoundingClientRect().width,
         label: Math.round(box(document.querySelector('#market .r')).width),
         cell: Math.min(...cellEls.map(e => box(e).width)),
         // Every seller's dot stays inside its own cell.
@@ -221,7 +221,7 @@ test('at 390 px the Growth grid narrows its names, never its cells or the page',
       };
     });
     const phone = await draw();
-    assert.equal(phone.scroll, phone.width, 'no sideways scroll');
+    assert.ok(phone.scroll <= phone.width, 'no sideways scroll');
     assert.ok(phone.label < 120, `the name column narrows (${phone.label}px)`);
     assert.ok(phone.cell >= 28, `a cell keeps room for "100" (${phone.cell}px)`);
     assert.ok(phone.dotsInside, 'the seller dots stay inside their cell');
@@ -255,14 +255,14 @@ test('at 390 px the count lines, the Ask row and a live Plan imports card share 
       const clashes = [];
       blocks.forEach((a, i) => blocks.slice(i + 1).forEach(b => { if(meets(a, b)) clashes.push(`${a.el} / ${b.el}`); }));
       const ask = document.getElementById('ssAsk'), card = document.getElementById('planImportsCard');
-      return {clashes, scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth,
+      return {clashes, scroll: document.documentElement.scrollWidth, width: document.documentElement.getBoundingClientRect().width,
         askShown: ask.getClientRects().length > 0, askInside: box(ask).l >= -0.5 && box(ask).r <= innerWidth + 0.5,
         askBelowCards: box(ask).t >= Math.max(...[...document.querySelectorAll('#secMoves .move')].map(c => box(c).b)) - 0.5,
         cardText: card.querySelector('.what').textContent, cardInside: box(card).r <= innerWidth + 0.5,
         lines: document.querySelectorAll('#alertMinor .td-count').length};
     });
     assert.deepEqual(m.clashes, [], 'nothing on Today overlaps');
-    assert.equal(m.scroll, m.width, 'no sideways scroll');
+    assert.ok(m.scroll <= m.width, 'no sideways scroll');
     assert.equal(m.lines, 2);
     assert.ok(m.askShown && m.askInside && m.askBelowCards, 'the Ask row sits under the cards, inside the window');
     assert.match(m.cardText, /^12 import settings/);
@@ -300,12 +300,12 @@ test('between the phone and the desk the tiles pair up before an amount would cl
           rows: new Set(tiles.map(t => Math.round(t.getBoundingClientRect().top))).size,
           clipped: tiles.filter(t => { const v = t.querySelector('.v'); return v.scrollWidth > v.clientWidth || t.scrollWidth > t.clientWidth; })
             .map(t => t.querySelector('.v').textContent.trim()),
-          scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+          scroll: document.documentElement.scrollWidth, client: document.documentElement.getBoundingClientRect().width,
         };
       });
       assert.equal(m.rows, width <= 1040 ? 2 : 1, `${width}: ${width <= 1040 ? 'two by two' : 'four in a row'}`);
       assert.deepEqual(m.clipped, [], `${width}: every amount fits its tile`);
-      assert.equal(m.scroll, m.client, `${width}: no sideways scroll`);
+      assert.ok(m.scroll <= m.client, `${width}: no sideways scroll`);
     } finally { await page.close(); }
   }
 });
@@ -326,12 +326,12 @@ test('a figure shrinks only when it is long: 30 px on a desk, 24 px at most on a
           spill: vs.filter(v => v.scrollWidth > v.clientWidth || v.closest('.kpi').scrollWidth > v.closest('.kpi').clientWidth)
             .map(v => `${v.textContent} ${v.scrollWidth}/${v.clientWidth}`),
           sizes: vs.map(v => parseFloat(getComputedStyle(v).fontSize)),
-          scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+          scroll: document.documentElement.scrollWidth, client: document.documentElement.getBoundingClientRect().width,
         };
       }, AMOUNTS);
       assert.ok(m.drawn, `${width}: each figure carries its own length`);
       assert.deepEqual(m.spill, [], `${width}: every figure fits its tile`);
-      assert.equal(m.scroll, m.client, `${width}: no sideways scroll`);
+      assert.ok(m.scroll <= m.client, `${width}: no sideways scroll`);
       if (width <= 640) assert.ok(m.sizes.every(px => px <= 24), `${width}: a phone's figures are 24 px at most (${m.sizes})`);
       else assert.equal(m.sizes[0], 30, `${width}: a seven-figure amount keeps the full 30 px (${m.sizes})`);
       // Only the longer figures give way, never below the one before them.

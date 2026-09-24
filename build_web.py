@@ -438,7 +438,9 @@ def release_info(root: str = HERE) -> dict:
     """The build stamp and the newest changelog entry the page ships with."""
     with open(os.path.join(root, "web", "changelog.json"), encoding="utf-8") as fh:
         changes = json.load(fh)
-    return {"version": stamp(root), "latest": max(changes, key=lambda entry: (entry["date"], entry["pr"]), default=None)}
+    # changelog.json is kept newest first, so among entries of one date the first listed is the newest.
+    newest = max(range(len(changes)), key=lambda i: (changes[i]["date"], -i), default=None)
+    return {"version": stamp(root), "latest": None if newest is None else changes[newest]}
 
 
 def release_json(release: dict) -> str:

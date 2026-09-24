@@ -318,12 +318,14 @@ test('on a phone the masthead has the icon, and the palette is the whole screen,
     assert.equal(await page.locator('#ssFieldBtn').isVisible(), true);
     await page.click('#ssFieldBtn');
     const box = await page.locator('#ssPal').boundingBox();
-    assert.deepEqual([box.x, box.y, box.width, box.height], [0, 0, 390, 844]);
+    // The whole page: the window less the scrollbar gutter the page keeps.
+    const page_w = await page.evaluate(() => document.documentElement.getBoundingClientRect().width);
+    assert.deepEqual([box.x, box.y, box.width, box.height], [0, 0, page_w, 844]);
     assert.equal(await page.locator('#ssPal .ss-cancel').isVisible(), true);
     await typed(page, 'gym');
     await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"]');
     assert.equal(await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-row').count(), 3);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), 'nothing scrolls sideways');
     await page.click('#ssPal .ss-cancel');
     assert.equal(await page.locator('#ssPal').isHidden(), true);
     assert.deepEqual(page.errors, []);
@@ -413,7 +415,7 @@ test('the sphere rests between the nav and the field, and the field steps down b
     await page.setViewportSize({width: 1180, height: 1000});
     await page.waitForFunction(() => $('mast').classList.contains('ss-tight'));
     assert.equal(await page.locator('#ssFieldBtn').isVisible(), true);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 1180);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), 'nothing scrolls sideways');
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -1211,12 +1213,12 @@ test('the search control wears the New badge until the palette first opens, and 
         const c = ssMastControl(), b = c.querySelector('[data-new-feature="board-search"]');
         const r = c.getBoundingClientRect(), br = b.getBoundingClientRect(), m = $('mast').getBoundingClientRect();
         return {id: c.id, badge: !b.hidden && br.width > 0, box: [r.left, r.top, r.width, r.height].map(Math.round),
-          inside: br.top >= m.top && br.left >= 0 && br.right <= innerWidth, scroll: document.documentElement.scrollWidth};
+          inside: br.top >= m.top && br.left >= 0 && br.right <= innerWidth, scroll: document.documentElement.scrollWidth, room: document.documentElement.getBoundingClientRect().width};
       });
       const before = await shown();
       assert.equal(before.badge, true, `${what}: the badge shows on ${before.id}`);
       assert.ok(before.inside, `${what}: the badge stays inside the masthead and the window`);
-      assert.equal(before.scroll, width, `${what}: nothing scrolls sideways`);
+      assert.ok(before.scroll <= before.room, `${what}: nothing scrolls sideways`);
       // Opening the palette is the visit; both forms lose the badge together.
       await page.evaluate(() => ssOpen());
       await page.evaluate(() => ssClose());

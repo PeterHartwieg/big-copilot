@@ -133,6 +133,11 @@ namespace BigCopilotLink
         private readonly DateTime _loadedAtUtc = DateTime.UtcNow;
         // MinValue, not now: the first refresh must not be throttled by the load itself.
         private DateTime _lastRefreshStarted = DateTime.MinValue;
+        // The seconds part of the last stamp this service published, so none is
+        // issued twice within a city session. The service is made anew at every
+        // city load; across loads and mod reloads, uniqueness rests on the wall
+        // clock having moved on since the last stamp.
+        private long _lastStampSeconds;
         private int _lastHourSeen = -1;
         private bool _lastSavingInProgress;
         private bool _lastHadChanges;
@@ -318,9 +323,37 @@ namespace BigCopilotLink
 
         /// <summary>
         /// Main thread only. A trigger whose stall is hidden anyway (a building load)
-        /// may pass the fifteen-second window; nothing passes Busy.
+        /// may pass the fifteen-second window; nothing passes Busy. A building load walks
+        /// on the main thread, under the black screen.
         /// </summary>
         public RefreshResult TryStartRefresh(string trigger, bool pastWindow)
+        {
+            return TryStartRefresh(trigger, pastWindow, pastWindow);
+        }
+
+        /// <summary>
+        /// Main thread only, right after a write applied (WriteService). The page waits
+        /// for the stamp to move, so this passes the fifteen-second window, as a building
+        /// load does, but never Busy (a write only runs while nothing is in flight, so
+        /// Busy is down here). Unlike a building load it walks on whichever path is on:
+        /// nothing hides a stall, and the state is not being rewritten under the walk.
+        /// Refused (the game started saving within the frame, say), it is kept as the
+        /// next attach refresh, which the page's /health polls then run once the window
+        /// lifts, the way a refused building load is.
+        /// </summary>
+        public RefreshResult TryStartRefreshAfterWrite()
+        {
+            var result = TryStartRefresh("write", true, false);
+            if (result.Outcome != RefreshOutcome.Started && !result.Attempted) _pendingAfterAttach = true;
+            return result;
+        }
+
+        /// <summary>
+        /// Main thread only. <paramref name="pastWindow"/> skips the fifteen-second
+        /// window; <paramref name="onMainThread"/> walks on the main thread whatever the
+        /// worker path's state (a building load). Nothing passes Busy.
+        /// </summary>
+        private RefreshResult TryStartRefresh(string trigger, bool pastWindow, bool onMainThread)
         {
             var sinceLast = (DateTime.UtcNow - _lastRefreshStarted).TotalSeconds;
             if (_busy || (!pastWindow && sinceLast < ThrottleSeconds))
@@ -350,11 +383,11 @@ namespace BigCopilotLink
             _retryPending = false;
             _pendingAfterAttach = false;
 
-            // A trigger past the window is a building load: the frame is black and the
-            // load coroutine is rewriting the very state a walk would read, so that
-            // refresh runs on the main thread, where the stall is hidden and the bytes
-            // are certain. It also keeps those failures out of the worker's count.
-            if (_backgroundSerialize && !pastWindow)
+            // A building load walks on the main thread: the frame is black and the load
+            // coroutine is rewriting the very state a walk would read, so the stall is
+            // hidden and the bytes are certain. It also keeps those failures out of the
+            // worker's count. A write's refresh passes the window too but not this.
+            if (_backgroundSerialize && !onMainThread)
             {
                 // The whole job on its own thread: walk, gzip, publish. Its own
                 // thread, not the pool: the listener's handlers share the pool and a
@@ -392,7 +425,7 @@ namespace BigCopilotLink
             // Counts toward the re-probe only when the fallback chose this thread, not
             // when a building load did (a building load takes it even with the
             // worker path on).
-            var fallbackRun = !_backgroundSerialize && !pastWindow;
+            var fallbackRun = !_backgroundSerialize && !onMainThread;
             try
             {
                 LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
@@ -434,7 +467,7 @@ namespace BigCopilotLink
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic |
                 System.Reflection.BindingFlags.Public);
 
-        private static bool CanSaveNow()
+        internal static bool CanSaveNow()
         {
             if (CanSaveMethod != null)
             {
@@ -458,7 +491,7 @@ namespace BigCopilotLink
         /// the global namespace so that nothing a later using brings in (UnityEngine
         /// has a UI namespace) can shadow the game's.
         /// </summary>
-        private static string RefusalReason()
+        internal static string RefusalReason()
         {
             if (global::UI.InteriorDesigner.InteriorDesignerUI.IsOpen) return "interior";
             if (global::BigAmbitions.PlacementSystem.PlacementSystem.IsInPlacementMode) return "placement";
@@ -560,21 +593,28 @@ namespace BigCopilotLink
 
                 var now = DateTime.UtcNow;
                 var unixSeconds = (long)(now - UnixEpoch).TotalSeconds;
-                var stamp = day.ToString(CultureInfo.InvariantCulture) + "-" +
-                            hour.ToString(CultureInfo.InvariantCulture) + "-" +
-                            unixSeconds.ToString(CultureInfo.InvariantCulture);
                 var iso = now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
-                // One reference swap publishes everything at once, so a reader can
-                // never pair new bytes with an old stamp. A city unloaded meanwhile
-                // (Clear ran) gets nothing: the bytes would outlive the game.
-                var next = new Snapshot(gz, stamp, day, iso);
                 // A refused enqueue means the city unloaded: Clear() already reset
                 // Busy and dropped the bytes, so there is nothing left to publish.
                 MainThreadDispatcher.Enqueue(delegate
                 {
                     if (_cleared) return;
-                    _current = next;
+                    // The stamp is opaque, but two refreshes must never share one: an
+                    // apply's refresh and a quick undo's can land in the same second,
+                    // and a page waiting for the stamp to move would wait out its
+                    // whole deadline. So the seconds are last + 1 at least, as the
+                    // mock's are. Taken here, on the main thread, where every publish
+                    // runs one after another.
+                    var seconds = Math.Max(unixSeconds, _lastStampSeconds + 1);
+                    _lastStampSeconds = seconds;
+                    var stamp = day.ToString(CultureInfo.InvariantCulture) + "-" +
+                                hour.ToString(CultureInfo.InvariantCulture) + "-" +
+                                seconds.ToString(CultureInfo.InvariantCulture);
+                    // One reference swap publishes everything at once, so a reader can
+                    // never pair new bytes with an old stamp. A city unloaded meanwhile
+                    // (Clear ran) gets nothing: the bytes would outlive the game.
+                    _current = new Snapshot(gz, stamp, day, iso);
                     _busy = false;
                     // Any published refresh ends the failure streak: "two in a row"
                     // means two failed walks with nothing served between them. A

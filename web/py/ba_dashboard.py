@@ -1519,6 +1519,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         # Every item name the text knows, so a material that no recipe or shop
         # line mentions is still named where the tables list it.
         "itemNames": {k: v for k, v in names.locale.items() if k.startswith("ba:itemname_")},
+        # The game's name for every skill a station can ask for, so the write
+        # dialogs never spell a role from its slug ("Securityguard").
+        "skillNames": {skill: names.label(skill) for skill in sorted({s for v in STATION_SKILLS.values() for s in v})},
         "cashFlow": _cash_flow(ledger, daily, day),
         "ledgerDays": len(ledger),
         "alerts": alerts["lines"],
@@ -1872,6 +1875,42 @@ def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
     return sorted(gaps)
 
 
+def schedule_entries(save: Save, registration: dict) -> list:
+    """A business's shifts as the shift print reads them: (weekday, from, to,
+    employee id, station id, type), every field at its default when the save
+    leaves it out."""
+    return [
+        (
+            (scheduled.get("day") or 0) % 7,
+            shift.get("startingHour") or 0,
+            shift.get("endingHour") or 0,
+            shift.get("employeeId") or "",
+            shift.get("itemInstanceId") or "",
+            shift.get("type") or 0,
+        )
+        for scheduled in save.items(registration.get("scheduleDays"))
+        for shift in save.items(scheduled.get("workShifts"))
+    ]
+
+
+def shift_print(entries) -> str:
+    """The schedule write's compare-and-set: docs/game-link-api.md, "Shift print".
+
+    The mod computes the same from live state, so this is the contract's
+    algorithm to the letter: one line per shift, sorted by ordinal string order,
+    joined with newlines, FNV-1a 32-bit over the UTF-8 bytes. No shifts at all
+    is the print of the empty string, 811c9dc5.
+    """
+    lines = sorted(
+        "|".join((str(int(d)), str(int(f)), str(int(t)), e, s, str(int(k))))
+        for d, f, t, e, s, k in entries
+    )
+    value = 0x811C9DC5
+    for byte in "\n".join(lines).encode("utf-8"):
+        value = ((value ^ byte) * 0x01000193) & 0xFFFFFFFF
+    return f"{value:08x}"
+
+
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
     st = latest.get(addr, {})
     name = b.get("BusinessName")
@@ -2054,6 +2093,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         # same skills as the game's ids, in the same order.
         "uniformGaps": [names.label(skill) for skill in uniform_gaps],
         "uniformGapSkills": uniform_gaps,
+        # What a schedule write sends as `expect`: the shifts as these bytes
+        # hold them, printed the way the mod prints its live ones.
+        "shiftPrint": shift_print(schedule_entries(save, b)),
         # The locker is what the player manages uniforms from, so it is checked
         # directly rather than through any demand; one still in cargo is boxed.
         # A type whose customers never ask about uniforms needs neither.
@@ -2876,7 +2918,7 @@ def _supply(
         who = names.addr(importer)
         if active and arrives >= day:
             next_day = arrives if next_day is None else min(next_day, arrives)
-        for product in save.items(partnership["products"]):
+        for place, product in enumerate(save.items(partnership["products"])):
             warehouse = site_key(save.address(product["assignedWarehouse"]))
             ordered = product.get("amountOrderedLastWeek", 0)
             amount = product.get("amount", 0)
@@ -2884,9 +2926,13 @@ def _supply(
                 continue
             # Every contract on the line, for the page to list and a later
             # write to address; after a delivery a contract stays on only if
-            # it repeats, so a paused one may be a finished one-off.
+            # it repeats, so a paused one may be a finished one-off. `group`
+            # (the importer's place: its first contract in the plan) and
+            # `product` (this product's place in the contract) finish the
+            # game's delivery order, which the write's cap budget follows.
             contracts_at[(warehouse, product["itemName"])].append({
-                "order": order, "rank": rank, "id": partnership.get("id"), "importer": who,
+                "order": order, "group": rank[0], "product": place, "rank": rank,
+                "id": partnership.get("id"), "importer": who,
                 "smart": smart, "amount": amount, "lastWeek": ordered, "active": active,
                 "repeating": bool(partnership.get("isRepeatingOrder")),
                 "agent": partnership.get("employeeInstanceId") is not None,
@@ -9948,6 +9994,453 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
 .find .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .find:hover .go{color:var(--accent);transform:translateX(3px)}
 .find.hide{display:none}
+
+/* writes to the game: the write buttons, the dialog every write goes through
+   (the permission asked in the game included) and the undo strip. The design
+   is mockup/write-dialogs (NOTES.md); every class is gw- prefixed and every
+   helper class scoped under one, because the board's classes are global. The
+   dialog is a <dialog> on <body>, in the top layer; under 560 px it is a sheet.
+   The one signal to read is the wire under the title: the board's dot, a line,
+   the game. Blue packets travelling ask, green agrees or is done, red broken
+   refuses, amber waits or the game moved on, grey is busy. */
+.gw-acts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:10px;vertical-align:middle;font-weight:400}
+.gw-acts.gw-panel{display:flex;margin:10px 0 0}
+/* In a finding row: under the sentence, its own grid cell (drawAlerts()). */
+.find > .gw-find{grid-column:3/5;grid-row:2;margin:6px 0 0}
+.gw-dlg svg,.gw-btn svg,.gw-note svg,#gwToast svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.gw-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* the write buttons where they sit on the board: each wears a mini wire */
+.gw-btn{display:inline-flex;align-items:center;gap:9px;height:32px;padding:0 12px 0 10px;border-radius:9px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;white-space:nowrap;transition:transform .25s cubic-bezier(.34,1.56,.64,1),border-color .15s,background .15s;position:relative}
+.gw-btn:hover{border-color:var(--accent);transform:translateY(-1px)}
+.gw-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gw-btn.alt{background:transparent;border-color:var(--rule)}
+.gw-btn.alt:hover{border-color:var(--accent)}
+.gw-btn .n{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--on-accent);font:600 10.5px/1 "IBM Plex Mono",monospace}
+.gw-mw{position:relative;width:24px;height:10px;flex:none}
+.gw-mw::before{content:"";position:absolute;left:0;top:1.5px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.gw-mw::after{content:"";position:absolute;right:0;top:0;width:10px;height:10px;border-radius:2.5px;border:1.5px solid currentColor;box-sizing:border-box}
+.gw-mw i{position:absolute;left:8px;right:11px;top:4.5px;height:1.5px;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px);opacity:.55}
+.gw-mw b{position:absolute;left:7px;top:3.5px;width:3.5px;height:3.5px;border-radius:50%;background:var(--accent);opacity:0}
+.gw-btn:hover .gw-mw b,.gw-btn:focus-visible .gw-mw b{animation:gw-hop .8s ease-in-out infinite}
+@keyframes gw-hop{0%{transform:translateX(0);opacity:0}25%{opacity:1}75%{opacity:1}100%{transform:translateX(7px);opacity:0}}
+.gw-btn.off{border-style:dashed;border-color:var(--rule);background:transparent;color:var(--ink-3);cursor:not-allowed}
+.gw-btn.off:hover{transform:none;border-color:var(--rule)}
+.gw-btn.off svg{width:14px;height:14px}
+.gw-btn.off .n{background:var(--rule);color:var(--ink-2)}
+.gw-note{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--warn)}
+.gw-note svg{width:13px;height:13px}
+
+/* the dialog ------------------------------------------------------------- */
+.gw-dlg{width:min(480px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);box-sizing:border-box;padding:0;border-radius:16px;background:var(--surface);border:1px solid var(--rule);color:var(--ink);box-shadow:0 34px 80px -28px #000c;overflow:hidden}
+.gw-dlg[open]{display:flex;flex-direction:column}
+.gw-dlg::backdrop{background:#000a}
+.gw-grab{display:none}
+.gw-head{display:grid;grid-template-columns:40px minmax(0,1fr) 32px;gap:14px;align-items:center;padding:18px 16px 14px 20px;flex:none}
+.gw-kind{width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.gw-dlg .gw-kind svg{width:21px;height:21px}
+.gw-dlg:hover .gw-kind{transform:rotate(-8deg) scale(1.06)}
+.gw-head h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.gw-where{display:flex;align-items:center;gap:7px;margin-top:4px;font-size:12.5px;color:var(--ink-2);min-width:0;white-space:nowrap}
+.gw-where:empty{display:none}
+.gw-where>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.gw-dlg .hood{height:18px;min-width:22px;font-size:9.5px}
+.gw-x{width:32px;height:32px;border-radius:8px;border:0;background:none;color:var(--ink-3);display:grid;place-items:center;cursor:pointer;transition:color .15s,background .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.gw-x:hover{color:var(--ink);background:var(--raised);transform:rotate(90deg)}
+.gw-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* the verdict: the board's dot, a wire, the game; what the game said */
+.gw-verdict{display:flex;align-items:center;gap:12px;margin:0 20px;padding:10px 12px;min-height:42px;box-sizing:border-box;border-radius:10px;background:var(--ground);font-size:13px;color:var(--ink-2);flex:none}
+.gw-verdict b{color:var(--ink);font-weight:600}
+.gw-meta{margin-left:auto;font:500 11px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap;text-align:right}
+.gw-w{position:relative;flex:none;width:58px;height:16px;color:var(--info)}
+.gw-w .a{position:absolute;left:0;top:3px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.gw-w .g{position:absolute;right:0;top:0;width:17px;height:17px;display:grid;place-items:center}
+.gw-dlg .gw-w .g svg{width:17px;height:17px}
+.gw-w .ln{position:absolute;left:13px;right:21px;top:7.5px;height:1.5px;background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 6px);opacity:.6}
+.gw-w .p{position:absolute;left:12px;top:6px;width:4px;height:4px;border-radius:50%;background:currentColor;opacity:0}
+.gw-w.ask .p{animation:gw-pk 1.2s linear infinite}
+.gw-w.ask .p:nth-of-type(2){animation-delay:.4s}.gw-w.ask .p:nth-of-type(3){animation-delay:.8s}
+@keyframes gw-pk{0%{transform:translateX(0);opacity:0}20%{opacity:1}80%{opacity:1}100%{transform:translateX(22px);opacity:0}}
+.gw-w.ok{color:var(--accent)}.gw-w.ok .ln{background:currentColor;opacity:1}
+.gw-w.ok .g{animation:gw-nod .6s cubic-bezier(.34,1.56,.64,1)}
+@keyframes gw-nod{40%{transform:translateY(-3px) scale(1.12)}}
+.gw-w.no{color:var(--neg)}.gw-w.no .ln{background:linear-gradient(90deg,currentColor 0 34%,transparent 34% 66%,currentColor 66%);opacity:1}
+.gw-w.no .g{animation:gw-shake 2.6s ease-in-out infinite}
+@keyframes gw-shake{0%,84%,100%{transform:none}88%{transform:translateX(-2px)}92%{transform:translateX(2px)}96%{transform:translateX(-1px)}}
+.gw-w.wait{color:var(--warn)}.gw-w.wait .p:first-of-type{left:22px;opacity:1;animation:gw-blink 1.1s ease-in-out infinite}
+.gw-w.wait .g{animation:gw-ring 1.6s ease-in-out infinite}
+@keyframes gw-blink{50%{opacity:.2;transform:scale(.6)}}
+@keyframes gw-ring{0%,70%,100%{transform:none}76%{transform:rotate(-10deg)}82%{transform:rotate(10deg)}88%{transform:rotate(-6deg)}}
+.gw-w.busy{color:var(--ink-3)}.gw-w.busy .p:first-of-type{opacity:1;animation:gw-bounce .9s ease-in-out infinite alternate}
+@keyframes gw-bounce{from{transform:translateX(0)}to{transform:translateX(20px)}}
+.gw-w.moved{color:var(--warn)}.gw-w.moved .ln{background:currentColor;opacity:.8}
+.gw-w.moved .g svg{animation:gw-tick 2s steps(8) infinite}
+@keyframes gw-tick{to{transform:rotate(360deg)}}
+
+/* body and foot */
+.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 8 auto;overscroll-behavior:contain}
+/* The fixed strip: the notes a decision rests on, under the verdict. It never
+   scrolls with the rows. On a short window both give way so the foot stays
+   whole, the rows first (their shrink weighs eight times the strip's), and
+   the strip scrolls in what is left. */
+.gw-fix{display:flex;flex-direction:column;gap:14px;padding:16px 20px 0;flex:0 1 auto;min-height:0;max-height:45vh;max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
+.gw-fix:empty,.gw-body:empty{display:none}
+.gw-fix:not(:empty)+.gw-body{padding-top:14px}
+/* While any modal dialog is open the page behind it holds still. The page
+   scrolls on the viewport (neither html nor body sets overflow); its gutter
+   is always kept, so the page does not shift sideways as the scrollbar goes. */
+html{scrollbar-gutter:stable}
+html:has(dialog:modal){overflow:hidden}
+.gw-lead{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2);text-wrap:pretty}
+.gw-lead b{color:var(--ink);font-weight:600}
+.gw-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.gw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:18px 20px;flex:none}
+.gw-gap{margin-left:auto}
+/* a control whose change the game is being asked about */
+.gw-dlg .gw-busy{cursor:progress;animation:gw-wait 1s ease-in-out infinite}
+@keyframes gw-wait{50%{opacity:.55}}
+.gw-body[aria-busy="true"]{cursor:progress}
+.gw-hint{margin-right:auto;flex:1 1 120px;min-width:0;font-size:12px;line-height:1.4;color:var(--ink-3);max-width:230px;text-wrap:pretty}
+.gw-hint.gw-warn{color:var(--warn)}
+.gw-b{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--rule);background:transparent;color:var(--ink);font:600 13.5px/1 Archivo,sans-serif;cursor:pointer;white-space:nowrap;transition:transform .2s cubic-bezier(.34,1.56,.64,1),border-color .15s,filter .15s}
+.gw-b:hover{border-color:var(--ink-3);transform:translateY(-1px)}
+.gw-b:active{transform:scale(.97)}
+.gw-b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gw-dlg .gw-b svg,#gwToast .gw-b svg{width:16px;height:16px}
+.gw-b.go{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.gw-b.go:hover{filter:brightness(1.08)}
+.gw-b.go:hover svg.go{animation:gw-nudge .5s ease-in-out}
+@keyframes gw-nudge{50%{transform:translateX(3px)}}
+.gw-b[disabled]{opacity:.38;cursor:not-allowed;transform:none;filter:none}
+.gw-b.busy,.gw-b.busy[disabled]{pointer-events:none;opacity:1}
+.gw-b.undo:hover svg{animation:gw-back .55s cubic-bezier(.34,1.56,.64,1)}
+@keyframes gw-back{40%{transform:rotate(-70deg)}}
+.gw-b.ghost{border-color:transparent;color:var(--ink-2)}
+.gw-b.ghost:hover{border-color:var(--rule);color:var(--ink)}
+.gw-spin{width:15px;height:15px;box-sizing:border-box;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:gw-rot .8s linear infinite;flex:none}
+@keyframes gw-rot{to{transform:rotate(360deg)}}
+
+/* the board reads the game again after an apply */
+.gw-reread{display:flex;align-items:center;gap:10px;font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-reread .gw-prog{flex:1;max-width:120px}
+.gw-reread.done{color:var(--accent)}
+.gw-prog{position:relative;height:3px;border-radius:2px;background:var(--rule);overflow:hidden}
+.gw-prog i{position:absolute;top:0;bottom:0;width:40%;border-radius:2px;background:var(--info);animation:gw-slide 1.2s ease-in-out infinite}
+.gw-prog.gw-warn i{background:var(--warn)}
+@keyframes gw-slide{from{left:-40%}to{left:100%}}
+
+/* what the game said, and the small boxes around it */
+.gw-said{margin:0;font-size:14px;font-weight:600;line-height:1.45;color:var(--ink);text-wrap:pretty}
+.gw-said.gw-neg{color:var(--neg)}.gw-said.gw-warn{color:var(--warn)}.gw-said.ok{color:var(--accent)}
+.gw-sub{margin:-6px 0 0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.gw-ok{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:center}
+.gw-ok .ic{width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;animation:pop .5s cubic-bezier(.34,1.56,.64,1)}
+.gw-dlg .gw-ok .ic svg{width:22px;height:22px;stroke-width:2.4}
+.gw-ok.no .ic{background:color-mix(in srgb,var(--neg) 16%,transparent);color:var(--neg)}
+.gw-ok.wait .ic{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.gw-ok.dim .ic{background:var(--raised);color:var(--ink-2)}
+.gw-ok p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+.gw-ok p b{color:var(--ink);font-weight:600}
+.gw-skel{display:flex;flex-direction:column;gap:8px}
+.gw-skel i{display:block;height:58px;border-radius:12px;background:linear-gradient(90deg,var(--ground) 0,var(--raised) 40%,var(--ground) 80%);background-size:300% 100%;animation:gw-shim 1.4s ease-in-out infinite}
+.gw-skel i:nth-child(2){animation-delay:.12s}.gw-skel i:nth-child(3){animation-delay:.24s;width:62%}
+@keyframes gw-shim{from{background-position:100% 0}to{background-position:0 0}}
+.gw-drift{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr);gap:8px;align-items:center}
+.gw-drift>div{padding:10px 12px;border-radius:10px;background:var(--ground);border:1px solid var(--rule-soft)}
+.gw-drift b{display:block;margin-top:6px;font:500 15px/1 "IBM Plex Mono",monospace}
+.gw-drift>div.now{border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.gw-drift>div.now b{color:var(--warn)}
+.gw-drift .ar{height:0;border-top:1.5px dashed var(--ink-3);position:relative}
+.gw-drift .ar::after{content:"";position:absolute;right:-1px;top:-5px;width:7px;height:7px;border-top:1.5px solid var(--ink-3);border-right:1.5px solid var(--ink-3);transform:rotate(45deg)}
+.gw-tries{display:inline-flex;gap:4px;vertical-align:middle;margin-right:4px}
+.gw-tries i{width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
+.gw-read{min-height:18px;font:500 12px/1.5 "IBM Plex Mono",monospace;color:var(--ink-3)}
+[data-readzone]>.gw-read{margin-top:8px}
+.gw-keyrow .gw-read{margin-top:0}
+.gw-read b{color:var(--ink);font-weight:500}
+.gw-read em{font-style:normal;color:var(--accent)}
+.gw-call{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:start;font-size:12.5px;line-height:1.45;color:var(--ink-2);text-wrap:pretty}
+.gw-call>.gw-i{display:inline-grid;place-items:center;padding-top:1px}
+.gw-call b{color:var(--ink);font-weight:600}
+.gw-call.gw-warn>.gw-i{color:var(--warn)}.gw-call.gw-neg>.gw-i{color:var(--neg)}.gw-call.info>.gw-i{color:var(--info)}.gw-call.ok>.gw-i{color:var(--accent)}
+.gw-call.gw-neg b{color:var(--neg)}
+.gw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.gw-chip{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:3px 9px;box-sizing:border-box;border-radius:6px;background:var(--raised);font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);max-width:100%;overflow-wrap:anywhere}
+.gw-dlg .gw-chip svg{width:12px;height:12px}
+.gw-chip b{color:var(--ink);font-weight:500}
+.gw-chip.gw-neg{background:color-mix(in srgb,var(--neg) 13%,transparent);color:var(--neg)}
+.gw-chip.ok{background:var(--accent-soft);color:var(--accent)}
+.gw-chip.gw-warn{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)}
+
+/* a refusal: one card a rule, the objects as chips, the fix on one line */
+.gw-no{display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 12px;padding:13px 14px 14px;border-radius:12px;background:color-mix(in srgb,var(--neg) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--neg) 35%,transparent)}
+.gw-no>.ic{grid-row:1/span 3;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--neg) 18%,transparent);color:var(--neg);display:grid;place-items:center}
+.gw-dlg .gw-no>.ic svg{width:17px;height:17px}
+.gw-no .rule{font-size:13.5px;font-weight:600;line-height:1.4;color:var(--ink);text-wrap:pretty}
+.gw-no .fix{display:flex;gap:7px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.gw-dlg .gw-no .fix svg{width:13px;height:13px;margin-top:2px;color:var(--ink-3)}
+.gw-no .gw-chips{margin-top:2px}
+.gw-lock{grid-column:2;margin-top:8px}
+.gw-lock .cells{display:grid;grid-template-columns:repeat(18,minmax(0,1fr));gap:2px}
+.gw-lock .cells i{height:14px;border-radius:2px;background:var(--rule-soft);position:relative}
+.gw-lock .cells i.x{background:repeating-linear-gradient(135deg,var(--neg) 0 2px,transparent 2px 5px);opacity:.75}
+.gw-lock .cells i.now{outline:2px solid var(--ink);outline-offset:1px;opacity:1;z-index:1;animation:gw-now 1.6s ease-in-out infinite}
+@keyframes gw-now{50%{outline-color:transparent}}
+.gw-lock .labs{display:grid;grid-template-columns:repeat(18,minmax(0,1fr));gap:2px;margin-top:6px;font:500 10px/1.2 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-lock .labs span{white-space:nowrap}
+.gw-lock .labs .n{color:var(--ink)}
+.gw-lock .labs .r{color:var(--accent);text-align:right}
+
+/* uniforms: one card a role, the preset as pills */
+.gw-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.gw-role{display:flex;align-items:center;gap:12px;min-height:62px;padding:10px 12px;box-sizing:border-box;border-radius:12px;background:var(--ground);border:1px solid var(--rule-soft);min-width:0;transition:border-color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.gw-role:hover,.gw-role:focus-visible{border-color:var(--rule);transform:translateY(-2px);outline:none}
+.gw-role>div{min-width:0}
+.gw-role b{display:block;font-size:13.5px;font-weight:600;line-height:1.2;overflow-wrap:anywhere}
+.gw-role small{display:flex;align-items:center;gap:5px;margin-top:5px;font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap;overflow:hidden}
+.gw-dlg .gw-role small svg{width:11px;height:11px}
+.gw-role small em{font-style:normal;color:var(--accent);overflow:hidden;text-overflow:ellipsis}
+.gw-role small>span{display:inline-flex;align-items:center;gap:5px}
+.gw-role small .gw-now,.is-done .gw-role small .gw-was{display:none}
+.is-done .gw-role small .gw-now{display:inline-flex;color:var(--accent)}
+.gw-shirt{position:relative;width:38px;height:38px;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--ink-3);border:1.5px dashed var(--ink-3);transition:background .3s,color .3s,border-color .3s}
+.gw-dlg .gw-shirt>svg{width:19px;height:19px}
+.gw-role.to:hover .gw-shirt>svg{animation:gw-don .55s cubic-bezier(.34,1.56,.64,1)}
+@keyframes gw-don{0%{transform:translateY(-7px) scale(.7);opacity:.3}60%{transform:translateY(1px) scale(1.08);opacity:1}}
+.gw-role.to:hover .gw-shirt{border-color:var(--accent);color:var(--accent)}
+.gw-role.kept{background:transparent;border-style:dashed}
+.gw-role.kept .gw-shirt{border:0;background:var(--raised);color:var(--ink-2)}
+.gw-role.kept b{color:var(--ink-2);font-weight:500}
+.gw-badge{position:absolute;right:-4px;bottom:-4px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:var(--surface);color:var(--ink-3);box-shadow:0 0 0 1px var(--rule)}
+.gw-dlg .gw-badge svg{width:10px;height:10px;stroke-width:2.2}
+.gw-role .gw-tk{display:none}
+.is-done .gw-role.to .gw-shirt{border:0;background:var(--accent-soft);color:var(--accent)}
+.is-done .gw-role.to .gw-tk{display:grid;background:var(--accent);color:var(--on-accent);box-shadow:none;animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+.is-applying .gw-role.to .gw-shirt{border-style:solid;border-color:var(--info);color:var(--info);animation:gw-pulse 1s ease-in-out infinite}
+@keyframes gw-pulse{50%{transform:scale(.92)}}
+.gw-pick{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.gw-presets{display:inline-flex;gap:6px;flex-wrap:wrap}
+.gw-preset{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 13px 0 6px;box-sizing:border-box;border-radius:18px;border:1px solid var(--rule);background:transparent;color:var(--ink-2);font:500 13px/1 Archivo,sans-serif;cursor:pointer;max-width:100%;transition:border-color .15s,color .15s,background .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.gw-preset:hover{color:var(--ink);transform:translateY(-1px)}
+.gw-preset:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gw-preset .ic{width:24px;height:24px;border-radius:50%;background:var(--raised);display:grid;place-items:center;flex:none;transition:background .2s,color .2s}
+.gw-dlg .gw-preset .ic svg{width:14px;height:14px}
+.gw-preset[aria-pressed="true"],.gw-preset.only{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.gw-preset[aria-pressed="true"] .ic,.gw-preset.only .ic{background:var(--accent);color:var(--on-accent)}
+.gw-preset.only{cursor:default;transform:none}
+.gw-only{font-size:12px;color:var(--ink-3)}
+
+/* uniforms at many shops: a row a shop, a shirt a role */
+.gw-tally{display:flex;align-items:flex-end;gap:26px}
+.gw-tally>div{display:flex;flex-direction:column;gap:6px}
+.gw-tally>div:last-child{margin-left:auto;align-items:flex-end}
+.gw-big{font:500 30px/1 "IBM Plex Mono",monospace;letter-spacing:-.03em;display:flex;align-items:center;gap:8px}
+.gw-dlg .gw-big svg{width:20px;height:20px;color:var(--accent)}
+.gw-big.dim{color:var(--ink-2)}.gw-dlg .gw-big.dim svg{color:var(--ink-3)}
+.gw-big small{font-size:15px;color:var(--neg)}
+.gw-shops{display:flex;flex-direction:column;border-top:1px solid var(--rule-soft)}
+.gw-shop{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:6px 12px;min-height:46px;padding:7px 2px;box-sizing:border-box;border-bottom:1px solid var(--rule-soft);transition:background .15s,opacity .3s}
+.gw-shop:hover,.gw-shop:focus-visible{background:var(--ground);outline:none}
+.gw-shop .nm{display:flex;align-items:center;gap:8px;min-width:0;font-size:13.5px;font-weight:500}
+.gw-shop .nm span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw-minis{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:2px;align-items:center}
+.gw-minis i{width:18px;height:18px;display:grid;place-items:center;color:var(--accent)}
+.gw-dlg .gw-minis i svg{width:15px;height:15px}
+.gw-minis i.k{color:var(--ink-3);opacity:.6}
+.gw-dlg .gw-minis i.k svg{fill:currentColor;stroke:none}
+.gw-shop:hover .gw-minis i{animation:sp-hop .45s ease-in-out;animation-delay:calc(var(--k)*40ms)}
+.gw-shop .c{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);min-width:24px;text-align:right}
+.gw-shop.bad .nm{color:var(--neg)}
+.gw-shop.bad .nm .hood{border-color:color-mix(in srgb,var(--neg) 50%,transparent);color:var(--neg)}
+.gw-shop .gw-why{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:0 0 4px 30px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.gw-shop .gw-why b{color:var(--ink);font-weight:600}
+.gw-shop.out{opacity:.45}
+.gw-shop.out .nm span:last-child{text-decoration:line-through}
+.gw-mini-b{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,transform .2s}
+.gw-mini-b:hover{border-color:var(--ink-3);transform:translateY(-1px)}
+.gw-mini-b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gw-dlg .gw-mini-b svg{width:13px;height:13px}
+
+/* imports: a card a material, grouped by depot */
+.gw-legend{display:flex;gap:8px 18px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2)}
+.gw-legend span{display:inline-flex;align-items:center;gap:7px}
+.gw-legend .sm svg{color:var(--info)}
+.gw-depot{display:flex;align-items:center;gap:8px;margin:4px 0 -4px;font:500 11px/1.2 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.gw-line{display:flex;flex-direction:column;gap:10px;padding:12px 14px 13px;border-radius:12px;background:var(--ground);border:1px solid var(--rule-soft);transition:border-color .15s}
+.gw-line:hover{border-color:var(--rule)}
+.gw-lt{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0}
+.gw-mat{width:30px;height:30px;border-radius:9px;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.gw-dlg .gw-mat svg{width:16px;height:16px}
+.gw-line:hover .gw-mat{transform:rotate(-8deg)}
+.gw-lt>b{font-size:14px;font-weight:600;min-width:0;overflow-wrap:anywhere}
+.gw-mode{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--raised);color:var(--ink-2);flex:none}
+.gw-dlg .gw-mode svg{width:14px;height:14px}
+.gw-mode.smart{color:var(--info);background:color-mix(in srgb,var(--info) 15%,transparent)}
+.gw-num{margin-left:auto;display:flex;align-items:baseline;gap:7px;font:500 15px/1 "IBM Plex Mono",monospace;white-space:nowrap}
+.gw-num s{font-size:12.5px;color:var(--ink-3);text-decoration-thickness:1px}
+.gw-dlg .gw-num svg{width:12px;height:12px;color:var(--ink-3);align-self:center}
+.gw-num small{font-size:11px;color:var(--ink-3)}
+.gw-lvl{position:relative;height:10px;border-radius:5px;background:var(--rule-soft);margin:2px 0 14px}
+.gw-lvl i{position:absolute;top:0;bottom:0;display:block}
+.gw-lvl .base{left:0;border-radius:5px 0 0 5px;background:color-mix(in srgb,var(--ink) 30%,transparent)}
+.gw-lvl .add{background:var(--accent);border-radius:0 5px 5px 0;transform-origin:left;animation:gw-grow .9s cubic-bezier(.2,.7,.2,1) both .2s}
+.gw-lvl .cut{background:repeating-linear-gradient(135deg,var(--ink-3) 0 3px,transparent 3px 6px);opacity:.7}
+.gw-lvl .short{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 6px);box-shadow:inset 0 0 0 1px var(--neg);border-radius:0 5px 5px 0}
+.gw-lvl .base.stopped{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 30%,transparent) 0 3px,transparent 3px 6px)}
+.gw-lvl .base.full{border-radius:5px}
+.gw-lvl u{position:absolute;top:-4px;bottom:-4px;width:0;border-left:1.5px solid var(--ink-2);text-decoration:none}
+.gw-lvl u span{position:absolute;top:calc(100% + 3px);left:0;transform:translateX(-50%);font:500 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.gw-lvl u.cap{border-left-color:var(--neg)}
+.gw-lvl u.cap span{color:var(--neg)}
+.gw-line:hover .gw-lvl .add{animation:gw-grow .6s cubic-bezier(.2,.7,.2,1)}
+@keyframes gw-grow{from{transform:scaleX(0)}}
+.gw-imps{display:flex;flex-wrap:wrap;gap:6px}
+.gw-imp{display:inline-flex;align-items:center;gap:7px;min-height:26px;padding:2px 10px 2px 4px;box-sizing:border-box;border-radius:13px;border:1px solid var(--rule-soft);background:var(--surface);font-size:12px;color:var(--ink);max-width:100%}
+.gw-imp i{width:18px;height:18px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 10px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2);flex:none}
+.gw-imp small{font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-imp.stopped{border-style:dashed;border-color:var(--warn)}
+.gw-imp.stopped i{background:none;color:var(--warn)}
+.gw-imp.stopped small{color:var(--warn)}
+.gw-dlg .gw-imp.stopped i svg{width:11px;height:11px;stroke-width:2.4}
+.gw-cash{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;margin-top:7px}
+.gw-cash .tr{position:relative;height:6px;border-radius:3px;background:var(--rule-soft);overflow:hidden}
+.gw-cash .tr i{position:absolute;left:0;top:0;bottom:0;width:var(--w);background:var(--warn);border-radius:3px}
+.gw-cash .tr.over i{background:var(--neg)}
+.gw-cash>span{font:500 11px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.gw-cash>span b{font-weight:500;color:var(--ink)}
+.gw-line.dim{opacity:.5}
+.gw-line.ticked .gw-mat{background:var(--accent-soft);color:var(--accent)}
+
+/* the schedule: the week as bars, the people as pills */
+.gw-plan{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;background:var(--raised);font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.gw-dlg .gw-plan svg{width:12px;height:12px}
+.gw-plan.full{background:color-mix(in srgb,var(--info) 15%,transparent);color:var(--info)}
+.gw-planrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.gw-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.gw-tile{padding:10px 12px 11px;border-radius:10px;background:var(--ground);border:1px solid var(--rule-soft);min-width:0}
+.gw-tile .v{display:flex;align-items:baseline;gap:6px;margin-top:8px;font:500 17px/1 "IBM Plex Mono",monospace;letter-spacing:-.01em;white-space:nowrap}
+.gw-tile .v s{font-size:12px;color:var(--ink-3);text-decoration-thickness:1px}
+.gw-dlg .gw-tile .v svg{width:11px;height:11px;color:var(--ink-3);align-self:center}
+.gw-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end}
+.gw-wd{display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 4px;border-radius:8px;transition:background .15s}
+.gw-wd:hover,.gw-wd:focus-visible{background:var(--ground);outline:none}
+.gw-wd .dl{font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);min-height:11px;white-space:nowrap}
+.gw-wd .dl.gw-up{color:var(--accent)}.gw-wd .dl.gw-dn{color:var(--warn)}
+.gw-wd .bars{display:flex;gap:3px;align-items:flex-end;height:64px}
+.gw-wd .bars i{display:block;width:10px;border-radius:3px 3px 1px 1px;height:var(--h)}
+.gw-wd .bars i.n{background:color-mix(in srgb,var(--ink) 20%,transparent)}
+.gw-wd .bars i.a{background:var(--accent);transform-origin:bottom;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.gw-wd:hover .bars i.a{transform:scaleY(1.08)}
+.gw-wd.same .bars i.a{background:color-mix(in srgb,var(--accent) 45%,transparent)}
+.gw-wd .d{font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3)}
+.gw-keyrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+.gw-key{display:flex;gap:14px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-key span{display:inline-flex;align-items:center;gap:6px}
+.gw-key i{width:8px;height:8px;border-radius:2px;background:color-mix(in srgb,var(--ink) 20%,transparent)}
+.gw-key i.a{background:var(--accent)}
+.gw-box{display:flex;flex-direction:column;gap:9px;padding:12px 14px;border-radius:12px;background:var(--ground);border:1px solid var(--rule-soft)}
+.gw-box.gw-warn{border-color:color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 6%,var(--ground))}
+.gw-box .gw-call{font-size:13px}
+.gw-pills{display:flex;flex-wrap:wrap;gap:6px}
+.gw-pills .person{font-size:12px;padding:4px 10px 4px 4px;background:var(--surface)}
+.gw-pills .person.hire{border:1px dashed var(--warn);background:none;color:var(--warn)}
+.gw-pills .person.hire i{background:none;color:var(--warn);border:1px dashed var(--warn)}
+.gw-dlg .gw-pills .person.hire i svg{width:12px;height:12px}
+.gw-pills .person.bench{color:var(--warn)}
+.gw-pills .person.bench i{box-shadow:inset 0 0 0 1.5px var(--ink-2);background:none}
+.gw-cover{display:flex;height:8px;gap:2px;border-radius:4px;overflow:hidden}
+.gw-cover i{display:block;height:100%}
+.gw-cover .c{background:var(--accent)}
+.gw-cover .e{background:repeating-linear-gradient(135deg,var(--warn) 0 3px,transparent 3px 6px);box-shadow:inset 0 0 0 1px var(--warn)}
+.gw-coverk{display:flex;justify-content:space-between;gap:10px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-coverk b{color:var(--ink);font-weight:500}.gw-coverk .w{color:var(--warn)}
+.gw-toggle{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 14px;align-items:start;padding:12px 14px;border-radius:12px;background:var(--ground);border:1px solid var(--rule-soft)}
+.gw-toggle b{display:block;font-size:13.5px;font-weight:600}
+.gw-toggle small{display:block;margin-top:3px;font-size:12px;line-height:1.4;color:var(--ink-3)}
+.gw-toggle .sw{border:0;padding:0;margin-top:2px}
+.gw-toggle .sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gw-hrs{grid-column:1/-1;display:grid;grid-template-columns:44px minmax(0,1fr);gap:5px 8px;align-items:center;font:500 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-hrs .h{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:2px}
+.gw-hrs .h i{height:8px;border-radius:2px;background:var(--rule-soft);transition:background .3s}
+.gw-hrs .h i.o{background:var(--ink-2)}
+.gw-hrs .h i.o.new{background:var(--accent)}
+.gw-toggle.off .gw-hrs .h i.o.new{background:var(--rule-soft)}
+.gw-steps{display:inline-flex;align-items:center;gap:5px;flex:none}
+.gw-steps i{width:9px;height:9px;border-radius:50%;background:var(--rule)}
+.gw-steps i.d{background:var(--accent)}
+.gw-steps i.s{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.gw-steps i.c{background:var(--ink);box-shadow:0 0 0 3px var(--accent-soft);animation:gw-cur 1.6s ease-in-out infinite}
+@keyframes gw-cur{50%{box-shadow:0 0 0 5px var(--accent-soft)}}
+.gw-run{display:flex;flex-direction:column;border-top:1px solid var(--rule-soft)}
+.gw-run>div{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:42px;border-bottom:1px solid var(--rule-soft);font-size:13.5px}
+.gw-run .m{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent)}
+.gw-dlg .gw-run .m svg{width:11px;height:11px;stroke-width:2.6}
+.gw-run .m.s{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3);color:var(--ink-3)}
+.gw-run small{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.gw-run .skip{color:var(--ink-3)}
+
+/* permission, asked in the game: a sketch of its screen, the popup and a cursor
+   heading for Allow. The mod draws the real one with the game's own popup. */
+.gw-scene{position:relative;height:156px;flex:none;border-radius:12px;background:var(--ground);border:1px solid var(--rule-soft);overflow:hidden}
+.gw-scene .gw-sbar{position:absolute;left:0;right:0;top:0;height:22px;border-bottom:1px solid var(--rule-soft);display:flex;align-items:center;gap:5px;padding:0 10px;font:500 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;color:var(--ink-3)}
+.gw-scene .gw-sbar i{width:6px;height:6px;border-radius:50%;background:var(--rule)}
+.gw-scene .gw-sbar span{margin-left:6px}
+.gw-scene .city{position:absolute;left:0;right:0;bottom:0;height:54px;display:flex;align-items:flex-end;gap:6px;padding:0 14px;opacity:.5}
+.gw-scene .city i{display:block;flex:1;background:var(--raised);border-radius:2px 2px 0 0}
+.gw-pop{position:absolute;left:50%;top:40px;width:250px;max-width:calc(100% - 24px);box-sizing:border-box;transform:translateX(-50%);padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 14px 34px -12px #000a;animation:gw-popin .6s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes gw-popin{from{transform:translateX(-50%) translateY(12px) scale(.9);opacity:0}}
+.gw-pop b{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;line-height:1.3}
+.gw-pop b i{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.gw-pop .bt{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+.gw-pop .bt span{height:22px;padding:0 10px;border-radius:6px;display:grid;place-items:center;font:600 11px/1 Archivo,sans-serif;border:1px solid var(--rule);color:var(--ink-2)}
+.gw-pop .bt span.y{background:var(--accent);border-color:var(--accent);color:var(--on-accent);animation:gw-halo 1.6s ease-out infinite}
+@keyframes gw-halo{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 60%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
+.gw-dlg svg.gw-cursor{position:absolute;left:62%;top:120px;width:18px;height:18px;color:var(--ink);fill:var(--surface);stroke-width:1.5;animation:gw-aim 2.4s ease-in-out infinite}
+@keyframes gw-aim{0%{transform:translate(40px,30px)}45%,70%{transform:translate(38px,-26px)}55%{transform:translate(38px,-26px) scale(.85)}100%{transform:translate(40px,30px)}}
+
+/* the undo strip at the foot of the window once the dialog is closed */
+#gwToast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;padding:8px 8px 8px 12px;border-radius:14px;background:var(--raised);border:1px solid var(--rule);color:var(--ink);box-shadow:0 16px 44px -12px #000b;font-size:13px}
+#gwToast .ic{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+#gwToast .ic svg{stroke-width:2.2}
+#gwToast .t{min-width:0;line-height:1.35}
+#gwToast .t small{display:block;font-size:11.5px;color:var(--ink-3)}
+#gwToast .gw-b{height:34px;padding:0 12px;font-size:13px}
+#gwToast .gw-x{width:30px;height:30px}
+
+/* phone: the dialog becomes a sheet from the foot of the screen */
+@media (max-width:560px){
+  .gw-dlg{width:100%;max-width:100%;margin:auto 0 0;border-radius:20px 20px 0 0;border-bottom:0;max-height:calc(100dvh - 48px)}
+  .gw-grab{display:block;width:38px;height:4px;border-radius:2px;background:var(--rule);margin:8px auto -6px;flex:none}
+  .gw-head{padding:16px 12px 12px 16px}
+  .gw-verdict{margin:0 16px}
+  .gw-body{padding:14px 16px 2px}
+  .gw-fix{padding:14px 16px 0;gap:12px}
+  .gw-foot{padding:14px 16px 26px;border-top:1px solid var(--rule-soft);margin-top:12px}
+  .gw-foot .gw-hint{flex-basis:100%;max-width:none;margin:0 0 4px}
+  .gw-foot .gw-gap{display:none}
+  .gw-foot .gw-b{flex:1;height:46px}
+  .gw-roles{gap:6px}
+  .gw-role{min-height:56px;padding:8px 10px;gap:10px}
+  .gw-shirt{width:34px;height:34px}
+  .gw-tally{gap:18px}
+  .gw-big{font-size:24px}
+  .gw-tiles{gap:6px}
+  .gw-tile{padding:9px 10px 10px}
+  .gw-tile .v{font-size:15px}
+  #gwToast{left:12px;right:12px;bottom:18px;transform:none;width:auto}
+}
+/* The dots stand still for a player who asked for less motion: the packets
+   sit on the wire, the bars and cards simply appear. */
+@media (prefers-reduced-motion:reduce){
+  .gw-dlg *,.gw-btn *,#gwToast *{animation:none!important;transition:none!important}
+  .gw-btn,.gw-b,.gw-x,.gw-preset,.gw-mini-b,.gw-role,.gw-kind{transition:none!important}
+  .gw-btn:hover,.gw-b:hover,.gw-x:hover,.gw-preset:hover,.gw-mini-b:hover,.gw-role:hover,.gw-role:focus-visible,.gw-dlg:hover .gw-kind{transform:none!important}
+  .gw-w.ask .p{opacity:1}
+  .gw-dlg .gw-busy{opacity:.6}
+  .gw-w.ask .p:nth-of-type(2){transform:translateX(8px)}.gw-w.ask .p:nth-of-type(3){transform:translateX(16px)}
+  .gw-prog i{left:30%}
+}
 .silenced{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);display:none}
 .silenced.on{display:block}
 /* Under the list: what the gate set aside, and the kinds switched off, a line
@@ -10078,6 +10571,7 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
 #importPlan td.imp-to > .chip{margin-left:6px}
 #importPlan .imp-contracts{min-width:12rem}
 #importPlan .imp-contracts > span{display:block}
+#importPlan .imp-contracts > .imp-order{font-style:italic}
 
 /* tables ----------------------------------------------------------------- */
 table{width:100%;border-collapse:collapse;font-size:13.5px}
@@ -11188,6 +11682,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #alertSection .find .go{grid-column:4;grid-row:1}
   #alertSection .find .what{grid-column:2/-1;grid-row:2}
   #alertSection .find .more{grid-column:2/-1}
+  #alertSection .find > .gw-find{grid-column:2/-1;grid-row:3;margin:2px 0 0}
   #secDaily .legend{flex-wrap:wrap}
   /* drawMarket() sets the grid's columns inline, the label column through
      --mk-label: narrower here, so seven neighbourhoods keep cells wide enough
@@ -11571,7 +12066,7 @@ const gauge = v => graded(v, "ink-3");
 /* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
    shop the building table places. With neither, no badge. */
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
-  title="${b.neighbourhood||"Unassigned"}">${b.code}</span>` : "";
+  title="${attr(b.neighbourhood||"Unassigned")}">${spEsc(b.code)}</span>` : "";
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
@@ -11727,7 +12222,8 @@ const chipHtml = (kind, text, tip) =>
   `<span class="chip ${kind}"${tip ? ` data-tip="${attr(tip)}"` : ""}>${text}</span>`;
 /* The neighbourhood pill: the player's [XX] prefix, or the code the building
    table gives the address. With neither, no pill. */
-const hoodHtml = b => b && b.code ? `<span class="hood">${b.code}</span>` : "";
+/* The code is the player's own [prefix] where there is one: text, never markup. */
+const hoodHtml = b => b && b.code ? `<span class="hood">${spEsc(b.code)}</span>` : "";
 /* $3.57M, $751k, $98: the compact money the tiles and axes use. */
 const money = compact;
 /* A segmented control, the .seg of the design: options are [id, label] pairs,
@@ -13209,6 +13705,9 @@ let ssFindSeq = 0;
 function findingRow(a){
   const b = alertSite(a);
   const {what, more} = splitFinding(a);
+  /* In linked mode a shop's missing uniforms can be set from here; one row,
+     picked by drawAlerts(), also offers every shop at once. */
+  const writes = gwDressable(a) ? gwUniformButtons(b, a.id === gwUniformAllId) : "";
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   /* The name is a way to the site's own page; the rest of the row still opens
@@ -13224,7 +13723,11 @@ function findingRow(a){
     <span class="mark" data-tip="Silence this finding"></span>
     <span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</button>
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</button>${
+      /* The game link's buttons sit under the sentence, beside the row's own
+         button rather than inside it. */
+      writes ? `
+    <span class="gw-acts gw-find">${writes}</span>` : ""}
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
     <span class="more">${more}</span>` : ""}</div>`;
@@ -13277,7 +13780,7 @@ function switchedOffKinds(rows, label, money, order = []){
 
 let showSwitchedOff = false;
 function drawAlerts(){
-  const {list, below, switchedOff} = partitionFindings(
+  const {list, below, switchedOff, smaller} = partitionFindings(
     D.alerts, (D.minor || {}).rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
@@ -13296,7 +13799,10 @@ function drawAlerts(){
   });
   $("alertTuneSlot").replaceWith(tune);
 
-  $("alerts").innerHTML = list.length ? list.map(findingRow).join("")
+  /* "Set for all" rides on the first row that can set uniforms and is not
+     silenced, the smaller findings included, so it is on the page once. */
+  gwUniformAllId = ([...list, ...smaller].find(x => gwDressable(x) && !silencedIds.has(x.id)) || {}).id ?? null;
+  $("alerts").innerHTML = list.length ? list.map(a => findingRow(a)).join("")
     : `<span class="quiet" style="display:block;padding:12px 0">Nothing to flag here.</span>`;
   bindFindingRows($("alerts"), list);
 
@@ -13307,7 +13813,7 @@ function drawAlerts(){
   const host = $("alertMinor");
   const block = (rows, open, toggle, line) => !rows.length ? "" :
     `<p class="quiet td-count">${line} &nbsp;<a class="link" href="#" data-td-toggle="${toggle}" aria-expanded="${open}">${
-      open ? "hide" : "show"}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(findingRow).join("")}</div>` : "");
+      open ? "hide" : "show"}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(a => findingRow(a)).join("")}</div>` : "");
   const worth = below.reduce((s,r) => s + (r.worth || 0), 0);
   host.innerHTML =
     block(below, showMinor, "below",
@@ -14447,10 +14953,12 @@ function spStandards(b){
   const met = Object.values(amenities).filter(Boolean).length;
   const read = unknown ? "Not scored yet"
     : `${asked} asked · <b>${asked - met} unmet</b>${roles.length ? ` · ${roles.length} role${roles.length === 1 ? "" : "s"} without a uniform` : ""}`;
+  /* In linked mode, the write that dresses them. */
+  const writes = roles.length && !b.missingUniformLocker && (b.uniformGapSkills || []).length ? gwUniformButtons(b, false) : "";
   return `${eq}
     <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
       `${spEsc(r)} <b>has no uniform set</b>`)}">${spEsc(roleCode(r))}</span>`).join("")}</div></div></div>
-    <div class="sp-read sp-readout">${read}</div>`;
+    <div class="sp-read sp-readout">${read}</div>${writes ? `<div class="gw-acts gw-panel">${writes}</div>` : ""}`;
 }
 const SP_AMENITY_ICON = {bathroom: "toilet", toiletprivacy: "door", sink: "sink",
                          music: "music", interior: "interior"};
@@ -15313,6 +15821,7 @@ function spRosterBlock(b){
     ${/* The switch sits on the week it switches: up in the heading it changed
           a grid that had often scrolled off the bottom of the screen. */""}
     <div class="sp-steps">${steps}<span class="seg sp-nowplan" style="margin-left:auto"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span><span class="seg sp-daytabs">${tabs}</span></div>
+    ${gwRosterButtons(b.key)}
     <div class="chartbox sp-gantt">${hours}${
       HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
     ${spRosterCount(c)}
@@ -16248,7 +16757,7 @@ function drawSite(){
   }
   $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
     <div class="sitehead rv">
-      ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
+      ${b.code ? `<span class="bullet">${spEsc(b.code)}</span>` : ""}
       <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
     </div>
     ${spFinds(finds, b, kind)}
@@ -16823,6 +17332,7 @@ function drawLogistics(){
     }).sort((a, b) => b.total - a.total);
     importRows.push({s, rows});
   });
+  gwImportRows = importRows.flatMap(d => d.rows);
   const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
   const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
   const short = count(r => r.fit === "short" || r.fit === "none");
@@ -16897,14 +17407,16 @@ function drawLogistics(){
   const setCell = r => `<td class="imp-to">${r.value === null ? "" : `<span class="imp-set"><input type="number" min="0" step="1" inputmode="numeric"
       class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-imp-ingame="${r.inGame ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
       r.edited ? `<button type="button" class="imp-reset" data-imp-reset="${attr(r.impId)}" aria-label="${attr(`Back to ${resetTo(r)}, for ${r.item}`)}"
-        data-tip="${attr(`Back to ${resetTo(r)}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}</td>`;
+        data-tip="${attr(`Back to ${resetTo(r)}`)}">${icon("refresh")}</button>` : ""}</span>`}${verdict(r)}${
+      shortOf.has(r) ? `<span class="sub gw-short">${gwLineWords(shortOf.get(r), false).join(" ")}</span>` : ""}</td>`;
   /* Two or more contracts on one line: each is listed under the material in
      the order the game delivers them (importer by importer, each in the place
      of its first contract in the plan), with its importer, how it is set and
-     whether it runs. */
+     whether it runs. The order is the player's to change, at the headquarters
+     in game. */
   const contractLines = r => r.contracts.length < 2 ? ""
     : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
-        c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}</span>`).join("")}</span>`;
+        c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
   /* Who draws the material, and how the week splits between the factory
      lines and the shops, stay on hover: the material name says who, the
      Used / week figure says how much of each. */
@@ -16937,8 +17449,20 @@ function drawLogistics(){
     ["Set to", null, "", "What to enter in game: the board's suggestion where the setting falls short of the week, as a stock level with Smart Delivery or a weekly amount without, else the figure in game. Enter your own figure to change it"],
     ["At depot", r => r.stock ?? null]];
   const importOrder = supplySort.imports, importHead = supplyHead(importCols, importOrder);
+  /* In linked mode the changes go to the game from here: one button for the
+     section, and one in each depot where two or more depots have changes.
+     A line whose week the caps leave short with nothing to change is no change. */
+  const toGame = gwImportLines(null);
+  const shortOf = new Map(gwLink() && gwImportsWritable() ? gwImportPlan(null).filter(gwNeedsWord).map(l => [l.r, l]) : []);
+  const toGameAt = key => gwImportLines(key).length;  // the depot's own plan, as its dialog makes it
+  const applyHere = (n, key) => {
+    const btn = n ? gwButton("imports", key ? "Apply in game" : "Apply changes in game", `data-gw-depot="${attr(key || "")}"`, "",
+      {count: n, name: `${key ? "Apply in game" : "Apply changes in game"}, ${plural(n, "change")}`, alt: !!key}) : "";
+    return btn ? `<div class="gw-acts gw-panel">${btn}</div>` : "";
+  };
+  const depotsToGame = new Set(toGame.map(l => l.depot.key)).size;
   const importTable = shown.map((d, i) => supplyLocation("imports", d.s, d.rows.length,
-    `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(d.rows, importCols, importOrder).map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
+    `${depotsToGame > 1 && D.businesses[d.s] ? applyHere(toGameAt(D.businesses[d.s].key), D.businesses[d.s].key) : ""}<div class="scrollx"><table>${importHead}<tbody>${supplySorted(d.rows, importCols, importOrder).map(importRow).join("")}</tbody></table></div>`, i === 0)).join("")
     + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
       `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(looseRows, importCols, importOrder).map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
@@ -16948,7 +17472,7 @@ function drawLogistics(){
       + (pausedCount ? chipHtml("warn", `${pausedCount} paused`) : "")
       + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
   $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText,
-    aside: importTable ? supplySortNote(importCols, importOrder) : ""}) + importTable;
+    aside: importTable ? supplySortNote(importCols, importOrder) : ""}) + applyHere(toGame.length, null) + importTable;
   seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
     () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
 
@@ -20208,6 +20732,7 @@ const bindFinds = once(() => {
     const f = m.closest(".find"); findGone(f, true);
     if(f.dataset.id){ silencedIds.add(f.dataset.id); saveSilenced(); }
     silencedLine();
+    gwRelabelAll();
   }, true);
   on("click", ".silenced a", (a, e) => {
     e.preventDefault();
@@ -20657,6 +21182,1608 @@ function wireKinds(){
   if(kindsPop && kindsPop.classList.contains("on")) drawKindRows();
 }
 
+/* --- writing to the game (docs/game-link-api.md, "Writes") -------------- */
+/* In linked mode the board can change the game, and SOURCE.write() is the only
+   way there: web/app.js owns the game's approval of this browser, retries a busy game and reads
+   the game again after an apply. Every write goes through gwConfirm(): a dry
+   run as the dialog opens, the game's verdict row by row, Apply, then Undo.
+   Outside linked mode SOURCE.link is missing or answers null, and nothing here
+   draws. */
+const gwLink = () => (typeof SOURCE.link === "function" && SOURCE.link()) || null;
+const GW_DOES = {uniforms: "set uniforms", imports: "change imports", schedule: "write schedules"};
+const GW_NOUN = {uniforms: "uniform", imports: "imports", schedule: "schedule"};
+const gwUndoable = {};  // kind -> {spec, text, sub, character, at}: its last apply, until undone or replaced
+let gwOpen = null;      // the dialog on screen
+
+/* The dialogs' icons: strokes on a 24 grid, as the design draws them. */
+const GW_P = {
+  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
+  crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
+  roster: '<path d="M4 7h9M4 12h16M4 17h6"></path><path d="M16 5v4M13 15v4"></path>',
+  game: '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.6 2.9a2.2 2.2 0 0 1-3.8 1L15 15.5H9l-2 2.3a2.2 2.2 0 0 1-3.8-1l-.6-2.9A4.5 4.5 0 0 1 7 8.5z"></path><path d="M8.5 11.5v3M7 13h3M15.5 12.3v.01M17.3 13.8v.01"></path>',
+  tank: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5"></ellipse><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13"></path><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"></path>',
+  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path>',
+  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  close: '<path d="M6 6l12 12M18 6L6 18"></path>',
+  right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+  undo: '<path d="M9 14L4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path>',
+  alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
+  info: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5M12 8v.01"></path>',
+  play: '<path d="M8 5.5v13l10.5-6.5z"></path>',
+  pause: '<path d="M9 6v12M15 6v12"></path>',
+  cap: '<path d="M4 20V8M4 8h16M20 8v12"></path><path d="M8 14h8"></path>',
+  exit: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H8"></path>',
+  plus: '<path d="M12 5v14M5 12h14"></path>',
+  clock: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
+  flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.1 2.1-5.1 3.6-7.3.5 1.7 1.5 2.8 2.6 3.3C11.7 7.3 13 4.6 15.2 3c-.3 2.9 3.3 5.7 3.3 10.6 0 4.3-2.8 7.4-6.5 7.4z"></path>',
+  key: '<circle cx="8" cy="14" r="4"></circle><path d="M11 11l9-8M16 6.5l3 3"></path>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>',
+  sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path>',
+  cursor: '<path d="M5 3l14 7-6 2-2 6z"></path>',
+  sofa: '<path d="M6 11V8a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v3"></path><path d="M4 13a2 2 0 0 1 4 0v2h8v-2a2 2 0 0 1 4 0v5H4zM7 18v2M17 18v2"></path>',
+  save: '<path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v5h7V4M8 20v-6h8v6"></path>',
+  skip: '<path d="M6 5.5v13l9-6.5zM18 5v14"></path>',
+  hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
+};
+const gwSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${GW_P[name] || ""}</svg>`;
+const gwI = name => `<span class="gw-i">${gwSvg(name)}</span>`;
+/* A line with its icon: tone is warn, neg, info or ok. */
+const gwCall = (tone, name, html) => `<div class="gw-call ${tone === "warn" || tone === "neg" ? `gw-${tone}` : tone}">${gwI(name)}<div>${html}</div></div>`;
+/* The same, as a note that goes up to the dialog's fixed strip (gwLift()). */
+const gwLiftCall = (tone, name, html) => gwCall(tone, name, html).replace('class="gw-call ', 'class="gw-call gw-lift ');
+/* The wire: the board's dot, a line, the game. ask | ok | no | wait | busy | moved. */
+const gwWire = state => `<span class="gw-w ${state}" aria-hidden="true"><span class="a"></span><span class="ln"></span><i class="p"></i><i class="p"></i><i class="p"></i><span class="g">${gwSvg("game")}</span></span>`;
+/* The game's clock as the dialogs show it, "Sun 14:02": now, by the link's
+   last health, or as this board was read. Day 1 is a Monday. */
+function gwClock(day, hour, minute){
+  const d = Number(day), h = Number(hour), m = Math.floor(Number(minute) || 0);
+  if(!Number.isFinite(d) || !Number.isFinite(h)) return "";
+  return `${WEEK_FULL[((d % 7) + 7) % 7].slice(0, 3)} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+const gwNow = () => { const l = gwLink() || {}; return gwClock(l.day, l.hour, l.minute); };
+const gwBoardRead = () => { const m = (D && D.meta) || {}; return gwClock(m.day, m.hour, m.minute); };
+/* Whose game a dry run judged: the same company again, or a dry run afresh. */
+const gwWhose = () => { const l = gwLink() || {}; return `${l.character || ""}|${l.company || ""}`; };
+
+/* A write button. None outside linked mode; with the link on but a mod that
+   cannot take this kind, disabled with the reason, never hidden, and so with
+   `blocked`, a reason of the board's own. `data` is the attribute markup the
+   click handler reads. It wears the wire: "this changes your game" shows
+   before anything opens. `o`: {count, name (the full words), alt, icon (for
+   a board reason)}. */
+function gwButton(kind, label, data, blocked, o = {}){
+  const link = gwLink();
+  if(!link) return "";
+  const old = !(link.writes || []).includes(kind);
+  const why = old ? `Update the Big Copilot Link mod to ${GW_DOES[kind]} from here` : blocked || "";
+  const name = o.name || label;
+  /* A browser the game has not approved yet is asked on the game's screen. */
+  const tip = why || (link.approved === false ? "The game asks you once, on its screen, when you first use this" : "");
+  return `<button type="button" class="gw-btn${o.alt ? " alt" : ""}${why ? " off" : ""}" data-gw="${kind}" ${data}${
+    why ? ` aria-disabled="true"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""} aria-label="${attr(why ? `${name}: ${why}` : name)}">${
+    why ? gwSvg(old ? "plug" : o.icon || "lock") : `<span class="gw-mw" aria-hidden="true"><i></i><b></b></span>`}<span class="gw-l">${label}</span>${
+    o.count ? `<span class="n" aria-hidden="true">${o.count}</span>` : ""}</button>`;
+}
+
+/* Uniforms: the shops with a role to dress and a locker to dress it from. */
+const gwUniformSites = () => (D.businesses || []).filter(b => (b.uniformGapSkills || []).length && !b.missingUniformLocker);
+/* A finding the uniforms write answers, and what "Set for all" dresses: every
+   shop such a finding names that the player has not silenced. */
+const gwDressable = x => { const s = x.group === "uniform" && alertSite(x); return !!s && gwUniformSites().includes(s); };
+let gwUniformAllId = null;  // the finding row that carries "Set for all"; drawAlerts() picks it
+function gwUniformAll(){
+  const finds = [...(D.alerts || []), ...((D.minor || {}).rows || [])]
+    .filter(x => gwDressable(x) && !silencedIds.has(x.id));
+  return [...new Set(finds.map(alertSite))];
+}
+function gwUniformButtons(b, all){
+  const one = gwButton("uniforms", "Set Default uniforms", `data-gw-sites="${attr(JSON.stringify([b.key]))}"`);
+  const sites = all ? gwUniformAll() : [];
+  return one + (one && sites.length > 1 ? gwButton("uniforms", `Set for all ${sites.length} shops`,
+    `data-gw-all data-gw-sites="${attr(JSON.stringify(sites.map(s => s.key)))}"`, "", {alt: true}) : "");
+}
+/* A finding silenced since the list was drawn leaves "Set for all" at once. */
+function gwRelabelAll(){
+  const sites = gwUniformAll();
+  document.querySelectorAll("[data-gw-all]").forEach(btn => {
+    if(sites.length < 2) return btn.remove();
+    const label = `Set for all ${sites.length} shops`;
+    btn.querySelector(".gw-l").textContent = label;
+    btn.setAttribute("aria-label", btn.getAttribute("aria-disabled") === "true" ? `${label}: ${btn.dataset.tip || ""}` : label);
+    btn.dataset.gwSites = JSON.stringify(sites.map(s => s.key));
+  });
+}
+/* The wire address is the site key taken apart: "<street>#<number>". */
+const gwAddress = key => ({street: key.slice(0, key.lastIndexOf("#")), number: Number(key.slice(key.lastIndexOf("#") + 1))});
+const gwKeyOf = address => address ? `${address.street}#${address.number}` : "";
+const gwSiteOf = address => address && (D.businesses || []).find(b => b.key === gwKeyOf(address)) || null;
+const gwSiteName = row => { const b = gwSiteOf(row.address); return spEsc(b ? shortName(b) : row.business || "A shop"); };
+/* Where a dialog is: the shop's pill, its name and its neighbourhood. */
+const gwWhere = b => b ? `${hoodHtml(b)}<span>${spEsc(baseName(b))}${b.neighbourhood ? ` · ${spEsc(b.neighbourhood)}` : ""}</span>` : "";
+/* The game's name for a skill, from wherever the payload carries one: the
+   uniform gaps, then the roles of the hour grid and the staffing plan. */
+function gwSkillName(skill){
+  const named = (D.skillNames || {})[skill];
+  if(named) return spEsc(named);
+  for(const b of D.businesses || []){
+    const i = (b.uniformGapSkills || []).indexOf(skill);
+    if(i >= 0 && b.uniformGaps?.[i]) return spEsc(b.uniformGaps[i]);
+  }
+  for(const site of [...(D.hours || []), ...(D.staffing || [])])
+    for(const r of site.roles || []) if(r.skill === skill && r.label) return spEsc(r.label);
+  const slug = String(skill).replace(/^ba:skill_/, "");
+  return spEsc(slug.charAt(0).toUpperCase() + slug.slice(1));
+}
+
+/* One uniform role as a card: dashed shirt, none now and the preset after;
+   a grey shirt with a lock, one already set and kept. Done, the dialog's
+   is-done ticks the cards that were dressed. */
+function gwRole(name, state, preset){
+  if(state === "kept" || state === "off"){
+    const said = state === "kept" ? "has one · kept" : "not offered here";
+    return `<div class="gw-role kept" tabindex="0" data-read="${attr(`<b>${name}</b> ${state === "kept"
+      ? "has a uniform already: the write never changes it" : "is not in this shop's Uniforms window"}`)}"><span class="gw-shirt">${
+      gwSvg("shirt")}<span class="gw-badge">${gwSvg("lock")}</span></span><div><b>${name}</b><small>${said}</small></div></div>`;
+  }
+  if(state === "back") return `<div class="gw-role to" tabindex="0" data-read="${attr(`<b>${name}</b>: back to no uniform`)}"><span class="gw-shirt">${
+    gwSvg("shirt")}</span><div><b>${name}</b><small><span>${preset} ${gwSvg("right")}</span>none</small></div></div>`;
+  return `<div class="gw-role to" tabindex="0" data-read="${attr(`<b>${name}</b>: no uniform now, <em>${preset}</em> after`)}"><span class="gw-shirt">${
+    gwSvg("shirt")}<span class="gw-badge gw-tk">${gwSvg("tick")}</span></span><div><b>${name}</b><small><span class="gw-was">none ${
+    gwSvg("right")}</span><span class="gw-now">${gwSvg("tick")}</span><em>${preset}</em></small></div></div>`;
+}
+/* The game's uniforms as pills: one is the usual case, and says so. */
+function gwPresets(answer, on){
+  const ps = (answer.presets || []).filter(p => p && p.id !== undefined);
+  if(!ps.length) return "";
+  if(ps.length === 1) return `<div class="gw-pick"><span class="gw-lab">Uniform</span><span class="gw-presets"><span class="gw-preset only"><span class="ic">${
+    gwSvg("shirt")}</span>${spEsc(ps[0].name)}</span></span><span class="gw-only">the only one in your game</span></div>`;
+  return `<div class="gw-pick"><span class="gw-lab" id="gwPresetLab">Uniform</span><span class="gw-presets" role="group" aria-labelledby="gwPresetLab">${
+    ps.map(p => `<button type="button" class="gw-preset" aria-pressed="${p.id === on ? "true" : "false"}" data-gw-preset="${attr(p.id)}"><span class="ic">${
+      gwSvg("shirt")}</span>${spEsc(p.name)}</button>`).join("")}</span></div>`;
+}
+
+/* Uniforms at one shop, or at every shop the alert names. The game sets all
+   of them or none, so a shop it refuses can be left out: the dialog asks the
+   game again without it. */
+function gwUniforms(keys){
+  const sites = keys.map(k => (D.businesses || []).find(b => b.key === k)).filter(Boolean);
+  if(!sites.length) return;
+  const many = sites.length > 1;
+  const out = new Set();  // shops left out
+  let presetId = null;
+  const kept = () => sites.filter(b => !out.has(b.key));
+  const presetOf = answer => spEsc((answer.rows || []).find(r => r.presetName)?.presetName || "Default");
+  const toSet = answer => (answer.rows || []).reduce((n, r) => n + (r.set || []).length, 0);
+  const refusal = r => {
+    const known = GW_REFUSE.uniforms[r.error] || GW_REFUSE.any[r.error];
+    return known || {rule: `The game refused this (${spEsc(r.error)})`, fix: ""};
+  };
+  /* A row a shop, a small shirt a role: outlined gets the uniform, grey keeps its own. */
+  const shopRow = (r, phase) => {
+    const b = gwSiteOf(r.address), key = gwKeyOf(r.address);
+    const name = gwSiteName(r), preset = spEsc(r.presetName || "Default");
+    const set = r.set || [], skipped = (r.skipped || []).map(s => s.skill);
+    const minis = [...set.map(s => ["to", s]), ...skipped.map(s => ["k", s])].map(([k, s], i) =>
+      `<i class="${k === "k" ? "k" : ""}" style="--k:${i}">${gwSvg(k !== "k" && phase === "done" ? "tick" : "shirt")}</i>`).join("");
+    const roles = `${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? "→ none" : `→ ${preset}`}</em>` : "nothing to set"}${
+      skipped.length ? ` · ${skipped.map(gwSkillName).join(", ")} kept` : ""}`;
+    const read = `<b>${name}</b> · ${roles}`;
+    const say = r.error ? refusal(r) : null;
+    return `<div class="gw-shop${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div><span class="gw-sr">: ${roles}</span>${
+      `<span class="gw-minis" aria-hidden="true">${minis}</span><span class="c">${r.error ? "" : set.length}</span>`}${say ? `<div class="gw-why"><span><b>${
+      say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${phase === "ready" && kept().length > 1 ? `<button type="button" class="gw-mini-b" data-gw-leave="${
+      attr(key)}" aria-label="${attr(`Leave it out: ${b ? shortName(b) : r.business || "this shop"}`)}">${gwSvg("skip")}Leave it out</button>` : ""}</div>` : ""}</div>`;
+  };
+  const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">out</span></div>`;
+  gwConfirm({
+    kind: "uniforms", icon: "shirt", againLabel: "Set again",
+    title: () => many ? `Set uniforms at ${kept().length} shops` : "Set uniforms",
+    where: () => !many ? gwWhere(sites[0])
+      : out.size ? `<span>${[...out].map(k => spEsc(shortName(sites.find(b => b.key === k)))).join(", ")} left out</span>`
+      : "<span>Every shop the alert names</span>",
+    /* skills null: every skill the shop's Uniforms window offers, not only the
+       roles on shift now, so the warning cannot come back with the roster. */
+    body: () => ({sites: kept().map(b => ({address: gwAddress(b.key), skills: null, presetId}))}),
+    verdict: answer => {
+      const bad = (answer.rows || []).filter(r => r.error).length, n = toSet(answer);
+      if(bad) return many ? `<b>The game refuses ${bad} of ${(answer.rows || []).length} shops</b>` : "<b>The game refuses this</b>";
+      return n ? `<b>The game will dress ${plural(n, "role")}</b>` : "<b>Every role already has a uniform</b>";
+    },
+    /* The refused shops say why in their own row. */
+    inline: many,
+    draw: (answer, phase) => {
+      const rows = answer.rows || [];
+      const preset = presetOf(answer);
+      const pick = phase === "ready" && !answer.undo ? gwPresets(answer, presetId ?? rows.find(r => r.presetId)?.presetId) : "";
+      if(!many){
+        const r = rows[0] || {};
+        const cards = [...(r.set || []).map(s => gwRole(gwSkillName(s), phase === "undone" ? "back" : "to", preset)),
+          ...(r.skipped || []).map(s => gwRole(gwSkillName(s.skill), s.reason === "already_set" ? "kept" : "off", preset))];
+        const lead = phase === "ready" ? `<p class="gw-lead">Every role this shop can dress gets a uniform. One already set stays as it is.</p>` : "";
+        return lead + pick + (cards.length ? `<div data-readzone><div class="gw-roles">${cards.join("")}</div><div class="gw-read sp-readout">Hover a role</div></div>` : "");
+      }
+      const set = toSet(answer), keptN = rows.reduce((n, r) => n + (r.skipped || []).length, 0);
+      const bad = rows.filter(r => r.error).length;
+      const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">Get ${preset}</span><span class="gw-big">${gwSvg("shirt")}${set}</span></div>
+        <div><span class="gw-lab">Kept</span><span class="gw-big dim">${gwSvg("lock")}${keptN}</span></div>
+        <div><span class="gw-lab">Shops</span><span class="gw-big dim">${rows.length - bad}${bad ? `<small>+${bad}</small>` : ""}</span></div></div>` : "";
+      return pick + tally + `<div data-readzone><div class="gw-shops">${rows.map(r => shopRow(r, phase)).join("")}${
+        [...out].map(k => sites.find(b => b.key === k)).filter(Boolean).map(outRow).join("")}</div><div class="gw-read sp-readout">Hover a shop for its roles</div></div>`;
+    },
+    refusedHint: answer => many ? "Every shop is set, or none: leave a refused shop out, or fix it first." : "Nothing was changed.",
+    bind: (dlg, replan) => {
+      dlg.querySelectorAll("[data-gw-preset]").forEach(b => { b.onclick = () => {
+        if(b.getAttribute("aria-pressed") === "true" || b.classList.contains("gw-busy")) return;
+        presetId = b.dataset.gwPreset;
+        /* Said at once on the pill; the rest waits for the game's answer. */
+        dlg.querySelectorAll("[data-gw-preset]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+        replan(b);
+      }; });
+      dlg.querySelectorAll("[data-gw-leave]").forEach(b => { b.onclick = () => {
+        if(b.classList.contains("gw-busy")) return;
+        out.add(b.dataset.gwLeave);
+        const row = b.closest(".gw-shop");
+        if(row) row.classList.add("out");
+        replan(b);
+      }; });
+    },
+    object: gwSiteName,
+    applyLabel: answer => { const n = answer ? toSet(answer) : 0; return n ? `Set ${plural(n, "uniform")}` : "Set uniforms"; },
+    applying: "Setting uniforms in the game…",
+    undoHint: () => many && kept().length > 1 ? `Undo takes back all ${kept().length} shops at once.` : null,
+    changed: answer => (answer.rows || []).some(r => (r.set || []).length),
+    done: answer => {
+      const rows = (answer.rows || []).filter(r => (r.set || []).length);
+      const n = rows.reduce((s, r) => s + r.set.length, 0);
+      if(answer.undo) return n ? `Undone: ${plural(n, "role")} back to no uniform.` : "Undone.";
+      if(!n) return "Nothing to set: every role already has a uniform.";
+      return `${presetOf(answer)} is on ${plural(n, "role")} at ${rows.length === 1 ? `${gwSiteName(rows[0])}` : `${rows.length} shops`}.`;
+    },
+  });
+}
+
+/* The refusals the player can fix in the game while the same request stays
+   valid (a screen closed, a locker placed, a week's lock over). Try again is
+   offered only when every error the answer names is one of them; the rest
+   ask for another request, or a refreshed board. */
+const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
+  "locked", "backorder", "not_assigned"]);
+const gwFixable = answer => {
+  const a = answer || {};
+  const codes = [a.siteError, ...(a.rows || []).flatMap(r => r ? [r.error, ...(r.products || []).map(p => p && p.error)] : [])].filter(Boolean);
+  return codes.length > 0 && codes.every(c => GW_FIXABLE.has(c));
+};
+/* Why a row was refused, in plain words: the rule, then the fix. An entry may
+   be a function of the row, for a refusal that carries its own numbers. */
+const GW_REFUSE = {
+  any: {
+    not_found: {rule: "No building at this address any more", fix: "Refresh the board: the shop may have closed or moved."},
+    not_rented: {rule: "You no longer rent this building", fix: "Refresh the board."},
+    changed: {rule: "Changed in the game since this board was read", fix: "Refresh the board, then try again."},
+    screen_open: {rule: "Open in BizMan right now", fix: "Close that BizMan screen in the game, then try again."},
+  },
+  uniforms: {
+    no_business: {rule: "No business is set up here", fix: "Set one up in BizMan first."},
+    no_locker: {rule: "No uniform locker: the game sets uniforms only where one stands", fix: "Place a uniform locker in the shop, then try again."},
+    no_preset: {rule: "The game has no uniform to set", fix: "Create one in the game's uniform settings, then try again."},
+  },
+  imports: {
+    no_agent: {rule: "No purchasing agent runs this contract", fix: "Assign a purchasing agent at the headquarters, then try again."},
+    no_amounts: {rule: "Every amount on this contract would be 0, and the game runs no contract with nothing to order",
+      fix: "Give it an amount, or stop it in BizMan."},
+    locked: r => {
+      const day = Number((r.reopens || {}).day);
+      return {rule: "Orders for Monday's delivery closed Sunday 20:00; they reopen Monday 08:00",
+        fix: r.reopens && Number.isFinite(day) ? `That is day ${day}, 08:00 game time: try again then.` : "Try again then."};
+    },
+    no_warehouse: {rule: "A product on this contract has no warehouse to deliver to", fix: "Pick a warehouse for it on the contract in BizMan."},
+    backorder: {rule: "The item is on backorder at the importer this week", fix: "Try again once the market event is over."},
+    /* The contract row repeats its product's error; the figure is on the product. */
+    over_cap: r => {
+      const p = (r.products || []).find(x => x && x.error === "over_cap") || r;
+      const max = p.max === null || p.max === undefined ? NaN : Number(p.max);
+      return {rule: `More than the importer still allows this week${Number.isFinite(max) ? ` (${max.toLocaleString()})` : ""}`,
+        fix: "Lower the amount, or bring the rest through another importer."};
+    },
+    bad_amount: {rule: "An amount is not a whole number of 0 or more", fix: "Correct it, then try again."},
+  },
+  schedule: {
+    headquarters: {rule: "A headquarters' schedule is not written from here", fix: "Change it in BizMan in the game."},
+    not_assigned: {rule: "Someone on the plan is not assigned to this business", fix: "Assign them in BizMan, or refresh the board."},
+    no_station: {rule: "A station on the plan is no longer here", fix: "Refresh the board."},
+    no_skill: {rule: "Someone on the plan lacks the skill for their station", fix: "Refresh the board."},
+    bad_hours: {rule: "A shift is not whole hours, at most 12, within the day", fix: "Refresh the board."},
+    overlap_person: {rule: "Someone would work two shifts at once", fix: "Refresh the board."},
+    overlap_station: {rule: "Two people would share one station", fix: "Refresh the board."},
+  },
+};
+/* The lock window, Sunday 16:00 to Monday 09:00 an hour a cell: shut from
+   20:00 to 08:00, and now ringed when it falls inside. */
+function gwLockStrip(){
+  const l = gwLink() || {};
+  const d = ((Number(l.day) % 7) + 7) % 7, h = Number(l.hour);
+  const at = d === 0 && h >= 16 ? h - 16 : d === 1 && h < 10 ? h + 8 : -1;
+  const cells = [...Array(18).keys()].map(k => `<i class="${k >= 4 && k < 16 ? "x" : ""}${k === at ? " now" : ""}"></i>`).join("");
+  const now = at >= 0 ? `<span class="n" style="grid-row:2;grid-column:${Math.min(at, 14) + 1}/span 4">now ${gwNow().slice(4)}</span>` : "";
+  return `<div class="gw-lock" aria-hidden="true"><div class="cells">${cells}</div><div class="labs"><span style="grid-column:1/span 4">Sun 16</span><span style="grid-column:5/span 3">20:00</span><span class="r" style="grid-column:15/span 4">Mon 08:00</span>${now}</div></div>`;
+}
+/* A dry run the game refused because the board's figures are no longer the
+   game's. */
+const gwMovedOn = answer => !answer.ok && (answer.siteError === "changed"
+  || (answer.rows || []).some(r => r && (r.error === "changed" || (r.products || []).some(p => p && p.error === "changed"))));
+/* The game's refusals, one card a rule: the rule, what it is about as
+   chips, and the fix on one line. */
+function gwRefusals(spec, answer){
+  /* A schedule answer names its business's own refusal apart from the rows;
+     a 409's rows already lead with it. */
+  const site = answer.siteError && !(answer.rows || []).some(r => r && r.error === answer.siteError && r.d === undefined)
+    ? [Object.assign({}, answer, {error: answer.siteError})] : [];
+  const groups = new Map();
+  site.concat(answer.rows || []).filter(r => r && r.error).forEach(r => {
+    const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
+    const say = typeof known === "function" ? known(r) : known || {rule: `The game refused this (${spEsc(r.error)})`, fix: ""};
+    const key = `${say.rule}|${say.fix}`;
+    if(!groups.has(key)) groups.set(key, {say, error: r.error, chips: []});
+    const chip = spec.object ? spec.object(r) : "";
+    if(chip && !groups.get(key).chips.includes(chip)) groups.get(key).chips.push(chip);
+  });
+  return [...groups.values()].map(({say, error, chips}) => `<div class="gw-no"><span class="ic">${gwSvg(error === "locked" || error === "no_locker" ? "lock" : "alert")}</span><div class="rule">${
+    say.rule}.</div>${chips.length ? `<div class="gw-chips">${chips.map(c => `<span class="gw-chip gw-neg">${c}</span>`).join("")}</div>` : ""}${
+    say.fix ? `<div class="fix">${gwSvg("right")}<span>${say.fix}</span></div>` : ""}${error === "locked" ? gwLockStrip() : ""}</div>`).join("");
+}
+const GW_CANNOT = {
+  saving: ["The game is saving right now", "Try again in a moment.", "save"],
+  placement: ["The game takes no changes while you are placing items", "Finish placing in the game, then try again.", "clock"],
+  interior: ["The game takes no changes while the interior designer is open", "Close it in the game, then try again.", "sofa"],
+  casino: ["The game takes no changes on the casino boat", "Leave the boat in the game, then try again.", "clock"],
+  other: ["The game takes no changes right now", "Try again in a moment.", "clock"],
+};
+/* What a failed write says, and what the dialog offers next: `wire` and
+   `say` for the verdict, `text` (and `sub`), or `box` [icon, tone] to set the
+   text beside an icon; `retry` with its label `again`, `refresh`, `wait` (s). */
+function gwProblem(res){
+  const body = res.body || {};
+  const ask = "Ask again";
+  const cannot = reason => GW_CANNOT[reason] || GW_CANNOT.other;
+  switch(res.error){
+    case "changed": return {wire: "moved", say: "<b>The game moved on</b>", text: "The game has moved on since this board was read. Nothing was changed.",
+      drift: true, sub: "Something was hired, set or sold in the game meanwhile. Refresh, and the board plans again from what the game holds.", refresh: true};
+    /* A refusal the player fixes in the game (a BizMan screen closed, a
+       locker placed) can be tried again from here; see gwFixable(). */
+    case "refused": return {wire: "no", say: "<b>The game refuses this</b>", text: "The game refused this. Nothing was changed.", retry: gwFixable(body)};
+    case "cannot_write": { const [text, fix, icon] = cannot(body.reason);
+      return {wire: "busy", say: "<b>Not now</b>", box: [icon, "dim"], text: `<b>${text}.</b> Nothing was changed. ${fix}`, retry: true}; }
+    case "busy": return {wire: "busy", say: "<b>The game is busy</b>", text: "The game stayed busy saving its state. Nothing was changed.",
+      sub: `<span class="gw-tries" aria-hidden="true"><i></i><i></i><i></i></span>tried 3 times, a second apart`, retry: true};
+    case "main_thread_unavailable": return {wire: "busy", say: "<b>No city loaded</b>", text: "The game did not take the change: no city is loaded.", retry: true};
+    case "nothing_to_undo": return {wire: "no", say: "<b>Nothing to undo</b>", box: ["info", "dim"],
+      text: "There is nothing left to undo: a later change replaced it, or the city was loaded again."};
+    /* The game's approval of this browser, asked for on the first write. */
+    case "cancelled": return {wire: "no", say: "<b>Not approved</b>", box: ["close", "no"],
+      text: "<b>Not approved in the game, so nothing was sent.</b> Its question may still be open there: asking again picks it up.", retry: true, again: ask};
+    case "denied": return {wire: "no", say: "<b>Not allowed</b>", box: ["close", "no"],
+      text: "<b>The game said no.</b> Nothing was sent. The board changes the game only with your yes, and asks again when you try.", retry: true, again: ask};
+    case "expired": return {wire: "wait", say: "<b>No answer in the game</b>", box: ["clock", "wait"],
+      text: "<b>No answer from the game.</b> Nothing was sent. Is the game paused in a menu, or minimised? It closes its question after a minute.", retry: true, again: ask};
+    case "throttled": { const wait = Number(res.retryAfter) || 10;
+      return {wire: "wait", say: "<b>Asked a moment ago</b>", text: `The game asked you a moment ago. Ask again in ${wait} s.`, retry: true, again: ask, wait}; }
+    case "lost": return {wire: "no", say: "<b>Answer lost</b>", text: "Approved, but the game's answer was lost: click again.", retry: true, again: ask};
+    case "not_taken": return {wire: "busy", say: "<b>Not taken</b>", text: "The game did not take the request. Nothing was sent.", sub: "Try again in a moment.", retry: true, again: ask};
+    case "reapproved": return {wire: "ok", say: "<b>Allowed</b>", text: "This browser is approved again. Nothing was changed yet.", sub: "Try again to send it.", retry: true};
+    case "origin_not_allowed": return {wire: "no", say: "<b>Not this site</b>", text: "The mod does not take changes from this site. Nothing was sent."};
+    case "not_paired": return {wire: "no", say: "<b>Not allowed</b>", text: "The game no longer knows this browser's approval. Nothing was changed.",
+      sub: "Ask again, and the game asks you once more.", retry: true, again: ask};
+    case "cannot_pair": return {wire: "busy", say: "<b>The game cannot ask now</b>", again: ask, retry: true,
+      text: res.reason === "popup_open" ? "Close the open question in the game first."
+        : res.reason === "no_ui" ? "The game cannot ask you right now. Nothing was sent." : `${cannot(res.reason)[0]}. Nothing was sent.`,
+      sub: res.reason === "no_ui" ? "Go back into the game, then try again." : ""};
+    case "unreachable": return {wire: "no", say: "<b>No answer</b>", text: spEsc(res.message || "The game did not answer."), retry: true};
+    case "uncertain": return {uncertain: true, text: "The game did not answer, so this may or may not have been applied."};
+    case "not_linked": return {wire: "no", say: "<b>Not linked</b>", text: "The board is no longer linked to the same game. Nothing was sent."};
+    default: return {wire: "no", say: "<b>Refused</b>", text: `The game answered ${res.status}${body.detail ? ` (${spEsc(body.detail)})` : ""}. Nothing was changed.`};
+  }
+}
+/* A sentence beside a round icon; tone no, wait or dim (plain is green). */
+const gwBox = (icon, tone, html) => `<div class="gw-ok${tone ? ` ${tone}` : ""}"><span class="ic">${gwSvg(icon)}</span><p>${html}</p></div>`;
+const gwReread = done => done
+  ? `<div class="gw-reread done">${gwSvg("tick")}<span>The board shows the game as it now stands</span></div>`
+  : `<div class="gw-reread"><span>Reading the game again</span><div class="gw-prog"><i></i></div></div>`;
+/* The game's screen, sketched: its popup and a cursor heading for Allow. */
+const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar"><i></i><i></i><i></i><span>BIG AMBITIONS</span></div><div class="city">${
+  [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
+  gwSvg("cursor", "gw-cursor")}</div>`;
+
+/* The board could not read the game after a write: its follow read gave up
+   or its build failed. Cleared by the next board built. */
+let gwReadStuck = false;
+function gwFollowFailed(){
+  gwReadStuck = true;
+  if(gwOpen && gwOpen._gwGate) gwOpen._gwGate();
+}
+/* Before a focused button is switched off: its place is remembered for the
+   next paint, and the dialog holds the focus meanwhile. */
+function gwKeepFocus(dlg, selector){
+  const a = document.activeElement;
+  if(!a || a === dlg || !dlg.contains(a) || !a.matches(selector)) return;
+  dlg._gwWant = gwFocusKey(a) || dlg._gwWant;
+  dlg.focus();
+}
+/* The dialog hangs off <body> in the top layer, so no section's paint
+   containment can clip it; one at a time. Its head names the write, its
+   verdict carries the wire, and its body and foot are the state's. */
+function gwDialog(icon, title, where){
+  /* The one before goes at once, not when its close event comes round. */
+  if(gwOpen){ const was = gwOpen; was.close(); was._gwGone(true); }
+  const dlg = document.createElement("dialog");
+  dlg.className = "gw-dlg";
+  dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
+  dlg.setAttribute("aria-labelledby", "gwTitle");
+  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close aria-label="Close">${gwSvg("close")}</button></div>
+    <div class="gw-verdict"></div><div class="gw-fix" aria-live="polite"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
+  gwHead(dlg, title, where);
+  dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
+  /* `replaced`: another dialog takes its place, so no Undo strip comes up
+     under it; the new one's own gwToast() decides. */
+  dlg._gwGone = replaced => {
+    if(!dlg.isConnected) return;
+    /* Closed while the game asks the player: this page stops waiting. */
+    if(dlg._gwCancel) dlg._gwCancel();
+    clearInterval(dlg._gwTick);
+    dlg.remove(); if(gwOpen === dlg) gwOpen = null;
+    if(replaced !== true) gwToast();
+  };
+  dlg.addEventListener("close", () => dlg._gwGone());
+  document.body.appendChild(dlg);
+  dlg.showModal();
+  gwOpen = dlg;
+  gwToast();
+  return dlg;
+}
+function gwHead(dlg, title, where){
+  dlg.querySelector("h2").textContent = title;
+  dlg.querySelector(".gw-where").innerHTML = where || "";
+}
+/* The control a keyboard was on, as a selector that finds it again once the
+   dialog is drawn afresh: a pill, a "Leave it out", the switch, a foot button. */
+function gwFocusKey(el){
+  for(const [key, name] of [["gwPreset", "data-gw-preset"], ["gwLeave", "data-gw-leave"], ["gwOpen", "data-gw-open"], ["gwB", "data-gw-b"]])
+    if(el.dataset && key in el.dataset) return `[${name}="${CSS.escape(el.dataset[key])}"]`;
+  return null;
+}
+/* The fixed strip under the verdict holds the most urgent note and what the
+   player must act on before the foot's first button; only the rows' detail
+   scrolls. The notes that open the body (what the game said, what was
+   undone, the approval asked in the game), and any note marked gw-lift or a
+   "read again" line wherever it sits, go up in their order. A refusal (its
+   card, with the lock-window strip) is urgent enough to stand alone there:
+   the other notes then open the scrolling body instead, in the same order. */
+const GW_LEAD = ".gw-said,.gw-sub,.gw-lead,.gw-drift,.gw-ok,.gw-no,.gw-reread,.gw-scene,.gw-call,.gw-lift";
+function gwLift(dlg, body){
+  const kids = [...body.children];
+  let lead = true;
+  const up = kids.filter(el => {
+    lead = lead && el.matches(GW_LEAD);
+    return lead || el.matches(".gw-lift,.gw-reread");
+  });
+  const cards = up.filter(el => el.matches(".gw-no"));
+  const fixed = cards.length ? cards : up;
+  /* Nothing would be left to scroll: the notes stay where they are. */
+  if(fixed.length === kids.length) return dlg.querySelector(".gw-fix").replaceChildren();
+  if(cards.length) body.prepend(...up.filter(el => !el.matches(".gw-no")));
+  dlg.querySelector(".gw-fix").replaceChildren(...fixed);
+}
+/* One state of the dialog. `v`: {phase, wire, say, meta, body, hint, warn,
+   buttons, keepTick}; a button is [label, onclick, {kind: go | ghost | undo,
+   icon, disabled, why, busy}], and "|" is the gap between the left and the
+   right. The phase is on the dialog as data-phase. A keyboard inside the
+   dialog keeps its place: the same control when it is drawn again, else the
+   primary button, else the dialog itself. */
+function gwPaint(dlg, v){
+  const was = document.activeElement;
+  const inside = !!was && dlg.contains(was);
+  if(inside && was !== dlg) dlg._gwWant = gwFocusKey(was) || dlg._gwWant || null;
+  dlg.dataset.phase = v.phase || "";
+  dlg._gwSoft = false;
+  dlg.classList.toggle("is-applying", v.phase === "applying");
+  dlg.classList.toggle("is-done", v.phase === "done");
+  if(!v.keepTick){ clearInterval(dlg._gwTick); dlg._gwTick = null; }
+  dlg.querySelector(".gw-verdict").innerHTML = `${gwWire(v.wire || "ask")}<span>${v.say || ""}</span>${v.meta ? `<span class="gw-meta">${v.meta}</span>` : ""}`;
+  const body = dlg.querySelector(".gw-body");
+  body.innerHTML = v.body || "";
+  body.removeAttribute("aria-busy");
+  gwLift(dlg, body);
+  const list = (v.buttons || []).slice();
+  if(!v.hint && !list.includes("|")) list.unshift("|");
+  const parts = [];
+  if(v.hint){
+    const h = document.createElement("span");
+    h.className = "gw-hint" + (v.warn ? " gw-warn" : "");
+    h.innerHTML = v.hint;
+    parts.push(h);
+  }
+  list.forEach(item => {
+    if(item === "|"){ const gap = document.createElement("span"); gap.className = "gw-gap"; return parts.push(gap); }
+    const [label, fn, o = {}] = item;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `gw-b ${o.kind || "ghost"}${o.busy ? " busy" : ""}`;
+    b.dataset.gwB = o.key || label;
+    if(o.busy) b.insertAdjacentHTML("beforeend", `<span class="gw-spin" aria-hidden="true"></span>`);
+    else if(["undo", "refresh", "skip", "key"].includes(o.icon)) b.insertAdjacentHTML("beforeend", gwSvg(o.icon));
+    const text = document.createElement("span");
+    text.textContent = label;
+    b.appendChild(text);
+    if(o.icon === "right") b.insertAdjacentHTML("beforeend", gwSvg("right", "go"));
+    if(o.disabled){ b.disabled = true; if(o.why) b.title = o.why; }
+    if(o.again) b.dataset.gwAgain = "";
+    if(fn) b.onclick = fn;
+    parts.push(b);
+  });
+  dlg.querySelector(".gw-foot").replaceChildren(...parts);
+  if(!inside) return;
+  const want = dlg._gwWant && dlg.querySelector(dlg._gwWant);
+  if(want && !want.disabled){ want.focus(); dlg._gwWant = null; return; }
+  if(dlg.contains(document.activeElement) && document.activeElement !== dlg) return;
+  (dlg.querySelector(".gw-foot .gw-b.go:not([disabled])") || dlg).focus();
+}
+/* The permission, asked in the game while the dialog waits: the states
+   web/app.js reports, drawn in the write's own dialog. */
+function gwAsking(dlg, state, info){
+  const cancel = ["Cancel", () => info.cancel && info.cancel(), {kind: "ghost"}];
+  const hint = "Nothing changes until you allow it and then apply.";
+  if(state === "retry") return gwPaint(dlg, {phase: "approval", wire: "busy", say: "<b>The game is busy with a question</b>",
+    body: `<p class="gw-said">The game is still answering an earlier request. Asking again in ${Number(info.wait) || 1} s…</p>`, hint, buttons: [cancel]});
+  if(state !== "waiting") return gwPaint(dlg, {phase: "approval", wire: "ask", say: "<b>Asking the game…</b>",
+    body: `${GW_SCENE}<p class="gw-lead">The game is about to ask you, on its own screen, whether this browser may change it.</p>`, hint, buttons: [cancel]});
+  const since = info.since || Date.now();
+  const clock = () => { const s = Math.max(0, Math.floor((Date.now() - since) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  const waiting = () => gwPaint(dlg, {phase: "approval", wire: "wait", say: "<b>Waiting for you in the game</b>", meta: clock(),
+    body: `${GW_SCENE}<p class="gw-lead">${info.resumed ? "The question is still open in the game. " : ""}The game is asking you on its screen. <b>Switch to Big Ambitions and choose Allow.</b> It asks once for this browser.</p>`,
+    hint, buttons: [cancel]});
+  /* The game closes its question after a minute; halfway, the dialog asks
+     whether the game is where the player can see it. The clock keeps going. */
+  const quiet = keepTick => gwPaint(dlg, {phase: "approval", wire: "wait", say: "<b>Still waiting</b>", meta: clock(), keepTick,
+    body: gwBox("clock", "wait", "<b>No answer from the game yet.</b> Is the game paused in a menu, or minimised? Its question waits there, and closes itself after a minute."),
+    hint, buttons: [cancel]});
+  const late = () => Date.now() - since >= 30000;
+  let shown = late() ? "quiet" : "waiting";
+  if(shown === "quiet") quiet(false); else waiting();
+  dlg._gwTick = setInterval(() => {
+    if(!dlg.open) return clearInterval(dlg._gwTick);
+    if(shown === "waiting" && late()){ shown = "quiet"; return quiet(true); }
+    const meta = dlg.querySelector(".gw-meta");
+    if(meta) meta.textContent = clock();
+  }, 1000);
+}
+/* The approval view SOURCE.write() reports to: the dialog shows each state,
+   and its Cancel (or closing it) stops this page waiting. `allowed` hears when
+   the game said yes. */
+function gwApprovalView(dlg, allowed){
+  return (state, info = {}) => {
+    if(!dlg.open) return;
+    dlg._gwCancel = state === "end" || state === "approved" ? null : info.cancel || null;
+    if(state === "approved") return allowed();
+    if(state === "end") return;
+    gwAsking(dlg, state, info);
+  };
+}
+/* `retry` repeats what failed; `recheck` is what may follow a write that got
+   no answer, once the board has read the game again: the dry run afresh,
+   never the write itself. In a run of shops, going on from a failure records
+   the shop as not written. */
+function gwFailed(dlg, spec, res, retry, recheck){
+  const p = gwProblem(res);
+  const next = spec.next ? [[spec.next.go ? spec.next.label : "End the run", () => spec.next.pass("not written"),
+    {kind: "go", icon: "right", key: "next"}]] : [];
+  const close = ["Close", () => dlg.close(), {kind: "ghost"}];
+  if(p.uncertain){
+    gwPaint(dlg, {phase: "uncertain", wire: "wait", say: "<b>No answer</b>", meta: gwNow(),
+      body: `<p class="gw-said gw-warn">${p.text}</p><div class="gw-reread"><span>Reading the game again before anything else is offered</span><div class="gw-prog gw-warn"><i></i></div></div>`,
+      hint: "No Undo: what it would restore is unknown.", buttons: [close]});
+    Promise.resolve(res.reread).catch(() => {}).then(() => {
+      if(!dlg.open) return;
+      if(recheck) return recheck();
+      gwPaint(dlg, {phase: "uncertain", wire: "ok", say: "<b>The board is up to date</b>", meta: gwNow(),
+        body: `<p class="gw-said gw-warn">${p.text}</p>${gwBox("refresh", "dim", "<b>The board now shows what the game holds.</b> Check it there: the warning is gone if it went through.")}`,
+        buttons: ["|", ["Close", () => dlg.close(), {kind: next.length ? "ghost" : "go"}], ...next]});
+    });
+    return;
+  }
+  const refused = res.error === "refused" && res.body;
+  const text = p.box ? gwBox(p.box[0], p.box[1], p.text) : `<p class="gw-said${p.wire === "no" ? " gw-neg" : ""}">${p.text}</p>`;
+  const drift = p.drift ? `<div class="gw-drift"><div><span class="gw-lab">Board read</span><b>${gwBoardRead() || "—"}</b></div><span class="ar" aria-hidden="true"></span><div class="now"><span class="gw-lab">Game now</span><b>${gwNow() || "—"}</b></div></div>` : "";
+  /* A refusal is said once: as cards, or in the drawing where the kind says it there. */
+  const body = (refused ? (spec.inline ? "" : gwRefusals(spec, res.body)) + (spec.draw ? spec.draw(res.body, "refused") : "")
+    : `${text}${p.sub && !p.drift ? `<p class="gw-sub">${p.sub}</p>` : ""}${drift}${p.drift ? `<p class="gw-lead">${p.sub}</p>` : ""}`);
+  /* A wait the game named keeps the button off until it has run out. */
+  const again = p.again || "Try again";
+  gwPaint(dlg, {phase: "failed", wire: p.wire, say: p.say, meta: gwNow(), body, hint: refused ? "Nothing was changed." : "",
+    buttons: [close, "|",
+      ...(p.refresh ? [["Refresh the board", () => spec.refreshBoard ? spec.refreshBoard() : (dlg.close(), typeof SOURCE.refresh === "function" && SOURCE.refresh()), {kind: "go", icon: "refresh"}]]
+        : p.retry && retry ? [[again, retry, {kind: "go", icon: p.again ? "key" : "refresh", disabled: !!p.wait, why: p.wait ? p.text : "", again: true}]] : []),
+      ...next]});
+  if(p.wait && p.retry && retry) setTimeout(() => {
+    const b = dlg.querySelector("[data-gw-again]");
+    if(b){ b.disabled = false; b.removeAttribute("title"); }
+  }, p.wait * 1000);
+}
+
+/* One write, confirmed. The spec is the kind's whole say:
+     kind, icon, title, where   the write, its icon, and where it is (both
+                               may be functions, asked at every paint)
+     body()                    the request without dryRun, built at each call
+     verdict(answer)           the game's answer in a few words, by the wire
+     draw(answer, phase)       the before → after, drawn: phase is ready,
+                               applying, done, undone or refused
+     meta(answer)              optional: the verdict's right-hand note (the
+                               game's clock otherwise)
+     object(row)               the name a refused row is about, as a chip
+     inline                    optional: refusals are drawn in draw(), not
+                               as cards above it
+     refusedHint(answer)       optional: the foot's note when the game refuses
+     bind(dlg, replan)         optional: wiring for any control in the drawing;
+                               replan(control) dry-runs again in place: the
+                               drawing stays, the wire asks, and the control
+                               that changed shows it is busy
+     applyLabel(answer), applying   the Apply button's words, and the verdict
+                               while it applies
+     done(answer)              one line after an apply, and after its undo;
+                               doneBody(answer) optional, the whole drawing
+     undoLabel(), undoHint()   optional: Undo's words and the foot's note
+                               beside it (null for the usual one)
+     changed(answer)           optional: false when an apply changed nothing,
+                               which leaves nothing to undo
+     nothing()                 optional: why there is nothing to write, which
+                               skips the dry run
+     next                      optional, a run of dialogs one site after
+                               another: {skip, pass(what), label, go}; pass
+                               leaves this site (skipped, not written...) and
+                               go, absent on the last, opens the next
+     onDone(answer)            optional: heard once an apply went through
+     onUndo()                  optional: heard once its undo went through
+     startUndo                 optional: the dialog opens by undoing the
+                               kind's last write, then asks the game afresh
+   The dialog dry-runs as it opens, offers Apply only when the game would take
+   every row, and after an apply offers Undo until the next write of the kind. */
+function gwConfirm(spec){
+  const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
+  const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
+  const dlg = gwDialog(spec.icon, title(), where());
+  const noun = GW_NOUN[spec.kind] || spec.kind;
+  const cancel = ["Cancel", () => dlg.close(), {kind: "ghost"}];
+  const skip = what => spec.next ? [[spec.next.skip || "Skip", () => spec.next.pass(what), {kind: "ghost", icon: "skip"}]] : [];
+  const left = spec.next ? [...skip("skipped"), "|"] : [cancel];
+  let applying = false;  // one apply per go: a second click must not send a second write
+  let judged = "";       // the body the answer on screen judged, as sent
+  let whose = "";        // and the game it judged it for
+  let last = null;       // that answer
+  let seq = 0;           // the newest dry run: an older one's late answer is dropped
+  let allowed = false;   // the game approved this browser for the dry run under way
+  const view = gwApprovalView(dlg, () => { allowed = true; asking(); });
+  const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: "<b>Nothing to write</b>", meta: gwNow(),
+    body: `<p class="gw-said">${none}</p>`,
+    buttons: ["|", ["Close", () => dlg.close(), {kind: spec.next ? "ghost" : "go"}], ...skip("nothing to write")]});
+  const asking = () => gwPaint(dlg, {phase: "asking", wire: "ask",
+    say: allowed ? "<b>Allowed.</b> Asking the game what it would do…" : "<b>Asking the game…</b>", meta: allowed ? "" : "dry run",
+    body: (allowed ? gwBox("tick", "", "<b>This browser may now change your game.</b> The game remembers it and will not ask again; “Forget approved browsers” in the Big Copilot Link options takes it back.") : "")
+      + `<div class="gw-skel" aria-hidden="true"><i></i><i></i>${allowed ? "" : "<i></i>"}</div>`,
+    hint: allowed ? "Next: the game's answer." : "Apply waits for the game's answer.",
+    buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
+  /* How plan() runs: `asked`, the approval the game gave for an Apply just
+     now, so the dry run that follows it does not ask a second time; `soft`,
+     a control changed in a dialog that shows the game's answer, so the
+     drawing stays where it is while the wire asks, `from` being the control;
+     `undone`, the undo just made, said once above the fresh answer. */
+  const plan = async (o = {}) => {
+    const mine = ++seq;
+    judged = "";
+    gwHead(dlg, title(), where());
+    const none = spec.nothing ? spec.nothing() : "";
+    if(none) return nothing(none);
+    /* In place only over the game's answer on screen, or over one already
+       being asked about in place: a second change while the first is asked. */
+    if(o.soft && (dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && dlg._gwSoft))) quietly(o.from);
+    else asking();
+    const body = spec.body();
+    const sent = JSON.stringify(body), game = gwWhose();
+    const res = await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof o.asked === "string" ? o.asked : ""});
+    if(!dlg.open || mine !== seq) return;
+    /* "Allowed." is said once: a Try again after this does not say it again. */
+    if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
+    /* The answer on screen and the body it judged go together. */
+    const answer = last = res.body || {};
+    judged = sent;
+    whose = game;
+    if(spec.learn) spec.learn(answer);
+    gwPaint(dlg, {phase: "ready", wire: answer.ok ? "ok" : "no", say: spec.verdict(answer), meta: spec.meta ? spec.meta(answer) : gwNow(),
+      body: (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
+      hint: answer.ok ? spec.hint || "Nothing changes until you apply." : spec.refusedHint ? spec.refusedHint(answer) : "Nothing was changed.",
+      warn: !answer.ok && !!spec.refusedHint,
+      /* Refused, nothing is left to cancel: the dialog closes. */
+      buttons: [...(answer.ok || spec.next ? left : [["Close", () => dlg.close(), {kind: "ghost"}]]),
+        /* The game moved on since the board was read: the way on is to read it again. */
+        ...(gwMovedOn(answer) ? [["Refresh the board", () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
+          /* Refused: fixed in the game, the game is asked again from here. */
+          : [...(answer.ok || !gwFixable(answer) ? [] : [["Try again", () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]]),
+             [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]])]});
+    allowed = false;
+    if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
+  };
+  /* The game asked again from a dialog that shows its answer: the answer on
+     screen stays until the new one replaces it; the wire asks, Apply waits,
+     and the control that changed says it is busy. */
+  const quietly = from => {
+    gwKeepFocus(dlg, '.gw-foot [data-gw-b="apply"]');
+    dlg._gwSoft = true;
+    dlg.dataset.phase = "asking";
+    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Asking the game…</b></span><span class="gw-meta">dry run</span>`;
+    dlg.querySelector(".gw-body").setAttribute("aria-busy", "true");
+    const go = dlg.querySelector('.gw-foot [data-gw-b="apply"]');
+    if(go){ go.disabled = true; go.title = "Apply waits for the game's answer"; }
+    dlg.querySelectorAll(".gw-busy").forEach(x => x.classList.remove("gw-busy"));
+    if(from && from.classList) from.classList.add("gw-busy");
+  };
+  const apply = async () => {
+    if(applying) return;
+    /* The board may have been read again since the dry run. */
+    const none = spec.nothing ? spec.nothing() : "";
+    if(none) return nothing(none);
+    /* Apply sends only what the game has judged: a board read again since, a
+       changed control, or another company in the game asks the game again
+       first. */
+    if(!judged || JSON.stringify(spec.body()) !== judged || gwWhose() !== whose) return plan({soft: true});
+    applying = true;
+    gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
+      buttons: ["|", ["Applying", null, {kind: "go", busy: true, disabled: true}]]});
+    const res = await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view});
+    if(res.error){
+      /* No answer: whether the game holds it is unknown, and so is what an
+         undo would restore. */
+      if(res.error === "uncertain") delete gwUndoable[spec.kind];
+      applying = false;
+      /* Approved again mid-apply: the apply was not sent twice; the player
+         reviews the game's answer afresh first, on the same approval. */
+      if(res.error === "reapproved" && dlg.open) return plan({asked: res.asked});
+      allowed = false;
+      return dlg.open ? gwFailed(dlg, spec, res, () => plan(), () => plan()) : gwToast();
+    }
+    applying = false;  // done: after an undo the write can be applied again
+    const answer = res.body || {};
+    /* An apply replaces its kind's undo, with nothing when it changed nothing. */
+    const undoable = !spec.changed || spec.changed(answer);
+    if(undoable) gwUndoable[spec.kind] = {spec, text: spec.done(answer), sub: `Undo stays until your next ${noun} change`,
+                                           whose: gwWhose(), at: Date.now()};
+    else delete gwUndoable[spec.kind];
+    if(spec.onDone) spec.onDone(answer);
+    if(!dlg.open) return gwToast();
+    gwHead(dlg, title(), where());
+    /* The board reads the game again; the line under the drawing says when it has. */
+    dlg._gwBoard = D;
+    const hint = spec.undoHint ? spec.undoHint() : null;
+    gwPaint(dlg, {phase: "done", wire: "ok", say: "<b>Done in the game</b>", meta: gwNow(),
+      body: (spec.doneBody ? spec.doneBody(answer, spec) : `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw(answer, "done")}`) + gwReread(false),
+      hint: !undoable ? "" : typeof hint === "string" ? hint : `Undo stays until your next ${noun} change.`,
+      buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : "Undo", () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
+        spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : ["Close", () => dlg.close(), {kind: "go"}]]});
+  };
+  /* After an undo in this dialog: the undo said, and the write offered
+     again once a board has been built since the undo answered, from the same
+     source and company as the undo (`undo` is {source, whose}); another
+     source or company closes it again. Weighed on every board built, never on
+     a timer. A board that has still not caught up with the undo is caught by
+     the game: the write's `expect` no longer matches, the dry run answers
+     `changed`, and the way on is a refresh. Should the board's read give up,
+     a refresh is offered, and the wait goes on. */
+  dlg._gwReplan = (undone, undo) => {
+    const mine = ++seq;
+    dlg._gwBuilt = false;  // set by the next board built
+    dlg._gwBoard = null;   // the apply's "read again" line is this gate's now
+    gwHead(dlg, title(), where());
+    let shown = "";
+    const gate = force => {
+      if(!dlg.open || mine !== seq){ if(dlg._gwGate === gate) dlg._gwGate = null; return; }
+      const l = gwLink();
+      const same = !!l && l.source === undo.source && gwWhose() === undo.whose;
+      const fresh = same && dlg._gwBuilt;
+      const stuck = same && !fresh && gwReadStuck;
+      /* Drawn again only when it says something new: a board built with
+         nothing to change keeps the click, the focus and the screen reader's peace. */
+      const key = `${same}|${fresh}|${stuck}`;
+      if(key === shown && force !== true) return;
+      shown = key;
+      gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
+        body: `<div class="gw-reread done">${gwSvg("undo")}<span>${undone}</span></div>${fresh ? gwReread(true)
+          : !same ? `<p class="gw-sub">The board is no longer linked to the game this was undone in.</p>`
+          : stuck ? `<p class="gw-sub">The board could not read the game after the undo. Refresh it to go on.</p>` : gwReread(false)}`,
+        hint: fresh || !same ? "" : "Offered again once the board has read the game.",
+        buttons: [...left,
+          ...(stuck ? [["Refresh the board", () => { if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {kind: "ghost", icon: "refresh", key: "refresh"}]] : []),
+          [spec.againLabel || "Apply again", () => { dlg._gwGate = null; plan(); },
+           {kind: "go", icon: "right", disabled: !fresh, why: !same ? "The board is no longer linked to this game" : "Reading the game again…", key: "again"}]]});
+    };
+    dlg._gwGate = gate;
+    gate(true);
+  };
+  /* The board read again at the player's word: in a run the run stays, and
+     the game is asked afresh from the new board; else the dialog closes. */
+  spec.refreshBoard = () => {
+    if(typeof SOURCE.refresh !== "function") return dlg.close();
+    if(!spec.next){ dlg.close(); return SOURCE.refresh(); }
+    asking();
+    Promise.resolve(SOURCE.refresh()).catch(() => {}).then(() => { if(dlg.open) plan(); });
+  };
+  if(spec.startUndo) gwUndo(spec, dlg); else plan();
+}
+/* Undo the kind's last write. In the write's own dialog the dialog goes back
+   to that write, asked afresh; from the strip, the dialog it opens says what
+   was undone and closes. */
+async function gwUndo(spec, dlg){
+  if(!(dlg && dlg.open)){
+    dlg = gwDialog(spec.icon, `Undo: ${typeof spec.title === "function" ? spec.title() : spec.title}`,
+      typeof spec.where === "function" ? spec.where() : spec.where || "");
+  }
+  if(dlg._gwReplan && dlg.dataset.phase){
+    /* In the write's own dialog the drawing stays while the game undoes it. */
+    gwKeepFocus(dlg, ".gw-foot button");
+    dlg.dataset.phase = "applying";
+    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Undoing in the game…</b></span>`;
+    dlg.querySelectorAll(".gw-foot button").forEach(b => { b.disabled = true; });
+  } else gwPaint(dlg, {phase: "applying", wire: "ask", say: "<b>Undoing in the game…</b>", buttons: ["|", ["Undoing", null, {kind: "go", busy: true, disabled: true}]]});
+  /* The game and source the undo is sent to: its gate opens only on a board of the same. */
+  const sentTo = {source: (gwLink() || {}).source, whose: gwWhose()};
+  gwReadStuck = false;  // an earlier write's failed read is not this undo's
+  const res = await SOURCE.write("undo", {kind: spec.kind}, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
+  /* Gone for good once the game says so; kept for a retry when it only could
+     not take it now. */
+  if(!res.error || ["changed", "nothing_to_undo", "uncertain"].includes(res.error)) delete gwUndoable[spec.kind];
+  if(!dlg.open) return gwToast();
+  /* A run of dialogs does not go on from an undo; and an undo that got no
+     answer is never sent again on its own. */
+  if(res.error){
+    /* In a run the shop stays written, or unknown after an undo with no
+       answer, and the run goes on from it; reopened from the end of the
+       run, it goes back there. */
+    if(res.error === "uncertain" && spec.onUndoUnknown) spec.onUndoUnknown();
+    const onward = spec.backToRun ? {label: "Back to the run", go: spec.backToRun, pass: spec.backToRun}
+      : spec.next ? {label: spec.next.label, go: spec.next.go, pass: () => spec.next.go()} : null;
+    /* A refresh after a failed undo reads the game and leaves the write as it
+       stands: the dialog is not asked about the write again, so in a run the
+       shop stays written and the way on is the run's. */
+    const refreshBoard = () => {
+      if(!onward) dlg.close();
+      if(typeof SOURCE.refresh === "function") SOURCE.refresh();
+    };
+    return gwFailed(dlg, Object.assign({}, spec, {next: onward, refreshBoard}), res, () => gwUndo(spec, dlg), null);
+  }
+  const answer = res.body || {};
+  if(spec.onUndo) spec.onUndo();
+  if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer), sentTo);
+  dlg._gwBoard = D;
+  gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
+    body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
+    buttons: ["|", ["Close", () => dlg.close(), {kind: "go"}]]});
+}
+/* Undo, once the dialog is closed: a strip at the foot of the window until
+   the next write of that kind, or until the board is another character's or
+   another company's. */
+function gwToast(){
+  const link = gwLink();
+  for(const kind of Object.keys(gwUndoable))
+    if(!link || gwWhose() !== gwUndoable[kind].whose) delete gwUndoable[kind];
+  /* The newest apply's undo; an older kind's comes back once that one is gone. */
+  const last = Object.values(gwUndoable).sort((a, b) => b.at - a.at)[0];
+  let bar = $("gwToast");
+  if(!last || gwOpen){ if(bar) bar.remove(); return; }
+  if(!bar){
+    bar = document.createElement("div");
+    bar.id = "gwToast"; bar.setAttribute("role", "status");
+    document.body.appendChild(bar);
+  }
+  const {spec, text, sub} = last;
+  bar.innerHTML = `<span class="ic" aria-hidden="true">${gwSvg("tick")}</span><span class="t">${text}<small>${sub || ""}</small></span><button type="button" class="gw-b undo" data-gw-undo>${
+    gwSvg("undo")}<span>Undo</span></button><button type="button" class="gw-x" data-gw-dismiss aria-label="Dismiss">${gwSvg("close")}</button>`;
+  bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
+  bar.querySelector("[data-gw-dismiss]").onclick = () => { delete gwUndoable[spec.kind]; gwToast(); };
+}
+/* After every render: an open dialog whose apply the board has now read
+   says so under its drawing. */
+function gwReadBack(){
+  const dlg = gwOpen;
+  /* A dialog waiting on an undo's gate says only what the gate says. */
+  if(dlg && dlg._gwGate) return dlg._gwGate();
+  if(!dlg || !dlg._gwBoard || dlg._gwBoard === D) return;
+  dlg._gwBoard = null;
+  const line = dlg.querySelector(".gw-reread:not(.done)");
+  if(line && !line.querySelector(".gw-prog.gw-warn")) line.outerHTML = gwReread(true);
+}
+/* --- imports: the Weekly imports table's Set to figures, written ---------- */
+/* drawLogistics() leaves its rows here: per depot and material, the Set to
+   figure, the figure in game and the line's contracts in the order the game
+   delivers them. The order itself is the player's to set at the headquarters
+   in game; a write never sends one. */
+let gwImportRows = [];
+/* What the dry runs said of each contract's product, keyed "<contract id>|
+   <item>|<depot key>": the importer's cap, what was ordered of the item this
+   week and, after an over_cap, what the importer still allows. Cleared with
+   every new board. */
+const gwTerms = new Map();
+const gwDepotKey = r => (D.businesses[r.s] || {}).key;
+const gwImportsWritable = () => ((gwLink() || {}).writes || []).includes("imports");
+const gwLineKey = (c, slug, depotKey) => `${c.id}|${slug}|${depotKey}`;
+
+/* Sunday 20:00 to Monday 08:00, by the game's clock as the link last read it:
+   an amount set then is for the Monday after the week's count resets, so the
+   importer allows its whole cap. */
+function gwLockWindow(){
+  const link = gwLink() || {};
+  const day = Number(link.day), hour = Number(link.hour);
+  if(!Number.isFinite(day) || !Number.isFinite(hour)) return false;
+  return (day % 7 === 0 && hour >= 20) || (day % 7 === 1 && hour < 8);
+}
+/* What an importer still allows of an item for the delivery a write is for,
+   from what the last dry run said of any contract with it; with no cap named
+   yet, no bound (the dry run then names one, and the split is made again). */
+function gwAllowance(importer, slug){
+  let least = Infinity;
+  gwImportRows.filter(r => r.slug === slug).forEach(r => r.contracts.forEach(c => {
+    if((c.importer || c.id) !== importer) return;
+    const t = gwTerms.get(gwLineKey(c, slug, gwDepotKey(r)));
+    if(!t || !Number.isFinite(t.cap)) return;
+    least = Math.min(least, Number.isFinite(t.max) ? t.max
+      : gwLockWindow() ? t.cap : Math.max(0, t.cap - (t.orderedThisWeek || 0)));
+  }));
+  return least;
+}
+
+/* The whole write, one line per depot and material with a change: each
+   contract's new amount.
+
+   Smart Delivery puts the Set to level on every Smart Delivery contract of
+   the line, so a backup brings only what the ones before it could not; the
+   plain contracts on that line keep their amounts, which the level counts.
+
+   Plain amounts come from one walk over every plain contract's products in
+   the order the game delivers them: importer by importer (an importer's
+   place is its first contract in the plan), each importer's contracts in plan
+   order, each contract's products in its own order. A running count per
+   importer and item starts at what the importer still allows and takes off
+   every product it passes: a product on a line in this write gets what its
+   line still needs, as far as the count allows; any other its standing
+   amount. So every figure is final when it is set, and what the caps leave of
+   a line's week is its `uncovered`, said in the dialog. Smart Delivery
+   contracts ahead in that order depend on stock and are not counted, only
+   named. A stopped contract starts when one of its products on a line here
+   gets something; started, all its products count and each one here is
+   written, 0 included. A running contract whose every amount would come to 0
+   keeps its amounts, since the game runs no contract with nothing to order
+   and a write never stops one. A contract with no purchasing agent cannot
+   deliver and is left out. */
+function gwImportPlan(depotKey){
+  const lines = gwImportRows
+    .filter(r => Number.isFinite(r.value) && (r.changed || (r.paused && r.total > 0)) && D.businesses[r.s]
+      && (!depotKey || gwDepotKey(r) === depotKey))
+    .map(r => ({r, depot: D.businesses[r.s], need: r.smart ? 0 : r.value, uncovered: 0, kept: [], smartAhead: [],
+                usable: r.contracts.filter(c => c.agent !== false && !!c.smart === !!r.smart),
+                left: r.contracts.filter(c => c.agent === false && !!c.smart === !!r.smart)}));
+  const lineOf = new Map(lines.filter(l => !l.r.smart).map(l => [l.r, l]));
+  const smartLineOf = new Map(lines.filter(l => l.r.smart).map(l => [l.r, l]));
+  const amounts = new Map();  // "<id>|<item>|<depot key>" -> the amount written
+  const started = new Set(), smartStarted = new Set();
+
+  /* Every product of every contract the payload places, in delivery order. */
+  const walk = gwImportRows.flatMap(r => r.contracts.map(c => ({c, r, line: lineOf.get(r) || null})))
+    .sort((a, b) => (a.c.group ?? a.c.order) - (b.c.group ?? b.c.order) || a.c.order - b.c.order
+      || (a.c.product ?? 0) - (b.c.product ?? 0));
+  const budgets = new Map(), smartSeen = new Map();
+  const capKey = e => `${e.c.importer || e.c.id}|${e.r.slug}`;
+  const budget = k => budgets.has(k) ? budgets.get(k) : gwAllowance(k.slice(0, k.lastIndexOf("|")), k.slice(k.lastIndexOf("|") + 1));
+  /* One contract's products against the counts as they stand: what each gets
+     when every one of them orders (`keep`: at its standing amount), and the
+     counts after. Nothing is committed. */
+  const tryContract = (group, keep) => {
+    const left = new Map(), need = new Map();
+    const got = group.map(e => {
+      const k = capKey(e), room = left.has(k) ? left.get(k) : budget(k);
+      if(e.line && !keep){
+        const want = need.has(e.line) ? need.get(e.line) : e.line.need;
+        const n = Math.max(0, Math.min(want, room));
+        need.set(e.line, want - n); left.set(k, room - n);
+        return n;
+      }
+      /* A standing amount (or one a kept contract keeps) is sent as it is, but
+         the game delivers only what the importer still allows of it. */
+      const n = Math.min(e.c.amount, room);
+      if(e.line) need.set(e.line, Math.max(0, (need.has(e.line) ? need.get(e.line) : e.line.need) - n));
+      left.set(k, room - n);
+      return e.c.amount;
+    });
+    return {got, left, need};
+  };
+  const commit = (group, t) => {
+    t.left.forEach((v, k) => budgets.set(k, v));
+    t.need.forEach((v, l) => { l.need = v; });
+    group.forEach((e, i) => { if(e.line) amounts.set(gwLineKey(e.c, e.r.slug, e.depotKey), t.got[i]); });
+  };
+  for(let i = 0; i < walk.length;){
+    let j = i;
+    while(j < walk.length && walk[j].c.id === walk[i].c.id && walk[j].c.order === walk[i].c.order) j++;
+    const group = walk.slice(i, j);
+    i = j;
+    group.forEach(e => { e.depotKey = gwDepotKey(e.r); });
+    const c = group[0].c;
+    if(c.smart){
+      /* Named for the plain products after it with the same importer and item,
+         at the level it will hold: the one a Smart line here sets, which
+         also starts it. */
+      if(c.agent === false) continue;
+      const setHere = e => { const here = smartLineOf.get(e.r); return here && here.usable.includes(e.c) ? here : null; };
+      /* Started when a Smart line here gives any of its products a level. */
+      if(!c.active && !group.some(e => setHere(e) && setHere(e).r.value > 0)) continue;
+      if(!c.active) smartStarted.add(c.id);
+      group.forEach(e => {
+        const level = setHere(e) ? setHere(e).r.value : e.c.amount;
+        if(!(level > 0)) return;
+        const k = capKey(e);
+        if(!smartSeen.has(k)) smartSeen.set(k, []);
+        smartSeen.get(k).push({c: e.c, r: e.r, level});
+      });
+      continue;
+    }
+    if(c.agent === false) continue;
+    group.filter(e => e.line).forEach(e => (smartSeen.get(capKey(e)) || []).forEach(s => {
+      if(!e.line.smartAhead.some(x => x.c.id === s.c.id && x.r.slug === s.r.slug)) e.line.smartAhead.push(s);
+    }));
+    if(!c.active){
+      const t = tryContract(group, false);
+      if(group.some((e, n) => e.line && t.got[n] > 0)){ started.add(c.id); commit(group, t); }
+      continue;
+    }
+    let t = tryContract(group, false);
+    if(group.some(e => e.c.amount > 0) && t.got.every(n => n === 0)){
+      t = tryContract(group, true);
+      group.filter(e => e.line).forEach(e => { if(!e.line.kept.includes(e.c)) e.line.kept.push(e.c); });
+    }
+    commit(group, t);
+  }
+
+  lines.forEach(l => {
+    const {r, depot} = l;
+    /* Why a week is left uncovered: the caps, no contract that runs, or none at all. */
+    l.cause = l.usable.length ? "caps"
+      : r.contracts.some(c => !!c.smart === !!r.smart) ? (r.smart ? "smartAgent" : "agent") : "none";
+    if(r.smart){
+      /* A Smart contract this write starts is written on every line here, 0 included. */
+      l.contracts = l.usable.map(c => ({c, amount: r.value}))
+        .filter(({c, amount}) => c.active ? amount !== c.amount : smartStarted.has(c.id));
+      return;
+    }
+    l.uncovered = l.need;
+    l.contracts = l.usable.map(c => ({c, amount: amounts.has(gwLineKey(c, r.slug, depot.key))
+        ? amounts.get(gwLineKey(c, r.slug, depot.key)) : c.active ? c.amount : 0}))
+      .filter(({c, amount}) => started.has(c.id) || (c.active && amount !== c.amount));
+  });
+  return lines;
+}
+/* The lines a write would change: what the "Apply N changes" buttons count. */
+const gwImportLines = depotKey => gwImportPlan(depotKey).filter(l => l.contracts.length);
+/* What a plan leaves uncovered, said the same way in the dialog and when
+   there is nothing to write. */
+const GW_UNCOVERED = {caps: "the importers' caps are reached", agent: "no contract for it here has a purchasing agent",
+                     smartAgent: "no Smart Delivery contract here has a purchasing agent", none: "no contract here"};
+/* A line a write leaves short, or leaves as it is when the Set to box asks
+   otherwise: the row, the dialog and the empty dialog all say why, and the
+   same way. */
+const gwNeedsWord = l => !l.contracts.length && (l.uncovered > 0 || l.cause !== "caps" || l.kept.length > 0);
+/* Why, as sentences: `place` names the material and depot, for the dialog. */
+function gwLineWords(l, place){
+  const at = `${spEsc(l.r.item)} at ${spEsc(l.depot.name)}`;
+  const words = [];
+  if(l.uncovered > 0) words.push(place
+    ? `<b>${Math.round(l.uncovered).toLocaleString()} a week of ${at} not covered</b>: ${GW_UNCOVERED[l.cause]}.`
+    : `${Math.round(l.uncovered).toLocaleString()} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
+  else if(l.cause !== "caps") words.push(place ? `<b>${at}</b>: ${GW_UNCOVERED[l.cause]}.`
+    : `${GW_UNCOVERED[l.cause].replace(/^./, x => x.toUpperCase())}.`);
+  /* Stopping it is the advice only where the others cover the week; short of
+     it, the cap is what leaves the kept contract nothing to bring. */
+  l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${c.amount.toLocaleString()} a week${
+    place ? ` of ${at}` : ""}: ${l.uncovered > 0 ? "its importer's cap leaves it nothing this week"
+      : "a write never stops a contract; stop it in BizMan"}.`));
+  return words;
+}
+/* The request: one entry per contract, its products from every line it serves. */
+function gwImportBody(lines){
+  const byId = new Map();
+  lines.forEach(({r, depot, contracts}) => contracts.forEach(({c, amount}) => {
+    if(!byId.has(c.id)) byId.set(c.id, {id: c.id, activate: false, products: []});
+    const row = byId.get(c.id);
+    row.activate = row.activate || (!c.active && amount > 0);
+    row.products.push({itemName: r.slug, warehouse: gwAddress(depot.key), amount, expect: c.amount});
+  }));
+  return {contracts: [...byId.values()]};
+}
+function gwLearnTerms(answer){
+  (answer.rows || []).forEach(row => (row.products || []).forEach(p => {
+    if(!p || !p.warehouse) return;
+    const key = `${row.id}|${p.itemName}|${p.warehouse.street}#${p.warehouse.number}`;
+    const was = gwTerms.get(key) || {};
+    const cap = Number.isFinite(p.cap) ? p.cap : null;
+    const orderedThisWeek = Number.isFinite(p.orderedThisWeek) ? p.orderedThisWeek : 0;
+    /* A later answer names `max` only with an over_cap; the one before still
+       stands while the cap and the week's orders it came with do. */
+    const same = was.cap === cap && was.orderedThisWeek === orderedThisWeek;
+    gwTerms.set(key, {cap, orderedThisWeek,
+                      max: Number.isFinite(p.max) ? p.max : same && Number.isFinite(was.max) ? was.max : null});
+  }));
+}
+const gwContract = id => {
+  for(const r of gwImportRows) for(const c of r.contracts) if(c.id === id) return c;
+  return null;
+};
+const gwContractName = row => spEsc((gwContract(row.id) || {}).importer || row.importer || "A contract");
+/* What a refused contract is about, as its chip: the importer and the
+   materials the refusal names. */
+const gwContractChip = row => {
+  const products = (row.products || []).filter(p => p && p.itemName);
+  const named = products.filter(p => p.error).length ? products.filter(p => p.error) : products;
+  const items = [...new Set(named.map(p => spEsc(itemName(p.itemName))))];
+  return `${gwContractName(row)}${items.length ? ` · ${items.join(", ")}` : ""}`;
+};
+/* The game's answer for one contract's product on a line. */
+function gwProduct(answer, c, l){
+  const row = (answer.rows || []).find(x => x.id === c.id);
+  return row && (row.products || []).find(p => p && p.itemName === l.r.slug && gwKeyOf(p.warehouse) === l.depot.key) || null;
+}
+/* When orders for Monday close, by the game's clock: inside the window the
+   clock itself, else "Sun 20:00 · in 6 h", so the lock is rarely a surprise. */
+function gwOrdersClose(){
+  const l = gwLink() || {};
+  const d = Number(l.day), h = Number(l.hour), m = Number(l.minute) || 0;
+  if(!Number.isFinite(d) || !Number.isFinite(h)) return "";
+  if(gwLockWindow()) return gwNow();
+  const hours = ((7 - ((d % 7) + 7) % 7) % 7) * 24 + 20 - h - m / 60;
+  const left = hours >= 48 ? `${Math.floor(hours / 24)} d` : hours >= 1 ? `${Math.floor(hours)} h` : `${Math.max(1, Math.round(hours * 60))} min`;
+  return `orders close<br>Sun 20:00 · in ${left}`;
+}
+const gwN = n => Math.round(Number(n) || 0).toLocaleString();
+/* The write as the player reads it: a card a material, grouped by depot. The
+   bar is what the contracts hold now (grey) and what the write sets (green);
+   red hatching past the cap is what the importers' caps leave uncovered. The
+   contracts are pills in the game's delivery order, read-only, and every
+   sentence about a line sits on its card. */
+function gwImportView(lines, answer, phase){
+  const rows = answer.rows || [];
+  const done = phase === "done";
+  const dim = phase === "refused" || (phase === "ready" && answer.ok === false);
+  const cash = answer.cash === null || answer.cash === undefined ? NaN : Number(answer.cash);
+  const totalOf = r => r.nextDeliveryTotal === null || r.nextDeliveryTotal === undefined ? NaN : Number(r.nextDeliveryTotal);
+  const started = rows.filter(r => r.reactivated);
+  const top = [];
+  /* Each start is weighed on its card; together they can still be more. */
+  const totals = started.map(totalOf), sum = totals.reduce((n, v) => n + v, 0);
+  if(!done && !dim && started.length > 1 && totals.every(Number.isFinite) && Number.isFinite(cash) && sum > cash)
+    top.push(gwCall("neg", "alert", `<b>Together the ${started.length} started contracts' next deliveries cost ${fmt(sum)}</b>, more than the ${
+      fmt(cash)} you hold: the game stops a contract it cannot pay for at delivery.`));
+  const aheadSaid = new Set(), startSaid = new Set();
+  const card = l => {
+    const r = l.r, smart = !!r.smart, unit = smart ? "in stock" : "a week";
+    const now = Number.isFinite(r.inGame) ? r.inGame : 0;
+    const target = Number.isFinite(r.value) ? r.value : 0;
+    const after = smart ? target : Math.max(0, target - (l.uncovered || 0));
+    const num = done || now === after
+      ? `<span class="gw-num">${gwN(after)}<small>${unit}</small></span>`
+      : `<span class="gw-num"><span class="gw-sr">from </span><s>${gwN(now)}</s>${gwSvg("right")}<span class="gw-sr"> to </span>${gwN(after)}<small>${unit}</small></span>`;
+    const mode = smart ? `<span class="gw-mode smart" title="Smart Delivery: keeps this much in stock">${gwSvg("tank")}<span class="gw-sr">Smart Delivery</span></span>`
+      : `<span class="gw-mode" title="Arrives every Monday">${gwSvg("truck")}<span class="gw-sr">weekly</span></span>`;
+    let bar = "";
+    if(!done && !dim){
+      const scale = Math.max(now, target, 1) * 1.12;
+      const pc = v => `${(Math.max(0, v) / scale * 100).toFixed(1)}%`;
+      const lo = Math.min(now, after), hi = Math.max(now, after);
+      bar = `<i class="base${r.paused ? " stopped" : ""}${hi === lo ? " full" : ""}" style="width:${pc(lo)}"></i>`;
+      if(after > now) bar += `<i class="add" style="left:${pc(now)};width:${pc(after - now)}"></i>`;
+      else if(now > after) bar += `<i class="cut" style="left:${pc(after)};width:${pc(now - after)}"></i>`;
+      if(!smart && l.uncovered > 0){
+        bar += `<i class="short" style="left:${pc(after)};width:${pc(l.uncovered)}"></i>`;
+        if(l.cause === "caps") bar += `<u class="cap" style="left:${pc(after)}"><span>cap ${gwN(after)}</span></u>`;
+      } else if(now > 0 && now !== after) bar += `<u style="left:${pc(now)};opacity:.7"><span>now</span></u>`;
+      bar = `<div class="gw-lvl" aria-hidden="true">${bar}</div>`;
+    }
+    /* The contracts on the line, in the order the game delivers them. */
+    const pills = (done ? [`<span class="gw-chip ok">${gwSvg("tick")}set</span>`] : []).concat(r.contracts.map((c, i) => {
+      const row = rows.find(x => x.id === c.id);
+      if(done) return row && row.reactivated ? `<span class="gw-chip ok">${gwSvg("play")}${spEsc(c.importer || "Importer")} started</span>` : "";
+      const p = gwProduct(answer, c, l);
+      const terms = p && Number.isFinite(p.unitPrice) ? `$${p.unitPrice.toFixed(2)} each` : "";
+      return `<span class="gw-imp${c.active ? "" : " stopped"}"><i><span class="gw-sr">${i + 1}. </span>${c.active ? `<span aria-hidden="true">${i + 1}</span>` : gwSvg("pause")}</i>${
+        spEsc(c.importer || "Importer")}${terms ? `<small>${terms}</small>` : ""}${c.active ? "" : "<small>stopped</small>"}${c.agent === false ? "<small>no agent</small>" : ""}</span>`;
+    })).filter(Boolean);
+    /* Every sentence about the line, on its card. */
+    const notes = [];
+    if(!dim){
+      if(l.uncovered > 0) notes.push(gwCall("neg", "cap", `<b>${gwN(l.uncovered)} a week ${done ? "still " : ""}not covered</b>: ${GW_UNCOVERED[l.cause]}.`));
+      else if(l.cause !== "caps") notes.push(gwCall("warn", "alert", `<b>${GW_UNCOVERED[l.cause].replace(/^./, x => x.toUpperCase())}</b>.`));
+    }
+    if(!done && !dim){
+      /* Stopping it is the advice only where the others cover the week; short
+         of it, the cap is what leaves the kept contract nothing to bring. */
+      l.kept.forEach(c => notes.push(gwCall("warn", "pause", `<b>${spEsc(c.importer || "A contract")}</b> keeps its ${gwN(c.amount)} a week: ${
+        l.uncovered > 0 ? "its importer's cap leaves it nothing this week" : "a write never stops a contract; stop it in BizMan"}.`)));
+      (l.smartAhead || []).forEach(e => {
+        const k = `${e.c.id}|${e.r.slug}`;
+        if(aheadSaid.has(k)) return;
+        aheadSaid.add(k);
+        notes.push(gwCall("info", "tank", `${spEsc(e.c.importer || "An importer")}'s Smart Delivery contract for ${spEsc(e.r.item)} at ${
+          spEsc((D.businesses[e.r.s] || {}).name || "a depot")} orders first and can use up to ${gwN(e.level)} of the cap.`));
+      });
+      /* A Smart Delivery write sets the level alone; the plain contracts on the
+         line keep their amounts, which the level already counts. */
+      const plain = smart && l.contracts.length ? r.contracts.filter(c => !c.smart) : [];
+      if(plain.length) notes.push(gwCall("info", "truck", `The plain ${plain.length === 1 ? "contract" : "contracts"} (${
+        plain.map(c => spEsc(c.importer || "Importer")).join(", ")}) ${plain.length === 1 ? "is" : "are"} left as ${
+        plain.length === 1 ? "it is" : "they are"}: the level counts what ${plain.length === 1 ? "it brings" : "they bring"}.`));
+      l.left.forEach(c => notes.push(gwCall("warn", "alert", `<b>${spEsc(c.importer || "A contract")}</b> is left out: no purchasing agent runs it. Assign one at the headquarters to use it.`)));
+      /* A stopped contract this write starts: its next delivery against the
+         cash, and what else starting it starts. */
+      started.filter(row => !startSaid.has(row.id) && l.contracts.some(({c}) => c.id === row.id)).forEach(row => {
+        startSaid.add(row.id);
+        const total = totalOf(row), day = Number(row.nextDeliveryDay);
+        const named = new Set((row.products || []).filter(p => p && p.warehouse).map(p => `${p.itemName}|${gwKeyOf(p.warehouse)}`));
+        const others = gwImportRows.flatMap(x => (x.contracts || []).filter(c => c.id === row.id).map(c => ({x, c})))
+          .filter(({x}) => !named.has(`${x.slug}|${gwDepotKey(x)}`));
+        const over = Number.isFinite(total) && Number.isFinite(cash) && total > cash;
+        const bill = Number.isFinite(total)
+          ? `<div class="gw-cash">${Number.isFinite(cash) && cash > 0 ? `<div class="tr${over ? " over" : ""}" aria-hidden="true"><i style="--w:${
+            Math.min(100, total / cash * 100).toFixed(1)}%"></i></div>` : "<span></span>"}<span>next delivery${day > 0 ? `, day ${day}` : ""}: <b>${fmt(total)}</b>${
+            Number.isFinite(cash) ? ` of ${fmt(cash)}` : ""}</span></div>`
+          : `<div class="gw-cash"><span></span><span>next delivery: an amount the game did not give</span></div>`;
+        notes.push(gwCall(over ? "neg" : "warn", "play", `<b>${gwContractName(row)} is stopped.</b> This starts it again, with Repeating on.${
+          over ? " <b>Its next delivery is more than you hold</b>: the game stops a contract it cannot pay for at delivery." : ""}${bill}${others.length
+          ? `<div class="gw-chips">${others.map(({x, c}) => `<span class="gw-chip">${gwSvg("play")}also starts: <b>${spEsc(x.item)}</b> at ${
+            spEsc((D.businesses[x.s] || {}).name || "a depot")} · ${c.smart ? `${gwN(c.amount)} in stock` : `${gwN(c.amount)} a week`}</span>`).join("")}</div>` : ""}`));
+      });
+    }
+    return `<div class="gw-line${dim ? " dim" : ""}${done ? " ticked" : ""}"><div class="gw-lt"><span class="gw-mat" aria-hidden="true">${gwSvg("crate")}</span><b>${
+      spEsc(r.item)}</b>${mode}${num}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
+  };
+  const depots = new Map();
+  lines.forEach(l => { if(!depots.has(l.depot.key)) depots.set(l.depot.key, []); depots.get(l.depot.key).push(l); });
+  const legend = done || dim ? "" : `<div class="gw-legend"><span class="sm">${gwSvg("tank")}Smart Delivery keeps this much in stock</span><span>${gwSvg("truck")}arrives every Monday</span></div>`;
+  const wait = dim && lines.length > 1 ? `<p class="gw-lead">Waiting with them, since the ${lines.length} go together:</p>` : "";
+  return top.join("") + legend + wait + [...depots.values()].map(ls => `<div class="gw-depot">${hoodHtml(ls[0].depot)}<span>${
+    spEsc(ls[0].depot.name)}</span></div>${ls.map(card).join("")}`).join("");
+}
+
+function gwImports(depotKey){
+  const lines = () => gwImportLines(depotKey);
+  const depot = depotKey ? (D.businesses || []).find(b => b.key === depotKey) : null;
+  let sent = null, shown = [], replans = 0, board = D;
+  const changes = () => shown.filter(l => l.contracts.length).length || lines().length;
+  gwConfirm({
+    kind: "imports", icon: "crate", againLabel: "Apply again",
+    title: "Weekly imports",
+    where: () => depot ? gwWhere(depot) : `<span>${plural(new Set(lines().map(l => l.depot.key)).size || 1, "depot")}</span>`,
+    /* With nothing to write, why each line asking for a change gets none. */
+    nothing: () => {
+      if(lines().length) return "";
+      const plan = gwImportPlan(depotKey), said = plan.filter(gwNeedsWord);
+      if(said.length) return `Nothing to write. ${said.flatMap(l => gwLineWords(l, true)).join(" ")}`;
+      return plan.length ? "Nothing to write: no contract here would change."
+        : "Nothing left to change: the game holds these figures.";
+    },
+    /* The request, and the lines it was made from, drawn with the answer. */
+    body: () => {
+      shown = gwImportPlan(depotKey).filter(l => l.contracts.length || gwNeedsWord(l));
+      sent = gwImportBody(shown.filter(l => l.contracts.length));
+      return sent;
+    },
+    learn: gwLearnTerms,
+    verdict: answer => {
+      const rows = answer.rows || [], bad = rows.filter(r => r.error).length, n = changes();
+      return bad ? `<b>The game refuses ${bad} of ${rows.length}</b>` : `<b>The game takes ${n === 1 ? "the change" : n === 2 ? "both" : `all ${n}`}</b>`;
+    },
+    meta: () => gwOrdersClose(),
+    draw: (answer, phase) => phase === "undone" ? "" : gwImportView(shown, answer, phase),
+    hint: "Written all together, or not at all.",
+    object: gwContractChip,
+    /* A dry run that named a cap can change how plain amounts split: ask again
+       with the split it allows, a few times at most. */
+    bind: (dlg, replan) => {
+      if(board !== D){ board = D; replans = 0; }  // a new board, new terms: counted afresh
+      if(replans < 3 && JSON.stringify(gwImportBody(lines())) !== JSON.stringify(sent)){ replans++; replan(null); }
+    },
+    applyLabel: () => `Apply ${plural(changes(), "change")}`,
+    applying: "Changing the imports in the game…",
+    changed: answer => (answer.rows || []).some(r => r.reactivated || (r.products || []).some(p => p.before !== p.amount)),
+    done: answer => {
+      if(answer.undo) return "Undone: the imports are back as they were.";
+      const rows = answer.rows || [];
+      const n = rows.reduce((k, r) => k + (r.products || []).filter(p => p.before !== p.amount).length, 0);
+      const started = rows.filter(r => r.reactivated).length;
+      const parts = [n ? `${plural(n, "amount")} set` : "", started ? `${plural(started, "contract")} started` : ""].filter(Boolean);
+      return parts.length ? `${parts.join(", ").replace(/^./, c => c.toUpperCase())} in the game.`
+        : "Nothing to change: the game already holds these figures.";
+    },
+  });
+}
+
+/* --- the schedule: a roster's plan, written ----------------------------- */
+const GW_HQ = "ba:businesstype_headquarters";
+/* The plan a shop's roster shows: the demand plan, or full cover where the
+   player picked it. None at a headquarters, whose shifts the game ties to its
+   opening hours, and none where nothing was planned. */
+function gwRosterPlan(key){
+  const b = (D.businesses || []).find(x => x.key === key);
+  if(!b || b.typeSlug === GW_HQ || b.status !== "retail") return null;
+  const base = spRosterRow(key);
+  if(!base || base.failed) return null;
+  const row = spOffersFull(base) && spPlanRead(base.key) === "full" ? spFullRow(base) : base;
+  return (row.shifts || []).length ? row : null;
+}
+/* The week a write sends, from the plan's rows, their station and person
+   indices turned back into the game's ids. Only the people already working
+   here: a hire's entry has nobody on it and a bench member's somebody not
+   assigned here yet, and both stay empty until the player adds them. A
+   cover-only plan leaves the serving entries in the game where they are, so
+   they go back as they stand: the write replaces the week whole. */
+function gwRosterWeek(row){
+  const bench = new Set([...(row.bench || []), ...((row.addPeople || {}).assign || [])].map(r => r.p));
+  const days = new Map();
+  let sent = 0, kept = 0;
+  const put = s => {
+    const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
+    if(!st || !spHasId(st.id) || !who || !spHasId(who.id) || !(s.d >= 0 && s.d < 7)) return false;
+    if(!days.has(s.d)) days.set(s.d, []);
+    days.get(s.d).push({f: s.f, t: s.t, employeeId: who.id, itemInstanceId: st.id});
+    return true;
+  };
+  (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
+  if(!row.full && spCoverOnly(row))
+    ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
+  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept};
+}
+/* Whether the game's schedule already is this week, entry for entry (and
+   open around the clock where the plan wants that). */
+function gwRosterMatches(row, week){
+  const line = (d, s) => [d, s.f, s.t, s.employeeId, s.itemInstanceId].join("|");
+  const want = week.days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
+  const have = ((row.current || {}).list || []).map(s => {
+    const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
+    return line(s.d, {f: s.f, t: s.t, employeeId: (who || {}).id, itemInstanceId: (st || {}).id});
+  }).sort();
+  return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
+}
+const gwScheduleSites = () => (D.staffing || []).map(r => r.key).filter(key => {
+  const row = gwRosterPlan(key);
+  if(!row) return false;
+  const week = gwRosterWeek(row);
+  return week.sent > 0 && !gwRosterMatches(row, week);
+});
+/* The roster's own write, and every planned shop's in turn. How many people
+   the plan still waits on stays beside it until they are added, so a partial
+   write never reads as the whole week. */
+function gwRosterButtons(key){
+  if(!gwLink()) return "";
+  const row = gwRosterPlan(key);
+  if(!row) return "";
+  const one = gwButton("schedule", "Write this roster to the game", `data-gw-sites="${attr(JSON.stringify([key]))}"`,
+    gwRosterWeek(row).sent ? "" : "Every entry in this plan waits on somebody who does not work here yet: add them first", {icon: "hire"});
+  const all = gwScheduleSites();
+  const many = all.length > 1
+    ? gwButton("schedule", `Write all ${all.length} planned sites`, `data-gw-sites="${attr(JSON.stringify(all))}"`, "", {alt: true}) : "";
+  const add = row.addPeople || {};
+  return one ? `<div class="gw-acts gw-panel">${one}${many}${add.people ? `<span class="gw-note">${gwSvg("hire")}${
+    add.hoursUncovered || 0} h a week stay empty until ${plural(add.people, "person is", "people are")} added</span>` : ""}</div>` : "";
+}
+const gwInitials = name => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const gwHours = list => list.reduce((n, s) => n + s.t - s.f, 0);
+/* Three figures, now → after. */
+const gwTiles = items => `<div class="gw-tiles">${items.map(([label, a, b]) => `<div class="gw-tile"><span class="gw-lab">${label}</span><div class="v">${
+  a === b || a === null ? b : `<span class="gw-sr">from </span><s>${a}</s>${gwSvg("right")}<span class="gw-sr"> to </span>${b}`}</div></div>`).join("")}</div>`;
+/* The week a write sends, against the one the board read: a pair of bars a day. */
+function gwWeek(now, days){
+  const per = HOUR_ROWS.map(d => {
+    const a = now.filter(s => s.d === d), b = (days.find(x => x.d === d) || {shifts: []}).shifts;
+    return {d, a, b, ah: gwHours(a), bh: gwHours(b)};
+  });
+  const top = Math.max(1, ...per.map(x => Math.max(x.ah, x.bh)));
+  const h = v => `${Math.max(v / top * 64, 2).toFixed(0)}px`;
+  const cols = per.map(({d, a, b, ah, bh}) => {
+    const delta = bh - ah;
+    const dl = delta > 0 ? `<span class="dl gw-up">+${delta} h</span>` : delta < 0 ? `<span class="dl gw-dn">−${-delta} h</span>` : `<span class="dl">=</span>`;
+    const said = `${WEEK_FULL[d]}: ${plural(a.length, "entry", "entries")}, ${ah} h → ${plural(b.length, "entry", "entries")}, ${bh} h`;
+    return `<div class="gw-wd${delta === 0 && a.length === b.length ? " same" : ""}" tabindex="0" data-read="${attr(`<b>${WEEK_FULL[d]}</b> · ${
+      plural(a.length, "entry", "entries")}, ${ah} h <em>→ ${plural(b.length, "entry", "entries")}, ${bh} h</em>`)}"><span class="gw-sr">${said}</span>${dl}<div class="bars" aria-hidden="true"><i class="n" style="--h:${
+      h(ah)}"></i><i class="a" style="--h:${h(bh)}"></i></div><span class="d" aria-hidden="true">${WEEK_FULL[d].slice(0, 3).toUpperCase()}</span></div>`;
+  }).join("");
+  return `<div data-readzone><div class="gw-week">${cols}</div><div class="gw-keyrow"><div class="gw-read sp-readout">Hover a day</div><div class="gw-key" aria-hidden="true"><span><i></i>now</span><span><i class="a"></i>after</span></div></div></div>`;
+}
+/* The add-people box: who to assign and whom to hire, and the hours written
+   now against the hours that wait for them. */
+function gwAddBox(add, staffed){
+  const pills = (add.assign || []).map(p => `<span class="person bench"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "?")}<small>unassigned</small></span>`)
+    .concat((add.hire || []).map(h => `<span class="person hire"><i>${gwSvg("plus")}</i>${h.people} × ${spEsc(h.role || "")}<small>to hire</small></span>`));
+  const empty = Number(add.hoursUncovered) || 0, total = staffed + empty;
+  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", `<b>Add ${plural(add.people, "person", "people")} to fill this plan</b>: ${
+    spAddWords(add)}; ${empty} h a week stay empty until then.`)}${pills.length ? `<div class="gw-pills">${pills.join("")}</div>` : ""}${
+    total > 0 ? `<div class="gw-cover" aria-hidden="true"><i class="c" style="flex:${(staffed / total).toFixed(3)}"></i><i class="e" style="flex:${
+      (empty / total).toFixed(3)}"></i></div><div class="gw-coverk"><span><b>${staffed} h</b> written now</span><span class="w">${empty} h wait for them</span></div>` : ""}</div>`;
+}
+
+/* One shop's schedule, and with several keys a run of dialogs, one shop
+   after another; `run` is what became of the ones before. The game keeps one
+   undo per kind, so each apply's Undo is for its own shop until the next one
+   is written. */
+function gwSchedule(keys, i = 0, run = [], o = {}){
+  const key = keys[i];
+  /* The shop after this one the run has not seen yet: a shop reopened from
+     the end of the run goes back to the end, not through the rest again. */
+  const after = keys.findIndex((k, j) => j > i && !run[j]);
+  const many = keys.length > 1, lastOne = after < 0;
+  const site = () => (D.businesses || []).find(x => x.key === key) || null;
+  const b = site();
+  /* Leaving this shop (skipped, not written, nothing to write) goes on to
+     the next, or after the last to the end of the run. */
+  const pass = (what = "skipped") => {
+    run[i] = {name: b ? spEsc(shortName(b)) : "A shop", plain: b ? shortName(b) : "A shop", what, ok: false};
+    if(!lastOne) gwSchedule(keys, after, run); else gwRunEnd(keys, run);
+  };
+  /* On from a shop written: the next one not seen yet, or the end of the run. */
+  const next = many ? {label: lastOne ? "See the run" : `Next shop · ${after + 1} of ${keys.length}`, skip: "Skip this shop", pass,
+                       go: lastOne ? () => gwRunEnd(keys, run) : () => gwSchedule(keys, after, run)} : null;
+  if(!b) return next && pass("gone");
+  const name = spEsc(shortName(b));
+  let openAll = true, last = null;
+  gwConfirm({
+    kind: "schedule", icon: "roster", againLabel: "Write again",
+    title: many ? `Write all ${keys.length} planned sites` : "Write this roster to the game",
+    where: () => many ? `${gwSteps(keys, run, i)}<span>${i + 1} of ${keys.length} · ${name}</span>` : gwWhere(b),
+    nothing: () => !gwRosterPlan(key) ? "This shop has no plan to write any more."
+      : typeof (site() || {}).shiftPrint !== "string" ? "Read the game again first: this board does not know the shop's schedule well enough to replace it."
+      : "",
+    body: () => {
+      const row = gwRosterPlan(key), week = gwRosterWeek(row);
+      last = {row, week, now: (row.current || {}).list || []};
+      return {address: gwAddress(key), expect: site().shiftPrint,
+              openAllHours: !!(row.full && !row.openNow && openAll), days: week.days};
+    },
+    verdict: answer => answer.ok ? "<b>The game takes the week</b>" : "<b>The game refuses this</b>",
+    object: row => {
+      if(row.d === undefined) return name;
+      const s = last && ((last.week.days.find(x => x.d === row.d) || {}).shifts || [])[row.i];
+      const who = s && (last.row.people || []).find(p => p.id === s.employeeId);
+      return `${WEEK_FULL[row.d] || "A day"}${s ? ` ${s.f}-${s.t}, ${spEsc((who || {}).name || "someone")}` : ""}`;
+    },
+    draw: (answer, phase) => {
+      if(!last) return "";
+      const {row, week, now} = last, add = row.addPeople || {};
+      const sentList = week.days.flatMap(x => x.shifts);
+      const people = list => new Set(list.map(x => x)).size;
+      const nowPeople = people(now.map(s => s.p).filter(p => p !== null && p !== undefined));
+      const afterPeople = people(sentList.map(s => s.employeeId));
+      if(phase === "undone"){
+        const a = Number((answer.before || {}).shifts) || 0, z = Number((answer.after || {}).shifts) || 0;
+        return gwTiles([["Entries", a, z]]);
+      }
+      if(phase === "done") return gwTiles([["Entries", null, sentList.length], ["Hours / week", null, gwHours(sentList)], ["People", null, afterPeople]])
+        + (add.people ? gwLiftCall("warn", "hire", `<b>${add.hoursUncovered || 0} h a week stay empty</b> until you add ${plural(add.people, "person", "people")}. Write the roster again then: the board keeps this note on the roster until it is full.`) : "");
+      const which = row.full ? `<span class="gw-plan full">${gwSvg("sun")}Full cover 24/7</span><span class="gw-only">every station, every hour</span>`
+        : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}Cleaning and security</span><span class="gw-only">replaces the whole week</span>`
+        : `<span class="gw-plan">${gwSvg("roster")}Demand plan</span><span class="gw-only">replaces the whole week</span>`;
+      const kept = week.kept ? gwCall("info", "info", `The ${plural(week.kept, "serving entry", "serving entries")} in the game ${week.kept === 1 ? "stays" : "stay"} as ${week.kept === 1 ? "it stands" : "they stand"}: this plan covers cleaning and security only.`) : "";
+      /* Full cover opens the shop around the clock, unless the player opts out. */
+      let toggle = "";
+      if(row.full && !row.openNow && phase === "ready"){
+        const open = new Set(((spRosterRow(key) || {}).open || []).flatMap(day => (day || []).flatMap(([a, z]) =>
+          [...Array(Math.max(0, Math.min(24, z) - Math.max(0, a))).keys()].map(k => a + k))));
+        const strip = (label, all) => `<span>${label}</span><div class="h">${[...Array(24).keys()].map(hr =>
+          `<i class="${all || open.has(hr) ? "o" : ""}${all && !open.has(hr) ? " new" : ""}"></i>`).join("")}</div>`;
+        toggle = `<div class="gw-toggle${openAll ? "" : " off"}"><div><b id="gwOpenLab">Also open every day 0 to 24</b><small>An hour the shop is closed is an hour the demand test never measures.</small></div><button type="button" class="sw${
+          openAll ? " on" : ""}" role="switch" aria-checked="${openAll ? "true" : "false"}" aria-labelledby="gwOpenLab" data-gw-open></button><div class="gw-hrs" aria-hidden="true">${strip("now", false)}${strip("after", true)}</div></div>`;
+      }
+      const roleOf = id => {
+        const p = (row.people || []).findIndex(x => x.id === id);
+        const s = now.find(x => x.p === p), st = s && (row.stations || [])[s.s];
+        return st ? gwSkillName(st.skill) : "";
+      };
+      const left = (answer.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}${
+        roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
+      const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
+        gwCall("warn", "flame", `<b>${spEsc(w.name || "Someone")}</b> works ${Number(w.hours)} h on ${WEEK_FULL[w.d] || "a day"}. The game allows it.`));
+      return `<div class="gw-planrow">${which}</div>`
+        + gwTiles([["Entries", now.length, sentList.length], ["Hours / week", gwHours(now), gwHours(sentList)], ["People", nowPeople, afterPeople]])
+        + gwWeek(now, week.days) + kept + toggle
+        + (left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No shift here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does.")}<div class="gw-pills">${left.join("")}</div></div>` : "")
+        + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
+    },
+    bind: (dlg, replan) => {
+      const sw = dlg.querySelector("[data-gw-open]");
+      if(sw) sw.onclick = () => {
+        if(sw.classList.contains("gw-busy")) return;
+        openAll = !openAll;
+        sw.classList.toggle("on", openAll);
+        sw.setAttribute("aria-checked", openAll ? "true" : "false");
+        const box = sw.closest(".gw-toggle");
+        if(box) box.classList.toggle("off", !openAll);
+        replan(sw);
+      };
+    },
+    applyLabel: () => "Write the week",
+    applying: "Writing the week in the game…",
+    changed: answer => (answer.before || {}).print !== (answer.after || {}).print || !!answer.openedHours,
+    startUndo: !!o.startUndo,
+    /* Undone, the shop is back to be written, in the run too. */
+    onUndo: () => { delete run[i]; },
+    onDone: answer => { run[i] = {name, plain: shortName(b), what: plural(Number(answer.added) || 0, "entry", "entries"), ok: true}; },
+    doneBody: (answer, spec) => {
+      const shop = name;  // the board's name for it: the game's carries the [code] prefix
+      const said = `<p class="gw-said ok">${shop}: ${plural(Number(answer.added) || 0, "entry", "entries")} set in place of ${Number(answer.removed) || 0}${
+        answer.openedHours ? ", open 0 to 24 every day" : ""}.</p>`;
+      return said + spec.draw(answer, "done");
+    },
+    undoHint: () => many ? "Undo holds only the last shop written." : null,
+    /* Where this shop sits in its run, so the end of the run offers Undo for
+       it and for no other; and, reopened from there to be undone, the way
+       back when the undo fails. */
+    runOf: many ? run : null,
+    runAt: i,
+    backToRun: many && o.startUndo ? () => gwRunEnd(keys, run) : null,
+    onUndoUnknown: () => { if(run[i]) run[i] = Object.assign({}, run[i], {what: "unknown, see the board", ok: false}); },
+    done: answer => {
+      const shop = name;  // the board's name for it: the game's carries the [code] prefix
+      if(answer.undo) return `Undone: the schedule at ${shop} is back as it was${answer.openedHours ? ", opening hours too" : ""}.`;
+      const add = (last && last.row.addPeople) || {};
+      return `${shop}: ${plural(Number(answer.added) || 0, "entry", "entries")} set in place of ${Number(answer.removed) || 0}${
+        answer.openedHours ? ", open 0 to 24 every day" : ""}.${add.people ? ` ${add.hoursUncovered || 0} h a week stay empty until you add ${
+        plural(add.people, "person", "people")}; write it again then.` : ""}`;
+    },
+    next,
+  });
+}
+
+/* The run's dots: green written, hollow left, ringed the one on screen; and
+   the same in words for a screen reader. */
+function gwSteps(keys, run, at){
+  const done = run.filter(x => x && x.ok).length, left = run.filter(x => x && !x.ok).length;
+  return `<span class="gw-steps" role="img" aria-label="${attr(`${done} written, ${left} left out, ${keys.length - done - left} to go`)}">${
+    keys.map((k, j) => `<i class="${run[j] ? (run[j].ok ? "d" : "s") : j === at ? "c" : ""}"></i>`).join("")}</span>`;
+}
+/* Every shop and what became of it, as a list. */
+const gwRunList = (keys, run) => `<div class="gw-run">${keys.map((k, j) => run[j]).filter(Boolean).map(x => `<div><span class="m${
+  x.ok ? "" : " s"}">${gwSvg(x.ok ? "tick" : "skip")}</span><span class="${x.ok ? "" : "skip"}">${x.name}</span><small>${x.what}</small></div>`).join("")}</div>`;
+/* The end of a run that did not end on a shop written: its summary, and Undo
+   for the last shop written in it while the game still holds that undo. */
+function gwRunEnd(keys, run){
+  const dlg = gwDialog("roster", `Write all ${keys.length} planned sites`, `${gwSteps(keys, run, -1)}<span>the end of the run</span>`);
+  const written = run.filter(x => x && x.ok), left = run.filter(x => x && !x.ok).length;
+  /* The game keeps one schedule undo: offered here only while it is this
+     run's, for the shop it belongs to. */
+  const u = gwUndoable.schedule;
+  const at = u && u.spec.runOf === run && run[u.spec.runAt] && run[u.spec.runAt].ok ? u.spec.runAt : -1;
+  gwPaint(dlg, {phase: "done", wire: written.length ? "ok" : "no", say: `<b>All ${keys.length} seen</b>`, meta: gwNow(),
+    body: `<p class="gw-said${written.length ? " ok" : ""}">${plural(written.length, "shop")} written${left ? `, ${left} left out` : ""}.</p>${gwRunList(keys, run)}${
+      at >= 0 ? gwLiftCall("info", "undo", `Undo holds the last shop written, <b>${run[at].name}</b>: the game keeps one schedule change to take back.`) : ""}`,
+    /* Undo reopens that shop inside the run, undone and asked afresh. */
+    buttons: [...(at >= 0 ? [[`Undo ${run[at].plain}`, () => gwSchedule(keys, at, run, {startUndo: true}),
+      {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
+      ["Close", () => dlg.close(), {kind: "go"}]]});
+}
+
+const bindWrites = once(() => {
+  on("click", "[data-gw]", (btn, e) => {
+    /* Capture phase: a button inside a finding row must not open the row. */
+    e.preventDefault(); e.stopPropagation();
+    if(btn.getAttribute("aria-disabled") === "true") return;
+    const kind = btn.dataset.gw;
+    if(kind === "uniforms") gwUniforms(btn.hasAttribute("data-gw-all")
+      ? gwUniformAll().map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"));
+    else if(kind === "imports") gwImports(btn.dataset.gwDepot || null);
+    else if(kind === "schedule") gwSchedule(JSON.parse(btn.dataset.gwSites || "[]"));
+  }, true);
+});
+function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }
+
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
 function wireAll(){
@@ -20665,7 +22792,7 @@ function wireAll(){
   wireChart(); wirePortfolio(); wireSiteReads();
   wireFlow();
   wireHeat(); wirePlan();
-  wireReveal();
+  wireReveal(); wireWrites();
 }
 
 /* The board with no numbers in it: the Wiki reads straight from the game's own
@@ -20741,11 +22868,21 @@ function startWatching(){
     changed(data){
       const first = !D;
       D = data;
+      gwTerms.clear();  // what the game said of caps belongs to the board it was said about
+      gwReadStuck = false;
+      if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
       if(first) boot(); else renderAll();
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
     stale: markStale,
+    /* The read that follows a write gave up, or its build failed. */
+    followFailed: () => gwFollowFailed(),
+    /* The read that follows a write ended well, with a board built or the one
+       on screen found current: an undo's gate may open. */
+    followDone: () => { if(gwOpen && gwOpen._gwGate){ gwOpen._gwBuilt = true; gwOpen._gwGate(); } },
+    /* Another source, with no new board yet: an undo's gate closes again. */
+    linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
     lost(){
       const dot = $("live");
       if(dot){ dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }

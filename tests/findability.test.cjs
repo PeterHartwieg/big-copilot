@@ -617,7 +617,7 @@ test("a site's page on a phone: a sticky crumb row, arrows round the list, nothi
     assert.equal(await page.locator('#sitePick > a.ibtn').count(), 2);
     assert.equal(await page.locator('#sitePick > a.ibtn').first().isVisible(), true);
     assert.equal(await page.locator('#sitePick .seg > span').first().isHidden(), true);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), 'nothing scrolls sideways');
     // Scrolled well past it, the row still sits right under the masthead.
     const stuck = await page.evaluate(async () => {
       scrollTo(0, document.querySelector('.ss-crumbs').offsetTop + 600);

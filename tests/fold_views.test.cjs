@@ -219,7 +219,7 @@ const mastBoxes = (page, [save, flags]) => page.evaluate(async ([save, flags, FL
   return {mast: box(document.querySelector('.mast')), brand: box(document.querySelector('.brand')),
     nav: box(document.getElementById('nav')), clock: box(document.getElementById('clock')),
     lines: [...document.querySelectorAll('#clock > small')].map(box),
-    scroll: document.documentElement.scrollWidth};
+    scroll: document.documentElement.scrollWidth, room: document.documentElement.getBoundingClientRect().width};
 }, [save, flags, FLAGS]);
 
 const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0, rules: []};
@@ -236,7 +236,7 @@ test("at 1501 px and over the chip ends the clock's last line, inside the masthe
     const {page, errors} = await board({width});
     try {
       const b = await mastBoxes(page, [save, flags]);
-      assert.equal(b.scroll, width, `${what} scrolls sideways`);
+      assert.ok(b.scroll <= b.room, `${what} scrolls sideways`);
       // The clock's content box stays inside the masthead.
       const [ml, mt, mw, mh] = b.mast, [cl, ct, cw, ch] = b.clock;
       assert.ok(cl >= ml && ct >= mt && cl + cw <= ml + mw && ct + ch <= mt + mh, `${what}: clock ${b.clock} outside ${b.mast}`);
@@ -467,7 +467,7 @@ test('on a phone the chip moves to the footer stamp', async () => {
     await foot.click();
     const box = await page.locator('#fvDiffPop').boundingBox();
     assert.ok(box.x >= 0 && box.x + box.width <= 390, 'the popover fits the phone');
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), 'nothing scrolls sideways');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

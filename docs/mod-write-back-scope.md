@@ -400,6 +400,20 @@ differ:
 - The plan still places unassigned staff and hires (`addPeople`). The schedule write sends only the
   entries of people assigned to the site and says how many people to add; a second write fills the
   holes once the player has assigned or hired them.
+- No reordering on the board (Peter, 23 September 2026). The game delivers grouped by importer, a
+  group placed by its first contract in the whole plan, so moving one contract within a line often
+  cannot be expressed without moving that importer's deliveries of other items too. The board shows a
+  line's contracts read-only in delivery order; the plan order is set at the headquarters in game. The
+  mod keeps `order` in `/write/imports` for later.
+- Plain contracts on one line split cap-aware (Peter, 23 September 2026): one budget per importer and
+  item across the whole write, walked in the game's delivery order; demand the caps leave is shown
+  before Apply. A Smart Delivery contract ahead in that order is named in the dialog, not budgeted.
+- No pairing code (Peter, 23 September 2026, after trying it in game: a code every launch is too
+  annoying). The first write from a browser shows the game's own confirm popup; the player approves
+  once per browser, remembered across launches (game-link-api.md, "Approving a browser"). This
+  replaces section 2's pairing code and sessionStorage.
+- Schedule writes are refused at a headquarters (its shifts follow the day's opening slot on every
+  open day, and unassigning people there clears plans and import agents).
 - Offices get a default plan of their own (a board branch, not the mod): computers staffed 24/7 = 3
   in a 50-capacity building, proportionally fewer in smaller ones (at least 1); every computer 8 to 22
   on weekdays; half the computers 8 to 22 on weekends. The game's office demand formula is exact
@@ -423,3 +437,82 @@ cargo; the board already assumes it).
 the Mac (mod README; SSH and headless Unity build notes in the game-link memory). Review panel:
 Opus 5.5 subagent + gpt-6-sol through `codex exec` (Codex CLI 0.156.1 or later); Grok was out of
 usage balance on 23 September.
+
+## 10. Status and hand-over (24 September 2026)
+
+**Steps 2 to 4 are built and almost done**, on branch `write-back` (worktree
+`C:/Users/Peter/Coding_Projects/big-copilot-write-back`). Nothing is pushed and there is no PR yet.
+The wire contract is `docs/game-link-api.md` "### Writes"; this section supersedes section 9 where
+the two differ.
+
+**What is on the branch**
+
+- Mod 0.2.0 (`mod/BigCopilotLink/`), review-green: write endpoints for uniforms, imports and schedule,
+  plus undo and dry runs. It is built on the Mac with `research/macbuild-write-back.sh` in the main checkout (local): scp the
+  Scripts, Locales and manifest, run a headless Unity build, fetch new `.meta` files back, then
+  restore the Mac checkout. The DLL is installed in Windows `ModsLocal/BigCopilotLink`, with the
+  Workshop copy disabled by Peter for testing.
+- **No pairing code** (Peter, 23 Sep: a code every launch was too annoying). The first write from a
+  browser shows the game's own confirm popup (`HudConfirm`). The approval is remembered per browser,
+  as a hash in PlayerPrefs `BigCopilotLink.approved`, and the options panel has "Forget approved
+  browsers". Two edge cases were declined in review: the map opened and closed within one pump tick,
+  and the race between first use and approval.
+- Page (`web/app.js`, the board script): the write dialogs ported from the canvas
+  (`mockup/write-dialogs`, approved by Peter), the approval inside the write's own dialog, the
+  uniforms buttons (in-place re-asks, "Leave it out"), imports Apply with a cap-aware plain split
+  (no board reorder, per Peter), and the schedule write for one shop or a run of shops. The mock
+  (`tools/game_link_mock.py`) speaks the whole contract.
+- Peter's in-game test on 24 Sep found three things. Changing the preset refreshed the whole dialog
+  (fixed: re-asks now update in place). After an undo, uniforms and schedule should be re-doable
+  (fixed: see the open work below).
+
+**Update, 24 September 2026 afternoon.** Items 1 to 3 below are done. (1) The undo gate was simplified by Peter's call: "Set/Apply/Write again" opens on the next board built (or a read-back that ends well) after the undo, from the same source and company; the mod's `expect` compare-and-set catches a stale board. Review-green after rounds 8 to 12 (9c622e3). A character binding on writes was tried and dropped: no two buildings share an address. The mod's stamps now never repeat within a city session (`SaveService.cs`, "last + 1"), so the mod needs a Mac rebuild. (2) The narrow supply fix shipped as PR #80 and is deployed; main is merged in (de04baa). (3) Build 3682: all seven reflected private members and the public API the mod calls are unchanged; the README now says 3682. Next: item 4 (Mac build, Peter's in-game test), then item 5.
+
+**Open work, in order**
+
+1. **Undo gate** (commit b35d546). After an undo the dialog shows "Undone in the game" and a disabled
+   "Set/Apply/Write again". The button should unlock only once the board has read the game after the
+   undo. gpt-6-sol's review found two MUST-FIX races, and Opus's review of the same commit may not
+   have landed. The fix to build: web/app.js tags every board build with the moment its `/save`
+   fetch started (or a fetch sequence number). The gate opens only on a build whose fetch started
+   after the undo answer arrived, instead of comparing stamps. gpt-6-sol's findings are saved in
+   `research/write-back-handover/undo-gate-r7-sol.md`, and Opus's in `undo-gate-r7-opus.md`, which adds a mod fix: stamps must never repeat within one second ("last + 1", as the mock does). The earlier review briefs are beside them
+   (`review_*.md`). It keeps re-checking on every build
+   until the player clicks, and closes again on a source or company switch. The stamp should be
+   committed (`lastLinkStamp`) only after the board accepts a build. Then run a scoped review round.
+2. **Narrow supply fix: redo it literally.** Peter chose "only remove the phantom: goods a factory
+   forwards to a depot that then uses none of them don't count". The branch's gross in/out model went
+   broader than that, and review round 2 found two more MUST-FIXes: a factory, then a depot, then a
+   consuming factory; and a same-day import mixed with a top-up. Saved in
+   `research/write-back-handover/supply-narrow-r2-sol.md` in the main checkout. Next: keep the base
+   net model of main and change only this. When a factory's same-day outflow of an item goes to a
+   depot whose draw of that item is nil (a stock-target fill nothing uses, as Factory Jewelry to
+   Jewelry Distrib., Metal Band 5,000), don't let it pull the factory's intake down. Nothing else
+   should differ from base. Paper Bag's Monday undercount can stay: its 25,000 level covers it.
+   The current work is on branch `supply-narrow` (worktree
+   `C:/Users/Peter/Coding_Projects/big-copilot-supply-narrow`, from main 92c3ef8). It uses gross
+   in/out flows per site instead of per-day net figures. On Peter's save, Metal Band's Used / week is
+   15,120 + 0 (it was 20,200) and Paper Bag's is 19,530. Review round 2 is on its latest commit.
+   Finish the review, then PR, merge and deploy the site (the wrong suggestion is live), then merge
+   main into `write-back` (generated files: take either side and rebuild). The demand-based supply
+   model (10-15% margin) belongs to the separate UX orchestration session, as part of R8. The branch
+   `supply-audit-fixes` is reference only.
+3. **Game build 3682**: re-verify, with `research/il_dump.py`, the private members the mod reads by
+   reflection. The mod README's game-API table lists them: `HudConfirmUi._onConfirmAction`,
+   `container`, `showInFullMenu`, `PurchasingAgentPlanUI._currentImportPartnership`, and the
+   `ScheduleHelper` / `BizManSchedule` members.
+4. **Peter's final in-game test** of the whole flow: approve, the three writes, undo and re-do,
+   restart without asking again. Serve the page with launch config `write-back-web` on
+   http://localhost:8792.
+5. **Release**: a changelog entry (a new capability, docs/contributing.md), the PR, merge, Peter
+   uploads mod 0.2.0 through the in-game Mod Creator (mod README "Publish to the Workshop"), then the
+   site deploy. The page gates writes on `/health.writes`, so a deploy before the upload shows
+   nothing new.
+
+**Review panel**: one Opus 5.5 subagent (Plan type, read-only) plus gpt-6-sol through
+`codex exec -m gpt-6-sol -s read-only "<brief>" </dev/null`, with the brief written to a file and
+scoped to one commit. Go on until neither reports a MUST-FIX or SHOULD-FIX. If a rule keeps drawing
+findings round after round, simplify the rule; the undo's re-ask went through three designs.
+Workers: Opus 5.5 subagents with explicit file ownership and a hard no-delete rule (no rm, git
+clean/restore/checkout/stash). A worker once tried to delete something unexpected and Peter stopped
+it.

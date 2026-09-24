@@ -16,13 +16,13 @@ namespace BigCopilotLink
     /// connect reads that as "the game is not running or no save is loaded".
     ///
     /// This class owns the wiring and the log; the work is in SaveService (when to
-    /// serialize and what the bytes are), HealthState (the cached live values) and
-    /// LinkHttpServer (the contract).
+    /// serialize and what the bytes are), HealthState (the cached live values),
+    /// WriteService (the writes, from 0.2.0) and LinkHttpServer (the contract).
     /// </summary>
     [ModEntryOnCityLoad]
     public class LinkMod : IModBigAmbitions
     {
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
         /// <summary>docs/game-link-api.md. Bump on any breaking change.</summary>
         public const int SchemaVersion = 1;
@@ -49,6 +49,8 @@ namespace BigCopilotLink
         private MainThreadDispatcher _dispatcher;
         private HealthState _health;
         private SaveService _saves;
+        private ApprovalService _approvals;
+        private WriteService _writes;
         private LinkHttpServer _http;
 
         // Written by the options panel, read by the pump and the listener. Volatile
@@ -74,6 +76,9 @@ namespace BigCopilotLink
 
             _health = new HealthState();
             _saves = new SaveService();
+            // Reads the approved browsers from PlayerPrefs: main thread, as here.
+            _approvals = new ApprovalService();
+            _writes = new WriteService(_saves, _approvals);
 
             _quitting = false;
             Application.quitting += OnQuitting;
@@ -110,6 +115,19 @@ namespace BigCopilotLink
                 _dispatcher = null;
             }
 
+            if (_approvals != null)
+            {
+                _approvals.Clear();
+                _approvals = null;
+            }
+
+            if (_writes != null)
+            {
+                // Undo holds references into this city's game state.
+                _writes.Clear();
+                _writes = null;
+            }
+
             if (_saves != null)
             {
                 // The bytes are the player's whole company; do not keep them around
@@ -142,6 +160,7 @@ namespace BigCopilotLink
         {
             if (_quitting) return;
             _health.RefreshOnMainThread();
+            if (_approvals != null) _approvals.PumpOnMainThread();
             if (_http == null) return; // disabled, or the port was taken
             _saves.PumpOnMainThread(_health.Attached, _hourly);
         }
@@ -158,7 +177,7 @@ namespace BigCopilotLink
             }
 
             var port = Ports[ClampPortIndex(_portIndex)];
-            var server = new LinkHttpServer(port, _saves, _health);
+            var server = new LinkHttpServer(port, _saves, _health, _writes, _approvals);
             try
             {
                 server.Start();
@@ -209,7 +228,8 @@ namespace BigCopilotLink
                 .AddToggle("onbuilding", "bigcopilotlink_onbuilding_label", _onBuildingLoad, OnBuildingLoadChanged)
                 .AddToggle("hourly", "bigcopilotlink_hourly_label", _hourly, OnHourlyChanged)
                 .AddSplitter()
-                .AddButton("bigcopilotlink_copy_label", CopyAddress);
+                .AddButton("bigcopilotlink_copy_label", CopyAddress)
+                .AddButton("bigcopilotlink_forget_label", ForgetBrowsers);
 
             try
             {
@@ -251,6 +271,19 @@ namespace BigCopilotLink
                       Ports[ClampPortIndex(_portIndex)].ToString(CultureInfo.InvariantCulture) + "/";
             GUIUtility.systemCopyBuffer = url;
             LogInfo("copied " + url + " to the clipboard.");
+        }
+
+        /// <summary>
+        /// Every browser the player approved loses its approval; the next write from any
+        /// of them asks again in game.
+        /// </summary>
+        private void ForgetBrowsers()
+        {
+            var approvals = _approvals;
+            if (approvals == null) return;
+            var count = approvals.ForgetAll();
+            WriteService.Notify("bigcopilotlink_forget_notification", "count", count.ToString(CultureInfo.InvariantCulture));
+            LogInfo("forgot " + count.ToString(CultureInfo.InvariantCulture) + " approved browser(s).");
         }
 
         // ---- logging -------------------------------------------------------------

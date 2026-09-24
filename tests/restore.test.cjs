@@ -155,10 +155,10 @@ test("at 390 px the board's source strip wraps a long file line instead of scrol
   const m = await page.evaluate(() => {
     const box = id => document.getElementById(id).getBoundingClientRect();
     const meta = box('srcMeta'), actions = box('srcActions');
-    return {scroll: document.documentElement.scrollWidth, metaRight: meta.right, actionsLeft: actions.left,
+    return {scroll: document.documentElement.scrollWidth, room: document.documentElement.getBoundingClientRect().width, metaRight: meta.right, actionsLeft: actions.left,
       beside: meta.top < actions.bottom && actions.top < meta.bottom};
   });
-  assert.equal(m.scroll, 390, 'nothing scrolls sideways');
+  assert.ok(m.scroll <= m.room, 'nothing scrolls sideways');
   assert.ok(m.metaRight <= 390, `the file line ends at ${m.metaRight}`);
   assert.ok(!m.beside || m.metaRight <= m.actionsLeft, 'and never runs under the buttons');
 });
