@@ -939,10 +939,10 @@ attention here* list, and each finding pulses the line it is about.
   standing import — gets a row of its own, nothing on hand in red, so its absence reads as
   plainly as a shortage. A line with no import row that nothing draws on sleeps instead
   of showing cover, because there is nothing for it to run out against, and reads *Idle
-  stock · nothing draws on these*. One held four weeks or more beyond what leaves it reads
-  *Idle stock* with its weeks on hand. The Checks view *Idle stock* lists both, the second
-  from five weeks; the first is also the *Idle stock* finding, and the second raises *Top-up
-  target too high*.
+  stock · nothing draws on these*. One of 500 units or more held four weeks or more beyond
+  what leaves it reads *Idle stock* with its weeks on hand. The Checks view *Idle stock*
+  lists the first from 1,000 units, which is also the *Idle stock* finding, and the second
+  from five weeks, which raises *Top-up target too high*.
   The column beside the rail is what to do about it — the units to bring in by hand before
   the shelf empties, or the order to raise — and the *Weekly order* column names the
   factory instead where the goods are made in-house rather than imported.
