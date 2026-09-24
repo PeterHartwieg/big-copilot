@@ -569,6 +569,30 @@ test('the now/plan toggle swaps the plan for the fragments the game holds', asyn
   } finally { await page.close(); }
 });
 
+// The two segmented controls stretch to the height of the steps beside them,
+// and the step naming who to add runs to two lines. Their labels stood at the
+// top of the stretched pills: every one of them sits in its pill's middle.
+test('the now/plan and day tabs centre their labels beside a two-line step', async () => {
+  const page = await shop('pinned');
+  try {
+    // Laid out, not just drawn: the page the panel lives on is shown.
+    await page.evaluate(() => { showPage('company'); drawSite(); });
+    const pills = await page.$$eval('#sp-roster .sp-nowplan a, #sp-roster .sp-daytabs a', els => els.map(a => {
+      const box = a.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(a.lastChild);
+      const text = range.getBoundingClientRect();
+      return {label: a.textContent, on: a.classList.contains('sp-on'), height: box.height,
+              shown: box.height > 0, off: (text.top + text.height / 2) - (box.top + box.height / 2)};
+    }).filter(p => p.shown));
+    const step = await page.locator('#sp-roster .sp-step.sp-add').evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(step > 40, `the add step runs to two lines (${step}px)`);
+    assert.ok(pills.some(p => p.height > 36), 'the pills beside it are stretched past their own height');
+    for (const p of pills) assert.ok(Math.abs(p.off) <= 1, `${p.label} sits ${p.off.toFixed(1)}px off its pill's middle`);
+    assert.deepEqual(pills.filter(p => p.on).map(p => p.label), ['plan', 'MON']);
+  } finally { await page.close(); }
+});
+
 test('hovering a shift lights that person everywhere they are named', async () => {
   const page = await shop('full');
   try {
