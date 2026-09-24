@@ -813,6 +813,49 @@ test('a depot finding pulses the line it is about', async () => {
   } finally { await page.close(); }
 });
 
+test('a depot and a factory say each line\'s word as Checks does', async () => {
+  let page = await site({
+    shop: DEPOT,
+    supply: {day: 29, imports: [importRow()], idle: [deadRow],
+             facts: {0: {soda: sf('short', 'shortfall'), napkins: sf('idle', 'notMoving')}}},
+  });
+  try {
+    const words = await page.$$eval('#sp-stock tbody tr', rs => rs.map(r => r.cells[0].textContent.replace(/\s+/g, ' ').trim()));
+    assert.deepEqual(words, ['Soda short', 'Napkins idle']);
+  } finally { await page.close(); }
+  page = await site({shop: FACTORY, supply: {factories: factories(), facts: FACTORY_FACTS}});
+  try {
+    const words = await page.$$eval('#sp-inputs tbody tr', rs => rs.map(r => r.cells[0].textContent.replace(/\s+/g, ' ').trim()));
+    assert.ok(words.includes('Ground Beef short') && words.includes('Grapes covered'), JSON.stringify(words));
+  } finally { await page.close(); }
+});
+
+test('a wholesale finding opens its shop on the shelf row, lit, and a depot on its Stock', async () => {
+  const shop = {lines: [
+    {item: 'Gift', slug: 'gift', units: 40, rate: 30, price: 30, revenue: 900, soldPerDay: 30},
+    {item: 'Energy Drink', slug: 'energy', units: 100, rate: 10, price: 5, revenue: 5, soldPerDay: 10}]};
+  const a = finding('w1', 'wholesale', 'HART. Gifts', KEY, 'critical', {slug: 'energy'});
+  const page = await site({shop, alerts: [a], supply: {facts: {0: {energy: sf('short', 'order',
+    {role: 'shelf', cad: 'weekly', use: 70, need: 81, have: 50, setTo: 90, wholesale: true})}}}});
+  try {
+    const landed = await page.evaluate(async a => {
+      showPage('today'); goToAlert(a);
+      await new Promise(r => setTimeout(r, 1200));
+      const row = [...document.querySelectorAll('#sp-shelves tbody tr')].find(tr => /Energy Drink/.test(tr.textContent));
+      const r = row ? row.getBoundingClientRect() : null;
+      return {row: !!row, lit: !!row && row.classList.contains('sp-hit'), inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
+    }, a);
+    // The drink sits in the folded odds and ends: the fold opens for it.
+    assert.deepEqual(landed, {row: true, lit: true, inView: true});
+  } finally { await page.close(); }
+  const depot = await site({shop: DEPOT, alerts: [finding('w2', 'wholesale', 'HART. Depot', KEY, 'warn', {slug: 'soda'})],
+    supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('short', 'order', {wholesale: true})}}}});
+  try {
+    const hit = await depot.$$eval('#sitePanel .sp-find', rs => rs.map(r => [r.dataset.ev, r.dataset.hit]));
+    assert.deepEqual(hit, [['stock', slugTok('soda')]]);
+  } finally { await depot.close(); }
+});
+
 const FACTORY_SITE = {
   s: 0, machines: 5, targets: {}, known: true, arrivals: {},
   lines: [

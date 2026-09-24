@@ -26,7 +26,7 @@ RID = next(rid for rid, item in RECIPE_ITEMS.items() if item == BEER)
 RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
-             "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from"}
+             "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 

@@ -193,6 +193,54 @@ test("Orders: a factory's paused contract the top-up falls short without is a ch
   assert.deepEqual(covered.acts, []);
 });
 
+/* Facts shaped as extraction writes them for a real save: a gym's shelf a
+   wholesale store fills each Monday (short, a warning while its stock reaches
+   the drop), another tight, and a depot only a route from a factory fills,
+   tight against its busiest day. Orders lists each in a group of its own. */
+test('Orders shows Wholesale deliveries and Depot daily top-ups from facts shaped like a real save\'s', async () => {
+  const data = fixture();
+  data.businesses[4].lines.push({slug: 'energy', item: 'Energy Drink', units: 1026, rate: 176, price: 5});
+  data.supply.facts[4] = {
+    energy: {st: 'short', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 1232, need: 1417,
+      have: 1200, setTo: 1420, parts: {lines: 0, sites: 1232, route: 0}, imp: false, wholesale: true},
+    soda: {st: 'tight', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 883, need: 1015,
+      have: 900, setTo: 1020, parts: {lines: 0, sites: 883, route: 0}, imp: false, wholesale: true},
+  };
+  data.supply.shops = data.supply.shops.filter(r => r.s !== 4).concat([
+    {s: 4, item: 'Energy Drink', slug: 'energy', sold: 176, peakSold: 192, peakDay: 'Sunday', target: 0,
+     pressure: null, stock: 1026, from: null, level: 'ok', wholesale: 1200, wholesaleDay: 'Monday'},
+    {s: 4, item: 'Soda Can', slug: 'soda', sold: 126, peakSold: 137, peakDay: 'Sunday', target: 0,
+     pressure: null, stock: 817, from: null, level: 'ok', wholesale: 900, wholesaleDay: 'Monday'}]);
+  data.supply.facts[0].bread = {st: 'tight', why: 'target', lvl: 'warn', role: 'depot', cad: 'daily',
+    use: 905, need: 1041, have: 1000, setTo: 1050, imp: false, from: 1};
+  data.supply.facts[0].cups = {st: 'covered', why: 'route', lvl: 'ok', role: 'depot', cad: 'daily',
+    use: 100, need: 115, have: 200, setTo: null, imp: false, from: 1};
+  const page = await board(data);
+  try {
+    const read = view => page.evaluate(view => {
+      logisticsView = view; drawLogistics();
+      const rows = id => [...document.querySelectorAll(`#${id} tbody tr`)].map(r =>
+        [...r.cells].map(c => c.textContent.replace(/\s+/g, ' ').trim()).join(' | '));
+      return {wholesale: rows('wholesalePlan'), depot: rows('depotTopupPlan'),
+              head: document.querySelector('#wholesalePlan .sechead').textContent};
+    }, view);
+    const all = await read('all');
+    assert.equal(all.wholesale.length, 2);
+    assert.match(all.wholesale[0], /Energy Drink ?each Monday \| 1,232 \| 1,200 \| 1,420 ?raise \| short$/);
+    assert.match(all.wholesale[1], /Soda Can ?each Monday \| 883 \| 900 \| 1,020 ?raise \| tight$/);
+    assert.match(all.head, /1 short/);
+    assert.equal(all.depot.length, 2);
+    assert.match(all.depot[0], /\| 905 \| 1,000 \| 1,050 ?raise \| .*Bakery Factory.* \| tight$/);
+    // Needs a change: the covered route-fed line drops out, both wholesale rows stay.
+    const changes = await read('changes');
+    assert.equal(changes.depot.length, 1);
+    assert.equal(changes.wholesale.length, 2);
+    // And the checklist has both groups.
+    const kinds = new Set((await page.evaluate(() => window.fixtureActions)).map(a => a.kind));
+    assert.ok(kinds.has('Wholesale deliveries') && kinds.has('Depot daily top-ups'), [...kinds].join());
+  } finally { await page.close(); }
+});
+
 test('a paused backup a route covers is covered by route, with nothing to resume', async () => {
   const data = fixture();
   data.supply.facts[0].sugar = {...data.supply.facts[0].sugar, st: 'covered', why: 'route', lvl: 'ok', setTo: null,
