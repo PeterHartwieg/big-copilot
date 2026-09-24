@@ -909,6 +909,66 @@ test('undo gate: Set again waits for a board built after the undo, then opens', 
   await dialog(page).getByText('The board shows the game as it now stands').waitFor();
 });
 
+test('undo gate: a board built from the undo\'s state before its answer is handled opens it', async (t) => {
+  const page = await linked(t, {approved: true});
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await until(async () => (await page.evaluate(() => LEDGER_SOURCE.link().stamp)) === await mockStamp(), 20000);
+  // The undo's answer is held; the game has refreshed already, and the
+  // watcher builds its bytes before the answer comes in.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route(`${mockUrl}/write/undo`, async (route) => {
+    const res = await route.fetch();
+    await held;
+    await route.fulfill({response: res});
+  });
+  const builds = await page.evaluate(() => window.builds);
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await until(async () => (await applied()).length === 2, 8000);
+  await watchNow(page);
+  await page.waitForFunction((n) => window.builds > n, builds);
+  const built = await page.evaluate(() => window.builds);
+  release();
+  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  // The follow finds the board already current: no build, and the gate opens.
+  await setAgainOn(page, 20000);
+  assert.equal(await page.evaluate(() => window.builds), built, 'no second build of the same bytes');
+});
+
+test('a write from a board of another character is answered changed, and nothing is written', async (t) => {
+  const page = await linked(t, {approved: true});
+  // The board is built from bytes of another character than the game now has loaded.
+  const health = async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({response: res, json: Object.assign(body, {character: 'someone-else', stamp: `${body.stamp}-else`})});
+  };
+  const save = async (route) => {
+    const headers = Object.assign({}, route.request().headers());
+    delete headers['if-none-match'];
+    const res = await route.fetch({headers});
+    const stamp = `${res.headers()['x-game-link-stamp']}-else`;
+    await route.fulfill({response: res, headers: Object.assign({}, res.headers(),
+      {'x-game-link-stamp': stamp, etag: `"${stamp}"`, 'x-game-link-character': 'someone-else'})});
+  };
+  await page.route(`${mockUrl}/health`, health);
+  await page.route(`${mockUrl}/save`, save);
+  const builds = await page.evaluate(() => window.builds);
+  await watchNow(page);
+  await page.waitForFunction((n) => window.builds > n, builds);
+  await page.unroute(`${mockUrl}/health`, health);
+  await page.unroute(`${mockUrl}/save`, save);
+  const asked = page.waitForRequest((req) => req.url().endsWith('/write/uniforms') && req.method() === 'POST');
+  await button(page, GIFTS).click();
+  assert.equal(JSON.parse((await asked).postData()).character, 'someone-else', 'the board\'s own character');
+  // The game answers changed: the way on is a refresh, and there is nothing to apply.
+  await dialog(page).getByRole('button', {name: 'Refresh the board'}).waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: SET}).count(), 0);
+  assert.deepEqual(await applied(), []);
+});
+
 test('undo gate: open, then a board of another company closes it again', async (t) => {
   const page = await linked(t, {approved: true});
   await undoneAndOpen(page);
@@ -1058,7 +1118,7 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
   await dialog(page).getByText('1 amount set in the game.').waitFor();
   const writes = await applied();
-  assert.deepEqual(writes[0].body, {dryRun: false, contracts: [{id: 'CONTRACTone', activate: false,
+  assert.deepEqual(writes[0].body, {dryRun: false, character: 'default', contracts: [{id: 'CONTRACTone', activate: false,
     products: [{itemName: 'ba:itemname_paperbag', warehouse: DEPOT_ADDRESS, amount: 4200, expect: 3800}]}]});
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
@@ -1398,7 +1458,7 @@ test('schedule: the roster is written with only the people working here, and und
     {n: builds, key: GIFTS});
   const writes = await applied();
   // Neither Dee's entry (not assigned here yet) nor the hire's goes to the game.
-  assert.deepEqual(writes[0].body, {dryRun: false, address: GIFTS_ADDRESS, expect: '9c98d93a', openAllHours: false,
+  assert.deepEqual(writes[0].body, {dryRun: false, character: 'default', address: GIFTS_ADDRESS, expect: '9c98d93a', openAllHours: false,
     days: [{d: 1, shifts: [{f: 8, t: 20, employeeId: BEN, itemInstanceId: REGISTER}]}]});
   // Undone: Write again waits while the board shows the write's bytes (or older),
   // and asks the game from the board read after the undo. That read is held here.

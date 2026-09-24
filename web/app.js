@@ -438,7 +438,12 @@
   const LINK_POLL_MS = 1000;
   let linkUrl = null;     // the mod's base URL while the link is the source
   let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
-  let linkHealth = null;  // the /health body behind those bytes, for the strip
+  // The character those bytes are of (X-Game-Link-Character): every write
+  // names it, and the mod refuses one for another character than it has loaded.
+  let boardCharacter = "";
+  // The /health body read with the newest bytes, for the strip; after a
+  // failed build it names the failed bytes' game, not the board's.
+  let linkHealth = null;
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
   // The watcher's own notes about the port, recognised on screen: it says one
@@ -579,6 +584,7 @@
     // IndexedDB, and choosing it again is one click, not one picker trip.
     linkUrl = null;
     lastLinkStamp = "";
+    boardCharacter = "";
     linkHealth = null;
     linkGone = false;
     linkNotReady = 0;
@@ -592,6 +598,7 @@
     // A board built from a folder or an earlier link is not this link's: the
     // first stamp the mod answers has to be read, whatever it is.
     lastLinkStamp = "";
+    boardCharacter = "";
     linkHealth = null;
     linkGone = false;
     linkNotReady = 0;
@@ -710,6 +717,7 @@
         const file = new File([bytes], `${health.character}-live.hsg`,
           {lastModified: Date.parse(health.refreshedAt) || Date.now()});
         file.linkStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
+        file.linkCharacter = res.headers.get("X-Game-Link-Character") || health.character || "";
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -1075,7 +1083,9 @@
     const bound = bindSource();
     const notLinked = {status: 0, error: "not_linked", body: null};
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
-    const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
+    // The character of the board's bytes: the mod answers `changed` should the
+    // game have loaded another since (docs/game-link-api.md, "Whose game").
+    const payload = JSON.stringify(Object.assign({}, body, {dryRun, character: boardCharacter}));
     // One click asks the game at most once: a token this write asked for and
     // got is not asked for again, busy retries and all; nor is one the game
     // gave the Apply this dry run follows (`opts.asked`).
@@ -1181,7 +1191,8 @@
   // and its undo in quick succession must leave the board on the undo. One
   // follow waits at a time, for the newest write's stamp. A follow that ends
   // in the bad state (no new state, the save not served, the build failed,
-  // the game gone) is told to the board, which offers a refresh.
+  // the game gone), or that cannot start, is told to the board, which offers
+  // a refresh; one that ends well is told too.
   let followBefore = null;
   async function followWrite(before) {
     const gen = sourceGen;
@@ -1191,10 +1202,15 @@
     await whenIdle(gen);
     const stamp = followBefore;
     followBefore = null;
-    if (gen !== sourceGen || !linkUrl || !startAttempt(gen)) return;
+    if (gen !== sourceGen || !linkUrl) return;
+    if (!startAttempt(gen)) { if (handlers && handlers.followFailed) handlers.followFailed(); return; }
     state("busy", "Reading the game after the change", linkUrl);
     await awaitNewStamp(stamp, gen);
-    if (gen === sourceGen && strip.tone === "bad" && handlers && handlers.followFailed) handlers.followFailed();
+    if (gen !== sourceGen || !handlers) return;
+    // Ended well: the board shows the game as it stands, whether this follow
+    // built it or found it already built.
+    if (strip.tone === "bad") { if (handlers.followFailed) handlers.followFailed(); }
+    else if (handlers.followDone) handlers.followDone();
   }
 
   // A write that got no answer: ask the game for its state, as Update does,
@@ -1287,12 +1303,13 @@
       company = (data.meta && data.meta.save) || company;
       // The board on screen is these bytes once it has taken them; while it
       // takes them, link().stamp is already theirs. Should it throw, the stamp
-      // before stays, so the watcher reads these bytes again, not skips them.
-      const was = lastLinkStamp;
-      if (file.linkStamp) lastLinkStamp = file.linkStamp;
+      // and character before stay, so the watcher reads these bytes again, not
+      // skips them, and a write names the board's character, not theirs.
+      const was = [lastLinkStamp, boardCharacter];
+      if (file.linkStamp) { lastLinkStamp = file.linkStamp; boardCharacter = file.linkCharacter || ""; }
       note("");
       try { if (handlers) { handlers.stale(""); handlers.changed(data); } }
-      catch (err) { lastLinkStamp = was; throw err; }
+      catch (err) { [lastLinkStamp, boardCharacter] = was; throw err; }
       enterBoard();
       state("ok", "Up to date", line(`built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
     } catch (err) {

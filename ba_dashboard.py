@@ -19009,12 +19009,18 @@ function gwConfirm(spec){
     dlg._gwBuilt = false;  // set by the next board built
     dlg._gwBoard = null;   // the apply's "read again" line is this gate's now
     gwHead(dlg, title(), where());
-    const gate = () => {
+    let shown = "";
+    const gate = force => {
       if(!dlg.open || mine !== seq){ if(dlg._gwGate === gate) dlg._gwGate = null; return; }
       const l = gwLink();
       const same = !!l && l.source === undo.source && gwWhose() === undo.whose;
       const fresh = same && dlg._gwBuilt;
       const stuck = same && !fresh && gwReadStuck;
+      /* Drawn again only when it says something new: a board built with
+         nothing to change keeps the click, the focus and the screen reader's peace. */
+      const key = `${same}|${fresh}|${stuck}`;
+      if(key === shown && force !== true) return;
+      shown = key;
       gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
         body: `<div class="gw-reread done">${gwSvg("undo")}<span>${undone}</span></div>${fresh ? gwReread(true)
           : !same ? `<p class="gw-sub">The board is no longer linked to the game this was undone in.</p>`
@@ -19026,7 +19032,7 @@ function gwConfirm(spec){
            {kind: "go", icon: "right", disabled: !fresh, why: !same ? "The board is no longer linked to this game" : "Reading the game again…", key: "again"}]]});
     };
     dlg._gwGate = gate;
-    gate();
+    gate(true);
   };
   /* The board read again at the player's word: in a run the run stays, and
      the game is asked afresh from the new board; else the dialog closes. */
@@ -19898,6 +19904,9 @@ function startWatching(){
     stale: markStale,
     /* The read that follows a write gave up, or its build failed. */
     followFailed: () => gwFollowFailed(),
+    /* The read that follows a write ended well, with a board built or the one
+       on screen found current: an undo's gate may open. */
+    followDone: () => { if(gwOpen && gwOpen._gwGate){ gwOpen._gwBuilt = true; gwOpen._gwGate(); } },
     /* Another source, with no new board yet: an undo's gate closes again. */
     linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
     lost(){

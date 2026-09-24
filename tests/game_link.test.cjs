@@ -60,7 +60,7 @@ function harness({routes = {}} = {}) {
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
     $: el, strip,
-    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null,
+    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
     state(tone, head, meta) { seen.states.push([tone, head, meta]); strip.tone = tone; },

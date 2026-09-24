@@ -85,7 +85,9 @@ under "Writes":
   changes nothing; the board runs one when its confirm dialog opens.
 - **Compare-and-set.** Each write carries what the board read from the last refresh
   (an amount, the shift print of a business); if the game has moved on since, the
-  write is refused as `changed` and the board refreshes.
+  write is refused as `changed` and the board refreshes. Every write and undo also names
+  the character whose bytes the board read; another character loaded now is `changed`
+  too, so a stale board never writes into another game's building at the same address.
 - **Not while you are looking at it.** A schedule write is refused while the BizMan
   schedule is open on that business (or the game's auto-fill is still filling it), an
   imports write while the purchasing-agent plan screen shows that contract or, for a

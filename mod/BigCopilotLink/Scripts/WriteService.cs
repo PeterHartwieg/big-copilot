@@ -131,7 +131,12 @@ namespace BigCopilotLink
                 if (text == null) throw new BadRequestException("the body is not UTF-8");
                 var root = JsonReader.Obj(JsonReader.Parse(text), "body");
                 dryRun = JsonReader.Bool(root, "dryRun", "body", false);
-                job = Prepare(kind, root);
+                // Whose game the page read: a write from a board of another character
+                // must never land on this one's buildings at the same address.
+                var character = JsonReader.Str(root, "character", "body", true);
+                var run = Prepare(kind, root);
+                var answerKind = kind == "undo" ? JsonReader.Str(root, "kind", "body", true) : kind;
+                job = (ws, dry) => ws.SameCharacter(character) ? run(ws, dry) : OtherCharacter(answerKind, dry);
             }
             catch (BadRequestException e)
             {
@@ -313,6 +318,34 @@ namespace BigCopilotLink
                 LinkMod.LogError("a write failed on the main thread: " + e);
                 return CannotWrite("other");
             }
+        }
+
+        /// <summary>Main thread: the character the page read is the one loaded now.</summary>
+        private bool SameCharacter(string character)
+        {
+            return string.Equals(character, SaveGameManager.Current.characterId ?? "", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// The page read another character's game: `changed`, as for an `expect` that
+        /// no longer holds, and nothing written. A dry run answers 200, ok false.
+        /// </summary>
+        private static WriteAnswer OtherCharacter(string kind, bool dryRun)
+        {
+            var w = new JsonWriter();
+            w.BeginObject();
+            if (dryRun)
+            {
+                w.Prop("ok", false);
+                w.Prop("kind", kind);
+                w.Prop("dryRun", true);
+                w.Prop("siteError", "changed");
+            }
+            else w.Prop("error", "changed");
+            w.BeginArray("rows");
+            w.EndArray();
+            w.EndObject();
+            return new WriteAnswer(dryRun ? 200 : 409, w.ToString());
         }
 
         private static WriteAnswer CannotWrite(string reason)
