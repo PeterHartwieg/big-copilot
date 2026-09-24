@@ -1488,3 +1488,35 @@ test('a finding written before the week existed reads as a week of its one run',
     assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1], 8, 20));
   } finally { await page.close(); }
 });
+
+/* A factory's and a depot's page on a phone: the lines and the stock keep a
+   width they can be read at and scroll inside their own box, never the page. */
+test('a factory and a depot on a phone scroll their wide blocks inside themselves', async () => {
+  const slots = Array.from({length: 40}, (_, i) => i + 1);
+  const busy = {...FACTORY_SITE, machines: 40, lines: [{...FACTORY_SITE.lines[0], slots, machines: 40}]};
+  for (const [kind, over] of [
+    ['factory', {shop: FACTORY, supply: {day: 29, factories: factories({sites: [busy]})}}],
+    ['depot', {shop: DEPOT, supply: {day: 29, imports: [importRow()], idle: [deadRow]}}],
+  ]) {
+    const page = await site(over);
+    try {
+      await page.setViewportSize({width: 390, height: 844});
+      await page.evaluate(() => drawSite());
+      const seen = await page.evaluate(() => {
+        const W = document.documentElement.clientWidth;
+        const spill = [...document.querySelectorAll('#sitePanel *')].filter(el => {
+          if (el.getBoundingClientRect().right <= W + 1) return false;
+          for (let a = el.parentElement; a && a.id !== 'sitePanel'; a = a.parentElement)
+            if (/(auto|scroll|hidden)/.test(getComputedStyle(a).overflowX)) return false;
+          return true;
+        }).map(el => el.tagName + '.' + el.className);
+        const lines = document.querySelector('#sp-lines .sp-lines');
+        return {page: document.documentElement.scrollWidth, W, spill,
+                lines: lines ? lines.parentElement.scrollWidth > lines.parentElement.clientWidth : null};
+      });
+      assert.equal(seen.page, seen.W, `${kind}: nothing pushes the page sideways`);
+      assert.deepEqual(seen.spill, [], `${kind}: nothing wider than the screen outside a scrolling box`);
+      if (kind === 'factory') assert.equal(seen.lines, true, 'the lines scroll inside their own box');
+    } finally { await page.close(); }
+  }
+});

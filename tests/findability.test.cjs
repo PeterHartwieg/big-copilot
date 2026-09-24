@@ -358,3 +358,248 @@ test('a chain row says what it is made of, not only how many sites', async () =>
     assert.deepEqual(words, ['2 shops, 2 factories, 1 warehouse', '1 headquarters', '1 shop', '2 sites']);
   } finally { await page.close(); }
 });
+
+/* --- a site's own page, and the names that lead to it ------------------ */
+
+/* A site's address is its key's slug. */
+const HERE = '#site/secondavenue-10', THERE = '#site/broadway-2';
+const CHAIN = {name: 'Gift Shops', sites: [KEY, OTHER], count: 2, suppliedBy: [], revenue: 1400, change: null,
+  last7: 0, prev7: 0, cogs: 0, wages: 600, rent: 200, marketing: 0, theft: 0, profit: 400, margin: 28.6};
+const FINDING = {id: 'loss1', level: 'crit', site: 'HART. Gifts', siteKey: KEY, group: 'loss',
+  text: 'Lost $200 yesterday', worth: 200};
+const SHELF = {s: 1, item: 'Cheap Gift', sold: 10, peakDay: 'Saturday', peakSold: 14, target: 20,
+  pressure: 90, level: 'warn', stock: 5};
+
+test("a site's page stands on its own, under a crumb row that carries the picker", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
+    assert.equal(await page.evaluate(() => location.hash), HERE);
+    // The rest of Results and the Company views step aside.
+    for (const sel of ['#secDaily', '#secRhythm', '#secPortfolio', '#companyNav'])
+      assert.equal(await page.locator(sel).isHidden(), true, sel);
+    assert.equal(await page.locator('#secDetail').isVisible(), true);
+    assert.equal(await page.locator('#nav a.on').getAttribute('data-id'), 'company', 'Company stays lit');
+    // The crumb row sits above the head and holds the picker; the close is gone.
+    assert.equal(await page.locator('#sitePanel > .ss-crumbs + .sitehead').count(), 1);
+    assert.equal(await page.locator('.ss-crumbs #sitePick select.sitepick').count(), 1);
+    assert.equal(await page.locator('#siteClose').count(), 0);
+    assert.equal(await page.locator('.ss-crumb').textContent(), 'Portfolio');
+    assert.equal(await page.locator('.ss-trail').textContent(), 'Gift Shops›HART. Gifts');
+    // The picker's neighbour is a link to its address.
+    assert.equal(await page.locator('#sitePick .seg a[data-key]').first().getAttribute('href'), THERE);
+    // "Portfolio" is the way back: Results whole again, the portfolio in view.
+    await page.locator('.ss-crumb').click();
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#company false');
+    for (const sel of ['#secDaily', '#secPortfolio', '#companyNav'])
+      assert.equal(await page.locator(sel).isVisible(), true, sel);
+    assert.equal(await page.locator('#secDetail').isHidden(), true);
+    // The chain in the trail opens that chain there.
+    await page.evaluate(key => openSite(key), KEY);
+    await page.locator('.ss-trail a[data-ss="chain"]').click();
+    assert.equal(await page.evaluate(() => openChains.has('Gift Shops')), true);
+    assert.equal(await page.locator(`#portfolio tr.kid.show[data-key="${KEY}"]`).count(), 1);
+  } finally { await page.close(); }
+});
+
+test("a finding row's name opens the site's page; the rest of the row still opens the finding", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(f => {
+      siteOpen = false; drawSite();
+      D.alerts = [f]; drawAlerts(); showPage('today');
+    }, FINDING);
+    const name = page.locator('#alertSection .find .site a.ss-sl');
+    assert.equal(await name.innerText(), 'HART. Gifts');
+    assert.equal(await name.getAttribute('href'), HERE);
+    assert.equal(await name.getAttribute('data-tip'), 'Open its page');
+    // The map button stays beside the name, outside the link.
+    assert.equal(await page.locator('#alertSection .find .site > .map-shortcut').count(), 1);
+    await name.click();
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')),
+                 `${HERE} true  `);
+    assert.equal(await page.locator('.ss-crumb').textContent(), 'Portfolio', 'a name is no finding');
+    // The row itself: the finding, lit, and the crumb names Today.
+    await page.evaluate(() => showPage('today'));
+    await page.locator('#alertSection .find .what').click();
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived].join(' ')),
+                 `${HERE} true loss1`);
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Today');
+    assert.equal(await page.locator('.ss-trail').textContent(), 'Portfolio›Gift Shops›HART. Gifts');
+    await page.locator('.ss-crumb.from').click();
+    await page.waitForFunction(() => location.hash === '#today' && page === 'today');
+    assert.equal(await page.evaluate(() => siteOpen), false);
+  } finally { await page.close(); }
+});
+
+test('every finding is reached from the keyboard, a synthetic one too, and lands with its evidence', async () => {
+  const page = await board({chains: [CHAIN], shop: {staffLackingCompany: 1, staffDemands: [
+    {slug: 'ba:jobdemand_goldhealthinsurance', demand: 'Gold Health Insurance', count: 1, priority: 1, company: true}]}});
+  try {
+    await page.evaluate(f => {
+      siteOpen = false; drawSite();
+      // As _alerts() writes it: about "Company", with no site of its own.
+      D.alerts = [{id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand',
+                   text: '1 staff with demands only you can meet: Gold Health Insurance for 1'}, f];
+      drawAlerts(); showPage('today');
+      document.activeElement?.blur();
+    }, FINDING);
+    // Tab from the top of the page to the first finding: its sentence is a button.
+    const tabTo = async test => {
+      for (let i = 0; i < 80; i++) {
+        await page.keyboard.press('Tab');
+        if (await page.evaluate(test)) return true;
+      }
+      return false;
+    };
+    assert.ok(await tabTo(() => !!document.activeElement.closest('#alertSection .find')),
+      'a finding row takes the focus');
+    assert.equal(await page.evaluate(() => [document.activeElement.className,
+      document.activeElement.closest('.find').dataset.id].join(' ')), 'what c1',
+      'the synthetic row has its sentence to focus, with nothing before it');
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'BUTTON',
+      'a button: no link, so no new-tab expectation to break');
+    // Its name says whose finding it is, and the row opens its detail as it
+    // does under the pointer.
+    assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with demands only you can meet/}).count(), 1);
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('#alertSection .find[data-id="c1"] .more').evaluate(m => getComputedStyle(m).opacity), '1');
+    await page.keyboard.press('Space');
+    assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${HERE} ${KEY}`);
+    assert.equal(await page.locator('#sp-crew.xl-arrived').count(), 1, 'the Crew that shows the demand rings');
+    // A site's row: the name first, then the finding.
+    await page.evaluate(() => { showPage('today'); document.activeElement?.blur(); });
+    assert.ok(await tabTo(() => document.activeElement.closest('.find')?.dataset.id === 'loss1'
+      && document.activeElement.classList.contains('ss-sl')));
+    // Then the map button beside it, then the finding itself.
+    assert.ok(await tabTo(() => document.activeElement.closest('.find')?.dataset.id === 'loss1'
+      && document.activeElement.className === 'what'));
+    assert.equal(await page.getByRole('button', {name: /^HART\. Gifts: Lost \$200/}).count(), 1);
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => [location.hash, spArrived].join(' ')), `${HERE} loss1`);
+    // A silenced row leaves the Tab order with its fold.
+    await page.evaluate(() => { showPage('today'); document.activeElement?.blur(); });
+    await page.locator('#alertSection .find[data-id="c1"] .mark').click();
+    assert.equal(await page.locator('#alertSection .find[data-id="c1"]').evaluate(f => f.inert), true);
+    await page.evaluate(() => document.activeElement?.blur());
+    const stops = [];
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press('Tab');
+      stops.push(await page.evaluate(() => document.activeElement.closest('.find')?.dataset.id || ''));
+    }
+    assert.ok(!stops.includes('c1'), 'Tab never lands in a silenced row');
+    assert.ok(stops.includes('loss1'), 'and still reaches the rest');
+  } finally { await page.close(); }
+});
+
+test("the address bar only ever trades another spelling of the open site's own address", async () => {
+  const page = await board();
+  try {
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
+    await page.evaluate(() => { history.replaceState({...history.state, other: 'kept'}, '', location.hash); });
+    // Capitals are another spelling of this site's address: the bar gives way
+    // to its own, and the entry keeps its state.
+    await page.evaluate(() => { history.replaceState(history.state, '', '#site/SecondAvenue-10'); drawSite(); });
+    assert.equal(await page.evaluate(() => location.hash), HERE);
+    assert.equal(await page.evaluate(() => history.state && history.state.other), 'kept');
+    // Another site's address, or one that opens nothing, is left as it is.
+    for (const to of [THERE, '#site/nowhere-1'])
+      assert.equal(await page.evaluate(to => { history.replaceState(history.state, '', to); drawSite(); return location.hash; }, to), to);
+  } finally { await page.close(); }
+});
+
+test('the portfolio, the checks and the goods flow name a site by a link to its page', async () => {
+  const page = await board({chains: [CHAIN], supply: {shops: [SHELF]}});
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); openChains.add('Gift Shops'); drawPortfolio(); });
+    const kid = page.locator(`#portfolio tr.kid[data-key="${OTHER}"] a.ss-sl`);
+    assert.equal(await kid.getAttribute('href'), THERE);
+    // A click on a portfolio name opens the page, as the row does.
+    await kid.click();
+    assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${THERE} ${OTHER}`);
+    // Supply › Checks: the shop cell of a real row.
+    await page.evaluate(() => { stockView = 'shops'; showAllStock = true; drawStock(); reveal('secStock'); });
+    const cell = page.locator('#stock tbody tr').first().locator('td').first();
+    assert.equal(await cell.locator('a.ss-sl').getAttribute('href'), THERE);
+    assert.equal(await cell.locator('.map-shortcut').count(), 1, 'the map button stays beside it');
+    await cell.locator('a.ss-sl').click();
+    assert.equal(await page.evaluate(() => [location.hash, page, siteKey].join(' ')), `${THERE} company ${OTHER}`);
+    // The goods flow: the picked site's name, and a labelled button beside the map's.
+    const head = await page.evaluate(key => {
+      D.supply.graph = {nodes: [{id: key, name: 'HART. Gifts', tag: 'HK', sub: 'Gift Shop', hood: '', items: []}], links: []};
+      flowPickId = key; drawFlowDetail();
+      return document.getElementById('flowDetail').querySelector('.sechead').innerHTML;
+    }, KEY);
+    assert.match(head, /<h2><a class="ss-sl" href="#site\/secondavenue-10"/);
+    assert.match(head, /<a class="ss-pagego" href="#site\/secondavenue-10">.*its page<\/a>/);
+  } finally { await page.close(); }
+});
+
+test('a click on a name still reaches whatever closes on a click elsewhere', async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(() => {
+      siteOpen = false; drawSite(); openChains.add('Gift Shops'); drawPortfolio();
+      window.__heard = 0;
+      document.addEventListener('click', () => { window.__heard++; });
+    });
+    await page.locator(`#portfolio tr.kid[data-key="${OTHER}"] a.ss-sl`).click();
+    assert.equal(await page.evaluate(() => window.__heard), 1);
+    assert.equal(await page.evaluate(() => siteKey), OTHER);
+  } finally { await page.close(); }
+});
+
+test('a site given up while its page is open hands the page back to the portfolio', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, OTHER);
+    await page.evaluate(() => { D = {...D, businesses: D.businesses.slice(0, 1)}; drawSite(); });
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#company false');
+    assert.equal(await page.locator('#secPortfolio').isVisible(), true);
+  } finally { await page.close(); }
+});
+
+test("another character's save closes the page, its crumb and its evidence with it", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(f => {
+      siteOpen = false; drawSite();
+      D.alerts = [f]; drawAlerts(); showPage('today'); goToAlert(f);
+    }, FINDING);
+    assert.equal(await page.evaluate(() => [location.hash, spArrived, siteFrom.label].join(' ')), `${HERE} loss1 Today`);
+    // The same address stands in the other company's save.
+    await page.evaluate(() => { D = {...D, meta: {...D.meta, character: 'someone-else'}}; drawSite(); });
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')), '#company false  ');
+    assert.equal(await page.locator('#secPortfolio').isVisible(), true);
+    assert.equal(await page.locator('#portfolio tr.kid.on').count(), 0, 'no portfolio row is lit as the open site');
+  } finally { await page.close(); }
+});
+
+test("a site's page on a phone: a sticky crumb row, arrows round the list, nothing sideways", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.setViewportSize({width: 390, height: 844});
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
+    assert.equal(await page.locator('.ss-trail').isHidden(), true);
+    assert.equal(await page.locator('#sitePick > a.ibtn').count(), 2);
+    assert.equal(await page.locator('#sitePick > a.ibtn').first().isVisible(), true);
+    assert.equal(await page.locator('#sitePick .seg > span').first().isHidden(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+    // Scrolled well past it, the row still sits right under the masthead.
+    const stuck = await page.evaluate(async () => {
+      scrollTo(0, document.querySelector('.ss-crumbs').offsetTop + 600);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return {y: scrollY, top: document.querySelector('.ss-crumbs').getBoundingClientRect().top,
+              mast: document.getElementById('mast').getBoundingClientRect().bottom};
+    });
+    assert.ok(stuck.y > 400, `the page scrolled: ${JSON.stringify(stuck)}`);
+    assert.ok(Math.abs(stuck.top - stuck.mast) <= 1, `stuck under the masthead: ${JSON.stringify(stuck)}`);
+    // A block landed on comes to rest below the crumb row, not under it.
+    await page.evaluate(() => { scrollTo(0, 0); xlArrive('#sp-shelves'); });
+    await page.waitForTimeout(600);
+    const landed = await page.evaluate(() => ({
+      block: document.querySelector('#sp-shelves').getBoundingClientRect().top,
+      crumbs: document.querySelector('.ss-crumbs').getBoundingClientRect().bottom, y: scrollY}));
+    assert.ok(landed.y > 0 && landed.block >= landed.crumbs, `landed in view: ${JSON.stringify(landed)}`);
+  } finally { await page.close(); }
+});

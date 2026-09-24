@@ -10,9 +10,9 @@ const BOOT = source.slice(source.indexOf('let shellOnly = false;'),
   source.indexOf('/* A page written with its numbers'));
 
 function board({saved = {}, data = {}} = {}) {
-  const entries = ['#today'];
+  const entries = ['#today'], states = [null];
   let position = 0;
-  const listeners = {};
+  const listeners = {}, captured = {};
   const elements = new Map();
   let chartDraws = 0, wikiVisits = 0, sitePanels = 0;
   const $ = id => {
@@ -22,18 +22,39 @@ function board({saved = {}, data = {}} = {}) {
   const location = {hash:'#today'};
   const context = vm.createContext({$, location, D: data,
     history:{
-      replaceState(_, __, hash){entries[position] = location.hash = hash;},
-      pushState(_, __, hash){entries.splice(++position); entries.push(location.hash = hash);},
+      get state(){return states[position];},
+      replaceState(state, __, hash){entries[position] = location.hash = hash; states[position] = state ?? null;},
+      pushState(state, __, hash){
+        entries.splice(++position); states.splice(position);
+        entries.push(location.hash = hash); states.push(state ?? null);
+      },
+      back(){move(-1);},
     },
     localStorage:{getItem(key){return saved[key] ?? null;}, setItem(){}},
-    document:{querySelectorAll(){return [];}, body:{classList:{add(){}, remove(){}}}},
+    document:{querySelectorAll(){return [];}, body:{classList:{add(){}, remove(){}}},
+              addEventListener(type, fn, capture){if (capture) captured[type] = fn;}},
     window:{scrollY:0, addEventListener(type, fn){listeners[type] = fn;}},
     drawChart(){chartDraws++;}, wireReveal(){}, requestAnimationFrame(){}, inkHome(){}, icon(){return '';},
     showCityMap(){}, showWikiRoute(){wikiVisits++;}, wireTips(){}, drawSite(){sitePanels++;},
+    drawPortfolio(){}, CSS:{escape: s => s},
+    spEsc: s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+    attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),
   });
+  /* The site state the board declares with its site panel, which no slice
+     below carries. */
+  vm.runInContext(`let siteKey = null, siteTab = -1, siteOpen = false, spFindsAll = false, spArrived = null;
+    const openChains = new Set();
+    const spHome = key => key === null ? null : (D.homes || []).find(h => h.key === key) || null;`, context);
+  function move(delta){
+    position = Math.max(0, Math.min(entries.length - 1, position + delta));
+    location.hash = entries[position];
+    listeners.hashchange();
+  }
   vm.runInContext(source.slice(source.indexOf('const SEC_PAGE ='), source.indexOf('/* The business a finding')), context);
   vm.runInContext(source.slice(source.indexOf('const featureDiscovery ='), source.indexOf('/* --- changelog dialog')), context);
   vm.runInContext(source.slice(source.indexOf('const PAGES ='), source.indexOf('/* --- which kinds of finding')), context);
+  /* The crumb row above a site's head, and its clicks. */
+  vm.runInContext(source.slice(source.indexOf('const SS_BACK ='), source.indexOf("/* The site's page stands on its own")), context);
   let booted = false;
   const load = () => {
     if (booted) return;
@@ -41,17 +62,23 @@ function board({saved = {}, data = {}} = {}) {
     context.renderAll = context.wireNav = context.wireCoin = context.wireSphere = () => {};
     vm.runInContext(BOOT, context);
   };
-  return {context, entries, $, charts(){return chartDraws;}, wikiVisits(){return wikiVisits;},
+  return {context, entries, states, $, charts(){return chartDraws;}, wikiVisits(){return wikiVisits;},
     sitePanels(){return sitePanels;},
     boot(){ load(); context.boot(); },
     shell(){ load(); context.bootShell(); },
-    move(delta){
-      position = Math.max(0, Math.min(entries.length - 1, position + delta));
-      location.hash = entries[position];
-      listeners.hashchange();
+    move,
+    /* A plain or modified click caught by the board's capture listener. */
+    click(href, mods = {}){
+      const e = {button: 0, ...mods, prevented: false, stopped: false,
+        target:{closest: sel => sel.includes('#site/') && href.startsWith('#site/') ? {getAttribute: () => href} : null},
+        preventDefault(){this.prevented = true;}, stopImmediatePropagation(){this.stopped = true;}};
+      captured.click(e);
+      return e;
     },
     page(){return vm.runInContext('page', context);},
     sub(id){return vm.runInContext(`sub.${id}`, context);},
+    site(){return vm.runInContext('siteOpen ? siteKey : null', context);},
+    from(){return vm.runInContext('siteFrom', context);},
   };
 }
 
@@ -296,4 +323,221 @@ test('a save arriving while the wiki is open leaves the reader where they are', 
   assert.equal(b.context.location.hash, '#wiki/businesstypes-giftshop');
   assert.equal(b.entries.length, entries, 'and no visit is added for it');
   assert.equal(vm.runInContext('shellOnly', b.context), false);
+});
+
+/* --- a site's own page (#site/<slug>) ------------------------------------ */
+
+const SHOP = 'ba:street_fifthavenue#57', DEPOT = 'ba:street_secondstreet#51', FLAT = 'ba:street_broadway#13';
+const sites = () => ({
+  businesses: [
+    {key: SHOP, name: 'HART. Clothing', address: '57 Fifth Avenue', status: 'retail'},
+    {key: DEPOT, name: 'Clothing Distr.', address: '51 Second Street', status: 'depot'},
+  ],
+  homes: [{key: FLAT, address: '13 Broadway Street'}],
+  chains: [{name: 'Clothing Stores', sites: [SHOP, DEPOT]}],
+});
+
+test('a site opens at its address, on Company, with Results under it', () => {
+  const b = board({data: sites()});
+  b.boot();
+  assert.equal(b.context.siteHref(SHOP), '#site/fifthavenue-57');
+  assert.equal(b.context.siteHref(FLAT), '#site/broadway-13', 'a home has an address too');
+  assert.ok(b.context.openSite(SHOP));
+  assert.equal(b.context.location.hash, '#site/fifthavenue-57');
+  assert.equal(b.page(), 'company');
+  assert.equal(b.sub('company'), 'results');
+  assert.equal(b.site(), SHOP);
+  assert.deepEqual(b.entries, ['#today', '#site/fifthavenue-57']);
+  assert.equal(b.context.openSite('ba:street_nowhere#1'), false, 'a key the save does not hold opens nothing');
+});
+
+test("a reload of a site's address reopens that site", () => {
+  const b = board({data: sites()});
+  b.context.location.hash = '#site/secondstreet-51';
+  b.boot();
+  assert.equal(b.page(), 'company');
+  assert.equal(b.site(), DEPOT);
+  assert.equal(b.context.location.hash, '#site/secondstreet-51', 'boot leaves the address as it was');
+  assert.equal(b.entries.length, 1, 'and adds no visit');
+});
+
+test('Back and Forward walk between sites and out to the page before', () => {
+  const b = board({data: sites()});
+  b.boot();
+  b.context.openSite(SHOP);
+  b.context.openSite(DEPOT);
+  assert.deepEqual(b.entries, ['#today', '#site/fifthavenue-57', '#site/secondstreet-51']);
+  b.move(-1);
+  assert.equal(b.site(), SHOP);
+  b.move(-1);
+  assert.equal(b.page(), 'today');
+  assert.equal(b.site(), null, 'leaving the address takes the site page down');
+  b.move(1);
+  assert.equal(b.site(), SHOP);
+  b.move(1);
+  assert.equal(b.site(), DEPOT);
+  assert.equal(b.entries.length, 3, 'replaying history adds no visit');
+});
+
+test('Company in the nav, and a Company hash, are the portfolio again', () => {
+  const b = board({data: sites()});
+  b.boot();
+  b.context.openSite(SHOP);
+  b.$('nav').click({preventDefault(){}, target:{closest(){return {dataset:{id:'company'}};}}});
+  assert.equal(b.site(), null);
+  assert.equal(b.context.location.hash, '#company');
+  b.move(-1);
+  assert.equal(b.site(), SHOP);
+  b.context.showSub('company', 'products');
+  assert.equal(b.site(), null, 'another Company view takes it down too');
+});
+
+test('an address that answers nothing lands on the portfolio and says so', () => {
+  const b = board({data: sites(), saved: {ba_dash_company: 'payroll'}});
+  b.context.location.hash = '#site/nowhere-1';
+  b.boot();
+  assert.equal(b.page(), 'company');
+  assert.equal(b.sub('company'), 'results');
+  assert.equal(b.site(), null);
+  assert.equal(b.context.location.hash, '#company');
+  b.context.history.pushState(null, '', '#site/nowhere-2');
+  b.move(0);
+  assert.equal(b.site(), null);
+  assert.equal(b.context.location.hash, '#company', 'typed into an open board too');
+});
+
+test('a slug is the key alone, written readably', () => {
+  const b = board({data: sites()});
+  b.boot();
+  for (const [key, slug] of [[SHOP, 'fifthavenue-57'], [DEPOT, 'secondstreet-51'],
+                             ['ba:street_24thstreet#6', '24thstreet-6']])
+    assert.equal(b.context.siteSlugOf(key), slug);
+  assert.equal(b.context.siteSlugOf(''), '', 'a site with no key has no address');
+  assert.equal(b.context.siteKeyOf(''), null, 'and an empty slug is no site');
+  // A site whose key is the bare head is still reachable, at "%x".
+  b.context.D.businesses = [...b.context.D.businesses, {key: 'ba:street_', name: 'Bare', address: '', status: 'retail'}];
+  assert.equal(b.context.siteHref('ba:street_'), '#site/%x');
+  assert.equal(b.context.siteBySlug('%X'), 'ba:street_');
+});
+
+test('two keys never share a slug, and every slug reads back to its key', () => {
+  const b = board({data: sites()});
+  b.boot();
+  const keys = ['ba:street_a#1', 'ba:street_a-1', 'ba:street_a-1-k8lvph', 'ba:street_a%2d1', 'ba:street_a%1',
+    'ba:street_a 1', 'ba:street_a_1', 'ba:street_A#1', 'ba:street_é#1', 'ba:street_e\u0301#1', 'ba:street_東京#1',
+    'ba:street_😀#1', 'ba:street_', 'ba:street_#', 'ba:street_%x', 'a#1', '%x', 'x:street_a#1', 'ba:street',
+    'ba:street_a#1#', 'ba:street_a##1'];
+  const slugs = keys.map(k => b.context.siteSlugOf(k));
+  assert.equal(new Set(slugs).size, keys.length, `injective: ${slugs.join(' ')}`);
+  slugs.forEach((slug, i) => {
+    assert.match(slug, /^[a-z0-9%-]+$/, `${keys[i]} writes a slug, of only a-z, 0-9, "-" and escapes`);
+    assert.equal(b.context.siteKeyOf(slug), keys[i], `${keys[i]} reads back from ${slug}`);
+  });
+  assert.equal(b.context.siteSlugOf('ba:street_a-1'), 'a%2d1', 'a literal "-" is escaped, "#" is the dash');
+  assert.equal(b.context.siteSlugOf('ba:street_'), '%x', 'the bare head has a slug of its own');
+  assert.equal(b.context.siteKeyOf('%x'), 'ba:street_');
+  assert.equal(b.context.siteSlugOf('x'), '%xx', 'which no key without the head can take');
+  assert.equal(b.context.siteKeyOf('a%zz'), null, 'a broken escape is no slug');
+  assert.equal(b.context.siteKeyOf('a%ff'), null, 'nor is a byte that is no UTF-8');
+});
+
+test('a site keeps its slug whatever else the save holds', () => {
+  const b = board({data: sites()});
+  b.boot();
+  const mine = () => b.context.siteHref(SHOP);
+  const before = mine();
+  const D = b.context.D;
+  D.businesses = [...D.businesses,
+    {key: 'ba:street_fifthavenue#57b', name: 'Same address', address: '57 Fifth Avenue', status: 'retail'},
+    {key: 'ba:street_elm#1', name: 'Its address is the other key', address: 'Fifthavenue 57', status: 'retail'}];
+  assert.equal(mine(), before, 'sites arriving change nothing');
+  D.businesses = D.businesses.slice().reverse();
+  assert.equal(mine(), before, 'nor does their order');
+  D.businesses = D.businesses.filter(x => x.key === SHOP);
+  assert.equal(mine(), before, 'nor sites leaving');
+  assert.equal(b.context.siteHref('ba:street_elm#1'), '', 'a site the save no longer holds has no address');
+  assert.equal(b.context.siteBySlug('elm-1'), null);
+});
+
+test('capitals are only another spelling of the same address', () => {
+  const b = board({data: sites()});
+  b.boot();
+  assert.equal(b.context.siteBySlug('FifthAvenue-57'), SHOP);
+  assert.equal(b.context.siteKeyOf('A%2D1'), 'ba:street_a-1', 'upper-case hex reads the same');
+  b.context.history.pushState(null, '', '#site/FIFTHAVENUE-57');
+  b.move(0);
+  assert.equal(b.site(), SHOP);
+});
+
+test('a history entry keeps what others stored on it; a new one starts clean', () => {
+  const b = board({data: sites()});
+  b.states[0] = {wiki: 'scroll'};
+  b.context.location.hash = '#site/nowhere-1';
+  b.boot();
+  assert.equal(b.context.location.hash, '#company');
+  assert.deepEqual({...b.states[0]}, {wiki: 'scroll'}, 'replacing the entry keeps its state');
+  b.context.openSite(SHOP, false, 'a1');
+  assert.deepEqual(Object.keys(b.states[1]), ['ssFrom'], 'a new entry carries only the way back');
+});
+
+test('arriving from a finding names the page it was on, through Back, Forward and a reload', () => {
+  const b = board({data: sites()});
+  b.boot();
+  b.context.openSite(SHOP, false, 'a1');
+  assert.deepEqual({...b.from()}, {label: 'Today', hash: '#today'});
+  assert.deepEqual({...b.states[1].ssFrom}, {label: 'Today', hash: '#today'}, 'the entry carries it');
+  b.move(-1); b.move(1);
+  assert.deepEqual({...b.from()}, {label: 'Today', hash: '#today'});
+  // A reload replays the same entry.
+  const again = board({data: sites()});
+  again.context.location.hash = '#site/fifthavenue-57';
+  again.states[0] = {ssFrom: {label: 'Today', hash: '#today'}};
+  again.boot();
+  assert.equal(again.from().label, 'Today');
+  // Anywhere else a finding is clicked: the view's own word.
+  b.context.showSub('supply', 'checks'); b.context.showPage('supply');
+  b.context.openSite(DEPOT, false, 'a2');
+  assert.deepEqual({...b.from()}, {label: 'Checks', hash: '#supply'});
+  // The picker, a name or a portfolio row is no finding: back to the portfolio.
+  b.context.openSite(SHOP);
+  assert.equal(b.from(), null);
+});
+
+test('the crumb leads back where the reader came from, else to the portfolio', () => {
+  const b = board({data: sites()});
+  b.boot();
+  b.context.openSite(SHOP, false, 'a1');
+  const html = b.context.siteCrumbs(SHOP, 'HART. Clothing', true);
+  assert.match(html, /<a class="ss-crumb from" href="#today" data-ss="back">.*Today<\/a>/);
+  assert.match(html, /data-ss="portfolio">Portfolio<\/a><i>›<\/i><a href="#secPortfolio" data-ss="chain" data-chain="Clothing Stores">/);
+  assert.match(html, /<div class="ss-pick" id="sitePick">/);
+  // Clicking it is the browser's own Back.
+  const nav = {};
+  b.context.q = () => nav;
+  b.context.wireSiteCrumbs();
+  nav.onclick({button: 0, preventDefault(){}, target:{closest: () => ({dataset:{ss:'back'}, getAttribute: () => '#today'})}});
+  assert.equal(b.page(), 'today');
+  assert.equal(b.site(), null);
+  assert.deepEqual(b.entries, ['#today', '#site/fifthavenue-57'], 'Back, not a new visit');
+  // Without a finding the crumb is the portfolio, and a home is in no picker.
+  b.context.openSite(FLAT);
+  const home = b.context.siteCrumbs(FLAT, '13 Broadway Street', false);
+  assert.match(home, /<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">.*Portfolio<\/a>/);
+  assert.doesNotMatch(home, /sitePick|data-ss="chain"/);
+});
+
+test("a site's name opens its page; a modified click is left to the browser", () => {
+  /* The rows a name sits in skip a click inside it (inSiteLink); that is
+     tests/findability.test.cjs. */
+  const b = board({data: sites()});
+  b.boot();
+  const plain = b.click('#site/secondstreet-51');
+  assert.ok(plain.prevented, 'the page opens here, not by the browser');
+  assert.ok(!plain.stopped, 'the click still travels on: a popover closing on a click elsewhere hears it');
+  assert.equal(b.site(), DEPOT);
+  assert.equal(b.context.location.hash, '#site/secondstreet-51');
+  b.move(-1);
+  const tab = b.click('#site/fifthavenue-57', {ctrlKey: true});
+  assert.ok(!tab.stopped && !tab.prevented, 'a new tab opens at the address');
+  assert.equal(b.site(), null);
 });
