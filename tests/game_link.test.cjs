@@ -60,7 +60,7 @@ function harness({routes = {}} = {}) {
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
     $: el, strip,
-    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
+    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null,
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
     state(tone, head, meta) { seen.states.push([tone, head, meta]); strip.tone = tone; },
@@ -240,7 +240,6 @@ test('a new stamp is read with the old ETag and built under the live name', asyn
   assert.equal(file.name, 'abc-live.hsg');
   assert.equal(file.lastModified, Date.parse('2026-09-22T14:33:20Z'), 'the file time is refreshedAt');
   assert.equal(file.linkStamp, 's9');
-  assert.equal(file.linkRead, h.run('linkReads'), 'tagged with the number of the fetch it came from');
   // The stamp is the board's only once buildFrom() has had the board take the
   // bytes (the stub here takes nothing): a failed build leaves the old one.
   assert.equal(h.run('lastLinkStamp'), 's1');

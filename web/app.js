@@ -189,9 +189,8 @@
     linkMoved();
     return sourceGen;
   }
-  // The board hears when what link() says of the board moved without a new
-  // board: a new source, a look that vouched for the board, a build it failed
-  // to take. An undo's gate weighs itself again.
+  // The board hears when the source changes without a new board: an undo's
+  // gate closes again.
   function linkMoved() {
     if (handlers && handlers.linkChanged) {
       try { handlers.linkChanged(); } catch (e) {}
@@ -439,19 +438,7 @@
   const LINK_POLL_MS = 1000;
   let linkUrl = null;     // the mod's base URL while the link is the source
   let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
-  // Every look at the game's state that can build the board or vouch for the
-  // one on screen (a /save fetch, or the /health read before it) is numbered
-  // as it starts. lastLinkRead is the newest such look the board on screen is
-  // known to match: the fetch its bytes came from, or a later look that found
-  // the same stamp still current. A write's answer carries the number reached
-  // when it came in, so the board can tell bytes read after a write or an
-  // undo from bytes read before it, whatever their stamps (link().read).
-  let linkReads = 0;
-  let lastLinkRead = 0;
-  let linkHealth = null;  // the newest /health body read, for the strip
-  // The /health body behind the board on screen: whose game link() names.
-  // Taken with lastLinkStamp, once the board has taken the bytes.
-  let boardHealth = null;
+  let linkHealth = null;  // the /health body behind those bytes, for the strip
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
   // The watcher's own notes about the port, recognised on screen: it says one
@@ -592,9 +579,7 @@
     // IndexedDB, and choosing it again is one click, not one picker trip.
     linkUrl = null;
     lastLinkStamp = "";
-    lastLinkRead = 0;
     linkHealth = null;
-    boardHealth = null;
     linkGone = false;
     linkNotReady = 0;
     try { localStorage.removeItem(LINK_KEY); } catch (e) {}
@@ -607,9 +592,7 @@
     // A board built from a folder or an earlier link is not this link's: the
     // first stamp the mod answers has to be read, whatever it is.
     lastLinkStamp = "";
-    lastLinkRead = 0;
     linkHealth = null;
-    boardHealth = null;
     linkGone = false;
     linkNotReady = 0;
     stored.set(LINK_KEY, linkUrl);
@@ -660,7 +643,7 @@
     if (!startAttempt(gen)) return;
     note("");
     state("busy", why, linkUrl);
-    let health, looked = ++linkReads;
+    let health;
     try { health = await readHealth(); }
     catch (err) { linkDown(gen, err); return; }
     if (gen !== sourceGen) return;
@@ -688,7 +671,6 @@
         }
         await linkWait(LINK_POLL_MS);
         if (gen !== sourceGen) return;
-        looked = ++linkReads;
         try { health = await readHealth(); }
         catch (err) { linkDown(gen, err); return; }
         if (gen !== sourceGen) return;
@@ -701,18 +683,14 @@
     if (health.stamp === lastLinkStamp && onBoard()) {
       finishAttempt(gen);
       state("ok", "No newer state from the game", linkLine(health));
-      vouch(looked);
     } else {
       let res;
-      const fetched = ++linkReads, asked = lastLinkStamp;
-      try { res = await linkFetch("/save", {headers: asked ? {"If-None-Match": `"${asked}"`} : {}}); }
+      try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}}); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (res.status === 304) {  // a newer stamp was announced and then overtaken
         finishAttempt(gen);
         state("ok", "No newer state from the game", linkLine(health));
-        // Only for the board it was asked about: one built meanwhile is not.
-        if (lastLinkStamp === asked) vouch(fetched);
       } else if (!res.ok) {
         // 503 no_save_yet when the city unloaded between the two calls, or a
         // wrong address answering with anything: the reason, not a parse error.
@@ -732,8 +710,6 @@
         const file = new File([bytes], `${health.character}-live.hsg`,
           {lastModified: Date.parse(health.refreshedAt) || Date.now()});
         file.linkStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
-        file.linkRead = fetched;
-        file.linkHealth = health;
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -743,15 +719,6 @@
     }
     lastCheck = Date.now();
     armWatch();  // polling /health is also what keeps the mod attached
-  }
-
-  // A look numbered `read` found the board's own stamp still the game's
-  // current one: the board is as good as bytes fetched then. Stamps never
-  // repeat (docs/game-link-api.md), so the same stamp means the same bytes.
-  function vouch(read) {
-    if (!lastLinkStamp || read <= lastLinkRead) return;
-    lastLinkRead = read;
-    linkMoved();
   }
 
   const LINK_REFUSE = {
@@ -1145,10 +1112,6 @@
       // cover it, and an apply whose answer cannot be read is as unknown as
       // one with none. A 401 is refused before the body, so it is certain.
       const answer = await readAnswer(res, WRITE_WAIT_MS - (Date.now() - sentAt));
-      // The game has done what it will do by the time its answer is read
-      // whole: any look numbered above this one began after the change
-      // (link().read).
-      const readAt = linkReads;
       if (!wellFormed(answer, res.status, dryRun, kind === "undo" ? body.kind : kind) && res.status !== 401) {
         if (dryRun) return {status: res.status, error: "unreachable", message: "The game's answer could not be read.", body: null};
         return {status: res.status, error: "uncertain", message: "The game's answer could not be read.", body: null, reread: rereadGame()};
@@ -1181,7 +1144,7 @@
         continue;
       }
       if (res.status === 200 && !dryRun && answer) followWrite(answer.stamp);
-      return {status: res.status, error, body: answer, readAt};
+      return {status: res.status, error, body: answer};
     }
   }
 
@@ -1218,8 +1181,7 @@
   // and its undo in quick succession must leave the board on the undo. One
   // follow waits at a time, for the newest write's stamp. A follow that ends
   // in the bad state (no new state, the save not served, the build failed,
-  // the game gone), or that cannot start, is told to the board with the
-  // stamp it waited to move away from, and the board offers a refresh.
+  // the game gone) is told to the board, which offers a refresh.
   let followBefore = null;
   async function followWrite(before) {
     const gen = sourceGen;
@@ -1229,12 +1191,10 @@
     await whenIdle(gen);
     const stamp = followBefore;
     followBefore = null;
-    if (gen !== sourceGen || !linkUrl) return;
-    const failed = () => { if (handlers && handlers.followFailed) handlers.followFailed(stamp); };
-    if (!startAttempt(gen)) { failed(); return; }
+    if (gen !== sourceGen || !linkUrl || !startAttempt(gen)) return;
     state("busy", "Reading the game after the change", linkUrl);
     await awaitNewStamp(stamp, gen);
-    if (gen === sourceGen && strip.tone === "bad") failed();
+    if (gen === sourceGen && strip.tone === "bad" && handlers && handlers.followFailed) handlers.followFailed();
   }
 
   // A write that got no answer: ask the game for its state, as Update does,
@@ -1325,22 +1285,14 @@
       lastGoodDir = dir || "";
       lastGoodSource = gen;
       company = (data.meta && data.meta.save) || company;
-      // The board on screen is these bytes once it has taken them. While it
-      // takes them, what it asks of the link (link().stamp, link().read) is
-      // already theirs; should it throw, the stamp and read behind the board
-      // before stay, so the watcher reads these bytes again, not skips them.
-      // The game's company and character behind the board go with them: a
-      // failed build of another company's bytes leaves the board's own.
-      const was = [lastLinkStamp, lastLinkRead, boardHealth];
-      if (file.linkStamp) { lastLinkStamp = file.linkStamp; lastLinkRead = file.linkRead || 0; boardHealth = file.linkHealth || linkHealth; }
+      // The board on screen is these bytes once it has taken them; while it
+      // takes them, link().stamp is already theirs. Should it throw, the stamp
+      // before stays, so the watcher reads these bytes again, not skips them.
+      const was = lastLinkStamp;
+      if (file.linkStamp) lastLinkStamp = file.linkStamp;
       note("");
       try { if (handlers) { handlers.stale(""); handlers.changed(data); } }
-      catch (err) {
-        // The board may have drawn part of these bytes before it threw.
-        [lastLinkStamp, lastLinkRead, boardHealth] = was;
-        linkMoved();
-        throw err;
-      }
+      catch (err) { lastLinkStamp = was; throw err; }
       enterBoard();
       state("ok", "Up to date", line(`built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
     } catch (err) {
@@ -1894,14 +1846,11 @@
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last
     // health (the import lock window), or null when the board is not linked.
-    // `stamp`: the stamp of the bytes behind the board on screen; `read`: the
-    // number of the newest look at the game the board is known to match, to
-    // weigh against a write's `readAt` (only a larger one began after it);
-    // `source`: which choice of source the board is from, new with each.
-    // `character` and `company` are the game's behind the board on screen.
-    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: (boardHealth || linkHealth).character || "",
-      company: (boardHealth || linkHealth).company || "", day: linkHealth.day, hour: linkHealth.hour, minute: linkHealth.minute,
-      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, read: lastLinkRead, source: sourceGen} : null),
+    // `stamp`: the stamp of the bytes behind the board on screen; `source`:
+    // which choice of source the board is from, new with each.
+    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || "",
+      company: linkHealth.company || "", day: linkHealth.day, hour: linkHealth.hour, minute: linkHealth.minute,
+      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen} : null),
     // Resolves to {status, error, body}; see gameWrite().
     write: (kind, body, opts) => gameWrite(kind, body, opts),
     // Update, for a board that learns the game has moved on.

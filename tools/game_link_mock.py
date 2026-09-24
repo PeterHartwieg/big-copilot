@@ -22,8 +22,7 @@ rewrites the file: an apply is kept in memory, over the bytes, so a later write
 sees it, answers the state it left, and moves the stamp as /refresh does.
 GET /debug/writes lists the applies; POST /debug/config changes the error
 switches while it runs, for the page's tests (and the game's day and hour, and
-those contract terms, the approval answer and the approved tokens; "refresh"
-serializes once more at once, as the game's hourly or save refresh would).
+those contract terms, the approval answer and the approved tokens).
 
 Approving a browser (POST /pair/request, GET /pair/status) answers after about
 a second as --pair says: approve (the default), deny, expire, or popup_open
@@ -947,11 +946,8 @@ class Link:
                 self.reject_tokens = bool(body["rejectTokens"])
             if "tokens" in body:  # approvals already given: {token: origin}
                 self.tokens = dict(body["tokens"] or {})
-        if body.get("refresh"):  # one refresh of the game's own, outside the throttle
-            self.refresh(force=True)
-        with self.lock:
             return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
-                    "writes": self.writes, "applied": len(self.applied), "stamp": self.stamp}
+                    "writes": self.writes, "applied": len(self.applied)}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

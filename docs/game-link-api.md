@@ -45,7 +45,8 @@ path is on.
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
 and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on it.
-A stamp is never issued twice, so the same stamp always means the same bytes.
+The mod never issues a stamp twice within a city session; across loads that rests on the
+clock, so clients must not rely on it.
 
 ### When the mod refreshes
 
