@@ -562,6 +562,7 @@ MATERIAL_SHARE = 0.005
 MATERIAL_FLOOR = 500.0
 
 NEW_SITE_DAYS = 7  # "just opened" — old enough to judge starts here
+MIN_TRADE_DAYS = 5  # trading days a shelf needs behind it before it is judged
 GRAPH_MIN_STOCK = 100  # below this a holding is a drawer, not a depot
 HYPE_BASELINE_DAYS = 3  # trading days needed before a wave to call it a baseline
 TREND_MIN_DAYS = 14  # a week-on-week comparison needs two full weeks behind it
@@ -1953,6 +1954,32 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
             revenue_by_item[sale["itemName"]] += sale.get("totalPrice", 0)
     span = max(len(recent), 1)
 
+    # A trading day is one after the opening day with somebody through the
+    # door: the opening day is partial, and a closed day or a day before the
+    # shop opened says nothing about how fast it sells; today is not over. The
+    # rate the supply figures read is the last week of trading days, not of
+    # calendar days, so a shop open four days is not judged at four sevenths
+    # of its pace.
+    opened = b.get("creationDay", 0)
+    trading = [e for e in orders
+               if opened < e.get("dayNumber", 0) < day and e.get("totalCustomers", 0) >= 1]
+    trade_window = trading[-STOCK_COVER_DAYS:]
+    trade_sold = collections.Counter()
+    for entry in trade_window:
+        for sale in save.items(entry.get("itemSales")):
+            trade_sold[sale["itemName"]] += sale.get("amountSold", 0)
+    # A site under a week old keeps its trading days, so Demand sizing can fit
+    # a line through them and read the coming week off it (_coming_week).
+    young = day - opened < NEW_SITE_DAYS
+    sold_days = collections.defaultdict(list)
+    if young:
+        for entry in trading:
+            by_item = collections.Counter()
+            for sale in save.items(entry.get("itemSales")):
+                by_item[sale["itemName"]] += sale.get("amountSold", 0)
+            for item, units in by_item.items():
+                sold_days[item].append([entry["dayNumber"], units])
+
     stock = collections.Counter()
     has_uniform_locker = False
     for holder in save.items(b["itemInstances"]):
@@ -1972,12 +1999,17 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     # Rows that tie on cover would otherwise reshuffle between runs and page loads.
     for item in _in_order(set(stock) | set(units_sold) | set(prices)):
         rate = units_sold[item] / span
+        # With no trading day on record (a depot, or a site nobody has come to
+        # yet) the calendar rate is all there is.
+        trade_rate = trade_sold[item] / len(trade_window) if trade_window else rate
         lines.append(
             {
                 "item": names.label(item),
                 "slug": item,
                 "units": int(stock[item]),
                 "rate": round(rate, 1),
+                "tradeRate": round(trade_rate, 1),
+                **({"soldDays": sold_days[item]} if sold_days.get(item) else {}),
                 "cover": round(stock[item] / rate, 1) if rate > 0.5 else None,
                 "price": money(prices.get(item, 0)),
                 "configuredPrice": _configured_price(prices.get(item)),
@@ -2120,6 +2152,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "lines": lines,
         "series": series,
         "daysOpen": max(day - b.get("creationDay", day), 1),
+        # Days after opening with at least one customer, all the order history
+        # holds: under MIN_TRADE_DAYS a shelf is too young to judge.
+        "tradeDays": len(trading),
     }
 
 
@@ -2723,6 +2758,21 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, r
             "runsOut": runs_out, "catchUp": catch_up}
 
 
+def _coming_week(points: list, day: int) -> float | None:
+    """The average day of the coming week on a straight line fitted through
+    a young site's trading days ([[day, units], ...]), never below nothing;
+    None with fewer than two days to draw a line through."""
+    if len(points) < 2:
+        return None
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    spread = sum((x - mx) ** 2 for x in xs)
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / spread if spread else 0.0
+    # Today to six days on: the middle of that week is three days ahead.
+    return max(0.0, my + slope * (day + 3 - mx))
+
+
 def _supply(
     save: Save,
     names: Names,
@@ -2742,7 +2792,10 @@ def _supply(
     asking, plus: what is piling up and never moving?
     """
     index = {b["key"]: i for i, b in enumerate(businesses)}
-    sold = {b["key"]: {l["slug"]: l["rate"] for l in b["lines"]} for b in businesses}
+    # What each shelf sells a trading day (_business); a hand-built business
+    # without it sells at its calendar rate.
+    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"]}
+            for b in businesses}
     held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
 
     # Most of today is already spent. A save taken at 23:00 on a Saturday has one
@@ -3056,7 +3109,7 @@ def _supply(
         if business["status"] != "retail":
             continue
         for line in business["lines"]:
-            item, rate = line["slug"], line["rate"]
+            item, rate = line["slug"], line.get("tradeRate", line["rate"])
             if rate <= 0:
                 continue
             target, source = target_at.get((business["key"], item), (0, None))
