@@ -1387,9 +1387,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         addr = (b["StreetName"], b["StreetNumber"])
         if addr in residential:
             continue
-        businesses.append(
-            _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
-        )
+        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
+        # The game's own switch that shuts a site's doors, which the
+        # not-trading finding names as a reason of its own.
+        row["closed"] = bool(b.get("temporarilyClosed"))
+        businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
     _job_demands(save, names, businesses)
 
@@ -1727,7 +1729,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     marked, since no site can settle them. staffLacking, staffLackingCompany and
     staffLackingAny count the people behind the site rows, the company rows and
     either, and quitWarnings the people with anything unmet who have already
-    warned they will quit. A demand
+    warned they will quit. An hours or days row whose roster is right for some of
+    them, who fail only on what they have already worked this week, carries
+    workedOver: how many, and the most hours or days the demand allows. A demand
     the table does not know, from a newer game, is left out rather than guessed at.
     """
     root = save.root
@@ -1760,14 +1764,22 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
                     if shift.get("employeeId") == employee_id:
                         yield shift
 
-    def met(e, key, kind, setting):
+    def rostered(e, kind, setting):
+        """Whether the hours or days assigned meet an hours or days demand."""
         if kind == "hours":
             low, high = setting
-            return (low <= (e.get("assignedWeeklyHours") or 0) <= high
-                    and (e.get("workedHoursThisWeek") or 0) <= high)
-        if kind == "days":
-            return (len(save.items(e.get("assignedWeeklyDays"))) == setting
-                    and (e.get("workedDays") or 0) <= setting)
+            return low <= (e.get("assignedWeeklyHours") or 0) <= high
+        return len(save.items(e.get("assignedWeeklyDays"))) == setting
+
+    def worked_over(e, kind, setting):
+        """Whether the hours or days worked so far this week pass the demand's top."""
+        if kind == "hours":
+            return (e.get("workedHoursThisWeek") or 0) > setting[1]
+        return (e.get("workedDays") or 0) > setting
+
+    def met(e, key, kind, setting):
+        if kind in ("hours", "days"):
+            return rostered(e, kind, setting) and not worked_over(e, kind, setting)
         if kind == "daysoff":
             return not set(save.items(e.get("assignedWeeklyDays"))) & set(setting)
         if kind == "noshift":
@@ -1807,6 +1819,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         raise ValueError(kind)
 
     unmet = collections.defaultdict(collections.Counter)
+    # Of those, the people whose roster meets an hours or days demand and who
+    # fail it only on what they have already worked this week.
+    worked = collections.defaultdict(collections.Counter)
     # People, not demands: how many at each site lack something the site can
     # give, how many lack something only the owner can, and how many of those
     # with anything unmet have warned they will quit.
@@ -1820,6 +1835,8 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             rule = JOB_DEMANDS.get(slug)
             if rule and not met(e, key, rule[0], rule[1]):
                 unmet[key][slug] += 1
+                if rule[0] in ("hours", "days") and rostered(e, rule[0], rule[1]):
+                    worked[key][slug] += 1
                 lacks.add("company" if rule[0] in COMPANY_DEMAND_KINDS else "site")
         for scope in lacks:
             people[key][scope] += 1
@@ -1838,6 +1855,14 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             }
             for slug, count in unmet[b["key"]].items()
         ]
+        for row in rows:
+            if worked[b["key"]][row["slug"]]:
+                kind, setting, _ = JOB_DEMANDS[row["slug"]]
+                row["workedOver"] = {
+                    "count": worked[b["key"]][row["slug"]],
+                    "max": setting[1] if kind == "hours" else setting,
+                    "unit": kind,
+                }
         rows.sort(key=lambda r: (-r["priority"], -r["count"], r["demand"]))
         b["staffDemands"] = rows
         b["staffLacking"] = people[b["key"]]["site"]
@@ -9503,6 +9528,16 @@ ALERT_UNITS = {
 }
 
 
+def _worked_over(d: dict, lead: str) -> str:
+    """Why an hours or days demand fails when the roster itself meets it: the
+    week worked so far has passed its top. The whole row, or how many of it."""
+    w = d.get("workedOver")
+    if not w:
+        return ""
+    who = "" if w["count"] == d["count"] else f"{w['count']} "
+    return f"{lead}{who}worked over {w['max']} {w['unit']} this week"
+
+
 def _alert_id(*parts: str) -> str:
     """A stable id for a finding: the same finding keeps it across renders,
     and it does not depend on where the finding sits in the list."""
@@ -9594,11 +9629,16 @@ def _alerts(
         silent.add(b["key"])
         priced = [l for l in b["lines"] if l["price"] > 0]
         stocked = [l for l in priced if l["units"] > 0]
-        # Which of the five pre-flight checks fail is the finding, so the slugs
+        # Which of the six pre-flight checks fail is the finding, so the slugs
         # are kept on the business beside the words: the site panel reads the
         # same list and the two cannot drift apart. An office sells hours, not
-        # goods, so it has nothing to stock or deliver.
+        # goods, so it has nothing to stock or deliver. A site shut with the
+        # game's temporarily-closed switch books no day however ready it is,
+        # so that reason comes first.
         failed, reasons = [], []
+        if b.get("closed"):
+            failed.append("closed")
+            reasons.append("temporarily closed")
         if b["staff"] == 0:
             failed.append("staff")
             reasons.append("no staff")
@@ -9699,6 +9739,7 @@ def _alerts(
         text = f"{count} staff with unmet demands: " + ", ".join(
             f"{d['demand']} for {d['count']} ("
             + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
+            + _worked_over(d, ", ")
             + ")"
             for d in shown
         )
@@ -9793,15 +9834,39 @@ def _alerts(
             and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * HYPE_TIGHT
         )
 
+    # A shop's takings under hype are one number however many waves carry them,
+    # so the waves are gathered by the shop they land hardest on and each shop
+    # gets one line. The waves come soonest-ending first, which the line keeps.
+    by_top = {}
     for wave in hype:
         top = max(wave["sites"], key=lambda s: s["revenue"])
-        when = (
-            "ends today"
-            if wave["daysLeft"] <= 0
-            else "ends tomorrow"
-            if wave["daysLeft"] == 1
-            else f"has {wave['daysLeft']} days left"
-        )
+        by_top.setdefault(top["key"], (top, []))[1].append(wave)
+
+    for top, waves in by_top.values():
+        waves.sort(key=lambda w: w["daysLeft"])
+        soonest = waves[0]["daysLeft"]
+        if len(waves) == 1:
+            left = waves[0]["daysLeft"]
+            lines = (
+                f"{waves[0]['count']} lines "
+                + (
+                    "ends today"
+                    if left <= 0
+                    else "ends tomorrow"
+                    if left == 1
+                    else f"has {left} days left"
+                )
+            )
+        else:
+            parts = []
+            for n, wave in enumerate(waves):
+                left = wave["daysLeft"]
+                ends = (
+                    "today" if left <= 0 else "tomorrow" if left == 1 else f"in {left} days"
+                )
+                parts.append(f"{wave['count']} {'end ' if n == 0 or left <= 1 else ''}{ends}")
+            lines = f"{sum(w['count'] for w in waves)} lines ({', '.join(parts)})"
+        wave_word = "the wave" if len(waves) == 1 else "the waves"
         # Pricing is somebody else's job in this company. When a wave lands on a
         # shop that is already full, the only lever left is capacity — and it has
         # the wave's end date on it.
@@ -9809,21 +9874,23 @@ def _alerts(
         queue = (
             f" It already runs within 10% of capacity for {full} hour"
             f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
-            f"of the wave away and capacity is the only lever left."
+            f"of {wave_word} away and capacity is the only lever left."
             if full
             else ""
         )
-        base = wave["baseline"]
+        # The baseline is the first wave's: the shop's own days before a later
+        # wave already carry the earlier one.
+        base = min(waves, key=lambda w: w["startDay"])["baseline"]
         if base:
             drop = max(top["revenue"] - base["revenue"], 0)
             note(
-                "critical" if wave["daysLeft"] <= 2 else "warn",
+                "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{waves[0]['hood']} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
                 f"${base['revenue']:,.0f} for {base['basis']}; "
-                f"about ${drop:,.0f}/day of revenue rides on the wave.{queue}",
+                f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
                 worth=drop,
                 key=top["key"],
             )
@@ -9832,11 +9899,11 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{waves[0]['hood']} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
                 f"shop of the same kind trading without a wave and no trading days "
-                f"before this one started, so there is no baseline to say what the "
-                f"drop will be",
+                f"before {'this one' if len(waves) == 1 else 'the first of them'} "
+                f"started, so there is no baseline to say what the drop will be",
                 always=True,
                 key=top["key"],
             )
@@ -15783,29 +15850,32 @@ const spHypeRow = key => {
   return null;
 };
 
-/* The five pre-flight checks, in the order a shop needs them. Red is failing
-   (b.notTrading, the same list the not-trading finding reads out); grey was
-   never checked, because the alert stops at the first of prices, stock and
-   shelves that fails; green is in place. An office has nothing to stock,
-   shelve or deliver, so it shows two. Only a site the not-trading finding
-   looked at has the list at all, and an empty one means every check passed
-   and the site simply has not booked a day yet. */
+/* The six pre-flight checks, in the order a shop needs them: doors open (the
+   game's temporarily-closed switch off), then the five that make it ready. Red
+   is failing (b.notTrading, the same list the not-trading finding reads out);
+   grey was never checked, because the alert stops at the first of prices,
+   stock and shelves that fails; green is in place. An office has nothing to
+   stock, shelve or deliver, so it shows three. Only a site the not-trading
+   finding looked at has the list at all, and an empty one means every check
+   passed and the site simply has not booked a day yet. */
 function spPreflight(b){
   const failed = b.notTrading;
   const chain = ["prices", "stock", "shelves"];
   const stops = chain.findIndex(s => failed.includes(s));
-  return ["staff", "prices", "stock", "shelves", "plan"]
-    .filter(s => b.status !== "office" || s === "staff" || s === "prices")
+  return ["closed", "staff", "prices", "stock", "shelves", "plan"]
+    .filter(s => b.status !== "office" || s === "closed" || s === "staff" || s === "prices")
     .map(s => ({slug: s, state: failed.includes(s) ? "no"
       : stops >= 0 && chain.indexOf(s) > stops ? "unk" : "ok"}));
 }
 const SP_CHECK_WORD = {
-  staff: "staffed", prices: "prices set", stock: "stock on the shelves",
+  closed: "open", staff: "staffed", prices: "prices set", stock: "stock on the shelves",
   shelves: "shelves filled", plan: "delivery plan",
 };
+/* A failing check that reads better as its own words than as "missing: ". */
+const SP_CHECK_NO = {closed: "temporarily closed"};
 /* What the lamp's own state adds to that word, and the drawing it wears. */
 const SP_CHECK_STATE = {ok: "", no: "missing: ", unk: "not checked yet: "};
-const SP_CHECK_ICON = {staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
+const SP_CHECK_ICON = {closed: "door", staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
 /* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
 const SP_PRIORITY = ["nice to have", "important", "critical"];
 /* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
@@ -17667,15 +17737,21 @@ function drawSite(){
 
   /* The staff's own demands the site does not meet, each with how many hold it;
      health insurance and a happy boss are among them, settled company-wide.
-     The panel reads the game's own priority as the three bars on a chip. */
+     The panel reads the game's own priority as the three bars on a chip. An
+     hours or days demand the roster meets but the week already worked has
+     passed says so, or the player sees a right roster and a wrong board. */
   const wants = b.staffDemands || [];
+  const spWorkedOver = d => { const w = d.workedOver; return w
+    ? `${w.count === d.count ? "" : w.count + " "}worked over ${w.max} ${w.unit} this week` : ""; };
   const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
-    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
+    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}${
+      spWorkedOver(d) ? ` (${spWorkedOver(d)})` : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
   const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     /* The tip lands as textContent: attr() alone, no markup escaping. */
     wants.map(d => `<span class="sp-dem" data-el="demand${d.company ? " company" : ""}" data-tip="${attr(`${d.demand} for ${d.count} · ${
-      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
+      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}${
+      spWorkedOver(d) ? " · " + spWorkedOver(d) : ""}`)}">${
       spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
       d.company ? `<span class="sp-i sp-co">${icon("company")}</span>` : ""}</span>`).join("")}${
     /* The mark and the count; the sentence is the chip's tip, not the page's. */
@@ -17686,7 +17762,7 @@ function drawSite(){
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${siteLink(depot)}` : ""].filter(Boolean).join(" · ");
   /* The head marks: whether the doors are open, and — where they are not — the
-     five pre-flight checks that say why, and the site's place by the profit of
+     six pre-flight checks that say why, and the site's place by the profit of
      its last seven days. */
   const headMarks = !sp ? "" : `
       <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
@@ -17695,7 +17771,8 @@ function drawSite(){
          written the list. An older silent shop has no list and no lamps. */
       b.notTrading === undefined ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
         `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
-          SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
+          p.state === "no" && SP_CHECK_NO[p.slug]
+          || SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
   /* The hour chips: one per ceiling the busy hours ran into — the site can be
      held by staffing at night and by its door by day — and one for idle
@@ -20070,7 +20147,7 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no prices, no stock or no trading day", on:true},
+  {id:"notrading",    label:"Not trading yet",        note:"Temporarily closed, or open but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
   {id:"staff",        label:"Nobody on shift",        note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
