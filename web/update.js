@@ -65,3 +65,18 @@
   document.addEventListener('visibilitychange', check);
   check();
 })();
+
+/* One-time news strip (#newsStrip in build_web.py). Its data-news-id names the
+ * announcement: dismissing remembers that id, so a new id shows again. */
+(() => {
+  const strip = document.getElementById('newsStrip');
+  const id = strip?.dataset.newsId;
+  if (!id) return;
+  const key = 'bc_news_dismissed';
+  try { if (localStorage.getItem(key) === id) return; } catch (_) {}
+  strip.hidden = false;
+  document.getElementById('newsDismiss').addEventListener('click', () => {
+    strip.hidden = true;
+    try { localStorage.setItem(key, id); } catch (_) {}
+  });
+})();
