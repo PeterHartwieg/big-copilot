@@ -75,7 +75,8 @@ the map.
   site: the spare staff-hours of the whole week, its wages summed, with the days and hours
   named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-12;
   4 counters Mon 12-20"), the two with the most spare hours named and the rest counted
-  ("(and 2 more)"); the site's own hours block reads out the same week and lights all of it.
+  ("(and 2 more)"); the site's own *Customers by hour* block reads out the same week and
+  lights all of it.
   A finding's headline never drops an item's variant: "Fabric (Expensive)", not "Fabric".
   Every *details ›* link opens the page and view the finding is spelt out on and scrolls
   to it.
@@ -831,15 +832,15 @@ and dims the rest; clicking scrolls there.
   An office is never asked about bathrooms, music or uniforms, so it draws the bars alone
   and its workstations beside them, one square a desk, filled while somebody is posted at
   it at the busiest hour.
-- **Promotion** (a shop). Foot traffic and marketing against the game's own 100 cap, split into what the street
-  brings and what campaigns add, with security and how many shoppers fit inside. A demand
-  wave running over the shop adds a bar for the share of its takings riding on the wave
-  and a pip a day left; with no baseline to measure the wave against, the bar is hatched
-  rather than guessed.
-- **Customers by hour.** The two things the grid can say that a daily total cannot are chips under it:
-  what the ceiling costs, with the fix, and what idle hours cost. The idle chip is the
-  site's *Overstaffed hours* line: the whole week's spare staff-hours, hours and wages.
-  Hovering a chip picks its own hours out of the grid.
+- **Promotion** (a shop). Foot traffic and marketing against the game's own 100 cap, split
+  into what the street brings and what campaigns add, with security and how many shoppers
+  fit inside. A demand wave running over the shop adds a bar for the share of its takings
+  riding on the wave and a pip a day left; with no baseline to measure the wave against,
+  the bar is hatched rather than guessed.
+- **Customers by hour.** The two things the grid can say that a daily total cannot are
+  chips under it: what the ceiling costs, with the fix, and what idle hours cost. The idle
+  chip is the site's *Overstaffed hours* line: the whole week's spare staff-hours, hours
+  and wages. Hovering a chip picks its own hours out of the grid.
 - **Staffing** (a shop). The week the board would copy into BizMan, on the customer grid's
   own 24 columns: a strip of what the measured hours ask for, then one row a station with
   the entries to set. A bar is a person and an hour range; a dashed one is a
@@ -924,23 +925,25 @@ attention here* list, and each finding pulses the line it is about.
   profit to close it; what is on the floor, over how many lines; the thinnest line, as
   the days it covers against the week, with its own bar; and how many sites it feeds,
   with what leaves a day.
-- **Stock.** One row a line, with the next seven days beside it, left to right from
-  today: a filled cell is a day covered, red hatching is a day dry, and the truck sits on
-  the day the delivery lands. Where two suppliers deliver in the same week the loaded
-  truck is the later one, because that is the delivery the cover, the run-out day and the
-  catch-up quantity are measured against; the earlier drop rides along faintly. A paused
-  contract is dry from the day its cover ends, and keeps the delivery day it was stopped
-  on — usually behind today, so there is no truck at all; where there is one, it is
-  struck through. An order due beyond those seven days hatches the rest of the week the
-  same way, with no truck to draw, while a line nothing delivers at all leaves those cells
-  blank rather than hatched: what happens after its cover runs out is not known. A line
-  this depot is expected to hold and holds none of — a factory input routed from here with
-  no standing import — gets a row of its own, nothing on hand in red, so its absence reads
-  as plainly as a shortage. A line nothing
-  draws on sleeps instead of showing cover, because there is nothing for it to run out
-  against, and reads as *Idle stock*, the name the Checks view and the finding use too. The column beside the rail is what to do about it — the units to bring in by
-  hand before the shelf empties, or the order to raise — and the *Weekly order* column
-  names the factory instead where the goods are made in-house rather than imported.
+- **Stock.** One row a line, with the next seven days beside it, left to right from today:
+  a filled cell is a day covered, red hatching is a day dry, and the truck sits on the day
+  the delivery lands. Where two suppliers deliver in the same week the loaded truck is the
+  later one, because that is the delivery the cover, the run-out day and the catch-up
+  quantity are measured against; the earlier drop rides along faintly. A paused contract
+  is dry from the day its cover ends, and keeps the delivery day it was stopped on —
+  usually behind today, so there is no truck at all; where there is one, it is struck
+  through. An order due beyond those seven days hatches the rest of the week the same way,
+  with no truck to draw, while a line nothing delivers at all leaves those cells blank
+  rather than hatched: what happens after its cover runs out is not known. A line this
+  depot is expected to hold and holds none of — a factory input routed from here with no
+  standing import — gets a row of its own, nothing on hand in red, so its absence reads as
+  plainly as a shortage. A line nothing draws on sleeps instead of showing cover, because
+  there is nothing for it to run out against, and reads *Idle stock · nothing draws on
+  these*. A line held far beyond what leaves it reads *Idle stock* with its weeks on hand;
+  those are the piles the Checks view *Idle stock* and the finding of the same name list.
+  The column beside the rail is what to do about it — the units to bring in by hand before
+  the shelf empties, or the order to raise — and the *Weekly order* column names the
+  factory instead where the goods are made in-house rather than imported.
 - **Feeds.** One row a site that draws on this depot, longest bar first, with what it
   takes a day.
 

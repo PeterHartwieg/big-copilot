@@ -153,6 +153,13 @@ test('the index holds every group, read from the page, with the words players us
     assert.equal(by('kind:idlestaff').tag, 'switched off · 1');
     assert.equal(by('kind:idlestaff').dot, 'off');
     assert.ok(by('kind:jobdemand').syn.includes('hire'));
+    // The board's old names for renamed things still find them (R12).
+    assert.ok(by('kind:dead').syn.includes('stock not moving'));
+    assert.ok(by('kind:staff').syn.includes('staffing'));
+    assert.ok(by('kind:satisfaction').syn.includes('standards'));
+    assert.ok(by('kind:promotion').syn.includes('pull'));
+    assert.ok(by('view:ops').syn.includes('standards'));
+    assert.ok(by('view:ops').syn.includes('pull'));
     // Find-a-location presets: the neighbourhood that wants the type most.
     assert.equal(by('finder:ba:businesstype_gym').t, 'Open a Gym');
     assert.equal(by('finder:ba:businesstype_gym').p, "best fit: Hell's Kitchen · demand 80");
