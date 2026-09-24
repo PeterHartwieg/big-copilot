@@ -126,11 +126,15 @@ const kinds = vm.createContext({});
 vm.runInContext(KINDS, kinds);
 const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, kinds));
 
-test('At capacity is on by default; Overstaffed hours stays off', () => {
+test('At capacity is on by default; Overstaffed hours and Demand wave ending are off', () => {
   const on = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.on]));
   assert.equal(on.atcap, true);
   assert.equal(on.idlestaff, false);
+  assert.equal(on.hype, false);
   assert.equal(run('kindPrefs({})').atcap, true);
+  assert.equal(run('kindPrefs({})').hype, false);
+  // A player who switched Demand wave ending on keeps it on.
+  assert.equal(run('kindPrefs(readKindChoices({v: 2, set: {hype: true}}))').hype, true);
 });
 
 test('a stored whole map keeps only what differs from the defaults it was saved under', () => {
@@ -143,6 +147,11 @@ test('a stored whole map keeps only what differs from the defaults it was saved 
   assert.equal(prefs.atcap, true, 'never touched: the new default applies');
   assert.equal(prefs.hype, false, 'a real choice survives');
   assert.equal(prefs.idlestaff, false);
+  // The first boards had Demand wave ending on, so a stored true was only a
+  // copy of that default: it is dropped, and the new default (off) applies.
+  const copied = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.id !== 'atcap' && g.id !== 'idlestaff']));
+  assert.deepEqual(run(`readKindChoices(${JSON.stringify(copied)})`), {});
+  assert.equal(run(`kindPrefs(readKindChoices(${JSON.stringify(copied)}))`).hype, false);
 });
 
 test('a player who had switched At capacity on keeps it on, and an explicit off survives', () => {
@@ -154,10 +163,12 @@ test('a player who had switched At capacity on keeps it on, and an explicit off 
 });
 
 test('a switch set back to its default stops being a stored choice', () => {
-  assert.deepEqual(run('setKindChoice({}, "hype", false)'), {hype: false});
-  assert.deepEqual(run('setKindChoice({hype: false}, "hype", true)'), {});
+  assert.deepEqual(run('setKindChoice({}, "trend", false)'), {trend: false});
+  assert.deepEqual(run('setKindChoice({trend: false}, "trend", true)'), {});
   assert.deepEqual(run('setKindChoice({}, "idlestaff", true)'), {idlestaff: true});
-  assert.deepEqual(run('setKindChoice({idlestaff: true, hype: false}, "idlestaff", false)'), {hype: false});
+  assert.deepEqual(run('setKindChoice({idlestaff: true, trend: false}, "idlestaff", false)'), {trend: false});
+  assert.deepEqual(run('setKindChoice({}, "hype", true)'), {hype: true});
+  assert.deepEqual(run('setKindChoice({hype: true}, "hype", false)'), {});
   // Dropped, the kind follows its default again.
   assert.equal(run('kindPrefs(setKindChoice({atcap: false}, "atcap", true))').atcap, true);
 });

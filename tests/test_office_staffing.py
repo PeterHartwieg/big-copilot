@@ -133,6 +133,8 @@ class OfficeGridTests(unittest.TestCase):
         self.assertEqual((staff["hours"], staff["cap"], staff["capTop"]), (9, 1, 2))
         self.assertEqual((door["when"], staff["when"]), ("Mon 9-17", "Mon 0-9"))
         self.assertIn("computers", staff["fix"])
+        # The building's own capacity comes with no advice.
+        self.assertEqual(door["fix"], "")
         # Throughput adds up the customers of each capped hour, not the thinnest
         # hour's ceiling times every hour.
         self.assertEqual(door["throughput"], money(8 * 3 * 388 / 7))
@@ -282,7 +284,12 @@ class OfficeAlertTextTests(unittest.TestCase):
                  self.cap(firm["key"], firm["name"], True, limit="the building", cap=3, top=3)]
         lines = [a for a in alerts([firm], hours) if a["group"] == "atcap"]
         self.assertEqual(len({a["id"] for a in lines}), 2)
-        self.assertTrue(any("at the 3/h building capacity" in a["text"] for a in lines))
+        [door] = [a for a in lines if "at the 3/h building capacity" in a["text"]]
+        # The building line gives the facts and stops: no fix, no "answer".
+        self.assertTrue(door["text"].endswith("of trade going through it."), door["text"])
+        self.assertNotIn("answer", door["text"])
+        [staff] = [a for a in lines if a is not door]
+        self.assertIn("so the answer is more staff at the computers", staff["text"])
 
     def test_idle_office_staff_are_workstations(self):
         firm = business(staff=[LAWYER_PERSON])

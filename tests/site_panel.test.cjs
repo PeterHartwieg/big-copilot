@@ -374,7 +374,7 @@ test("the tiles carry the fortnight, the costs of the day and the ceilings", asy
     shop: {series: fortnight(), cogs: 400, profit: 200},
     trends: READY,
     hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 3,
-                    when: 'Fri 12-13', limit: 'the building', fix: 'a bigger site nearby',
+                    when: 'Fri 12-13', limit: 'the building', fix: '',
                     cap: 50, capTop: 50, basket: 30, throughput: 900}],
     hours: grid(false, 3),
   });
@@ -473,7 +473,7 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
   const page = await site({
     hours: mixedGrid(),
     hourFindings: [
-      cap('every day 9', 'the building', 'a bigger site or a second shop nearby', 50, 1500),
+      cap('every day 9', 'the building', '', 50, 1500),
       cap('every day 12', 'staffing', 'more service staff on those hours', 2, 60, 1),
       cap('every day 15', 'registers', 'another counter', 3, 90, 1),
     ],
@@ -487,6 +487,17 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
       ['the building', 'door'],
       ['staffing', `staff:${SERVICE}`],
       ['registers', `post:${SERVICE}`]]);
+    // The building's chip gives no fix: no arrow, and no "so the answer is" in
+    // its tip. The staffing and registers chips keep theirs.
+    const fixes = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
+      els.map(e => [e.querySelector('.fix') ? e.querySelector('.fix').textContent : null,
+        /so the answer is/.test(e.dataset.tip)]));
+    assert.deepEqual(fixes, [
+      [null, false],
+      ['more service staff on those hours', true],
+      ['another counter', true]]);
+    assert.match(await page.locator('#sp-hours .sp-hchip[data-show="door"]').getAttribute('data-tip'),
+      /the building is the limit\. \$/);
     // All three ceilings held hours here, so all three icons are lit.
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));
