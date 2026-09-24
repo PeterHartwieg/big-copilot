@@ -24,7 +24,29 @@ const DEPOT = 'ba:street_pier#9';
 const STUB = '<script>window.LEDGER_SOURCE = {label: "Live", data: async () => null, '
   + 'name: async () => null, watch(h){ window.calmWatch = h; }};</script>';
 
-let browser, html, payload;
+// The same company a day on, as the game would have moved it: more cash, a
+// fourth hand at the second shop and a bigger import; and another company,
+// the same save under another name. Both through the real extract().
+const MOVED = `
+import json, os, sys
+sys.path.insert(0, 'tests')
+import es3_fixture as f
+def build(name, change):
+    company = f.link_company()
+    change(company)
+    save = os.path.join(sys.argv[1], name + '.hsg')
+    with open(save, 'wb') as fh: fh.write(f.encode(company))
+    with open(os.path.join(sys.argv[1], name + '.json'), 'w', encoding='utf-8') as fh: json.dump(f.link_payload(save), fh)
+def later(c):
+    c['Day'], c['Money'] = 35, 25000.0
+    c['importPartnerships'][0]['products'][0]['amount'] = 4600
+    c['EmployeeInstances'].append({'id': 'DDDDemployeeDDDDDDDDDDDD', 'assignedAddress': f.address('ba:street_broadway', 2),
+        'characterData': {'name': 'Di Park', 'skills': [{'name': 'ba:skill_customerservice', 'value': 50.0}]}})
+build('later', later)
+build('other', lambda c: c.update(SaveGameName='Other Co'))
+`;
+
+let browser, html, payload, later, other;
 before(async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'calm-refresh-'));
   try {
@@ -32,6 +54,10 @@ before(async () => {
     const made = spawnSync(PYTHON, [path.join(root, 'tests', 'es3_fixture.py'), save, data], {cwd: root});
     assert.equal(made.status, 0, made.stderr?.toString());
     payload = fs.readFileSync(data, 'utf8');
+    const moved = spawnSync(PYTHON, ['-c', MOVED, dir], {cwd: root});
+    assert.equal(moved.status, 0, moved.stderr?.toString());
+    later = fs.readFileSync(path.join(dir, 'later.json'), 'utf8');
+    other = fs.readFileSync(path.join(dir, 'other.json'), 'utf8');
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
   const page = spawnSync(PYTHON, ['-c',
     'from ba_dashboard import render; import sys; '
@@ -61,7 +87,7 @@ async function board(t) {
   return page;
 }
 // What the source does when the save moves on: a fresh copy of the numbers.
-const deliver = page => page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), payload);
+const deliver = (page, data = payload) => page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), data);
 
 // Finite animations and transitions running on the page on screen, and the
 // blocks on it that have not arrived. Loops (a ping, a belt) are not
@@ -172,4 +198,124 @@ test('going somewhere new and opening a site still arrive', async t => {
   const shop = await motion(page);
   assert.ok(shop.moving.some(m => /^opacity on div\.sitehead\.rv\.in$/.test(m)), shop.moving.join('\n'));
   assert.ok(shop.moving.filter(m => /^opacity on /.test(m)).length > 2, shop.moving.join('\n'));
+});
+
+// --- a refresh draws the page on screen -------------------------------------
+
+// The page on screen, as the reader sees it once it is painted (a section
+// off screen has no text until then), and the same page after a full redraw
+// of the numbers it now has: the two must read the same.
+const onScreen = page => page.evaluate(async () => {
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const host = [...document.querySelectorAll('.page')].find(p => !p.hidden);
+  return `${host.id}\n${host.innerText}`;
+});
+async function asRedrawn(page) {
+  const shown = await onScreen(page);
+  await page.evaluate(() => renderAll());
+  return [shown, await onScreen(page)];
+}
+
+test('a refresh on Today draws Today; every other page waits for its visit and opens on the new numbers', async t => {
+  const page = await board(t);
+  // Every view seen once, Company last on Payroll and Supply on Checks.
+  await page.evaluate(() => {
+    for (const [p, v] of [['growth', 'market'], ['supply', 'orders'], ['supply', 'checks'], ['company', 'results'], ['company', 'payroll']]) {
+      showPage(p); showSub(p, v);
+    }
+  });
+  await page.click('#nav a[data-id="today"]');
+  await settle(page);
+  // Blocks of each page as they stand now, to tell a redraw from none.
+  const mark = () => page.evaluate(() => {
+    window.calmOld = {kpis: '#kpis > *', payroll: '#secPayroll > *', portfolio: '#portfolio tbody',
+      stock: '#stockHead > *', market: '#market > *'};
+    for (const k in calmOld) calmOld[k] = document.querySelector(calmOld[k]);
+  });
+  const standing = () => page.evaluate(() =>
+    Object.fromEntries(Object.entries(calmOld).map(([k, el]) => [k, !!el && el.isConnected])));
+  await mark();
+  assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/);
+
+  // (a) The refresh redraws Today and leaves the other pages' markup alone.
+  await deliver(page, later);
+  assert.match(await page.locator('#kpis').innerText(), /25,000/, 'Today has the new cash');
+  assert.deepEqual(await standing(), {kpis: false, payroll: true, portfolio: true, stock: true, market: true});
+  assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/, 'Payroll waits for its visit');
+
+  // (b) By the nav: Company opens on Payroll, drawn for the new numbers.
+  await page.click('#nav a[data-id="company"]');
+  assert.match(await page.locator('#secPayroll').textContent(), /\b4 people\b/);
+  assert.deepEqual(await motion(page), still, 'a view seen before comes back already arrived');
+  let [shown, redrawn] = await asRedrawn(page);
+  assert.equal(shown, redrawn);
+  await page.click('#nav a[data-id="today"]');
+
+  // By a section link on Today: the profit tile opens Company > Results.
+  await mark();
+  await deliver(page);
+  assert.equal((await standing()).portfolio, true);
+  await page.click('#kpis a[data-go="secDaily"]');
+  assert.equal(await page.evaluate(() => viewOf(page)), 'company/results');
+  assert.equal((await standing()).portfolio, false, 'the portfolio was drawn on the way in');
+  [shown, redrawn] = await asRedrawn(page);
+  assert.equal(shown, redrawn);
+
+  // By Back: Supply was the page before Today.
+  await page.click('#nav a[data-id="supply"]');
+  await page.click('#nav a[data-id="today"]');
+  await mark();
+  await deliver(page, later);
+  assert.equal((await standing()).stock, true);
+  await page.goBack();
+  await page.waitForFunction(() => page === 'supply');
+  assert.equal((await standing()).stock, false, 'the checks were drawn on the way back');
+  [shown, redrawn] = await asRedrawn(page);
+  assert.equal(shown, redrawn);
+
+  // A site opened from a finding on Today: its page, and the portfolio under it.
+  await page.click('#nav a[data-id="today"]');
+  await mark();
+  await deliver(page);
+  await page.locator('#alerts .find a[href^="#site/"]').first().click();
+  await page.waitForFunction(() => siteOpen);
+  assert.equal((await standing()).portfolio, false);
+  [shown, redrawn] = await asRedrawn(page);
+  assert.equal(shown, redrawn);
+
+  // And Today itself, after a refresh made on Supply.
+  await page.click('#nav a[data-id="supply"]');
+  await mark();
+  await deliver(page, later);
+  assert.equal((await standing()).kpis, true, 'Today waits for its visit too');
+  await page.click('#nav a[data-id="today"]');
+  assert.match(await page.locator('#kpis').innerText(), /25,000/);
+  [shown, redrawn] = await asRedrawn(page);
+  assert.equal(shown, redrawn);
+
+  // (c) Another company is drawn whole, at once.
+  await mark();
+  await deliver(page, other);
+  assert.deepEqual(await standing(), {kpis: false, payroll: false, portfolio: false, stock: false, market: false});
+});
+
+test('a view drawn on its visit is wired once', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('company'); showSub('company', 'results'); showPage('today'); });
+  await deliver(page, later);
+  // Drawn on the way in, after the boot and the refresh have each wired the board.
+  await page.click('#nav a[data-id="company"]');
+  const chain = page.locator('#portfolio tr.chain').first();
+  await chain.click();
+  assert.equal(await chain.evaluate(tr => tr.classList.contains('open')), true, 'one click opens the chain');
+  await chain.click();
+  assert.equal(await chain.evaluate(tr => tr.classList.contains('open')), false, 'and one closes it');
+  // Today, drawn on its visit: a severity counter hides its findings, once.
+  await deliver(page);
+  await page.click('#nav a[data-id="today"]');
+  const sev = page.locator('#alertHead .sev[data-kind]').first();
+  await sev.click();
+  assert.equal(await sev.evaluate(s => s.classList.contains('off')), true);
+  await sev.click();
+  assert.equal(await sev.evaluate(s => s.classList.contains('off')), false);
 });

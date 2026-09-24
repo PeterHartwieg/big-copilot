@@ -13220,7 +13220,7 @@ function nameLine(rid, slug){
   const again = () => { drawStock(); drawLogistics(); drawSite(); wireAll(); };
   if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
-    .then(data => { if(data){ D = data; renderAll(); } else again(); })
+    .then(data => { if(data){ D = data; renderCalm(); } else again(); })
     .catch(again);
 }
 const feedFit = (need, have) => {
@@ -13309,7 +13309,7 @@ function syncLocalNames(view){
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
-    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderAll(); } })
+    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderCalm(); } })
     .catch(() => {});
 }
 
@@ -18765,15 +18765,24 @@ function drawDifficulty(hadFocus = null){
 
 /*__WIKI_SCRIPT__*/
 
+/* Everything the board draws from the numbers. A live refresh of the same
+   company (renderCalm(), with calmLazy set) draws only the page and view on
+   screen, plus everything outside the pages; the rest is marked out of date
+   (PAGE_DRAWS, pageStale) and drawn as it is opened (drawStale()). Every
+   other caller -- the first boot, another company or save -- draws it all. */
+let calmLazy = false;
 function renderAll(){
   /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
   const diffFocus = fvChipFocus();
+  const here = calmLazy ? viewOf(page) : null;
   indexTrends();
-  drawMast(); drawKpis(); drawAlerts();
-  drawChart(); drawPortfolio(); drawSitePicker(); drawSite();
-  drawLogistics(); drawStock(); drawFlow();
-  drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
-  drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawOptimizeStaffing(); drawFooter();
+  drawMast();
+  PAGE_DRAWS.forEach(row => {
+    if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
+    pageStale.delete(row);
+    row[1]();
+  });
+  drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
   refreshCityMaps();
@@ -18809,14 +18818,16 @@ function calmSettle(skip, only){
     try{ a.finish(); }catch(e){}
   });
 }
-function renderCalm(){
+/* `lazy`: the same company's next numbers, so only what is on screen is
+   drawn now (see renderAll()); false for another company or save. */
+function renderCalm(lazy = true){
   let was;
   try{ was = new Set(document.getAnimations()); }catch(e){ was = new Set(); }
   /* What the rebuild inserts, read back synchronously below. */
   const drawn = new MutationObserver(() => {});
   drawn.observe(document.body, {childList: true, subtree: true});
-  rvCalm = true;
-  try{ renderAll(); } finally { rvCalm = false; }
+  rvCalm = true; calmLazy = lazy;
+  try{ renderAll(); } finally { rvCalm = false; calmLazy = false; }
   const fresh = new Set(drawn.takeRecords().flatMap(r => [...r.addedNodes]));
   drawn.disconnect();
   calmSettle(was);
@@ -18871,12 +18882,59 @@ Object.entries(SUBS).forEach(([id, sv]) => {
   sub[id] = sv.items.some(([k]) => k === saved) ? saved : sv.start;
 });
 
+/* What each draw function fills, in the order renderAll() draws them: the
+   page or view ("page/view") its markup is on, space-separated when it is on
+   two, or "" for one a live refresh always draws. Read from what each writes
+   into and what other code reads back, not from the names:
+   - drawLogistics() is Today's too: its change checklist paints the Plan
+     imports card there.
+   - drawSite() is drawn every time: it hides the site panel when no site is
+     open (cheap), draws the open one where it is (on Company > Results, the
+     view on screen whenever a site is open), and resets the factory view the
+     site kinds are read from (spViewCache).
+   - drawOptimizeStaffing() names on its card the site the search and Ask
+     the board open, from any page; drawFindLocation() is a line of text.
+   Everything outside the pages -- the masthead, the footer, the difficulty
+   chips, the city maps (the location-map dialog opens from any page), the
+   search index -- is drawn by renderAll() itself on every refresh. Each row
+   calls its function by name when it runs, so a test that swaps one out is
+   heard. */
+const PAGE_DRAWS = [
+  ["today", () => drawKpis()], ["today", () => drawAlerts()],
+  ["company/results", () => drawChart()], ["company/results", () => drawPortfolio()],
+  ["company/results", () => drawSitePicker()], ["", () => drawSite()],
+  ["today supply/orders", () => drawLogistics()], ["supply/checks", () => drawStock()], ["supply/map", () => drawFlow()],
+  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
+  ["company/products", () => drawProducts()], ["company/payroll", () => drawPayroll()],
+  ["company/milestones", () => drawGoals()], ["", () => drawFindLocation()], ["", () => drawOptimizeStaffing()],
+];
+/* The rows a live refresh left out: drawn for older numbers than D. */
+const pageStale = new Set();
+/* The page, with its view where it has views: "today", "company/payroll". */
+const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
+/* Draw what a live refresh left out of date on the page's view about to show,
+   before it shows (showPage(), showSub()). It is drawn while still hidden, as
+   the refresh would have drawn it, so it arrives the same way: a block rebuilt
+   where an arrived block stood is simply there (rvSettle), and a view never
+   visited yet still arrives when it opens. */
+function drawStale(pageId){
+  if(!pageStale.size || !hasData()) return;
+  const view = viewOf(pageId);
+  const due = PAGE_DRAWS.filter(row => pageStale.has(row) && row[0].split(" ").includes(view));
+  if(!due.length) return;
+  const had = new Set($$(".rv"));
+  due.forEach(row => { pageStale.delete(row); row[1](); });
+  $$(".rv:not(.in)").forEach(el => { if(!had.has(el) && el.closest("[hidden]")) rvSettle(el); });
+  wireAll();
+}
+
 function showSub(pageId, id){
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   /* A site's page lives on Results; any other Company view takes it down. */
   if(pageId === "company" && id !== "results") siteShut();
   sub[pageId] = id;
+  drawStale(pageId);
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
   /* The site panel is only on screen while a site is open, so it owns its own
      visibility and the sweep above is corrected by the panel itself. */
@@ -18900,6 +18958,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   const from = page;
   if(id !== "company") siteShut();
   page = id;
+  drawStale(id);
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
   remember(PAGE_KEY, id);
@@ -23136,6 +23195,10 @@ window.BigCopilotBoard = {
 };
 
 /* --- live refresh --------------------------------------------------- */
+/* Two payloads of one company: the same character and the same save name,
+   as each autosave of a game in play is. Anything else is a new board. */
+const sameCompany = (a, b) => !!(a && b && a.meta && b.meta)
+  && a.meta.character === b.meta.character && a.meta.save === b.meta.save;
 /* The save on disk only changes when the game writes one, so this polls a
    cheap stamp and pulls fresh numbers only when that stamp moves. */
 function startWatching(){
@@ -23153,11 +23216,15 @@ function startWatching(){
   SOURCE.watch({
     changed(data){
       const first = !D;
+      /* The same company's next numbers redraw what is on screen and leave the
+         rest to be drawn as it is opened; another company or save redraws it
+         all. */
+      const same = !first && sameCompany(D, data);
       D = data;
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      if(first) boot(); else renderCalm();
+      if(first) boot(); else renderCalm(same);
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
