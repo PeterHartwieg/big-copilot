@@ -422,7 +422,11 @@ test('every site gets its own address: namesakes at one address, and none at all
   b.context.history.pushState(null, '', '#site/fifthavenue-57b');
   b.move(0);
   assert.equal(b.site(), 'ba:street_fifthavenue#57b', 'the second site at an address opens itself, not its namesake');
-  assert.equal(b.context.siteBySlug('57-fifth-avenue'), null, 'the shared address opens neither');
+  // The bare shared address still opens one of them, the same one every time:
+  // the building's own key before a unit's.
+  assert.equal(b.context.siteBySlug('57-fifth-avenue'), SHOP);
+  b.context.D.businesses = data.businesses.slice().reverse();
+  assert.equal(b.context.siteBySlug('57-fifth-avenue'), SHOP, 'whatever the order');
 });
 
 test("a namesake's address does not hang on the order of the list, or on the other staying", () => {
@@ -441,6 +445,35 @@ test("a namesake's address does not hang on the order of the list, or on the oth
   b.context.history.pushState(null, '', before[1]);
   b.move(0);
   assert.equal(b.site(), 'ba:street_fifthavenue#57b');
+});
+
+test("no address takes another site's key slug, whatever the order", () => {
+  // "Mainstreet 5" comes out as mainstreet-5, which is also the slug of the
+  // key ba:street_mainstreet#5 -- a different site.
+  const x = {key: 'ba:street_mainstreet#5', name: 'X', address: '5 Main Street', status: 'retail'};
+  const y = {key: 'ba:street_elm#1', name: 'Y', address: 'Mainstreet 5', status: 'retail'};
+  for (const businesses of [[x, y], [y, x]]) {
+    const b = board({data: {businesses, homes: []}});
+    b.boot();
+    assert.equal(b.context.siteHref(x.key), '#site/5-main-street');
+    assert.equal(b.context.siteHref(y.key), '#site/elm-1', 'Y shows its key slug, not the one X owns');
+    assert.equal(b.context.siteBySlug('mainstreet-5'), x.key, "X's key slug always opens X");
+    assert.equal(b.context.siteBySlug('elm-1'), y.key);
+  }
+});
+
+test('two keys that slug the same are told apart, whatever the order', () => {
+  const p = {key: 'ba:street_a#1', name: 'P', address: '', status: 'retail'};
+  const q = {key: 'ba:street_a-1', name: 'Q', address: '', status: 'retail'};
+  const seen = [[p, q], [q, p]].map(businesses => {
+    const b = board({data: {businesses, homes: []}});
+    b.boot();
+    const hrefs = [p, q].map(x => b.context.siteHref(x.key));
+    assert.notEqual(hrefs[0], hrefs[1]);
+    hrefs.forEach((h, i) => assert.equal(b.context.siteBySlug(h.slice(6)), [p, q][i].key));
+    return hrefs.join(' ');
+  });
+  assert.equal(seen[0], seen[1]);
 });
 
 test('a history entry keeps what others stored on it; a new one starts clean', () => {

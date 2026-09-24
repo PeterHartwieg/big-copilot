@@ -9492,8 +9492,9 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
   letter-spacing:.06em;color:var(--ink-2);flex:none;
 }
 .find .what{font-weight:600;font-size:14px;color:var(--ink)}
-.find a.what{text-decoration:none}
-.find a.what:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.find button.what{appearance:none;-webkit-appearance:none;background:none;border:0;padding:0;margin:0;font-family:inherit;line-height:inherit;letter-spacing:inherit;text-align:left;cursor:pointer}
+.find button.what:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.find:focus-within .more{max-height:60px;opacity:1;margin-top:4px}
 .find .more{
   grid-column:3/5;max-height:0;overflow:hidden;opacity:0;font-size:12.5px;color:var(--ink-2);
   transition:max-height .28s ease,opacity .2s,margin .28s;margin:0;
@@ -12486,6 +12487,8 @@ function findingAmount(a){
    its kind's name so it is clear why it is down there. */
 const kindLabel = id => ((typeof ALERT_GROUPS !== "undefined" && ALERT_GROUPS.find(g => g.id === id)) || {}).label || id;
 const kindOff = a => alertGroupPrefs[a.group] === false;
+/* Numbers the ids that name a finding's button after its site. */
+let ssFindSeq = 0;
 function findingRow(a){
   const b = alertSite(a);
   const {what, more} = splitFinding(a);
@@ -12493,13 +12496,18 @@ function findingRow(a){
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   /* The name is a way to the site's own page; the rest of the row still opens
      the finding. A synthetic site ("3 shops") has no page and stays text. The
-     finding's own sentence is the row's link, so a keyboard reaches every
-     finding -- a synthetic one too -- without going through the name. */
+     finding's own sentence is the row's button, so a keyboard reaches every
+     finding -- a synthetic one too -- without going through the name; it says
+     whose finding it is to a screen reader, as the row shows it to the eye,
+     through a hidden copy of the name (the name cell itself also holds the
+     map button, whose own label would ride along). */
   const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
+  const n = ++ssFindSeq;
   return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
     <span class="site">${site}</span>
-    <a class="what" href="#${alertPage(a)}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</a>
+    <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</button>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
     <span class="more">${more}</span>` : ""}</div>`;
@@ -15118,6 +15126,7 @@ function drawSite(){
        portfolio it would have been reached from. */
     if(siteOpen){
       siteOpen = false; spArrived = null; siteFrom = null; siteFor = undefined;
+      drawPortfolio();
       if(page === "company") showPage("company", false, "replace");
     }
     return;
@@ -17137,10 +17146,11 @@ function openHash(h, historyMode = "none"){
    address as a slug. It is what the address bar shows while the site is open,
    so a reload reopens it and Back and Forward walk between sites. A home the
    player rents has one too; it opens from its map card.
-   The slug is unique: sites that share an address, and a site with no
-   address at all, take a slug of their key instead, so the order the save
-   lists them in decides nothing. A site with no key has no address and opens
-   as it always has, under #company. */
+   The slug is unique: sites that share an address, a site with no address at
+   all, and one whose address would take another site's key slug show their
+   own key's slug instead (siteSlugs() says how), so the order the save lists
+   them in decides nothing. A site with no key has no address and opens as it
+   always has, under #company. */
 const SITE_HASH = /^site\//;
 let siteFrom = null, siteFor, siteSlugsFor = [], siteSlugMap = {bySlug: new Map(), byKey: new Map()};
 const siteSlugText = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -17160,20 +17170,33 @@ function siteSlugs(){
     (data.businesses || []).forEach(b => take(b.key, b.address));
     (data.homes || []).forEach(h => take(h.key, h.address));
   }
-  /* An address two sites share belongs to neither: both take their key's slug,
-     so neither's address depends on which of them the save lists first, or on
-     the other one still being there. */
+  /* Every site's key slug is reserved first, so no address can take it and it
+     answers whatever else changes: fifthavenue-57 for ba:street_fifthavenue#57.
+     Two keys that come out the same carry a short hash of the key itself. */
+  const plain = key => siteSlugText(String(key).replace(/^ba:(street_)?/, "")) || "site";
+  const plains = new Map();
+  sites.forEach(([key]) => plains.set(plain(key), (plains.get(plain(key)) || 0) + 1));
+  const hash = key => { let h = 0x811c9dc5; for(const c of String(key)){ h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); };
+  const keySlug = key => plains.get(plain(key)) > 1 ? `${plain(key)}-${hash(key)}` : plain(key);
+  sites.forEach(([key]) => bySlug.set(keySlug(key), key));
+  /* The street address is the slug where it is one site's alone and names no
+     key. An address two sites share belongs to neither: both show their key's
+     slug, so neither's address depends on the order the save lists them in or
+     on the other still being there. None of this depends on order. */
   const shared = new Map();
-  sites.forEach(([, address]) => { if(address) shared.set(address, (shared.get(address) || 0) + 1); });
-  const keySlug = key => siteSlugText(String(key).replace(/^ba:(street_)?/, "")) || "site";
+  sites.forEach(([key, address]) => { if(address) shared.set(address, (shared.get(address) || []).concat([key])); });
   sites.forEach(([key, address]) => {
-    let slug = address && shared.get(address) === 1 ? address : keySlug(key);
-    for(let n = 2, base = slug; bySlug.has(slug); n++) slug = `${base}-${n}`;
+    const own = address && shared.get(address).length === 1 && !bySlug.has(address);
+    const slug = own ? address : keySlug(key);
     bySlug.set(slug, key); byKey.set(key, slug);
   });
-  /* A key's own slug always answers too: a link written while the address was
-     shared still opens its site once the other has gone. */
-  sites.forEach(([key]) => { const k = keySlug(key); if(!bySlug.has(k)) bySlug.set(k, key); });
+  /* A bare address two sites share still opens one of them, the same one
+     every time: the shorter key (a building's own, before any unit in it),
+     then the lower. The page then shows that site's own slug. */
+  shared.forEach((keys, address) => {
+    if(keys.length < 2 || bySlug.has(address)) return;
+    bySlug.set(address, keys.slice().sort((x, y) => x.length - y.length || (x < y ? -1 : x > y ? 1 : 0))[0]);
+  });
   siteSlugsFor = of;
   return siteSlugMap = {bySlug, byKey};
 }
@@ -17232,6 +17255,7 @@ function openSite(key, scroll = true, finding = null, historyMode = "push"){
   showPage("company", scroll, historyMode);
   showSub("company", "results");
   drawPortfolio();
+  siteAt = location.hash;
   return true;
 }
 /* Take the site's page down without going anywhere: the caller is on its way
@@ -17251,14 +17275,21 @@ function closeSite(chain = null){
     chain !== null && typeof CSS !== "undefined" ? `#portfolio tr.chain[data-chain="${CSS.escape(chain)}"]` : null);
 }
 /* The address bar follows the open site: a live refresh can change its slug
-   (a second site moving in at its address), and a key's own slug, still
-   answered, is shown as the site's address once it has opened. The entry is
-   replaced, never added, and keeps its state. */
+   (a second site moving in at its address), and a key's slug or a shared
+   address, both answered, give way to the site's own once it has opened. It
+   only ever rewrites an address that is this site's -- the one it was shown
+   at, or one that opens it or nothing -- never one that belongs to another
+   site. The entry is replaced, never added, and keeps its state. */
+let siteAt = "";
 function siteSyncAddress(){
   if(!siteOpen || page !== "company") return;
-  const want = siteHref(siteKey);
-  if(!want || location.hash === want) return;
-  try{ history.replaceState(siteHistoryState(true), "", want); }catch(e){}
+  const want = siteHref(siteKey), now = location.hash;
+  if(!want || now === want || !SITE_HASH.test(now.slice(1))) return;
+  let slug = now.slice(6);
+  try{ slug = decodeURIComponent(slug); }catch(e){}
+  const opens = siteBySlug(slug);
+  if(now !== siteAt && opens !== null && opens !== siteKey) return;
+  try{ history.replaceState(siteHistoryState(true), "", want); siteAt = want; }catch(e){}
 }
 /* A #site/ hash, typed, reloaded or replayed. An address that no longer
    answers -- a site given up, a link from another save -- lands on the
@@ -18002,25 +18033,27 @@ function silencedLine(){
   const b = line.querySelector("b");
   if(b) b.textContent = n + (n === 1 ? " finding silenced" : " findings silenced");
 }
+/* A silenced row folds away, and leaves the Tab order with it. */
+function findGone(f, on){ f.classList.toggle("gone", on); f.inert = on; }
 const bindFinds = once(() => {
   /* Capture phase: the mark sits inside the row's link, and the row must not
      follow the click. */
   on("click", ".find .mark", (m, e) => {
     e.preventDefault(); e.stopPropagation();
-    const f = m.closest(".find"); f.classList.add("gone");
+    const f = m.closest(".find"); findGone(f, true);
     if(f.dataset.id){ silencedIds.add(f.dataset.id); saveSilenced(); }
     silencedLine();
   }, true);
   on("click", ".silenced a", (a, e) => {
     e.preventDefault();
     silencedIds.clear(); saveSilenced();
-    $$(".find.gone").forEach(f => f.classList.remove("gone"));
+    $$(".find.gone").forEach(f => findGone(f, false));
     silencedLine();
   });
 });
 function wireFinds(){
   bindFinds();
-  $$(".find[data-id]").forEach(f => f.classList.toggle("gone", silencedIds.has(f.dataset.id)));
+  $$(".find[data-id]").forEach(f => findGone(f, silencedIds.has(f.dataset.id)));
   silencedLine();
 }
 

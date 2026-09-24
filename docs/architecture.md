@@ -354,19 +354,25 @@ is one of:
 A site's page is the site panel (`drawSite()` in `#secDetail`) shown on its own on Company:
 while it is up, `#pageCompany` carries `ss-siteup` and the rest of Results and the Company
 views step aside. The address is the street address as a slug, built by `siteSlugs()` over
-`D.businesses` and then `D.homes`. Sites that share an address, and a site with no address,
-take a slug of their key instead, so no site's address depends on the order of the list or on
-a namesake still being there; a key's own slug is always answered as well, so a link written
-while an address was shared still opens its site. A site with an empty key has no address and
-opens under `#company` as before. `siteSyncAddress()` keeps the address bar on the open site's
-current slug after a refresh, replacing the entry and keeping its state.
+`D.businesses` and then `D.homes`. Every site's key slug (`fifthavenue-57` for
+`ba:street_fifthavenue#57`; two keys that come out the same carry a short hash of the key) is
+reserved first and always answers. The street address is the site's slug where it is that
+site's alone and names no key; sites that share an address show their key slugs, and the bare
+shared address still opens one of them, the shorter key, then the lower. None of it depends on
+the order of the lists. A site with an empty key has no address and opens under `#company` as
+before. `siteSyncAddress()` keeps the address bar on the open site's own slug (after a
+refresh, or after opening through a key slug or a shared address), replacing the entry and
+keeping its state, and only ever rewrites an address that is this site's: the one it was
+shown at, or one that opens it or nothing.
 
 **`siteHref(key)`** is the one way to link to a site: it returns `#site/<address>`, or `""` for
 a site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that
 link (`.ss-sl`), and a capture-phase listener, `siteLinkClick()`, turns a plain click on any
 `a[href^="#site/"]` into `openSite()`. It does not stop the click, so anything that closes on
 a click elsewhere still hears it; a row a name sits in (a finding, a portfolio row, the
-picker, the map card's "its page") asks `inSiteLink(e)` and leaves that click alone. A
+picker, the map card's "its page") asks `inSiteLink(e)` and leaves that click alone. A finding
+row's own control is its sentence, a `<button class="what">` labelled by a hidden copy of the
+site's name and its own text, so every finding is reached from the keyboard; a silenced row is `inert`. A
 modified click is left to the browser and opens the address in a new tab.
 
 `openSite(key, scroll, finding, historyMode)` writes the address, `closeSite(chain)` goes back

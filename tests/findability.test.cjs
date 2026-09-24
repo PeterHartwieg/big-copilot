@@ -369,7 +369,7 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
       drawAlerts(); showPage('today');
       document.activeElement?.blur();
     }, FINDING);
-    // Tab from the top of the page to the first finding: its sentence is a link.
+    // Tab from the top of the page to the first finding: its sentence is a button.
     const tabTo = async test => {
       for (let i = 0; i < 80; i++) {
         await page.keyboard.press('Tab');
@@ -382,7 +382,14 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     assert.equal(await page.evaluate(() => [document.activeElement.className,
       document.activeElement.closest('.find').dataset.id].join(' ')), 'what c1',
       'the synthetic row has its sentence to focus, with nothing before it');
-    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'BUTTON',
+      'a button: no link, so no new-tab expectation to break');
+    // Its name says whose finding it is, and the row opens its detail as it
+    // does under the pointer.
+    assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with demands only you can meet/}).count(), 1);
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('#alertSection .find[data-id="c1"] .more').evaluate(m => getComputedStyle(m).opacity), '1');
+    await page.keyboard.press('Space');
     assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${HERE} ${KEY}`);
     assert.equal(await page.locator('#sp-crew.xl-arrived').count(), 1, 'the Crew that shows the demand rings');
     // A site's row: the name first, then the finding.
@@ -392,8 +399,44 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     // Then the map button beside it, then the finding itself.
     assert.ok(await tabTo(() => document.activeElement.closest('.find')?.dataset.id === 'loss1'
       && document.activeElement.className === 'what'));
+    assert.equal(await page.getByRole('button', {name: /^HART\. Gifts: Lost \$200/}).count(), 1);
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => [location.hash, spArrived].join(' ')), `${HERE} loss1`);
+    // A silenced row leaves the Tab order with its fold.
+    await page.evaluate(() => { showPage('today'); document.activeElement?.blur(); });
+    await page.locator('#alertSection .find[data-id="c1"] .mark').click();
+    assert.equal(await page.locator('#alertSection .find[data-id="c1"]').evaluate(f => f.inert), true);
+    await page.evaluate(() => document.activeElement?.blur());
+    const stops = [];
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press('Tab');
+      stops.push(await page.evaluate(() => document.activeElement.closest('.find')?.dataset.id || ''));
+    }
+    assert.ok(!stops.includes('c1'), 'Tab never lands in a silenced row');
+    assert.ok(stops.includes('loss1'), 'and still reaches the rest');
+  } finally { await page.close(); }
+});
+
+test('a bare address two sites share opens one of them, and the bar then shows its own', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); location.hash = '#site/10-second-avenue'; });
+    await page.waitForFunction(() => siteOpen);
+    // ba:street_broadway#2 is the shorter key.
+    assert.equal(await page.evaluate(() => [siteKey, location.hash].join(' ')), `${OTHER} ${THERE}`);
+  } finally { await page.close(); }
+});
+
+test("the address bar is never rewritten to over another site's address", async () => {
+  const page = await board();
+  try {
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
+    // Something else put the other site's address in the bar; a redraw leaves it.
+    await page.evaluate(to => { history.replaceState(history.state, '', to); drawSite(); }, THERE);
+    assert.equal(await page.evaluate(() => location.hash), THERE);
+    // An address that opens nothing is this page's to correct.
+    await page.evaluate(() => { history.replaceState(history.state, '', '#site/nowhere'); drawSite(); });
+    assert.equal(await page.evaluate(() => location.hash), HERE);
   } finally { await page.close(); }
 });
 
@@ -460,6 +503,7 @@ test("another character's save closes the page, its crumb and its evidence with 
     await page.evaluate(() => { D = {...D, meta: {...D.meta, character: 'someone-else'}}; drawSite(); });
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')), '#company false  ');
     assert.equal(await page.locator('#secPortfolio').isVisible(), true);
+    assert.equal(await page.locator('#portfolio tr.kid.on').count(), 0, 'no portfolio row is lit as the open site');
   } finally { await page.close(); }
 });
 
