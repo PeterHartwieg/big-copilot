@@ -448,7 +448,7 @@ the two differ.
 **What is on the branch**
 
 - Mod 0.2.0 (`mod/BigCopilotLink/`), review-green: write endpoints for uniforms, imports and schedule,
-  plus undo and dry runs. It is built on the Mac with the session scratchpad's `macbuild.sh`: scp the
+  plus undo and dry runs. It is built on the Mac with `research/macbuild-write-back.sh` in the main checkout (local): scp the
   Scripts, Locales and manifest, run a headless Unity build, fetch new `.meta` files back, then
   restore the Mac checkout. The DLL is installed in Windows `ModsLocal/BigCopilotLink`, with the
   Workshop copy disabled by Peter for testing.
