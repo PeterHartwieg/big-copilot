@@ -345,9 +345,9 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await page.setViewportSize({width: 1280, height: 1000});
     // The browser drops focus from the hidden chip at its next rendering step,
     // which a loaded machine can reach after the popover has closed: wait for
-    // both (a chip that kept focus would time this out).
+    // both, then say where focus went.
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on')
-      && document.activeElement === document.body);
+      && document.activeElement !== document.querySelector('#clock .fv-diff'), null, {timeout: 3000});
     const s = await state(page);
     assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
     assert.deepEqual(errors, []);

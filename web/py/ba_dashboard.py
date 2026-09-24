@@ -9660,6 +9660,12 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .kpi:hover::before{opacity:1}
 .kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .kpi .v{font-family:"IBM Plex Mono",monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.05}
+/* The figure is sized to its tile: 30 px wherever the tile has room (every
+   desk width with a seven-figure amount), and smaller only where a tile is
+   too narrow for twelve characters of mono ("$123,456,789", "-$1,234,567"),
+   which at 13cqi take about 91% of its width. */
+.kpi{container-type:inline-size}
+.kpi .v{font-size:min(30px,13cqi)}
 .kpi .row{display:flex;align-items:center;gap:10px;min-height:20px}
 .chip{
   display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
@@ -10944,9 +10950,10 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .order-item.just-marked::after{display:none}
 }
 
-/* Four tiles side by side need about 975 px for a seven-figure amount on
-   each ($3,667,464 cash on a real save) and about 1,040 px for eight;
-   narrower, they pair up two by two. The phone's own tile rules follow. */
+/* Four tiles side by side need about 975 px for a seven-figure amount at the
+   full 30 px ($3,667,464 cash on a real save) and about 1,040 px for eight;
+   narrower, they pair up two by two, and a longer figure still shrinks to
+   its tile (.kpi .v above). The phone's own tile rules follow. */
 @media (max-width:1040px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kpi{min-width:0}
@@ -10958,7 +10965,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 @media (max-width:640px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:24px}
   .kpi{padding:14px 14px 12px;min-width:0}
-  .kpi .v{font-size:clamp(17px,5.4vw,24px)}
+  .kpi .v{font-size:min(24px,13cqi)}
   .kpi .row{flex-wrap:wrap;gap:4px 8px}
   .moves{grid-template-columns:minmax(0,1fr);gap:12px}
   #alertSection .find{grid-template-columns:18px minmax(0,1fr) auto 20px;gap:4px 10px}

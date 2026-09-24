@@ -309,3 +309,31 @@ test('between the phone and the desk the tiles pair up before an amount would cl
     } finally { await page.close(); }
   }
 });
+
+test('a figure of ten to twelve characters fits its tile at every width, and a desk keeps the full 30 px', async () => {
+  const AMOUNTS = ['$1,234,567', '$87,654,321', '-$1,234,567', '$123,456,789'];
+  for (const width of [390, 700, 1041, 1100, 1440]) {
+    const page = await today(width);
+    try {
+      const m = await page.evaluate(AMOUNTS => {
+        const vs = [...document.querySelectorAll('#kpis .kpi .v')];
+        vs.forEach((v, i) => { v.textContent = AMOUNTS[i]; });
+        return {
+          spill: vs.filter(v => v.scrollWidth > v.clientWidth || v.closest('.kpi').scrollWidth > v.closest('.kpi').clientWidth)
+            .map(v => `${v.textContent} ${v.scrollWidth}/${v.clientWidth}`),
+          sizes: vs.map(v => parseFloat(getComputedStyle(v).fontSize)),
+          scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+        };
+      }, AMOUNTS);
+      assert.deepEqual(m.spill, [], `${width}: every figure fits its tile`);
+      assert.equal(m.scroll, m.client, `${width}: no sideways scroll`);
+      if (width === 1440) assert.deepEqual(m.sizes, [30, 30, 30, 30], 'a desk keeps the full size');
+    } finally { await page.close(); }
+  }
+  // A seven-figure amount at 1600 px is the size it always was.
+  const page = await today(1600);
+  try {
+    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('#kpis .kpi .v')]
+      .map(v => parseFloat(getComputedStyle(v).fontSize))), [30, 30, 30, 30]);
+  } finally { await page.close(); }
+});
