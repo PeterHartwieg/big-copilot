@@ -822,7 +822,7 @@ and dims the rest; clicking scrolls there.
   itself, with a red dot on a day in the red. The fourth tile carries the three ceilings a
   busy hour can run into — the door, the counters or workstations, the people on — with
   the binding one lit.
-- **Standards.** The four parts of satisfaction as an equaliser against the 80 line the
+- **Satisfaction.** The four parts of satisfaction as an equaliser against the 80 line the
   game marks good at. A shop adds one lamp an amenity its type is asked about: lit for one
   found in place, struck for one looked for and missed, and dashed for one the game has
   not scored, which is every lamp until customers have walked in. The second row is the
@@ -831,12 +831,12 @@ and dims the rest; clicking scrolls there.
   An office is never asked about bathrooms, music or uniforms, so it draws the bars alone
   and its workstations beside them, one square a desk, filled while somebody is posted at
   it at the busiest hour.
-- **Pull** (a shop). Promotion against the game's own 100 cap, split into what the street
+- **Promotion** (a shop). Foot traffic and marketing against the game's own 100 cap, split into what the street
   brings and what campaigns add, with security and how many shoppers fit inside. A demand
   wave running over the shop adds a bar for the share of its takings riding on the wave
   and a pip a day left; with no baseline to measure the wave against, the bar is hatched
   rather than guessed.
-- **Hours.** The two things the grid can say that a daily total cannot are chips under it:
+- **Customers by hour.** The two things the grid can say that a daily total cannot are chips under it:
   what the ceiling costs, with the fix, and what idle hours cost. The idle chip is the
   site's *Overstaffed hours* line: the whole week's spare staff-hours, hours and wages.
   Hovering a chip picks its own hours out of the grid.
@@ -938,7 +938,7 @@ attention here* list, and each finding pulses the line it is about.
   no standing import — gets a row of its own, nothing on hand in red, so its absence reads
   as plainly as a shortage. A line nothing
   draws on sleeps instead of showing cover, because there is nothing for it to run out
-  against. The column beside the rail is what to do about it — the units to bring in by
+  against, and reads as *Idle stock*, the name the Checks view and the finding use too. The column beside the rail is what to do about it — the units to bring in by
   hand before the shelf empties, or the order to raise — and the *Weekly order* column
   names the factory instead where the goods are made in-house rather than imported.
 - **Feeds.** One row a site that draws on this depot, longest bar first, with what it

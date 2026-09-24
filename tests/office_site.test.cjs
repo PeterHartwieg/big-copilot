@@ -102,7 +102,7 @@ async function theatre() {
   return page;
 }
 
-const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Hours'}).locator('.why').getAttribute('data-tip');
+const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Customers by hour'}).locator('.why').getAttribute('data-tip');
 const capChip = page => page.locator('#sitePanel .sp-hchip.cap').getAttribute('data-tip');
 
 test('an office reads its grid as staffed workstations, with the finding and its money', async () => {
