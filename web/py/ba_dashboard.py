@@ -2736,6 +2736,10 @@ def _supply(
     shipped = collections.defaultdict(lambda: collections.defaultdict(float))
     received = collections.defaultdict(lambda: collections.defaultdict(float))
     by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    # What left a site and what reached it, day by day and gross: _parked()
+    # needs a factory's forwarding apart from what reached it the same day.
+    out_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    in_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     round_days = collections.defaultdict(set)
     inbound_days = collections.defaultdict(set)
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -2753,9 +2757,11 @@ def _supply(
                     continue
                 if amount < 0:
                     shipped[key][entry["itemName"]] -= amount
+                    out_by_day[key][entry["itemName"]][when] -= amount
                     round_days[key].add(when)
                 elif amount > 0:
                     received[key][entry["itemName"]] += amount
+                    in_by_day[key][entry["itemName"]][when] += amount
                     inbound_days[key].add(when)
                 by_day[key][entry["itemName"]][when] += amount
 
@@ -3154,6 +3160,13 @@ def _supply(
         "shipped": shipped_per_day,
         "received": received_per_day,
         "byDay": lambda key, item: by_day[key][item],
+        "outByDay": lambda key, item: out_by_day[key][item],
+        "inByDay": lambda key, item: in_by_day[key][item],
+        # A shop listing the item sells it, and so does any site whose line
+        # for it shows sales, whatever its type.
+        "sells": lambda key, item: key in index and (
+            sold.get(key, {}).get(item, 0) > 0
+            or (businesses[index[key]]["status"] == "retail" and item in sold.get(key, {}))),
         "roundDays": lambda key: round_days.get(key, set()),
     }
     factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
@@ -3565,6 +3578,63 @@ def _ceil_hundred(value: float) -> int:
     return int(math.ceil(value / 100.0) * 100)
 
 
+def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
+    """What each factory sent, day by day, to depots where nothing uses `slug`.
+
+    A depot is idle for the item where no shelf there sells it and every
+    route it passes the item on by leads to another idle site; one with no
+    such route must have logged none of it leaving in the window. A factory
+    never is. An idle depot is clean for a factory only where that factory is
+    its sole routed source of the item and it imports none: only then is what
+    it received the factory's. A factory's add-back on a day is what it sent,
+    up to what its clean idle depots received that day. It is read net for the
+    whole window, as before, where it also feeds an idle depot that is not
+    clean (another source fills it), or imports the item itself (what it sent
+    on may have been that import), or is fed the item by more than one
+    routed source (what it sent on may not have been the depot's).
+
+    This assumes a send and its receipt carry the same dayOfDelivery. The
+    routes are today's while the log is the week's, so a route changed
+    mid-week is a known limit. A leaf depot that shipped the item once early
+    in the week stays not idle all window, and its factory is read net: a
+    safe miss. An import contract gone from importPartnerships that still
+    delivered mid-week at the factory or its depot is not seen by the import
+    guards, and that one is not safe: it can add back up to what the factory
+    sent. A paused contract that still holds an amount counts as an import,
+    so its factory or depot reads net: a safe miss. Returns {factory: {day: amount}}.
+    """
+    def idle(site, seen=frozenset()):
+        if site not in index or site in machines or flow["sells"](site, slug):
+            return False
+        onward = _in_order({dest for dest, item, _ in flow["edges"].get(site, []) if item == slug})
+        if not onward:
+            return not any(flow["outByDay"](site, slug).values())
+        return all(dest in seen or idle(dest, seen | {site}) for dest in onward)
+
+    sources = collections.defaultdict(set)
+    routes = collections.defaultdict(set)
+    for source, legs in flow["edges"].items():
+        for dest, item, _ in legs:
+            if item == slug:
+                sources[dest].add(source)
+                if source in machines:
+                    routes[source].add(dest)
+    added = collections.defaultdict(dict)
+    for factory in _in_order(routes):
+        if (factory, slug) in flow["imports"] or len(sources[factory]) > 1:
+            continue
+        idle_at = [dest for dest in _in_order(routes[factory]) if idle(dest)]
+        clean = [dest for dest in idle_at
+                 if sources[dest] == {factory} and (dest, slug) not in flow["imports"]]
+        if not clean or len(clean) < len(idle_at):
+            continue
+        for day, out in sorted(flow["outByDay"](factory, slug).items()):
+            amount = min(out, sum(flow["inByDay"](dest, slug).get(day, 0.0) for dest in clean))
+            if amount > 0:
+                added[factory][day] = amount
+    return added
+
+
 def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tuple:
     """What each depot imports a week, and what leaves it for the shops.
 
@@ -3609,6 +3679,21 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
     # and the factory's seven. What the factories took that day comes off what
     # the depot sent that day; only a remainder is the shops', and a remainder
     # too small to size an order on is nothing.
+    # One exception to reading a factory's intake net: what it sent that day
+    # to a depot where nothing uses the item is added back (_parked()).
+    # Netted, Factory Jewelry filling Jewelry Distrib. with metal bands it
+    # never ships read as 5,000 a week to the shops.
+    parked = {}
+
+    def intake(fkey, slug):
+        got = flow["byDay"](fkey, slug)
+        if slug not in parked:
+            parked[slug] = _parked(flow, index, machines, slug)
+        extra = parked[slug].get(fkey)
+        if not extra:
+            return got
+        return {d: got.get(d, 0.0) + extra.get(d, 0.0) for d in set(got) | set(extra)}
+
     depot_other = collections.defaultdict(dict)
     pairs = set(flow["imports"]) | {
         (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
@@ -3621,7 +3706,7 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
             continue
         sent = flow["byDay"](depot, slug)
         taken = [
-            flow["byDay"](fkey, slug)
+            intake(fkey, slug)
             for fkey in machines
             if flow["targets"].get((fkey, slug), (0, None))[1] == depot
         ]
