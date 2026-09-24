@@ -2008,8 +2008,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                if opened < e.get("dayNumber", 0) < day and e.get("totalCustomers", 0) >= 1]
     trade_window = trading[-STOCK_COVER_DAYS:]
     week_trading = sum(1 for e in trading if e.get("dayNumber", 0) >= day - 7)
-    # The days of the last seven the site has been open, its opening day not counted.
-    open_days = min(7, max(1, day - opened - 1))
+    # The days of the last seven since the site first traded: the days before
+    # it (the opening day, an empty day or two) are no week it could sell in.
+    first_trade = trading[0].get("dayNumber", day - 7) if trading else day - 7
+    open_days = min(7, max(1, day - first_trade))
     trade_sold = collections.Counter()
     for entry in trade_window:
         for sale in save.items(entry.get("itemSales")):
@@ -3678,18 +3680,22 @@ def _supply(
                         [index[key], round(rate), round(line["units"] / rate, 1)])
     for (key, item), row in need_rows.items():
         if (row["target"] or (key, item) in imports or index[key] in row["madeAt"]
-                or not row["perDay"]):
+                or (key, item) in wholesale or not row["perDay"]):
             continue
         units = held.get(key, {}).get(item, 0)
         unfed_by_item[item].append([index[key], round(row["perDay"]), round(units / row["perDay"], 1)])
     # And a site whose own plans send an item on to shelves or machines while
-    # nothing brings it there: no top-up, no import, no line of its own that
-    # makes it. Its plans carry what they would, from whatever it holds.
+    # nothing brings it there: no top-up, no import, no wholesale delivery, no
+    # line of its own that makes it. Its plans carry what they would, from
+    # whatever it holds. A factory with a machine the board cannot name may
+    # make it there, so it is left out.
     for key, outs in edges.items():
-        if key not in index or businesses[index[key]]["status"] in ("vacant", "retail"):
+        if (key not in index or key in unread_sites
+                or businesses[index[key]]["status"] in ("vacant", "retail")):
             continue
         for item in _in_order({i for _d, i, _a in outs}):
-            if (key, item) in target_at or (key, item) in imports or (key, item) in made_at:
+            if ((key, item) in target_at or (key, item) in imports or (key, item) in made_at
+                    or (key, item) in wholesale):
                 continue
             per_day, _waits = plan_draw(key, item, "cap")
             if per_day <= 0:
@@ -4349,6 +4355,20 @@ def _supply_facts(ctx: dict) -> dict:
         inbound = target_at.get((key, slug), (0, None))[1] is not None
         if inbound and not entry and not lines_use:
             return route_fed(key, slug, gross, row)
+        deal = wholesale.get((key, slug))
+        if deal and not entry:
+            # A depot a wholesale store delivers each week: its contract is
+            # judged against the week as an import is.
+            brings = deal["weekly"]
+            p = {"short": ["order"] if use and _below(brings, use) else []}
+            if need and _below(brings, need):
+                p["tight"] = "order"
+            return p, {
+                "use": use, "need": need, "have": brings,
+                "setTo": _ceil_ten(need) if need and _below(brings, need) else None,
+                "parts": {"lines": round(lines_use), "sites": round(sites), "route": round(routed)},
+                "imp": False,
+            }, "weekly"
         p = {}
         if paused and use and not covered:
             p["paused"] = True
@@ -4390,7 +4410,7 @@ def _supply_facts(ctx: dict) -> dict:
         cad = "weekly" if entry or lines_use or not inbound else "daily"
         return p, fields, cad
 
-    def route_fed(key, slug, gross, row):
+    def route_fed(key, slug, gross, _row):
         """A depot topped up each morning from another of your sites and
         imported by nobody: the route is the whole of its supply, so it is
         judged as a shelf is, on that top-up against its busiest day's draw
@@ -4398,10 +4418,8 @@ def _supply_facts(ctx: dict) -> dict:
         factor, _day = ctx["peak"](businesses[index[key]])
         busiest = gross / 7 * factor
         use, need = round(busiest), round(busiest * (1 + SUPPLY_MARGIN))
-        top = target_at[(key, slug)][0]
+        top, source = target_at[(key, slug)]
         p = {"short": []}
-        if row is not None and row["basis"] == "order":
-            p["young"] = "young"
         if use and _below(top, use):
             p["short"].append("target")
         elif need and _below(top, need):
@@ -4409,7 +4427,9 @@ def _supply_facts(ctx: dict) -> dict:
         else:
             p["covered"] = "route"
         set_to = _ceil_ten(need) if need and _below(top, need) else None
-        return p, {"use": use, "need": need, "have": top, "setTo": set_to, "imp": False}, "daily"
+        # `from`: the site whose plan sends the top-up, which Orders names.
+        return p, {"use": use, "need": need, "have": top, "setTo": set_to, "imp": False,
+                   "from": index.get(source)}, "daily"
 
     def daily_input(key, row, mode):
         """A factory input topped up each morning, judged on a day of its machines."""
@@ -5199,7 +5219,9 @@ def _factories(
             share = direct_weekly or ((own_import or {}).get("pausedWeekly") or 0)
             direct_need = min(share, row["perDay"] * 7) if mixed else row["perDay"] * 7 if own_import else 0
             warehouse_need = max(row["perDay"] * 7 - direct_need, 0) if source and (mixed or not own_import) else 0
-            direct = bool(own_import and not warehouse_need)
+            # A paused contract never makes an input direct: beside a top-up the
+            # top-up is what brings it today.
+            direct = bool(own_import and not warehouse_need and not (mixed and not direct_weekly))
             import_source = key if direct else upstream(source, slug) if source else None
             # An input that only sits because every line using it is stopped
             # for want of something else is waiting, not being ignored.
@@ -10287,7 +10309,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 if fact["st"] == "short" and fact["why"] == "target":
                     item = labels.get((s, slug), slug)
                     notes.append(_finding(
-                        "critical", b["name"], "shortfall",
+                        "critical", b["name"], "topup",
                         f"{item} is topped up to {fact['have']:,} a day against the "
                         f"{fact['use']:,} its busiest day sends on; raise the top-up to "
                         f"{fact['setTo']:,}",
@@ -10638,6 +10660,7 @@ SUMMARIES = {
     "order": "{n} weekly orders cannot cover their own week; worst {subject}",
     "paused": "{n} imports are paused; soonest to run out is {subject}",
     "outruns": "{n} products outsell their daily top-up; worst {subject}",
+    "topup": "{n} products outrun the depot's daily top-up; worst {subject}",
     "unplanned": "{n} stocked products are on no distribution plan; largest {subject}",
     "dead": "{n} products sit idle; largest {subject}",
     "notrouted": "{n} products are held where no plan sends them on; largest {subject}",
@@ -14690,6 +14713,8 @@ const ALERT_LINKS = {
   outruns: {sec:"secStock", view:"shops"}, unplanned: {sec:"secStock", view:"shops"},
   dead: {sec:"secStock", view:"idle"}, target: {sec:"secStock", view:"idle"},
   notrouted: {sec:"secStock", view:"idle"},
+  /* A depot only a route from your own site feeds: its page's Stock. */
+  topup: {sec:"secDetail", site:true},
   feed: {sec:"secStock", view:"feed"}, staff: {sec:"secStock", view:"lines"},
   unnamed: {sec:"secStock", view:"lines"}, unset: {sec:"secStock", view:"lines"},
   atcap: {sec:"secDetail", site:true}, idlestaff: {sec:"secDetail", site:true},
@@ -14846,6 +14871,7 @@ const ALERT_EVIDENCE = {
   dead: {block: "shelves"},
   /* About the depot that holds the stock; its shelves-to-be are named in the sentence. */
   notrouted: {block: "stock"},
+  topup: {block: "stock"},
   shortfall: {block: "stock"},
   order: {block: "stock"},
   paused: {block: "stock"},
@@ -16113,7 +16139,7 @@ const SP_BLOCKS = {
    - neither draws a profit chart, so a trend lands on the tiles. */
 const SP_EVIDENCE_KIND = {
   depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
-          shortfall: "stock", order: "stock", paused: "stock"},
+          topup: "stock", shortfall: "stock", order: "stock", paused: "stock"},
   factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
             feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
 };
@@ -18310,7 +18336,7 @@ function importSetting(fact, contract, edit){
    carries its `fact`. A change that only restores the margin (tight) is
    marked so, and Today's card leaves it out. Keep this pure so changes can be
    checked without a browser or a save file. */
-function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses){
+function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = []){
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
@@ -18390,6 +18416,17 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
       f.setTo, `From ${address(from)}. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
+      from, null, false, f.st === "tight");
+  });
+  /* A depot only a route from your own site feeds: the top-up that route's
+     plan holds it to, against its busiest day (its fact's day figures). */
+  depots.forEach(r => {
+    const f = r.fact || {};
+    if(!set(f)) return;
+    const from = Number.isInteger(f.from) ? f.from : null;
+    add("Depot daily top-ups", r.s, r.item, Number.isFinite(f.have) ? f.have : 0, f.setTo,
+      `${from !== null ? `Set on the plan of ${address(from)}. ` : ""}Its busiest day sends on ${
+        (f.use || 0).toLocaleString()} units${margin(r.margin)}.`,
       from, null, false, f.st === "tight");
   });
   const groups = new Map();
@@ -18905,9 +18942,15 @@ function drawLogistics(){
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
+  /* Depots fed only by a route from your own site, with a top-up to change. */
+  const depotTopups = Object.keys(facts).flatMap(si => Object.keys(facts[si]).map(slug => {
+    const fact = szFact(+si, slug);
+    return fact.role === "depot" && fact.cad === "daily" && Number.isFinite(fact.setTo) && D.businesses[+si]
+      ? {s: +si, slug, item: label(+si, slug), fact, margin} : null;
+  }).filter(Boolean));
   drawOrderChecklist(buildOrderChecklist(importRows, looseRows, allSites,
     (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
-    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses), f);
+    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups), f);
   wireSupplyLocations($("importPlan"));
   wireSupplyLocations($("topupPlan"));
   const redraw = () => { drawLogistics(); wireAll(); };
@@ -20363,11 +20406,12 @@ const ALERT_GROUPS = [
   {id:"unnamed",      label:"Unnamed factory line",   note:"A machine running a recipe the board cannot name", on:true},
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import or route round", on:true},
+  {id:"topup",        label:"Depot top-up too low",   note:"A depot fed only by a route from your own site, whose busiest day outruns its daily top-up", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
   {id:"atcap",        label:"At capacity",            note:"Hours a week the staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Idle stock",             note:"Goods sitting in a depot no line draws from", on:true},
-  {id:"notrouted",    label:"Not routed",             note:"Stock at a depot no plan sends on, while your own sites sell or need it", on:true},
+  {id:"notrouted",    label:"Not routed",             note:"Stock a depot or factory holds that no plan sends on, while your own sites sell or need it", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";

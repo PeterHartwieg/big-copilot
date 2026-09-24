@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=6e5785a3a5">
+<link rel="stylesheet" href="community.css?v=ffa77e8560">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=6e5785a3a5">
+<link rel="stylesheet" href="fonts/fonts.css?v=ffa77e8560">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3616,8 +3616,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "6e5785a3a5";</script>
-<script>window.LEDGER_RELEASE = {"version":"6e5785a3a5","latest":{"pr":92,"date":"2026-09-24","title":"Size supply for 24/7 or for demand, and find stock no plan sends on","summary":"Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked \"may still be ramping\". Tight means an order covers the use but not the margin; it shows on Supply and never on Today. A new Not routed finding points at stock in a warehouse that no plan sends on while your own shops sell it."}};</script>
+<script>window.LEDGER_BUILD = "ffa77e8560";</script>
+<script>window.LEDGER_RELEASE = {"version":"ffa77e8560","latest":{"pr":92,"date":"2026-09-24","title":"Size supply for 24/7 or for demand, and find stock no plan sends on","summary":"Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked \"may still be ramping\". Tight means an order covers the use but not the margin; it shows on Supply and never on Today. A new Not routed finding points at stock in a warehouse that no plan sends on while your own shops sell it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3701,8 +3701,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=6e5785a3a5"></script>
-<script src="community.js?v=6e5785a3a5"></script>
+<script src="app.js?v=ffa77e8560"></script>
+<script src="community.js?v=ffa77e8560"></script>
 
 <script>
 
@@ -5140,6 +5140,8 @@ const ALERT_LINKS = {
   outruns: {sec:"secStock", view:"shops"}, unplanned: {sec:"secStock", view:"shops"},
   dead: {sec:"secStock", view:"idle"}, target: {sec:"secStock", view:"idle"},
   notrouted: {sec:"secStock", view:"idle"},
+  /* A depot only a route from your own site feeds: its page's Stock. */
+  topup: {sec:"secDetail", site:true},
   feed: {sec:"secStock", view:"feed"}, staff: {sec:"secStock", view:"lines"},
   unnamed: {sec:"secStock", view:"lines"}, unset: {sec:"secStock", view:"lines"},
   atcap: {sec:"secDetail", site:true}, idlestaff: {sec:"secDetail", site:true},
@@ -5296,6 +5298,7 @@ const ALERT_EVIDENCE = {
   dead: {block: "shelves"},
   /* About the depot that holds the stock; its shelves-to-be are named in the sentence. */
   notrouted: {block: "stock"},
+  topup: {block: "stock"},
   shortfall: {block: "stock"},
   order: {block: "stock"},
   paused: {block: "stock"},
@@ -6563,7 +6566,7 @@ const SP_BLOCKS = {
    - neither draws a profit chart, so a trend lands on the tiles. */
 const SP_EVIDENCE_KIND = {
   depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
-          shortfall: "stock", order: "stock", paused: "stock"},
+          topup: "stock", shortfall: "stock", order: "stock", paused: "stock"},
   factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
             feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
 };
@@ -8760,7 +8763,7 @@ function importSetting(fact, contract, edit){
    carries its `fact`. A change that only restores the margin (tight) is
    marked so, and Today's card leaves it out. Keep this pure so changes can be
    checked without a browser or a save file. */
-function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses){
+function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = []){
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
@@ -8840,6 +8843,17 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
       f.setTo, `From ${address(from)}. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
+      from, null, false, f.st === "tight");
+  });
+  /* A depot only a route from your own site feeds: the top-up that route's
+     plan holds it to, against its busiest day (its fact's day figures). */
+  depots.forEach(r => {
+    const f = r.fact || {};
+    if(!set(f)) return;
+    const from = Number.isInteger(f.from) ? f.from : null;
+    add("Depot daily top-ups", r.s, r.item, Number.isFinite(f.have) ? f.have : 0, f.setTo,
+      `${from !== null ? `Set on the plan of ${address(from)}. ` : ""}Its busiest day sends on ${
+        (f.use || 0).toLocaleString()} units${margin(r.margin)}.`,
       from, null, false, f.st === "tight");
   });
   const groups = new Map();
@@ -9355,9 +9369,15 @@ function drawLogistics(){
     + topupTable;
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
+  /* Depots fed only by a route from your own site, with a top-up to change. */
+  const depotTopups = Object.keys(facts).flatMap(si => Object.keys(facts[si]).map(slug => {
+    const fact = szFact(+si, slug);
+    return fact.role === "depot" && fact.cad === "daily" && Number.isFinite(fact.setTo) && D.businesses[+si]
+      ? {s: +si, slug, item: label(+si, slug), fact, margin} : null;
+  }).filter(Boolean));
   drawOrderChecklist(buildOrderChecklist(importRows, looseRows, allSites,
     (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
-    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses), f);
+    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups), f);
   wireSupplyLocations($("importPlan"));
   wireSupplyLocations($("topupPlan"));
   const redraw = () => { drawLogistics(); wireAll(); };
@@ -14475,11 +14495,12 @@ const ALERT_GROUPS = [
   {id:"unnamed",      label:"Unnamed factory line",   note:"A machine running a recipe the board cannot name", on:true},
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import or route round", on:true},
+  {id:"topup",        label:"Depot top-up too low",   note:"A depot fed only by a route from your own site, whose busiest day outruns its daily top-up", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
   {id:"atcap",        label:"At capacity",            note:"Hours a week the staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Idle stock",             note:"Goods sitting in a depot no line draws from", on:true},
-  {id:"notrouted",    label:"Not routed",             note:"Stock at a depot no plan sends on, while your own sites sell or need it", on:true},
+  {id:"notrouted",    label:"Not routed",             note:"Stock a depot or factory holds that no plan sends on, while your own sites sell or need it", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
