@@ -9638,16 +9638,19 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 @keyframes gw-tick{to{transform:rotate(360deg)}}
 
 /* body and foot */
-.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}
+.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 8 auto;overscroll-behavior:contain}
 /* The fixed strip: the notes a decision rests on, under the verdict. It never
-   scrolls with the rows; a cap keeps the foot on screen on a short window. */
-.gw-fix{display:flex;flex-direction:column;gap:14px;padding:16px 20px 0;flex:none;max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
+   scrolls with the rows. On a short window both give way so the foot stays
+   whole, the rows first (their shrink weighs eight times the strip's), and
+   the strip scrolls in what is left. */
+.gw-fix{display:flex;flex-direction:column;gap:14px;padding:16px 20px 0;flex:0 1 auto;min-height:0;max-height:45vh;max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
 .gw-fix:empty,.gw-body:empty{display:none}
-.gw-fix+.gw-body{padding-top:14px}
+.gw-fix:not(:empty)+.gw-body{padding-top:14px}
 /* While any modal dialog is open the page behind it holds still. The page
-   scrolls on the viewport (neither html nor body sets overflow); the gutter
-   stays so the page does not shift sideways as its scrollbar goes. */
-html:has(dialog:modal){overflow:hidden;scrollbar-gutter:stable}
+   scrolls on the viewport (neither html nor body sets overflow); its gutter
+   is always kept, so the page does not shift sideways as the scrollbar goes. */
+html{scrollbar-gutter:stable}
+html:has(dialog:modal){overflow:hidden}
 .gw-lead{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2);text-wrap:pretty}
 .gw-lead b{color:var(--ink);font-weight:600}
 .gw-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
@@ -18523,15 +18526,19 @@ function gwUniforms(keys){
   });
 }
 
+/* The refusals the player can fix in the game while the same request stays
+   valid (a screen closed, a locker placed, a week's lock over). Try again is
+   offered only when every error the answer names is one of them; the rest
+   ask for another request, or a refreshed board. */
+const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
+  "locked", "backorder", "not_assigned"]);
+const gwFixable = answer => {
+  const a = answer || {};
+  const codes = [a.siteError, ...(a.rows || []).flatMap(r => r ? [r.error, ...(r.products || []).map(p => p && p.error)] : [])].filter(Boolean);
+  return codes.length > 0 && codes.every(c => GW_FIXABLE.has(c));
+};
 /* Why a row was refused, in plain words: the rule, then the fix. An entry may
    be a function of the row, for a refusal that carries its own numbers. */
-/* The refusals the player can fix in the game while the same request stays
-   valid (a screen closed, a locker placed, a week's lock over): only these
-   offer Try again. The rest ask for another request, or a refreshed board. */
-const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
-  "locked", "backorder", "not_assigned", "no_skill"]);
-const gwFixable = answer => GW_FIXABLE.has((answer || {}).siteError)
-  || ((answer || {}).rows || []).some(r => r && (GW_FIXABLE.has(r.error) || (r.products || []).some(p => p && GW_FIXABLE.has(p.error))));
 const GW_REFUSE = {
   any: {
     not_found: {rule: "No building at this address any more", fix: "Refresh the board: the shop may have closed or moved."},
@@ -18743,8 +18750,11 @@ function gwLift(dlg, body){
     return lead || el.matches(".gw-lift,.gw-reread");
   });
   const cards = up.filter(el => el.matches(".gw-no"));
+  const fixed = cards.length ? cards : up;
+  /* Nothing would be left to scroll: the notes stay where they are. */
+  if(fixed.length === kids.length) return dlg.querySelector(".gw-fix").replaceChildren();
   if(cards.length) body.prepend(...up.filter(el => !el.matches(".gw-no")));
-  dlg.querySelector(".gw-fix").replaceChildren(...(cards.length ? cards : up));
+  dlg.querySelector(".gw-fix").replaceChildren(...fixed);
 }
 /* One state of the dialog. `v`: {phase, wire, say, meta, body, hint, warn,
    buttons, keepTick}; a button is [label, onclick, {kind: go | ghost | undo,

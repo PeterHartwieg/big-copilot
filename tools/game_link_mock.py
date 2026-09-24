@@ -400,9 +400,20 @@ class Link:
                     row["reopens"] = {"day": self._monday(), "hour": 8}
             return 409, {"error": error, "rows": rows}
         if error in ("changed", "refused") and kind == "undo":
-            # As the undo of that kind answers: its rows lead with the rule.
-            rule = detail or REFUSED_DEFAULT.get(body.get("kind"), "screen_open")
-            return 409, {"error": error, "rows": [] if error == "changed" else [{"error": rule}]}
+            # As the mod's undo of that kind answers (UniformWrite, ImportWrite,
+            # ScheduleWrite .Undo): a uniforms undo is only ever refused as changed.
+            target = body.get("kind")
+            rule = "changed" if error == "changed" else detail or REFUSED_DEFAULT.get(target, "screen_open")
+            head = {"error": "changed" if rule == "changed" else "refused", "ok": False, "kind": target,
+                    "dryRun": False, "undo": True}
+            if target == "uniforms":
+                return 409, dict(head, error="changed", rows=[{"error": "changed"}])
+            if target == "schedule":
+                return 409, dict(head, siteError=rule, rows=[] if rule == "changed" else [{"error": rule}])
+            row = {"error": rule, "products": []}
+            if rule == "locked":
+                row["reopens"] = {"day": self._monday(), "hour": 8}
+            return 409, dict(head, rows=[row])
         return 409, {"error": error}
 
     # uniforms ---------------------------------------------------------------------

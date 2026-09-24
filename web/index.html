@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=e8467e1244">
+<link rel="stylesheet" href="community.css?v=e76187c8de">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=e8467e1244">
+<link rel="stylesheet" href="fonts/fonts.css?v=e76187c8de">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1123,16 +1123,19 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 @keyframes gw-tick{to{transform:rotate(360deg)}}
 
 /* body and foot */
-.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}
+.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 8 auto;overscroll-behavior:contain}
 /* The fixed strip: the notes a decision rests on, under the verdict. It never
-   scrolls with the rows; a cap keeps the foot on screen on a short window. */
-.gw-fix{display:flex;flex-direction:column;gap:14px;padding:16px 20px 0;flex:none;max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
+   scrolls with the rows. On a short window both give way so the foot stays
+   whole, the rows first (their shrink weighs eight times the strip's), and
+   the strip scrolls in what is left. */
+.gw-fix{display:flex;flex-direction:column;gap:14px;padding:16px 20px 0;flex:0 1 auto;min-height:0;max-height:45vh;max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
 .gw-fix:empty,.gw-body:empty{display:none}
-.gw-fix+.gw-body{padding-top:14px}
+.gw-fix:not(:empty)+.gw-body{padding-top:14px}
 /* While any modal dialog is open the page behind it holds still. The page
-   scrolls on the viewport (neither html nor body sets overflow); the gutter
-   stays so the page does not shift sideways as its scrollbar goes. */
-html:has(dialog:modal){overflow:hidden;scrollbar-gutter:stable}
+   scrolls on the viewport (neither html nor body sets overflow); its gutter
+   is always kept, so the page does not shift sideways as the scrollbar goes. */
+html{scrollbar-gutter:stable}
+html:has(dialog:modal){overflow:hidden}
 .gw-lead{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2);text-wrap:pretty}
 .gw-lead b{color:var(--ink);font-weight:600}
 .gw-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
@@ -3154,8 +3157,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "e8467e1244";</script>
-<script>window.LEDGER_RELEASE = {"version":"e8467e1244","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "e76187c8de";</script>
+<script>window.LEDGER_RELEASE = {"version":"e76187c8de","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3224,8 +3227,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=e8467e1244"></script>
-<script src="community.js?v=e8467e1244"></script>
+<script src="app.js?v=e76187c8de"></script>
+<script src="community.js?v=e76187c8de"></script>
 
 <script>
 
@@ -14105,15 +14108,19 @@ function gwUniforms(keys){
   });
 }
 
+/* The refusals the player can fix in the game while the same request stays
+   valid (a screen closed, a locker placed, a week's lock over). Try again is
+   offered only when every error the answer names is one of them; the rest
+   ask for another request, or a refreshed board. */
+const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
+  "locked", "backorder", "not_assigned"]);
+const gwFixable = answer => {
+  const a = answer || {};
+  const codes = [a.siteError, ...(a.rows || []).flatMap(r => r ? [r.error, ...(r.products || []).map(p => p && p.error)] : [])].filter(Boolean);
+  return codes.length > 0 && codes.every(c => GW_FIXABLE.has(c));
+};
 /* Why a row was refused, in plain words: the rule, then the fix. An entry may
    be a function of the row, for a refusal that carries its own numbers. */
-/* The refusals the player can fix in the game while the same request stays
-   valid (a screen closed, a locker placed, a week's lock over): only these
-   offer Try again. The rest ask for another request, or a refreshed board. */
-const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
-  "locked", "backorder", "not_assigned", "no_skill"]);
-const gwFixable = answer => GW_FIXABLE.has((answer || {}).siteError)
-  || ((answer || {}).rows || []).some(r => r && (GW_FIXABLE.has(r.error) || (r.products || []).some(p => p && GW_FIXABLE.has(p.error))));
 const GW_REFUSE = {
   any: {
     not_found: {rule: "No building at this address any more", fix: "Refresh the board: the shop may have closed or moved."},
@@ -14325,8 +14332,11 @@ function gwLift(dlg, body){
     return lead || el.matches(".gw-lift,.gw-reread");
   });
   const cards = up.filter(el => el.matches(".gw-no"));
+  const fixed = cards.length ? cards : up;
+  /* Nothing would be left to scroll: the notes stay where they are. */
+  if(fixed.length === kids.length) return dlg.querySelector(".gw-fix").replaceChildren();
   if(cards.length) body.prepend(...up.filter(el => !el.matches(".gw-no")));
-  dlg.querySelector(".gw-fix").replaceChildren(...(cards.length ? cards : up));
+  dlg.querySelector(".gw-fix").replaceChildren(...fixed);
 }
 /* One state of the dialog. `v`: {phase, wire, say, meta, body, hint, warn,
    buttons, keepTick}; a button is [label, onclick, {kind: go | ghost | undo,

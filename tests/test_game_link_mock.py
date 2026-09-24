@@ -581,6 +581,26 @@ class MockWrites(unittest.TestCase):
         _, answer = self.post("schedule", dict(body, dryRun=True, address={"street": "ba:street_nowhere", "number": 1}))
         self.assertEqual((answer["ok"], answer["siteError"]), (False, "not_found"))
 
+    def test_refused_undos_answer_as_the_mods_do(self):
+        self.link.refuse_write = "refused"
+        # Uniforms: the mod's undo is only ever refused as changed.
+        status, answer = self.post("undo", {"kind": "uniforms"})
+        self.assertEqual((status, answer["error"], answer["rows"]), (409, "changed", [{"error": "changed"}]))
+        # Schedule: the site's own refusal, leading the rows.
+        self.link.refuse_write = "refused:screen_open"
+        status, answer = self.post("undo", {"kind": "schedule"})
+        self.assertEqual((status, answer["error"], answer["siteError"], answer["rows"]),
+                         (409, "refused", "screen_open", [{"error": "screen_open"}]))
+        # Imports: a locked row names when the window reopens; changed rows carry changed.
+        self.link.refuse_write = "refused:locked"
+        status, answer = self.post("undo", {"kind": "imports"})
+        self.assertEqual((status, answer["rows"][0]["error"]), (409, "locked"))
+        self.assertEqual(answer["rows"][0]["reopens"]["hour"], 8)
+        self.link.refuse_write = "changed"
+        status, answer = self.post("undo", {"kind": "imports"})
+        self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "changed", "changed"))
+        self.assertEqual(self.link.applied, [])
+
     def test_a_headquarters_is_never_written(self):
         reg = self.link._save().items(self.link._save().root["BuildingRegistrations"])[0]
         reg["businessTypeName"] = "ba:businesstype_headquarters"
