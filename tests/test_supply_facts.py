@@ -1220,6 +1220,31 @@ class RoundSixFixTests(unittest.TestCase):
         self.assertIn("runs out before", line["detail"])
 
 
+class RoundTenFixTests(unittest.TestCase):
+    """Review round 10: a wholesale order short of the week that also runs dry."""
+
+    def gym(self, units, trade_days=30):
+        # 1,200 a week against the 1,232 the gym sells (176 a day), due Monday.
+        c = Company()
+        c.shop(GYM, "Gym", trade_days=trade_days)
+        c.hold(GYM, SODA, units, 176)
+        c.wholesale(GYM, SODA, 1200, due=22)
+        c.run()
+        return c.fact(GYM, SODA)
+
+    def test_short_of_the_week_and_dry_before_monday_carries_both_figures(self):
+        fact = self.gym(100)
+        # 1.5 days of 176 to Monday's drop: 264, 164 more than the 100 held.
+        self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["day"]), ("short", "shortfall", "critical", "Monday"))
+        self.assertEqual((fact["setTo"], fact["catchUp"]), (1420, 164))
+
+    def test_a_new_shop_carries_no_figure_to_bring_in(self):
+        fact = self.gym(100, trade_days=3)
+        self.assertEqual(fact["st"], "new")
+        self.assertNotIn("catchUp", fact)
+        self.assertIsNone(fact["setTo"])
+
+
 class StableOrderTests(unittest.TestCase):
     def test_the_facts_do_not_depend_on_the_hash_seed(self):
         script = ("import json, test_supply_facts as t;"

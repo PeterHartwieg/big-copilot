@@ -44,6 +44,22 @@ test('a paused contract beside a top-up that falls short is resumed; one the top
   assert.deepEqual(build({imports: [{s: 1, rows: [paused('info')]}]}), []);
 });
 
+test('a wholesale contract short of the week that also runs dry gives two changes; a 24/7 depot claims no margin', () => {
+  const shelf = {s: 2, item: 'Soda', slug: 'soda', margin: 0.15, fact: fact('short', {why: 'shortfall', lvl: 'critical',
+    role: 'shelf', cad: 'weekly', use: 1232, need: 1417, have: 1200, setTo: 1420, catchUp: 164, day: 'Monday', wholesale: true})};
+  const depot = {s: 0, item: 'Syrup', slug: 'syrup', margin: 0.15, fact: fact('short', {why: 'order', lvl: 'critical',
+    role: 'depot', cad: 'weekly', use: 1680, need: 1680, have: 1000, setTo: 1680, day: 'Monday', wholesale: true})};
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [shelf, depot])));
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed]), [
+    ['Wholesale deliveries', 'Soda', 1200, 1420],
+    ['Before the next delivery', 'Soda', null, 164],
+    ['Wholesale deliveries', 'Syrup', 1000, 1680]]);
+  assert.match(rows[0].reason, /^Sells 1[,.]232 a week, plus a 15% margin, 1[,.]417 in all\./);
+  assert.match(rows[1].reason, /^Bring in 164 extra units by hand before Monday's wholesale delivery/);
+  // Factory lines sized 24/7 take no margin: need is use, and none is claimed.
+  assert.match(rows[2].reason, /^Uses 1[,.]680 a week\. Change the amount/);
+});
+
 test('a depot only a route feeds gets its daily top-up, from the site whose plan sets it', () => {
   const depot = (st, have, item) => ({s: 0, item, slug: item, margin: 0.15,
     fact: fact(st, {role: 'depot', cad: 'daily', use: 100, need: 115, have, setTo: 120, from: 1})});

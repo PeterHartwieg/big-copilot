@@ -204,7 +204,8 @@ test('Orders shows Wholesale deliveries and Depot daily top-ups from facts shape
                                 {slug: 'chips', item: 'Chips', units: 100, rate: 100, price: 2});
   data.supply.facts[4] = {
     energy: {st: 'short', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 1232, need: 1417,
-      have: 1200, setTo: 1420, parts: {lines: 0, sites: 1232, route: 0}, imp: false, wholesale: true, day: 'Monday'},
+      have: 1200, setTo: 1420, catchUp: 50, parts: {lines: 0, sites: 1232, route: 0}, imp: false, wholesale: true,
+      day: 'Monday'},
     soda: {st: 'tight', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 883, need: 1015,
       have: 900, setTo: 1020, parts: {lines: 0, sites: 883, route: 0}, imp: false, wholesale: true, day: 'Monday'},
     // Covered for the week, but the stock runs out before Monday's delivery.
@@ -237,9 +238,10 @@ test('Orders shows Wholesale deliveries and Depot daily top-ups from facts shape
     const all = await read('all');
     const row = text => all.wholesale.find(r => r.includes(text)) || '';
     assert.equal(all.wholesale.length, 4);
-    assert.match(row('Energy Drink'), /Energy Drink ?each Monday \| 1,232 \| 1,200 \| 1,420 ?raise \| short$/);
+    // Short of the week and dry before Monday: the raise and the stock to bring in, both.
+    assert.match(row('Energy Drink'), /Energy Drink ?each Monday \| 1,232 \| 1,200 \| 1,420 ?raise ?bring in 50 \| short$/);
     assert.match(row('Soda Can'), /Soda Can ?each Monday \| 883 \| 900 \| 1,020 ?raise \| tight$/);
-    assert.match(row('Chips'), /\| 700 \| 900 \| 120 ?bring in \| short$/);
+    assert.match(row('Chips'), /\| 700 \| 900 \| bring in 120 \| short$/);
     assert.match(row('Syrup'), /Import Hub.*\| Syrup ?each Monday \| 1,680 \| 1,000 \| 1,680 ?raise \| short$/);
     assert.match(all.head, /3 short/);
     assert.equal(all.depot.length, 2);

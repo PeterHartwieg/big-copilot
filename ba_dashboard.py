@@ -4594,6 +4594,8 @@ def _supply_facts(ctx: dict) -> dict:
             # line waits for its history, an idle one for its stock to run down.
             if st not in SET_WORDS:
                 fact["setTo"] = None
+            if st != "short":
+                fact.pop("catchUp", None)
             fact.update(extra.get((key, slug), {}))
             # A factory input topped up from a depot and imported to the
             # factory as well: the input keeps its one daily word, and its own
@@ -10290,7 +10292,7 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 # Fed by a weekly wholesale delivery, not a top-up.
                 rate = round(line.get("tradeRate", line["rate"]))
                 row = rows.get((s, slug)) or {}
-                day = row.get("wholesaleDay") or "the next"
+                day = fact.get("day") or row.get("wholesaleDay") or "the next"
                 also_short = _below(fact["have"], fact["use"])
                 if fact["why"] == "shortfall" and also_short:
                     # Both at once: the stock does not reach the drop, and the
@@ -14923,8 +14925,10 @@ function goToAlert(a){
   reveal(link.sec);
 }
 const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
-/* The kinds about a single line of a site's shelves, Stock or Inputs: a
-   link to the site lands on that line's row, lit. */
+/* The kinds about a single line of a site's shelves, Stock or Inputs: once a
+   kind's link targets the site (ALERT_LINKS site:true), it lands on that
+   line's row, lit. The kinds that link to a Checks view today are listed so
+   they behave alike the moment they do. */
 const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "shortfall", "order",
                                     "paused", "notrouted", "feed"]);
 
@@ -15701,9 +15705,9 @@ const SHELF_MAIN_SHARE = 0.02;
 /* Whether a shelf sits among the folded odds and ends: a bag, or a line
    selling under SHELF_MAIN_SHARE of the best-selling listed shelf. One rule
    for drawSite(), a finding's landing and the Products link. */
-function spShelfFolded(b, line){
-  const listed = ((b && b.lines) || []).filter(l => spShelfListed(b, l) && l.item !== "Paper Bag");
-  const peak = Math.max(0, ...listed.map(l => l.revenue || 0));
+const spShelfPeak = b => Math.max(0, ...((b && b.lines) || [])
+  .filter(l => spShelfListed(b, l) && l.item !== "Paper Bag").map(l => l.revenue || 0));
+function spShelfFolded(b, line, peak = spShelfPeak(b)){
   return line.item === "Paper Bag" || (line.revenue || 0) < peak * SHELF_MAIN_SHARE;
 }
 /* Whether a line gets a row in a site's Shelves block at all (folded or not):
@@ -17496,7 +17500,8 @@ function spStockRows(b){
       cover: perDay ? cover : null, short: !!f && f.st === "short",
       rail: spRail(cover, null, false, !!f && !perDay, null, false),
       act: "", feeds: spItemDraw(l.slug, l.item).sites,
-      order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
+      order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
+        : f && f.wholesale && Number.isFinite(f.have) ? `${spNum(f.have)}<small ${SMALL}>/wk wholesale</small>` : "—",
       el: [spKeyTok(l.slug, l.item), f ? szEl(f) : ""].filter(Boolean),
       /* No fact is no verdict: the next refresh judges the line. */
       read: !f ? "Not judged yet"
@@ -17550,7 +17555,7 @@ function spStockRows(b){
   const own = ((D.supply || {}).facts || {})[siteTab] || {};
   Object.keys(own).forEach(slug => {
     const f = supplyFact(siteTab, slug);
-    const item = ((D.plan && D.plan.items) || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
+    const item = itemName(slug);
     if(!f || !take({slug, item})) return;
     const perDay = szDaily(f, 0);
     rows.push({
@@ -18024,7 +18029,8 @@ function drawSite(){
      A depot and a factory draw no shelves, so none of this is composed for
      them: `shelved` is what says so. */
   const shelvesAll = shelved ? b.lines.filter(l => spShelfListed(b, l)) : [];
-  const isMainShelf = l => !spShelfFolded(b, l);
+  const shelfPeak = spShelfPeak(b);
+  const isMainShelf = l => !spShelfFolded(b, l, shelfPeak);
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
@@ -18555,11 +18561,17 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   wholesale.forEach(r => {
     const f = r.fact || {};
     const when = f.day ? `${f.day}'s` : "the next";
+    /* The margin as the fact carries it: a depot's factory lines sized 24/7
+       take none, so its need is its use and no margin is claimed. */
+    const sized = Number.isFinite(f.need) && Number.isFinite(f.use) && f.need > f.use
+      ? `${margin(r.margin)}, ${f.need.toLocaleString()} in all` : "";
     if(set(f)) add("Wholesale deliveries", r.s, r.item, Number.isFinite(f.have) ? f.have : null, f.setTo,
-      `${f.role === "depot" ? "Uses" : "Sells"} ${(f.use || 0).toLocaleString()} a week${margin(r.margin)}. Change the amount on the wholesale delivery contract in-game.`,
+      `${f.role === "depot" ? "Uses" : "Sells"} ${(f.use || 0).toLocaleString()} a week${sized}. Change the amount on the wholesale delivery contract in-game.`,
       null, "weekly", false, f.st === "tight");
-    else if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r.item, null, f.catchUp,
-      `Bring in ${f.catchUp.toLocaleString()} extra units by hand before ${when} wholesale delivery. The contract covers the week, but the stock on hand runs out before it lands.`);
+    /* Independent of the contract: stock that runs out before the delivery
+       is brought in by hand, whether or not the contract is raised too. */
+    if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r.item, null, f.catchUp,
+      `Bring in ${f.catchUp.toLocaleString()} extra units by hand before ${when} wholesale delivery: the stock on hand runs out before it lands.`);
   });
   /* A depot only a route from your own site feeds: the top-up that route's
      plan holds it to, against its busiest day (its fact's day figures). */
@@ -19101,11 +19113,13 @@ function drawLogistics(){
   /* A row needs a change where there is a figure to set, or stock to bring
      in by hand before the delivery. */
   const toChange = r => Number.isFinite(r.fact.setTo) || (Number.isFinite(r.fact.catchUp) && r.fact.catchUp > 0);
-  const planSetCell = (fc, word) => Number.isFinite(fc.setTo)
-    ? `${set(fc.setTo)}${up(word, fc.st === "tight" ? SZ_STATE.tight : szTip(fc))}`
-    : Number.isFinite(fc.catchUp) && fc.catchUp > 0
-    ? `${set(fc.catchUp)}${up("bring in", `By hand, before ${fc.day ? `${fc.day}'s` : "the next"} delivery: the stock runs out before it lands`)}`
-    : "—";
+  const planSetCell = (fc, word) => {
+    const raise = Number.isFinite(fc.setTo) ? `${set(fc.setTo)}${up(word, fc.st === "tight" ? SZ_STATE.tight : szTip(fc))}` : "";
+    const bring = Number.isFinite(fc.catchUp) && fc.catchUp > 0
+      ? chipHtml("bad", `bring in ${fc.catchUp.toLocaleString()}`,
+          `By hand, before ${fc.day ? `${fc.day}'s` : "the next"} delivery: the stock runs out before it lands`) : "";
+    return raise || bring ? [raise, bring].filter(Boolean).join(" ") : "—";
+  };
   const planState = (rows, what) => {
     const shortN = rows.filter(r => r.fact.st === "short").length, tightN = rows.filter(r => r.fact.st === "tight").length;
     return !shortN && !tightN ? check(rows.length, what)
@@ -19444,7 +19458,7 @@ function indexPlan(){
    then, if nobody named it, the slug made readable. */
 const prettySlug = slug => slug.replace(/^ba:[a-z]+_/, "").replace(/([a-z])(\d)/g, "$1 $2")
   .replace(/^./, c => c.toUpperCase());
-const itemName = slug => (D.plan.items || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
+const itemName = slug => ((D.plan || {}).items || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
 const HOURS = 24;  // a workstation keeps running while the shops are shut
 
 /* changed for growth: one physical product is enough to plan — the hairdresser
