@@ -15189,7 +15189,7 @@ function drawSite(){
 
      A depot and a factory draw no shelves, so none of this is composed for
      them: `shelved` is what says so. */
-  const shelvesAll = shelved ? b.lines.filter(l => l.rate > 0 || l.units > 0) : [];
+  const shelvesAll = shelved ? b.lines.filter(l => spShelfListed(b, l)) : [];
   const peakRevenue = Math.max(0, ...shelvesAll.filter(l => l.item !== "Paper Bag").map(l => l.revenue));
   const isMainShelf = l => l.item !== "Paper Bag" && l.revenue >= peakRevenue * SHELF_MAIN_SHARE;
   const sideShelves = shelvesAll.filter(l => !isMainShelf(l));
@@ -16945,10 +16945,6 @@ const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
 const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
 let page = "today";
-/* The stamp on a history entry the board has stood on, and whether the hash
-   change being handled is Back or Forward: see stampHistory(). */
-const HISTORY_SEEN = {baSeen: true};
-let historyStep = false;
 const sub = {};
 Object.entries(SUBS).forEach(([id, sv]) => {
   const saved = remembered(sv.key);
@@ -16988,13 +16984,13 @@ function showPage(id, scroll = true, historyMode = "push"){
   try{
     const keep = historyMode === "replace" && pageFromHash(location.hash.slice(1)) === id;
     if(historyMode !== "none" && !keep && location.hash !== "#" + id)
-      history[historyMode === "replace" ? "replaceState" : "pushState"](HISTORY_SEEN, "", "#" + id);
+      history[historyMode === "replace" ? "replaceState" : "pushState"](null, "", "#" + id);
   }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
   if(id === "company" && sub.company === "results" && hasData()) drawChart();
   if(id === "map") showCityMap();
-  if(id === "wiki") wikiVisit(from !== "wiki", historyStep);
+  if(id === "wiki") wikiVisit(from !== "wiki");
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
   /* The masthead is sticky, so the top of the new page is the top of the window. */
   if(scroll && window.scrollY > 0) window.scrollTo(0, 0);
@@ -17052,35 +17048,18 @@ function openHash(h, historyMode = "none"){
   return true;
 }
 /* The wiki module, when the build carries it, owns everything under #wiki.
-   `entered` is true when the Wiki has just replaced another page, so a link
-   into one of its sections lands there however often it is followed; `step`
-   is true when Back or Forward brought the reader here, and then the Wiki
-   leaves them where they were rather than landing again. */
-function wikiVisit(entered = false, step = false){
-  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered, step);
+   `entered` is true when the Wiki has just replaced another page, by a link
+   or by Back, so a link into one of its sections lands there however often
+   it is followed. */
+function wikiVisit(entered = false){
+  if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered);
 }
-/* Back and Forward against a link followed. The browser fires popstate and
-   hashchange alike for both, so neither event says which it was. The entry
-   does: every entry the board has stood on is stamped in its state, an entry a
-   link has just made has none, and so a hash change onto a stamped entry is a
-   step through history (HISTORY_SEEN and historyStep sit beside `page`, since
-   showPage() reads them). */
-function stampHistory(){
-  try{
-    if(!(history.state && history.state.baSeen))
-      history.replaceState(Object.assign({}, history.state, HISTORY_SEEN), "", location.hash || location.href);
-  }catch(e){}
-}
-stampHistory();
 window.addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
-  const step = !!(history.state && history.state.baSeen);
-  stampHistory();
   /* With no save open only the wiki has anything behind it; the rest would be
      empty chrome, so the nav's own lock holds for a typed hash too. */
   if(!hasData() && pageFromHash(h) !== "wiki") return;
-  historyStep = step;
-  try{ openHash(h, "none"); }finally{ historyStep = false; }
+  openHash(h, "none");
 });
 
 /* --- which kinds of finding make the list ------------------------------- */

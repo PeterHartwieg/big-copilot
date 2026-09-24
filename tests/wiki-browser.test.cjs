@@ -127,72 +127,39 @@ test('the same section link followed again, after leaving the Wiki, lands again'
   assert.deepEqual(errors, []);
 });
 
-/* Back and Forward put the reader where they stood on that entry: the Wiki
-   keeps a y on each history entry as the reader scrolls. */
+/* Back and Forward follow the one rule too: coming into the Wiki, or onto
+   another route inside it, lands on the route's section. */
 const landedOnPrices = page => page.waitForFunction(() => {
   const el = document.getElementById('wk-prices');
   return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
 });
-// Scroll somewhere in the middle and let the Wiki write it down. A landing
-// keeps settling for a few frames, so the reader starts once it has.
-async function readTo(page, share) {
-  await page.waitForTimeout(500);
-  await page.evaluate(share =>
-    scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * share)), share);
-  await page.waitForFunction(() => history.state && history.state.y === Math.round(scrollY));
-  return page.evaluate(() => history.state.y);
-}
-const near = async (page, y) => {
-  await page.waitForTimeout(300);
-  const at = await page.evaluate(() => Math.round(scrollY));
-  assert.ok(Math.abs(at - y) <= 2, `at ${at}, expected ${y}`);
-};
 
-test('Back to a guide read from its prices link returns to where the reader was on it', async t => {
+test('Back onto a prices entry lands on Prices, from another page and from another guide', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
   await landedOnPrices(page);
-  // Reading on, well past the section, then off to another guide and Back.
-  const y = await readTo(page, 0.35);
+  // Scrolled back up to the guide's top and paused there, off to another
+  // page, then Back: Prices again, not the top.
+  await page.waitForTimeout(500);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForTimeout(400);
+  await page.evaluate(() => showPage('today'));
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => page === 'wiki');
+  await landedOnPrices(page);
+  assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
+  // Another guide, then Back: another route, so it lands on Prices again.
   await page.evaluate(() => { location.hash = '#wiki/businesstypes-bookstore'; });
   await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
   await page.evaluate(() => history.back());
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
-  await near(page, y);
-  // And Forward to the other guide, which the reader never scrolled: its top.
-  await page.evaluate(() => history.forward());
-  await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
-  await near(page, 0);
-  assert.deepEqual(errors, []);
-});
-
-test('Back into the Wiki from another page returns to where the reader was', async t => {
-  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
-  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
-  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
   await landedOnPrices(page);
-  for (const share of [0.6, 0]) {
-    const y = await readTo(page, share);
-    await page.evaluate(() => showPage('today'));
-    await page.evaluate(() => history.back());
-    await page.waitForFunction(() => page === 'wiki');
-    await near(page, y);
-    assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
-  }
-  // Back to the guide's own entry, never scrolled: its top; Forward onto the
-  // prices entry: where the reader last stood there, not the section again.
-  await page.evaluate(() => history.back());
-  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop');
-  await near(page, 0);
-  await page.evaluate(() => history.forward());
-  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop/prices');
-  await near(page, 0);
-  // Following the link afresh still lands on the section.
-  await page.evaluate(() => showPage('today'));
-  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
-  await page.waitForFunction(() => page === 'wiki');
-  await landedOnPrices(page);
+  // A redraw of the route on screen does not land again.
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { scrollTo(0, 0); drawWiki(); wikiVisit(); });
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => scrollY), 0);
   assert.deepEqual(errors, []);
 });
 
