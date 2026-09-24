@@ -17177,8 +17177,9 @@ function siteSlugOf(key){
   }catch(e){ return ""; }  // a lone surrogate has no UTF-8
   return out;
 }
-/* The exact inverse, read case-insensitively: a capital in a typed address is
-   only another spelling, since the slug writes none. null if it is no slug. */
+/* The inverse of every slug siteSlugOf() writes; other spellings (capitals,
+   upper-case hex, needless escapes) read back too, since the slug writes
+   none of them. null if it is no slug. */
 function siteKeyOf(slug){
   let s = String(slug ?? "").toLowerCase(), key = SITE_KEY_HEAD;
   if(s === "") return null;
@@ -17282,8 +17283,8 @@ function closeSite(chain = null){
     chain !== null && typeof CSS !== "undefined" ? `#portfolio tr.chain[data-chain="${CSS.escape(chain)}"]` : null);
 }
 /* Any other spelling that reads back to the open site's key -- capitals,
-   upper-case hex -- gives way to its own. Nothing else is ever rewritten. The entry is replaced,
-   never added, and keeps its state. */
+   upper-case hex, needless escapes -- gives way to its own. Nothing else is
+   ever rewritten. The entry is replaced, never added, and keeps its state. */
 function siteSyncAddress(){
   if(!siteOpen || page !== "company") return;
   const want = siteHref(siteKey), now = location.hash;
