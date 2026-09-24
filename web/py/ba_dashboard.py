@@ -18806,13 +18806,19 @@ function renderAll(){
    later (and with it the demand grid's lit row and column): transitions on
    what the refresh drew that start in those two frames are run to the end
    as well, so the finding under the pointer does not unfold again in slow
-   motion. Anything else started in those frames is the reader's and plays. */
+   motion. Anything else started in those frames is the reader's and plays.
+   Only the board is settled: an open dialog (a game-link write's "ready
+   again" nod), the write toast and the search palette are the reader's own
+   and play through a refresh. */
 const calmSignal = a => a.animationName === "bump";
+const CALM_OWN = "dialog[open], #gwToast, .ss-pal";
 function calmSettle(skip, only){
   let all;
   try{ all = document.getAnimations(); }catch(e){ return; }
   all.forEach(a => {
     if(skip.has(a) || calmSignal(a) || only && !only(a)) return;
+    const el = a.effect && a.effect.target;
+    if(el && el.closest && el.closest(CALM_OWN)) return;
     const t = a.effect && a.effect.getComputedTiming && a.effect.getComputedTiming();
     if(!t || !isFinite(t.endTime)) return;
     try{ a.finish(); }catch(e){}
@@ -18916,14 +18922,18 @@ const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
    before it shows (showPage(), showSub()). It is drawn while still hidden, as
    the refresh would have drawn it, so it arrives the same way: a block rebuilt
    where an arrived block stood is simply there (rvSettle), and a view never
-   visited yet still arrives when it opens. */
+   visited yet still arrives when it opens. A draw that throws stays out of
+   date and is tried again on the next visit; the page still opens. */
 function drawStale(pageId){
   if(!pageStale.size || !hasData()) return;
   const view = viewOf(pageId);
   const due = PAGE_DRAWS.filter(row => pageStale.has(row) && row[0].split(" ").includes(view));
   if(!due.length) return;
   const had = new Set($$(".rv"));
-  due.forEach(row => { pageStale.delete(row); row[1](); });
+  due.forEach(row => {
+    pageStale.delete(row);
+    try{ row[1](); }catch(e){ pageStale.add(row); console.error(e); }
+  });
   $$(".rv:not(.in)").forEach(el => { if(!had.has(el) && el.closest("[hidden]")) rvSettle(el); });
   wireAll();
 }

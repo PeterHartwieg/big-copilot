@@ -319,3 +319,52 @@ test('a view drawn on its visit is wired once', async t => {
   await sev.click();
   assert.equal(await sev.evaluate(s => s.classList.contains('off')), false);
 });
+
+test('a draw that throws on the way in leaves the view out of date, not the reader stuck', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('company'); showSub('company', 'payroll'); showPage('today'); });
+  await deliver(page, later);
+  const stale = () => page.evaluate(() => [...pageStale].some(row => /drawPayroll/.test(String(row[1]))));
+  assert.equal(await stale(), true, 'Payroll waits for its visit');
+  const messages = [];
+  page.on('console', m => { if (m.type() === 'error') messages.push(m.text()); });
+  await page.evaluate(() => {
+    window.calmDraw = window.drawPayroll;
+    window.drawPayroll = () => { throw new Error('payroll broke'); };
+  });
+  await page.click('#nav a[data-id="company"]');
+  assert.equal(await page.evaluate(() => page), 'company', 'the nav click still opens Company');
+  assert.equal(await page.locator('#pageCompany').isHidden(), false);
+  assert.equal(await page.locator('#pageToday').isHidden(), true);
+  assert.equal(await stale(), true, 'the view is still out of date');
+  assert.ok(messages.some(m => /payroll broke/.test(m)), messages.join('\n'));
+  assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/);
+
+  await page.evaluate(() => { window.drawPayroll = window.calmDraw; });
+  await page.click('#nav a[data-id="today"]');
+  await page.click('#nav a[data-id="company"]');
+  assert.equal(await stale(), false);
+  assert.match(await page.locator('#secPayroll').textContent(), /\b4 people\b/, 'drawn on the next visit');
+});
+
+test('a refresh settles the board, not an open dialog', async t => {
+  const page = await board(t);
+  await settle(page);
+  // A game-link write dialog on screen: the refresh repaints it through its
+  // gate (gwReadBack()), and the "ready again" nod it puts there plays.
+  const nod = await page.evaluate(async p => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'gw-dlg';
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    gwOpen = dlg;
+    dlg._gwGate = () => { dlg.innerHTML = '<div class="gw-w ok"><span class="g">ready</span></div>'; };
+    const playing = () => document.getAnimations().filter(a => a.animationName === 'gw-nod' && dlg.contains(a.effect.target))
+      .map(a => a.playState);
+    window.calmWatch.changed(JSON.parse(p));
+    const now = playing();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return {now, later: playing()};
+  }, payload);
+  assert.deepEqual(nod, {now: ['running'], later: ['running']});
+});

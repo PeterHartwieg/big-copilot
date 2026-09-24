@@ -332,12 +332,24 @@ Growth's views:
 | Plan a chain | `secPlan`, `secIngredients` | `drawPlan` |
 
 Outside the pages, `drawMast` and `drawFooter` own the masthead and footer, and
-`indexTrends` builds the lookup the other draws use. `renderAll()` calls them all;
-`PAGE_ALIASES` keeps old hashes such as `#results` working after a page became a view.
+`indexTrends` builds the lookup the other draws use. `renderAll()` calls those itself and
+works through `PAGE_DRAWS` for the rest, one row per draw function, tagged with the views
+(`"today"`, `"company/payroll"`) whose markup it writes, or `""` for a row drawn on every
+refresh. `PAGE_ALIASES` keeps old hashes such as `#results` working after a page became a
+view.
+
+A live refresh of the same company enters through `renderCalm()`, which also runs the
+entrance animations the rebuild started to their end, so nothing slides in again. It draws
+only the rows tagged for the view on screen, plus the `""` rows, and marks the rest in
+`pageStale`; `drawStale()`, called from `showPage()` and `showSub()`, draws them as their
+view opens. The first boot and another company or save draw every row.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge — see [contributing.md](contributing.md)), and a draw function called
-from `renderAll()`.
+it deserves a badge — see [contributing.md](contributing.md)), and a `PAGE_DRAWS` row for
+its draw function. The same goes for a new view or draw function. Tag the row with every
+view whose DOM it writes; if other code reads state it computes from another page, tag it
+`""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
+redraw.
 
 ### Routes
 
