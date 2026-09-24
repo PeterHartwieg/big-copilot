@@ -2007,6 +2007,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     trading = [e for e in orders
                if opened < e.get("dayNumber", 0) < day and e.get("totalCustomers", 0) >= 1]
     trade_window = trading[-STOCK_COVER_DAYS:]
+    week_trading = sum(1 for e in trading if e.get("dayNumber", 0) >= day - 7)
     trade_sold = collections.Counter()
     for entry in trade_window:
         for sale in save.items(entry.get("itemSales")):
@@ -2045,6 +2046,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         # With no trading day on record (a depot, or a site nobody has come to
         # yet) the calendar rate is all there is.
         trade_rate = trade_sold[item] / len(trade_window) if trade_window else rate
+        # A week of it: the trading-day rate on the days the shop traded in the
+        # last seven, so a shop open two days a week sells two days' worth.
+        week_sold = trade_rate * week_trading if trade_window else rate * 7
         lines.append(
             {
                 "item": names.label(item),
@@ -2052,6 +2056,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                 "units": int(stock[item]),
                 "rate": round(rate, 1),
                 "tradeRate": round(trade_rate, 1),
+                "weekSold": round(week_sold),
                 **({"soldDays": sold_days[item]} if sold_days.get(item) else {}),
                 "cover": round(stock[item] / rate, 1) if rate > 0.5 else None,
                 "price": money(prices.get(item, 0)),
@@ -2840,6 +2845,10 @@ def _supply(
     sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"]}
             for b in businesses}
     held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
+    # What each shelf sells a week, as a day: the trading-day rate over the
+    # days the shop traded in the last week (_business's weekSold). Every
+    # weekly figure reads this; a daily top-up reads the trading-day rate.
+    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"]} for b in businesses}
 
     # Most of today is already spent. A save taken at 23:00 on a Saturday has one
     # hour of Saturday's selling left in it, not a whole day of it, and charging
@@ -2911,7 +2920,7 @@ def _supply(
             return 0.0  # a pier or someone else's address: an export, not a draw
         if (key, item) in drawn:
             return drawn[(key, item)]
-        total = sold.get(key, {}).get(item, 0.0)
+        total = sold_week.get(key, {}).get(item, 0.0)
         for dest_key, dest_item, _ in edges.get(key, []):
             if dest_item == item:
                 total += draw(dest_key, item, seen | {key})
@@ -2949,6 +2958,7 @@ def _supply(
     round_days = collections.defaultdict(set)
     inbound_days = collections.defaultdict(set)
     first_logged = {}  # the oldest day a site's log still holds
+    first_seen = {}  # (site, item) -> the oldest day its whole log names the item
     log_full = set()  # sites whose log is at its sixty, so its oldest day is partial
     rounds_today = set()  # (site, item) whose round has already left today
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -2961,6 +2971,10 @@ def _supply(
             when = transaction.get("dayOfDelivery")
             if when is not None:
                 first_logged[key] = min(first_logged.get(key, when), when)
+                for entry in save.items(transaction.get("deliveryItems")):
+                    if entry.get("itemName") and entry.get("amountDelivered", 0):
+                        seen_at = (key, entry["itemName"])
+                        first_seen[seen_at] = min(first_seen.get(seen_at, when), when)
             if when == day:
                 rounds_today.update(
                     (key, entry["itemName"])
@@ -2984,12 +2998,32 @@ def _supply(
                     inbound_days[key].add(when)
                 by_day[key][entry["itemName"]][when] += amount
 
+    def first_fill(dest: str, item: str) -> tuple:
+        """(day, units) of a site's first fill of `item` inside the window: the
+        first day its whole log names the item, when that falls in the window
+        and the log reaches further back; else (None, 0)."""
+        first = first_seen.get((dest, item))
+        if first is None or first < day - SHIPPED_WINDOW or first >= day:
+            return None, 0.0
+        # A log that starts that very day cannot tell a first fill from the
+        # first round it happens to hold.
+        if first_logged.get(dest, first) >= first:
+            return None, 0.0
+        return first, in_by_day[dest][item].get(first, 0.0)
+
     def shipped_per_day(key: str, item: str) -> float | None:
-        """Measured daily outflow, or None when too few rounds are on record."""
+        """Measured daily outflow, or None when too few rounds are on record.
+        A one-off first fill of a site on a plan from here (a new target's
+        first round) is no draw, and comes off the day it left."""
         days = round_days.get(key, ())
         if len(days) < SHIPPED_MIN_DAYS:
             return None
-        return shipped[key].get(item, 0.0) / len(days)
+        total = shipped[key].get(item, 0.0)
+        for dest in {d for d, i, _a in edges.get(key, []) if i == item and d != key}:
+            when, units = first_fill(dest, item)
+            if when is not None:
+                total -= min(units, out_by_day[key][item].get(when, 0.0))
+        return max(0.0, total) / len(days)
 
     def received_per_day(key: str, item: str) -> float | None:
         """Measured daily inflow, or None when too few rounds are on record."""
@@ -3509,7 +3543,9 @@ def _supply(
         key = business["key"]
         young = (business["status"] == "retail"
                  and day - business.get("opened", day) < NEW_SITE_DAYS)
-        rates = dict(sold.get(key, {}))
+        # A shop a week old sells its week; one younger its trading-day rate
+        # until its coming week can be read off a line.
+        rates = dict((sold if young else sold_week).get(key, {}))
         for line in business["lines"]:
             if young and rates.get(line["slug"], 0) > 0:
                 ramping.add(key)
@@ -3552,6 +3588,11 @@ def _supply(
         "byDay": lambda key, item: by_day[key][item],
         "outByDay": lambda key, item: out_by_day[key][item],
         "inByDay": lambda key, item: in_by_day[key][item],
+        # The oldest day the site's whole log names the item, and whether the
+        # log is so full that its oldest day may be cut short.
+        "firstSeen": lambda key, item: first_seen.get((key, item)),
+        "logCut": lambda key: key in log_full,
+        "firstLogged": lambda key: first_logged.get(key),
         # A shop listing the item sells it, and so does any site whose line
         # for it shows sales, whatever its type.
         "sells": lambda key, item: key in index and (
@@ -3577,7 +3618,10 @@ def _supply(
         made_at |= {(key, line["slug"]) for line in site["lines"]}
         for row in site["needs"]:
             need_rows[(key, row["slug"])] = row
-    machine_sites = {businesses[site["s"]]["key"] for site in factories.get("sites", [])}
+    # A factory with a machine whose recipe the board cannot read: what
+    # arrives there may be what that machine eats.
+    unread_sites = {businesses[site["s"]]["key"] for site in factories.get("sites", [])
+                    if site.get("unnamed")}
 
     def line_need(row, mode):
         return row["perDay"] if mode == "cap" else row.get("demDay", row["perDay"])
@@ -3595,8 +3639,11 @@ def _supply(
             if dest_item != item or dest not in index or dest in seen or dest == key:
                 continue
             if businesses[index[dest]]["status"] == "retail":
-                total += sold.get(dest, {}).get(item, 0.0)
-                waits = waits or young_shop(dest)
+                # A shop too new to have a week behind it sells at its
+                # trading-day rate, not at the few days it has traded yet.
+                young = young_shop(dest)
+                total += (sold if young else sold_week).get(dest, {}).get(item, 0.0)
+                waits = waits or young
                 continue
             row = need_rows.get((dest, item))
             if row:
@@ -3645,8 +3692,10 @@ def _supply(
                 if business["status"] == "retail":
                     if young_shop(key):
                         continue
-                    per_day = sold.get(key, {}).get(item, 0.0)
-                    busiest = per_day * factor
+                    # Weeks of what it sells in a week; the busiest day, for a
+                    # top-up target, at the trading-day rate.
+                    per_day = sold_week.get(key, {}).get(item, 0.0)
+                    busiest = sold.get(key, {}).get(item, 0.0) * factor
                 elif row:
                     if row.get("firstFill"):
                         continue
@@ -3654,7 +3703,7 @@ def _supply(
                     onward, _waits = plan_draw(key, item, mode)
                     per_day += onward
                     busiest = per_day
-                elif key in machine_sites and not any(i == item for _d, i, _a in edges.get(key, [])):
+                elif key in unread_sites and not any(i == item for _d, i, _a in edges.get(key, [])):
                     # A factory holding what no named line eats (a recipe the
                     # board cannot read): what arrives is what its machines
                     # draw, never nothing while deliveries come in.
@@ -3662,7 +3711,7 @@ def _supply(
                     busiest = per_day
                 else:
                     per_day, waits = plan_draw(key, item, mode)
-                    per_day += sold.get(key, {}).get(item, 0.0)
+                    per_day += sold_week.get(key, {}).get(item, 0.0)
                     if not per_day:
                         if waits:
                             continue
@@ -3693,7 +3742,9 @@ def _supply(
                     if brings and brings >= IDLE_WEEKS * per_day * 7:
                         entry.update(why="importHigh", importLevel=brings,
                                      smart=bool(supply.get("smart")))
-                    elif target and target >= IDLE_WEEKS * 7 * busiest:
+                    elif target and (target >= IDLE_WEEKS * 7 * busiest
+                                     # a shelf at its target holds what the target puts there
+                                     or (business["status"] == "retail" and target >= units)):
                         entry["why"] = "targetHigh"
                     else:
                         entry["why"] = "overstock"
@@ -3713,6 +3764,12 @@ def _supply(
                 row["dem"] = changed
         idle_rows.append(row)
     idle_rows.sort(key=lambda r: (-(r["weeks"] or 999), r["s"], r["slug"]))
+    # A depot line nothing draws on (its only measured outflow a one-off fill)
+    # has no draw to walk to the drop: it is idle stock, not a holding that
+    # reaches the import, so Before the import leaves it to Idle stock.
+    still = {(index[key], item) for (key, item), by_mode in idle_by.items()
+             if (by_mode.get("cap") or {}).get("dead")}
+    import_rows = [r for r in import_rows if (r["s"], r["slug"]) not in still]
 
     # What the facts carry: the idle verdict in each mode, and, for stock no
     # plan sends on while own sites sell or need it, the sites it could feed
@@ -4067,17 +4124,12 @@ def _supply(
         entry["short"] = sum(1 for i in entry["items"] if i["fit"] == "short")
         entry["tight"] = sum(1 for i in entry["items"] if i["fit"] == "tight")
         entry["low"] = sum(1 for i in entry["items"] if i["low"])
-        # Of the short, those with no order at all: no plan, or a paused import.
-        entry["unsupplied"] = sum(
-            1 for i in entry["items"] if i.get("why") in ("paused", "unplanned")
-        )
         entry["stock"] = sum(i["stock"] for i in entry["items"])
 
     for entry in nodes.values():
         entry.setdefault("tight", 0)
         entry.setdefault("short", 0)
         entry.setdefault("low", 0)
-        entry.setdefault("unsupplied", 0)
         entry.setdefault("stock", 0)
 
     # A site earns a place on the diagram by being on a plan or by holding
@@ -4135,7 +4187,8 @@ def _supply_status(p: dict) -> tuple:
                a factory input, order for a depot; severity `noplanLvl`)
     new     -- too young to judge (`young` is the why: young or firstFill)
     short   -- `short` lists what falls short, most telling first: order,
-               shortfall (cover to the drop), target, dry
+               shortfall (cover to the drop), target, dry; critical, or
+               `shortLvl` (a wholesale order whose stock reaches the drop: warn)
     stalled -- planned, the source holds it, little arrives, and neither a
                Produce up to limit nor staffing explains it (`stalled`:
                notDrawn, or waiting for another input, which is info)
@@ -4154,7 +4207,7 @@ def _supply_status(p: dict) -> tuple:
     if p.get("young"):
         return "new", p["young"], "info"
     if p.get("short"):
-        return "short", p["short"][0], "critical"
+        return "short", p["short"][0], p.get("shortLvl", "critical")
     if p.get("stalled"):
         return "stalled", p["stalled"], "info" if p["stalled"] == "waiting" else "warn"
     if p.get("idle"):
@@ -4162,6 +4215,17 @@ def _supply_status(p: dict) -> tuple:
     if p.get("tight"):
         return "tight", p["tight"], "warn"
     return "covered", p.get("covered"), "ok"
+
+
+def _week_sold(business: dict, line: dict) -> float:
+    """What a shelf sells a week: _business's weekSold, or, on a hand-built
+    line without it, its trading-day rate over as many days as it traded."""
+    if "weekSold" in line:
+        return line["weekSold"]
+    return line.get("tradeRate", line["rate"]) * min(7, business.get("tradeDays", 7))
+
+
+SET_WORDS = ("short", "tight", "noplan")  # the words whose fact carries a figure to set
 
 
 def _supply_fact(facts: dict, s, slug: str, mode: str = "cap") -> dict | None:
@@ -4276,8 +4340,19 @@ def _supply_facts(ctx: dict) -> dict:
             p["tight"] = "order"
         elif measured and row["coverFit"] == "tight":
             p["tight"] = "shortfall"
-        if covered or (inbound and not entry and not lines_use):
+        if covered:
             p["covered"] = "route"
+        elif inbound and not entry and not lines_use:
+            # Topped up each morning from another of your sites and imported
+            # by nobody: the top-up has to carry a day of what leaves.
+            # (All of what leaves: the route is the whole of the supply.)
+            top = target_at[(key, slug)][0]
+            if gross and _below(top, gross / 7):
+                p["short"].append("target")
+            elif gross and _below(top, gross * (1 + SUPPLY_MARGIN) / 7):
+                p["tight"] = "target"
+            else:
+                p["covered"] = "route"
         set_to = None
         if not paused and need and (_below(brought, need) if entry else p.get("noplan")):
             set_to = _raise_import(entry, need) if entry else _ceil_ten(need)
@@ -4345,8 +4420,9 @@ def _supply_facts(ctx: dict) -> dict:
         young = rate > 0 and business.get("tradeDays", MIN_TRADE_DAYS) < MIN_TRADE_DAYS
         deal = wholesale.get((key, slug))
         if deal and not target:
-            use = round(max(rate, 0.0) * 7)
-            need = round(max(rate, 0.0) * 7 * (1 + SUPPLY_MARGIN))
+            week = max(_week_sold(business, line), 0.0)
+            use = round(week)
+            need = round(week * (1 + SUPPLY_MARGIN))
             have = deal["weekly"]
             p = {"short": []}
             if young:
@@ -4355,6 +4431,9 @@ def _supply_facts(ctx: dict) -> dict:
                 p["short"].append("order")
             if rate > 0 and deal["days"] and _below(line["units"], rate * deal["days"]):
                 p["short"].append("shortfall")
+            # An order under the week is a warning while the stock reaches the
+            # next drop; the stock running out before it is critical.
+            p["shortLvl"] = "critical" if "shortfall" in p["short"] else "warn"
             if need and _below(have, need):
                 p["tight"] = "order"
             set_to = _ceil_ten(need) if need and _below(have, need) else None
@@ -4398,7 +4477,8 @@ def _supply_facts(ctx: dict) -> dict:
     facts = collections.defaultdict(dict)
     for key, slug in _in_order(keys):
         business = businesses[index[key]]
-        if business["status"] == "vacant":
+        # An office's fees and the equipment it holds are not supply.
+        if business["status"] in ("vacant", "office"):
             continue
         line = held.get((key, slug))
         stock = line["units"] if line else 0
@@ -4432,7 +4512,26 @@ def _supply_facts(ctx: dict) -> dict:
                 p.update(more)
             st, why, lvl = _supply_status(p)
             fact = {"st": st, "why": why, "lvl": lvl, "role": role, "cad": cad, **fields}
+            # Only a word that asks for a change carries a figure to set: a new
+            # line waits for its history, an idle one for its stock to run down.
+            if st not in SET_WORDS:
+                fact["setTo"] = None
             fact.update(extra.get((key, slug), {}))
+            # A factory input topped up from a depot and imported to the
+            # factory as well: the input keeps its one daily word, and its own
+            # contract is judged on the week beside it (`import`), as a depot
+            # line is, so Weekly imports and the findings see that contract.
+            row = inputs.get((key, slug))
+            if (role == "input" and cad != "weekly" and row
+                    and row.get("factoryImportSite") is not None and entry):
+                ip, ifields, _icad = weekly(key, slug, mode, stock)
+                ist, iwhy, ilvl = _supply_status(ip)
+                ifields.pop("imp", None)
+                if ist not in SET_WORDS:
+                    ifields["setTo"] = None
+                fact["import"] = {"st": ist, "why": iwhy, "lvl": ilvl, "role": "input",
+                                  "cad": "weekly", **ifields}
+                fact["imp"] = True
             if mode == "dem" and role in ("input", "depot"):
                 ramp = sorted(ramp_at.get((key, slug)) or ())
                 if ramp:
@@ -5116,11 +5215,17 @@ def _factories(
                     ramp_at[(import_source, slug)] |= ramp
             row["demDay"] = round(row["demDay"])
             # A line on its first fill: the first of it arrived in the last
-            # MIN_TRADE_DAYS days and nothing before, so the log cannot judge
-            # it yet. A line fed all week and then not at all is not new.
+            # MIN_TRADE_DAYS days, and the site's whole log names it nowhere
+            # before, so the log cannot judge it yet. A line fed before and
+            # starved now is not new, whatever the first days of the window
+            # hold; nor is one a log cut short at its oldest day may hide.
             fed = [d for d, amount in in_by_day(key, slug).items() if amount > 0]
+            first = flow.get("firstSeen", lambda *_: None)(key, slug)
+            first_logged_day = flow.get("firstLogged", lambda *_: None)(key)
             row["firstFill"] = bool(
-                fed and flow.get("day") is not None and min(fed) >= flow["day"] - MIN_TRADE_DAYS)
+                fed and flow.get("day") is not None and first is not None
+                and first == min(fed) and first >= flow["day"] - MIN_TRADE_DAYS
+                and not (flow.get("logCut", lambda *_: False)(key) and first_logged_day == first))
         # What the page needs to work out a line the player names by hand:
         # every top-up into this factory, and what arrived over the week.
         into = {
@@ -10099,7 +10204,7 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                         f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
                         f"against the {fact['use']:,} it sells")
                 notes.append(_finding(
-                    "critical", b["name"], "outruns", text, key=b["key"],
+                    fact["lvl"], b["name"], "outruns", text, key=b["key"],
                     rank=-round(fact["use"] / fact["have"] * 100) if fact["have"] else 0,
                     subject=line["item"], ev={"slug": slug}))
             elif fact["st"] == "short" and fact["why"] == "target":
@@ -10136,6 +10241,8 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             continue
         for slug in _in_order(facts[s_key]):
             fact = _supply_fact(facts, s, slug, mode)
+            # A factory's own contract beside a daily top-up is its `import`.
+            fact = fact.get("import") or fact
             if fact["cad"] != "weekly" or fact["role"] not in ("depot", "input"):
                 continue
             st, why = fact["st"], fact["why"]
@@ -17289,7 +17396,18 @@ function spInputsRead(site){
   const worst = (site.needs || []).reduce((w, n) => !w || szRank(szNeed(site, n)) < szRank(szNeed(site, w)) ? n : w, null);
   if(!worst) return "&nbsp;";
   const f = szNeed(site, worst);
-  if(f.st === "covered" || f.st === "made") return "Every input arrives in step";
+  if(f.st === "covered" || f.st === "made"){
+    /* Covered because Produce up to or the roster holds the machines back
+       says so: the inputs arrive as the lines make, not as they could. */
+    const held = (site.needs || []).map(n => [n, szNeed(site, n)])
+      .find(([, g]) => g.st === "covered" && (g.why === "limit" || g.why === "staffing"));
+    if(!held) return "Every input arrives in step";
+    if(held[1].why === "limit"){
+      const n = (site.lines || []).filter(l => l.limitHeld).length;
+      return `<b>Produce up to</b> holds ${n ? `${n} line${n === 1 ? "" : "s"}` : "the lines"} back; the inputs arrive as they make`;
+    }
+    return `<b>${spEsc(held[0].item)}</b> · ${spNeedRead(held[0], held[1])}`;
+  }
   return `<b>${spEsc(worst.item)}</b> · ${spNeedRead(worst, f)}`;
 }
 function spMachines(count, gaps, slots){
@@ -18488,7 +18606,9 @@ function drawLogistics(){
     const s = +si;
     if(!D.businesses[s]) return;
     const rows = Object.keys(facts[si]).filter(slug => facts[si][slug].imp).map(slug => {
-      const fact = szFact(s, slug);
+      /* A factory input topped up daily and imported too: its contract's
+         week is the fact's `import`. */
+      const whole = szFact(s, slug), fact = whole.import || whole;
       const contract = (depotsKnown[si] || {})[slug] || {};
       const impId = impSetId(D.businesses[s].key, slug);
       let setting = importSetting(fact, contract, edits[impId]);
@@ -23352,7 +23472,9 @@ function gwAllowance(importer, slug){
    gets something; started, all its products count and each one here is
    written, 0 included. A running contract whose every amount would come to 0
    keeps its amounts, since the game runs no contract with nothing to order
-   and a write never stops one. A contract with no purchasing agent cannot
+   and a write never stops one; and a product of a running contract that the
+   caps leave nothing while its line wants some keeps its own amount, however
+   its other products fare. A contract with no purchasing agent cannot
    deliver and is left out. */
 function gwImportPlan(depotKey){
   const lines = gwImportRows
@@ -23438,6 +23560,16 @@ function gwImportPlan(depotKey){
     if(group.some(e => e.c.amount > 0) && t.got.every(n => n === 0)){
       t = tryContract(group, true);
       group.filter(e => e.line).forEach(e => { if(!e.line.kept.includes(e.c)) e.line.kept.push(e.c); });
+    } else {
+      /* A product the caps leave nothing while its line still wants some,
+         beside one the contract still writes: writing it 0 would stop what
+         it brings. It keeps its standing amount, which the cap passes nothing
+         of, and the line's week stays uncovered, said in the dialog. */
+      group.forEach((e, n) => {
+        if(!e.line || t.got[n] !== 0 || !(e.c.amount > 0) || !(t.need.get(e.line) > 0)) return;
+        t.got[n] = e.c.amount;
+        if(!e.line.kept.includes(e.c)) e.line.kept.push(e.c);
+      });
     }
     commit(group, t);
   }
