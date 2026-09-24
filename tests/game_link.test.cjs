@@ -60,7 +60,7 @@ function harness({routes = {}} = {}) {
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
     $: el, strip,
-    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null,
+    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
     state(tone, head, meta) { seen.states.push([tone, head, meta]); strip.tone = tone; },
@@ -69,7 +69,7 @@ function harness({routes = {}} = {}) {
     stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
-    closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {},
+    closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
     idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
     startAttempt: () => true, finishAttempt() {},
     async buildFrom(file) { seen.builds.push(file); },
@@ -86,11 +86,23 @@ function harness({routes = {}} = {}) {
   });
   vm.runInContext(section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
+  // linkFetch only ever reaches an address on this computer; the tests that
+  // call it directly talk to the default one.
+  vm.runInContext('linkUrl = "http://127.0.0.1:8322";', context);
   return {
     context, seen, els, routes, remembered, waits,
     run: (expr) => vm.runInContext(expr, context),
   };
 }
+
+test('linkFetch reaches only an address on this computer', async () => {
+  for (const link of ['null', 'https://evil.example', '']) {
+    const h = harness({routes: {health: HEALTH}});
+    h.run(`linkUrl = ${JSON.stringify(link) === '""' ? 'null' : JSON.stringify(link)}`);
+    await assert.rejects(h.run('linkFetch("/write/uniforms", {method: "POST"})'), (err) => err.unsent === true);
+    assert.deepEqual(h.seen.calls, [], link);
+  }
+});
 
 test('linkFetch tries loopback, then local, then no annotation, and remembers', async () => {
   const h = harness({routes: {health: HEALTH}});
@@ -228,7 +240,9 @@ test('a new stamp is read with the old ETag and built under the live name', asyn
   assert.equal(file.name, 'abc-live.hsg');
   assert.equal(file.lastModified, Date.parse('2026-09-22T14:33:20Z'), 'the file time is refreshedAt');
   assert.equal(file.linkStamp, 's9');
-  assert.equal(h.run('lastLinkStamp'), 's9');
+  // The stamp is the board's only once buildFrom() has had the board take the
+  // bytes (the stub here takes nothing): a failed build leaves the old one.
+  assert.equal(h.run('lastLinkStamp'), 's1');
   const save = h.seen.calls.find(([url]) => url.endsWith('/save'));
   assert.equal(save[1].headers['If-None-Match'], '"s1"', 'the stamp on screen is the ETag asked against');
 });

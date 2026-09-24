@@ -1,5 +1,11 @@
 [
   {
+    "pr": 82,
+    "date": "2026-09-24",
+    "title": "Write to the game from the board (Big Copilot Link 0.2.0)",
+    "summary": "With the Big Copilot Link mod 0.2.0, the board can now make three changes in your game for you: set uniforms where roles have none, apply the import amounts from Plan imports, and write a shop's staffing plan, for one shop or a run of shops. Every change shows what the game will do before you apply it, can be undone once, and is refused, with nothing written, if the game has moved on since the board last read it. The first write from a browser asks for approval in the game; after that it is remembered."
+  },
+  {
     "pr": 83,
     "date": "2026-09-24",
     "title": "Fix: warehouses fed by your own factory no longer read as short",

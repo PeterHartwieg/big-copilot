@@ -22,6 +22,15 @@ Without the mod, Big Copilot reads a save file you pick. With it, the board read
 [*]You no longer pick a save folder or look for the newest Recover save.
 [/list]
 
+[h2]New in 0.2.0: make the changes from the board[/h2]
+The board can now make three changes in your game for you:
+[list]
+[*][b]Uniforms:[/b] set the default uniform wherever a role has none.
+[*][b]Imports:[/b] apply the amounts from Plan imports to your import contracts.
+[*][b]Staffing:[/b] write a shop's staffing plan into the game, for one shop or a run of shops.
+[/list]
+Every change shows what the game will do before you apply it and can be undone once. If the game has changed since the board last read it, the change is refused and nothing is written. The first change from a browser asks for your approval in the game; after that the browser is remembered.
+
 [h2]How to use it[/h2]
 [olist]
 [*]Subscribe, then enable [b]Big Copilot Link[/b] in the game's Mods menu.
@@ -34,15 +43,15 @@ Without the mod, Big Copilot reads a save file you pick. With it, the board read
 [*]The mod listens on 127.0.0.1:8322 only. Nothing outside your PC can reach it.
 [*]It answers bigcopilot.com and pages on your own PC. Other websites get nothing.
 [*]The board reads your company in your browser. Nothing is uploaded.
-[*]The mod writes no files and changes nothing in the game.
+[*]The mod writes no files. It changes your game only when you apply a change on the board and approve that browser in the game.
 [/list]
 
 [h2]Good to know[/h2]
 [list]
 [*]A save made with any mod enabled is a modded save. If you load an unmodded save with the mod on, the game asks "Load with mods?" and writes a copy named "(Modded)", leaving your original save as it was. The game turns bug reporting off for modded saves. That is the game's rule for every mod.
 [*]The mod does nothing while the board is closed. It only refreshes when Big Copilot has asked in the last two minutes.
-[*]Options, under Big Copilot Link in the game's mod options: switch it off, change the port (8322 to 8325), refresh every game hour, refresh when a building loads.
-[*]Made for game build 3680, on Windows and macOS.
+[*]Options, under Big Copilot Link in the game's mod options: switch it off, change the port (8322 to 8325), refresh every game hour, refresh when a building loads, forget approved browsers.
+[*]Made for game build 3682, on Windows and macOS.
 [/list]
 
 [h2]Links[/h2]

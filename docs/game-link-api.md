@@ -45,6 +45,8 @@ path is on.
 A serialization is called a **refresh**. Each successful refresh gets a new **stamp**,
 an opaque string; clients compare stamps for equality and never parse them. The mock
 and the mod both use `"<day>-<hour>-<unix seconds>"` but nothing may depend on it.
+The mod never issues a stamp twice within a city session; across loads that rests on the
+clock, so clients must not rely on it.
 
 ### When the mod refreshes
 
@@ -100,7 +102,9 @@ state from the listener's threads.
   "stamp": "34-14-1758550000",
   "busy": false,
   "size": 5123456,
-  "refreshedAt": "2026-09-22T14:33:20Z"
+  "refreshedAt": "2026-09-22T14:33:20Z",
+  "writes": ["uniforms", "imports", "schedule"],
+  "paired": false
 }
 ```
 
@@ -112,6 +116,11 @@ state from the listener's threads.
 - `busy` is true while a refresh is in flight.
 - `cash`, `day`, `hour`, `minute` are the live values for a ticker; they can be newer
   than the served bytes.
+- `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
+  sends no `writes`, which a client reads as `[]`. `paired` is true only when this request
+  carried a token the game approved for its origin, so a poll without one always says
+  false. Both are
+  additive: `schemaVersion` stays 1.
 
 ### `GET /save`
 
@@ -158,9 +167,276 @@ the mod sees it. Browsers' `fetch` and Python's `urllib` send it; curl does not,
 Every JSON answer, `/health` included, carries `Cache-Control: no-store`: a cached
 `/health` would hide a moved stamp.
 
+### Writes
+
+Mod 0.2.0 and later. Three kinds change the game — `uniforms`, `imports`, `schedule` —
+and a fourth undoes the last write of a kind. The scope and the game rules behind each are
+`docs/mod-write-back-scope.md`; this section is only the wire.
+
+**Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
+at most 256 KiB, else `413 {"error":"too_large"}`) and the header
+`Authorization: Bearer <token>`, the token the game issued this browser when the player
+approved it (see "Approving a browser" below).
+
+- A request that names the same site, contract or product twice is `400 bad_request`.
+- **Approval.** A missing, unknown, expired or forgotten token, or one used from another
+  origin than the one it was issued to, answers `401 {"error":"not_paired"}` before the body
+  is read; the page drops its token and asks the game again. Reads (`/health`, `/save`,
+  `/refresh`) never need one.
+- **Dry run.** `"dryRun": true` in the body runs every check and answers the verdict and
+  the values the game would hold, applying nothing. A well-formed, paired dry run always
+  answers `200`, with `"ok": false` and the per-row `error`s when the real write would be
+  refused. The page runs one when its confirm dialog opens.
+- **Apply** (`"dryRun": false` or absent) is all or nothing: every row passes or nothing
+  is written.
+- **Compare-and-set.** Rows carry `expect`, the value the page read from the bytes. A
+  mismatch refuses an apply with `409 {"error":"changed", ...}` (a dry run answers `200`,
+  `ok` false, the row's error `changed`); the page refreshes and re-plans. `changed` is
+  checked before any rule, after `not_found` (there is nothing to compare without the target).
+- **Threading.** The mod runs the whole check-and-apply on the game's main thread. While a
+  refresh walk is in flight on the worker thread the main thread holds the write until the
+  walk has published; if the write has not started within three seconds it is withdrawn
+  and the answer is `503 {"error":"busy"}`: nothing was written. A write that has started
+  is always waited for and answered with its result. The page retries after a second, up to
+  three times.
+- **An apply that changes nothing** still answers `200` with a `stamp` and a refresh, so
+  the page's wait ends; it replaces the kind's undo with nothing.
+- **After an apply** the mod calls `SaveGameManager.MarkChange()`, shows an in-game
+  notification ("Big Copilot updated <what> at <business>"), and starts a refresh that may
+  pass the fifteen-second window (never an in-flight one). The answer carries `stamp`,
+  the stamp before that refresh; the page polls `/health` until it moves, as after
+  `POST /refresh`, and rebuilds from the new bytes. No game save.
+
+**Answers common to every kind**
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `200` | `{"ok": true, "kind", "dryRun", ...}` | Applied, or a dry run's verdict (`ok` false when an apply would be refused) |
+| `400` | `{"error":"bad_request","detail":"<what>"}` | Not JSON, a missing or mistyped field |
+| `401` | `{"error":"not_paired"}` | No valid token for this origin: ask the game to approve this browser |
+| `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
+| `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
+| `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`) |
+| `413` | `{"error":"too_large"}` | Body over 256 KiB |
+| `503` | `{"error":"busy"}` or `{"error":"main_thread_unavailable"}` | Walk in flight past three seconds, or no city loaded |
+
+`rows` in a `409` has the same shape as in the dry run's `200`, so the page renders both
+the same way. An address on the wire is `{"street": "<StreetName>", "number": <StreetNumber>}`,
+the two fields of the building registration as the save holds them.
+
+#### Approving a browser
+
+The first write from a browser asks the player in the game, once; the answer is remembered
+for that browser across game launches.
+
+1. `POST /pair/request {"name": "Chrome on Windows"}`, no token, from an allowed origin
+   (a request with no `Origin`, such as the CLI watcher, is its own origin, shown as "a
+   program on this computer"). `name` is the page's own short label for the browser: the
+   mod keeps only ASCII letters, digits, spaces and `. , - ( ) / +`, collapses runs of spaces,
+   cuts it at 39 characters (and appends `_` if that is one of the game's text keys), and
+   uses "a browser" when nothing is left. The mod shows the game's own confirm
+   popup (`HudConfirm`), "Allow Big Copilot to change your game?", naming the origin and the
+   name, with Allow and Deny, and answers `202 {"requestId": "...", "expiresIn": 60}`.
+2. `GET /pair/status?id=<requestId>` answers `{"state": "pending"}`, `{"state": "denied"}`
+   (Deny, or the popup dismissed: Escape, opening the phone or the city map), `{"state": "expired"}` (60 s
+   without an answer; the mod closes its own popup), or `{"state": "approved", "token":
+   "..."}`. The token is 32 random bytes, base64url, and is answered exactly once; later
+   polls of an approved request answer `{"state": "approved"}` without it. The page polls
+   every second. An unknown id answers `404 {"error": "not_found"}`.
+3. The page keeps the token in `localStorage` for its origin and sends it as
+   `Authorization: Bearer <token>` on every write.
+
+Refusals of `POST /pair/request`:
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `409` | `{"error":"cannot_pair","reason":"popup_open"}` | The game's confirm popup is already open |
+| `409` | `{"error":"cannot_pair","reason":"no_ui"}` | The game has no popup to show right now |
+| `409` | `{"error":"cannot_pair","reason":"saving"}` | As `cannot_write`: `saving`, `placement`, `interior`, `casino`, `other` |
+| `429` | `{"error":"throttled","retryAfter":<s>}` | A request is already pending, or this origin was just denied or let one expire (10 s, then 30 s, then 120 s on repeats) |
+| `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist: no popup is shown |
+| `400` / `413` | `bad_request` / `too_large` | Not JSON, or a body over 4 KiB |
+| `503` | `{"error":"busy"}` / `{"error":"main_thread_unavailable"}` | The game's main thread did not take the request within three seconds; no popup was shown |
+
+Rules the mod keeps:
+
+- The popup is never skippable (`allowConfirmationSkip` false), and the mod refuses to call
+  it when no popup UI is registered, since the game would then confirm unseen.
+- A confirm that lands within one second of the popup opening is taken as a dismissal, not
+  an approval: the game also confirms on its Confirm key, which the player may have been
+  pressing for something else.
+- Approved browsers are stored in `PlayerPrefs` (`BigCopilotLink.approved`) as the SHA-256
+  of each token with its origin, name, and when it was made and last used; never the token
+  itself. At most 10 are kept (a never-used one goes first, else the one used longest ago); one unused for 90 days expires. The mod's
+  options panel has "Forget approved browsers".
+
+#### `POST /write/uniforms`
+
+```json
+{"dryRun": true,
+ "sites": [{"address": {"street": "ba:street_secondavenue", "number": 12},
+            "skills": ["ba:skill_customerservice", "ba:skill_cleaning"],
+            "presetId": null}]}
+```
+
+`skills` null (the page's default) means every skill the site's Uniforms window offers, so
+the warning cannot come back when the roster changes; a list limits the write to those
+skills. `presetId` null means the preset
+named "Default", else the first of `GameInstance.employeePresets`; a string names one.
+
+```json
+{"ok": true, "kind": "uniforms", "dryRun": true,
+ "presets": [{"id": "…", "name": "Default"}],
+ "rows": [{"address": {}, "business": "Costy Co 2", "presetId": "…", "presetName": "Default",
+           "set": ["ba:skill_customerservice"],
+           "skipped": [{"skill": "ba:skill_cleaning", "reason": "already_set"}],
+           "error": null}]}
+```
+
+- `set` is what the write fills (a dry run: would fill): every requested (or, for `skills`
+  null, offered) skill that has no uniform yet. A skill with a uniform is skipped as
+  `already_set` and never overwritten; a skill the window does not offer is skipped as
+  `not_offered`. Neither is a refusal.
+- Row `error`: `not_found` (no registration at that address), `not_rented`, `no_business`
+  (an empty building), `no_locker` (no item tagged `isuniformlocker`), `no_preset`.
+- No `expect`: "has no uniform yet" is the compare-and-set.
+
+#### `POST /write/imports`
+
+```json
+{"dryRun": true,
+ "contracts": [{"id": "<ImportPartnership id>", "activate": true,
+                "products": [{"itemName": "ba:item_…", "warehouse": {"street": "…", "number": 3},
+                              "amount": 4200, "expect": 3800}]}],
+ "order": ["<id>", "<id>"]}
+```
+
+- `contracts[].id` is the payload's `contracts[].id`; a product is found by `itemName` and
+  `warehouse` among that contract's existing products (a write never adds or removes a
+  product). `expect` is the product's `amount` as the bytes had it.
+- `activate: true` switches a stopped contract on the way the game's Start does, and turns
+  Repeating on with it; on a running contract it changes nothing. `false` leaves the
+  running state alone. A write never stops a contract.
+- An amount change on a running contract needs `DeliveryHelper.CanModifyContract` for its
+  next delivery, as the game's Cancel does; inside the lock window (Sunday 20:00 to Monday
+  08:00) that contract is refused `locked`.
+- `order`, optional (null or absent keeps the order): contract ids in the new relative order.
+  The mod takes the slots those contracts occupy in `GameInstance.importPartnerships` and
+  refills the same slots in the given order; every other contract keeps its place. An id
+  that is not a contract is `not_found`.
+
+```json
+{"ok": true, "kind": "imports", "dryRun": true, "cash": 148230.5,
+ "rows": [{"id": "…", "importer": "…", "active": true, "repeating": true, "reactivated": true,
+           "nextDeliveryDay": 36, "nextDeliveryTotal": 23100.0, "error": null,
+           "reopens": null,
+           "products": [{"itemName": "…", "warehouse": {}, "before": 3800, "amount": 4200,
+                         "smart": true, "unitPrice": 5.5, "cap": 5000, "orderedThisWeek": 0,
+                         "error": null, "max": null}]}]}
+```
+
+- Values are what the contract holds after the write (a dry run: would hold).
+  `nextDeliveryTotal` is the game's `NextDeliveryTotal` for the contract as written.
+  `unitPrice` is per unit after the importer's discount. `cap` is the importer's weekly cap
+  for the item (null when none applies), `orderedThisWeek` what the player's contracts with
+  that importer already ordered of it this week.
+- Contract `error`: `not_found`, `no_agent` (no purchasing agent, or one who left),
+  `locked` (with `reopens: {"day": <game day>, "hour": 8}`), `screen_open` (the BizMan
+  plan screen is open on this contract, or the headquarters' purchasing-agent list while
+  `order` would reorder it), `no_amounts` (activating a contract whose amounts are all 0,
+  or setting every amount of a running one to 0: the game's Start refuses both), `changed`. A contract row's `error` repeats its first
+  product error, so a row can be judged without reading its products.
+- Product `error`: `not_found`, `no_warehouse`, `backorder` (the item is in a backorder
+  market event), `over_cap` (a plain contract's amount above what the importer allows,
+  with `max`), `changed`, `bad_amount` (negative or not a whole number). A Smart Delivery
+  amount is a stock level, never `over_cap`. `max` is what the importer still allows,
+  `max(0, cap - orderedThisWeek)`: urgent orders during the week count against the next
+  Monday's delivery, which is the one the amount is for. Inside the lock window the amount can only
+  be delivered on the Monday after, when the week's count has reset, so `max` is the full cap
+  (a restart, an activation or an edit to a stopped contract alike). `max` ignores the player's other contracts with the same importer and item; the game
+  trims those at delivery in plan order.
+- Activation lists, as extra product rows, products the request did not name that the
+  game's Start would refuse (`no_warehouse`). Rows also carry `reordered` (true when `order`
+  moved this contract).
+
+#### `POST /write/schedule`
+
+One business per call: its seven days of shifts are replaced.
+
+```json
+{"dryRun": true,
+ "address": {"street": "…", "number": 12},
+ "expect": "9f86d081",
+ "openAllHours": false,
+ "days": [{"d": 1, "shifts": [{"f": 8, "t": 20, "employeeId": "…", "itemInstanceId": "…"}]}]}
+```
+
+- `d` is the payload's weekday, `scheduleDays[i].day % 7` (1 is Monday, 0 Sunday). A day
+  not listed is written empty; all seven are replaced.
+- A shift's type is the mod's to choose, as the game's schedule screen does
+  (`GetWorkShiftType`: cleaning stations get the cleaning type).
+- `openAllHours: true` also sets every day open 0 to 24 (`isOpen`, one slot `{0, 24}`), the
+  full-cover plan's opening hours.
+- A headquarters is refused (`headquarters`): the game ties its shifts to the day's opening
+  slot on every open day, and unassigning people there clears their plans and import
+  contracts. The board plans no headquarters.
+- `expect` is the **shift print** of the business's current shifts (below).
+
+```json
+{"ok": true, "kind": "schedule", "dryRun": true, "address": {}, "business": "…",
+ "before": {"shifts": 84, "print": "9f86d081"}, "after": {"shifts": 90, "print": "1b4f0e98"},
+ "removed": 84, "added": 90, "openedHours": false,
+ "leftWithout": [{"employeeId": "…", "name": "Ana Silva"}],
+ "warnings": [{"type": "overworked", "employeeId": "…", "name": "…", "d": 3, "hours": 14}],
+ "siteError": null, "rows": []}
+```
+
+- `leftWithout`: people with a shift here before and none after; the game unassigns their
+  work and adds a to-do, as its own screen does.
+- `siteError`, the business's own refusal: `not_found`, `not_rented`, `screen_open` (the
+  BizMan schedule is open on this business, or an auto-fill is running on it),
+  `headquarters`, `changed`. In a `409 refused` the rows lead with `{"error": <siteError>}` (no `d`, `i`); a
+  `409 changed` has empty rows.
+- Shift `error`s in `rows`, each `{"d", "i" (index in that day's list), "error"}`:
+  `not_assigned` (the employee is not assigned to this business), `no_station` (no such item
+  here, or not a workstation), `no_skill` (`HasSkillForWorkstation` false), `bad_hours`
+  (whole hours, `0 <= f < t <= 24`, `t - f <= 12`), `overlap_person`, `overlap_station`.
+
+**Shift print.** Both sides compute it the same way: the page's payload (`ba_dashboard.py`,
+from the bytes) and the mod (from live state). For each entry of the business's
+`scheduleDays`, for each of its `workShifts`, one line
+`<day % 7>|<startingHour>|<endingHour>|<employeeId>|<itemInstanceId>|<type>`: integers in
+invariant decimal, a missing id as the empty string, a missing field at its default (0).
+Sort the lines by ordinal string order, join them with `\n`, and take FNV-1a 32-bit
+(offset basis `0x811c9dc5`, prime `0x01000193`) over the UTF-8 bytes; the print is eight
+lowercase hex digits. No shifts at all is the print of the empty string, `811c9dc5`.
+A test vector both sides pin: the two lines
+`0|0|12|AAAAemployeeAAAAAAAAAAAA|CCCCcleanCCCCCCCCCCCCCCC|0` and
+`1|8|20|AAAAemployeeAAAAAAAAAAAA|BBBBstationBBBBBBBBBBBBB|1` print as `ee01ac86`.
+
+#### `POST /write/undo`
+
+```json
+{"kind": "imports", "dryRun": false}
+```
+
+Restores what the last applied write of that kind changed, in this city session, where
+the target still holds what that write left there: uniforms only on the skills it set and
+still holding its preset; imports the amounts, running state, Repeating, urgent flag, next
+delivery day and plan order; the schedule the shifts and, when it opened them, the
+opening hours, after checking the restored shifts as a write would (a person moved away
+or a station sold since answers `changed`). Answers like the write it undoes, with `"undo": true`: uniforms list the
+skills it cleared in `set`; imports and schedule answer `before` as the state the undo
+found and the values as they now stand;
+`409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
+game has moved on. An undo is not itself undoable; a new write of the kind replaces what
+undo would restore. One board per game: with two boards writing the same kind, an undo
+restores whichever write came last.
+
 ### Anything else
 
-`404 {"error": "not_found", "endpoints": ["/health", "/save", "/refresh"]}`.
+`404 {"error": "not_found", "endpoints": [...]}`, listing the paths above (0.1.0 lists
+`/health`, `/save`, `/refresh`).
 Methods other than the ones above answer `405`.
 
 ## CORS and the browser
@@ -182,7 +458,7 @@ A preflight `OPTIONS` answers `204` with those headers plus:
 
 ```
 Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, If-None-Match
+Access-Control-Allow-Headers: Authorization, Content-Type, If-None-Match
 Access-Control-Max-Age: 600
 Access-Control-Allow-Private-Network: true     (only when the request carried
                                                 Access-Control-Request-Private-Network: true)

@@ -1,0 +1,195 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-23T15:00:00Z"
+ },
+ "title": "Big Copilot Write Dialogs",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1680,
+   "h": 740,
+   "title": "Uniforms · one shop",
+   "is_interactive": true
+  },
+  "UniformsAll.dc.html": {
+   "x": 0,
+   "y": 1100,
+   "w": 1144,
+   "h": 940,
+   "title": "Uniforms · every shop",
+   "is_interactive": true
+  },
+  "Imports.dc.html": {
+   "x": 0,
+   "y": 2400,
+   "w": 1680,
+   "h": 1180,
+   "title": "Imports",
+   "is_interactive": true
+  },
+  "Schedule.dc.html": {
+   "x": 0,
+   "y": 3940,
+   "w": 1680,
+   "h": 1070,
+   "title": "Schedule · one shop",
+   "is_interactive": true
+  },
+  "ScheduleAll.dc.html": {
+   "x": 0,
+   "y": 5370,
+   "w": 1680,
+   "h": 820,
+   "title": "Schedule · every planned site",
+   "is_interactive": true
+  },
+  "Permission.dc.html": {
+   "x": 0,
+   "y": 6550,
+   "w": 1680,
+   "h": 1020,
+   "title": "Permission · approve in game",
+   "is_interactive": true
+  },
+  "States.dc.html": {
+   "x": 0,
+   "y": 7930,
+   "w": 1680,
+   "h": 1960,
+   "title": "Shared states",
+   "is_interactive": true
+  },
+  "Buttons.dc.html": {
+   "x": 0,
+   "y": 10250,
+   "w": 1680,
+   "h": 1120,
+   "title": "Write buttons on the board",
+   "is_interactive": true
+  },
+  "PhoneUniforms.dc.html": {
+   "x": 1920,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · uniforms sheet",
+   "is_interactive": true
+  },
+  "PhoneImports.dc.html": {
+   "x": 2390,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · imports sheet",
+   "is_interactive": true
+  },
+  "PhoneUndo.dc.html": {
+   "x": 2860,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "Phone · Undo strip",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "UniformsAll.dc.html",
+  "Imports.dc.html",
+  "Schedule.dc.html",
+  "ScheduleAll.dc.html",
+  "Permission.dc.html",
+  "States.dc.html",
+  "Buttons.dc.html",
+  "PhoneUniforms.dc.html",
+  "PhoneImports.dc.html",
+  "PhoneUndo.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": -250,
+   "w": 560,
+   "maxH": 190,
+   "text": "Play it: pick a uniform in 02, press Set 3 uniforms, then Undo. Hover a role card: the line under the cards says what happens to it. Dashed shirt = no uniform, gets one; grey shirt with a lock = has one, never touched."
+  },
+  "try-uniformsall": {
+   "x": 0,
+   "y": 850,
+   "w": 560,
+   "maxH": 190,
+   "text": "Click “Leave it out” on the refused shop: the verdict turns green and Apply unlocks for the other six. Hover a row for its roles."
+  },
+  "try-imports": {
+   "x": 0,
+   "y": 2150,
+   "w": 560,
+   "maxH": 190,
+   "text": "Grey bar = what the contract holds now, green = what the write adds, red hatching past the cap = what the importers' caps leave uncovered. A tank is Smart Delivery (a stock level), a truck is a weekly amount."
+  },
+  "try-schedule": {
+   "x": 0,
+   "y": 3690,
+   "w": 560,
+   "maxH": 190,
+   "text": "Hover a day's bars for its entries and hours. In 02, flip the open-0-to-24 switch: the new hours in the strip go back to closed."
+  },
+  "try-scheduleall": {
+   "x": 0,
+   "y": 5120,
+   "w": 560,
+   "maxH": 190,
+   "text": "The dots under the title are the run: green written, hollow skipped, the ringed one on screen."
+  },
+  "try-permission": {
+   "x": 0,
+   "y": 6300,
+   "w": 560,
+   "maxH": 190,
+   "text": "Replaces the pairing code. The board's dialog waits while the game asks; one Allow per browser."
+  },
+  "try-states": {
+   "x": 0,
+   "y": 7680,
+   "w": 560,
+   "maxH": 190,
+   "text": "The wire under each title is the state at a glance: blue travelling asks, green agrees, red refuses, amber waits or moved on, grey is busy."
+  },
+  "try-buttons": {
+   "x": 0,
+   "y": 10000,
+   "w": 560,
+   "maxH": 190,
+   "text": "Hover a green button: a packet runs from the board's dot to the game."
+  },
+  "try-phoneuniforms": {
+   "x": 1920,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "At phone width the dialog is a bottom sheet; the role cards stay two to a row and the buttons go full width."
+  },
+  "try-phoneimports": {
+   "x": 2390,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "Imports cards stack; nothing scrolls sideways. The sheet scrolls inside itself."
+  },
+  "try-phoneundo": {
+   "x": 2860,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "After closing: the Undo strip sits above the board's foot."
+  }
+ },
+ "designSystems": []
+}

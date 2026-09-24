@@ -84,6 +84,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
+| `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
 | `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
 | `alerts` | `_alerts()`, its `lines` | `drawAlerts`, `kindCounts`; `web/map.js` `mapFindings` |

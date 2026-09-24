@@ -5,6 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
 const startup = source.slice(source.indexOf('    // A folder chosen on an earlier visit:'), source.lastIndexOf('  });'));
+// The loopback check a remembered link goes through, as app.js has it.
+const loopback = source.slice(source.indexOf('  function loopbackOrigin('), source.indexOf('  // Chrome and Edge hold a public page'));
 
 async function resume(permission, options = {}) {
   const loads = [];
@@ -19,7 +21,7 @@ async function resume(permission, options = {}) {
     canHandle:options.supported !== false, dirHandle:null, sourceGen:0,
     handles:{async get(){return options.missing ? null : handle;}},
     stored:{get:(key) => key === 'ledger_link' && options.link ? options.link : ''},
-    LINK_KEY:'ledger_link', linkUrl:null,
+    LINK_KEY:'ledger_link', LINK_DEFAULT:'http://127.0.0.1:8322', linkUrl:null, URL,
     runtimeReady:true, pick:{dir:'character', name:'chosen.hsg'},
     place(){}, idleState(){}, wireLanding(){}, paintStrip(){},
     startAttempt(){return true;}, finishAttempt(){}, state(){},
@@ -27,7 +29,7 @@ async function resume(permission, options = {}) {
     async loadFromHandle(value){loads.push(value);},
     async loadFromLink(why, gen){links.push([why, gen]);},
   });
-  await vm.runInContext(`(async () => {${startup}\n})()`, context);
+  await vm.runInContext(`(async () => {${loopback}\n${startup}\n})()`, context);
   return {loads, links, notes, handle, context};
 }
 
@@ -54,4 +56,10 @@ test('a remembered game link is opened and the folder path skipped', async () =>
   assert.deepEqual(result.loads, [], 'the folder handle is left alone');
   assert.equal(result.context.linkUrl, 'http://127.0.0.1:8323');
   assert.deepEqual(result.notes, [], 'the probe owns whatever is said next');
+});
+test('a remembered link that is not this machine is not followed', async () => {
+  for (const link of ['https://evil.example', 'http://192.168.1.5:8322', 'not a url']) {
+    const result = await resume('granted', {link});
+    assert.equal(result.context.linkUrl, 'http://127.0.0.1:8322', link);
+  }
 });

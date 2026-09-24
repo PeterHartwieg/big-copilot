@@ -163,7 +163,7 @@ class SmartSupplyTests(unittest.TestCase):
         self.assertEqual((line["smart"], line["target"], line["weekly"]), (True, 3000, 3000))
         self.assertEqual(line["arrivedLastWeek"], 1200)
         self.assertEqual(line["contracts"], [{
-            "order": 0, "id": "c-1", "importer": "1 Pier", "smart": True, "amount": 3000,
+            "order": 0, "group": 0, "product": 0, "id": "c-1", "importer": "1 Pier", "smart": True, "amount": 3000,
             "lastWeek": 1200, "active": True, "repeating": True, "agent": True}])
 
     def test_missing_flags_read_as_the_games_defaults(self):
