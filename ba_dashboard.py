@@ -4497,10 +4497,12 @@ def _supply_facts(ctx: dict) -> dict:
             p = {"short": []}
             if young:
                 p["young"] = "young"
-            if use and _below(have, use):
-                p["short"].append("order")
+            # Running out before the delivery is the more telling of the two,
+            # so it comes first where the order is short of the week too.
             if rate > 0 and deal["days"] and _below(line["units"], rate * deal["days"]):
                 p["short"].append("shortfall")
+            if use and _below(have, use):
+                p["short"].append("order")
             # An order under the week is a warning while the stock reaches the
             # next drop; the stock running out before it is critical.
             p["shortLvl"] = "critical" if "shortfall" in p["short"] else "warn"
@@ -10282,11 +10284,21 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 # Fed by a weekly wholesale delivery, not a top-up.
                 rate = round(line.get("tradeRate", line["rate"]))
                 row = rows.get((s, slug)) or {}
-                text = (f"{line['item']} runs out before {row.get('wholesaleDay') or 'the next'}'s "
-                        f"wholesale delivery: {line['units']:,} left at {rate:,}/day"
-                        if fact["why"] == "shortfall" else
-                        f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
-                        f"against the {fact['use']:,} it sells")
+                day = row.get("wholesaleDay") or "the next"
+                also_short = _below(fact["have"], fact["use"])
+                if fact["why"] == "shortfall" and also_short:
+                    # Both at once: the stock does not reach the drop, and the
+                    # delivery would not carry the week if it did.
+                    text = (f"{line['item']} runs out before {day}'s wholesale delivery, and the "
+                            f"delivery brings {fact['have']:,} a week against the {fact['use']:,} "
+                            f"it sells"
+                            + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                elif fact["why"] == "shortfall":
+                    text = (f"{line['item']} runs out before {day}'s wholesale delivery: "
+                            f"{line['units']:,} left at {rate:,}/day")
+                else:
+                    text = (f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
+                            f"against the {fact['use']:,} it sells")
                 # Running out before the delivery ranks ahead of an order
                 # short of the week; the ratio breaks ties among each.
                 ratio = round(fact["have"] / fact["use"], 2) if fact["use"] else 0

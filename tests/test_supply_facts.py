@@ -1182,9 +1182,23 @@ class RoundSixFixTests(unittest.TestCase):
         c.run()
         need = next(n for s in c.supply["factories"]["sites"] for n in s["needs"] if n["slug"] == WATER)
         self.assertTrue(need["ownPaused"])
+        # With no shop behind the line, Demand sizes it as 24/7 does: the same
+        # critical paused contract, so the row carries no Demand copy at all.
         dem = _supply_fact(c.supply["facts"], c.index(FACTORY), WATER, "dem")
-        expected = dem["import"]["lvl"] != "info"
-        self.assertEqual({**need, **need.get("dem", {})}.get("ownPaused", False), expected)
+        self.assertEqual((dem["st"], dem["import"]["st"], dem["import"]["lvl"]), ("short", "paused", "critical"))
+        self.assertNotIn("dem", need)
+
+    def test_a_wholesale_order_short_and_late_says_both_and_ranks_as_a_shortfall(self):
+        c = Company()
+        c.shop(GYM, "Gym")
+        c.hold(GYM, SODA, 150, 100)
+        c.wholesale(GYM, SODA, 600)
+        c.run()
+        fact = c.fact(GYM, SODA)
+        self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["setTo"]), ("short", "shortfall", "critical", 810))
+        [note] = [f for f in c.findings() if f["group"] == "wholesale"]
+        self.assertEqual(note["text"], "Soda runs out before Tuesday's wholesale delivery, and the delivery "
+                                       "brings 600 a week against the 700 it sells; raise the contract to 810")
 
     def test_a_wholesale_shop_reads_out_the_delivery_that_runs_out_first(self):
         # Three shelves on wholesale at one gym: two orders short of the week
