@@ -8,7 +8,8 @@ draw. A depot fed by imports alone reads exactly as before.
 """
 import unittest
 
-from ba_dashboard import WEEKDAYS, History, Names, _alerts, _factories, _supply, site_key
+from ba_dashboard import (SUMMARIES, TEMPLATE, WEEKDAYS, History, Names, _alerts, _factories,
+                          _supply, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -63,10 +64,26 @@ def contract(amount, last_week, smart, due=14, active=True):
     return partnership
 
 
-def depot_row(routed_share, contracts, stock=2700, import_days=(), route=None, target=7000,
-              route_from=4, arrivals=(), sent_elsewhere=0, rhythm=None, truncated=False):
-    """_supply() over a factory, a depot and a shop; returns the depot's import
-    row and its node in the goods-flow graph.
+def depot_row(*args, **kwargs):
+    """The depot's import row and its node in the goods-flow graph, from
+    depot_supply()."""
+    supply, _businesses = depot_supply(*args, **kwargs)
+    row = next(r for r in supply["imports"] if r["s"] == 1)
+    node = next(n for n in supply["graph"]["nodes"] if n.get("id") == site_key(DEPOT))
+    return row, next(i for i in node["items"] if i["item"] == "Frozen Food")
+
+
+def board_data(*args, **kwargs):
+    """The payload the board's supply tables read, for a page test: depot_supply()
+    as `D`. tests/import_routes.test.cjs renders it."""
+    supply, businesses = depot_supply(*args, **kwargs)
+    return {"meta": {"character": "routed-supply", "day": DAY, "save": "Fixture"},
+            "supply": supply, "businesses": businesses, "plan": {"recipes": []}}
+
+
+def depot_supply(routed_share, contracts, stock=2700, import_days=(), route=None, target=7000,
+                 route_from=4, arrivals=(), sent_elsewhere=0, rhythm=None, truncated=False):
+    """_supply() over a factory, a depot and a shop, and the businesses.
 
     Every day the depot sends the shop DRAW. From `route_from` each morning
     the factory's route brings `routed_share` of it, as the logistics round
@@ -117,10 +134,7 @@ def depot_row(routed_share, contracts, stock=2700, import_days=(), route=None, t
     if rhythm:
         businesses[1]["rhythm"] = [{"day": WEEKDAYS[wd], "index": index}
                                    for wd, index in enumerate(rhythm)]
-    supply = _supply(save, Names({}), businesses, DAY, {})
-    row = next(r for r in supply["imports"] if r["s"] == 1)
-    node = next(n for n in supply["graph"]["nodes"] if n.get("id") == site_key(DEPOT))
-    return row, next(i for i in node["items"] if i["item"] == "Frozen Food")
+    return _supply(save, Names({}), businesses, DAY, {}), businesses
 
 
 class SupplyOnly(list):
@@ -292,6 +306,16 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertIn("a route brings the week's draw (3,600/day)", text)
         self.assertIn("before its next round", text)
         self.assertNotIn("import", text)
+
+    def test_the_shortfall_kind_is_named_for_a_route_s_round_too(self):
+        """The Saturday above stays a `shortfall`, so a player's switch for the
+        kind keeps what it meant; the kind's name and description, and the
+        line three of them condense into, name the next delivery, import or
+        route round, rather than an import alone."""
+        self.assertNotIn("import", SUMMARIES["shortfall"])
+        [kind] = [line for line in TEMPLATE.splitlines() if 'id:"shortfall"' in line]
+        self.assertIn("import or route round", kind)
+        self.assertNotIn("Import shortfall", kind)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
         """The same Saturday with the backup paused: there is no drop to reach,

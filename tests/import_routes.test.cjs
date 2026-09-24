@@ -171,3 +171,55 @@ test('unused paused contract stays paused without a resume recommendation', asyn
     assert.equal((await page.evaluate(() => window.fixtureActions)).length, 0);
   } finally { await page.close(); }
 });
+
+/* A depot a factory's route tops up (tests/test_routed_supply.py): the Weekly
+   imports table sizes the import on what the route leaves, and the table,
+   the checklist and the Stock view say the same thing. */
+for (const scenario of [
+  {name: 'a paused backup the route covers', args: '1.0,[contract(5200,0,smart=True,active=False)]'},
+  {name: 'an active backup below the week the route covers', args: '1.0,[contract(2000,0,smart=False)]'},
+  {name: 'a line the route covers half of', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,)'},
+  {name: 'a paused import on a line the route covers half of', args: '0.5,[contract(13000,13000,smart=False,active=False)],import_days=(7,)'},
+]) {
+  test(`routed supply: ${scenario.name}`, async () => {
+    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+      + 'from test_routed_supply import board_data,contract; '
+      + `print(json.dumps(board_data(${scenario.args})))`));
+    const page = await browser.newPage();
+    try {
+      await page.route('https://**', route => route.abort());
+      await page.setContent(html, {waitUntil: 'load'});
+      await page.evaluate(data => {
+        D = data; stockView = 'imports'; showAllStock = true; logisticsView = 'all';
+        const draw = drawOrderChecklist;
+        drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+        drawStock(); drawLogistics();
+      }, data);
+      const actions = await page.evaluate(() => window.fixtureActions);
+      const imports = await page.locator('#importPlan').textContent();
+      const stock = await page.locator('#stock').textContent();
+      const row = data.supply.imports.find(r => r.s === 1);
+      const weekly = actions.filter(a => a.kind === 'Weekly imports');
+      if (row.covered) {
+        assert.match(imports, /route brings it/);
+        assert.doesNotMatch(imports, /resume import|raise|nothing draws it/);
+        assert.deepEqual(actions, []);
+        assert.equal(row.level, 'ok');
+      } else if (row.paused) {
+        assert.match(imports, /resume import/);
+        assert.equal(weekly.length, 1);
+        assert.match(weekly[0].reason,
+          /Resume the paused import contract.*after the 12[,.\s]?600 a week a route brings, is 12[,.\s]?600\./);
+        assert.equal(row.weekNeed, 12600);
+      } else {
+        // The table's suggestion is the Stock view's week for the import.
+        assert.equal(row.weekNeed, 12600);
+        assert.match(stock, /after 1[,.\s]?800\/day by route/);
+        assert.match(imports, /raise/);
+        assert.equal(weekly.length, 1);
+        assert.equal(weekly[0].proposed, 12600);
+        assert.match(weekly[0].reason, /less the 12[,.\s]?600 a week a route brings/);
+      }
+    } finally { await page.close(); }
+  });
+}

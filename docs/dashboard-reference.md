@@ -218,7 +218,8 @@ What is on the list is what moves the number:
   against the seven days before it, with both figures. Sites open under two weeks have no
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
-  its next import, an order too small for the week it has to cover, a paused import.
+  its next import or route round, an order too small for the week it has to cover, a
+  paused import.
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -1105,12 +1106,18 @@ Two tables, one per number a logistics manager is set with.
   cap shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
   *Set to* is a box: where the setting falls short of the week it holds the
-  suggestion, elsewhere the figure in game. For a plain order the suggestion is the used
-  week rounded up to the hundred. For Smart Delivery it names one contract, the one
-  whose level holds: the last that still brings something when the game's delivery pass
-  runs into an empty depot. A plain amount delivered before that level counts toward it
-  (the level only tops up what is missing), one delivered after it comes on top as
-  "plus N a week". The suggested level is the least, in hundreds, at which that pass,
+  suggestion, elsewhere the figure in game. What a logistics route from your own site
+  brings the depot, measured as the Stock view measures it and named on hover over *Used /
+  week*, is not the import's to bring: it goes first to the shops' part of the draw and
+  the rest comes off the factories'. A route that brings the whole draw marks the line
+  *route brings it*: the import is a backup, with nothing to raise or resume, unless the
+  factories' full-rate week is more than the depot's measured draw (a starved factory),
+  when the import still answers for what the route leaves. For a plain order the
+  suggestion is the import's week rounded up to the hundred. For Smart Delivery it names
+  one contract, the one whose level holds: the last that still brings something when the
+  game's delivery pass runs into an empty depot. A plain amount delivered before that
+  level counts toward it (the level only tops up what is missing), one delivered after
+  it comes on top as "plus N a week". The suggested level is the least, in hundreds, at which that pass,
   replayed with it, brings the week, so a plain amount that already passes the level is
   never taken off it. Enter your own figure and it is kept in this browser per character,
   depot and material, with the figure the game held when you entered it, until you reset
