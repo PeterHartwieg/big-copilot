@@ -36,7 +36,7 @@ test('weekly order changes use the existing consolidated recommendation', () => 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].current, 1000);
   assert.equal(rows[0].proposed, 1500);
-  assert.match(rows[0].reason, /factory inputs plus deliveries to other sites/);
+  assert.match(rows[0].reason, /factory inputs plus shop deliveries/);
 });
 
 test('covered orders and deliberate surplus buffers are not cut automatically', () => {

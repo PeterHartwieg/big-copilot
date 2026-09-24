@@ -2593,35 +2593,6 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today):
             "runsOut": runs_out, "catchUp": catch_up}
 
 
-def _import_arrivals(amounts: list, contracts: list) -> float | None:
-    """What reached a site one day that was not its own import, or None where
-    that cannot be told.
-
-    `amounts` are the day's arrivals of one item; `contracts` holds one entry
-    per contract product delivering that item there on that weekday, the
-    amount it brought last week. Each contract product brings at most one
-    arrival that day, whatever its amount. An arrival of exactly last week's
-    amount is taken as its contract's first, each contract excusing one. Any
-    contracts left then account for the arrivals left, but only when there are
-    no more of those than of them; with more, which is the import is unknown,
-    and the caller falls back to the old net reading of that day.
-    """
-    left = collections.Counter(contracts)
-    open_contracts = len(contracts)
-    rest = []
-    for amount in amounts:
-        if left[amount] > 0:
-            left[amount] -= 1
-            open_contracts -= 1
-        else:
-            rest.append(amount)
-    if not open_contracts or not rest:
-        return float(sum(rest))
-    if len(rest) <= open_contracts:
-        return 0.0
-    return None
-
-
 def _supply(
     save: Save,
     names: Names,
@@ -2722,25 +2693,9 @@ def _supply(
     shipped = collections.defaultdict(lambda: collections.defaultdict(float))
     received = collections.defaultdict(lambda: collections.defaultdict(float))
     by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
-    # The same log kept gross, day by day: what left a site (a round, as a
-    # positive figure) apart from what reached it. Netted, a factory passing an
-    # import on to a depot's target pulls its own intake down, and an import
-    # landing the day a round leaves cancels that round. `taken_by_day` is what
-    # reached the site less its own import deliveries (_import_arrivals()).
+    # What left a site day by day, gross: _depot_flow() needs a factory's
+    # forwarding on its own, apart from what reached it the same day.
     out_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
-    taken_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
-    arrivals = collections.defaultdict(list)  # (site, item, day) -> amounts, in log order
-    # One entry per contract product that delivers (it brought something last
-    # week, or is active and set above zero): the weekday its import lands on
-    # and the amount it brought last week.
-    contracted = collections.defaultdict(list)
-    for partnership in save.items(save.root["importPartnerships"]):
-        drop_day = (partnership.get("nextDeliveryDay") or 0) % 7
-        for product in save.items(partnership["products"]):
-            last = product.get("amountOrderedLastWeek", 0)
-            if last or (partnership.get("isActive") and product.get("amount")):
-                contracted[(site_key(save.address(product["assignedWarehouse"])),
-                            product["itemName"], drop_day)].append(last)
     round_days = collections.defaultdict(set)
     inbound_days = collections.defaultdict(set)
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -2763,13 +2718,7 @@ def _supply(
                 elif amount > 0:
                     received[key][entry["itemName"]] += amount
                     inbound_days[key].add(when)
-                    arrivals[(key, entry["itemName"], when)].append(amount)
                 by_day[key][entry["itemName"]][when] += amount
-    for (key, item, when), amounts in arrivals.items():
-        taken = _import_arrivals(amounts, contracted.get((key, item, when % 7), []))
-        # Where the imports cannot be told from the rest, the day is read net,
-        # as before this was kept gross.
-        taken_by_day[key][item][when] = by_day[key][item][when] if taken is None else taken
 
     def shipped_per_day(key: str, item: str) -> float | None:
         """Measured daily outflow, or None when too few rounds are on record."""
@@ -3168,7 +3117,6 @@ def _supply(
         "byDay": lambda key, item: by_day[key][item],
         "outByDay": lambda key, item: out_by_day[key][item],
         "customerDriven": customer_driven,
-        "takenByDay": lambda key, item: taken_by_day[key][item],
         "roundDays": lambda key: round_days.get(key, set()),
     }
     factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
@@ -3577,8 +3525,7 @@ def _ceil_hundred(value: float) -> int:
     return int(math.ceil(value / 100.0) * 100)
 
 
-def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict,
-                eaten: set | None = None, blind: set = frozenset()) -> tuple:
+def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tuple:
     """What each depot imports a week, and what leaves it for the shops.
 
     Orders come from current import contracts, outflow from the delivery log,
@@ -3621,20 +3568,32 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict,
     # into "417 a week to the shops" because the depot's log holds six days
     # and the factory's seven. What the factories took that day comes off what
     # the depot sent that day; only a remainder is the shops', and a remainder
-    # too small to size an order on is nothing. Both sides are gross (see
-    # _supply()): the depot's rounds out, and what reached the factory less
-    # its own imports, so a factory forwarding goods and an import landing on
-    # a round day change nothing here. Where a factory's own import cannot be
-    # told from the rest of a day's arrivals, that day is read net, as before.
-    # A factory takes an item only where one of its named lines eats it
-    # (`eaten`); paper bags it passes on are the shops'. With no recipes to
-    # read the lines by, or at a factory with a line the board cannot name
-    # (`blind`: the page may name it, and must not then count it twice), any
-    # factory the depot tops up with the item takes it. A factory that eats
-    # an item and also passes some on, along routes that all lead somewhere it
-    # is used (a shelf down the chain, a line that eats it, an export), took
-    # for itself only what it did not send on; one passing it to a depot
-    # where nothing uses it (a target set on the wrong route) keeps it all.
+    # too small to size an order on is nothing.
+    # One exception to reading a factory's intake net: what it sends on the
+    # same day to a depot whose draw of the item is nil (a stock target nothing
+    # uses: no round of it leaves there, and no shelf down the chain sells it)
+    # is added back. Netted, Factory Jewelry filling Jewelry Distrib. with
+    # metal bands it never ships read as 5,000 a week to the shops. Only what
+    # that depot received that day is added back, and only at a factory with
+    # no import of the item of its own: there, what it sent on may have been
+    # that import, and the day is read net as before.
+    def idle(dest, slug):
+        return (dest in index and dest not in machines
+                and not any(flow["outByDay"](dest, slug).values())
+                and not flow["customerDriven"](dest, slug))
+
+    def intake(fkey, slug):
+        got = flow["byDay"](fkey, slug)
+        idle_dests = {dest for dest, item, _ in flow["edges"].get(fkey, [])
+                      if item == slug and idle(dest, slug)}
+        if not idle_dests or (fkey, slug) in flow["imports"]:
+            return got
+        got = dict(got)
+        for d, out in flow["outByDay"](fkey, slug).items():
+            parked = sum(max(0.0, flow["byDay"](dest, slug).get(d, 0.0)) for dest in idle_dests)
+            got[d] = got.get(d, 0.0) + min(out, parked)
+        return got
+
     depot_other = collections.defaultdict(dict)
     pairs = set(flow["imports"]) | {
         (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
@@ -3645,25 +3604,14 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict,
         days = flow["roundDays"](depot)
         if len(days) < SHIPPED_MIN_DAYS:
             continue
-        sent = flow["outByDay"](depot, slug)
-        takes = lambda site: eaten is None or site in blind or (site, slug) in eaten
-
-        def used(dest):
-            return dest not in index or flow["customerDriven"](dest, slug) or (
-                dest in machines and takes(dest))
-
-        taken = []
-        for fkey in machines:
-            if flow["targets"].get((fkey, slug), (0, None))[1] != depot or not takes(fkey):
-                continue
-            got = flow["takenByDay"](fkey, slug)
-            onward = [dest for dest, item, _ in flow["edges"].get(fkey, []) if item == slug]
-            if onward and all(used(dest) for dest in onward):
-                out = flow["outByDay"](fkey, slug)
-                got = {d: got.get(d, 0.0) - out.get(d, 0.0) for d in set(got) | set(out)}
-            taken.append(got)
+        sent = flow["byDay"](depot, slug)
+        taken = [
+            intake(fkey, slug)
+            for fkey in machines
+            if flow["targets"].get((fkey, slug), (0, None))[1] == depot
+        ]
         rest = sum(
-            max(0.0, sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
+            max(0.0, -sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
             for d in days
         )
         week = rest / len(days) * 7
@@ -3810,8 +3758,6 @@ def _factories(
     # --- each factory: its lines, and what they eat
     made_by = collections.defaultdict(set)
     sites, depot_need = [], collections.defaultdict(float)
-    eaten_rows = []  # (factory, need row) for every input a named line eats
-    blind = set()  # factories with a line running a recipe the board cannot name
     for key, counter in machines.items():
         lines, unnamed, needs = [], [], {}
         for (station, rid), n in sorted(counter.items(), key=lambda kv: -kv[1]):
@@ -3825,8 +3771,6 @@ def _factories(
                 ],
             }
             if not slug:
-                if rid:
-                    blind.add(key)
                 unnamed.append(
                     {
                         "rid": rid,
@@ -3883,7 +3827,6 @@ def _factories(
                 if rec["item"] not in row["lines"]:
                     row["lines"].append(rec["item"])
         stopped_lines = {line["item"]: line["missing"] for line in lines if line["missing"]}
-        eaten_rows.extend((key, row) for row in needs.values())
         for slug, row in needs.items():
             target, source = flow["targets"].get((key, slug), (0, None))
             # A factory can itself be an import destination. Weekly deliveries
@@ -4015,8 +3958,7 @@ def _factories(
             key=lambda r: ({"critical": 0, "warn": 1, "info": 2, "ok": 3}[r["level"]], -r["perDay"])
         )
     sites.sort(key=lambda s: -s["machines"])
-    eaten = {(key, row["slug"]) for key, row in eaten_rows}
-    depots, depot_other = _depot_flow(flow, index, machines, depot_need, eaten, blind)
+    depots, depot_other = _depot_flow(flow, index, machines, depot_need)
     return {
         "sites": sites,
         "machines": sum(s["machines"] for s in sites),
@@ -15270,8 +15212,8 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     } else if(r.edited ? r.changed : r.setTo !== null
         && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
       const why = r.edited ? yours : r.factoryWeek
-        ? `Full-rate factory inputs${r.otherWeek ? " plus deliveries to other sites" : ""}; confirm the production plan before increasing.`
-        : "Based on recorded deliveries to other sites over a week.";
+        ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}; confirm the production plan before increasing.`
+        : "Based on recorded shop deliveries over a week.";
       add("Weekly imports", r.s, r.item, r.inGame ?? r.current ?? null, value,
         `${setting(value)} ${why}`, null, mode);
     }
@@ -15632,11 +15574,11 @@ function drawLogistics(){
   /* Who draws the material, and how the week splits between the factory
      lines and the shops, stay on hover: the material name says who, the
      Used / week figure says how much of each. */
-  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line draws it; what leaves goes to other sites";
+  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line draws it; what leaves goes to the shops";
   const splitTip = r => r.factoryWeek && r.otherWeek
-    ? `Factories ${r.factoryWeek.toLocaleString()} · other sites ${r.otherWeek.toLocaleString()} a week`
+    ? `Factories ${r.factoryWeek.toLocaleString()} · shops ${r.otherWeek.toLocaleString()} a week`
     : r.factoryWeek ? `All ${r.factoryWeek.toLocaleString()} a week to the factory lines`
-    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to other sites` : "";
+    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "";
   const importRow = r => `<tr${r.changed ? ` class="imp-changed"` : ""}>
       <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}${contractLines(r)}</td>
       <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
