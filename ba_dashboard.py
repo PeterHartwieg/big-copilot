@@ -3552,9 +3552,10 @@ def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
     mid-week is a known limit. A leaf depot that shipped the item once early
     in the week stays not idle all window, and its factory is read net: a
     safe miss. An import contract gone from importPartnerships that still
-    delivered at the factory mid-week is not seen by the import guard. A
-    paused contract still counts as an import, so its factory or depot reads
-    net: a safe miss. Returns {factory: {day: amount}}.
+    delivered mid-week at the factory or its depot is not seen by the import
+    guards, and that one is not safe: it can add back up to what the factory
+    sent. A paused contract that still holds an amount counts as an import,
+    so its factory or depot reads net: a safe miss. Returns {factory: {day: amount}}.
     """
     def idle(site, seen=frozenset()):
         if site not in index or site in machines or flow["sells"](site, slug):
