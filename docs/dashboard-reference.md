@@ -26,8 +26,9 @@ hash, so a live refresh and a reopened tab both land where you left off.
 **Map** shows the city with your business footprints in green, buildings you own dashed
 blue, homes you rent in white, and a floating list of places over the right edge. Five
 chips above the map are layers that add up: your businesses, buildings you own, homes you
-rent, sites with a finding from Today (of a kind still switched on, as Needs attention
-shows them; search colours a site's dot the same way), and every address (off by default, drawn as faint
+rent, sites with a finding from Today (any finding of a kind still switched on, the ones
+under the list included; board search colours a site's dot from the list alone, above the
+gate and of a kind still on), and every address (off by default, drawn as faint
 outlines). Clicking a chip switches that
 layer off; off is dimmed, never removed. The search field narrows the list and shows its
 count; the `?` mark explains the layers. Drag to pan, scroll or pinch to zoom, or use the

@@ -479,6 +479,9 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
     ],
   });
   try {
+    // Before anything is pointed at, the read-out opens on the worst hour with
+    // something to fix: 15:00, not the building's busier 09:00.
+    assert.match(await page.locator('#hourRead').textContent(), /^Worst hour · Monday 15:00 /);
     // A cell says which kind of ceiling held it and whose role held it, as
     // `<kind>:<skill>`; the door is nobody's role, so its token stands alone.
     const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
@@ -535,6 +538,24 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
         .filter(h => h !== null));
       assert.deepEqual(lit, Array(7).fill(hour), `the ${mine} chip lights ${hour}:00 and nothing else`);
     }
+  } finally { await page.close(); }
+});
+
+test('a site held only by its building opens on its busiest hour, at building capacity', async () => {
+  // mixedGrid() with the 12:00 and 15:00 hours emptied: only the door's 09:00 is full.
+  const [g] = mixedGrid();
+  [g.customers, g.staffed, g.onShift, g.effective, g.roles[0].staffed, g.roles[0].onShift]
+    .forEach(week => week.forEach(day => { day[12] = 0; day[15] = 0; }));
+  const page = await site({
+    hours: [g],
+    hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 7,
+      when: 'every day 9', limit: 'the building', fix: '', cap: 50, capTop: 50, basket: 30, throughput: 1500}],
+  });
+  try {
+    const read = await page.locator('#hourRead').textContent();
+    assert.match(read, /^Busiest hour · Monday 09:00 50 customers/);
+    assert.match(read, /at building capacity$/);
+    assert.doesNotMatch(read, /at the ceiling/);
   } finally { await page.close(); }
 });
 

@@ -358,6 +358,25 @@ test('a kind switched off leaves the Findings layer: its count, its pip and the 
   }finally{await page.close();}
 });
 
+test('flipping a kind switch, or resetting them, redraws the Findings layer',async()=>{
+  const {page,errors}=await fixture();
+  try{
+    await openPage(page);
+    await page.evaluate(o=>{
+      D.alerts=[...D.alerts,{siteKey:o.key,level:'critical',group:'hype',text:'Wave ending tomorrow',id:'map-hype'}];
+      alertKindChoices={}; Object.assign(alertGroupPrefs,kindPrefs({}));
+      refreshCityMaps(); wireKinds(); openKindsPanel();
+    },other);
+    const count=()=>page.locator('#cityMapPage .lay[data-l="fnd"] .n').textContent();
+    assert.equal(await count(),'1');  // Demand wave ending is off by default
+    await page.locator('#alertPop .sw[data-kind="hype"]').click();
+    assert.equal(await count(),'2');
+    await page.locator('#alertPop [data-kinds-reset]').click();
+    assert.equal(await count(),'1');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
 test('the card opens beside the picked footprint, inside the stage, and closes from the map',async()=>{
   const {page,errors}=await fixture();
   try{
