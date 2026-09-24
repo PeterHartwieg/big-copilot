@@ -187,6 +187,19 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual((item["need"], item["low"]), (row["carry"], False))
         self.assertLess(item["need"], 6000)
 
+    def test_the_node_carries_a_routed_line_to_its_first_drop_only(self):
+        """Half the draw by route and two plain 6,500 contracts, one due on day
+        11 and one on day 14. The shelf has to reach day 11's drop, not hold
+        the whole stretch to day 14 as if nothing landed in between."""
+        contracts = [contract(6500, 6500, smart=False, due=11),
+                     contract(6500, 6500, smart=False, due=14)]
+        contracts[1]["importAddress"] = ("pier", 3)
+        row, item = depot_row(0.5, contracts, stock=4000)
+        self.assertEqual((row["coverFit"], row["catchUp"]), ("ok", 0))
+        self.assertEqual((item["need"], item["low"]), (row["carry"], False))
+        # The rest of today at the import's 1,800 a day, then day 11's drop.
+        self.assertEqual(row["carry"], 900)
+
     def test_an_import_before_the_route_s_first_arrival_does_not_dilute_it(self):
         """The import landed on day 4 and the route's first round on day 5:
         the route still brings the whole draw on the days it ran."""

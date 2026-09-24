@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=a5b179d817">
+<link rel="stylesheet" href="community.css?v=4447b76ecb">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=a5b179d817">
+<link rel="stylesheet" href="fonts/fonts.css?v=4447b76ecb">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2711,8 +2711,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "a5b179d817";</script>
-<script>window.LEDGER_RELEASE = {"version":"a5b179d817","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "4447b76ecb";</script>
+<script>window.LEDGER_RELEASE = {"version":"4447b76ecb","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=a5b179d817"></script>
-<script src="community.js?v=a5b179d817"></script>
+<script src="app.js?v=4447b76ecb"></script>
+<script src="community.js?v=4447b76ecb"></script>
 
 <script>
 
@@ -3543,6 +3543,7 @@ const SUPPLY_VIEWS = {
          holding a busy day empties runs dry before the route's next round,
          not before an import, whatever the backup import is doing. */
       const routeDry = rows.filter(r => r.coverFit === "short" && r.covered).length;
+      const routeClose = rows.filter(r => r.coverFit === "tight" && r.covered).length;
       const short = rows.filter(r => r.coverFit === "short").length - routeDry;
       const close = rows.filter(r => r.coverFit === "tight" && !r.covered).length;
       const tight = rows.filter(r => r.orderFit === "tight").length;
@@ -3555,6 +3556,7 @@ const SUPPLY_VIEWS = {
         small ? `${small} order${small===1?" is":"s are"} too small` : "",
         short ? `${short} holding${short===1?" does":"s do"} not reach the import` : "",
         routeDry ? `${routeDry} holding${routeDry===1?"":"s"} fed by route run${routeDry===1?"s":""} dry on a busy day` : "",
+        routeClose ? `${routeClose} fed by route come${routeClose===1?"s":""} within half a day of running dry on a busy day` : "",
         close ? `${close} land within half a day of it` : "",
         tight ? `${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : "",
       ].filter(Boolean);
@@ -6471,6 +6473,8 @@ function spStockRows(b){
         ? `${spImportWeek(r)}; ${spKeeps(shown, plainAfter, r.plainBefore)}`
       : r.orderFit === "short"
         ? `${spImportWeek(r)}; the order brings <b>${spNum(r.weekly)}</b>`
+      : r.covered && r.coverFit === "tight" && r.runsOut
+        ? `Runs close on <b>${spEsc(r.runsOut)}</b>, before the route's next round`
       : r.covered ? `A route brings what leaves; the import is a backup`
       : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? "Covered through the week"
       : `<b>${spNum(r.cover)}</b> days on hand`;
