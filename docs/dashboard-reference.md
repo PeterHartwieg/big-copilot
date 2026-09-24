@@ -337,7 +337,7 @@ grid and three lines meet.
   a per-hour limit, not a daily total.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
-Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red,
+Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
 and hours with capacity doing nothing in blue.
 
 Every kind of furniture whose help text says it is an *employee station* with a Customer

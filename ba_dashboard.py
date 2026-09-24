@@ -14372,7 +14372,8 @@ function miniChart(series, key, colour, o = {}){
    professionals posted at its computers, and a site asking for several skills
    is only as fast as its slowest role. The door cap is the building's own
    limit. Shade is how busy against the site's own busiest hour; a red outline
-   is an hour spent at the ceiling that was on. The sentence under the grid
+   is an hour spent at the ceiling that was on (a neutral one where the
+   building's own capacity held it). The sentence under the grid
    says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -14402,7 +14403,7 @@ function roleRead(r, wd, h){
 }
 
 /* The hour the grid's read-out opens on before one is pointed at: the busiest
-   hour spent at the ceiling, or with none at it, the busiest hour. */
+   hour at a ceiling other than the building's, or with none, the busiest hour. */
 function hourLeadCell(g){
   let best = null;
   HOUR_ROWS.forEach(wd => {
