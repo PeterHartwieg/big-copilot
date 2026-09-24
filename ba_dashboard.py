@@ -134,9 +134,8 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>'
-                  # The difficulty chip, shown here at 1500 px and under, and
-                  # wider where the masthead has no room for it (ssFitMast());
-                  # otherwise it ends the masthead clock's last line.
+                  # The difficulty chip, shown here at 1500 px and under; wider
+                  # than that it ends the masthead clock's last line.
                   '<span class="fv-footdiff" id="footDiff"></span>')
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
@@ -9447,10 +9446,8 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* The difficulty chip (fold-views, R15): at the end of the clock's last line
    at 1501 px and over, where the masthead is a fixed 100 px with room to
    spare, and at 1500 px and under beside the footer's game build instead.
-   Wider too, the footer's when the chip would push the search control into
-   the sphere's resting place: ssFitMast() then sets .fv-chipfoot on the
-   masthead. Wherever the chip is not on the clock, the clock is exactly the
-   board's own: no width rules, and its last line keeps its own glow. */
+   Below the switch the clock is exactly the board's own: no width rules, and
+   its last line keeps its own glow. */
 .fv-diff{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
   font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:0;color:var(--ink-2);text-shadow:none;
   padding:3px 7px;border-radius:4px;border:1px solid var(--rule);background:var(--surface);transition:color .15s,border-color .15s}
@@ -9475,10 +9472,6 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .clock .fv-glow{position:relative}
   .clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
     border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
-  .mast.fv-chipfoot .clock .fv-diff,.mast.fv-chipfoot .clock .fv-glow::before{display:none}
-  .mast.fv-chipfoot .clock small.fv-diffline::before{display:block}
-  .mast.fv-chipfoot ~ .sitefoot .fv-footdiff{display:inline-flex}
-  .mast.fv-chipfoot ~ .sitefoot .fv-footdiff:empty{display:none}
 }
 .fv-pop{position:fixed;left:0;top:0;z-index:60;width:470px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-y:auto;
   padding:18px 20px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0007;
@@ -17270,8 +17263,7 @@ function drawGoals(){
    from the game's Normal preset. Normal is the yardstick rather than x1,
    because the presets are not x1: Normal's urgent wholesale fee is x0.2. The
    chip ends the masthead's build line at 1501 px and over, and at 1500 px
-   and under (or wider, where it would crowd the sphere; ssFitMast()) sits
-   beside the footer's game build. These three
+   and under sits beside the footer's game build. These three
    build markup only;
    drawDifficulty() places and wires the popover. */
 const FV_PRESETS = ["Easy", "Normal", "Hard"];
@@ -17496,8 +17488,8 @@ function drawFooter(){
   }
   $("footBuild").textContent = `Game build ${m.build}`;
   /* At 1500 px and under, where the masthead has no room to spare, the
-     difficulty chip stands beside the game build instead; the stylesheet (and
-     ssFitMast(), wider) shows one or the other. */
+     difficulty chip stands beside the game build instead; the stylesheet shows
+     one or the other. */
   const diff = $("footDiff");
   if(diff) diff.innerHTML = fvDiffChip(m.houseRules, "foot", m.difficulty);
 }
@@ -17516,13 +17508,12 @@ const fvChipFocus = () => {
   return a && a.matches && a.matches("button.fv-diff") ? a.dataset.fvAt : null;
 };
 /* The chip the popover can hang from right now: the masthead's at 1501 px
-   and over, the footer's at 1500 px and under or where ssFitMast() moved it,
-   whichever the stylesheet shows. */
+   and over, the footer's at 1500 px and under, whichever the stylesheet
+   shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
 function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
-  /* A resize across 1500 px (or ssFitMast() moving the chip) hides the chip
-     it hung from and shows the other,
+  /* A resize across 1500 px hides the chip it hung from and shows the other,
      which may be a page away (the footer's). Following it could leave the
      popover off screen, so it closes instead. Focus moves only if it is in
      the popover or on a chip right now, and then to the chip now shown when
@@ -17937,7 +17928,8 @@ function siteStateFrom(){
    page lights as the reason for coming; a finding also names the page it was
    clicked on for the crumb, and so does a search or a question (`cameFrom`,
    which ssOpenSite() sets): each is asked from somewhere and leads away from
-   it. `scroll` puts the page's top at the top of the window; a caller landing
+   it. `cameFrom` can also be the way back itself ({label, hash}), for a site
+   opened from another site's page (siteHereFrom()). `scroll` puts the page's top at the top of the window; a caller landing
    on a block inside it passes false and reveals that block itself. */
 function openSite(key, scroll = true, finding = null, historyMode = "push", cameFrom = finding !== null){
   if(!hasData() || !D.businesses.some(b => b.key === key) && !spHome(key)) return false;
@@ -17946,6 +17938,7 @@ function openSite(key, scroll = true, finding = null, historyMode = "push", came
   const again = page === "company" && siteOpen && key === siteKey;
   const from = historyMode !== "push" ? siteStateFrom()
     : again ? siteFrom
+    : cameFrom && typeof cameFrom === "object" ? cameFrom
     : cameFrom && !(page === "company" && siteOpen) ? siteCameFrom() : null;
   if(key !== siteKey) spFindsAll = false;
   spArrived = finding;
@@ -18022,7 +18015,17 @@ function siteOpenOver(key){
   ssClose(false);
   ssClearAsked();
   ssTicket++; ssPending = null;
-  return openSite(key, true, null, "push", true);
+  return openSite(key, true, null, "push", siteHereFrom());
+}
+/* The way back for a site found by a search or a question: the page it was
+   asked on (true, which openSite() reads through siteCameFrom()), or, asked
+   on another site's page, that site -- which is where Back goes, since the
+   palette adds no visit of its own. */
+function siteHereFrom(){
+  if(!(page === "company" && siteOpen) || !hasData()) return true;
+  const b = D.businesses.find(x => x.key === siteKey), h = !b && spHome(siteKey);
+  const label = b ? shortName(b) : h ? h.address || "Home" : "";
+  return label ? {label, hash: siteHref(siteKey) || location.hash || "#company"} : true;
 }
 /* The wiki module, when the build carries it, owns everything under #wiki.
    `entered` is true when the Wiki has just replaced another page, by a link
@@ -18674,7 +18677,7 @@ const ssNum = n => Math.round(n || 0).toLocaleString("en-US");
    the rows in the block to pulse. Whichever it was, the page's crumb leads back
    to where it was asked from. */
 function ssOpenSite(key, into = "", o = {}){
-  if(!key || !openSite(key, !into, o.finding || null, "push", true)){ reveal("secPortfolio"); return false; }
+  if(!key || !openSite(key, !into, o.finding || null, "push", o.finding ? true : siteHereFrom())){ reveal("secPortfolio"); return false; }
   if(into) xlArrive(into, o.hit || "");
   return true;
 }
@@ -19314,35 +19317,9 @@ const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && e
    and below that it steps down to its icon. Measured at full width each time,
    whatever the last measure decided. */
 const SS_BALL_ROOM = 40 + 100 + 12, SS_FIELD_MIN = 180, SS_ICON_GAP = 12;
-/* The difficulty chip ends the clock's last line from 1501 px, unless with it
-   there the search control would sit in the ball's room (a long save name, a
-   flags line): then it stands in the footer stamp, as at 1500 px and under.
-   Decided from one measurement taken with the chip in, so a run of this that
-   the clock's own narrowing sets off reaches the same answer: nothing flips. */
 function ssFitMast(){
   const mast = $("mast"), nav = $("nav");
   if(!mast || !nav) return;
-  const was = mast.classList.contains("fv-chipfoot");
-  mast.classList.remove("fv-chipfoot");
-  ssFitSearch(mast, nav);
-  const chip = q("#clock .fv-diff");
-  if(chip && chip.getClientRects().length && ssInBallRoom(nav)){
-    mast.classList.add("fv-chipfoot");
-    ssFitSearch(mast, nav);
-  }
-  /* A popover hanging from the chip that just moved follows the rule a
-     resize across 1500 px keeps. */
-  if(was !== mast.classList.contains("fv-chipfoot")) fvPlaceDiffPop();
-}
-/* The shown search control starts inside the first ball's resting place. */
-function ssInBallRoom(nav){
-  const c = ssMastControl();
-  if(!c) return false;
-  const r = c.getBoundingClientRect(), n = nav.getBoundingClientRect();
-  if(n.top >= r.bottom || r.top >= n.bottom) return false;
-  return r.left < n.right + SS_BALL_ROOM - 0.5;
-}
-function ssFitSearch(mast, nav){
   mast.classList.remove("ss-tight");
   ssField.style.width = "";
   ssFieldBtn.style.marginRight = "";
@@ -19354,9 +19331,11 @@ function ssFitSearch(mast, nav){
   if(room >= f.width) return;
   if(room >= SS_FIELD_MIN){ ssField.style.width = room + "px"; return; }
   mast.classList.add("ss-tight");
-  /* The icon keeps out of the ball's room too. A long clock -- a long save
-     name, a flags line -- can push it in there, so it closes on the clock,
-     down to the sphere's own gap. */
+  /* The icon keeps out of the ball's room too. A long clock -- a flags line,
+     the difficulty chip from 1501 px -- can push it in there, so it closes on
+     the clock, down to the sphere's own gap. A very long save name can still
+     leave it no room (at 1301 px, and with the chip at about 1501 to 1530 px):
+     then it sits over the ball's resting place. */
   const short = Math.ceil(n.right + SS_BALL_ROOM - ssFieldBtn.getBoundingClientRect().left);
   const give = (parseFloat(getComputedStyle(mast).columnGap) || 0) - SS_ICON_GAP;
   if(short > 0 && give > 0) ssFieldBtn.style.marginRight = `-${Math.min(short, give)}px`;
@@ -19392,8 +19371,14 @@ function ssOpen(text = ""){
   ssPointer = null;
   ssIndex = ssBuild();
   if(typeof kindsPop !== "undefined" && kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
-  /* The difficulty's popover stands above the palette: it goes too. */
-  if(ssDiffOpen()) fvCloseDiff(false);
+  /* The difficulty's popover stands above the palette: it goes too, and
+     closing the palette later hands focus to its chip, not to the popover
+     now hidden. */
+  if(ssDiffOpen()){
+    if(ssReturn && fvDiffPop.contains(ssReturn))
+      ssReturn = fvDiffAnchor && fvDiffAnchor.isConnected && fvDiffAnchor.getClientRects().length ? fvDiffAnchor : fvShownChip();
+    fvCloseDiff(false);
+  }
   /* The wiki's pages join once its file is in: ask for it now, and look again
      while it loads. */
   if(typeof loadWikiData === "function" && typeof wikiStatus !== "undefined" && wikiStatus === "idle") loadWikiData();
@@ -19444,6 +19429,8 @@ function ssClose(restore = true){
   ssReturn = null;
   if(restore && back && back.isConnected && back !== document.body && typeof back.focus === "function")
     try{ back.focus({preventScroll: true}); }catch(e){}
+  /* A chip given focus back would open its tooltip over the page. */
+  if(typeof hideTip === "function") hideTip();
 }
 function ssWatchWiki(){
   clearTimeout(ssWikiWait);
@@ -19646,6 +19633,9 @@ ssRes.addEventListener("click", e => {
   e.preventDefault();
   ssGoTo(+r.dataset.k);
 });
+/* A site's name is a link hidden from screen readers: a press on it, a
+   Ctrl+click included, leaves focus in the field. The new tab still opens. */
+ssRes.addEventListener("mousedown", e => { if(e.target.closest("a.ss-sl")) e.preventDefault(); });
 ssScrim.addEventListener("click", () => ssClose());
 /* The map a site row opens sits over the palette; closing it hands the keys back. */
 if($("locationMapDialog")) $("locationMapDialog").addEventListener("close", () => { if(ssIsOpen()) setTimeout(() => ssInput.focus({preventScroll: true}), 0); });

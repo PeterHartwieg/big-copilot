@@ -1068,3 +1068,64 @@ test("a site's link inside a palette option is hidden from a screen reader, whic
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
+
+// --- release round 2 ---------------------------------------------------------------------
+
+test("from one site's page, a site opened over the palette leads back to the first, as Back does", async () => {
+  const page = await board();
+  try {
+    await page.evaluate(key => openSite(key), SHOP);
+    const first = await page.evaluate(() => location.hash);
+    // The map a palette row showed, and its card's "its page".
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    await page.keyboard.press('Shift+Enter');
+    await page.evaluate(() => {
+      const a = document.createElement('a');
+      a.href = '#site/secondavenue-2'; a.id = 'probeGo'; a.textContent = 'its page';
+      $('locationMapDialog').appendChild(a);
+    });
+    await page.click('#probeGo');
+    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom && siteFrom.label, siteFrom && siteFrom.hash, history.state.ssFrom.label]),
+      [GYM, 'Test Clothing', first, 'Test Clothing']);
+    await page.goBack();
+    await page.waitForFunction(key => siteOpen && siteKey === key, SHOP);
+    // A row opened with Enter says the same.
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom && siteFrom.label]), [GYM, 'Test Clothing']);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('the palette opened over the difficulty popover hands focus back to its chip', async () => {
+  const page = await board({width: 1600});
+  try {
+    await withChip(page);
+    await page.locator('#clock .fv-diff').click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'mast');
+    assert.equal(await page.evaluate(() => document.getElementById('tip').classList.contains('on')), false);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test("a press on a site's name in the palette leaves focus in the field", async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    const prevented = await page.evaluate(() => {
+      const ev = new MouseEvent('mousedown', {bubbles: true, cancelable: true, ctrlKey: true});
+      document.querySelector('#ssRes .ss-row.on a.ss-sl').dispatchEvent(ev);
+      return ev.defaultPrevented;
+    });
+    assert.equal(prevented, true);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'ssInput');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});

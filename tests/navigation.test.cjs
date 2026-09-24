@@ -36,7 +36,7 @@ function board({saved = {}, data = {}} = {}) {
     window:{scrollY:0, addEventListener(type, fn){listeners[type] = fn;}},
     drawChart(){chartDraws++;}, wireReveal(){}, requestAnimationFrame(){}, inkHome(){}, icon(){return '';},
     showCityMap(){}, showWikiRoute(){wikiVisits++;}, wireTips(){}, drawSite(){sitePanels++;},
-    drawPortfolio(){}, CSS:{escape: s => s},
+    drawPortfolio(){}, CSS:{escape: s => s}, shortName: b => b.name,
     spEsc: s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),
   });
@@ -602,4 +602,16 @@ test('the site on screen, opened again, keeps its way back', () => {
   // Another site is somewhere new.
   b.context.openSite(DEPOT);
   assert.equal(b.from(), null);
+});
+
+test("from one site's page, a search's site leads back to the first, where Back goes", () => {
+  const b = board({data: sites()});
+  b.boot();
+  assert.equal(b.context.siteHereFrom(), true, 'on Today the page itself is the way back');
+  b.context.openSite(SHOP);
+  b.context.openSite(DEPOT, true, null, 'push', b.context.siteHereFrom());
+  assert.deepEqual({...b.from()}, {label: 'HART. Clothing', hash: '#site/fifthavenue-57'});
+  assert.deepEqual({...b.states[2].ssFrom}, {label: 'HART. Clothing', hash: '#site/fifthavenue-57'});
+  b.move(-1);
+  assert.equal(b.site(), SHOP);
 });

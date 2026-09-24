@@ -313,7 +313,7 @@ Company's views:
 | Results | `secDaily` (its By weekday option, `drawWeekday`, replaced the Weekly rhythm section; an old `#secRhythm` link lands here through `SEC_MOVED`), `secPortfolio`, `secDetail` | `drawChart`, `drawPortfolio`, `drawSitePicker` + `drawSite` |
 | Products | `secProducts` | `drawProducts` |
 | Payroll | `secPayroll` | `drawPayroll` |
-| Milestones | `secGoals` | `drawGoals`; the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under or wherever on the clock it would push the search control into the sphere's resting place (`ssFitMast()` sets `.fv-chipfoot` on the masthead), the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
+| Milestones | `secGoals` | `drawGoals`; the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under, the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
 
 Supply's views:
 

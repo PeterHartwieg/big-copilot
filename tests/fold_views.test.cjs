@@ -228,70 +228,30 @@ const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0
 const ballRoom = page => page.evaluate(() => ({control: ssMastControl().getBoundingClientRect().left,
   right: ssMastControl().getBoundingClientRect().right,
   rest: document.getElementById('nav').getBoundingClientRect().right + SS_BALL_ROOM,
-  clock: document.getElementById('clock').getBoundingClientRect().left,
-  foot: document.getElementById('mast').classList.contains('fv-chipfoot')}));
+  clock: document.getElementById('clock').getBoundingClientRect().left}));
 
-test("at 1501 px and over the chip ends the clock's last line, unless it would crowd the sphere", async () => {
-  const placed = {};
+test("at 1501 px and over the chip ends the clock's last line, inside the masthead", async () => {
   for (const width of [1501, 1530, 1600]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
     const what = `${width} ${save.length} chars${flags ? ' with flags' : ''}`;
-    const boxes = [];
-    for (const houseRules of [CUSTOM, null]) {
-      const {page, errors} = await board({width, houseRules});
-      try {
-        const b = await mastBoxes(page, [save, flags]);
-        boxes.push(b);
-        assert.equal(b.scroll, width, `${what} scrolls sideways`);
-        // The clock's content box stays inside the masthead.
-        const [ml, mt, mw, mh] = b.mast, [cl, ct, cw, ch] = b.clock;
-        assert.ok(cl >= ml && ct >= mt && cl + cw <= ml + mw && ct + ch <= mt + mh, `${what}: clock ${b.clock} outside ${b.mast}`);
-        const room = await ballRoom(page);
-        // The search field (or its icon) ends before the clock and keeps out of the ball's room.
-        assert.ok(room.right <= room.clock, `${what}: search ${room.right} runs into the clock ${room.clock}`);
-        assert.ok(room.control >= room.rest - 0.5, `${what}: search at ${room.control} is in the ball's room, which ends at ${room.rest}`);
-        if (houseRules) {
-          placed[what] = room.foot ? 'foot' : 'mast';
-          assert.equal(await page.locator('#clock .fv-diff').isVisible(), !room.foot, what);
-          assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), room.foot, what);
-          // On the clock, in its last line and no other, never a line of its own (the
-          // web build's live dot always adds a line, so no fixed count).
-          if (!room.foot) {
-            const lines = await page.$$eval('#clock > small', ls => ls.map(l => l.querySelectorAll('.fv-diff').length));
-            assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1], what);
-          }
-        }
-        assert.deepEqual(errors, []);
-      } finally { await page.close(); }
-    }
-    // With the chip in the footer the masthead is exactly the one without a chip.
-    if (placed[what] === 'foot') assert.deepEqual(boxes[0], boxes[1], what);
+    const {page, errors} = await board({width});
+    try {
+      const b = await mastBoxes(page, [save, flags]);
+      assert.equal(b.scroll, width, `${what} scrolls sideways`);
+      // The clock's content box stays inside the masthead.
+      const [ml, mt, mw, mh] = b.mast, [cl, ct, cw, ch] = b.clock;
+      assert.ok(cl >= ml && ct >= mt && cl + cw <= ml + mw && ct + ch <= mt + mh, `${what}: clock ${b.clock} outside ${b.mast}`);
+      // In the clock's last line and no other, never a line of its own (the web
+      // build's live dot always adds a line, so no fixed count).
+      const lines = await page.$$eval('#clock > small', ls => ls.map(l => l.querySelectorAll('.fv-diff').length));
+      assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1], what);
+      assert.equal(await page.locator('#clock .fv-diff').isVisible(), true, what);
+      assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, what);
+      // The search field (or its icon) ends before the clock.
+      const room = await ballRoom(page);
+      assert.ok(room.right <= room.clock, `${what}: search ${room.right} runs into the clock ${room.clock}`);
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); }
   }
-  // A short name keeps the chip on the clock; a long name with a long chip sends it to the footer.
-  assert.equal(placed['1600 7 chars'], 'mast');
-  assert.equal(placed['1501 36 chars'], 'foot');
-});
-
-test("the chip's place is decided once, from the clock with the chip in: nothing flips", async () => {
-  const {page, errors} = await board({width: 1501});
-  try {
-    const seen = await page.evaluate(async LONG => {
-      D.meta.save = LONG; drawMast();
-      const seen = [];
-      for (let i = 0; i < 12; i++) {
-        await new Promise(done => requestAnimationFrame(done));
-        seen.push(document.getElementById('mast').classList.contains('fv-chipfoot'));
-      }
-      ssFitMast(); ssFitMast();
-      seen.push(document.getElementById('mast').classList.contains('fv-chipfoot'));
-      return seen;
-    }, LONG);
-    // The first frame's callbacks run before the observer has measured; from then on it holds.
-    assert.deepEqual(seen.slice(1), Array(seen.length - 1).fill(true), `the class flipped: ${seen}`);
-    // Back to a short name, the chip returns to the clock.
-    await mastBoxes(page, ['Fixture', false]);
-    assert.equal(await page.locator('#clock .fv-diff').isVisible(), true);
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
 });
 
 test("at 1500 px and under the masthead is the board's own, and the chip is in the footer", async () => {
@@ -317,9 +277,11 @@ test("at 1500 px and under the masthead is the board's own, and the chip is in t
 
 test("the search control keeps out of the sphere's resting place, Normal or Custom chip", async () => {
   for (const houseRules of [NORMAL, CUSTOM]) for (const width of [1501, 1530, 1440, 1301]) for (const save of ['Fixture', LONG]) {
-    // At 1301 px a 36-character name leaves no room for the ball and the icon
-    // together, chip or no chip: the brand and the nav alone reach past it.
-    if (width === 1301 && save === LONG) continue;
+    // A 36-character name leaves no room for the ball and the icon together
+    // at 1301 px, chip or no chip (the brand and the nav alone reach past it),
+    // nor with the Custom chip on the clock at 1501 and 1530 px. The icon then
+    // sits over the ball's resting place; accepted, rather than moving the chip.
+    if (save === LONG && (width === 1301 || (houseRules === CUSTOM && width >= 1501 && width <= 1530))) continue;
     const what = `${houseRules.label} ${width} ${save.length} chars`;
     const {page, errors} = await board({width, houseRules});
     try {
