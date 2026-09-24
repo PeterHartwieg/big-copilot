@@ -14409,7 +14409,10 @@ function hourLeadCell(g){
     for(let h = 0; h < 24; h++){
       const seen = g.customers[wd][h], cap = g.effective[wd][h];
       if(seen === null) continue;
-      const atCap = !!(!g.thin[wd] && cap && seen >= cap * AT_CAP);
+      /* An hour held by the building's own capacity is a busy hour, not a
+         bad one: it competes on its customers like any other, so the worst
+         hour is one with something to fix. */
+      const atCap = !!(!g.thin[wd] && cap && seen >= cap * AT_CAP) && spCellLimit(g, wd, h) !== "door";
       if(!best || atCap > best.atCap || (atCap === best.atCap && seen > best.seen)) best = {wd, h, seen, atCap};
     }
   });
@@ -14456,13 +14459,13 @@ function hourGrid(g, todayWd, lead = null, idle = []){
       const idleWord = roles.length > 1 && idle.length
         ? `${idle.map(r => r.label || "capacity").join(", ")} idle`
         : "capacity idle";
-      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
-        atCap ? " · <b>at the ceiling</b>" : slack ? ` · ${idleWord}` : ""}`;
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */
       const held = atCap ? spCellLimit(g, wd, h) : "";
       /* Held by the building's own capacity: a busy hour, not a bad one. */
       const bcap = held === "door";
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
+        atCap ? ` · <b>${bcap ? "at building capacity" : "at the ceiling"}</b>` : slack ? ` · ${idleWord}` : ""}`;
       if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap && !bcap ? "Worst hour" : "Busiest hour"; }
       cells += `<div class="hc${atCap ? ` cap${bcap ? " sp-bcap" : ""}` : slack && !atCap ? " slack" : ""}"${
         held ? ` data-caps="${attr(held)}"` : ""}${week.has(`${wd}:${h}`) ? ` data-el="idle"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
