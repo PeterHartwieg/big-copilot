@@ -115,6 +115,26 @@ const lit = page => page.$eval('#ssRes .on', el => el.querySelector('.t') ? el.q
 
 // --- the index -----------------------------------------------------------------
 
+test('a kind switched off colours no site and is not counted as read out', async () => {
+  const page = await board();
+  try {
+    const read = () => page.evaluate(SHOP => {
+      const index = ssBuild();
+      const by = id => index.find(e => e.id === id);
+      return {dot: by(`site:${SHOP}`).dot, tag: by('view:alerts').tag};
+    }, SHOP);
+    await page.evaluate(SHOP => {
+      D.alerts = [...D.alerts, {group: 'hype', level: 'critical', site: '[LM] Test Clothing', siteKey: SHOP,
+        id: 'hype-1', text: 'Lower Manhattan hype on 2 lines ends tomorrow', worth: 5000, unit: '/day revenue'}];
+      Object.assign(alertGroupPrefs, {hype: false});
+    }, SHOP);
+    assert.deepEqual(await read(), {dot: '', tag: '1 today'});
+    await page.evaluate(() => Object.assign(alertGroupPrefs, {hype: true}));
+    assert.deepEqual(await read(), {dot: 'crit', tag: '2 today'});
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
 test('the index holds every group, read from the page, with the words players use', async () => {
   const page = await board();
   try {
@@ -152,6 +172,8 @@ test('the index holds every group, read from the page, with the words players us
     assert.equal(by('kind:feed').tag, '1 today');
     assert.equal(by('kind:idlestaff').tag, 'switched off · 1');
     assert.equal(by('kind:idlestaff').dot, 'off');
+    // Needs attention reads out one finding, and says so.
+    assert.equal(by('view:alerts').tag, '1 today');
     assert.ok(by('kind:jobdemand').syn.includes('hire'));
     // The board's old names for renamed things still find them (R12).
     assert.ok(by('kind:dead').syn.includes('stock not moving'));

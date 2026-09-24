@@ -487,17 +487,28 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
       ['the building', 'door'],
       ['staffing', `staff:${SERVICE}`],
       ['registers', `post:${SERVICE}`]]);
-    // The building's chip gives no fix: no arrow, and no "so the answer is" in
-    // its tip. The staffing and registers chips keep theirs.
-    const fixes = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
-      els.map(e => [e.querySelector('.fix') ? e.querySelector('.fix').textContent : null,
+    // The building's chip is information, not a warning: the neutral
+    // modifier, no fix arrow, and a tip that only says how much. The staffing
+    // and registers chips keep their warning look and their fixes.
+    const chipLook = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
+      els.map(e => [e.classList.contains('sp-bcap'),
+        e.querySelector('.fix') ? e.querySelector('.fix').textContent : null,
         /so the answer is/.test(e.dataset.tip)]));
-    assert.deepEqual(fixes, [
-      [null, false],
-      ['more service staff on those hours', true],
-      ['another counter', true]]);
-    assert.match(await page.locator('#sp-hours .sp-hchip[data-show="door"]').getAttribute('data-tip'),
-      /the building is the limit\. \$/);
+    assert.deepEqual(chipLook, [
+      [true, null, false],
+      [false, 'more service staff on those hours', true],
+      [false, 'another counter', true]]);
+    const door = page.locator('#sp-hours .sp-hchip[data-show="door"]');
+    assert.match(await door.getAttribute('data-tip'),
+      /^At the building's capacity 7 hours a week \(every day 9\); \$[\d.,]+k?\/day of trade goes through those hours\.$/);
+    assert.match(await door.innerText(), /at building capacity/);
+    // Its hours wear the neutral ring too; the other ceilings' hours do not.
+    const rings = await page.$$eval('#sp-hours .hc.cap', els =>
+      [...new Set(els.map(e => `${e.dataset.caps.split(':')[0]}:${e.classList.contains('sp-bcap')}`))].sort());
+    assert.deepEqual(rings, ['door:true', 'post:false', 'staff:false']);
+    // And the ceiling tile's door icon is lit without the warning colour.
+    assert.deepEqual(await page.$$eval('#sp-tiles .sp-ceil .sp-i.on', els => els.map(e => e.classList.contains('sp-bcap'))),
+      [true, false, false]);
     // All three ceilings held hours here, so all three icons are lit.
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));

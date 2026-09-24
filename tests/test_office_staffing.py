@@ -278,18 +278,20 @@ class OfficeAlertTextTests(unittest.TestCase):
         mart = next(a for a in lines if a["site"] == "Mart")
         self.assertIn("fills the counters", mart["text"])
 
-    def test_two_ceilings_at_one_site_keep_their_own_ids(self):
+    def test_the_building_capacity_raises_no_line(self):
+        # Sitting at the building's capacity is normal for a good site and
+        # there is nothing to fix, so it is no finding, for an office or a
+        # shop, on the list or under it. The site's staffing ceiling still is.
         firm = business(staff=[LAWYER_PERSON])
+        shop = business(btype=SHOP, number=14, name="Mart", staff=[LAWYER_PERSON])
         hours = [self.cap(firm["key"], firm["name"], True),
-                 self.cap(firm["key"], firm["name"], True, limit="the building", cap=3, top=3)]
-        lines = [a for a in alerts([firm], hours) if a["group"] == "atcap"]
-        self.assertEqual(len({a["id"] for a in lines}), 2)
-        [door] = [a for a in lines if "at the 3/h building capacity" in a["text"]]
-        # The building line gives the facts and stops: no fix, no "answer".
-        self.assertTrue(door["text"].endswith("of trade going through it."), door["text"])
-        self.assertNotIn("answer", door["text"])
-        [staff] = [a for a in lines if a is not door]
+                 self.cap(firm["key"], firm["name"], True, limit="the building", cap=3, top=3),
+                 self.cap(shop["key"], "Mart", False, limit="the building", cap=50, top=50)]
+        rows = [a for a in alerts([firm, shop], hours) if a["group"] == "atcap"]
+        [staff] = rows
+        self.assertEqual(staff["site"], firm["name"])
         self.assertIn("so the answer is more staff at the computers", staff["text"])
+        self.assertFalse(any("building capacity" in a["text"] for a in rows))
 
     def test_idle_office_staff_are_workstations(self):
         firm = business(staff=[LAWYER_PERSON])

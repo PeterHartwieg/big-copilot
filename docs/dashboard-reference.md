@@ -26,7 +26,8 @@ hash, so a live refresh and a reopened tab both land where you left off.
 **Map** shows the city with your business footprints in green, buildings you own dashed
 blue, homes you rent in white, and a floating list of places over the right edge. Five
 chips above the map are layers that add up: your businesses, buildings you own, homes you
-rent, sites with a finding from Today, and every address (off by default, drawn as faint
+rent, sites with a finding from Today (of a kind still switched on, as Needs attention
+shows them; search colours a site's dot the same way), and every address (off by default, drawn as faint
 outlines). Clicking a chip switches that
 layer off; off is dimmed, never removed. The search field narrows the list and shows its
 count; the `?` mark explains the layers. Drag to pan, scroll or pinch to zoom, or use the
@@ -392,9 +393,10 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
 hour is judged on its own roster, and each role on the roster that was on for it. Where the
-door cap is at or below the site's staffed capacity the building is the limit, and the
-line names the ceiling and the trade through it and gives no fix, on the list or in the
-site panel's hour chip. Otherwise every role standing at the site's own minimum is named, and only those: a
+door cap is at or below the site's staffed capacity the building is the limit. That is
+not raised as a finding: plenty of well-run sites sit at their building's capacity, and
+there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
+building capacity") and neutral rings on its hours in the grid. Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
 standing empty is short of people; one with every station manned is short of stations. A
@@ -847,8 +849,9 @@ and dims the rest; clicking scrolls there.
   riding on the wave and a pip a day left; with no baseline to measure the wave against,
   the bar is hatched rather than guessed.
 - **Customers by hour.** The two things the grid can say that a daily total cannot are
-  chips under it: what the ceiling costs, with the fix where there is one (the building's
-  own capacity has none), and what idle hours cost. The idle
+  chips under it: what the ceiling costs, with the fix, and what idle hours cost. Hours
+  held by the building's own capacity get a neutral chip with no fix, since that is not a
+  warning. The idle
   chip is the site's *Overstaffed hours* line: the whole week's spare staff-hours, hours
   and wages. Hovering a chip picks its own hours out of the grid.
 - **Staffing** (a shop). The week the board would copy into BizMan, on the customer grid's

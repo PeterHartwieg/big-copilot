@@ -335,6 +335,29 @@ test('finding dots appear only when zoomed and the fnd switch clears them',async
   }finally{await page.close();}
 });
 
+test('a kind switched off leaves the Findings layer: its count, its pip and the card',async()=>{
+  const {page,errors}=await fixture();
+  try{
+    await openPage(page);
+    await page.evaluate(o=>{
+      D.alerts=[...D.alerts,{siteKey:o.key,level:'critical',group:'hype',text:'Wave ending tomorrow',id:'map-hype'}];
+      D.minor={rows:[{siteKey:o.key,level:'info',group:'idlestaff',text:'Overstaffed',id:'map-idle'}]};
+      Object.assign(alertGroupPrefs,{hype:false,idlestaff:false});
+      refreshCityMaps();
+    },other);
+    assert.equal(await page.locator('#cityMapPage .lay[data-l="fnd"] .n').textContent(),'1');
+    assert.equal(await page.locator('#cityMapPage .map-pips .pip').count(),1);
+    await pickRow(page,other.key);
+    assert.equal(await page.locator('#cityMapPage .site .finds2 .f').count(),0);
+    // Switched back on, the same findings colour the site again.
+    await page.evaluate(()=>{ Object.assign(alertGroupPrefs,{hype:true}); refreshCityMaps(); });
+    assert.equal(await page.locator('#cityMapPage .lay[data-l="fnd"] .n').textContent(),'2');
+    assert.equal(await page.locator('#cityMapPage .map-pips .pip.crit').count(),2);
+    assert.match(await page.locator('#cityMapPage .site .finds2').innerText(),/Wave ending tomorrow/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
 test('the card opens beside the picked footprint, inside the stage, and closes from the map',async()=>{
   const {page,errors}=await fixture();
   try{
