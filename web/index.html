@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=15a6d851e9">
+<link rel="stylesheet" href="community.css?v=59fcadb6a9">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=15a6d851e9">
+<link rel="stylesheet" href="fonts/fonts.css?v=59fcadb6a9">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3157,8 +3157,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "15a6d851e9";</script>
-<script>window.LEDGER_RELEASE = {"version":"15a6d851e9","latest":{"pr":82,"date":"2026-09-24","title":"Write to the game from the board (Big Copilot Link 0.2.0)","summary":"With the Big Copilot Link mod 0.2.0, the board can now make three changes in your game for you: set uniforms where roles have none, apply the import amounts from Plan imports, and write a shop's staffing plan, for one shop or a run of shops. Every change shows what the game will do before you apply it, can be undone once, and is refused, with nothing written, if the game has moved on since the board last read it. The first write from a browser asks for approval in the game; after that it is remembered."}};</script>
+<script>window.LEDGER_BUILD = "59fcadb6a9";</script>
+<script>window.LEDGER_RELEASE = {"version":"59fcadb6a9","latest":{"pr":82,"date":"2026-09-24","title":"Write to the game from the board (Big Copilot Link 0.2.0)","summary":"With the Big Copilot Link mod 0.2.0, the board can now make three changes in your game for you: set uniforms where roles have none, apply the import amounts from Plan imports, and write a shop's staffing plan, for one shop or a run of shops. Every change shows what the game will do before you apply it, can be undone once, and is refused, with nothing written, if the game has moved on since the board last read it. The first write from a browser asks for approval in the game; after that it is remembered."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3205,7 +3205,7 @@ document.addEventListener('click', event => {
       const hasChange = latest && typeof latest.title === 'string' && latest.title.trim() &&
         typeof latest.summary === 'string' && typeof latest.date === 'string' && Number.isInteger(latest.pr) &&
         (!previous || latest.date > previous.date ||
-          (latest.date === previous.date && latest.pr > previous.pr) ||
+          (latest.date === previous.date && latest.pr !== previous.pr) ||
           (latest.pr === previous.pr && (latest.title !== previous.title || latest.summary !== previous.summary)));
       $('releaseDetails').hidden = !hasChange;
       $('releaseDetails').open = false;
@@ -3227,8 +3227,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=15a6d851e9"></script>
-<script src="community.js?v=15a6d851e9"></script>
+<script src="app.js?v=59fcadb6a9"></script>
+<script src="community.js?v=59fcadb6a9"></script>
 
 <script>
 
