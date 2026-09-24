@@ -367,11 +367,11 @@ test('a line with no measured draw is sized on everything that leaves, as before
   assert.deepEqual(weekOf(1000, 450, {weekly:1000}), {routed:0, covered:false, gross:1450, need:1450});
 });
 
-test('a routed line is sized on the measured draw, not on the log net of the route', () => {
-  // The shops draw 25,200 a week and a route brings 12,600 every day, the
-  // import's day too: the log nets both off what left and reads 10,800. The
-  // import answers for the draw less the route, 12,600.
-  assert.equal(weekOf(0, 10800, {weekly:5000, routed:12600, covered:false, drawWeek:25200}).need, 12600);
+test('a routed line is sized on what leaves, less the route once', () => {
+  // The shops draw 25,200 a week and a route brings 12,600 of it; on a
+  // routed line depotOther is read gross, 25,200. The import answers for the
+  // draw less the route, 12,600.
+  assert.equal(weekOf(0, 25200, {weekly:5000, routed:12600, covered:false, drawWeek:25200}).need, 12600);
   // The factories' full-rate week stays a floor under a draw a starved
   // factory holds down.
   assert.equal(weekOf(18000, 0, {weekly:5000, routed:1000, covered:false, drawWeek:15000}).need, 17000);
@@ -379,12 +379,12 @@ test('a routed line is sized on the measured draw, not on the log net of the rou
 
 test('a routed line feeding shops and a starved factory keeps what the shops take', () => {
   // The factory eats 14,000 a week at full rate but draws 7,000; the shops
-  // take 11,200, and a route brings 3,000 of it, so the log counts 8,200 as
-  // leaving for them. The draw, 18,200, is held down by the factory: the
-  // week is the full-rate factory plus the shops, 22,200, and the import
-  // answers for 19,200 of it, not the draw's 15,200.
-  const w = weekOf(14000, 8200, {weekly:5000, routed:3000, covered:false, drawWeek:18200});
-  assert.deepEqual([w.gross, w.need], [22200, 19200]);
+  // take 11,200 (depotOther, read gross on a routed line), and a route
+  // brings 3,000 a week. The draw, 18,200, is held down by the factory: the
+  // week is the full-rate factory plus the shops, 25,200, and the import
+  // answers for 22,200 of it, not the draw's 15,200.
+  const w = weekOf(14000, 11200, {weekly:5000, routed:3000, covered:false, drawWeek:18200});
+  assert.deepEqual([w.gross, w.need], [25200, 22200]);
 });
 
 test('a depot line no contract covers asks for no import when a route brings its draw', () => {
@@ -415,25 +415,22 @@ test('an active backup below the week asks for nothing when a route brings the w
 
 test('a route covering part of the draw leaves the import the rest, not the whole week', () => {
   // 25,200 leaves a week: 14,000 to the factories at full rate and 11,200 to
-  // the shops. The route brings 12,600, which covers the shops' part (so
-  // what the log counts as leaving for the shops is nothing) and 1,400 of
-  // the factories'. The import answers for 12,600.
+  // the shops. The route brings 12,600 of it; the import answers for 12,600.
   const contract = {weekly:5000, routed:12600, covered:false, drawWeek:25200};
-  const r = routedRow(14000, 0, contract);
+  const r = routedRow(14000, 11200, contract);
   assert.deepEqual([r.need, r.fit, r.setTo], [12600, 'short', 12600]);
   const [action] = build({imports:[{s:0, rows:[r]}]});
   assert.equal(action.kind, 'Weekly imports');
   assert.deepEqual([action.current, action.proposed], [5000, 12600]);
   assert.match(action.reason, /Full-rate factory inputs plus shop deliveries, less the 12[,.]600 a week a route brings;/);
-  // Only a depot's shops: what the log counts as leaving is already net of
-  // the route, so it is not taken off twice.
-  assert.equal(routedRow(0, 12600, contract).need, 12600);
+  // Only a depot's shops: the same week, the route taken off once.
+  assert.equal(routedRow(0, 25200, contract).need, 12600);
   // An order that covers the rest is left alone.
-  assert.deepEqual(build({imports:[{s:0, rows:[routedRow(14000, 0, {...contract, weekly:13000})]}]}), []);
+  assert.deepEqual(build({imports:[{s:0, rows:[routedRow(14000, 11200, {...contract, weekly:13000})]}]}), []);
 });
 
 test('a paused import on a partly routed line resumes at what the route leaves', () => {
-  const r = routedRow(14000, 0, {weekly:0, pausedWeekly:13000, routed:12600, covered:false, drawWeek:25200});
+  const r = routedRow(14000, 11200, {weekly:0, pausedWeekly:13000, routed:12600, covered:false, drawWeek:25200});
   const [action] = build({imports:[{s:0, rows:[r]}]});
   assert.equal(action.proposed, null);
   assert.match(action.reason,

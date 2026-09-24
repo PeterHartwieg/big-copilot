@@ -3963,23 +3963,33 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
         days = flow["roundDays"](depot)
         if len(days) < SHIPPED_MIN_DAYS:
             continue
-        sent = flow["byDay"](depot, slug)
+        # A line a route from the company's own site feeds is read gross:
+        # netted, what the route brought the day would come off the shops'
+        # draw, and the Weekly imports table takes the route off again.
+        routed = bool((flow.get("routed", {}).get((depot, slug)) or (0,))[0]
+                      or (flow.get("routeOnly", {}).get((depot, slug)) or (0,))[0])
+        # What left each day: gross (outByDay counts up), or net (byDay, negative out).
+        if routed:
+            gone = flow["outByDay"](depot, slug)
+        else:
+            net = flow["byDay"](depot, slug)
+            gone = {d: -units for d, units in net.items()}
         taken = [
             intake(fkey, slug)
             for fkey in machines
             if flow["targets"].get((fkey, slug), (0, None))[1] == depot
         ]
-        # A day an import can have landed nets its arrival off what left, so
-        # the shops' draw that day reads as nothing: it is left out, as the
-        # route's own figure leaves it out, rather than counted as a day
-        # nothing went to the shops. With too few days left, all of them.
+        # Netted, a day an import can have landed takes its arrival off what
+        # left, so the shops' draw that day reads as nothing: it is left out,
+        # as the route's own figure leaves it out, rather than counted as a
+        # day nothing went to the shops. With too few days left, all of them.
         supply = flow["imports"].get((depot, slug))
-        landed = _landings(supply) if supply else set()
+        landed = _landings(supply) if supply and not routed else set()
         kept = [d for d in days if d not in landed]
         if len(kept) >= SHIPPED_MIN_DAYS:
             days = kept
         rest = sum(
-            max(0.0, -sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
+            max(0.0, gone.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
             for d in days
         )
         week = rest / len(days) * 7
@@ -9365,11 +9375,16 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"{row.get('importNeed', row['depotNeed']):,} it needs to cover a week"
                 )
             else:
-                weeks = row["depotStock"] / row["depotNeed"] if row["depotNeed"] else 0
+                # A route into the depot brings part of the week: the weeks
+                # held are counted against the rest, which is named as such.
+                need = row.get("importNeed", row["depotNeed"])
+                weeks = row["depotStock"] / need if need else 0
                 text = (
                     f"{row['item']} has no standing import; {depot} holds "
-                    f"{row['depotStock']:,}, {weeks:.1f} weeks of the {row['depotNeed']:,} a week "
+                    f"{row['depotStock']:,}, {weeks:.1f} weeks of the {need:,} a week "
                     f"the factories eat"
+                    + (f" beyond the {row['importRouted']:,} a week a route brings"
+                       if row.get("importRouted") else "")
                 )
             notes.append(
                 _finding(
@@ -17034,21 +17049,19 @@ function importSetting(total, contract, edit){
 /* What a depot line's import has to bring a week, once the company's own
    routes into the depot are counted: the Weekly imports table sizes its
    suggestion on it, and the checklist says it. `factoryWeek` is what the
-   factory lines draw at full rate, `otherWeek` what else leaves as the log
-   nets it (depotOther): what a route brought on the day comes off what left,
-   so on a line a route feeds it is neither the shops' draw nor the import's.
-   `contract` carries what _supply() measured on such a line: `drawWeek`, the
-   week's gross draw, `routed`, what routes brought a week, and `covered`, a
-   route bringing that draw. A routed line's week is that draw, never less
-   than the factories eat at full rate plus the net figure (a starved factory
-   holds the draw down, and the shops' share must not go with it), and the
-   route's week comes off it; a line no route feeds is sized as it always
-   was. A covered line asks
-   nothing of the import, which is a backup, provided the factories'
-   full-rate week is no more than the draw: a starved factory draws less than
-   it needs, and a route covering what it draws does not cover what it needs.
-   `gross` is the week before the route, the figure the table shows as used.
-   Pure, so the figure can be checked without a page. */
+   factory lines draw at full rate, `otherWeek` what else leaves (depotOther:
+   on a line a route feeds, read gross, so the route is not in it). `contract`
+   carries what _supply() measured on such a line: `drawWeek`, the week's
+   gross draw, `routed`, what routes brought a week, and `covered`, a route
+   bringing that draw. A routed line's week is the larger of that draw and
+   the factories' full-rate week plus the rest (a starved factory holds the
+   draw down, and the shops' share must not go with it), and the route's
+   week comes off it once; a line no route feeds is sized as it always was.
+   A covered line asks nothing of the import, which is a backup, provided the
+   factories' full-rate week is no more than the draw: a starved factory
+   draws less than it needs, and a route covering what it draws does not
+   cover what it needs. `gross` is the week before the route, the figure the
+   table shows as used. Pure, so the figure can be checked without a page. */
 function importWeek(factoryWeek, otherWeek, contract){
   const routed = contract.routed || 0, draw = contract.drawWeek || 0;
   const covered = !!contract.covered && factoryWeek <= draw * 1.05;

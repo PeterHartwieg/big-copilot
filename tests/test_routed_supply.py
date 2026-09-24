@@ -9,7 +9,7 @@ draw. A depot fed by imports alone reads exactly as before.
 import unittest
 
 from ba_dashboard import (SUMMARIES, TEMPLATE, WEEKDAYS, History, Names, _alerts, _factories,
-                          _supply, site_key)
+                          _feed_notes, _supply, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -359,6 +359,15 @@ class RoutedSupplyTests(unittest.TestCase):
         row = next(r for r in supply["imports"] if r["s"] == 1)
         self.assertEqual(row["weekNeed"], 7 * DRAW)
 
+    def test_a_routed_line_s_other_use_is_read_gross(self):
+        """A route brings half of what leaves every day, the import's day too:
+        read net, the log would take the route off what the shops draw, and
+        the table would take it off again. Read gross it is the shops' 25,200."""
+        supply, _ = depot_supply(0.5, [contract(5000, 5000, smart=False)],
+                                 import_days=(7,), route_from=3)
+        self.assertEqual(supply["factories"]["depotOther"][1][FOOD], 7 * DRAW)
+        self.assertEqual(supply["factories"]["depots"][1][FOOD]["routed"], 7 * DRAW // 2)
+
     def test_a_depot_line_a_route_feeds_with_no_import_is_given_to_the_table(self):
         """No import contract, and the factory's route brings the whole draw:
         the line is listed with its route, so the table asks for no import."""
@@ -440,6 +449,17 @@ class RoutedFactoryViewTests(unittest.TestCase):
         self.assertEqual((row["status"], row["importNeed"]), ("noimport", 840))
         # A route covering what a starved factory draws does not cover its need.
         self.assertEqual(self.need(route_only=(200, True, 200), target=300)["status"], "noimport")
+
+    def test_the_no_import_finding_counts_what_the_route_leaves(self):
+        """Half the week by route: the finding counts the depot's weeks against
+        the other half and says the route brings the rest."""
+        row = self.need(route_only=(840, False, 1680), target=300)
+        row["depotStock"] = 1260
+        businesses = [{"key": site_key(("factory", 0)), "name": "Factory"},
+                      {"key": "depot#1", "name": "Depot"}]
+        [note] = _feed_notes(businesses, {"sites": [{"s": 0, "needs": [row]}]}, set())
+        self.assertIn("holds 1,260, 1.5 weeks of the 840 a week the factories eat "
+                      "beyond the 840 a week a route brings", note["text"])
 
     def test_a_route_covering_a_starved_draw_does_not_cover_the_need(self):
         """The depot draws only 200 a week because the factory is starved; a
