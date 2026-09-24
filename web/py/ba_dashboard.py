@@ -3173,14 +3173,19 @@ def _supply(
                     "shortBy": round(short_by, 2),
                     "catchUp": catch_up,
                     "coverageUntil": until,
-                    # What the shelf has to hold to the next drop (the first,
-                    # where several are due), from the same walk, for a line a
-                    # route helps feed: the goods-flow node reads it rather
-                    # than a busy day times the days.
-                    "carry": round(_deepest_use(
-                        per_day, weekly, day,
-                        day + 7 if horizon else supply["arrives"] if supply["active"] else until,
-                        left_today)) if routed else None,
+                    # What the shelf has to hold, from the same walk, for a
+                    # line a route helps feed: to the next drop (the first,
+                    # where several are due), or, where a later drop is still
+                    # too far for what lands before it, the stock plus the
+                    # catch-up that bridges it. The goods-flow node reads it
+                    # rather than a busy day times the days.
+                    "carry": round(max(
+                        _deepest_use(
+                            per_day, weekly, day,
+                            day + 7 if horizon else supply["arrives"] if supply["active"] else until,
+                            left_today),
+                        line["units"] + catch_up if catch_up else 0,
+                    )) if routed else None,
                     "paused": not supply["active"],
                     "arrives": supply["arrives"],
                     "from": supply["from"],
@@ -11721,7 +11726,7 @@ const SUPPLY_VIEWS = {
         small ? `${small} order${small===1?" is":"s are"} too small` : "",
         short ? `${short} holding${short===1?" does":"s do"} not reach the import` : "",
         routeDry ? `${routeDry} holding${routeDry===1?"":"s"} fed by route run${routeDry===1?"s":""} dry on a busy day` : "",
-        routeClose ? `${routeClose} fed by route come${routeClose===1?"s":""} within half a day of running dry on a busy day` : "",
+        routeClose ? `${routeClose} holding${routeClose===1?"":"s"} fed by route come${routeClose===1?"s":""} within half a day of running dry on a busy day` : "",
         close ? `${close} land within half a day of it` : "",
         tight ? `${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : "",
       ].filter(Boolean);
