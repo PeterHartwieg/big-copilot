@@ -18727,11 +18727,13 @@ function gwFocusKey(el){
     if(el.dataset && key in el.dataset) return `[${name}="${CSS.escape(el.dataset[key])}"]`;
   return null;
 }
-/* What decides the next step never scrolls away: the notes that open the
-   body (what the game said, why it refused, what was undone, the approval
-   asked in the game), and any note marked gw-lift or a "read again" line
-   wherever it sits, go to the fixed strip under the verdict, in their order.
-   Only the rows' detail stays in the body, which scrolls. */
+/* The fixed strip under the verdict holds the most urgent note and what the
+   player must act on before the foot's first button; only the rows' detail
+   scrolls. The notes that open the body (what the game said, what was
+   undone, the approval asked in the game), and any note marked gw-lift or a
+   "read again" line wherever it sits, go up in their order. A refusal (its
+   card, with the lock-window strip) is urgent enough to stand alone there:
+   the other notes then open the scrolling body instead, in the same order. */
 const GW_LEAD = ".gw-said,.gw-sub,.gw-lead,.gw-drift,.gw-ok,.gw-no,.gw-reread,.gw-scene,.gw-call,.gw-lift";
 function gwLift(dlg, body){
   const kids = [...body.children];
@@ -18740,7 +18742,9 @@ function gwLift(dlg, body){
     lead = lead && el.matches(GW_LEAD);
     return lead || el.matches(".gw-lift,.gw-reread");
   });
-  dlg.querySelector(".gw-fix").replaceChildren(...up);
+  const cards = up.filter(el => el.matches(".gw-no"));
+  if(cards.length) body.prepend(...up.filter(el => !el.matches(".gw-no")));
+  dlg.querySelector(".gw-fix").replaceChildren(...(cards.length ? cards : up));
 }
 /* One state of the dialog. `v`: {phase, wire, say, meta, body, hint, warn,
    buttons, keepTick}; a button is [label, onclick, {kind: go | ghost | undo,

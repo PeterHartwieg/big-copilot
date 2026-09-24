@@ -1282,8 +1282,10 @@ test('schedule: on a phone, what decides the next step stays in view; only the r
   await dialog(page).getByRole('button', {name: 'Write the week'}).click();
   await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
   await configure({refuseWrite: null});
-  // The refusal is fixed, the way on is in the foot, and the body still has room to scroll.
+  // The refusal alone is fixed; the add-people note opens the scrolling body; the way on is in the foot.
   assert.equal(await dialog(page).locator('.gw-fix .gw-no').count(), 1);
+  assert.equal(await dialog(page).locator('.gw-fix > :not(.gw-no)').count(), 0, 'only the refusal is fixed');
+  assert.equal(await dialog(page).locator('.gw-body > :first-child').evaluate((e) => e.matches('.gw-box.gw-warn')), true);
   assert.equal(await dialog(page).locator('.gw-body .gw-no, .gw-body .gw-b').count(), 0, 'no refusal or button in the rows');
   assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Try again'}).count(), 1);
   const m = await dialog(page).evaluate((d) => {
@@ -1292,7 +1294,7 @@ test('schedule: on a phone, what decides the next step stays in view; only the r
     return {foot: box('.gw-foot').bottom, view: innerHeight, body: b.clientHeight, rows: b.scrollHeight};
   });
   assert.ok(m.foot <= m.view, 'the foot is on screen');
-  assert.ok(m.body >= 60, `the body keeps room (${m.body} px)`);
+  assert.ok(m.body >= 180, `the body keeps room (${m.body} px)`);
   assert.ok(m.rows > m.body, 'the rows scroll');
 });
 
