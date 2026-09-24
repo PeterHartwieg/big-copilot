@@ -1134,9 +1134,7 @@
         await linkWait(1000);
         continue;
       }
-      // An apply or an undo carries `read`: settled once the board has read
-      // the game after it, so the page can ask afresh on what the game holds.
-      if (res.status === 200 && !dryRun && answer) return {status: res.status, error, body: answer, read: followWrite(answer.stamp)};
+      if (res.status === 200 && !dryRun && answer) followWrite(answer.stamp);
       return {status: res.status, error, body: answer};
     }
   }
@@ -1172,33 +1170,19 @@
   // after Update. A read already under way may have read the bytes before
   // the change, so the follow waits for it to finish and then looks: an apply
   // and its undo in quick succession must leave the board on the undo. One
-  // follow waits at a time, for the newest write's stamp. Resolves once the
-  // follow that covers this write has ended: the board rebuilt from the new
-  // bytes, or the follow given up (another source, a read that failed).
+  // follow waits at a time, for the newest write's stamp.
   let followBefore = null;
-  let followWaiting = [];  // the writes the queued follow covers, to be told when it has ended
-  function followWrite(before) {
-    return new Promise((resolve) => {
-      followWaiting.push(resolve);
-      const gen = sourceGen;
-      const waiting = followBefore !== null;
-      followBefore = before || lastLinkStamp;
-      if (waiting) return;
-      (async () => {
-        await whenIdle(gen);
-        const stamp = followBefore;
-        followBefore = null;
-        const covered = followWaiting;
-        followWaiting = [];
-        try {
-          if (gen !== sourceGen || !linkUrl || !startAttempt(gen)) return;
-          state("busy", "Reading the game after the change", linkUrl);
-          await awaitNewStamp(stamp, gen);
-        } finally {
-          covered.forEach((done) => done());
-        }
-      })();
-    });
+  async function followWrite(before) {
+    const gen = sourceGen;
+    const waiting = followBefore !== null;
+    followBefore = before || lastLinkStamp;
+    if (waiting) return;
+    await whenIdle(gen);
+    const stamp = followBefore;
+    followBefore = null;
+    if (gen !== sourceGen || !linkUrl || !startAttempt(gen)) return;
+    state("busy", "Reading the game after the change", linkUrl);
+    await awaitNewStamp(stamp, gen);
   }
 
   // A write that got no answer: ask the game for its state, as Update does,
@@ -1844,9 +1828,10 @@
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last
     // health (the import lock window), or null when the board is not linked.
+    // `stamp`: the stamp of the bytes behind the board on screen.
     link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || "",
       company: linkHealth.company || "", day: linkHealth.day, hour: linkHealth.hour, minute: linkHealth.minute,
-      approved: !!approvalToken(linkUrl)} : null),
+      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp} : null),
     // Resolves to {status, error, body}; see gameWrite().
     write: (kind, body, opts) => gameWrite(kind, body, opts),
     // Update, for a board that learns the game has moved on.

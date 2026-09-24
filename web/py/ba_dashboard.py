@@ -18480,6 +18480,10 @@ function gwLockStrip(){
   const now = at >= 0 ? `<span class="n" style="grid-row:2;grid-column:${Math.min(at, 14) + 1}/span 4">now ${gwNow().slice(4)}</span>` : "";
   return `<div class="gw-lock" aria-hidden="true"><div class="cells">${cells}</div><div class="labs"><span style="grid-column:1/span 4">Sun 16</span><span style="grid-column:5/span 3">20:00</span><span class="r" style="grid-column:15/span 4">Mon 08:00</span>${now}</div></div>`;
 }
+/* A dry run the game refused because the board's figures are no longer the
+   game's. */
+const gwMovedOn = answer => !answer.ok && (answer.siteError === "changed"
+  || (answer.rows || []).some(r => r && (r.error === "changed" || (r.products || []).some(p => p && p.error === "changed"))));
 /* The game's refusals, one card a rule: the rule, what it is about as
    chips, and the fix on one line. */
 function gwRefusals(spec, answer){
@@ -18560,12 +18564,34 @@ const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar">
   [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
   gwSvg("cursor", "gw-cursor")}</div>`;
 
+/* A write's `expect` is what the board read. Straight after an undo the
+   board may still hold the figures of the write the undo took back, so until
+   it has read the game after the undo, `expect` comes from the undo's own
+   answer, which gives the state as it now stands: the schedule's print
+   (after.print), each import product's amount. `stamps` are the board's
+   stamp at the undo and the undo's own: bytes with either predate the undo's
+   refresh; any other stamp is a board read after it, and ends the override.
+   A mod whose undo answer lacks the figures leaves no override. */
+let gwUndoExpect = null;  // {kind, values: Map(key -> expect), stamps}
+function gwLearnUndo(kind, answer, key){
+  const values = new Map();
+  if(kind === "schedule" && typeof (answer.after || {}).print === "string" && (answer.address || key))
+    values.set(answer.address ? gwKeyOf(answer.address) : key, answer.after.print);
+  if(kind === "imports") (answer.rows || []).forEach(r => (r.products || []).forEach(p => {
+    if(p && p.warehouse && Number.isFinite(p.amount)) values.set(`${r.id}|${p.itemName}|${gwKeyOf(p.warehouse)}`, p.amount);
+  }));
+  if(values.size) gwUndoExpect = {kind, values, stamps: [(gwLink() || {}).stamp, answer.stamp]};
+  else if(gwUndoExpect && gwUndoExpect.kind === kind) gwUndoExpect = null;
+}
+function gwExpect(kind, key, board){
+  const o = gwUndoExpect;
+  if(!o || o.kind !== kind) return board;
+  if(!o.stamps.includes((gwLink() || {}).stamp)){ gwUndoExpect = null; return board; }
+  return o.values.has(key) ? o.values.get(key) : board;
+}
 /* The dialog hangs off <body> in the top layer, so no section's paint
    containment can clip it; one at a time. Its head names the write, its
    verdict carries the wire, and its body and foot are the state's. */
-/* How long the board waits for its own read of the game after an undo
-   before it asks the game afresh regardless. */
-const GW_READ_WAIT_MS = 20000;
 /* The undo just made, said once above whatever the dialog shows next. */
 function gwUndoneNote(dlg){
   const text = dlg._gwUndone;
@@ -18811,7 +18837,8 @@ function gwConfirm(spec){
     buttons: ["|", ["Close", () => dlg.close(), {kind: spec.next ? "ghost" : "go"}], ...skip("nothing to write")]});
   const asking = () => gwPaint(dlg, {phase: "asking", wire: "ask",
     say: allowed ? "<b>Allowed.</b> Asking the game what it would do…" : "<b>Asking the game…</b>", meta: allowed ? "" : "dry run",
-    body: (allowed ? gwBox("tick", "", "<b>This browser may now change your game.</b> The game remembers it and will not ask again; “Forget approved browsers” in the Big Copilot Link options takes it back.") : "")
+    body: (dlg._gwUndone ? `<div class="gw-reread done">${gwSvg("undo")}<span>${dlg._gwUndone}</span></div>` : "")
+      + (allowed ? gwBox("tick", "", "<b>This browser may now change your game.</b> The game remembers it and will not ask again; “Forget approved browsers” in the Big Copilot Link options takes it back.") : "")
       + `<div class="gw-skel" aria-hidden="true"><i></i><i></i>${allowed ? "" : "<i></i>"}</div>`,
     hint: allowed ? "Next: the game's answer." : "Apply waits for the game's answer.",
     buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
@@ -18848,7 +18875,9 @@ function gwConfirm(spec){
       warn: !answer.ok && !!spec.refusedHint,
       /* Refused, nothing is left to cancel: the dialog closes. */
       buttons: [...(answer.ok || spec.next ? left : [["Close", () => dlg.close(), {kind: "ghost"}]]),
-        [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]]});
+        /* The game moved on since the board was read: the way on is to read it again. */
+        gwMovedOn(answer) ? ["Refresh the board", () => { dlg.close(); if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {kind: "go", icon: "refresh"}]
+          : [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]]});
     allowed = false;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
   };
@@ -18891,6 +18920,8 @@ function gwConfirm(spec){
       return dlg.open ? gwFailed(dlg, spec, res, () => plan(), () => plan()) : gwToast();
     }
     applying = false;  // done: after an undo the write can be applied again
+    /* The game has moved past what an undo of this kind answered. */
+    if(gwUndoExpect && gwUndoExpect.kind === spec.kind) gwUndoExpect = null;
     const answer = res.body || {};
     /* An apply replaces its kind's undo, with nothing when it changed nothing. */
     const undoable = !spec.changed || spec.changed(answer);
@@ -18909,19 +18940,12 @@ function gwConfirm(spec){
       buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : "Undo", () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
         spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : ["Close", () => dlg.close(), {kind: "go"}]]});
   };
-  /* After an undo in this dialog the write is offered again. The undo is said
-     at once; the game is asked afresh only once the board has read it after
-     the undo (or after a while regardless), because the request's `expect`
-     figures come from the board. */
-  dlg._gwReplan = (undone, read) => {
-    const mine = ++seq;
+  /* After an undo in this dialog the write is offered again at once: the
+     undo is said, and the game asked afresh (its `expect` from the undo's own
+     answer, see gwExpect()). */
+  dlg._gwReplan = undone => {
     dlg._gwUndone = undone;
-    gwPaint(dlg, {phase: "reading", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
-      body: `<div class="gw-reread done">${gwSvg("undo")}<span>${undone}</span></div>${gwReread(false)}<div class="gw-skel" aria-hidden="true"><i></i><i></i></div>`,
-      hint: "Offered again once the board has read the game.",
-      buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
-    Promise.race([Promise.resolve(read).catch(() => {}), new Promise(done => setTimeout(done, GW_READ_WAIT_MS))])
-      .then(() => { if(dlg.open && mine === seq) plan(); });
+    plan();
   };
   if(spec.startUndo) gwUndo(spec, dlg); else plan();
 }
@@ -18947,11 +18971,19 @@ async function gwUndo(spec, dlg){
   if(!dlg.open) return gwToast();
   /* A run of dialogs does not go on from an undo; and an undo that got no
      answer is never sent again on its own. */
-  if(res.error) return gwFailed(dlg, Object.assign({}, spec, {next: spec.backToRun
-    ? {label: "Back to the run", go: spec.backToRun, pass: spec.backToRun} : null}), res, () => gwUndo(spec, dlg), null);
+  if(res.error){
+    /* In a run the shop stays written, or unknown after an undo with no
+       answer, and the run goes on from it; reopened from the end of the
+       run, it goes back there. */
+    if(res.error === "uncertain" && spec.onUndoUnknown) spec.onUndoUnknown();
+    const onward = spec.backToRun ? {label: "Back to the run", go: spec.backToRun, pass: spec.backToRun}
+      : spec.next ? {label: spec.next.label, go: spec.next.go, pass: () => spec.next.go()} : null;
+    return gwFailed(dlg, Object.assign({}, spec, {next: onward}), res, () => gwUndo(spec, dlg), null);
+  }
   const answer = res.body || {};
+  gwLearnUndo(spec.kind, answer, spec.undoKey);
   if(spec.onUndo) spec.onUndo();
-  if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer), res.read);
+  if(dlg._gwReplan){ gwHead(dlg, typeof spec.title === "function" ? spec.title() : spec.title, typeof spec.where === "function" ? spec.where() : spec.where || ""); return dlg._gwReplan(spec.done(answer)); }
   dlg._gwBoard = D;
   gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
@@ -19189,7 +19221,7 @@ function gwImportBody(lines){
     if(!byId.has(c.id)) byId.set(c.id, {id: c.id, activate: false, products: []});
     const row = byId.get(c.id);
     row.activate = row.activate || (!c.active && amount > 0);
-    row.products.push({itemName: r.slug, warehouse: gwAddress(depot.key), amount, expect: c.amount});
+    row.products.push({itemName: r.slug, warehouse: gwAddress(depot.key), amount, expect: gwExpect("imports", gwLineKey(c, r.slug, depot.key), c.amount)});
   }));
   return {contracts: [...byId.values()]};
 }
@@ -19535,7 +19567,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
     body: () => {
       const row = gwRosterPlan(key), week = gwRosterWeek(row);
       last = {row, week, now: (row.current || {}).list || []};
-      return {address: gwAddress(key), expect: site().shiftPrint,
+      return {address: gwAddress(key), expect: gwExpect("schedule", key, site().shiftPrint),
               openAllHours: !!(row.full && !row.openNow && openAll), days: week.days};
     },
     verdict: answer => answer.ok ? "<b>The game takes the week</b>" : "<b>The game refuses this</b>",
@@ -19619,6 +19651,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
     runOf: many ? run : null,
     runAt: i,
     backToRun: many && o.startUndo ? () => gwRunEnd(keys, run) : null,
+    undoKey: key,
+    onUndoUnknown: () => { if(run[i]) run[i] = Object.assign({}, run[i], {what: "unknown, see the board", ok: false}); },
     done: answer => {
       const shop = name;  // the board's name for it: the game's carries the [code] prefix
       if(answer.undo) return `Undone: the schedule at ${shop} is back as it was${answer.openedHours ? ", opening hours too" : ""}.`;
