@@ -347,7 +347,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     // which a loaded machine can reach after the popover has closed: wait for
     // both, then say where focus went.
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on')
-      && document.activeElement !== document.querySelector('#clock .fv-diff'), null, {timeout: 3000});
+      && document.activeElement !== document.querySelector('#clock .fv-diff'), null, {timeout: 10000});
     const s = await state(page);
     assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
     assert.deepEqual(errors, []);

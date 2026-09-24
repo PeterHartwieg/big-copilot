@@ -310,30 +310,32 @@ test('between the phone and the desk the tiles pair up before an amount would cl
   }
 });
 
-test('a figure of ten to twelve characters fits its tile at every width, and a desk keeps the full 30 px', async () => {
+test('a figure shrinks only when it is long: 30 px on a desk, 24 px at most on a phone, and it always fits', async () => {
+  // A seven-figure amount first, then eleven and twelve characters.
   const AMOUNTS = ['$1,234,567', '$87,654,321', '-$1,234,567', '$123,456,789'];
   for (const width of [390, 700, 1041, 1100, 1440]) {
     const page = await today(width);
     try {
       const m = await page.evaluate(AMOUNTS => {
         const vs = [...document.querySelectorAll('#kpis .kpi .v')];
-        vs.forEach((v, i) => { v.textContent = AMOUNTS[i]; });
+        // drawKpis() writes each figure's length for the stylesheet.
+        const drawn = vs.every(v => +v.style.getPropertyValue('--n') === v.textContent.length);
+        vs.forEach((v, i) => { v.textContent = AMOUNTS[i]; v.style.setProperty('--n', AMOUNTS[i].length); });
         return {
+          drawn,
           spill: vs.filter(v => v.scrollWidth > v.clientWidth || v.closest('.kpi').scrollWidth > v.closest('.kpi').clientWidth)
             .map(v => `${v.textContent} ${v.scrollWidth}/${v.clientWidth}`),
           sizes: vs.map(v => parseFloat(getComputedStyle(v).fontSize)),
           scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
         };
       }, AMOUNTS);
+      assert.ok(m.drawn, `${width}: each figure carries its own length`);
       assert.deepEqual(m.spill, [], `${width}: every figure fits its tile`);
       assert.equal(m.scroll, m.client, `${width}: no sideways scroll`);
-      if (width === 1440) assert.deepEqual(m.sizes, [30, 30, 30, 30], 'a desk keeps the full size');
+      if (width <= 640) assert.ok(m.sizes.every(px => px <= 24), `${width}: a phone's figures are 24 px at most (${m.sizes})`);
+      else assert.equal(m.sizes[0], 30, `${width}: a seven-figure amount keeps the full 30 px (${m.sizes})`);
+      // Only the longer figures give way, never below the one before them.
+      assert.ok(m.sizes[3] <= m.sizes[1] && m.sizes[1] <= m.sizes[0], `${width}: ${m.sizes}`);
     } finally { await page.close(); }
   }
-  // A seven-figure amount at 1600 px is the size it always was.
-  const page = await today(1600);
-  try {
-    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('#kpis .kpi .v')]
-      .map(v => parseFloat(getComputedStyle(v).fontSize))), [30, 30, 30, 30]);
-  } finally { await page.close(); }
 });

@@ -9660,12 +9660,14 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .kpi:hover::before{opacity:1}
 .kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .kpi .v{font-family:"IBM Plex Mono",monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.05}
-/* The figure is sized to its tile: 30 px wherever the tile has room (every
-   desk width with a seven-figure amount), and smaller only where a tile is
-   too narrow for twelve characters of mono ("$123,456,789", "-$1,234,567"),
-   which at 13cqi take about 91% of its width. */
-.kpi{container-type:inline-size}
-.kpi .v{font-size:min(30px,13cqi)}
+/* Today's figures are sized by their own length (--n, set by drawKpis()):
+   a figure keeps its 30 px until it would fill more than about 95% of its
+   tile, so only a long one ("$123,456,789", "-$1,234,567") shrinks. IBM Plex
+   Mono 500 advances 0.6em a character, 0.58em at this letter-spacing, and
+   0.58 / 0.95 is 0.61. A browser without container queries keeps the plain
+   30 px written first. */
+#kpis .kpi{container-type:inline-size}
+#kpis .kpi .v{font-size:30px;font-size:min(30px,calc(100cqi / (var(--n,10) * .61)))}
 .kpi .row{display:flex;align-items:center;gap:10px;min-height:20px}
 .chip{
   display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
@@ -10953,10 +10955,10 @@ body:has(#changelogDialog[open]){overflow:hidden}
 /* Four tiles side by side need about 975 px for a seven-figure amount at the
    full 30 px ($3,667,464 cash on a real save) and about 1,040 px for eight;
    narrower, they pair up two by two, and a longer figure still shrinks to
-   its tile (.kpi .v above). The phone's own tile rules follow. */
+   its tile (#kpis .kpi .v above). The phone's own tile rules follow. */
 @media (max-width:1040px){
-  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .kpi{min-width:0}
+  #kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #kpis .kpi{min-width:0}
 }
 /* The phone: nothing on Today, Company or Growth may push the page sideways.
    Four tiles pair up two by two, the Next moves cards stack, and a finding's
@@ -10965,7 +10967,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 @media (max-width:640px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:24px}
   .kpi{padding:14px 14px 12px;min-width:0}
-  .kpi .v{font-size:min(24px,13cqi)}
+  #kpis .kpi .v{font-size:clamp(17px,5.4vw,24px);font-size:min(24px,calc(100cqi / (var(--n,10) * .61)))}
   .kpi .row{flex-wrap:wrap;gap:4px 8px}
   .moves{grid-template-columns:minmax(0,1fr);gap:12px}
   #alertSection .find{grid-template-columns:18px minmax(0,1fr) auto 20px;gap:4px 10px}
@@ -12648,7 +12650,7 @@ function drawKpis(){
   $("kpis").innerHTML = tiles.map(t => `
     <${tag(t)} class="kpi rv${seen ? " in" : ""}${t.go ? " td-go" : ""}"${t.go ? ` href="#${t.go}" data-go="${t.go}" aria-label="${attr(`${t.l} ${t.v}. ${t.goTip}`)}"` : ""}>
       <span class="lab">${t.l}${t.go ? `<span class="td-go-ic" data-tip="${attr(t.goTip)}">${icon("go")}</span>` : ""}</span>
-      <span class="v">${t.v}</span>
+      <span class="v" style="--n:${String(t.v).replace(/<[^>]*>/g, "").length}">${t.v}</span>
       <div class="row">${t.chip}<span class="sub">${t.sub}</span></div>
       ${t.spark ? sparkHtml(t.spark, t.spark.map(money)) : ""}
     </${tag(t)}>`).join("");
