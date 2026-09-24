@@ -11194,7 +11194,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .sp-rrow{display:grid;grid-template-columns:200px 1fr auto;gap:18px;align-items:center;min-height:48px;border-bottom:1px solid var(--rule-soft)}
 .sp-rbtn{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;cursor:pointer;text-align:left}
-.sp-rbtn i{width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
+.sp-rbtn i{flex:none;width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
 .sp-rbtn .sp-i{color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
 .sp-rbtn:hover .sp-i{color:var(--accent);transform:translateX(2px)}
 .sp-rrow.open .sp-rbtn .sp-i{transform:rotate(90deg)}
@@ -11211,12 +11211,13 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* The three columns leave the dots what the role and its count do not take.
    Beside Fees or Shelves the Crew block is a third of the page, and a big
    role's dots were squeezed into one column, a dot a line. Too narrow, the
-   dots take a line of their own under the role and its count, as on a phone. */
+   dots take a line of their own under the role and its count, as on a phone,
+   and the count wraps at its breaks rather than squeezing the role. */
 .sp-roster{container-type:inline-size}
 @container (max-width:620px){
-  .sp-rrow{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+  .sp-rrow{grid-template-columns:auto minmax(0,1fr);gap:4px 12px}
   .sp-rrow .sp-dots{grid-column:1/-1;grid-row:2}
-  .sp-rrow .sp-rcount{grid-column:2;grid-row:1}
+  .sp-rrow .sp-rcount{grid-column:2;grid-row:1;white-space:normal}
 }
 
 /* shelves: the three marks a shop's own table gains */

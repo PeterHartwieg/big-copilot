@@ -197,21 +197,28 @@ test('a big crew folds into one row a role, a dozen still read as pills', async 
 // a third of the page wide beside Fees, and the three columns (role, dots,
 // count) left the eighty dots a single column, a dot a line, with the role and
 // its count adrift halfway down. Every role's row keeps its name and count on
-// its first line and lays its dots out in lines of many.
+// its first line and lays its dots out in lines of many. At a tablet's width the
+// count took its full unbroken width and squashed the role's badge and name, so
+// the count now wraps at its breaks and the badge keeps its size.
 test('a big role in a narrow Crew block keeps its name, its count and its dots in lines', async () => {
   const person = n => ({name: `Person ${n}`, role: n <= 3 ? 'Cleaning' : 'Lawyer',
                         absent: n % 17 === 0, daily: n <= 3 ? 250 : 800});
   const people = Array.from({length: 83}, (_, i) => person(i + 1));
-  for (const viewport of [{width: 1850, height: 1100}, {width: 1440, height: 1000}, {width: 390, height: 900}]) {
+  for (const width of [1850, 1440, 900, 820, 768, 390]) {
+    const viewport = {width, height: 1000};
     const page = await site({viewport, shop: {status: 'office', type: 'Law Firm', basket: 387.89,
       staff: 83, staffCost: 64750, people,
       crew: [{role: 'Cleaning', count: 3, daily: 750, absent: 0}, {role: 'Lawyer', count: 80, daily: 64000, absent: 4}]}});
     try {
       const rows = await page.$$eval('#sitePanel .sp-rrow', rows => rows.map(r => {
         const top = r.getBoundingClientRect().top;
-        const btn = r.querySelector('.sp-rbtn').getBoundingClientRect();
+        const button = r.querySelector('.sp-rbtn');
+        const btn = button.getBoundingClientRect();
         const count = r.querySelector('.sp-rcount').getBoundingClientRect();
         return {
+          badge: button.querySelector('i').getBoundingClientRect().width,
+          overflow: button.scrollWidth - button.clientWidth,
+          gap: count.left - btn.right,
           role: r.querySelector('.sp-rbtn').textContent.trim(),
           count: r.querySelector('.sp-rcount').textContent,
           btnTop: btn.top - top, btnWidth: btn.width, countTop: count.top - top,
@@ -223,10 +230,13 @@ test('a big role in a narrow Crew block keeps its name, its count and its dots i
       for (const r of rows) {
         assert.ok(r.btnTop < 12 && r.countTop < 30, `${viewport.width}px: ${r.role} starts its row ${JSON.stringify(r)}`);
         assert.ok(r.btnWidth >= 90, `${viewport.width}px: ${r.role} has room for its name`);
+        assert.equal(Math.round(r.badge), 26, `${viewport.width}px: ${r.role}'s badge keeps its size`);
+        assert.ok(r.overflow <= 0, `${viewport.width}px: ${r.role}'s name fits its button`);
+        assert.ok(r.gap >= 0, `${viewport.width}px: ${r.role} ends before its count begins ${JSON.stringify(r)}`);
       }
       assert.match(rows[1].count, /^80 · 4 off · \$64,000\/day$/);
       // Eighty dots at 16px a dot run to a handful of lines, not eighty.
-      assert.ok(rows[1].lines <= 8, `${viewport.width}px: ${rows[1].lines} lines of dots`);
+      assert.ok(rows[1].lines <= 6, `${viewport.width}px: ${rows[1].lines} lines of dots`);
     } finally { await page.close(); }
   }
 });
