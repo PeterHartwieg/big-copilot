@@ -160,6 +160,39 @@ test("Orders lists a route-fed depot's daily top-up from its fact, naming the si
   } finally { await page.close(); }
 });
 
+test("Orders: a factory's paused contract the top-up falls short without is a change; one it covers is not", async () => {
+  const withPaused = lvl => {
+    const data = fixture();
+    data.supply.facts[1].milk = {...data.supply.facts[1].milk, imp: true, import: {st: 'paused',
+      why: lvl === 'info' ? 'topup' : 'order', lvl, role: 'input', cad: 'weekly', use: 0, need: 0, have: 2100,
+      setTo: null, parts: {lines: 0, sites: 0, route: 0}, from: 0}};
+    const hubMilk = data.supply.factories.depots[0].milk;
+    data.supply.factories.depots[1] = {milk: {...hubMilk, weekly: 0, pausedWeekly: 2100, plain: 0,
+      contracts: [{...hubMilk.contracts[0], id: 'c7', active: false}]}};
+    return data;
+  };
+  const read = async lvl => {
+    const page = await board(withPaused(lvl));
+    try {
+      return await page.evaluate(() => {
+        logisticsView = 'changes'; drawLogistics();
+        return {head: document.querySelector('#importPlan .sechead').textContent,
+                rows: [...document.querySelectorAll('#importPlan tbody tr')].map(r => r.cells[0].textContent.trim()),
+                acts: window.fixtureActions.filter(a => a.item === 'Milk' && a.kind === 'Weekly imports')
+                  .map(a => [a.kind, !!a.paused])};
+      });
+    } finally { await page.close(); }
+  };
+  const short = await read('critical');
+  assert.match(short.head, /2 paused/);
+  assert.ok(short.rows.some(r => r.startsWith('Milk')), JSON.stringify(short.rows));
+  assert.deepEqual(short.acts, [['Weekly imports', true]]);
+  const covered = await read('info');
+  assert.match(covered.head, /1 paused/);
+  assert.ok(!covered.rows.some(r => r.startsWith('Milk')), JSON.stringify(covered.rows));
+  assert.deepEqual(covered.acts, []);
+});
+
 test('a paused backup a route covers is covered by route, with nothing to resume', async () => {
   const data = fixture();
   data.supply.facts[0].sugar = {...data.supply.facts[0].sugar, st: 'covered', why: 'route', lvl: 'ok', setTo: null,

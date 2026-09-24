@@ -4353,12 +4353,13 @@ def _supply_facts(ctx: dict) -> dict:
         paused = bool(entry and not brought and entry.get("pausedWeekly"))
         measured = row is not None and row["basis"] != "order"
         inbound = target_at.get((key, slug), (0, None))[1] is not None
-        if inbound and not entry and not lines_use:
-            return route_fed(key, slug, gross, row)
         deal = wholesale.get((key, slug))
+        if inbound and not entry and not lines_use and not deal:
+            return route_fed(key, slug, gross, row)
         if deal and not entry:
             # A depot a wholesale store delivers each week: its contract is
-            # judged against the week as an import is.
+            # judged against the week as an import is, and a top-up from your
+            # own site (what its route brought) comes off the week on top of it.
             brings = deal["weekly"]
             p = {"short": ["order"] if use and _below(brings, use) else []}
             if need and _below(brings, need):
@@ -10311,9 +10312,9 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
         if b["key"] in silent:
             continue
         for slug in _in_order(facts[s_key]):
-            fact = _supply_fact(facts, s, slug, mode)
+            whole = _supply_fact(facts, s, slug, mode)
             # A factory's own contract beside a daily top-up is its `import`.
-            fact = fact.get("import") or fact
+            fact = whole.get("import") or whole
             # A depot only a route from your own site feeds: its daily top-up
             # against its busiest day, as a shelf's (tight is no finding).
             if fact["role"] == "depot" and fact["cad"] == "daily":
@@ -10345,10 +10346,28 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if st == "short" and why == "shortfall" and row:
                 notes.append(_shortfall_note(row, item, site, key))
                 continue
+            if (st == "short" and not entry and row is None and fact["role"] == "depot"
+                    and fact.get("have")):
+                # A depot a wholesale store delivers to: its contract, said on
+                # the depot's own page (Weekly imports does not list it).
+                notes.append(_finding(
+                    fact["lvl"], site, "feed" if parts.get("lines") else "topup",
+                    f"{item}'s wholesale delivery brings {fact['have']:,} a week against "
+                    f"{fact['use']:,} used"
+                    + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
+                    key=key, rank=-round(fact["use"] / 7), subject=item, ev=ev))
+                continue
             smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
-            if parts.get("lines"):
-                if st == "paused":
+            if parts.get("lines") or fact["role"] == "input":
+                source = businesses[fact["from"]]["name"] if fact.get("from") is not None else None
+                if (st == "paused" and fact["role"] == "input" and whole is not fact
+                        and whole["st"] == "short" and whole.get("setTo") and source):
+                    # Paused, with a top-up beside it that falls short: both ways out.
+                    text = (f"{item} import to {site} is paused and {source}'s top-up of "
+                            f"{whole['have']:,} falls short; resume the contract or raise the "
+                            f"top-up to {whole['setTo']:,}")
+                elif st == "paused":
                     text = f"{item} import is paused; resume the contract supplying {site}"
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
@@ -18351,6 +18370,10 @@ function importSetting(fact, contract, edit){
    carries its `fact`. A change that only restores the margin (tight) is
    marked so, and Today's card leaves it out. Keep this pure so changes can be
    checked without a browser or a save file. */
+/* A paused contract to resume although it carries no week of its own: a
+   factory's own import beside a top-up that falls short without it (its
+   fact is paused at more than info). One the top-up covers stays quiet. */
+const importResumes = r => r.fit === "paused" && !!r.fact && !!r.fact.lvl && r.fact.lvl !== "info";
 function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = []){
   const rows = [];
   const site = s => businesses[s];
@@ -18382,12 +18405,13 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const byRoute = p.route ? `, less the ${p.route.toLocaleString()} a week a route brings` : "";
     const sized = `${r.use ? `Uses ${r.use.toLocaleString()} a week${p.lines && p.sites ? " (factory lines and shops)"
       : p.lines ? " (factory lines)" : p.sites ? " (shops)" : ""}` : "Sized"}${byRoute}${margin(r.margin)}`;
-    if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited)){
+    if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited || importResumes(r))){
       const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString()} in stock`
         : `configured for ${r.pausedWeekly.toLocaleString()} units/week`;
       add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
-          : `${sized}: ${(r.setTo ?? r.need).toLocaleString()} a week. Review the quantity after resuming.`}`,
+          : (r.need || 0) > 0 ? `${sized}: ${(r.setTo ?? r.need).toLocaleString()} a week. Review the quantity after resuming.`
+          : "The top-up beside it falls short without it; resume it, or raise the top-up."}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
       const why = r.edited ? yours : `${sized}${r.fit === "tight" ? "; the order covers the use but not the margin" : ""}.`;
@@ -18765,10 +18789,10 @@ function drawLogistics(){
   const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
   const short = count(r => r.fit === "short" || r.fit === "noplan");
   const tight = count(r => r.fit === "tight");
-  const pausedCount = count(r => r.fit === "paused" && r.need > 0);
+  const pausedCount = count(r => r.fit === "paused" && (r.need > 0 || importResumes(r)));
   const importAll = count(() => true);
   // A figure the player typed is a change they want to see, so it stays in view.
-  const wanted = r => r.edited || (r.fit === "paused" && r.need > 0) || r.setTo !== null;
+  const wanted = r => r.edited || (r.fit === "paused" && (r.need > 0 || importResumes(r))) || r.setTo !== null;
   const shown = (changesOnly
     ? importRows.map(d => ({s: d.s, rows: d.rows.filter(wanted)}))
     : importRows).filter(d => d.rows.length);
@@ -21442,6 +21466,7 @@ const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: [
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
   notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],
+  topup: ["top-up", "route too low", "depot top-up"],
   satisfaction: ["standards"], promotion: ["pull"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
 /* ...and for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],

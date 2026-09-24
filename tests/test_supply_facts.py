@@ -803,8 +803,11 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertEqual((own["st"], own["why"], own["lvl"], own["have"]), ("paused", "order", "critical", 1000))
         # A paused contract brings nothing: the Hub carries the Mill's whole week.
         self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("short", 1680))
-        [paused] = [f for f in c.findings() if f["group"] == "paused"]
-        self.assertEqual((paused["level"], paused["text"]), ("critical", "Water import is paused"))
+        # Said with the input, both ways out, and linked to Feed the factories.
+        [paused] = [f for f in c.findings() if "paused" in f["text"]]
+        self.assertEqual((paused["level"], paused["group"], paused["text"]), (
+            "critical", "feed", "Water import to Mill is paused and Import Hub's top-up of 200 falls "
+            "short; resume the contract or raise the top-up to 240"))
 
     def test_s2_a_depot_line_whose_only_outflow_was_a_first_fill_is_not_moving(self):
         c = Company()
@@ -1077,7 +1080,50 @@ class RoundThreeFixTests(unittest.TestCase):
         self.assertEqual((fact["st"], fact["why"], fact["cad"], fact["have"], fact["use"]),
                          ("short", "order", "weekly", 1000, 1680))
         self.assertFalse([f for f in c.findings() if "no standing import" in f["text"]])
+        # Said from the fact, on the depot's page by way of its factory lines.
+        [note] = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
+        self.assertEqual((note["group"], note["text"]), (
+            "feed", "Water's wholesale delivery brings 1,000 a week against 1,680 used; "
+            "raise the contract to 1,680"))
         self.assertEqual(run(2000).fact(DISTRIB, WATER)["st"], "covered")
+
+    def wholesale_distrib(self, amount, top_up=None):
+        """Distrib gets `amount` soda a week wholesale and sends 100 a day to a
+        shop; `top_up`, the Hub's route to it, brings 50 a day of it."""
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.site(DISTRIB, "Distrib")
+        c.shop(SHOP_A, "Soda Shop")
+        c.hold(HUB, SODA, 5000)
+        c.hold(DISTRIB, SODA, 300)
+        c.hold(SHOP_A, SODA, 100, 100)
+        c.plan(DISTRIB, SHOP_A, SODA, 150)
+        c.wholesale(DISTRIB, SODA, amount)
+        if top_up:
+            c.plan(HUB, DISTRIB, SODA, top_up)
+        for d in range(13, 20):
+            c.ship(d, DISTRIB, SHOP_A, {SODA: 100})
+            if top_up:
+                c.ship(d, HUB, DISTRIB, {SODA: 50})
+        c.run()
+        return c
+
+    def test_a_wholesale_depot_only_shops_draw_on_is_a_finding_on_its_page(self):
+        c = self.wholesale_distrib(100)
+        fact = c.fact(DISTRIB, SODA)
+        self.assertEqual((fact["st"], fact["have"], fact["use"], fact["setTo"]), ("short", 100, 700, 810))
+        [note] = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
+        self.assertEqual((note["group"], note["text"]), (
+            "topup", "Soda's wholesale delivery brings 100 a week against 700 used; "
+            "raise the contract to 810"))
+
+    def test_a_wholesale_depot_topped_up_as_well_is_judged_on_its_contract_with_the_top_up_on_it(self):
+        # The route brings 350 of the 700 a week used: the contract answers
+        # for the other 350, 455 with the margin on the shops' week.
+        fact = self.wholesale_distrib(400, top_up=200).fact(DISTRIB, SODA)
+        self.assertEqual((fact["cad"], fact["have"], fact["use"], fact["need"], fact["st"]),
+                         ("weekly", 400, 350, 455, "tight"))
+        self.assertEqual(self.wholesale_distrib(500, top_up=200).fact(DISTRIB, SODA)["st"], "covered")
 
     def test_a_route_fed_depot_names_the_site_whose_plan_tops_it_up(self):
         c = RoundOneFixTests().depot_fed(80)

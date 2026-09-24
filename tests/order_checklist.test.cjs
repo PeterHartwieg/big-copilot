@@ -34,6 +34,16 @@ const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' :
 const order = changes => ({s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
   fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes});
 
+test('a paused contract beside a top-up that falls short is resumed; one the top-up covers is left alone', () => {
+  const paused = lvl => order({item: 'Water', fit: 'paused', paused: true, pausedWeekly: 1000, current: 0,
+    inGame: 1000, setTo: null, value: 1000, changed: false, use: 0, need: 0, parts: {lines: 0, sites: 0, route: 0},
+    fact: fact('paused', {why: lvl === 'info' ? 'topup' : 'order', lvl, use: 0, need: 0})});
+  const rows = build({imports: [{s: 1, rows: [paused('critical')]}]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, !!r.paused]), [['Weekly imports', 'Water', true]]);
+  assert.match(rows[0].reason, /The top-up beside it falls short without it; resume it, or raise the top-up\./);
+  assert.deepEqual(build({imports: [{s: 1, rows: [paused('info')]}]}), []);
+});
+
 test('a depot only a route feeds gets its daily top-up, from the site whose plan sets it', () => {
   const depot = (st, have, item) => ({s: 0, item, slug: item, margin: 0.15,
     fact: fact(st, {role: 'depot', cad: 'daily', use: 100, need: 115, have, setTo: 120, from: 1})});
