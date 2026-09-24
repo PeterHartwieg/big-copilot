@@ -1704,7 +1704,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     marked, since no site can settle them. staffLacking, staffLackingCompany and
     staffLackingAny count the people behind the site rows, the company rows and
     either, and quitWarnings the people with anything unmet who have already
-    warned they will quit. A demand
+    warned they will quit. An hours or days row whose roster is right for some of
+    them, who fail only on what they have already worked this week, carries
+    workedOver: how many, and the most hours or days the demand allows. A demand
     the table does not know, from a newer game, is left out rather than guessed at.
     """
     root = save.root
@@ -1737,14 +1739,22 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
                     if shift.get("employeeId") == employee_id:
                         yield shift
 
-    def met(e, key, kind, setting):
+    def rostered(e, kind, setting):
+        """Whether the hours or days assigned meet an hours or days demand."""
         if kind == "hours":
             low, high = setting
-            return (low <= (e.get("assignedWeeklyHours") or 0) <= high
-                    and (e.get("workedHoursThisWeek") or 0) <= high)
-        if kind == "days":
-            return (len(save.items(e.get("assignedWeeklyDays"))) == setting
-                    and (e.get("workedDays") or 0) <= setting)
+            return low <= (e.get("assignedWeeklyHours") or 0) <= high
+        return len(save.items(e.get("assignedWeeklyDays"))) == setting
+
+    def worked_over(e, kind, setting):
+        """Whether the hours or days worked so far this week pass the demand's top."""
+        if kind == "hours":
+            return (e.get("workedHoursThisWeek") or 0) > setting[1]
+        return (e.get("workedDays") or 0) > setting
+
+    def met(e, key, kind, setting):
+        if kind in ("hours", "days"):
+            return rostered(e, kind, setting) and not worked_over(e, kind, setting)
         if kind == "daysoff":
             return not set(save.items(e.get("assignedWeeklyDays"))) & set(setting)
         if kind == "noshift":
@@ -1784,6 +1794,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         raise ValueError(kind)
 
     unmet = collections.defaultdict(collections.Counter)
+    # Of those, the people whose roster meets an hours or days demand and who
+    # fail it only on what they have already worked this week.
+    worked = collections.defaultdict(collections.Counter)
     # People, not demands: how many at each site lack something the site can
     # give, how many lack something only the owner can, and how many of those
     # with anything unmet have warned they will quit.
@@ -1797,6 +1810,8 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             rule = JOB_DEMANDS.get(slug)
             if rule and not met(e, key, rule[0], rule[1]):
                 unmet[key][slug] += 1
+                if rule[0] in ("hours", "days") and rostered(e, rule[0], rule[1]):
+                    worked[key][slug] += 1
                 lacks.add("company" if rule[0] in COMPANY_DEMAND_KINDS else "site")
         for scope in lacks:
             people[key][scope] += 1
@@ -1815,6 +1830,14 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             }
             for slug, count in unmet[b["key"]].items()
         ]
+        for row in rows:
+            if worked[b["key"]][row["slug"]]:
+                kind, setting, _ = JOB_DEMANDS[row["slug"]]
+                row["workedOver"] = {
+                    "count": worked[b["key"]][row["slug"]],
+                    "max": setting[1] if kind == "hours" else setting,
+                    "unit": kind,
+                }
         rows.sort(key=lambda r: (-r["priority"], -r["count"], r["demand"]))
         b["staffDemands"] = rows
         b["staffLacking"] = people[b["key"]]["site"]
@@ -8661,6 +8684,16 @@ ALERT_UNITS = {
 }
 
 
+def _worked_over(d: dict, lead: str) -> str:
+    """Why an hours or days demand fails when the roster itself meets it: the
+    week worked so far has passed its top. The whole row, or how many of it."""
+    w = d.get("workedOver")
+    if not w:
+        return ""
+    who = "" if w["count"] == d["count"] else f"{w['count']} "
+    return f"{lead}{who}worked over {w['max']} {w['unit']} this week"
+
+
 def _alert_id(*parts: str) -> str:
     """A stable id for a finding: the same finding keeps it across renders,
     and it does not depend on where the finding sits in the list."""
@@ -8856,6 +8889,7 @@ def _alerts(
         text = f"{count} staff with unmet demands: " + ", ".join(
             f"{d['demand']} for {d['count']} ("
             + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
+            + _worked_over(d, ", ")
             + ")"
             for d in shown
         )
@@ -16703,15 +16737,21 @@ function drawSite(){
 
   /* The staff's own demands the site does not meet, each with how many hold it;
      health insurance and a happy boss are among them, settled company-wide.
-     The panel reads the game's own priority as the three bars on a chip. */
+     The panel reads the game's own priority as the three bars on a chip. An
+     hours or days demand the roster meets but the week already worked has
+     passed says so, or the player sees a right roster and a wrong board. */
   const wants = b.staffDemands || [];
+  const spWorkedOver = d => { const w = d.workedOver; return w
+    ? `${w.count === d.count ? "" : w.count + " "}worked over ${w.max} ${w.unit} this week` : ""; };
   const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
-    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}`).join(" · ")}${
+    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}${
+      spWorkedOver(d) ? ` (${spWorkedOver(d)})` : ""}`).join(" · ")}${
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
   const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     /* The tip lands as textContent: attr() alone, no markup escaping. */
     wants.map(d => `<span class="sp-dem" data-el="demand${d.company ? " company" : ""}" data-tip="${attr(`${d.demand} for ${d.count} · ${
-      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
+      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}${
+      spWorkedOver(d) ? " · " + spWorkedOver(d) : ""}`)}">${
       spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
       d.company ? `<span class="sp-i sp-co">${icon("company")}</span>` : ""}</span>`).join("")}${
     /* The mark and the count; the sentence is the chip's tip, not the page's. */

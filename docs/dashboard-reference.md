@@ -648,7 +648,10 @@ its code at build 3680:
 - **Hours and days.** Full-time is 30 to 50 assigned hours a week, part-time 10 to 30, and
   the hours worked so far this week must not pass the top. Four or five days a week counts
   the days assigned, and the days worked so far must not pass it; free weekends means no
-  Saturday or Sunday among them.
+  Saturday or Sunday among them. A roster changed mid-week can meet the demand while the
+  week already worked has passed its top, so where that is the only failure the finding and
+  the site's Crew say so: *Full-time for 4 (critical, worked over 50 hours this week)*, or
+  *4 worked over 50 hours this week* when only some of the count fail that way.
 - **No shifts in a window.** Mornings 6-10, afternoons 14-16, evenings 18-22, nights 22-4.
   Any shift of the employee's that touches the window, on a day their building is open,
   breaks it. No cleaning shifts means no cleaning duty on an open day.
