@@ -231,6 +231,19 @@ test('Not routed is a kind, on by default, linked to Idle stock and the depot\'s
   assert.match(source, /depot: \{[^}]*notrouted: "stock"/);
 });
 
+/* A depot only a route from the company's own site feeds, whose busiest day
+   outruns its daily top-up: a kind of its own, opening the depot's page on
+   its Stock, since Before the import never lists such a depot. */
+test("Depot top-up too low is a kind, on by default, landing on the depot's own Stock", () => {
+  const g = run('ALERT_GROUPS').find(x => x.id === 'topup');
+  assert.deepEqual([g.label, g.on], ['Depot top-up too low', true]);
+  const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
+  assert.match(links, /topup: \{sec:"secDetail", site:true\}/);
+  const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
+  assert.match(evidence, /topup: \{block: "stock"\}/);
+  assert.match(source, /depot: \{[^}]*topup: "stock"/);
+});
+
 /* Today reads the findings of the sizing on screen: Python runs the list
    twice, and Demand has its own (alertsDemand). */
 test('Today, the kinds popover and the map read the list of the sizing on screen', () => {

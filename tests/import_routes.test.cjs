@@ -146,6 +146,20 @@ test("a shelf a wholesale store delivers each week reads its week, and its chang
   } finally { await page.close(); }
 });
 
+test("Orders lists a route-fed depot's daily top-up from its fact, naming the site that sets it", async () => {
+  const data = fixture();
+  // The hub's soda, fed only by the bakery's plan: its busiest day outruns the top-up.
+  data.supply.facts[0].soda = {st: 'short', why: 'target', lvl: 'critical', role: 'depot', cad: 'daily',
+    use: 100, need: 115, have: 80, setTo: 120, imp: false, from: 1};
+  const page = await board(data);
+  try {
+    const act = (await page.evaluate(() => window.fixtureActions)).find(a => a.kind === 'Depot daily top-ups');
+    assert.deepEqual([act.kind, act.current, act.proposed, act.source, !!act.tight],
+      ['Depot daily top-ups', 80, 120, 1, false]);
+    assert.match(act.reason, /Bakery Factory/);
+  } finally { await page.close(); }
+});
+
 test('a paused backup a route covers is covered by route, with nothing to resume', async () => {
   const data = fixture();
   data.supply.facts[0].sugar = {...data.supply.facts[0].sugar, st: 'covered', why: 'route', lvl: 'ok', setTo: null,

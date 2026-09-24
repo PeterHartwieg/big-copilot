@@ -1053,20 +1053,23 @@ still be ramping*, naming the shops. Switching needs no refresh: both answers ar
 already on the page.
 
 A shop's week is its trading-day rate over the days it traded in the last seven, spread
-over the days it has been open, so a shop open two days a week uses two days' worth, not
-seven, and one open four days is not read at four sevenths of its week; a daily top-up is
-still judged on the busiest trading day.
+over the days since it first traded, so a shop open two days a week uses two days' worth,
+not seven, and one trading for four days is not read at four sevenths of its week; a daily
+top-up is still judged on the busiest trading day.
 
 A first fill is a factory's or a depot's first round of a new top-up target: the first
 day its whole delivery log names the item, inside the last week. What that day brought
 beyond the rounds after it is no use, so a depot whose only outflow was a first fill reads
-**idle**, not moving, and a factory input on its first fill is **new**. (A log that has
-reached its sixty entries and starts that very day may have lost older ones, so there it
-is no first fill.)
+**idle**, not moving, and a factory input on its first fill is **new**. A depot whose plans
+feed a factory line on its first fill is not judged idle until that line has five days
+behind it. (A log that has reached its sixty entries and starts that very day may have
+lost older ones, so there it is no first fill.)
 
 A depot only a route from another of your sites feeds is judged as a shelf is, in a day's
 figures: its top-up against its busiest day's draw plus the margin, with the top-up to set;
-a short one is a finding. A factory input topped up from a depot and imported to the
+a short one is a finding (*Depot top-up too low*, opening the depot's page), and Orders
+lists the change under *Depot daily top-ups*, naming the site whose plan sets it. A depot a
+wholesale store delivers to is judged on that contract's week, as an import is. A factory input topped up from a depot and imported to the
 factory as well keeps its daily word, and its own contract is judged on the week in Weekly
 imports beside the depots'; paused, it reads **paused**, and the depot answers only for the
 rest. Only **short**, **tight** and **no plan** suggest a figure to set.

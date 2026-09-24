@@ -26,7 +26,7 @@ RID = next(rid for rid, item in RECIPE_ITEMS.items() if item == BEER)
 RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
-             "lower", "imp", "ramp", "unfed", "via", "dem", "import"}
+             "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 
@@ -229,10 +229,10 @@ class TradingDayTests(unittest.TestCase):
         self.assertEqual(b["tradeDays"], 4)
 
     def test_a_week_is_the_trading_days_of_the_days_open(self):
-        # Open since day 1, on day 8: six whole days open, four of them traded
-        # at 225, so its week is 225 x 4 spread over the six days it has been open.
+        # Opened on day 1 and first traded on day 4, on day 8: four days at 225
+        # since it first traded, so its week is seven of them.
         b = business(self.week(), day=8)
-        self.assertEqual(next(l for l in b["lines"] if l["slug"] == ROSE)["weekSold"], 1050)
+        self.assertEqual(next(l for l in b["lines"] if l["slug"] == ROSE)["weekSold"], 1575)
         # A shop a month old trading on Saturdays and Sundays only: two days' worth.
         weekends = [sale_day(d, 30 if d % 7 in (6, 0) else 0, 100 if d % 7 in (6, 0) else 0)
                     for d in range(2, 30)]
@@ -965,7 +965,7 @@ class RoundTwoFixTests(unittest.TestCase):
                 notes = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
                 self.assertEqual(len(notes), found, notes)
                 if found:
-                    self.assertEqual((notes[0]["level"], notes[0]["group"]), ("critical", "shortfall"))
+                    self.assertEqual((notes[0]["level"], notes[0]["group"]), ("critical", "topup"))
                     self.assertIn("raise the top-up to 120", notes[0]["text"])
 
     def test_stock_a_factory_holds_that_a_depots_plans_need_is_not_routed(self):
@@ -1003,6 +1003,77 @@ class RoundTwoFixTests(unittest.TestCase):
         self.assertIn("no plan sends it on: add a plan to the shops that should get it, "
                       "or stop the top-up", note["text"])
         self.assertNotIn("remove", note["text"])
+
+
+class RoundThreeFixTests(unittest.TestCase):
+    """Review round 3: the fixes each on a company of its own."""
+
+    def test_a_depot_a_wholesale_store_feeds_is_fed_so_nothing_is_not_routed_to_it(self):
+        # Distrib gets 1,000 soda a week wholesale and sends it to a shop; the
+        # Brewery holds 2,000 soda nothing uses.
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Brewery")
+        c.site(DISTRIB, "Distrib")
+        c.shop(SHOP_A, "Soda Shop")
+        c.hold(HUB, SODA, 100)
+        c.hold(FACTORY, SODA, 2000)
+        c.hold(DISTRIB, SODA, 500)
+        c.hold(SHOP_A, SODA, 50, 100)
+        c.plan(HUB, FACTORY, SODA, 2000)
+        c.plan(DISTRIB, SHOP_A, SODA, 150)
+        c.wholesale(DISTRIB, SODA, 1000)
+        c.run()
+        fact = c.fact(FACTORY, SODA)
+        self.assertEqual((fact["st"], fact["why"]), ("idle", "notMoving"))
+        self.assertNotIn("unfed", fact)
+        self.assertFalse([f for f in c.findings() if f["group"] == "notrouted"])
+
+    def test_a_paused_own_import_never_makes_a_topped_up_input_direct(self):
+        # The Mill's own contract, paused at 2,000, would cover the week; the
+        # Hub's top-up of 300 is what brings it.
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Mill")
+        c.hold(HUB, WATER, 2000)
+        c.hold(FACTORY, WATER, 250)
+        c.hold(FACTORY, BEER, 300)
+        c.plan(HUB, FACTORY, WATER, 300)
+        c.contract(HUB, WATER, 800)
+        c.contract(FACTORY, WATER, 2000, active=False)
+        for d in range(13, 20):
+            c.ship(d, HUB, FACTORY, {WATER: 240})
+        c.run()
+        fact = c.fact(FACTORY, WATER)
+        self.assertEqual((fact["role"], fact["cad"], fact["have"]), ("input", "daily", 300))
+        self.assertEqual((fact["import"]["st"], fact["import"]["have"]), ("paused", 2000))
+        need = next(n for s in c.supply["factories"]["sites"] for n in s["needs"] if n["slug"] == WATER)
+        self.assertFalse(need["directImport"])
+
+    def test_a_depot_a_wholesale_store_feeds_is_judged_on_its_contract(self):
+        # Distrib gets 1,000 water a week wholesale and tops the brewery up
+        # to 300; the brewery eats 1,680 a week.
+        def run(amount):
+            c = Company()
+            c.factory(FACTORY, "Brewery")
+            c.site(DISTRIB, "Distrib")
+            c.hold(DISTRIB, WATER, 2000)
+            c.hold(FACTORY, WATER, 250)
+            c.hold(FACTORY, BEER, 300)
+            c.plan(DISTRIB, FACTORY, WATER, 300)
+            c.wholesale(DISTRIB, WATER, amount)
+            c.run()
+            return c
+        c = run(1000)
+        fact = c.fact(DISTRIB, WATER)
+        self.assertEqual((fact["st"], fact["why"], fact["cad"], fact["have"], fact["use"]),
+                         ("short", "order", "weekly", 1000, 1680))
+        self.assertFalse([f for f in c.findings() if "no standing import" in f["text"]])
+        self.assertEqual(run(2000).fact(DISTRIB, WATER)["st"], "covered")
+
+    def test_a_route_fed_depot_names_the_site_whose_plan_tops_it_up(self):
+        c = RoundOneFixTests().depot_fed(80)
+        self.assertEqual(c["from"], 0)
 
 
 class StableOrderTests(unittest.TestCase):

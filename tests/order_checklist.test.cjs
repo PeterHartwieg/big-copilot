@@ -34,6 +34,19 @@ const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' :
 const order = changes => ({s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
   fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes});
 
+test('a depot only a route feeds gets its daily top-up, from the site whose plan sets it', () => {
+  const depot = (st, have, item) => ({s: 0, item, slug: item, margin: 0.15,
+    fact: fact(st, {role: 'depot', cad: 'daily', use: 100, need: 115, have, setTo: 120, from: 1})});
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses,
+    [depot('short', 80, 'Paper Bag'), depot('tight', 104, 'Soda'), {...depot('covered', 200, 'Cups'),
+      fact: fact('covered', {role: 'depot', cad: 'daily', have: 200, setTo: null})}])));
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, !!r.tight, r.source]), [
+    ['Depot daily top-ups', 'Paper Bag', 80, 120, false, 1],
+    ['Depot daily top-ups', 'Soda', 104, 120, true, 1]]);
+  assert.match(rows[0].reason, /^Set on the plan of Factory · 2 Factory Street\. Its busiest day sends on 100 units, plus a 15% margin\.$/);
+  assert.equal(rows[0].group, 'Depot daily top-ups · Depot · 1 Depot Street');
+});
+
 test('weekly order changes propose the fact\'s figure and say what it was sized on', () => {
   const rows = build({imports:[{s:0, rows:[order({})]}]});
   assert.equal(rows.length, 1);
