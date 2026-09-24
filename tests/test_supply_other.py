@@ -108,6 +108,46 @@ class DepotOtherTests(unittest.TestCase):
                                   (FACTORY, DISTRIB, WATER, 700)], [imports(HUB, WATER, 3080)])
         self.assertEqual(other[WATER], 700)
 
+    def test_a_line_a_route_feeds_is_read_gross_less_the_factory(self):
+        """The hub sends the factory 240 a day and the shops 100, a route from
+        the distributor brings it 200 a day, and the import lands on day 7.
+        Netted, the route's 200 would come off what left and nothing would be
+        left for the shops; read gross, what leaves less the factory's intake
+        is the shops' 100 a day, every day of the week, 700."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 240})
+            ship(log, day, HUB, None, {WATER: 100})
+            ship(log, day, DISTRIB, HUB, {WATER: 200})
+        log[HUB].append(tx(7, {WATER: 1000}))
+        other = depot_other(log, [(HUB, FACTORY, WATER, 300), (HUB, SHOP, WATER, 150),
+                                  (DISTRIB, HUB, WATER, 500)], [imports(HUB, WATER, 1000)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_factory_s_own_import_is_not_taken_for_the_depot_s_top_up(self):
+        """The hub tops the factory up with 240 water a day and sends the shops
+        100; the factory also takes its own weekly import of 700, landing on
+        day 7, the day of a top-up, and the hub's own import lands on day 5.
+        The log does not say who delivered, so on day 7 the factory's 940 is
+        not what the hub sent it: that day is left out, and the shops' 100 a
+        day stay 700 a week, with a route into the hub or without."""
+        for routed in (False, True):
+            with self.subTest(routed=routed):
+                log = {}
+                for day in range(3, 10):
+                    ship(log, day, HUB, FACTORY, {WATER: 240})
+                    ship(log, day, HUB, None, {WATER: 100})
+                    if routed:
+                        ship(log, day, DISTRIB, HUB, {WATER: 200})
+                log[FACTORY].append(tx(7, {WATER: 700}))
+                log[HUB].append(tx(5, {WATER: 1000}))
+                hub = dict(imports(HUB, WATER, 1000), nextDeliveryDay=12)
+                targets = [(HUB, FACTORY, WATER, 300), (HUB, SHOP, WATER, 150)]
+                if routed:
+                    targets.append((DISTRIB, HUB, WATER, 500))
+                other = depot_other(log, targets, [hub, imports(FACTORY, WATER, 700)])
+                self.assertEqual(other[WATER], 700)
+
     def test_a_depot_feeding_a_consuming_factory_still_counts(self):
         """340 a day reach the factory, which eats 240 and passes 100 through
         a depot to a second factory whose line eats them. That depot's rounds

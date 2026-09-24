@@ -180,7 +180,8 @@ for (const scenario of [
   {name: 'an active backup below the week the route covers', args: '1.0,[contract(2000,0,smart=False)]'},
   {name: 'a line the route covers half of', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,)'},
   {name: 'a paused import on a line the route covers half of', args: '0.5,[contract(13000,13000,smart=False,active=False)],import_days=(7,)'},
-  // The route also runs the day the import lands, so the log nets both off it.
+  // The route also runs the day the import lands: the route's own figure
+  // leaves that day out, and what leaves for the shops is read gross.
   {name: 'a line the route covers half of every day', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,),route_from=3'},
   {name: 'a covered backup with a figure typed in', args: '1.0,[contract(2000,0,smart=False)]', typed: 2500},
   // No route: the log loses the import's day, the measured draw does not.

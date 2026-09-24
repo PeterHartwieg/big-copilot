@@ -459,7 +459,29 @@ class RoutedFactoryViewTests(unittest.TestCase):
                       {"key": "depot#1", "name": "Depot"}]
         [note] = _feed_notes(businesses, {"sites": [{"s": 0, "needs": [row]}]}, set())
         self.assertIn("holds 1,260, 1.5 weeks of the 840 a week the factories eat "
-                      "beyond the 840 a week a route brings", note["text"])
+                      "beyond the 840 a week a route brings them", note["text"])
+
+    def test_the_no_import_finding_names_only_the_route_s_share_to_the_factories(self):
+        """The depot also sends the shops 840 a week, and the route goes to the
+        whole draw: of its 2,000, 840 are the shops' and 1,160 reach the
+        factories, whose 1,680 leave 520 with no import. A route that brings
+        no more than the shops take goes unnamed."""
+        businesses = [{"key": site_key(("factory", 0)), "name": "Factory"},
+                      {"key": "depot#1", "name": "Depot"}]
+
+        def text(route):
+            row = self.need(route_only=route, target=300)
+            [note] = _feed_notes(businesses, {"sites": [{"s": 0, "needs": [row]}]}, set())
+            return row, note["text"]
+
+        row, said = text((2000, False, 2520))
+        self.assertEqual((row["importRoutedFactories"], row["importNeed"]), (1160, 520))
+        self.assertIn("of the 520 a week the factories eat beyond the 1,160 a week a route "
+                      "brings them", said)
+        row, said = text((500, False, 2520))
+        self.assertEqual((row["importRoutedFactories"], row["importNeed"]), (0, 1680))
+        self.assertIn("of the 1,680 a week the factories eat", said)
+        self.assertNotIn("route", said)
 
     def test_a_route_covering_a_starved_draw_does_not_cover_the_need(self):
         """The depot draws only 200 a week because the factory is starved; a

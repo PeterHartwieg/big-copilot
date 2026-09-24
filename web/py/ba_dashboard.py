@@ -3974,17 +3974,24 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
         else:
             net = flow["byDay"](depot, slug)
             gone = {d: -units for d, units in net.items()}
-        taken = [
-            intake(fkey, slug)
-            for fkey in machines
-            if flow["targets"].get((fkey, slug), (0, None))[1] == depot
-        ]
+        feeders = [fkey for fkey in machines
+                   if flow["targets"].get((fkey, slug), (0, None))[1] == depot]
+        taken = [intake(fkey, slug) for fkey in feeders]
         # Netted, a day an import can have landed takes its arrival off what
         # left, so the shops' draw that day reads as nothing: it is left out,
         # as the route's own figure leaves it out, rather than counted as a
         # day nothing went to the shops. With too few days left, all of them.
         supply = flow["imports"].get((depot, slug))
         landed = _landings(supply) if supply and not routed else set()
+        # A factory this depot tops up may take its own import of the item as
+        # well. The log does not say who delivered, so on a day that import
+        # can have landed what the factory took in is not what this depot
+        # sent it, and taking it all off would take the shops' share with it:
+        # those days are left out too, gross or net.
+        for fkey in feeders:
+            own = flow["imports"].get((fkey, slug))
+            if own:
+                landed |= _landings(own)
         kept = [d for d in days if d not in landed]
         if len(kept) >= SHIPPED_MIN_DAYS:
             days = kept
@@ -4313,6 +4320,8 @@ def _factories(
             row["importCovered"] = covered
             row["importDrawWeek"] = draw_week
             to_factories = max(0, routed_week - max(0, draw_week - weekly_need))
+            # The route's share that reaches the factories, the rest going to the shops.
+            row["importRoutedFactories"] = round(to_factories)
             weekly_need = 0 if covered else max(weekly_need - to_factories, 0)
             # What the import has to bring a week, after the route.
             row["importNeed"] = round(weekly_need)
@@ -9383,8 +9392,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"{row['item']} has no standing import; {depot} holds "
                     f"{row['depotStock']:,}, {weeks:.1f} weeks of the {need:,} a week "
                     f"the factories eat"
-                    + (f" beyond the {row['importRouted']:,} a week a route brings"
-                       if row.get("importRouted") else "")
+                    + (f" beyond the {row['importRoutedFactories']:,} a week a route brings them"
+                       if row.get("importRoutedFactories") else "")
                 )
             notes.append(
                 _finding(
