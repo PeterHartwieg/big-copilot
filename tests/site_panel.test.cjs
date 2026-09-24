@@ -997,7 +997,7 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
     // Nothing draws on the napkins, so there is no cover and no truck.
     assert.equal(rows[1].el, `${slugTok('napkins')} dead`);
     assert.equal(rows[1].zzz, true);
-    assert.match(rows[1].read, /Idle stock/);
+    assert.match(rows[1].read, /Idle stock.*nothing draws on these/);
     assert.equal(rows[1].cells.at(-2), '—');
     // The Thinnest tile reads the same row, not only the imported lines.
     assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Thinnest'}).innerText(),
