@@ -332,3 +332,35 @@ test('the imports table scrolls inside its box, not the page, on a phone', async
     assert.ok(sizes.page <= sizes.view, JSON.stringify(sizes));
   } finally { await page.close(); }
 });
+
+// Today's Plan imports card is painted by the checklist from the same rows and
+// ticks, so its count is always the checklist's "to do".
+test('the Plan imports card counts what the checklist has to do', async () => {
+  const page = await board();
+  try{
+    const card = () => page.evaluate(() => [
+      document.querySelector('#planImportsCard .soon').textContent,
+      document.querySelector('#planImportsCard .soon').className,
+      document.querySelector('#planImportsCard .what').textContent,
+      document.querySelector('#orderChecklistTitle .order-count').textContent]);
+    const [badge, cls, what, todo] = await card();
+    assert.deepEqual([badge, cls, todo], ['1 TO CHANGE', 'soon live', '1 to do']);
+    assert.match(what, /^Sugar at North Depot: Smart Delivery stock 900 → 1[.,]?400\.$/);
+    await box(page, 'Flour').fill('6000');
+    await box(page, 'Flour').press('Enter');
+    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+    assert.deepEqual((await card()).filter((_, i) => i !== 1), ['2 TO CHANGE', '2 changes at North Depot, starting with Sugar.', '2 to do']);
+    const tick = i => page.evaluate(i => {
+      const input = document.querySelectorAll('#orderChecklistBody input[data-order-mark]')[i];
+      input.checked = true; input.dispatchEvent(new Event('change'));
+    }, i);
+    await tick(0);
+    const one = await card();
+    assert.deepEqual([one[0], one[3]], ['1 TO CHANGE', '1 to do']);
+    assert.match(one[2], /^Flour at North Depot: Smart Delivery stock 5[.,]?000 → 6[.,]?000\.$/);
+    await tick(1);
+    const [done, quiet, doneWhat, doneTodo] = await card();
+    assert.deepEqual([done, quiet, doneTodo], ['ALL TICKED', 'soon', 'All checked']);
+    assert.match(doneWhat, /^You ticked all 2\./);
+  } finally { await page.close(); }
+});

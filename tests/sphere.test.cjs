@@ -17,7 +17,8 @@ before(async()=>{
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));});
 const settle=ms=>new Promise(r=>setTimeout(r,ms));
 async function fixture(reduced){
-  const page=await browser.newPage({viewport:{width:1280,height:960}});const errors=[];
+  // Wide enough for three balls: the shelf ends short of the search field.
+  const page=await browser.newPage({viewport:{width:1920,height:960}});const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   if(reduced)await page.emulateMedia({reducedMotion:'reduce'});
   await page.route('https://**',r=>r.abort());

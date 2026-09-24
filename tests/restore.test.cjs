@@ -144,6 +144,25 @@ test('loading is prominent until data arrives, including runtime ready; remember
   assert.equal(await page.locator('#pageSupply').isVisible(), true);
 });
 
+test("at 390 px the board's source strip wraps a long file line instead of scrolling the page sideways", async t => {
+  const page = await setup(t, {width:390});
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  // A company with a long name, read from an autosave, while the board watches the folder.
+  await page.evaluate(() => { document.getElementById('srcMeta').textContent =
+    'The Very Long Company Name Ltd · autosave from 24 Sep, 12:23 · watching'; });
+  const m = await page.evaluate(() => {
+    const box = id => document.getElementById(id).getBoundingClientRect();
+    const meta = box('srcMeta'), actions = box('srcActions');
+    return {scroll: document.documentElement.scrollWidth, room: document.documentElement.getBoundingClientRect().width, metaRight: meta.right, actionsLeft: actions.left,
+      beside: meta.top < actions.bottom && actions.top < meta.bottom};
+  });
+  assert.ok(m.scroll <= m.room, 'nothing scrolls sideways');
+  assert.ok(m.metaRight <= 390, `the file line ends at ${m.metaRight}`);
+  assert.ok(!m.beside || m.metaRight <= m.actionsLeft, 'and never runs under the buttons');
+});
+
 test('the Impressum and privacy notice stay reachable once the board replaces the landing', async t => {
   const page = await setup(t);
   await messages(page);

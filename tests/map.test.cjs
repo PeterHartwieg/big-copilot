@@ -221,6 +221,12 @@ test('the map head keeps five layer chips, a why mark, search with a count, and 
   try{
     await openPage(page);
     assert.equal(await page.locator('#cityMapPage .map-head .lay').count(),5);
+    // Each layer names itself beside its count, rather than behind the ?.
+    assert.deepEqual(await page.$$eval('#cityMapPage .map-head .lay',ls=>ls.map(l=>l.innerText.replace(/\s+/g,' ').trim())),
+      ['Mine 2','Owned 0','Homes 0','Findings 1','All 883']);
+    // What a chip is called out loud starts with the word printed on it.
+    for(const name of ['Mine 2','Owned 0','Homes 0','Findings 1','All 883'])
+      assert.equal(await page.locator('#cityMapPage .map-head').getByRole('button',{name,exact:true}).count(),1,name);
     assert.equal(await page.locator('#cityMapPage .map-head .why').count(),1);
     assert.equal(await page.locator('#cityMapPage .srch input[data-control="search"]').count(),1);
     assert.equal(await page.locator('#cityMapPage [data-stage] .zoomer .ibtn[data-action="in"]').count(),1);
@@ -568,6 +574,12 @@ test('on a narrow screen the zoomer and the card stay inside the stage',async()=
       return rect(document.querySelector('#cityMapPage .zoomer'),document.querySelector('#cityMapPage [data-stage]'));
     });
     assert.equal(inside,true);
+    // The named layer chips wrap inside the page rather than widening it.
+    assert.equal(await page.evaluate(()=>{
+      const w=document.documentElement.clientWidth;
+      return [...document.querySelectorAll('#cityMapPage .map-head .lay')].every(l=>l.getBoundingClientRect().right<=w+1)
+        &&document.documentElement.scrollWidth<=innerWidth;
+    }),true);
     await page.evaluate(key=>cityMapPage.select(key),place.key);
     await page.locator('#cityMapPage .site.in').waitFor();
     assert.equal(await page.evaluate(()=>{
@@ -613,9 +625,11 @@ test('finding map buttons remain visible beside long business names',async()=>{
 test('weekly rhythm tooltip keeps off-peak business references as plain text',async()=>{
   const {page,errors}=await fixture();
   try{
+    // The verdict rides on By weekday's series line now, the Daily result chart's third option.
     const tip=await page.evaluate(()=>{
       const b=D.businesses[0];D.businesses=Array.from({length:8},(_,i)=>({...b,key:b.key+'-'+i,name:'Shop '+i,rhythm:[],peakDay:i===7?'Tuesday':'Monday',swing:20}));
-      D.rhythm={};drawRhythm();return $('rhythmHead').querySelector('.why').dataset.tip;
+      const week=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day,i)=>({day,short:day.slice(0,3),index:[106,101,95,105,116,87,82][i],n:4}));
+      D.rhythm={recent:{revenue:week}};chartWindow='wd';drawChart();return $('dailyBox').querySelector('.fv-basis').dataset.tip;
     });
     assert.match(tip,/Shop 7/);assert.doesNotMatch(tip,/<button|<svg|data-map-key/);
     assert.deepEqual(errors,[]);
@@ -662,12 +676,18 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     assert.match(await card.locator('.sub').innerText(),/Home/);
     assert.equal(await card.locator('.nums .num').count(),1);
     assert.match(await card.locator('.nums').innerText(),/\$34/);
-    // The arrow is the only way into a flat's panel: it is in no picker.
+    // "its page" is the only way into a flat's panel besides its name: it is
+    // in no picker. Both go to the flat's own address.
     assert.equal(await card.locator('.go2').isHidden(),false);
-    assert.equal(await card.locator('.go2').getAttribute('aria-label'),'Open home details');
+    assert.equal(await card.locator('.go2').innerText(),'its page');
+    const address=await page.evaluate(k=>siteHref(k),home.key);
+    assert.match(address,/^#site\/[a-z0-9%-]+$/);
+    assert.equal(await card.locator('.go2').getAttribute('href'),address);
+    assert.equal(await card.locator('h3 a.ss-sl').getAttribute('href'),address);
     await card.locator('.go2').click();
     assert.equal(await page.locator('#secDetail').evaluate(s=>!s.hidden),true);
     assert.equal(await page.locator('#sitePanel .sp-house').count(),1);
+    assert.equal(await page.evaluate(()=>location.hash),address,'the flat opens at its address');
     const panel=await page.locator('#sitePanel').textContent();
     assert.match(panel,new RegExp(home.address.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
     assert.deepEqual(await page.$$eval('#sitePanel .sp-hometiles .sstat .lab',ls=>ls.map(l=>l.textContent)),

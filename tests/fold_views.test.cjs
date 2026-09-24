@@ -1,0 +1,580 @@
+// Fold the low-value views (UX audit R15): the Weekly rhythm section is the
+// Daily result chart's By weekday option, the difficulty is one chip with a
+// popover (masthead on a desktop, footer on a phone), and the weekday charts
+// name the series they read. Synthetic fixtures only.
+// Browser regressions: install Playwright and its Chromium browser to run.
+// NODE_PATH may point at an existing Playwright installation.
+const {test, before, after} = require('node:test');
+const assert = require('node:assert/strict');
+const {spawnSync} = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
+const {chromium} = require('playwright');
+
+let browser;
+let html;
+before(async () => {
+  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
+    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
+  {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
+  assert.equal(result.status, 0, result.stderr?.toString());
+  html = process.env.BOARD_TARGET === 'web'
+    ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
+    : result.stdout.toString();
+  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+});
+after(async () => { await browser?.close(); });
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// A weekday profile as _weekday_profile() returns it, Monday first.
+const profile = (indexes, n = 4) => indexes.map((index, i) =>
+  ({day: DAYS[i], short: DAYS[i].slice(0, 3), index, n}));
+const rule = (name, value, normal, lean, unit = '×') => ({name, value, normal, unit, lean, what: 'what it does'});
+const CUSTOM = {label: 'Custom', slot: 0, harder: 2, easier: 1, startingMoney: 0, rules: [
+  rule('Public prices', 1.3, 0.7, 'harder'), rule('Export price', 0.1, 0.65, 'harder'),
+  rule('Tax rate', 0, 5, 'easier', '%'), rule('Bank interest', 0.7, 0.7, 'level'),
+]};
+
+async function board({width = 1600, recent, houseRules = CUSTOM, difficulty, businesses = [], products = [], goals} = {}) {
+  const page = await browser.newPage({viewport: {width, height: 1000}});
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.route('https://**', route => route.abort());
+  await page.route('https://fold.test/', route =>
+    route.fulfill({contentType: 'text/html; charset=utf-8', body: html}));
+  await page.goto('https://fold.test/', {waitUntil: 'load'});
+  await page.evaluate(o => {
+    document.body.classList.add('has-board');
+    const daily = Array.from({length: 40}, (_, i) => ({day: 30 + i, profit: 1000 + i, profit7: 1000, revenue: 3000,
+      cogs: 1000, wages: 500, business: 1000, loans: 0, insurance: 0, homes: 0, parking: 0}));
+    D = {
+      meta: {save: 'Fixture', day: 73, hour: 11, minute: 13, cityDate: 'Year 2, day 13 of 60', build: 3682,
+        verifiedBuild: 3682, locale: true, houseRules: o.houseRules, source: 'fixture.hsg', saved: 'today',
+        generated: 'now', difficulty: o.difficulty},
+      kpi: {businesses: 2, employees: 9, vacant: 0},
+      daily, rhythm: {recent: o.recent || {}}, businesses: o.businesses, products: o.products,
+      goals: o.goals || {typesRun: 1, typesTotal: 3, buildingsOwned: 0, buildingsTotal: 885, goodsProduced: 12, taxesPaid: 0},
+    };
+    showPage('company', false, 'none'); showSub('company', 'results');
+    drawMast(); drawFooter(); drawDifficulty(); drawChart(); drawProducts(); drawGoals(); wireAll();
+  }, {recent, houseRules, difficulty, businesses, products, goals});
+  return {page, errors};
+}
+const tools = page => page.$$eval('#chartTools a', as => as.map(a => a.textContent));
+// The read-out line is a flex row, so its text is read whole rather than as laid out.
+const readout = page => page.locator('#dailyBox .fv-readout').evaluate(el => el.textContent.replace(/\s+/g, ' ').trim());
+
+// --- By weekday ----------------------------------------------------------------
+
+test('By weekday is offered only when a company series clears the weekly-cycle test', async () => {
+  const none = await board({recent: {days: 28, revenue: null, profit: null, customers: null}});
+  try {
+    assert.deepEqual(await tools(none.page), ['30 days', 'All']);
+    assert.equal(await none.page.locator('#secRhythm').count(), 0, 'the Weekly rhythm section is gone');
+    assert.doesNotMatch(await none.page.locator('#pageCompany').innerText(), /Not enough history to separate/);
+    assert.deepEqual(none.errors, []);
+  } finally { await none.page.close(); }
+
+  const some = await board({recent: {days: 28, revenue: profile([106, 101, 95, 105, 116, 87, 82]),
+    profit: profile([102, 85, 80, 99, 121, 104, 96]), customers: null}});
+  try {
+    assert.deepEqual(await tools(some.page), ['30 days', 'All', 'By weekday']);
+    await some.page.locator('#chartTools a[data-id="wd"]').click();
+    // Revenue first; the series that failed the test (customers) has no chip.
+    assert.deepEqual(await some.page.$$eval('#dailyBox [data-week]', as => as.map(a => a.textContent.trim())),
+      ['Revenue', 'Profit']);
+    assert.equal(await some.page.locator('#dailyBox [data-week].on').textContent(), 'Revenue');
+    // The series line names what it reads: the company's revenue over its last four weeks.
+    assert.equal((await some.page.locator('#dailyBox .fv-basis').innerText()).replace(/\s+/g, ' ').trim(),
+      'Company revenue · every site · 4 weeks');
+    assert.equal(await readout(some.page), 'Peaks Friday +16 · lowest Sunday −18');
+    assert.match(await some.page.locator('#dailyHead .why').getAttribute('data-tip'), /from the company's last 4 weeks of daily results/);
+    // One run of text: the read-out's flex gap does not split "Peaks Friday +16".
+    assert.equal(await some.page.locator('#dailyBox .fv-readout > *').count(), 1);
+    // Day 73 is a Wednesday: its column is outlined, and the tooltip reads it.
+    assert.equal(await some.page.locator('#dailyBox .wd.now').getAttribute('data-read'),
+      'Wednesday <b>95%</b> of a normal day · from 4 weeks');
+    assert.match(await some.page.locator('#dailyBox .fv-basis').getAttribute('data-tip'),
+      /Today is Wednesday, normally -5%\. Yesterday was Tuesday, normally \+1%\./);
+    // A weekday reads out on the series line while it is pointed at.
+    await some.page.locator('#dailyBox .wd').nth(4).hover();
+    assert.equal(await readout(some.page), 'Friday 116% of a normal day · from 4 weeks');
+    await some.page.locator('#dailyBox [data-week="profit"]').click();
+    assert.equal((await some.page.locator('#dailyBox .fv-basis').innerText()).replace(/\s+/g, ' ').trim(),
+      'Company profit · every site · 4 weeks');
+    // Back to the days: the SVG chart, untouched.
+    await some.page.locator('#chartTools a[data-id="30"]').click();
+    assert.equal(await some.page.locator('#dailyBox svg').count(), 1);
+    assert.deepEqual(some.errors, []);
+  } finally { await some.page.close(); }
+});
+
+test('a save that stops clearing the test falls back to the days', async () => {
+  const {page, errors} = await board({recent: {days: 28, revenue: profile([106, 101, 95, 105, 116, 87, 82])}});
+  try {
+    await page.locator('#chartTools a[data-id="wd"]').click();
+    await page.evaluate(() => { D.rhythm.recent.revenue = null; drawChart(); });
+    assert.deepEqual(await tools(page), ['30 days', 'All']);
+    assert.equal(await page.locator('#chartTools a.on').textContent(), '30 days');
+    assert.equal(await page.evaluate(() => chartWindow), 30);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('site by site keeps its table, and the verdict stays plain text', async () => {
+  const shop = i => ({key: `shop#${i}`, name: `Shop ${i}`, status: 'retail', type: 'Clothing Store', address: `${i} Fifth Avenue`,
+    rhythm: profile([98, 92, 82, 96, 100, 118, 114], 3), peakDay: i === 7 ? 'Tuesday' : 'Saturday', swing: 36,
+    lines: [], series: []});
+  const {page, errors} = await board({recent: {days: 28, revenue: profile([106, 101, 95, 105, 116, 87, 82])},
+    businesses: Array.from({length: 8}, (_, i) => shop(i))});
+  try {
+    await page.locator('#chartTools a[data-id="wd"]').click();
+    const tip = await page.locator('#dailyBox .fv-basis').getAttribute('data-tip');
+    assert.match(tip, /7 sites peak Saturday/);
+    assert.match(tip, /Shop 7 peaks Tuesday/);
+    assert.doesNotMatch(tip, /<button|<svg|data-map-key/);
+    assert.equal(await page.locator('.fv-sites').isHidden(), true);
+    await page.locator('#rhythmToggle').click();
+    assert.equal(await page.locator('#rhythmToggle').textContent(), 'hide the table');
+    assert.equal(await page.locator('#rhythmSites tbody tr').count(), 8);
+    assert.deepEqual(await page.$$eval('#rhythmSites thead th', th => th.map(x => x.textContent)),
+      ['Business', 'Peaks', 'Swing', 'Across the week']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('Products names its peaks in units, with the weeks they come from', async () => {
+  const product = (item, peak, swing, weeks = peak ? 2 : 0) => ({item, revenue: 1000, units: 50, week: 350, price: 20, stores: 7,
+    peak, swing, weeks});
+  const {page, errors} = await board({products: [product('Shirts', 'Saturday', 37), product('Hats', 'Sunday', 20, 3),
+    product('Socks', null, 0)]});
+  try {
+    const th = page.locator('#secProducts th', {hasText: 'Peaks'});
+    assert.equal(await th.textContent(), 'Peaks · units');
+    assert.match(await th.getAttribute('data-tip'), /most units, across every store that carries it, from the last 2 to 3 weeks of sales/);
+    // Each cell reads its own product's weeks.
+    assert.deepEqual(await page.locator('#secProducts td.pos').evaluateAll(tds => tds.map(td => td.dataset.tip)), [
+      'Units sold across 7 stores, last 2 weeks: peaks Saturday, 37 points between best and worst day',
+      'Units sold across 7 stores, last 3 weeks: peaks Sunday, 20 points between best and worst day']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// --- the difficulty chip ----------------------------------------------------------
+
+test('the difficulty chip sits on the build line on a desktop and opens its settings', async () => {
+  const {page, errors} = await board({width: 1600});
+  try {
+    const mast = page.locator('#clock .fv-diff');
+    assert.equal(await mast.textContent(), 'CUSTOM · 2 HARDER · 1 EASIER');
+    assert.equal(await mast.isVisible(), true);
+    assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, 'the footer copy is for 1500 px and under');
+    assert.equal(await mast.getAttribute('aria-expanded'), 'false');
+    await mast.click();
+    const pop = page.locator('#fvDiffPop');
+    assert.equal(await pop.evaluate(el => [el.parentElement === document.body, getComputedStyle(el).position].join()),
+      'true,fixed', 'hung off the body, so no section can clip it');
+    assert.equal(await mast.getAttribute('aria-expanded'), 'true');
+    assert.match(await pop.locator('h3').textContent(), /Custom difficulty\s*2 harder\s*1 easier/);
+    assert.match(await pop.locator('p').first().textContent(), /differs from the game's Normal preset\. Started with \$0\./);
+    // The settings that moved, not the one left at Normal.
+    assert.deepEqual(await pop.locator('.fv-rule .n').evaluateAll(ns => ns.map(n => n.firstChild.textContent)),
+      ['Public prices', 'Export price', 'Tax rate']);
+    assert.equal(await pop.locator('.fv-rule').nth(2).getAttribute('data-tip'),
+      'What it does. Normal is 5%, so this game is easier.');
+    // Right is harder: Export price is lower than Normal and still to the right of the tick.
+    const knob = n => pop.locator('.fv-rule').nth(n).locator('.me').evaluate(el => parseFloat(el.style.left));
+    assert.ok(await knob(1) > 50);
+    assert.ok(await knob(2) < 50);
+    // Under its chip, inside the window.
+    const [chip, box] = await Promise.all([mast.boundingBox(), pop.boundingBox()]);
+    assert.ok(box.y > chip.y + chip.height - 1 && box.x + box.width <= 1600);
+    // Focus goes into the dialog, and Esc brings it back to the chip with no
+    // tooltip left open over the closed popover.
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
+    await page.keyboard.press('Escape');
+    assert.equal(await mast.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'mast');
+    assert.equal(await page.evaluate(() => document.getElementById('tip').classList.contains('on')), false);
+    await mast.click();
+    await page.mouse.click(300, 600);
+    assert.equal(await pop.evaluate(el => el.classList.contains('on')), false, 'an outside click closes it');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// Game save names are not capped; this one is 36 characters.
+const LONG = 'The Very Long Name Of A Company Save';
+const FLAGS = {locale: false, build: 3683};
+// The masthead as drawn: every box in it, rounded to the pixel. Measured once
+// the search field has fitted itself to what is left (ssFitMast(), run by a
+// ResizeObserver on the clock, before the next paint): in between, the field
+// and the new clock can share a width neither of them keeps.
+const mastBoxes = (page, [save, flags]) => page.evaluate(async ([save, flags, FLAGS]) => {
+  D.meta.save = save;
+  if (flags) Object.assign(D.meta, FLAGS);
+  drawMast();
+  await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+  const box = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round); };
+  return {mast: box(document.querySelector('.mast')), brand: box(document.querySelector('.brand')),
+    nav: box(document.getElementById('nav')), clock: box(document.getElementById('clock')),
+    lines: [...document.querySelectorAll('#clock > small')].map(box),
+    scroll: document.documentElement.scrollWidth, room: document.documentElement.getBoundingClientRect().width};
+}, [save, flags, FLAGS]);
+
+const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0, rules: []};
+// Where the search control starts, and where the sphere's first ball needs it
+// to start: 40 px after the nav, 100 px of ball, 12 px of gap.
+const ballRoom = page => page.evaluate(() => ({control: ssMastControl().getBoundingClientRect().left,
+  right: ssMastControl().getBoundingClientRect().right,
+  rest: document.getElementById('nav').getBoundingClientRect().right + SS_BALL_ROOM,
+  clock: document.getElementById('clock').getBoundingClientRect().left}));
+
+test("at 1501 px and over the chip ends the clock's last line, inside the masthead", async () => {
+  for (const width of [1501, 1530, 1600]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
+    const what = `${width} ${save.length} chars${flags ? ' with flags' : ''}`;
+    const {page, errors} = await board({width});
+    try {
+      const b = await mastBoxes(page, [save, flags]);
+      assert.ok(b.scroll <= b.room, `${what} scrolls sideways`);
+      // The clock's content box stays inside the masthead.
+      const [ml, mt, mw, mh] = b.mast, [cl, ct, cw, ch] = b.clock;
+      assert.ok(cl >= ml && ct >= mt && cl + cw <= ml + mw && ct + ch <= mt + mh, `${what}: clock ${b.clock} outside ${b.mast}`);
+      // In the clock's last line and no other, never a line of its own (the web
+      // build's live dot always adds a line, so no fixed count).
+      const lines = await page.$$eval('#clock > small', ls => ls.map(l => l.querySelectorAll('.fv-diff').length));
+      assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1], what);
+      assert.equal(await page.locator('#clock .fv-diff').isVisible(), true, what);
+      assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, what);
+      // The search field (or its icon) ends before the clock.
+      const room = await ballRoom(page);
+      assert.ok(room.right <= room.clock, `${what}: search ${room.right} runs into the clock ${room.clock}`);
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+  }
+});
+
+test("at 1500 px and under the masthead is the board's own, and the chip is in the footer", async () => {
+  for (const width of [1500, 1440, 1301, 900, 540, 390]) for (const save of ['Fixture', LONG]) for (const flags of [false, true]) {
+    const what = `${width} ${save.length} chars${flags ? ' with flags' : ''}`;
+    const boxes = [];
+    // With the difficulty (chip in the markup, hidden) and with none at all,
+    // which is the masthead as it was before the chip.
+    for (const houseRules of [CUSTOM, null]) {
+      const {page, errors} = await board({width, houseRules});
+      try {
+        boxes.push(await mastBoxes(page, [save, flags]));
+        if (houseRules) {
+          assert.equal(await page.locator('#clock .fv-diff').isVisible(), false, what);
+          assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), true, what);
+        }
+        assert.deepEqual(errors, []);
+      } finally { await page.close(); }
+    }
+    assert.deepEqual(boxes[0], boxes[1], what);
+  }
+});
+
+test("the search control keeps out of the sphere's resting place, Normal or Custom chip", async () => {
+  for (const houseRules of [NORMAL, CUSTOM]) for (const width of [1501, 1530, 1440, 1301]) for (const save of ['Fixture', LONG]) {
+    // A 36-character name leaves no room for the ball and the icon together
+    // at 1301 px, chip or no chip (the brand and the nav alone reach past it),
+    // nor with the Custom chip on the clock at 1501 and 1530 px. The icon then
+    // sits over the ball's resting place; accepted, rather than moving the chip.
+    if (save === LONG && (width === 1301 || (houseRules === CUSTOM && width >= 1501 && width <= 1530))) continue;
+    const what = `${houseRules.label} ${width} ${save.length} chars`;
+    const {page, errors} = await board({width, houseRules});
+    try {
+      await mastBoxes(page, [save, false]);
+      const room = await ballRoom(page);
+      assert.ok(room.control >= room.rest - 0.5, `${what}: search at ${room.control} is in the ball's room, which ends at ${room.rest}`);
+      assert.ok(room.clock - room.right >= 12 - 0.5, `${what}: and stays the sphere's gap clear of the clock`);
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+  }
+});
+
+// A long page, so the footer's chip is well out of the window near the top.
+const LONG_PAGE = {products: Array.from({length: 30}, (_, i) => ({item: `Line ${i}`, revenue: 1000, units: 50, week: 350,
+  price: 20, stores: 7, peak: null, swing: 0, weeks: 0}))};
+const state = page => page.evaluate(() => ({
+  open: document.getElementById('fvDiffPop').classList.contains('on'),
+  focus: document.activeElement === document.body ? 'body' : document.activeElement.dataset.fvAt || document.activeElement.tagName,
+  expanded: [...document.querySelectorAll('.fv-diff')].map(b => b.getAttribute('aria-expanded')),
+  tip: document.getElementById('tip').classList.contains('on'),
+  y: window.scrollY,
+}));
+
+test('a resize that swaps the chip closes the popover; focus goes only where it can be seen', async () => {
+  // Desktop to narrow, near the top of a long page: the footer's chip is off
+  // screen, so focus leaves the popover for the page, and nothing scrolls.
+  let {page, errors} = await board({width: 1600, ...LONG_PAGE});
+  try {
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, 400); });
+    await page.locator('#clock .fv-diff').click();
+    const y = (await state(page)).y;
+    await page.setViewportSize({width: 1200, height: 800});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    assert.deepEqual(await state(page), {open: false, focus: 'body', expanded: ['false', 'false'], tip: false, y});
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // At the bottom of the page the footer's chip is in the window: focus goes to it.
+  ({page, errors} = await board({width: 1600, ...LONG_PAGE}));
+  try {
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
+    await page.locator('#clock .fv-diff').click();
+    await page.setViewportSize({width: 1280, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'foot', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // Focus on the open popover's own chip, which the resize hides: the browser
+  // drops it to the page before the handler runs, and it stays there (both
+  // directions). The popover closes and nothing reads as open.
+  ({page, errors} = await board({width: 1600, ...LONG_PAGE}));
+  try {
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    assert.equal((await state(page)).focus, 'mast');
+    await page.mouse.move(5, 600);
+    await page.setViewportSize({width: 1280, height: 1000});
+    // The browser drops focus from the hidden chip at its next rendering step,
+    // which a loaded machine can reach after the popover has closed: wait for
+    // both, then say where focus went.
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on')
+      && document.activeElement !== document.querySelector('#clock .fv-diff'), null, {timeout: 10000});
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+  ({page, errors} = await board({width: 390}));
+  try {
+    const foot = page.locator('#footDiff .fv-diff');
+    await foot.scrollIntoViewIfNeeded();
+    await foot.click();
+    await foot.focus();
+    assert.equal((await state(page)).focus, 'foot');
+    await page.mouse.move(5, 5);
+    await page.setViewportSize({width: 1600, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // Focus the reader put elsewhere while it was open stays there.
+  ({page, errors} = await board({width: 1600}));
+  try {
+    await page.locator('#clock .fv-diff').click();
+    await page.evaluate(() => document.querySelector('#nav a').focus());
+    await page.setViewportSize({width: 1200, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    assert.equal((await state(page)).focus, 'A');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // Narrow to desktop: the masthead's chip is always in the window.
+  ({page, errors} = await board({width: 390}));
+  try {
+    const foot = page.locator('#footDiff .fv-diff');
+    await foot.scrollIntoViewIfNeeded();
+    await foot.click();
+    assert.deepEqual((await state(page)).expanded, ['false', 'true']);
+    await page.setViewportSize({width: 1600, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'mast', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// What renderAll() does to the chips: ask which one has focus, redraw the
+// masthead and the footer (a save that has moved on), then drawDifficulty().
+const refresh = page => page.evaluate(() => {
+  const had = fvChipFocus();
+  D.meta.minute = (D.meta.minute + 1) % 60;
+  drawMast(); drawFooter(); drawDifficulty(had);
+});
+
+test('a live refresh gives focus back to the chip that had it, and to nothing else', async () => {
+  // The focused chip is replaced: its replacement gets focus, the popover
+  // stays open on it, and no tooltip opens.
+  let {page, errors} = await board({width: 1600});
+  try {
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    await page.evaluate(() => { document.activeElement.dataset.old = '1'; });
+    await page.mouse.move(5, 600);
+    await refresh(page);
+    assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.fvAt, document.activeElement.dataset.old,
+      document.activeElement.isConnected]), ['mast', undefined, true]);
+    const s = await state(page);
+    assert.deepEqual([s.open, s.expanded, s.tip], [true, ['true', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // Focus elsewhere, or on the page itself, is left where it is.
+  ({page, errors} = await board({width: 1600}));
+  try {
+    await page.evaluate(() => document.querySelector('#nav a').focus());
+    await refresh(page);
+    assert.equal((await state(page)).focus, 'A');
+    await page.evaluate(() => document.activeElement.blur());
+    await refresh(page);
+    assert.equal((await state(page)).focus, 'body');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // Focus inside the open popover (where a click on the chip puts it): the
+  // refresh refills the popover and focus stays in it, still open on the new chip.
+  ({page, errors} = await board({width: 1600}));
+  try {
+    await page.locator('#clock .fv-diff').click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
+    await refresh(page);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
+    const s = await state(page);
+    assert.deepEqual([s.open, s.expanded], [true, ['true', 'false']]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('renderAll asks which chip has focus before the chips are replaced', () => {
+  // The order the refresh test above stands in for: fvChipFocus() read before
+  // drawMast() and drawFooter(), and handed to drawDifficulty().
+  const src = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+  const body = src.slice(src.indexOf('function renderAll(){'), src.indexOf('\n}', src.indexOf('function renderAll(){')));
+  const at = needle => { const i = body.indexOf(needle); assert.ok(i >= 0, needle); return i; };
+  assert.ok(at('const diffFocus = fvChipFocus();') < at('drawMast();'));
+  assert.ok(at('drawMast();') < at('drawFooter();'));
+  assert.ok(at('drawFooter();') < at('drawDifficulty(diffFocus);'));
+});
+
+test('on a phone the chip moves to the footer stamp', async () => {
+  const {page, errors} = await board({width: 390});
+  try {
+    assert.equal(await page.locator('#clock .fv-diff').isVisible(), false);
+    const foot = page.locator('#footDiff .fv-diff');
+    assert.equal(await foot.isVisible(), true);
+    assert.equal(await foot.textContent(), 'Custom · 2 harder · 1 easier');
+    await foot.scrollIntoViewIfNeeded();
+    await foot.click();
+    const box = await page.locator('#fvDiffPop').boundingBox();
+    assert.ok(box.x >= 0 && box.x + box.width <= 390, 'the popover fits the phone');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), 'nothing scrolls sideways');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a preset says its name, Normal included, and lists what differs', async () => {
+  const normal = await board({houseRules: {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 10000,
+    rules: [rule('Public prices', 0.7, 0.7, 'level')]}});
+  try {
+    assert.equal(await normal.page.locator('#clock .fv-diff').textContent(), 'NORMAL');
+    await normal.page.locator('#clock .fv-diff').click();
+    assert.equal(await normal.page.locator('#fvDiffPop .fv-rule').count(), 0);
+    assert.match(await normal.page.locator('#fvDiffPop').textContent(), /Normal difficulty[\s\S]*Started with \$10,000/);
+  } finally { await normal.page.close(); }
+  const hard = await board({houseRules: {label: 'Hard', slot: 3, harder: 1, easier: 0, startingMoney: 4200,
+    rules: [rule('Wholesale urgent fee', 0.3, 0.2, 'harder')]}});
+  try {
+    assert.equal(await hard.page.locator('#clock .fv-diff').textContent(), 'HARD');
+    assert.match(await hard.page.locator('#clock .fv-diff').getAttribute('data-tip'), /Hard preset: 1 setting harder than Normal/);
+  } finally { await hard.page.close(); }
+  const old = await board({houseRules: null, difficulty: 'Hard'});
+  try {
+    // A board built before the house rules still names the difficulty, with nothing to open.
+    const plain = old.page.locator('#clock .fv-diff');
+    assert.equal(await plain.textContent(), 'HARD');
+    assert.equal(await plain.evaluate(el => el.tagName), 'SPAN');
+    await plain.click();
+    assert.equal(await old.page.locator('#fvDiffPop.on').count(), 0);
+    assert.deepEqual(old.errors, []);
+  } finally { await old.page.close(); }
+  const none = await board({houseRules: null});
+  try {
+    assert.equal(await none.page.locator('.fv-diff').count(), 0, 'with neither, no chip');
+    // And the empty footer slot takes no room (no flex gap beside the build).
+    await none.page.setViewportSize({width: 390, height: 1000});
+    assert.equal(await none.page.locator('#footDiff').evaluate(el => getComputedStyle(el).display), 'none');
+  } finally { await none.page.close(); }
+  const unmoved = await board({houseRules: {label: 'Custom', slot: 0, harder: 0, easier: 0, startingMoney: 0,
+    rules: [rule('Public prices', 0.7, 0.7, 'level')]}});
+  try {
+    assert.equal(await unmoved.page.locator('#clock .fv-diff').textContent(), 'CUSTOM');
+    await unmoved.page.locator('#clock .fv-diff').click();
+    assert.match(await unmoved.page.locator('#fvDiffPop p').textContent(), /^No setting differs from the game's Normal preset\./);
+  } finally { await unmoved.page.close(); }
+});
+
+test('the site page names its own week', async () => {
+  const {page, errors} = await board();
+  try {
+    const line = await page.evaluate(() => {
+      const shop = {
+        key: 'ba:street_fifthavenue#1', status: 'retail', name: 'HART. Clothing', code: 'MT',
+        type: 'Clothing Store', typeSlug: 'ba:businesstype_clothingstore', address: '1 Fifth Avenue',
+        neighbourhood: 'Midtown', opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200,
+        margin: 22.2, cogs: 0, wages: 300, rent: 100, marketing: 0, theft: 0, licensing: 0,
+        staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
+        people: [], lines: [], series: [], staffDemands: [], quitWarnings: 0, daysOpen: 30,
+        rhythm: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, i) =>
+          ({day, short: day.slice(0, 3), index: [98, 92, 82, 96, 100, 118, 114][i], n: 3})),
+        peakDay: 'Saturday', swing: 36,
+        satisfaction: {overall: 74, service: 88, pricing: 71, cleanliness: 62, facility: 79},
+        amenities: {bathroom: true, toiletprivacy: false, sink: true, music: false, interior: true},
+        missingUniformLocker: false, uniformGaps: [], traffic: 41, marketingIndex: 31, security: 85, capacity: 40,
+      };
+      Object.assign(D, {businesses: [shop], supply: {day: 73, shops: [], imports: [], idle: [], factories: {sites: []}},
+        hours: [], hourFindings: [], trends: [], hypeExposure: [], alerts: [], minor: {rows: []}, homes: [], chains: [], plan: null});
+      siteKey = shop.key; siteOpen = true;
+      showPage('company');
+      drawSite();
+      return document.querySelector('#sp-week .fv-basis').textContent.replace(/\s+/g, ' ').trim();
+    });
+    assert.equal(line, 'This shop’s revenue · 3 weeks');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// --- with a site's own page open (R9) -------------------------------------------
+
+test("a site's page puts By weekday aside, the chip still opens over it, and #secRhythm lands on the chart", async () => {
+  const {page, errors} = await board({recent: {days: 28, revenue: profile([106, 101, 95, 105, 116, 87, 82])}});
+  try {
+    await page.locator('#chartTools a[data-id="wd"]').click();
+    const KEY = 'ba:street_fifthavenue#1';
+    await page.evaluate(key => {
+      const shop = {key, status: 'retail', name: 'HART. Clothing', code: 'MT', type: 'Clothing Store',
+        typeSlug: 'ba:businesstype_clothingstore', address: '1 Fifth Avenue', neighbourhood: 'Midtown', opened: 3,
+        revenue: 900, customers: 30, basket: 30, profit: 200, margin: 22.2, cogs: 0, wages: 300, rent: 100, marketing: 0,
+        theft: 0, licensing: 0, staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
+        people: [], lines: [], series: [], staffDemands: [], quitWarnings: 0, daysOpen: 30,
+        satisfaction: {overall: 74, service: 88, pricing: 71, cleanliness: 62, facility: 79},
+        amenities: {bathroom: true, toiletprivacy: false, sink: true, music: false, interior: true},
+        missingUniformLocker: false, uniformGaps: [], traffic: 41, marketingIndex: 31, security: 85, capacity: 40};
+      Object.assign(D, {businesses: [shop], supply: {day: 73, shops: [], imports: [], idle: [], factories: {sites: []}},
+        hours: [], hourFindings: [], trends: [], hypeExposure: [], alerts: [], minor: {rows: []}, homes: [], chains: [], plan: null});
+      openSite(key);
+    }, KEY);
+    assert.equal(await page.evaluate(() => location.hash), '#site/fifthavenue-1');
+    assert.equal(await page.locator('#dailyBox .fv-wd').isVisible(), false, 'the company chart steps aside');
+    assert.equal(await page.locator('#secDetail').isVisible(), true);
+    // The chip is the masthead's, over any page.
+    await page.locator('#clock .fv-diff').click();
+    assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), true);
+    await page.keyboard.press('Escape');
+    // An old Weekly rhythm link takes the site's page down and lands on the chart, By weekday still chosen.
+    await page.evaluate(() => { location.hash = '#secRhythm'; });
+    await page.waitForFunction(() => !siteOpen);
+    assert.deepEqual(await page.evaluate(() => [page, sub.company, chartWindow]), ['company', 'results', 'wd']);
+    assert.equal(await page.locator('#dailyBox .fv-wd').isVisible(), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});

@@ -155,6 +155,8 @@ let wikiShowFix = false;        // the setup list is showing every alternative
    pieces that run after it. The payload is never rewritten to point at the
    business being read: navigation moves this, and nothing else. */
 let wikiActive = null;
+let wikiLanding = "";           // a section a link asked for, until the page has it
+let wikiLandTop = false;        // that landing came with entering or a new page: no section there means the top
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
@@ -251,7 +253,11 @@ function loadWikiData(){
 }
 
 /* --- routes ------------------------------------------------------------- */
-/* #wiki, #wiki/c/<category>, #wiki/q/<query>, #wiki/<page>. */
+/* #wiki, #wiki/c/<category>, #wiki/q/<query>, #wiki/<page>, and
+   #wiki/<page>/<section> for a guide's section the board links into. */
+/* The sections a link may land on, each by the id its heading carries. Only
+   these are read off the end of a route, so a page id is never cut short. */
+const WIKI_SECTIONS = {prices: "wk-prices"};
 /* A hash is whatever the address bar holds, so a half-typed escape decodes to
    itself rather than throwing the page away. */
 const wikiDecode = s => { try{ return decodeURIComponent(s); }catch(e){ return s; } };
@@ -263,19 +269,43 @@ function wikiParse(hash){
   const tail = parts.join("/");
   if(head === "c" && tail) return {kind: "category", id: wikiDecode(tail), query: ""};
   if(head === "q") return {kind: "home", id: "", query: wikiDecode(tail || "")};
-  return {kind: "page", id: wikiDecode([head, ...parts].join("/")), query: ""};
+  const section = parts.length && WIKI_SECTIONS[parts[parts.length - 1]] ? parts.pop() : "";
+  return {kind: "page", id: wikiDecode([head, ...parts].join("/")), query: "", section};
 }
 function wikiHref(route){
   if(!route || route.kind === "home")
     return route && route.query ? `#wiki/q/${encodeURIComponent(route.query)}` : "#wiki";
   if(route.kind === "category") return `#wiki/c/${encodeURIComponent(route.id)}`;
-  return `#wiki/${encodeURIComponent(route.id)}`;
+  return `#wiki/${encodeURIComponent(route.id)}${route.section && WIKI_SECTIONS[route.section] ? `/${route.section}` : ""}`;
+}
+/* The board's way in: a business type's own guide, by the type slug the save
+   carries ("ba:businesstype_gym"), which the help files name
+   "businesstypes-gym". It needs no catalogue loaded, so a link can be drawn
+   before the wiki has ever been opened; a type the help does not cover lands
+   on the wiki's own "no page" note. */
+function wikiTypeHref(typeSlug, section){
+  const m = String(typeSlug ?? "").match(/businesstype_([a-z0-9]+)$/i);
+  return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
-   while it is up. */
-function showWikiRoute(hash){
+   while it is up. `entered` says the Wiki was not the page on screen before:
+   the reader came from another page, by a link or by Back. */
+function showWikiRoute(hash, entered = false){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
+  /* One rule: coming into the Wiki from another page, or onto another route
+     inside it, lands on the route's section when it names one, and starts at
+     the page's top when it names none. Back and Forward are no exception. A
+     redraw of the route on screen never lands again, so the reader is left
+     wherever they have scrolled to. The route outlives a visit to another
+     page, so following the same link a second time is not a move; coming in
+     from elsewhere is what says so. A landing still waiting for the catalogue
+     is dropped when the reader enters again, moves to another page, or steps
+     onto a route that names no section (Back from A/prices to A) before the
+     catalogue arrives. */
+  const land = !!next.section && (entered || moved || next.section !== wikiRoute.section);
+  if(land){ wikiLanding = next.section; wikiLandTop = entered || moved; }
+  else if(entered || moved || !next.section) wikiLanding = "";
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -284,9 +314,12 @@ function showWikiRoute(hash){
     wikiPicked = null;
     wikiFocus = "";
     wikiShowFix = false;
-    /* A different page starts at its own top, however far down its link was. */
-    if(window.scrollY > 0) window.scrollTo(0, 0);
   }
+  /* A different page, or the Wiki come back to with no section to land on,
+     starts at its own top, however far down the reader was before. Entering
+     with a section to land on leaves the scroll to wikiLand(), which goes to
+     the top instead when the page turns out not to have that section. */
+  if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
   drawWiki();
 }
@@ -1807,7 +1840,7 @@ function wikiGuidePrices(g, offers){
   if(!offers.length) return "";
   const heading = `<div class="sechead"><h2>Prices in your save</h2>
     <span class="aside">${wikiChip("save", hasData() ? `save day ${D.meta?.day ?? "unknown"}` : "no save open")}</span></div>`;
-  if(!hasData()) return `<section class="sec">${heading}
+  if(!hasData()) return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
     <p class="quiet">Open a save to see your configured prices and neighbourhood market prices.</p></section>`;
   const mine = (D.businesses || []).filter(b => b.typeSlug === g.BUSINESS.nameSrc && b.status !== "vacant");
   const hoodOf = b => b.neighbourhood || "Unknown neighbourhood";
@@ -1838,7 +1871,7 @@ function wikiGuidePrices(g, offers){
         <thead><tr><th scope="col">Product or service</th><th scope="col">Your configured price</th>
         <th scope="col">Lowest market price</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
   }).join("");
-  return `<section class="sec">${heading}
+  return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
     <p class="quiet">Prices per unit or service. The market minimum includes your shops and other business types selling the item.
     Reconstructed from this save; MarketInsider's cached display may differ. These are not recommended prices.</p>
     ${body || '<p class="quiet">No matching shops or neighbourhood market data in this save.</p>'}</section>`;
@@ -1958,6 +1991,7 @@ function drawWiki(hold){
   wikiGraph();
   wireTips();
   wireReveal();
+  wikiLand();
   const search = $("wikiSearch");
   if(search && held){
     search.focus();
@@ -1967,6 +2001,25 @@ function drawWiki(hold){
     return;
   }
   wikiRestore(hold);
+}
+
+/* Scroll to the section a link asked for, once the page that holds it is
+   drawn. Until the catalogue is in there is nothing to scroll to, so the wish
+   waits for the draw that has it. A page without the section, entered or
+   moved to, starts at its top rather than keeping the last page's scroll; a
+   section asked for on the page already on screen leaves the reader be.
+   settleScroll() is the board's: the sections above are estimated heights
+   until they paint, and one scroll would land short. */
+function wikiLand(){
+  if(!wikiLanding || wikiStatus !== "ready") return;
+  const el = $(WIKI_SECTIONS[wikiLanding]);
+  wikiLanding = "";
+  if(!el){
+    if(wikiLandTop && window.scrollY > 0) window.scrollTo(0, 0);
+    return;
+  }
+  if(typeof settleScroll === "function") settleScroll(el);
+  else if(typeof el.scrollIntoView === "function") el.scrollIntoView({block: "start"});
 }
 
 /* --- what the reader can do --------------------------------------------- */

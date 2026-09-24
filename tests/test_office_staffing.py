@@ -290,7 +290,9 @@ class OfficeAlertTextTests(unittest.TestCase):
                 "day": "Monday", "from": 9, "to": 13, "staff": 6, "seen": 2, "spare": 16,
                 "worth": 332.57}
         [line] = [a for a in alerts([firm], [idle]) if a["group"] == "idlestaff"]
-        self.assertIn("runs 6 workstations 09:00-13:00 on a Monday", line["text"])
+        # A finding with no week of runs is read as a week of one.
+        self.assertIn("16 staff-hours a week that buy nothing: 6 workstations Mon 9-13",
+                      line["text"])
 
 
 if __name__ == "__main__":

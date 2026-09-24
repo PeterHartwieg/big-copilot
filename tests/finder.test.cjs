@@ -179,6 +179,9 @@ test('the switch is in the map window; every filter lives in the panel', async (
     // button, and is on screen whether the finder is on or off.
     assert.equal(await page.locator('#cityMapPage [data-stage] .fswitch .ibtn').count(), 1);
     assert.equal(await page.locator(chip).isVisible(), true);
+    // A chip with its name on it, not a bare pin that only a tooltip names.
+    assert.equal((await page.locator(chip).innerText()).trim(), 'Find a location');
+    assert.equal(await page.getByRole('button', {name: 'Find a location', exact: true}).count(), 1);
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'false');
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), true);
     assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);
@@ -1278,6 +1281,14 @@ test('the card says who owns the place and who trades from it', async () => {
     await page.evaluate(key => cityMapPage.select(key), MT[5]);
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts').textContent.includes('HART. Gym'));
     assert.equal(await row('Owner').textContent(), 'OwnerYou');
+    assert.equal(await row('Renter').textContent(), 'RenterHART. Gym (you)');
+    // Once the save carries the business, its name is a way to its own page.
+    await page.evaluate(key => {
+      D.businesses = [{key, name: 'HART. Gym', address: '5 Test Street', status: 'retail', type: 'Gym'}];
+      refreshCityMaps(); cityMapPage.select(key);
+    }, MT[5]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts a.ss-sl'));
+    assert.equal(await row('Renter').locator('a.ss-sl').getAttribute('href'), '#site/broadwaystreet-5');
     assert.equal(await row('Renter').textContent(), 'RenterHART. Gym (you)');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

@@ -72,7 +72,7 @@ test('a site lists its unmet staff demands as chips under the crew', async () =>
     assert.deepEqual(chips, [
       {text: 'Full-time ×1', priority: [true, true, true], high: true, evidence: 'demand',
        company: false, quit: false, tip: 'Full-time for 1 · critical'},
-      {text: 'Gold Health Insurance ×2', priority: [true, true, false], high: false, evidence: 'demand',
+      {text: 'Gold Health Insurance ×2', priority: [true, true, false], high: false, evidence: 'demand company',
        company: true, quit: false,
        tip: 'Gold Health Insurance for 2 · important · settled company-wide, not here'},
       {text: '1', priority: [], high: false, evidence: 'quit', company: false, quit: true,
@@ -107,7 +107,9 @@ test('both demand findings can be filtered and link somewhere', async () => {
     const kinds = await page.evaluate(() => ALERT_GROUPS.filter(g => /demand/.test(g.id)).map(g => [g.id, g.on]));
     assert.deepEqual(kinds, [['jobdemand', true], ['companydemand', true]]);
     const links = await page.evaluate(() => [ALERT_LINKS.jobdemand, ALERT_LINKS.companydemand]);
-    assert.deepEqual(links, [{sec: 'secDetail', site: true}, {sec: 'secPayroll'}]);
+    // The company-wide finding has no site of its own; its link picks one
+    // (ALERT_SITE_PICK) and lands on the Crew that shows the demand.
+    assert.deepEqual(links, [{sec: 'secDetail', site: true}, {sec: 'secDetail', site: true}]);
     // The amount column carries the people, since these findings have no money.
     const amounts = await page.evaluate(() => [
       findingAmount({group: 'jobdemand', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}),
@@ -115,5 +117,38 @@ test('both demand findings can be filtered and link somewhere', async () => {
       splitFinding({group: 'jobdemand', site: 'HART. Gifts', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}).what,
     ]);
     assert.deepEqual(amounts, ['2<small>staff</small>', '11<small>staff</small>', '2 staff with unmet demands']);
+  } finally { await page.close(); }
+});
+
+test('the company-wide demand finding lands on the Crew with the most people lacking it', async () => {
+  const insurance = count => ({slug: 'ba:jobdemand_goldhealthinsurance', demand: 'Gold Health Insurance',
+                               count, priority: 1, company: true});
+  const page = await site([insurance(1)]);
+  try {
+    await page.evaluate(([one, three]) => {
+      const first = D.businesses[0];
+      first.staffLackingCompany = 1;
+      D.businesses.push({...first, key: 'ba:street_broadway#2', name: 'HART. Other', staffDemands: [three],
+                         staffLackingCompany: 3});
+      D.supply = {shops: [], imports: [], idle: [], factories: {sites: []}};
+      D.daily = [];  // the Company page draws its chart when it opens
+      siteOpen = false; drawSite();
+      // The finding as _alerts() writes it: about "Company", with no site key.
+      goToAlert({id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand',
+                 text: '4 staff with demands only you can meet: Gold Health Insurance for 4'});
+    }, [insurance(1), insurance(3)]);
+    assert.equal(await page.evaluate(() => [page, siteOpen, siteKey].join(' ')),
+                 'company true ba:street_broadway#2');
+    // The Crew block rings, and the company-wide chip in it pulses.
+    assert.equal(await page.locator('#sp-crew.xl-arrived').count(), 1);
+    assert.equal(await page.locator('#sp-crew .sp-dem.sp-hit').count(), 1);
+    assert.match(await page.locator('#sp-crew .sp-dem.sp-hit').innerText(), /Gold Health Insurance/);
+    // No site lacks it any more: the link falls back to Payroll.
+    await page.evaluate(() => {
+      D.businesses.forEach(b => { b.staffLackingCompany = 0; b.staffDemands = []; });
+      siteOpen = false; drawSite();
+      goToAlert({id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand', text: ''});
+    });
+    assert.equal(await page.evaluate(() => [page, siteOpen, sub.company].join(' ')), 'company false payroll');
   } finally { await page.close(); }
 });

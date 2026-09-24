@@ -24,11 +24,12 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       });
     }
     await page.goto(base);
-    // Nine: the landing's footer and the board's each carry a Changelog, a
-    // voting and a game-link badge, the nav adds two and the Link button one.
-    // The copies share an id, so the counts below still go to zero together
-    // once the feature has been opened.
-    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),9);
+    // Eleven: the landing's footer and the board's each carry a Changelog, a
+    // voting and a game-link badge, the nav adds two, the Link button one, and
+    // the masthead's search control two (the field and its icon form; the
+    // stylesheet shows one). The copies share an id, so the counts below still
+    // go to zero together once the feature has been opened.
+    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),11);
     // Linking reaches no game here; using the entry point is what counts.
     await page.locator('#linkBtn').click();
     assert.equal(await page.locator('[data-new-feature="game-link"]:not([hidden])').count(),0);
@@ -44,6 +45,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       document.body.classList.add('has-board');
       D = {meta:{character:'release-fixture',day:1},businesses:[],homes:[],alerts:[],minor:{rows:[]}};
     });
+    // Opening the search palette is the search's visit.
+    await page.evaluate(() => { ssOpen(); ssClose(); });
+    assert.equal(await page.locator('[data-new-feature="board-search"]:not([hidden])').count(),0);
     await page.locator('#nav a[data-id="map"]').click();
     await page.evaluate(() => cityMapPage.ready);
     assert.equal(await page.locator('#cityMapPage .lay').count(),5);
