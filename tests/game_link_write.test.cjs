@@ -25,13 +25,27 @@ const BARE = 'ba:street_fifthavenue#4';
 const TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml'};
 
 let browser, mock, mockUrl, payload, dir;
+/* The board's Weekly imports are Python's import facts (supplyFact), sized
+   with the chain's margin. These tests are about writing the Set to figure,
+   whatever it is, so each depot line the payload imports is laid in as a
+   covered import fact: nothing to change until a test types a figure. */
+function withImportFacts(text) {
+  const d = JSON.parse(text);
+  const facts = d.supply.facts = d.supply.facts || {};
+  Object.entries(d.supply.factories.depots || {}).forEach(([s, lines]) => Object.entries(lines).forEach(([slug, line]) => {
+    const use = line.weekly || 0;
+    (facts[s] = facts[s] || {})[slug] = {st: 'covered', why: null, lvl: 'ok', role: 'depot', cad: 'weekly', use,
+      need: use, have: use, setTo: null, parts: {lines: 0, sites: use, route: 0}, imp: true};
+  }));
+  return JSON.stringify(d);
+}
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'game-link-write-'));
   const save = path.join(dir, 'link.hsg'), data = path.join(dir, 'payload.json');
   const made = spawnSync(PYTHON, [path.join(root, 'tests', 'es3_fixture.py'), save, data], {cwd: root});
   assert.equal(made.status, 0, made.stderr?.toString());
-  payload = fs.readFileSync(data, 'utf8');
+  payload = withImportFacts(fs.readFileSync(data, 'utf8'));
   mock = spawn(PYTHON, ['-u', path.join(root, 'tools', 'game_link_mock.py'), save, '--port', '0',
     '--character', 'default', '--company', 'Link Co', '--day', '34', '--hour', '14'], {cwd: root});
   mockUrl = await new Promise((resolve, reject) => {
@@ -1130,6 +1144,25 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['imports', 'undo']);
+});
+
+test("imports: the figure written is the fact's, with no figure typed", async (t) => {
+  // Python sizes the week with the chain's margin, rounded up to ten; the board
+  // offers that figure in the box and writes it as it stands.
+  const d = JSON.parse(payload);
+  const [s, lines] = Object.entries(d.supply.facts).find(([, l]) => l['ba:itemname_paperbag']);
+  Object.assign(lines['ba:itemname_paperbag'], {st: 'short', why: 'order', lvl: 'critical', setTo: 4370});
+  const page = await linked(t, {approved: true, data: JSON.stringify(d)});
+  await supply(page);
+  assert.equal(await importRow(page, 'Paperbag').locator('input[data-imp]').inputValue(), '4370');
+  await applyImports(page).click();
+  await ready(page);
+  assert.match(await dialog(page).locator('.gw-line', {hasText: 'Paperbag'}).locator('.gw-num').textContent(),
+    /^from 3,800 to 4,370in stock$/);
+  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
+  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4370);
+  assert.ok(s !== undefined);
 });
 
 test('imports: after an undo, Apply again asks from the board read after it', async (t) => {

@@ -130,9 +130,14 @@ const importRow = (over = {}) => Object.assign({
   arrives: 33, from: 'Acme', level: 'critical', reason: 'shortfall',
 }, over);
 
+/* Python's verdict on a line (supplyFact), which the depot and factory read-outs follow. */
+const sf = (st, why = null, extra = {}) => ({st, why, lvl: st === 'covered' ? 'ok' : 'critical', role: 'depot',
+  cad: 'weekly', use: 0, need: 0, have: 0, setTo: null, parts: {lines: 0, sites: 0, route: 0}, ...extra});
+
 test('a depot reads out its thinnest line', async () => {
   const page = await board({shop: DEPOT, supply: {imports: [
-    importRow({item: 'Chips', slug: 'chips', cover: 9, coverFit: 'ok', runsOut: null}), importRow()]}});
+    importRow({item: 'Chips', slug: 'chips', cover: 9, coverFit: 'ok', runsOut: null}), importRow()],
+    facts: {0: {chips: sf('covered'), soda: sf('short', 'shortfall')}}}});
   try {
     assert.match(await readOf(page, 'stock'), /^Thinnest · Soda · Runs dry Tuesday, the truck lands /);
   } finally { await page.close(); }
@@ -170,15 +175,20 @@ const FACTORY = {...DEPOT, name: 'HART. Works', type: 'Factory',
                  lines: [{item: 'Burger', slug: 'burger', units: 2100, rate: 0, price: 1, revenue: 0, soldPerDay: 0}]};
 const factories = site => ({sites: [site], machines: 4, unnamed: 1, character: 'xl-fixture',
                             aliases: {}, depots: {}, depotOther: {}});
+// The beef's top-up is below a day's need; the grapes are fed.
+const INPUT_FACTS = {0: {
+  gb: sf('short', 'target', {role: 'input', cad: 'daily', use: 9600, need: 9600, have: 8000, setTo: 9600}),
+  grapes: sf('covered', null, {role: 'input', cad: 'daily', use: 2400, need: 2400, have: 2400}),
+}};
 
 test('a factory reads out the machine that makes nothing, else the least staffed, and its worst input', async () => {
-  let page = await board({shop: FACTORY, supply: {factories: factories(FACTORY_SITE)}});
+  let page = await board({shop: FACTORY, supply: {factories: factories(FACTORY_SITE), facts: INPUT_FACTS}});
   try {
     assert.equal(await readOf(page, 'lines'), 'Making nothing · Machine 5 is staffed and rented with no recipe');
     assert.equal(await readOf(page, 'inputs'), 'Ground Beef · Tops up to 8,000, the machines eat 9,600');
   } finally { await page.close(); }
   page = await board({shop: FACTORY, supply: {factories: factories({...FACTORY_SITE, unnamed: [],
-    needs: [FACTORY_SITE.needs[0]]})}});
+    needs: [FACTORY_SITE.needs[0]]}), facts: INPUT_FACTS}});
   try {
     assert.equal(await readOf(page, 'lines'),
       'Least staffed · Bottle of Wine · Machine 3 · 144 of 168 h rostered: nobody on it on Sundays');

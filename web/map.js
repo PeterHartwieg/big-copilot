@@ -78,7 +78,9 @@ async function loadCityMap(){
 function mapBusinesses(){ return new Map((D?.businesses || []).map(b => [b.key,b])); }
 function mapFindings(){
   const result = new Map();
-  for(const a of [...(D?.alerts || []), ...(D?.minor?.rows || [])]){
+  // The findings of the sizing on screen, as Today lists them (alertLines()).
+  if(!D) return result;
+  for(const a of [...alertLines(), ...(alertMinor().rows || [])]){
     if(!a.siteKey) continue;
     if(!result.has(a.siteKey)) result.set(a.siteKey, []);
     result.get(a.siteKey).push(a);

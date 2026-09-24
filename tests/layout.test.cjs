@@ -82,7 +82,10 @@ test('feed and top-up labels count all machines making the same product', async 
       D.supply.factories.machines = 5;
       site.needs = [{item: 'Fabric', slug: 'fabric', lines: [site.lines[0].item],
         perDay: 1200, perWeek: 8400, target: 0, from: null, known: false,
-        importWeekly: null, depotNeed: 0, depotStock: 0, status: 'unplanned', level: 'critical'}];
+        importWeekly: null, depotNeed: 0, depotStock: 0, status: 'noplan', level: 'critical'}];
+      // Python's verdict on the input: on no plan, with the top-up to set.
+      D.supply.facts = {[site.s]: {fabric: {st: 'noplan', why: null, lvl: 'critical', role: 'input', cad: 'daily',
+        use: 1200, need: 1380, have: 0, setTo: 1380, parts: {lines: 8400, sites: 0, route: 0}}}};
       stockView = 'feed';
       drawStock();
       drawLogistics();
