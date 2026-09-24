@@ -1016,9 +1016,9 @@ test("a site's page opened from the map over the palette takes the palette down,
     assert.equal(await page.locator('#locationMapDialog').evaluate(d => d.open), false);
     assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, siteKey, siteFrom && siteFrom.label]),
       ['#site/secondavenue-2', true, GYM, 'Today']);
-    // Without a palette, a name on the map is a name: the portfolio's way back.
+    // Without a palette, a name on the map says where it was clicked, as any name does.
     await page.evaluate(() => { siteShut(); showPage('today'); siteOpenOver(D.businesses[0].key); });
-    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom]), [SHOP, null]);
+    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom && siteFrom.label]), [SHOP, 'Today']);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -1201,7 +1201,7 @@ test("asked on a site's page opened with no way back, the strip goes back to the
 // --- the New badge -----------------------------------------------------------------------
 
 test('the search control wears the New badge until the palette first opens, and the badge takes no room', async () => {
-  for (const [width, chip] of [[1440, true], [1600, true], [1600, false], [390, true]]) {
+  for (const [width, chip] of [[1440, true], [1600, true], [1600, false], [700, true], [390, true]]) {
     const what = `${width}${chip ? ' with the chip' : ''}`;
     const page = await board({width, height: 900});
     try {

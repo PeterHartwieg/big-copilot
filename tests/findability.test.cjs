@@ -416,9 +416,10 @@ test("a finding row's name opens the site's page; the rest of the row still open
     // The map button stays beside the name, outside the link.
     assert.equal(await page.locator('#alertSection .find .site > .map-shortcut').count(), 1);
     await name.click();
-    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')),
-                 `${HERE} true  `);
-    assert.equal(await page.locator('.ss-crumb').textContent(), 'Portfolio', 'a name is no finding');
+    // A name lights no finding, but it says where it was clicked, as a finding does.
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom.label].join(' ')),
+                 `${HERE} true  Today`);
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Today');
     // The row itself: the finding, lit, and the crumb names Today.
     await page.evaluate(() => showPage('today'));
     await page.locator('#alertSection .find .what').click();
@@ -517,6 +518,8 @@ test('the portfolio, the checks and the goods flow name a site by a link to its 
     // A click on a portfolio name opens the page, as the row does.
     await kid.click();
     assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${THERE} ${OTHER}`);
+    // From the portfolio the way back is the portfolio.
+    assert.equal(await page.evaluate(() => siteFrom), null);
     // Supply › Checks: the shop cell of a real row.
     await page.evaluate(() => { stockView = 'shops'; showAllStock = true; drawStock(); reveal('secStock'); });
     const cell = page.locator('#stock tbody tr').first().locator('td').first();
@@ -524,6 +527,8 @@ test('the portfolio, the checks and the goods flow name a site by a link to its 
     assert.equal(await cell.locator('.map-shortcut').count(), 1, 'the map button stays beside it');
     await cell.locator('a.ss-sl').click();
     assert.equal(await page.evaluate(() => [location.hash, page, siteKey].join(' ')), `${THERE} company ${OTHER}`);
+    // Anywhere else the crumb names the view the name was clicked on.
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Checks');
     // The goods flow: the picked site's name, and a labelled button beside the map's.
     const head = await page.evaluate(key => {
       D.supply.graph = {nodes: [{id: key, name: 'HART. Gifts', tag: 'HK', sub: 'Gift Shop', hood: '', items: []}], links: []};

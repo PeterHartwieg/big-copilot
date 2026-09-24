@@ -10682,7 +10682,7 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .mast .ss-q .ss-new{top:-9px;right:10px}
 .mast .ss-qbtn .ss-new{top:-13px;left:50%;transform:translateX(-50%)}
 /* A phone's masthead is too short to carry it above the icon: beside it. */
-@media(max-width:560px){ .mast .ss-qbtn .ss-new{top:50%;left:auto;right:calc(100% + 6px);transform:translateY(-50%)} }
+@media(max-width:760px){ .mast .ss-qbtn .ss-new{top:50%;left:auto;right:calc(100% + 6px);transform:translateY(-50%)} }
 .mast .ss-qbtn{display:none;margin-left:auto;width:36px;height:36px;border-radius:9px;flex:none;position:relative;z-index:7}
 .mast .ss-q ~ .clock{margin-left:0}
 .mast.ss-tight .ss-q{display:none}
@@ -18097,14 +18097,19 @@ function siteLinkClick(e){
   e.preventDefault();
   const dialog = $("locationMapDialog");
   if(dialog && dialog.open) dialog.close();
-  siteOpenOver(key);
+  /* A name says where it was clicked, as a finding does: the page or view it
+     sat on, or the other site's page -- but not on the portfolio, whose own
+     way back is the portfolio, nor in a site's picker, which walks between
+     sites. */
+  siteOpenOver(key, a.closest("#secPortfolio, #sitePick, .ss-crumbs") ? false : siteHereFrom());
 }
 document.addEventListener("click", siteLinkClick, true);
 /* A site opened from over the search palette -- the map a palette row showed,
    and its card's "its page" -- takes the palette down with it, and was found
-   by a search: the crumb names the page the palette was opened on. */
-function siteOpenOver(key){
-  if(typeof ssIsOpen !== "function" || !ssIsOpen()) return openSite(key);
+   by a search: the crumb names the page the palette was opened on. With no
+   palette up, `cameFrom` is openSite()'s own. */
+function siteOpenOver(key, cameFrom = siteHereFrom()){
+  if(typeof ssIsOpen !== "function" || !ssIsOpen()) return openSite(key, true, null, "push", cameFrom);
   ssClose(false);
   ssClearAsked();
   ssTicket++; ssPending = null;
@@ -18979,7 +18984,7 @@ function ssLand(qn, from, ticket, tries = 0){
      the browser's Back, to where it was asked, or with no way back recorded
      (the site was open already) the portfolio. */
   const onSite = siteOpen && page === "company";
-  const viaSite = onSite && siteStateFrom() ? siteFrom : null;
+  const viaSite = onSite && siteFrom ? siteFrom : null;
   const backLabel = viaSite ? viaSite.label : onSite ? "Portfolio" : back.label;
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>YOU ASKED</small><br><b>${ssEsc(qn.q)}</b></span>`
     + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(backLabel)}</button>`
