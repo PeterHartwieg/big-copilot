@@ -13144,8 +13144,8 @@ const SUPPLY_VIEWS = {
         ? `<span class="chip ${SZ_CHIP[f.lvl] || "dim"}">not moving</span>`
         : `<span class="chip ${SZ_CHIP[f.lvl] || "dim"}">${r.weeks}</span>`}</td>
       <td>${r.target ? r.target.toLocaleString() : "—"}</td>
-      <td class="l">${szChip(f, f.why === "notRouted" ? "not routed" : null)}${unfed.length
-        ? `<span class="sub">${unfed.map(u => `${mapRef(D.businesses[u[0]])} ${u[1].toLocaleString()}/day`).join(", ")}</span>` : ""}</td>`;
+      <td class="l">${szChip(f)}${unfed.length
+        ? `<span class="sub">not routed: ${unfed.map(u => `${mapRef(D.businesses[u[0]])} ${u[1].toLocaleString()}/day`).join(", ")}</span>` : ""}</td>`;
     },
   },
   lines: {

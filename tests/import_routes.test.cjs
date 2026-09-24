@@ -167,8 +167,8 @@ test('Checks, Goods flow and Today read the same facts, by sizing', async () => 
     // One status word per row; tight shows on Checks.
     assert.match(await view('imports'), /tight/);
     const idle = await view('idle');
-    assert.match(idle, /not routed/);
-    assert.match(idle, /Garden Gym\s*53\/day/);
+    // The status word is one of the nine; "not routed" is the reason, with the shops.
+    assert.match(idle, /idle\s*not routed: Garden Gym\s*53\/day/);
     assert.match(await view('shops'), /no plan[\s\S]*top-up to 70 from\s*Import Hub/);
     // The switch sits in the Checks toolbar for the sized views only.
     assert.equal(await page.locator('#stockSizing').count(), 0, 'not on Idle stock');
