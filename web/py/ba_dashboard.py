@@ -9639,6 +9639,11 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 
 /* body and foot */
 .gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}
+/* The fixed strip: the notes a decision rests on, under the verdict. It never
+   scrolls with the rows; a cap keeps the foot on screen on a short window. */
+.gw-fix{display:flex;flex-direction:column;gap:14px;padding:16px 20px 0;flex:none;max-height:45dvh;overflow-y:auto;overscroll-behavior:contain}
+.gw-fix:empty,.gw-body:empty{display:none}
+.gw-fix+.gw-body{padding-top:14px}
 /* While any modal dialog is open the page behind it holds still. The page
    scrolls on the viewport (neither html nor body sets overflow); the gutter
    stays so the page does not shift sideways as its scrollbar goes. */
@@ -9966,6 +9971,7 @@ html:has(dialog:modal){overflow:hidden;scrollbar-gutter:stable}
   .gw-head{padding:16px 12px 12px 16px}
   .gw-verdict{margin:0 16px}
   .gw-body{padding:14px 16px 2px}
+  .gw-fix{padding:14px 16px 0;gap:12px}
   .gw-foot{padding:14px 16px 26px;border-top:1px solid var(--rule-soft);margin-top:12px}
   .gw-foot .gw-hint{flex-basis:100%;max-width:none;margin:0 0 4px}
   .gw-foot .gw-gap{display:none}
@@ -18304,6 +18310,8 @@ const gwSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 2
 const gwI = name => `<span class="gw-i">${gwSvg(name)}</span>`;
 /* A line with its icon: tone is warn, neg, info or ok. */
 const gwCall = (tone, name, html) => `<div class="gw-call ${tone === "warn" || tone === "neg" ? `gw-${tone}` : tone}">${gwI(name)}<div>${html}</div></div>`;
+/* The same, as a note that goes up to the dialog's fixed strip (gwLift()). */
+const gwLiftCall = (tone, name, html) => gwCall(tone, name, html).replace('class="gw-call ', 'class="gw-call gw-lift ');
 /* The wire: the board's dot, a line, the game. ask | ok | no | wait | busy | moved. */
 const gwWire = state => `<span class="gw-w ${state}" aria-hidden="true"><span class="a"></span><span class="ln"></span><i class="p"></i><i class="p"></i><i class="p"></i><span class="g">${gwSvg("game")}</span></span>`;
 /* The game's clock as the dialogs show it, "Sun 14:02": now, by the link's
@@ -18688,7 +18696,7 @@ function gwDialog(icon, title, where){
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
   dlg.setAttribute("aria-labelledby", "gwTitle");
   dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close aria-label="Close">${gwSvg("close")}</button></div>
-    <div class="gw-verdict"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
+    <div class="gw-verdict"></div><div class="gw-fix" aria-live="polite"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
   gwHead(dlg, title, where);
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
   /* `replaced`: another dialog takes its place, so no Undo strip comes up
@@ -18719,6 +18727,21 @@ function gwFocusKey(el){
     if(el.dataset && key in el.dataset) return `[${name}="${CSS.escape(el.dataset[key])}"]`;
   return null;
 }
+/* What decides the next step never scrolls away: the notes that open the
+   body (what the game said, why it refused, what was undone, the approval
+   asked in the game), and any note marked gw-lift or a "read again" line
+   wherever it sits, go to the fixed strip under the verdict, in their order.
+   Only the rows' detail stays in the body, which scrolls. */
+const GW_LEAD = ".gw-said,.gw-sub,.gw-lead,.gw-drift,.gw-ok,.gw-no,.gw-reread,.gw-scene,.gw-call,.gw-lift";
+function gwLift(dlg, body){
+  const kids = [...body.children];
+  let lead = true;
+  const up = kids.filter(el => {
+    lead = lead && el.matches(GW_LEAD);
+    return lead || el.matches(".gw-lift,.gw-reread");
+  });
+  dlg.querySelector(".gw-fix").replaceChildren(...up);
+}
 /* One state of the dialog. `v`: {phase, wire, say, meta, body, hint, warn,
    buttons, keepTick}; a button is [label, onclick, {kind: go | ghost | undo,
    icon, disabled, why, busy}], and "|" is the gap between the left and the
@@ -18735,8 +18758,10 @@ function gwPaint(dlg, v){
   dlg.classList.toggle("is-done", v.phase === "done");
   if(!v.keepTick){ clearInterval(dlg._gwTick); dlg._gwTick = null; }
   dlg.querySelector(".gw-verdict").innerHTML = `${gwWire(v.wire || "ask")}<span>${v.say || ""}</span>${v.meta ? `<span class="gw-meta">${v.meta}</span>` : ""}`;
-  dlg.querySelector(".gw-body").innerHTML = v.body || "";
-  dlg.querySelector(".gw-body").removeAttribute("aria-busy");
+  const body = dlg.querySelector(".gw-body");
+  body.innerHTML = v.body || "";
+  body.removeAttribute("aria-busy");
+  gwLift(dlg, body);
   const list = (v.buttons || []).slice();
   if(!v.hint && !list.includes("|")) list.unshift("|");
   const parts = [];
@@ -19648,7 +19673,7 @@ function gwAddBox(add, staffed){
   const pills = (add.assign || []).map(p => `<span class="person bench"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "?")}<small>unassigned</small></span>`)
     .concat((add.hire || []).map(h => `<span class="person hire"><i>${gwSvg("plus")}</i>${h.people} × ${spEsc(h.role || "")}<small>to hire</small></span>`));
   const empty = Number(add.hoursUncovered) || 0, total = staffed + empty;
-  return `<div class="gw-box gw-warn">${gwCall("warn", "hire", `<b>Add ${plural(add.people, "person", "people")} to fill this plan</b>: ${
+  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", `<b>Add ${plural(add.people, "person", "people")} to fill this plan</b>: ${
     spAddWords(add)}; ${empty} h a week stay empty until then.`)}${pills.length ? `<div class="gw-pills">${pills.join("")}</div>` : ""}${
     total > 0 ? `<div class="gw-cover" aria-hidden="true"><i class="c" style="flex:${(staffed / total).toFixed(3)}"></i><i class="e" style="flex:${
       (empty / total).toFixed(3)}"></i></div><div class="gw-coverk"><span><b>${staffed} h</b> written now</span><span class="w">${empty} h wait for them</span></div>` : ""}</div>`;
@@ -19710,7 +19735,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         return gwTiles([["Entries", a, z]]);
       }
       if(phase === "done") return gwTiles([["Entries", null, sentList.length], ["Hours / week", null, gwHours(sentList)], ["People", null, afterPeople]])
-        + (add.people ? gwCall("warn", "hire", `<b>${add.hoursUncovered || 0} h a week stay empty</b> until you add ${plural(add.people, "person", "people")}. Write the roster again then: the board keeps this note on the roster until it is full.`) : "");
+        + (add.people ? gwLiftCall("warn", "hire", `<b>${add.hoursUncovered || 0} h a week stay empty</b> until you add ${plural(add.people, "person", "people")}. Write the roster again then: the board keeps this note on the roster until it is full.`) : "");
       const which = row.full ? `<span class="gw-plan full">${gwSvg("sun")}Full cover 24/7</span><span class="gw-only">every station, every hour</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}Cleaning and security</span><span class="gw-only">replaces the whole week</span>`
         : `<span class="gw-plan">${gwSvg("roster")}Demand plan</span><span class="gw-only">replaces the whole week</span>`;
@@ -19806,7 +19831,7 @@ function gwRunEnd(keys, run){
   const at = u && u.spec.runOf === run && run[u.spec.runAt] && run[u.spec.runAt].ok ? u.spec.runAt : -1;
   gwPaint(dlg, {phase: "done", wire: written.length ? "ok" : "no", say: `<b>All ${keys.length} seen</b>`, meta: gwNow(),
     body: `<p class="gw-said${written.length ? " ok" : ""}">${plural(written.length, "shop")} written${left ? `, ${left} left out` : ""}.</p>${gwRunList(keys, run)}${
-      at >= 0 ? gwCall("info", "undo", `Undo holds the last shop written, <b>${run[at].name}</b>: the game keeps one schedule change to take back.`) : ""}`,
+      at >= 0 ? gwLiftCall("info", "undo", `Undo holds the last shop written, <b>${run[at].name}</b>: the game keeps one schedule change to take back.`) : ""}`,
     /* Undo reopens that shop inside the run, undone and asked afresh. */
     buttons: [...(at >= 0 ? [[`Undo ${run[at].plain}`, () => gwSchedule(keys, at, run, {startUndo: true}),
       {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",

@@ -70,11 +70,11 @@ const applied = async () => (await (await fetch(mockUrl + '/debug/writes')).json
 // the fixture's by default. The mock's player answers a new request after a
 // quarter of a second.
 async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved = false, stored = null, link = true,
-                          data = payload} = {}) {
+                          data = payload, viewport = {width: 1280, height: 1000}} = {}) {
   await configure({reset: true, refuseWrite: null, busyWrites: 0, writes, pairDelay: 0.25, pairCooldowns: [0],
                    tokens: approved ? {[TOKEN]: ORIGIN} : {}});
   const code = approved ? {link: mockUrl, token: TOKEN} : stored;
-  const context = await browser.newContext({viewport: {width: 1280, height: 1000}, reducedMotion: 'reduce'});
+  const context = await browser.newContext({viewport, reducedMotion: 'reduce'});
   t.after(() => context.close());
   await context.addInitScript(({data, code}) => {
     window.builds = 0;
@@ -1265,6 +1265,35 @@ test('schedule: in a run, an undo refused while a BizMan screen is open is offer
   await dialog(page).getByRole('button', {name: 'Try again'}).click();
   await dialog(page).getByText('Undone: the schedule at HART. Corner is back as it was.').waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
+});
+
+test('schedule: on a phone, what decides the next step stays in view; only the rows scroll', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters(), viewport: {width: 390, height: 700}});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Skip this shop'}).click();
+  await dialog(page).locator('.gw-where', {hasText: '2 of 2 · HART. Gifts'}).waitFor();
+  await ready(page);
+  // The add-people note sits in the fixed strip, the week in the body.
+  await dialog(page).locator('.gw-fix .gw-box.gw-warn', {hasText: 'Add 2 people to fill this plan'}).waitFor();
+  assert.equal(await dialog(page).locator('.gw-body .gw-week').count(), 1);
+  await configure({refuseWrite: 'refused:screen_open'});
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
+  await configure({refuseWrite: null});
+  // The refusal is fixed, the way on is in the foot, and the body still has room to scroll.
+  assert.equal(await dialog(page).locator('.gw-fix .gw-no').count(), 1);
+  assert.equal(await dialog(page).locator('.gw-body .gw-no, .gw-body .gw-b').count(), 0, 'no refusal or button in the rows');
+  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Try again'}).count(), 1);
+  const m = await dialog(page).evaluate((d) => {
+    const box = (s) => d.querySelector(s).getBoundingClientRect();
+    const b = d.querySelector('.gw-body');
+    return {foot: box('.gw-foot').bottom, view: innerHeight, body: b.clientHeight, rows: b.scrollHeight};
+  });
+  assert.ok(m.foot <= m.view, 'the foot is on screen');
+  assert.ok(m.body >= 60, `the body keeps room (${m.body} px)`);
+  assert.ok(m.rows > m.body, 'the rows scroll');
 });
 
 test('schedule: a refusal the game cannot be talked out of (bad_hours) offers no Try again', async (t) => {
