@@ -2736,6 +2736,41 @@ def _supply(
             return None
         return received[key].get(item, 0.0) / len(days)
 
+    # Who tops each line up on a logistics route, and to what target.
+    route_targets = collections.defaultdict(list)
+    for source, destinations in edges.items():
+        if source not in index:
+            continue
+        for dest_key, item, amount in destinations:
+            if dest_key != source:
+                route_targets[(dest_key, item)].append((source, amount))
+
+    def routed_per_day(key: str, item: str, imported: float) -> float:
+        """What the company's own sites bring a depot line per day on routes.
+
+        A factory that tops a depot up every morning is supply the import
+        never has to bring. The log does not name who delivered, so this is
+        the line's measured inflow less what the imports brought last week
+        (`imported`), averaged over the days since its first arrival on
+        record: a site keeps only its last sixty transactions, so the window
+        can open part-way through a day. It is capped by the route targets,
+        since a morning round brings at most its target, and by what the
+        senders were measured shipping of the item.
+        """
+        routes = route_targets.get((key, item))
+        arrivals = in_by_day[key][item]
+        if not routes or not arrivals:
+            return 0.0
+        span = day - min(arrivals)
+        if span < SHIPPED_MIN_DAYS:
+            return 0.0
+        brought = max(sum(arrivals.values()) - imported, 0.0) / span
+        cap = sum(amount for _source, amount in routes)
+        sent = [shipped_per_day(source, item) for source, _amount in routes]
+        if all(s is not None for s in sent):
+            cap = min(cap, sum(sent))
+        return min(brought, cap)
+
     # --- imports: what lands weekly, and when
     # A contract is plain or Smart Delivery (isTarget; the save leaves out a
     # false one). Plain brings its amount every Monday. Smart Delivery's amount
@@ -2916,9 +2951,19 @@ def _supply(
                 per_day, basis = draw(business["key"], item), "sales"
             else:
                 per_day, basis = supply["lastWeek"] / 7, "order"
-            weekly_use[(business["key"], item)] = per_day * 7
             if per_day <= 0:
+                weekly_use[(business["key"], item)] = 0.0
                 continue
+            # What leaves is not all the import's to bring: a factory of the
+            # company's own that tops this line up every morning covers its
+            # share, and a backup import beside it brings nothing while the
+            # depot stays full. Only the rest of the draw is the import's.
+            routed = (
+                min(routed_per_day(business["key"], item, supply["arrived"]), per_day)
+                if basis == "shipped" else 0.0
+            )
+            gross, per_day = per_day, per_day - routed
+            weekly_use[(business["key"], item)] = per_day * 7
             driven = customer_driven(business["key"], item)
 
             # Walk real days forward rather than dividing by an average: three
@@ -2967,7 +3012,7 @@ def _supply(
             # So the same tolerance the order fit uses applies to the walk: a gap
             # under half a day, or under 5% of the week the order covers, is
             # tight rather than short.
-            slack = max(COVER_NOISE_DAYS, FIT_TIGHT * week_need / per_day)
+            slack = max(COVER_NOISE_DAYS, FIT_TIGHT * week_need / per_day if per_day else 0.0)
             short_by = max(due - cover, 0.0) if due is not None else 0.0
             cover_fit = (
                 "short" if short_by > slack else "tight" if short_by > 0 else "ok"
@@ -2996,7 +3041,11 @@ def _supply(
             # Naming the order first keeps them one finding with one fix, and
             # leaves 'shortfall' for the case that really is different — an
             # order sized right, and stock that still will not reach the drop.
-            if not supply["active"]:
+            if per_day <= 0:
+                # The route brings everything that leaves: the import is a
+                # backup, paused or not, and has nothing to answer for.
+                level, reason = "ok", None
+            elif not supply["active"]:
                 level, reason = ("critical" if cover < 7 else "warn"), "paused"
             elif order_fit == "short":
                 level, reason = "critical", "order"
@@ -3014,15 +3063,21 @@ def _supply(
                     "item": line["item"],
                     "slug": item,
                     "stock": line["units"],
-                    "perDay": round(per_day),
+                    # What leaves a day, and of it what the company's own
+                    # routes bring (routed) and what is left for the import
+                    # (importPerDay): the week, cover and catch-up below are
+                    # judged on the last.
+                    "perDay": round(gross),
+                    "routed": round(routed),
+                    "importPerDay": round(per_day),
                     "basis": basis,
                     "peakDay": peak_day,
-                    "peakPerDay": round(per_day * factor),
+                    "peakPerDay": round(gross * factor),
                     "cover": round(cover, 1),
                     "stockCover": round(stock_cover, 1),
                     # The plain division, without the weekday walk: units on the
                     # shelf against a flat day of draw.
-                    "daysOnHand": round(line["units"] / per_day, 1) if per_day else None,
+                    "daysOnHand": round(line["units"] / gross, 1),
                     "runsOut": WEEKDAYS[runs_out % 7] if runs_out is not None else None,
                     "weekly": supply["weekly"],
                     "lastWeek": supply["lastWeek"],
@@ -3341,11 +3396,13 @@ def _supply(
                 cycle_need, cadence = need, "daily"
                 fit, why = "short", "unplanned"
             elif depot:
-                need = round(depot["perDay"] * max(depot_days, 0.0) * factor)
+                # The import's share of the draw: what a route from the
+                # company's own factory brings every morning is not its to cover.
+                need = round(depot["importPerDay"] * max(depot_days, 0.0) * factor)
                 provision = depot["weekly"]
                 # The order arrives weekly, so it has to cover a week — comparing
                 # it with the days left until the next one would flatter it.
-                cycle_need, cadence = round(depot["perDay"] * 7), "weekly"
+                cycle_need, cadence = round(depot["importPerDay"] * 7), "weekly"
             elif made:
                 need = provision = cycle_need = 0
                 cadence = "made"
@@ -7997,7 +8054,9 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
 
     by_label = {b["key"]: {} for b in businesses}
     for row in supply["imports"]:
-        by_label[businesses[row["s"]]["key"]][row["item"]] = row["perDay"]
+        # What the import brings, not what leaves: a route from the company's
+        # own factory is not bought.
+        by_label[businesses[row["s"]]["key"]][row["item"]] = row.get("importPerDay", row["perDay"])
 
     prices = {}
     for (key, slug), paid in spend.items():
@@ -8611,13 +8670,16 @@ def _alerts(
         site, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
         arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
         when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
+        # The draw the import answers for; a route's share is named, not hidden.
+        rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
+            f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
         if row["reason"] == "paused":
             note(
                 "critical",
                 site,
                 "paused",
                 f"{row['item']} import is paused: {row['cover']:.0f} days left "
-                f"at {row['perDay']:,}/day",
+                f"at {rate}",
                 row["cover"],
                 row["item"],
                 key=key,
@@ -8629,7 +8691,8 @@ def _alerts(
                 site,
                 "shortfall",
                 f"{row['item']} runs dry {when}, {row['shortBy']:.1f} days before "
-                f"{arrives}'s import ({row['perDay']:,}/day, {row['peakPerDay']:,} at peak)",
+                f"{arrives}'s import ("
+                + (rate if row.get("routed") else f"{rate}, {row['peakPerDay']:,} at peak") + ")",
                 row["cover"],
                 row["item"],
                 key=key,
@@ -11545,7 +11608,8 @@ const SUPPLY_VIEWS = {
         : r.weekly.toLocaleString()}</td>
       <td>${r.basis === "order"
         ? `<span class="chip dim" data-tip="No logistics round has shipped this yet, so its use is last week's order: a guess, not a measurement">no draw logged yet</span>`
-        : `${r.weekNeed.toLocaleString()}${r.orderFit !== "ok"
+        : `${r.weekNeed.toLocaleString()}${r.routed
+          ? `<span class="sub" data-tip="Brought every morning on a logistics route from your own site, so not the import's to cover"> after ${r.routed.toLocaleString()}/day by route</span>` : ""}${r.orderFit !== "ok"
           ? ` <span class="chip ${r.orderFit === "short" ? "bad" : "warn"}">${
               r.orderFit !== "short" ? "tight" : r.smart ? "stock level too low" : "order too small"}</span>` : ""}`}</td>`;
     },
