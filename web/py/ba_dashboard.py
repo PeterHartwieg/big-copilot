@@ -7242,12 +7242,11 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 ),
             }
             if limits[0][0] == "the building":
+                # The building's capacity comes with the lease, and the board
+                # has no advice for it: the finding names the ceiling and what
+                # goes through it, and no fix.
                 finding["limit"] = "the building"
-                finding["fix"] = (
-                    "a bigger office or a second one nearby"
-                    if office
-                    else "a bigger site or a second shop nearby"
-                )
+                finding["fix"] = ""
             else:
                 # One role reads exactly as it always has, which is what keeps
                 # a shop's and an office's alert ids. Roles tied on the same
@@ -9025,13 +9024,13 @@ def _alerts(
             lines = f"{sum(w['count'] for w in waves)} lines ({', '.join(parts)})"
         wave_word = "the wave" if len(waves) == 1 else "the waves"
         # Pricing is somebody else's job in this company. When a wave lands on a
-        # shop that is already full, the only lever left is capacity — and it has
-        # the wave's end date on it.
+        # shop that is already full, the door turns part of it away — until the
+        # wave's end date.
         full = full_hours(top["key"])
         queue = (
             f" It already runs within 10% of capacity for {full} hour"
             f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
-            f"of {wave_word} away and capacity is the only lever left."
+            f"of {wave_word} away."
             if full
             else ""
         )
@@ -9233,8 +9232,7 @@ def _alerts(
         if limit == "the building":
             text = (
                 f"{where} {subject} at the {cap}/h building capacity {when}, {per_week} hours a "
-                f"week at the ceiling with ${worth:,.0f}/day of trade going through it. "
-                f"The building is the limit, so the answer is {group[0]['fix']}{who}"
+                f"week at the ceiling with ${worth:,.0f}/day of trade going through it{who}."
             )
         else:
             noun = group[0].get("noun") or ("workstations" if office else "counters")
@@ -16618,8 +16616,10 @@ function drawSite(){
      hours ran into, and one for idle capacity. */
   const capNotes = sp ? spCapNotes(b.key) : [];
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
-  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
-         the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
+  /* The building's own capacity carries no fix, so its sentence names the
+     ceiling and stops there. */
+  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit${
+         n.fix ? `, so the answer is ${n.fix}` : ""}. ${fmt(n.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`;
   /* The idle chip reads the whole week, as the site's Today line does: the
      same staff-hours, the same hours and the same wages. */
@@ -16817,7 +16817,7 @@ function drawSite(){
     capNotes.map(n => `<span class="sp-hchip cap" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
-      fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
+      fmt(n.throughput)}/day through it${n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
     (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
@@ -19196,7 +19196,7 @@ const ALERT_GROUPS = [
   {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
   {id:"jobdemand",    label:"Staff demands",          note:"Schedule, desk or building demands of a site's staff not met", on:true},
   {id:"companydemand",label:"Insurance / happy boss", note:"Staff demands only the owner can meet", on:true},
-  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
+  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:false},
   {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
   {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
