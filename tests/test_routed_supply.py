@@ -8,7 +8,7 @@ draw. A depot fed by imports alone reads exactly as before.
 """
 import unittest
 
-from ba_dashboard import WEEKDAYS, History, Names, _factories, _supply, site_key
+from ba_dashboard import WEEKDAYS, History, Names, _alerts, _factories, _supply, site_key
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -123,6 +123,14 @@ def depot_row(routed_share, contracts, stock=2700, import_days=(), route=None, t
     return row, next(i for i in node["items"] if i["item"] == "Frozen Food")
 
 
+class SupplyOnly(list):
+    """The businesses as the supply findings index them, with none of their own
+    findings: a loop over them sees nothing."""
+
+    def __iter__(self):
+        return iter(())
+
+
 class RoutedSupplyTests(unittest.TestCase):
     def test_a_depot_fed_daily_by_a_factory_is_not_short(self):
         """The Costy Co case: the factory's route brings back each morning what
@@ -232,6 +240,22 @@ class RoutedSupplyTests(unittest.TestCase):
         # Wednesday afternoon, Thursday and Friday leave 2,700 on top of the
         # 2,700 held; Saturday takes 6,480 beyond the route.
         self.assertEqual(row["catchUp"], 6480 - 2700 - 2700)
+
+    def test_the_alert_for_a_covered_line_names_the_route_not_the_drop(self):
+        """The Saturday above, with the backup active: the gap is the day before
+        the route's next round, not the days to Tuesday's drop, and the import
+        answers for nothing a day."""
+        rhythm = [70] * 6 + [280]
+        row, _item = depot_row(1.0, [contract(5200, 0, smart=True, due=16)], rhythm=rhythm)
+        supply = {"graph": {"links": []}, "shops": [], "idle": [], "nextImportWeekday": None,
+                  "imports": [dict(row, s=0)]}
+        result = _alerts(SupplyOnly([{"key": site_key(DEPOT), "name": "Depot"}]),
+                         supply, [], [], [], [], [], DAY, 0.0)
+        texts = [a["text"] for a in result["lines"] + result["minor"]["rows"]]
+        [text] = [t for t in texts if "Frozen Food" in t]
+        self.assertIn("a route brings the week's draw (3,600/day)", text)
+        self.assertIn("before its next round", text)
+        self.assertNotIn("import", text)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
         """The same Saturday with the backup paused: there is no drop to reach,

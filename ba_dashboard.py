@@ -3482,15 +3482,16 @@ def _supply(
             elif depot:
                 # The import's share of the draw: what a route from the
                 # company's own factory brings every morning is not its to cover.
-                # A route that brings the week refills the line every morning,
-                # so what the shelf has to carry past it is one busy day's draw
-                # beyond the route, not the days to the import's drop. A route
-                # that brings part of it leaves the import's share (importPerDay,
-                # the route already off) to build up until the drop.
-                need = round(
-                    max(0.0, depot["perDay"] * factor - depot["routed"]) if depot["covered"]
-                    else depot["importPerDay"] * max(depot_days, 0.0) * factor
-                )
+                # A route brings about the same every morning, so a busy day's
+                # draw beyond it is the peak draw less the route. A route that
+                # brings the week refills the line every morning, so the shelf
+                # carries one such day; one that brings part of it leaves that
+                # to build up until the import's drop.
+                if depot["routed"]:
+                    beyond = max(0.0, depot["perDay"] * factor - depot["routed"])
+                    need = round(beyond * (1.0 if depot["covered"] else max(depot_days, 0.0)))
+                else:
+                    need = round(depot["importPerDay"] * max(depot_days, 0.0) * factor)
                 provision = depot["weekly"]
                 # The order arrives weekly, so it has to cover a week — comparing
                 # it with the days left until the next one would flatter it.
@@ -4128,13 +4129,17 @@ def _factories(
             # the need is no more than that draw.
             routed_week, covered, draw_week = flow.get("routed", {}).get(
                 (source, row["slug"]), (0, False, 0))
-            # Judged on the rounded figures the page gets, so feedVerdict agrees.
-            covered = covered and round(weekly_need) <= round(draw_week) * (1 + FIT_TIGHT)
-            row["importRouted"] = round(routed_week)
+            # Worked on the rounded figures the page gets, so feedVerdict,
+            # which redoes it, agrees.
+            routed_week, draw_week = round(routed_week), round(draw_week)
+            if routed_week:
+                weekly_need = round(weekly_need)
+            covered = covered and weekly_need <= draw_week * (1 + FIT_TIGHT)
+            row["importRouted"] = routed_week
             row["importCovered"] = covered
-            row["importDrawWeek"] = round(draw_week)
-            to_factories = max(0.0, routed_week - max(0.0, draw_week - weekly_need))
-            weekly_need = 0.0 if covered else max(weekly_need - to_factories, 0.0)
+            row["importDrawWeek"] = draw_week
+            to_factories = max(0, routed_week - max(0, draw_week - weekly_need))
+            weekly_need = 0 if covered else max(weekly_need - to_factories, 0)
             # What the import has to bring a week, after the route.
             row["importNeed"] = round(weekly_need)
             row["importPaused"] = bool(supply and not supply["weekly"] and supply.get("pausedWeekly")
@@ -8786,6 +8791,8 @@ def _alerts(
         # The draw the import answers for; a route's share is named, not hidden.
         rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
             f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
+        if row.get("routed") and not row.get("importPerDay"):
+            rate = f"a route brings {row['routed']:,}/day"
         if row["reason"] == "paused":
             note(
                 "critical",
@@ -8798,15 +8805,16 @@ def _alerts(
                 key=key,
                 ev={"slug": row["slug"]},
             )
-        elif row["reason"] == "shortfall" and row["paused"]:
-            # A route brings the week and the backup import is paused: no
-            # drop is coming, only the route's next round.
+        elif row["reason"] == "shortfall" and row.get("covered"):
+            # A route brings the week: the gap is a busy day before the
+            # route's next round, not the days to the backup's drop.
             note(
                 "critical",
                 site,
                 "shortfall",
                 f"{row['item']} runs dry {when} although a route brings the week's draw "
-                f"({row['routed']:,}/day); a busy day outruns the shelf and the import is paused",
+                f"({row['routed']:,}/day); a busy day outruns the shelf before its next round"
+                + ("; the import is paused" if row["paused"] else ""),
                 row["cover"],
                 row["item"],
                 key=key,
@@ -11686,7 +11694,7 @@ const SUPPLY_VIEWS = {
          reach; one a busy day empties runs dry before the route's next round. */
       const routeDry = rows.filter(r => r.coverFit === "short" && r.paused && r.covered).length;
       const short = rows.filter(r => r.coverFit === "short").length - routeDry;
-      const close = rows.filter(r => r.coverFit === "tight").length;
+      const close = rows.filter(r => r.coverFit === "tight" && !(r.paused && r.covered)).length;
       const tight = rows.filter(r => r.orderFit === "tight").length;
       const small = rows.filter(r => r.orderFit === "short").length;
       /* A paused backup beside a route that brings everything is no problem. */
@@ -15498,9 +15506,11 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   imports.forEach(r => {
     if(r.paused && !r.covered && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if(r.paused && r.covered && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+    else if(r.covered && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
       Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
-      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply or resume the import.`);
+      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
+        ? `, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply or resume the import.`
+        : `. Arrange a one-off supply, or raise the route's stock target.`}`);
     else if(!r.paused && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
       Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
       `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
