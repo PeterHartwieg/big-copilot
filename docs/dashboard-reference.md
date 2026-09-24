@@ -238,7 +238,8 @@ What is on the list is what moves the number:
   against the seven days before it, with both figures. Sites open under two weeks have no
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
-  its next import, an order too small for the week it has to cover, a paused import.
+  its next import or route round, an order too small for the week it has to cover, a
+  paused import.
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -1126,17 +1127,32 @@ Two tables, one per number a logistics manager is set with.
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
   *Used / week* is what all the factories drawing on it eat in a week (from their lines,
   machines times recipe draw times 24 times 7) plus what else leaves for the shops
-  (measured from the delivery log). *Arrived last week* sums every contract's
-  `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
-  cap shows as an order cut short. *Set in game* is the figure in the purchasing
+  (measured from the delivery log, leaving out the days an import can have landed, when
+  the log nets the arrival off what left; on a line a route from your own site feeds,
+  what left is read gross, before any arrival, so an import day is not left out for
+  that). A factory the depot tops up that also takes its own import of the material
+  still has that import's days left out, route or not, since the log cannot tell its
+  import from the depot's top-up. *Arrived last week* sums every contract's
+  `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly cap
+  shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
   *Set to* is a box: where the setting falls short of the week it holds the
-  suggestion, elsewhere the figure in game. For a plain order the suggestion is the used
-  week rounded up to the hundred. For Smart Delivery it names one contract, the one
-  whose level holds: the last that still brings something when the game's delivery pass
-  runs into an empty depot. A plain amount delivered before that level counts toward it
-  (the level only tops up what is missing), one delivered after it comes on top as
-  "plus N a week". The suggested level is the least, in hundreds, at which that pass,
+  suggestion, elsewhere the figure in game. Where a logistics route from your own site
+  also feeds the line, *Used / week* is the depot's measured draw, as the Stock view
+  measures it (never less than the factories eat at full rate), and what the route brings,
+  named on hover, comes off it: the import answers for the rest. A route that brings the
+  whole draw marks the line *route brings it*: the import is a backup, with nothing to
+  raise or resume, unless the factories' full-rate week is more than the depot's measured
+  draw (a starved factory), when the import still answers for what the route leaves. The
+  same holds for a depot line with no import contract at all that a route feeds: it is not
+  asked for an import the route already brings. The table suggests imports only where an
+  import contract exists or a factory line needs the material; a depot line that only
+  shops draw, with no contract, is not in it. For a plain order the
+  suggestion is the import's week rounded up to the hundred. For Smart Delivery it names
+  one contract, the one whose level holds: the last that still brings something when the
+  game's delivery pass runs into an empty depot. A plain amount delivered before that
+  level counts toward it (the level only tops up what is missing), one delivered after
+  it comes on top as "plus N a week". The suggested level is the least, in hundreds, at which that pass,
   replayed with it, brings the week, so a plain amount that already passes the level is
   never taken off it. Enter your own figure and it is kept in this browser per character,
   depot and material, with the figure the game held when you entered it, until you reset

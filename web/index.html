@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=56e0134acc">
+<link rel="stylesheet" href="community.css?v=35b2d410ba">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=56e0134acc">
+<link rel="stylesheet" href="fonts/fonts.css?v=35b2d410ba">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3604,8 +3604,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "56e0134acc";</script>
-<script>window.LEDGER_RELEASE = {"version":"56e0134acc","latest":{"pr":81,"date":"2026-09-24","title":"Every site has its own page, and you can search the board","summary":"Each shop, warehouse, factory and office now opens as its own page with an address, so a reload keeps it and Back and Forward walk between sites; a crumb takes you back to where you came from, and site names on Today, Supply and the map link to it. Press / or Ctrl+K to search the whole board: pages, your sites, products, kinds of finding, location presets and the game's help pages, with everyday words like hire, debt or difficulty. Today has an Ask the board row whose questions land on the answer. The difficulty you play on sits beside the clock, and Company › Results can show your week by weekday."}};</script>
+<script>window.LEDGER_BUILD = "35b2d410ba";</script>
+<script>window.LEDGER_RELEASE = {"version":"35b2d410ba","latest":{"pr":81,"date":"2026-09-24","title":"Every site has its own page, and you can search the board","summary":"Each shop, warehouse, factory and office now opens as its own page with an address, so a reload keeps it and Back and Forward walk between sites; a crumb takes you back to where you came from, and site names on Today, Supply and the map link to it. Press / or Ctrl+K to search the whole board: pages, your sites, products, kinds of finding, location presets and the game's help pages, with everyday words like hire, debt or difficulty. Today has an Ask the board row whose questions land on the answer. The difficulty you play on sits beside the clock, and Company › Results can show your week by weekday."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3689,8 +3689,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=56e0134acc"></script>
-<script src="community.js?v=56e0134acc"></script>
+<script src="app.js?v=35b2d410ba"></script>
+<script src="community.js?v=35b2d410ba"></script>
 
 <script>
 
@@ -4681,7 +4681,9 @@ const SUPPLY_VIEWS = {
         import: () => r.raiseImport
           ? `${chip("bad", "import short")} raise the ${r.importSmart ? "Smart Delivery stock level" : "weekly import"} to ${r.raiseImport.toLocaleString()}`
           : `${chip("warn", "import tight")} within 5% of what the factories eat`,
-        noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.depotNeed, 1)).toFixed(1)} weeks of it`,
+        // Weeks of what the import has to bring, after a route's share to the factories (_feed_notes).
+        noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.importNeed ?? r.depotNeed, 1)).toFixed(1)} weeks of it${
+          r.importRoutedFactories ? ` beyond the ${r.importRoutedFactories.toLocaleString()} a week a route brings the factories` : ""}`,
         made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => mapRef(D.businesses[i])).join(", ")}`,
         ok: () => chip("ok", "covered"),
       }[r.status]();
@@ -4798,6 +4800,7 @@ function feedVerdict(n){
      factory draws less than it needs, so it holds only up to that draw. */
   const covered = !!n.importCovered && n.depotNeed <= (n.importDrawWeek || 0) * 1.05;
   const need = covered ? 0 : Math.max(0, n.depotNeed - toFactories);
+  n.importRoutedFactories = Math.round(toFactories);
   n.importNeed = Math.round(need);
   n.importFit = n.importWeekly !== null
     ? need && !n.importWeekly ? "short" : feedFit(need, n.importWeekly) : null;
@@ -4822,7 +4825,7 @@ function feedVerdict(n){
     status = "import"; level = "critical"; n.raiseImport = importRaise(n, need); }
   else if(n.importWeekly !== null && n.importFit === "tight"){ status = "import"; level = "warn"; }
   else if(n.importWeekly === null && n.madeAt.length){ status = "made"; level = "ok"; }
-  else if(n.importWeekly === null && n.depotStock < n.depotNeed){ status = "noimport"; level = "warn"; }
+  else if(n.importWeekly === null && n.depotStock < need){ status = "noimport"; level = "warn"; }
   else { status = "ok"; level = "ok"; }
   n.status = status; n.level = level;
 }
@@ -4848,6 +4851,11 @@ const importLine = (view, s, slug) => {
   const line = (view.depots[s] || {})[slug];
   return line && !line.zeroOnly ? line : undefined;
 };
+/* What routes bring a depot line, as _factories() reads it: the import line's
+   route figures, or, where the depot imports none of it, a route's alone
+   (depotRoutes: depot to depot, say). */
+const routeFeed = (view, s, slug) => s === null || s === undefined ? null
+  : importLine(view, s, slug) || ((view.depotRoutes || {})[s] || {})[slug] || null;
 /* Recompute the split after recipe choices change total input consumption. */
 function feedRoute(site, n, view, held){
   const t = site.targets?.[n.slug], target = t ? t[0] : 0, source = t ? t[1] : null;
@@ -4874,9 +4882,10 @@ function feedRoute(site, n, view, held){
   n.importLevelName = supply && supply.smart ? supply.levelName ?? supply.levelImporter ?? null : null;
   n.importPass = supply && supply.smart ? supply.pass || [] : [];
   n.importLevelAt = supply && supply.smart ? supply.levelAt ?? null : null;
-  n.importRouted = supply ? supply.routed || 0 : 0;
-  n.importDrawWeek = supply ? supply.drawWeek || 0 : 0;
-  n.importCovered = !!(supply && supply.covered);
+  const fed = routeFeed(view, n.importSite, n.slug);
+  n.importRouted = fed ? fed.routed || 0 : 0;
+  n.importDrawWeek = fed ? fed.drawWeek || 0 : 0;
+  n.importCovered = !!(fed && fed.covered);
   n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly);
 }
 
@@ -4924,9 +4933,10 @@ function factoryView(){
             row.importTarget = d && d.smart ? d.target : null;
             row.importPlainAfter = d && d.smart ? d.plainAfter || 0 : 0;
             row.importPlainBefore = d && d.smart ? d.plainBefore || 0 : 0;
-            row.importRouted = d ? d.routed || 0 : 0;
-            row.importDrawWeek = d ? d.drawWeek || 0 : 0;
-            row.importCovered = !!(d && d.covered);
+            const fed = routeFeed(view, importSite, islug);
+            row.importRouted = fed ? fed.routed || 0 : 0;
+            row.importDrawWeek = fed ? fed.drawWeek || 0 : 0;
+            row.importCovered = !!(fed && fed.covered);
             row.importPaused = !!(d && !d.weekly && d.pausedWeekly);
           }
           s.needs.push(row);
@@ -8667,6 +8677,29 @@ function importSetting(total, contract, edit){
           changed: value !== null && value !== inGame, surplus};
 }
 
+/* What a depot line's import has to bring a week, once the company's own
+   routes into the depot are counted: the Weekly imports table sizes its
+   suggestion on it, and the checklist says it. `factoryWeek` is what the
+   factory lines draw at full rate, `otherWeek` what else leaves (depotOther:
+   on a line a route feeds, read gross, so the route is not in it). `contract`
+   carries what _supply() measured on such a line: `drawWeek`, the week's
+   gross draw, `routed`, what routes brought a week, and `covered`, a route
+   bringing that draw. A routed line's week is the larger of that draw and
+   the factories' full-rate week plus the rest (a starved factory holds the
+   draw down, and the shops' share must not go with it), and the route's
+   week comes off it once; a line no route feeds is sized as it always was.
+   A covered line asks nothing of the import, which is a backup, provided the
+   factories' full-rate week is no more than the draw: a starved factory
+   draws less than it needs, and a route covering what it draws does not
+   cover what it needs. `gross` is the week before the route, the figure the
+   table shows as used. Pure, so the figure can be checked without a page. */
+function importWeek(factoryWeek, otherWeek, contract){
+  const routed = contract.routed || 0, draw = contract.drawWeek || 0;
+  const covered = !!contract.covered && factoryWeek <= draw * 1.05;
+  const gross = routed && draw ? Math.max(draw, factoryWeek + otherWeek) : factoryWeek + otherWeek;
+  return {routed, covered, gross, need: covered ? 0 : Math.max(0, gross - (draw ? routed : 0))};
+}
+
 /* A checklist of existing recommendations, not a second forecasting engine.
    Keep this pure so changes can be checked without a browser or a save file. */
 function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses){
@@ -8692,18 +8725,21 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       : `Set the weekly order to ${n.toLocaleString()}.`;
     const yours = `Your own figure${r.setTo !== null && r.setTo !== undefined
       ? `; the board suggests ${r.setTo.toLocaleString()}` : ""}.`;
-    if(r.paused && (r.total > 0 || r.edited)){
+    // What a route from the company's own site brings is off the week (importWeek).
+    const byRoute = r.routed ? `, less the ${r.routed.toLocaleString()} a week a route brings` : "";
+    if(r.paused && (r.need > 0 || r.edited)){
       const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString()} in stock`
         : `configured for ${r.pausedWeekly.toLocaleString()} units/week`;
       add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
-          : `The estimated requirement is ${ceil100(r.total).toLocaleString()}. Review the quantity after resuming.`}`,
+          : `The estimated requirement${r.routed ? `, after the ${r.routed.toLocaleString()} a week a route brings,` : ""} is ${
+            ceil100(r.need).toLocaleString()}. Review the quantity after resuming.`}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null
         && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
       const why = r.edited ? yours : r.factoryWeek
-        ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}; confirm the production plan before increasing.`
-        : "Based on recorded shop deliveries over a week.";
+        ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}${byRoute}; confirm the production plan before increasing.`
+        : `Based on recorded shop deliveries over a week${byRoute}.`;
       add("Weekly imports", r.s, r.item, r.inGame ?? r.current ?? null, value,
         `${setting(value)} ${why}`, null, mode);
     }
@@ -8975,6 +9011,7 @@ function drawLogistics(){
   const f = factoryView();
   const other = (D.supply.factories && D.supply.factories.depotOther) || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
+  const routesOnly = (D.supply.factories && D.supply.factories.depotRoutes) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
   const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
   const lines = f.sites.reduce((n, s) => n + s.lines.length, 0);
@@ -9018,13 +9055,18 @@ function drawLogistics(){
     const s = +si;
     const rows = Object.values(items).map(r => {
       const otherWeek = (other[si] || {})[r.slug] || 0;
-      const total = r.factoryWeek + otherWeek;
       const contract = (depotsKnown[si] || {})[r.slug] || {};
+      // A line no import contract covers may still be fed by a route (_depot_routes).
+      const route = {...((routesOnly[si] || {})[r.slug] || {}), ...contract};
       const impId = impSetId(D.businesses[s] ? D.businesses[s].key : si, r.slug);
-      let setting = importSetting(total, contract, edits[impId]);
+      // The import is sized on what the routes into the depot leave it.
+      const {routed, covered, gross, need} = importWeek(r.factoryWeek, otherWeek, route);
+      // What leaves in a week, as measured: the shops' part is what the factories do not take.
+      const total = Math.round(gross), shopsWeek = Math.round(Math.max(0, gross - r.factoryWeek));
+      let setting = importSetting(need, contract, edits[impId]);
       // The game's figure has moved since this was typed: the answer is stale.
-      if(setting.stale){ impSetKeep(impId, null); setting = importSetting(total, contract, undefined); }
-      return {...r, s, otherWeek, total, ...setting, impId, arrived: contract.arrivedLastWeek,
+      if(setting.stale){ impSetKeep(impId, null); setting = importSetting(need, contract, undefined); }
+      return {...r, s, otherWeek: shopsWeek, total, routed, covered, need, ...setting, impId, arrived: contract.arrivedLastWeek,
               contracts: contract.contracts || [], stock: held(s, r.slug)};
     }).sort((a, b) => b.total - a.total);
     importRows.push({s, rows});
@@ -9034,11 +9076,11 @@ function drawLogistics(){
   const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
   const short = count(r => r.fit === "short" || r.fit === "none");
   const tight = count(r => r.fit === "tight");
-  const pausedCount = count(r => r.paused && r.total > 0);
+  const pausedCount = count(r => r.paused && r.need > 0);
   const importAll = count(() => true);
   // A figure the player typed is a change they want to see, so it stays in view.
   const shown = (changesOnly
-    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => (r.paused && r.total > 0) || r.edited
+    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => (r.paused && r.need > 0) || r.edited
         || r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
     : importRows).filter(d => d.rows.length);
   /* The thin line under the depot figure: how much of a day's draw it holds,
@@ -9058,6 +9100,9 @@ function drawLogistics(){
   /* A Smart Delivery figure is a stock level and a plain one a weekly amount;
      the label beside each number keeps the two from reading as the same. */
   const SMART_TIP = "Smart Delivery: the purchasing agent tops the depot up to this level each Monday";
+  // The Stock view's words for a line a route covers (spImportWeek, drawStock).
+  const routeTip = r => r.inGame === null ? "A route brings what leaves; it needs no import"
+    : "A route brings what leaves; the import is a backup";
   const unit = smart => smart
     ? `<small class="imp-unit" data-tip="${attr(SMART_TIP)}">in stock</small>`
     : `<small class="imp-unit">a week</small>`;
@@ -9076,11 +9121,12 @@ function drawLogistics(){
         r.plainBefore.toLocaleString()} a week delivered first counts toward it</span>`)
     + (r.plainAfter ? `<span class="sub" data-tip="${attr(
         "A plain contract the game delivers after the level brings this on top of it")}">plus ${r.plainAfter.toLocaleString()} a week</span>` : "");
-  const gameCell = r => r.inGame === null ? chipHtml("bad", "not imported")
-    : `${amount(r.inGame, r.smart)}${aroundLevel(r)}${r.paused ? ` ${chipHtml("warn", "paused")}` : ""}`;
+  const gameCell = r => r.inGame === null ? r.covered ? chipHtml("dim", "not imported", routeTip(r)) : chipHtml("bad", "not imported")
+    : `${amount(r.inGame, r.smart)}${aroundLevel(r)}${r.paused ? ` ${chipHtml(r.covered ? "dim" : "warn", "paused")}` : ""}`;
   /* What the box is about: the board's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
-  const verdict = r => r.setTo === null ? chipHtml("dim", "nothing draws it")
+  const verdict = r => r.covered ? chipHtml("ok", "route brings it", routeTip(r))
+    : r.setTo === null ? chipHtml("dim", "nothing draws it")
     : r.paused ? chipHtml("warn", "resume import")
     : r.edited ? ""
     : r.fit === "none" ? up("add")
@@ -9090,12 +9136,14 @@ function drawLogistics(){
     : chipHtml("ok", "covered");
   /* What the box holds, said per state: the board's suggestion, the figure
      already in game, or the player's own. */
-  const boardSays = r => r.smart
+  const boardSays = r => (r.smart
     ? `the level${r.levelName ? ` at ${r.levelName}` : ""} at which the week's deliveries, in the game's order, run everything this depot feeds at full capacity`
-    : "a week of everything this depot feeds at full capacity";
+    : "a week of everything this depot feeds at full capacity")
+    + (r.routed ? `, less the ${r.routed.toLocaleString()} a week a route brings` : "");
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
     ? `Your own figure. ${suggests(r) ? `The board suggests ${r.suggested.toLocaleString()}` : `The game holds ${r.inGame.toLocaleString()}`}`
+    : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
     : suggests(r) ? `The board suggests ${r.value.toLocaleString()}: ${boardSays(r)}`
     : "The figure in game; nothing here asks for a change";
@@ -9118,10 +9166,12 @@ function drawLogistics(){
      lines and the shops, stay on hover: the material name says who, the
      Used / week figure says how much of each. */
   const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line draws it; what leaves goes to the shops";
-  const splitTip = r => r.factoryWeek && r.otherWeek
+  const splitTip = r => [r.factoryWeek && r.otherWeek
     ? `Factories ${r.factoryWeek.toLocaleString()} · shops ${r.otherWeek.toLocaleString()} a week`
     : r.factoryWeek ? `All ${r.factoryWeek.toLocaleString()} a week to the factory lines`
-    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "";
+    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "",
+    r.routed ? `A route from your own site brings ${r.routed.toLocaleString()} a week here; the import is sized on what it leaves` : ""]
+    .filter(Boolean).join(". ");
   const importRow = r => `<tr${r.changed ? ` class="imp-changed"` : ""}>
       <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}${contractLines(r)}</td>
       <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
@@ -17516,7 +17566,7 @@ function gwAllowance(importer, slug){
    deliver and is left out. */
 function gwImportPlan(depotKey){
   const lines = gwImportRows
-    .filter(r => Number.isFinite(r.value) && (r.changed || (r.paused && r.total > 0)) && D.businesses[r.s]
+    .filter(r => Number.isFinite(r.value) && (r.changed || (r.paused && r.need > 0)) && D.businesses[r.s]
       && (!depotKey || gwDepotKey(r) === depotKey))
     .map(r => ({r, depot: D.businesses[r.s], need: r.smart ? 0 : r.value, uncovered: 0, kept: [], smartAhead: [],
                 usable: r.contracts.filter(c => c.agent !== false && !!c.smart === !!r.smart),

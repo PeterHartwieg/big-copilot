@@ -171,3 +171,142 @@ test('unused paused contract stays paused without a resume recommendation', asyn
     assert.equal((await page.evaluate(() => window.fixtureActions)).length, 0);
   } finally { await page.close(); }
 });
+
+/* A depot a factory's route tops up (tests/test_routed_supply.py): the Weekly
+   imports table sizes the import on what the route leaves, and the table,
+   the checklist and the Stock view say the same thing. */
+for (const scenario of [
+  {name: 'a paused backup the route covers', args: '1.0,[contract(5200,0,smart=True,active=False)]'},
+  {name: 'an active backup below the week the route covers', args: '1.0,[contract(2000,0,smart=False)]'},
+  {name: 'a line the route covers half of', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,)'},
+  {name: 'a paused import on a line the route covers half of', args: '0.5,[contract(13000,13000,smart=False,active=False)],import_days=(7,)'},
+  // The route also runs the day the import lands: the route's own figure
+  // leaves that day out, and what leaves for the shops is read gross.
+  {name: 'a line the route covers half of every day', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,),route_from=3'},
+  {name: 'a covered backup with a figure typed in', args: '1.0,[contract(2000,0,smart=False)]', typed: 2500},
+  // No route: the log loses the import's day, the measured draw does not.
+  {name: 'a line only the import feeds', args: '0.0,[contract(5000,5000,smart=False)],import_days=(7,)'},
+]) {
+  test(`routed supply: ${scenario.name}`, async () => {
+    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+      + 'from test_routed_supply import board_data,contract; '
+      + `print(json.dumps(board_data(${scenario.args})))`));
+    const page = await browser.newPage();
+    try {
+      await page.route('https://**', route => route.abort());
+      await page.setContent(html, {waitUntil: 'load'});
+      await page.evaluate(([data, typed]) => {
+        D = data; stockView = 'imports'; showAllStock = true; logisticsView = 'all';
+        const draw = drawOrderChecklist;
+        drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+        if (typed) {
+          const line = D.supply.factories.depots[1]['ba:itemname_frozenfood'];
+          impSetKeep(impSetId(D.businesses[1].key, 'ba:itemname_frozenfood'), {value: typed, inGame: line.weekly});
+        }
+        drawStock(); drawLogistics();
+      }, [data, scenario.typed || 0]);
+      const actions = await page.evaluate(() => window.fixtureActions);
+      const imports = await page.locator('#importPlan').textContent();
+      const stock = await page.locator('#stock').textContent();
+      const row = data.supply.imports.find(r => r.s === 1);
+      const weekly = actions.filter(a => a.kind === 'Weekly imports');
+      if (row.covered && scenario.typed) {
+        // The player's own figure goes to the checklist; the chip still says why.
+        assert.match(imports, /route brings it/);
+        assert.doesNotMatch(imports, /nothing draws it/);
+        assert.equal(weekly.length, 1);
+        assert.equal(weekly[0].proposed, scenario.typed);
+      } else if (row.covered) {
+        assert.match(imports, /route brings it/);
+        assert.doesNotMatch(imports, /resume import|raise|nothing draws it/);
+        assert.deepEqual(actions, []);
+        assert.equal(row.level, 'ok');
+      } else if (!row.routed) {
+        // The Stock view's week, 25,200, not the log's 21,600.
+        assert.equal(row.weekNeed, 25200);
+        assert.equal(weekly.length, 1);
+        assert.equal(weekly[0].proposed, row.weekNeed);
+        assert.match(imports, /25[,.\s]?200/);
+      } else if (row.paused) {
+        assert.match(imports, /resume import/);
+        assert.equal(weekly.length, 1);
+        assert.match(weekly[0].reason,
+          /Resume the paused import contract.*after the 12[,.\s]?600 a week a route brings, is 12[,.\s]?600\./);
+        assert.equal(row.weekNeed, 12600);
+      } else {
+        // The table's suggestion is the Stock view's week for the import,
+        // and what it shows as used is the draw the route is taken off.
+        assert.equal(row.weekNeed, 12600);
+        assert.match(stock, /after 1[,.\s]?800\/day by route/);
+        assert.match(imports, /raise/);
+        assert.match(imports, /25[,.\s]?200/);
+        assert.equal(weekly.length, 1);
+        assert.equal(weekly[0].proposed, row.weekNeed);
+        assert.match(weekly[0].reason, /less the 12[,.\s]?600 a week a route brings/);
+      }
+    } finally { await page.close(); }
+  });
+}
+
+test('a depot line with no import that a route feeds is not asked to import', async () => {
+  // A factory drawing 1,680 water a week from a depot with no import
+  // contract; a route from another of the company's depots brings that
+  // depot the whole draw (_depot_routes).
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_import_routes import ImportRoutesTests; '
+    + 'print(json.dumps(ImportRoutesTests().build([],routed=True)))'));
+  const page = await browser.newPage();
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    const run = routes => page.evaluate(([data, routes]) => {
+      D = data; logisticsView = 'all';
+      D.supply.factories.depotRoutes = routes;
+      const draw = drawOrderChecklist;
+      drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+      drawLogistics();
+      // The factory view's verdict on the same input, as the page redoes it.
+      const view = JSON.parse(JSON.stringify(D.supply.factories));
+      const site = view.sites[0], n = site.needs[0];
+      const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
+      feedRoute(site, n, view, held);
+      Object.assign(n, {depotNeed: n.perWeek, madeAt: [], waitingOn: []});
+      feedVerdict(n);
+      return {actions: window.fixtureActions, imports: document.getElementById('importPlan').textContent,
+              status: n.status, share: n.importRoutedFactories, need: n.importNeed};
+    }, [data, routes]);
+    const slug = data.supply.factories.sites[0].needs[0].slug;
+    const without = await run({});
+    assert.equal(without.actions.filter(a => a.kind === 'Weekly imports').length, 1, 'no route: an import to add');
+    assert.equal(without.status, 'noimport');
+    const fed = await run({1: {[slug]: {routed: 1680, covered: true, drawWeek: 1680}}});
+    assert.equal(fed.actions.filter(a => a.kind === 'Weekly imports').length, 0);
+    assert.match(fed.imports, /route brings it/);
+    assert.equal(fed.status, 'ok');
+    // A route bringing 400 of the 1,680: the page works out the route's share
+    // to the factories itself, as feedVerdict does, not the payload's.
+    const part = await run({1: {[slug]: {routed: 400, covered: false, drawWeek: 1680}}});
+    assert.deepEqual([part.status, part.share, part.need], ['noimport', 400, 1280]);
+  } finally { await page.close(); }
+});
+
+test('the factory inputs view counts the weeks at the depot against what a route leaves', async () => {
+  // As _feed_notes() says it: 1,000 at the depot against the 840 a week the
+  // import has to bring beyond the route's 840 to the factories, 1.2 weeks.
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_import_routes import ImportRoutesTests; '
+    + 'print(json.dumps(ImportRoutesTests().build([],routed=True)))'));
+  Object.assign(data.supply.factories.sites[0].needs[0], {status: 'noimport', level: 'warn',
+    depotStock: 1000, depotNeed: 1680, importNeed: 840, importRoutedFactories: 840});
+  const page = await browser.newPage();
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    const text = await page.evaluate(data => {
+      D = data; stockView = 'feed'; showAllStock = true;
+      drawStock();
+      return document.getElementById('stock').textContent;
+    }, data);
+    assert.match(text, /holds 1\.2 weeks of it beyond the 840 a week a route brings the factories/);
+  } finally { await page.close(); }
+});
