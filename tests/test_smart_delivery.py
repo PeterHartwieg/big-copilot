@@ -8,8 +8,8 @@ import unittest
 from unittest.mock import patch
 
 import test_import_routes as fixtures
-from ba_dashboard import (_alerts, _feed_notes, _import_drop, _import_level, _import_pass, _level_for,
-                          _raise_import, _scheduled_import_gap, _smart_words, _supply)
+from ba_dashboard import (_alerts, _import_drop, _import_level, _import_notes, _import_pass,
+                          _level_for, _raise_import, _scheduled_import_gap, _smart_words, _supply)
 from test_import_routes import contract
 from test_recipe_identity import WATER
 
@@ -105,10 +105,10 @@ class ImportLevelTests(unittest.TestCase):
             need = rng.randint(1, 8000)
             level = _level_for(drops, at, need)
             with self.subTest(case=case):
-                self.assertEqual(level % 100, 0)
+                self.assertEqual(level % 10, 0)
                 self.assertGreaterEqual(_import_pass(drops, at, level), need)
-                # Nothing smaller, in hundreds, would do.
-                smallest = next(n for n in range(0, need + 101, 100)
+                # Nothing smaller, in tens, would do.
+                smallest = next(n for n in range(0, need + 11, 10)
                                 if _import_pass(drops, at, n) >= need)
                 self.assertEqual(level, smallest)
 
@@ -190,16 +190,16 @@ class SmartSupplyTests(unittest.TestCase):
 
     def test_a_mixed_line_names_the_level_and_sizes_the_raise_net_of_what_comes_on_top(self):
         # The factory eats 1,680 a week. A level of 700 with 400 a week after
-        # it brings 1,100: the level has to rise to 1,300, not 1,700.
+        # it brings 1,100: the level has to rise to 1,280, not 1,680.
         data = self.routes.build([smart(700, destination=("factory", 0)),
                                   contract(400, pier=2, destination=("factory", 0))])
         need = self.routes.need(data)
         self.assertEqual((need["importWeekly"], need["importTarget"], need["importPlainAfter"]),
                          (1100, 700, 400))
-        self.assertEqual(need["raiseImport"], 1300)
-        [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
+        self.assertEqual(need["raiseImport"], 1280)
+        [note] = _import_notes(data["businesses"], data["supply"], set())
         self.assertIn("Smart Delivery keeps 700 in stock, plus 400 a week on top", note["text"])
-        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,300", note["text"])
+        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,280", note["text"])
         self.assertNotIn("1,100 in stock", note["text"])
         # Plain first, the same contracts read as the level alone.
         data = self.routes.build([contract(400, pier=2, destination=("factory", 0)),
@@ -207,7 +207,7 @@ class SmartSupplyTests(unittest.TestCase):
         need = self.routes.need(data)
         self.assertEqual((need["importWeekly"], need["importTarget"], need["importPlainAfter"]),
                          (700, 700, 0))
-        self.assertEqual(need["raiseImport"], 1700)
+        self.assertEqual(need["raiseImport"], 1680)
 
     def test_a_depot_line_reads_as_its_delivery_pass(self):
         for orders, level, after, week in (
@@ -305,26 +305,29 @@ class SmartSupplyTests(unittest.TestCase):
         self.assertEqual((line["weekly"], line["pausedWeekly"], line["smart"]), (0, 3000, True))
 
     def test_the_fit_asks_whether_the_level_covers_a_full_week(self):
-        # The factory eats 240 a day, 1,680 a week, from a direct import.
-        for level, status in ((1700, "ok"), (1650, "import"), (700, "import")):
+        # The factory eats 240 a day, 1,680 a week, from a direct import. At
+        # 24/7 sizing there is no margin: a level within rounding of the week
+        # covers it, anything further under is short.
+        for level, status in ((1700, "covered"), (1675, "covered"), (1650, "short"),
+                              (700, "short")):
             with self.subTest(level=level):
                 data = self.routes.build([smart(level, destination=("factory", 0))])
                 need = self.routes.need(data)
                 self.assertEqual((need["status"], need["importSmart"]), (status, True))
         need = self.routes.need(self.routes.build([smart(700, destination=("factory", 0))]))
-        self.assertEqual(need["raiseImport"], 1700)
+        self.assertEqual(need["raiseImport"], 1680)
 
     def test_feed_findings_say_the_level_is_kept_in_stock(self):
         data = self.routes.build([smart(700, destination=("factory", 0))])
-        [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
+        [note] = _import_notes(data["businesses"], data["supply"], set())
         self.assertIn("Smart Delivery keeps 700 in stock", note["text"])
-        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,700", note["text"])
+        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,680", note["text"])
         self.assertNotIn("import order", note["text"])
         data = self.routes.build([smart(1650, destination=("factory", 0))])
-        [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
-        self.assertIn("Smart Delivery keeps 1,650 in stock, within 5%", note["text"])
+        [note] = _import_notes(data["businesses"], data["supply"], set())
+        self.assertIn("Smart Delivery keeps 1,650 in stock", note["text"])
         data = self.routes.build([contract(700, destination=("factory", 0))])
-        [note] = _feed_notes(data["businesses"], data["supply"]["factories"], set())
+        [note] = _import_notes(data["businesses"], data["supply"], set())
         self.assertIn("import order is 700", note["text"])
 
     def measured(self, contracts):

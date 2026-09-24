@@ -9,7 +9,7 @@ draw. A depot fed by imports alone reads exactly as before.
 import unittest
 
 from ba_dashboard import (SUMMARIES, TEMPLATE, WEEKDAYS, History, Names, _alerts, _factories,
-                          _feed_notes, _supply, site_key)
+                          _import_notes, _supply, _supply_facts, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -300,11 +300,11 @@ class RoutedSupplyTests(unittest.TestCase):
         the route's next round, not the days to Tuesday's drop, and the import
         answers for nothing a day."""
         rhythm = [70] * 6 + [280]
-        row, _item = depot_row(1.0, [contract(5200, 0, smart=True, due=16)], rhythm=rhythm)
-        supply = {"graph": {"links": []}, "shops": [], "idle": [], "nextImportWeekday": None,
-                  "imports": [dict(row, s=0)]}
-        result = _alerts(SupplyOnly([{"key": site_key(DEPOT), "name": "Depot"}]),
-                         supply, [], [], [], [], [], DAY, 0.0)
+        supply, businesses = depot_supply(1.0, [contract(5200, 0, smart=True, due=16)],
+                                          rhythm=rhythm)
+        self.assertEqual((supply["facts"]["1"][FOOD]["st"], supply["facts"]["1"][FOOD]["why"]),
+                         ("short", "shortfall"))
+        result = _alerts(SupplyOnly(businesses), supply, [], [], [], [], [], DAY, 0.0)
         texts = [a["text"] for a in result["lines"] + result["minor"]["rows"]]
         [text] = [t for t in texts if "Frozen Food" in t]
         self.assertIn("a route brings the week's draw (3,600/day)", text)
@@ -456,38 +456,54 @@ class RoutedFactoryViewTests(unittest.TestCase):
         # A route covering what a starved factory draws does not cover its need.
         self.assertEqual(self.need(route_only=(200, True, 200), target=300)["status"], "noimport")
 
+    def route_fact(self, route, shops_week=0):
+        """The depot's water fact when a route feeds it and no import does:
+        the factory's line eats 1,680 a week, the shops take `shops_week`."""
+        depot = site_key(("depot", 1))
+        businesses = [
+            {"key": site_key(("factory", 0)), "name": "Factory", "status": "support", "lines": []},
+            {"key": depot, "name": "Depot", "status": "support",
+             "lines": [{"slug": WATER, "item": "Water", "units": 400, "rate": 0}]},
+        ]
+        routed, covered, draw = route
+        factories = {
+            "sites": [], "depots": {}, "depotOther": {1: {WATER: shops_week}},
+            "depotRoutes": {1: {WATER: {"routed": routed, "covered": covered, "drawWeek": draw}}},
+            "_need": {mode: {(depot, WATER): (1680.0, 1680.0)} for mode in ("cap", "dem")},
+        }
+        facts = _supply_facts({
+            "businesses": businesses, "index": {b["key"]: i for i, b in enumerate(businesses)},
+            "factories": factories, "targets": {(depot, WATER): (5000, "hub#9")},
+            "import_rows": [], "peak": lambda business: (1.0, None),
+        })
+        supply = {"facts": facts, "imports": [], "factories": factories}
+        return facts["1"][WATER], _import_notes(businesses, supply, set())
+
     def test_the_no_import_finding_counts_what_the_route_leaves(self):
         """Half the week by route: the finding counts the depot's weeks against
-        the other half and says the route brings the rest."""
-        row = self.need(route_only=(840, False, 1680), target=300)
-        row["depotStock"] = 1260
-        businesses = [{"key": site_key(("factory", 0)), "name": "Factory"},
-                      {"key": "depot#1", "name": "Depot"}]
-        [note] = _feed_notes(businesses, {"sites": [{"s": 0, "needs": [row]}]}, set())
-        self.assertIn("holds 1,260, 1.5 weeks of the 840 a week the factories eat "
-                      "beyond the 840 a week a route brings them", note["text"])
+        the other half and says the route brings the rest. Holding less than
+        that half, the depot is a warning; holding more, it is noted only."""
+        fact, [note] = self.route_fact((840, False, 1680))
+        self.assertEqual((fact["st"], fact["use"], fact["parts"]),
+                         ("noplan", 840, {"lines": 1680, "sites": 0, "route": 840}))
+        self.assertIn("holds 400, 0.5 weeks of the 840 a week the factories eat "
+                      "beyond the 840 a week a route brings", note["text"])
 
-    def test_the_no_import_finding_names_only_the_route_s_share_to_the_factories(self):
+    def test_the_no_import_finding_names_what_the_route_leaves_of_everything(self):
         """The depot also sends the shops 840 a week, and the route goes to the
-        whole draw: of its 2,000, 840 are the shops' and 1,160 reach the
-        factories, whose 1,680 leave 520 with no import. A route that brings
-        no more than the shops take goes unnamed."""
-        businesses = [{"key": site_key(("factory", 0)), "name": "Factory"},
-                      {"key": "depot#1", "name": "Depot"}]
-
-        def text(route):
-            row = self.need(route_only=route, target=300)
-            [note] = _feed_notes(businesses, {"sites": [{"s": 0, "needs": [row]}]}, set())
-            return row, note["text"]
-
-        row, said = text((2000, False, 2520))
-        self.assertEqual((row["importRoutedFactories"], row["importNeed"]), (1160, 520))
-        self.assertIn("of the 520 a week the factories eat beyond the 1,160 a week a route "
-                      "brings them", said)
-        row, said = text((500, False, 2520))
-        self.assertEqual((row["importRoutedFactories"], row["importNeed"]), (0, 1680))
-        self.assertIn("of the 1,680 a week the factories eat", said)
-        self.assertNotIn("route", said)
+        whole draw: of the 2,520 that leave, a 2,000 route leaves 520 with no
+        import, which the finding counts; with no route it is all 2,520."""
+        fact, [note] = self.route_fact((2000, False, 2520), shops_week=840)
+        self.assertEqual((fact["use"], fact["parts"]),
+                         (520, {"lines": 1680, "sites": 840, "route": 2000}))
+        self.assertIn("of the 520 a week the factories and other sites draw beyond the "
+                      "2,000 a week a route brings", note["text"])
+        fact, [note] = self.route_fact((0, False, 0), shops_week=840)
+        self.assertIn("of the 2,520 a week the factories and other sites draw", note["text"])
+        self.assertNotIn("route", note["text"])
+        # A route bringing all of it leaves nothing to say.
+        fact, notes = self.route_fact((1680, True, 1680))
+        self.assertEqual((fact["st"], fact["why"], notes), ("covered", "route", []))
 
     def test_a_route_covering_a_starved_draw_does_not_cover_the_need(self):
         """The depot draws only 200 a week because the factory is starved; a

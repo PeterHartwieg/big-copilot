@@ -171,7 +171,15 @@ if __name__ == "__main__":
 DEPOT_KEY = site_key(("ba:street_firstavenue", 1))
 WORKS_KEY = site_key(("ba:street_pierroad", 9))
 SODA = "ba:itemname_soda"
+JUICE = "ba:itemname_juice"
 BEEF = "ba:itemname_groundbeef"
+
+
+def import_fact(use, have, lines=0):
+    """A depot line's fact, short of its week: the verdict every view reads."""
+    return {"st": "short", "why": "order", "lvl": "critical", "role": "depot", "cad": "weekly",
+            "use": use, "need": use, "have": have, "setTo": use,
+            "parts": {"lines": lines, "sites": use - lines, "route": 0}, "imp": True}
 
 
 def stub(key, name, status, **over):
@@ -196,7 +204,7 @@ class FindingEvidenceTests(unittest.TestCase):
 
     def supply(self):
         imports = [{
-            "s": 0, "item": "Soda", "slug": SODA, "stock": 200, "perDay": 1000,
+            "s": 0, "item": "Juice", "slug": JUICE, "stock": 200, "perDay": 1000,
             "basis": "shipped", "peakDay": "Friday", "peakPerDay": 1100, "cover": 1.0,
             "stockCover": 1.0, "daysOnHand": 1.0, "runsOut": "Tuesday", "weekly": 500,
             "lastWeek": 500, "weekNeed": 7000, "orderFit": "short", "coverFit": "short",
@@ -213,20 +221,23 @@ class FindingEvidenceTests(unittest.TestCase):
             "dailyNeed": 9600, "arrives": 0, "known": True, "stock": 0, "from": 0,
             "directImport": False, "stalled": False, "waitingOn": [], "importWeekly": None,
             "importPaused": False, "depotNeed": 67200, "depotStock": 0, "staffedShare": 1.0,
-            "madeAt": [], "importSite": 0, "status": "unplanned", "level": "critical",
+            "madeAt": [], "importSite": 0, "status": "noplan", "why": "target",
+            "level": "critical",
         }
         # An import sized wrong is one finding about the depot, however many
-        # factories draw on it: _feed_notes() re-keys it to the import site,
+        # factories draw on it: it is the depot's fact, read by _import_notes(),
         # and the recipe's label for the goods is not that depot's label.
-        offsite = {**need, "item": "Fizzy Drink", "slug": SODA, "status": "noimport",
-                   "level": "warn", "importWeekly": None, "depotNeed": 7000}
+        offsite = {**need, "item": "Fizzy Drink", "slug": SODA, "status": "covered",
+                   "why": None, "level": "ok", "importWeekly": None, "depotNeed": 7000}
         needs = [need, offsite]
+        facts = {"0": {SODA: import_fact(7000, 0, lines=7000), JUICE: import_fact(7000, 500)}}
         lines = [{"rid": "r1", "item": "Burger", "slug": "ba:itemname_burger",
                   "workstation": "Food Workstation", "slots": [3], "machines": 1,
                   "rate": 200, "makes": 4800, "ships": 0, "stock": 0, "missing": [],
                   "gaps": [{"slot": 3, "hours": 100, "off": "on Sundays"}]}]
         return {
             "graph": {"links": []}, "shops": [], "imports": imports, "idle": idle,
+            "facts": facts,
             "factories": {"sites": [{"s": 1, "machines": 1, "lines": lines, "unnamed": [],
                                      "needs": needs, "targets": {}, "known": True,
                                      "arrivals": {}}]},
@@ -246,7 +257,7 @@ class FindingEvidenceTests(unittest.TestCase):
 
     def test_every_group_the_panel_pulses_by_row_carries_its_slug(self):
         rows = self.rows()
-        for group, slug in (("order", SODA), ("dead", "ba:itemname_napkins")):
+        for group, slug in (("order", JUICE), ("dead", "ba:itemname_napkins")):
             self.assertIn(group, rows, f"{group} is in the fixture's findings")
             self.assertEqual(rows[group]["ev"], {"slug": slug})
         own = self.one("feed", WORKS_KEY)
@@ -287,7 +298,7 @@ class FindingEvidenceTests(unittest.TestCase):
         # The id hashes the group, the site key and the subject, none of which
         # the new field touches: a silenced finding stays silenced.
         self.assertEqual(self.one("order", DEPOT_KEY)["id"],
-                         _alert_id("order", DEPOT_KEY, "Soda"))
+                         _alert_id("order", DEPOT_KEY, "Juice"))
         self.assertEqual(self.one("feed", WORKS_KEY)["id"],
                          _alert_id("feed", WORKS_KEY, "Bag of Tomatoes"))
 
@@ -298,7 +309,8 @@ class FindingEvidenceTests(unittest.TestCase):
         base = supply["imports"][0]
         supply["imports"] = [
             {**base, "item": name, "slug": f"ba:itemname_{name.lower()}", "cover": cover}
-            for name, cover in (("Soda", 3.0), ("Juice", 1.0), ("Water", 2.0))]
+            for name, cover in (("Tea", 3.0), ("Juice", 1.0), ("Water", 2.0))]
+        supply["facts"] = {"0": {row["slug"]: import_fact(7000, 500) for row in supply["imports"]}}
         result = _alerts(list(self.businesses), supply, [], [], [], [], [], 20, 0.0)
         merged = next(r for r in result["lines"] + result["minor"]["rows"]
                       if r["group"] == "order")

@@ -152,7 +152,7 @@ class ProductionLimitTests(unittest.TestCase):
     def test_a_line_at_its_limit_is_held_by_it(self):
         f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500})
         need = f.need()
-        self.assertEqual((need["status"], need["level"]), ("limit", "ok"))
+        self.assertEqual((need["status"], need["why"], need["level"]), ("covered", "limit", "ok"))
         self.assertTrue(need["limited"])
         line = f.supply["factories"]["sites"][0]["lines"][0]
         self.assertEqual((line["limit"], line["limitHeld"]), (500, True))
@@ -160,15 +160,15 @@ class ProductionLimitTests(unittest.TestCase):
 
     def test_without_the_limit_the_same_line_is_not_drawing(self):
         need = self.run_limited({}).need()
-        self.assertEqual((need["status"], need["level"]), ("idle", "warn"))
+        self.assertEqual((need["status"], need["why"], need["level"]), ("stalled", "notDrawn", "warn"))
         # A limit set but not reached, with nothing measured leaving: still not drawing.
         need = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=400).need()
-        self.assertEqual(need["status"], "idle")
+        self.assertEqual(need["why"], "notDrawn")
 
     def test_output_a_days_shipments_below_the_limit_is_being_made_back(self):
         # The morning round took 150 of the 500; the machine is refilling.
         f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=400, shipped_beer=150)
-        self.assertEqual(f.need()["status"], "limit")
+        self.assertEqual(f.need()["why"], "limit")
 
     def test_shipping_more_than_the_limit_with_nothing_held_is_a_dry_depot(self):
         """A day's shipments above the limit must not stretch the tolerance to
@@ -184,15 +184,15 @@ class ProductionLimitTests(unittest.TestCase):
             ship(f.log, day, FACTORY, None, {BEER: 600})
         f.run()
         self.assertFalse(f.supply["factories"]["sites"][0]["lines"][0]["limitHeld"])
-        self.assertEqual(f.need()["status"], "dry")
+        self.assertEqual((f.need()["status"], f.need()["why"]), ("short", "dry"))
 
     def test_the_tolerance_is_bounded_by_a_share_of_the_limit(self):
         # 600 a day leave a 500 limit; 100 held is far under it, not held by it.
         f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=100, shipped_beer=600)
-        self.assertEqual(f.need()["status"], "idle")
+        self.assertEqual(f.need()["why"], "notDrawn")
         # 400 held is within a quarter of the limit: the machines are making it back.
         f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=400, shipped_beer=600)
-        self.assertEqual(f.need()["status"], "limit")
+        self.assertEqual(f.need()["why"], "limit")
 
 
 class RoundWalkTests(unittest.TestCase):
@@ -287,7 +287,7 @@ class FactoryChainTests(unittest.TestCase):
         self.assertEqual(first["depotNeed"], 3360)
         self.assertEqual((second["from"], second["importSite"]), (0, 1))
         self.assertEqual((second["depotNeed"], second["importWeekly"]), (3360, 3400))
-        self.assertEqual(second["status"], "ok")
+        self.assertEqual(second["status"], "covered")
         # What the first factory passed on to the second is no other site's draw.
         self.assertEqual(f.other()[WATER], 0)
 
