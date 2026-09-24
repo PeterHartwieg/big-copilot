@@ -84,12 +84,20 @@ async function board(o = {}) {
                     {slug: 'ba:businesstype_lawfirm', type: 'Law Firm', demand: 70, category: 'office'}]}},
       goals: {typesRun: 2, typesTotal: 24, buildingsOwned: 0, buildingsTotal: 885, rivalsDefeated: 0, rivalsTotal: 4,
         completed: 3, goalsDone: 3, goalsTotal: null, diplomas: 1, diplomasTotal: 5, goodsProduced: 1200, taxesPaid: 0},
-      chains: [], daily: [], hours: [], hourFindings: [], trends: [], homes: [], staffing: [],
+      chains: [], daily: [], hours: [], hourFindings: [], trends: [], homes: [], staffing: [], market: {rows: []},
     };
     Object.assign(alertGroupPrefs, {idlestaff: false});
     /* The fixture's sites are too thin for the panel and the portfolio to draw;
-       where a search lands is what is under test, not those draws. */
-    drawChart = () => {}; drawSite = () => {}; drawPortfolio = () => {};
+       where a search lands is what is under test, not those draws. The panel
+       is a head and two blocks, enough to land on. */
+    drawChart = () => {}; drawPortfolio = () => {};
+    drawSite = () => {
+      $('secDetail').hidden = !siteOpen;
+      $('sitePanel').innerHTML = siteOpen ? '<div class="sitehead"><h2>site</h2></div>'
+        + '<section class="sec" data-block="crew" id="sp-crew">crew</section>'
+        + '<section class="sec" data-block="roster" id="sp-roster">roster</section>' : '';
+    };
+    $('optimizeStaffingCard').dataset.site = SHOP;
     showPage('today', false, 'replace');
     drawGoals();
   }, [SHOP, GYM, FACTORY, DEPOT]);
@@ -394,5 +402,242 @@ test('the sphere rests between the nav and the field, and the field steps down b
     assert.equal(await page.locator('#ssFieldBtn').isVisible(), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 1180);
     assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// --- review round 1 -------------------------------------------------------------------
+
+test('a live refresh while the palette is open re-reads the board, and keeps the lit row', async () => {
+  const page = await board();
+  try {
+    // renderAll() is where a refresh, or another save, arrives.
+    const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+    const body = source.slice(source.indexOf('function renderAll(){'), source.indexOf('/* --- pages ---'));
+    assert.match(body, /ssDataChanged\(\);/);
+    await page.keyboard.press('/');
+    await typed(page, 'test');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await lit(page), 'Test Fitness');
+    await page.evaluate(() => {
+      D = {...D, businesses: [...D.businesses.slice(1), {key: 'ba:street_broadway#9', name: 'Test Florist', code: 'MT',
+        status: 'retail', type: 'Florist', typeSlug: 'ba:businesstype_florist', address: '9 Broadway', neighbourhood: 'Midtown'}]};
+      ssDataChanged();
+    });
+    const titles = await page.$$eval('#ssRes .ss-grp[aria-label="Sites"] .t', ts => ts.map(t => t.textContent));
+    assert.ok(titles.includes('Test Florist'), titles.join('|'));
+    assert.ok(!titles.includes('Test Clothing'), titles.join('|'));
+    assert.equal(await lit(page), 'Test Fitness');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('"Are my prices right?" lands on the wiki guide every time it is asked', async () => {
+  const page = await board();
+  try {
+    for (const round of [1, 2]) {
+      await page.evaluate(() => ssAsk('prices'));
+      await page.waitForFunction(() => document.querySelector('#pageWiki .ss-asked'), null, {timeout: 5000});
+      assert.equal(await page.evaluate(() => page), 'wiki', `round ${round}`);
+      assert.equal(await page.locator('#wk-prices').evaluate(el => el.classList.contains('ss-lit')), true, `round ${round}`);
+      assert.equal(await page.locator('.ss-asked').count(), 1, `round ${round}`);
+      await page.waitForTimeout(100);
+      assert.equal(await page.locator('.ss-asked').count(), 1, `round ${round}: nothing clears it`);
+      await page.click('#nav a[data-id="today"]');
+      await page.waitForFunction(() => !document.querySelector('.ss-asked'));
+    }
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('"Why did profit move?" and "Whom should I hire?" light a block whose tag is not clipped', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="profit"]');
+    assert.equal(await page.evaluate(() => [page, view, VIEWS.pnl.cols[sortKey][0], sortDir].join()), 'company,pnl,Wk / wk,-1');
+    const port = page.locator('#secPortfolio');
+    assert.equal(await port.evaluate(el => el.classList.contains('ss-lit')), true);
+    // Nothing between the tag and the page scrolls or clips.
+    assert.equal(await port.evaluate(el => getComputedStyle(el).overflowX), 'visible');
+    assert.equal(await port.evaluate(el => getComputedStyle(el).contentVisibility), 'visible');
+    assert.equal(await page.locator('#secDaily').evaluate(el => el.classList.contains('ss-dim')), true);
+    assert.equal(await page.locator('#pageCompany .ss-asked + #secPortfolio').count(), 1);
+    await page.click('#nav a[data-id="today"]');
+    await page.click('#ssAskMini button');
+    await page.click('#ssRes .ss-q2 >> text=Whom should I hire?');
+    assert.deepEqual(await page.evaluate(() => [page, siteOpen, siteKey]), ['company', true, SHOP]);
+    assert.equal(await page.locator('#sp-roster').evaluate(el => el.classList.contains('ss-lit')), true);
+    assert.equal(await page.locator('#sp-crew').evaluate(el => el.classList.contains('ss-dim')), true);
+    assert.equal(await page.locator('#sitePanel .sitehead').evaluate(el => el.classList.contains('ss-dim')), false);
+    assert.match(await page.locator('.ss-asked').innerText(), /Staffing on \[LM\] Test Clothing/);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a landing still waiting for its page is dropped when the reader goes elsewhere', async () => {
+  const page = await board();
+  try {
+    // Away before the wiki page opens; the landing used to wait its full four
+    // seconds for the guide and then put the strip on whatever page was up.
+    await page.evaluate(() => { ssAsk('prices'); showPage('supply'); });
+    await page.waitForTimeout(4600);
+    assert.equal(await page.evaluate(() => page), 'supply');
+    assert.equal(await page.locator('.ss-asked').count(), 0);
+    assert.equal(await page.locator('.ss-lit').count(), 0);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a tab or link on the same page clears the landing, though page and address stay', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="profit"]');
+    assert.equal(await page.locator('.ss-asked').count(), 1);
+    const state = await page.evaluate(() => ssNavState());
+    await page.click('#companyNav a[data-id="results"]');
+    assert.equal(await page.evaluate(() => ssNavState()), state);
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a resting pointer never takes the light from the keys', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'test');
+    // Rest the pointer on the third row, then let the rows be redrawn under it.
+    const third = await page.locator('#ssRes .ss-row').nth(2).boundingBox();
+    await page.mouse.move(third.x + 40, third.y + 10);
+    await typed(page, 'tes');
+    await typed(page, 'test');
+    await page.evaluate(() => { ssRes.scrollTop = 1; ssRes.scrollTop = 0; });
+    await page.waitForTimeout(100);
+    assert.equal(await lit(page), 'Test Clothing');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await lit(page), 'Test Fitness');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => siteKey), GYM);
+    // A pointer that really moves does light the row under it.
+    await page.keyboard.press('/');
+    await typed(page, 'test');
+    const row = await page.locator('#ssRes .ss-row').nth(2).boundingBox();
+    await page.mouse.move(row.x + 30, row.y + 10);
+    await page.mouse.move(row.x + 40, row.y + 12);
+    assert.equal(await page.locator('#ssRes .ss-row').nth(2).evaluate(el => el.classList.contains('on')), true);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('an input method keeps its own Enter and arrows', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'test');
+    const moved = await page.evaluate(() => {
+      const key = (key, o) => ssInput.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true, ...o}));
+      key('ArrowDown', {isComposing: true});
+      key('ArrowDown', {keyCode: 229});
+      key('Enter', {isComposing: true});
+      return document.querySelector('#ssRes .on .t').textContent;
+    });
+    assert.equal(moved, 'Test Clothing');
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('neighbourhoods match by word, and the line shows the neighbourhood that matched', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'kitchen');
+    const row = page.locator('#ssRes .ss-grp[aria-label="Sites"] .ss-row').first();
+    assert.equal(await row.locator('.t').innerText(), 'Test Fitness');
+    assert.equal(await row.locator('.p').innerText(), "Gym · 2 Second Avenue · Hell's Kitchen");
+    assert.equal(await row.locator('.p mark').innerText(), 'Kitchen');
+    // A match is marked where the word starts, not where the letters first occur.
+    assert.equal(await page.evaluate(() => ssMark('Unpaid pay', 'pa', true)), 'Unpaid <mark>pa</mark>y');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('Esc on a palette button stays in the palette, / closes the kinds panel, and Ctrl+K reads the K key on any layout', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => { window.__escapes = 0; document.addEventListener('keydown', e => { if(e.key === 'Escape') window.__escapes++; }); });
+    await page.keyboard.press('/');
+    await typed(page, 'zeppelin');
+    await page.focus('#ssRes .ss-chip[data-wiki]');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
+    assert.equal(await page.evaluate(() => window.__escapes), 0);
+    await page.evaluate(() => openKindsPanel(q(KINDS_TOGGLE)));
+    assert.equal(await page.locator('#alertPop').evaluate(el => el.classList.contains('on')), true);
+    await page.evaluate(() => ssOpen());
+    assert.equal(await page.locator('#alertPop').evaluate(el => el.classList.contains('on')), false);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', {key: 'л', code: 'KeyK', ctrlKey: true, bubbles: true, cancelable: true})));
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('Shift+Enter shows a site on the map over the palette, whose keys wait for it', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    await page.keyboard.press('Shift+Enter');
+    assert.equal(await page.locator('#locationMapDialog').evaluate(d => d.open), true);
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    // Ctrl+K under the map leaves both alone.
+    await page.keyboard.press('Control+k');
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    assert.equal(await page.locator('#locationMapDialog').evaluate(d => d.open), true);
+    await page.evaluate(() => $('locationMapDialog').close());
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'ssInput');
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+  } finally { await page.close(); }
+});
+
+test('/ typed into an editable area stays there', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => { const d = document.createElement('div'); d.id = 'probe'; d.contentEditable = 'true'; document.body.appendChild(d); });
+    await page.focus('#probe');
+    await page.keyboard.press('/');
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
+    assert.equal(await page.locator('#probe').innerText(), '/');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a kind that lands on a site goes through the one way into a site; a preset opens on its neighbourhood', async () => {
+  const page = await board();
+  try {
+    const got = await page.evaluate(() => {
+      const via = [];
+      const real = ssOpenSite;
+      ssOpenSite = (...a) => { via.push(a); return real(...a); };
+      ssKindGo('idlestaff');
+      let preset = null;
+      openFinder = p => { preset = p; };
+      ssBuild().find(e => e.id === 'finder:ba:businesstype_gym').go();
+      return {via, site: [siteOpen, siteKey, spArrived], preset};
+    });
+    assert.deepEqual(got.via, [[SHOP, '', {finding: 'idle-1'}]]);
+    assert.deepEqual(got.site, [true, SHOP, 'idle-1']);
+    assert.deepEqual(got.preset, {cat: 'retail', type: 'ba:businesstype_gym', hoods: ["Hell's Kitchen"]});
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('on a phone the sheet is as tall as the visible viewport', async () => {
+  const page = await board({width: 390, height: 700});
+  try {
+    await page.click('#ssFieldBtn');
+    assert.equal(await page.evaluate(() => [ssPal.style.height, `${Math.round(visualViewport.height)}px`].join()), '700px,700px');
+    await page.click('#ssPal .ss-cancel');
+    assert.equal(await page.evaluate(() => ssPal.style.height), '');
   } finally { await page.close(); }
 });

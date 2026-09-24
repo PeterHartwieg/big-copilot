@@ -16658,8 +16658,10 @@ function drawPlan(){
 /* The top of the list is the money; the full list is what a factory planner
    needs, every product with its week of sales across all stores. The revenue
    bar sits in the cell so the shape of the range reads before the figures do. */
+/* How many products the table shows before "all n". */
+const PRODUCTS_TOP = 14;
 function drawProducts(){
-  const TOP = 14, all = D.products;
+  const TOP = PRODUCTS_TOP, all = D.products;
   if(!all.length){
     $("secProducts").innerHTML = sechead("Products")
       + `<p class="quiet">No products sold in this save yet.</p>`;
@@ -16967,6 +16969,7 @@ function renderAll(){
   /* The wiki is the game's own text and does not move with a save, but the one
      strip on it that does is redrawn with everything else. */
   if(page === "wiki") wikiVisit();
+  ssDataChanged();
 }
 
 /* --- pages ------------------------------------------------------------ */
@@ -17739,11 +17742,12 @@ const ssNum = n => Math.round(n || 0).toLocaleString("en-US");
 /* --- where things land ----------------------------------------------------- */
 /* Every way into one site goes through here. The site pages (R9) take it over in
    this one place; today it opens the site's panel under Company › Results, and
-   with `into` lands on one block of it, ringed. */
-function ssOpenSite(key, into = ""){
+   with `into` lands on one block of it, ringed. `o.finding` marks the finding a
+   landing came from, `o.hit` the rows in the block to pulse. */
+function ssOpenSite(key, into = "", o = {}){
   if(!key || !hasData() || !D.businesses.some(b => b.key === key)){ reveal("secPortfolio"); return false; }
-  openSite(key, !into);
-  if(into) xlArrive(into);
+  openSite(key, !into, o.finding || null);
+  if(into) xlArrive(into, o.hit || "");
   return true;
 }
 /* One of the Supply checks, as a finding's link opens it. */
@@ -17798,14 +17802,15 @@ function ssRing(el){
 }
 
 /* --- Ask the board ----------------------------------------------------------
-   The seven questions and where each lands: `go` navigates, `lit` is the block
-   that answers (a selector, or a function returning the element), `dim: false`
-   keeps the page around it at full strength. One table, so a question can move
+   The seven questions and where each lands: `go` navigates, `page` is the page it
+   has to arrive on, `lit` is the block that answers (a selector, or a function
+   returning the element), `wait` gives a block drawn after a file loads time to
+   appear, and `dim: false` keeps the page around it at full strength. One table, so a question can move
    in one place: "What am I playing on?" moves to the difficulty chip (R15), and
    "Is my factory fed?" and "Whom should I hire?" move once the factory pages (R8)
    and the company-wide Staff list (R14) exist. */
 const SS_QUESTIONS = [
-  {id: "profit", q: "Why did profit move?", lands: "Company › Results · the portfolio sorted by week on week",
+  {id: "profit", q: "Why did profit move?", lands: "Company › Results · the portfolio sorted by week on week", page: "company",
    go(){
      view = "pnl";
      const i = VIEWS.pnl.cols.findIndex(c => c[0] === "Wk / wk");
@@ -17813,22 +17818,22 @@ const SS_QUESTIONS = [
      drawPortfolio();
      reveal("secPortfolio");
    },
-   lit: () => $("portfolio") && $("portfolio").parentElement},
-  {id: "open", q: "Where should I open next?", lands: "Map › Find a location · ranked by demand",
+   lit: "#secPortfolio"},
+  {id: "open", q: "Where should I open next?", lands: "Map › Find a location · ranked by demand", page: "map",
    go: () => ssFinder({cat: "retail", type: "", hoods: null}), lit: "#cityMapPage .places", dim: false, wait: true},
-  {id: "fed", q: "Is my factory fed?", lands: "Supply › Checks › Feed the factories",
+  {id: "fed", q: "Is my factory fed?", lands: "Supply › Checks › Feed the factories", page: "supply",
    go: () => ssStock("feed"), lit: "#secStock"},
-  {id: "hire", q: "Whom should I hire?",
+  {id: "hire", q: "Whom should I hire?", page: "company",
    lands: () => { const b = D.businesses.find(x => x.key === ssStaffingSite());
      return b ? `Staffing on ${b.name} · hiring lines` : "Company › Results · the sites"; },
    go: () => ssOpenSite(ssStaffingSite(), "#sp-roster"),
-   lit: () => ssStaffingSite() && siteOpen ? $("sp-roster") : $("portfolio") && $("portfolio").parentElement},
-  {id: "prices", q: "Are my prices right?",
+   lit: () => ssStaffingSite() && siteOpen ? $("sp-roster") : $("secPortfolio")},
+  {id: "prices", q: "Are my prices right?", page: "wiki",
    lands: () => { const t = ssTopType(); return t ? `Wiki › ${t.type} › Prices in your save` : "Wiki"; },
    go: ssPrices, lit: "#wk-prices", wait: true},
-  {id: "import", q: "What should I import this week?", lands: "Supply › Orders › Change checklist",
+  {id: "import", q: "What should I import this week?", lands: "Supply › Orders › Change checklist", page: "supply",
    go: ssChecklist, lit: "#orderChecklist"},
-  {id: "playing", q: "What am I playing on?", lands: "Company › Milestones · game settings",
+  {id: "playing", q: "What am I playing on?", lands: "Company › Milestones · game settings", page: "company",
    go: () => reveal("secGoals"), lit: () => q("#secGoals .rules") || q("#secGoals .sechead")},
 ];
 const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
@@ -17880,9 +17885,10 @@ function ssAskPaint(){
 }
 
 /* Where the reader was when a question was asked, so the next navigation can
-   take the strip and the lighting away again. */
-let ssAsked = null, ssTicket = 0;
-const ssNavState = () => JSON.stringify([page, sub, siteOpen, siteKey, location.hash]);
+   take the strip and the lighting away again; and the landing still on its way,
+   with the address its question opened. */
+let ssAsked = null, ssTicket = 0, ssPending = null;
+const ssNavState = () => JSON.stringify([page, sub, siteOpen, siteKey, location.hash, stockView, view]);
 function ssAsk(id){
   const qn = SS_QUESTIONS.find(x => x.id === id);
   if(!qn || !hasData()) return;
@@ -17890,20 +17896,27 @@ function ssAsk(id){
   try{ localStorage.setItem(SS_ASK_KEY, "1"); }catch(e){}
   ssAskPaint();
   ssClearAsked();
+  const ticket = ++ssTicket;
   qn.go();
-  ssLand(qn, from, ++ssTicket);
+  ssPending = {ticket, hash: location.hash};
+  ssLand(qn, from, ticket);
 }
 function ssLand(qn, from, ticket, tries = 0){
-  /* A later question, or a search that went elsewhere, takes over from one
-     still waiting for its block. */
-  if(ticket !== ssTicket) return;
-  const find = () => typeof qn.lit === "function" ? qn.lit() : q(qn.lit);
-  const el = find();
-  /* The wiki draws its guide once its file is in, and the map its finder once
-     its file is: wait for the block. */
+  /* A later question, a search that went elsewhere, or the reader's own
+     navigation takes over from a landing still on its way. */
+  if(ticket !== ssTicket || !ssPending || ssPending.ticket !== ticket) return;
+  if(location.hash !== ssPending.hash){ ssPending = null; return; }
+  const host = $((PAGES.find(p => p.id === qn.page) || {}).host);
+  /* Only the answer on the page the question opened, and on screen: a copy
+     left in a hidden page from last time is not it. */
+  const arrived = page === qn.page && !!host;
+  const found = arrived ? (typeof qn.lit === "function" ? qn.lit() : q(qn.lit)) : null;
+  const el = found && host.contains(found) && found.getClientRects().length ? found : null;
+  /* The wiki opens its page once the address has changed, and draws its guide
+     once its file is in; the map draws its finder once its file is: wait. */
   if(!el && qn.wait && tries < 40){ setTimeout(() => ssLand(qn, from, ticket, tries + 1), 100); return; }
-  const host = $((PAGES.find(p => p.id === page) || {}).host);
-  if(!host) return;
+  ssPending = null;
+  if(!arrived) return;
   const strip = document.createElement("div");
   strip.className = "ss-asked"; strip.setAttribute("role", "status");
   const back = PAGES.find(p => p.id === from) || PAGES[0];
@@ -17950,13 +17963,26 @@ function ssClearAsked(){
   $$(".ss-lit, .ss-litpos, .ss-host, .ss-dim").forEach(el => el.classList.remove("ss-lit", "ss-litpos", "ss-host", "ss-dim"));
 }
 /* The next navigation clears it: anything that changes the page, the view, the
-   open site or the hash. Checked after the event has done its work. */
-const ssNavCheck = () => setTimeout(() => {
-  if(ssAsked && (ssNavState() !== ssAsked.state || !ssAsked.strip.isConnected)) ssClearAsked();
+   open site, the checks or portfolio view, or the hash, and any link, finding,
+   card or tab followed outside the strip and the palette, which may reveal
+   another section of the same page. Checked after the event has done its work.
+   A landing still on its way is dropped the same way. */
+const SS_NAV_CLICK = 'a[href^="#"]:not([href="#"]), [data-go], .find, .move, tr.kid, [data-key], [data-xl-item], .seg a, #nav a';
+const ssNavCheck = (moved = false) => setTimeout(() => {
+  if(ssAsked && (moved || ssNavState() !== ssAsked.state || !ssAsked.strip.isConnected)) ssClearAsked();
 }, 0);
-document.addEventListener("click", ssNavCheck);
-window.addEventListener("popstate", ssNavCheck);
-window.addEventListener("hashchange", ssNavCheck);
+document.addEventListener("click", e => {
+  const t = e.target && e.target.closest ? e.target : null;
+  const moved = !!t && !!t.closest(SS_NAV_CLICK) && !t.closest(".ss-asked, #ssPal, #ssAsk, #ssAskMini");
+  if(moved && ssPending) ssTicket++;
+  ssNavCheck(moved);
+});
+const ssAddressMoved = () => {
+  if(ssPending && location.hash !== ssPending.hash) ssTicket++;
+  ssNavCheck();
+};
+window.addEventListener("popstate", ssAddressMoved);
+window.addEventListener("hashchange", ssAddressMoved);
 
 /* --- the index ----------------------------------------------------------------
    Built each time the palette opens, from what is already on the page, so the
@@ -17967,7 +17993,8 @@ window.addEventListener("hashchange", ssNavCheck);
 function ssEntry(o){
   const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: ""}, o);
   e.lt = e.t.toLowerCase(); e.lp = e.p.toLowerCase();
-  e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kw.map(s => String(s).toLowerCase());
+  e.kwRaw = e.kw.map(s => String(s));
+  e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kwRaw.map(s => s.toLowerCase());
   if(!e.land) e.land = e.p;
   return e;
 }
@@ -18064,7 +18091,19 @@ function ssKindLands(id){
 }
 function ssKindGo(id){
   const rows = [...(D.alerts || []), ...((D.minor || {}).rows || [])].filter(a => a.group === id);
-  if(rows.length){ goToAlert(rows[0]); return; }
+  const a = rows[0], link = ALERT_LINKS[id] || {};
+  /* goToAlert()'s way to a site, through ssOpenSite() like every other. */
+  if(a && link.site){
+    const b = alertSite(a);
+    const pick = !b ? ALERT_SITE_PICK[a.group] || null : null;
+    const picked = pick ? pick.site(a) : null;
+    const ev = ALERT_EVIDENCE[a.group];
+    if(b) ssOpenSite(b.key, "", {finding: a.id});
+    else if(picked) ssOpenSite(picked.key, ev ? `#sp-${ev.block}` : "", {hit: ev ? ev.hit || "" : ""});
+    else reveal(pick ? pick.otherwise : link.sec);
+    return;
+  }
+  if(a){ goToAlert(a); return; }
   /* Nothing of the kind today: the list's own switch for it, so the player
      sees what it is and whether it is on. */
   reveal("alertSection");
@@ -18135,7 +18174,7 @@ function ssBuild(){
       it.parts.push(`Sold in ${plural(p.stores, "store")} · ${ssNum(p.units)} a day · ${compact(p.revenue)}`);
       if(!it.kind) Object.assign(it, {kind: "sold", ic: "shelves", land: `Company › Products · ${p.item}`, go(){
         const at = D.products.findIndex(x => x.item === p.item);
-        if(at >= 14 && !showAllProducts){ showAllProducts = true; drawProducts(); }
+        if(at >= PRODUCTS_TOP && !showAllProducts){ showAllProducts = true; drawProducts(); }
         reveal("secProducts");
         ssRing($$("#secProducts tbody tr").find(tr => (tr.querySelector("td") || {}).textContent === p.item));
       }});
@@ -18183,7 +18222,7 @@ function ssBuild(){
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
         p: `best fit: ${d.hood} · demand ${d.demand}`, ic: "pin",
         syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
-        go: () => ssFinder({cat: d.category, type: d.slug, hoods: null})}));
+        go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
     });
     if(D.premises) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: "Rent a warehouse",
       p: "Map › Find a location · Warehouse · by m²", ic: "crate", syn: ["depot", "storage", "floor size", "warehouse"],
@@ -18200,16 +18239,19 @@ function ssBuild(){
 /* --- matching -------------------------------------------------------------
    The canvas's search(): a title that starts with the words beats one where
    they start a word, which beats one that only holds them; a synonym comes in
-   between, and a site's address or neighbourhood counts as its title. The line
-   under a title only counts from three letters. */
+   between, and a word of a site's address, neighbourhood or type counts almost
+   as its title. The line under a title, and the words it does not show, only
+   count from three letters. A match in those words ("kw") names the word. */
 const ssRx = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function ssScore(e, qq, ws){
   if(e.lt.startsWith(qq)) return [100, "t", ""];
   if(ws.test(e.lt)) return [85, "t", ""];
   if(e.lt.includes(qq)) return [60, "t", ""];
   for(const s of e.syn) if(s.startsWith(qq) || (qq.length >= 4 && s.includes(qq))) return [70, "syn", s];
-  if(e.g === "sites" && e.kw.some(k => k.startsWith(qq))) return [75, "p", ""];
-  if(qq.length >= 3 && (ws.test(e.lp) || e.kw.some(k => k.startsWith(qq)))) return [40, "p", ""];
+  const k = e.kw.findIndex(w => ws.test(w));
+  if(e.g === "sites" && k >= 0) return [75, "kw", e.kwRaw[k]];
+  if(qq.length >= 3 && ws.test(e.lp)) return [40, "p", ""];
+  if(qq.length >= 3 && k >= 0) return [40, "kw", e.kwRaw[k]];
   return [0, "", ""];
 }
 /* Grouped hits, best group first; each group keeps its best `per` unless it
@@ -18331,13 +18373,15 @@ ssPal.innerHTML = `<div class="ss-in"><button type="button" class="ss-back" aria
 document.body.append(ssScrim, ssPal);
 const ssInput = $("ssInput"), ssRes = $("ssRes");
 
-let ssIndex = [], ssRows = [], ssWhole = {}, ssReturn = null, ssWikiWait = null;
+let ssIndex = [], ssRows = [], ssWhole = {}, ssReturn = null, ssWikiWait = null, ssPointer = null;
 const ssIsOpen = () => !ssPal.hidden;
 function ssOpen(text = ""){
   if(ssIsOpen()){ ssInput.focus(); return; }
   ssReturn = document.activeElement;
   ssWhole = {};
+  ssPointer = null;
   ssIndex = ssBuild();
+  if(typeof kindsPop !== "undefined" && kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
   /* The wiki's pages join once its file is in: ask for it now, and look again
      while it loads. */
   if(typeof loadWikiData === "function" && typeof wikiStatus !== "undefined" && wikiStatus === "idle") loadWikiData();
@@ -18347,14 +18391,36 @@ function ssOpen(text = ""){
   ssField.classList.add("on");
   if(typeof hideTip === "function") hideTip();
   ssInput.value = text;
+  ssFitSheet();
   ssRender();
   ssInput.focus({preventScroll: true});
+}
+/* A live refresh, or another save, while the palette is open: the index is
+   today's again, and the lit row stays lit if it is still there. The next
+   open rebuilds anyway. renderAll() calls this. */
+function ssDataChanged(){
+  if(!ssIsOpen()) return;
+  ssIndex = ssBuild();
+  ssRender(true);
+}
+/* On a phone the sheet is the visible viewport, so the on-screen keyboard
+   never covers the results. */
+function ssFitSheet(){
+  const vv = window.visualViewport;
+  const fit = ssIsOpen() && ssPhone() && vv;
+  ssPal.style.height = fit ? `${Math.round(vv.height)}px` : "";
+  ssPal.style.top = fit ? `${Math.round(vv.offsetTop)}px` : "";
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", ssFitSheet);
+  window.visualViewport.addEventListener("scroll", ssFitSheet);
 }
 function ssClose(restore = true){
   if(!ssIsOpen()) return;
   ssScrim.hidden = ssPal.hidden = true;
   document.body.classList.remove("ss-open");
   ssField.classList.remove("on");
+  ssFitSheet();
   clearTimeout(ssWikiWait);
   /* Focus must not stay in the hidden field, or the next / would be read as
      typing in it. */
@@ -18408,10 +18474,13 @@ function ssRow(item, qq){
       + `<span class="ss-side"><span class="ss-go">${ssSvg("enter")}open</span></span></div>`;
   }
   const {e, where, syn} = item;
-  let title = where === "t" ? ssMark(e.t, qq) : ssEsc(e.t);
-  if(where === "syn") title += `<span class="ss-syn" title="${ssEsc(`The word you typed; the board calls it ${e.t}`)}"><b>≈</b> ${ssMark(syn, qq)}</span>`;
-  const line = where === "syn" && e.synP && e.synP[syn] ? e.synP[syn] : e.p;
-  const sub = where === "p" ? ssMark(line, qq, true) : ssEsc(line);
+  let title = where === "t" ? ssMark(e.t, qq, true) : ssEsc(e.t);
+  if(where === "syn") title += `<span class="ss-syn" title="${ssEsc(`The word you typed; the board calls it ${e.t}`)}"><b>≈</b> ${ssMark(syn, qq, true)}</span>`;
+  let line = where === "syn" && e.synP && e.synP[syn] ? e.synP[syn] : e.p;
+  /* A word the line does not show (a neighbourhood, say) joins it, so the
+     reader sees what matched. */
+  if(where === "kw" && !line.toLowerCase().includes(syn.toLowerCase())) line += ` · ${syn}`;
+  const sub = where === "p" || where === "kw" ? ssMark(line, qq, true) : ssEsc(line);
   const ic = e.hood ? `<span class="ic hood" aria-hidden="true">${ssEsc(e.hood)}</span>` : `<span class="ic" aria-hidden="true">${ssSvg(e.ic)}</span>`;
   let side = "";
   if(e.tag || e.dot) side += `<span class="ss-tag">${e.dot ? `<i class="ss-dot ${e.dot}"></i>` : ""}${ssEsc(e.tag)}</span>`;
@@ -18507,6 +18576,8 @@ function ssGoTo(k, onMap = false){
 
 ssInput.addEventListener("input", () => { ssRender(); ssRes.scrollTop = 0; });
 ssInput.addEventListener("keydown", e => {
+  /* Keys that pick a word in an input method are that method's. */
+  if(e.isComposing || e.keyCode === 229) return;
   const n = ssRows.length, at = ssLitIndex();
   if(e.key === "ArrowDown"){ e.preventDefault(); if(n) ssPick(at < 0 ? 0 : Math.min(n - 1, at + 1)); }
   else if(e.key === "ArrowUp"){ e.preventDefault(); if(n) ssPick(Math.max(0, at - 1)); }
@@ -18516,7 +18587,7 @@ ssInput.addEventListener("keydown", e => {
 /* Keyboard first: focus stays in the field, and Tab does not wander off behind
    the scrim. */
 ssPal.addEventListener("keydown", e => {
-  if(e.key === "Escape" && e.target !== ssInput){ e.preventDefault(); ssClose(); return; }
+  if(e.key === "Escape" && e.target !== ssInput){ e.preventDefault(); e.stopPropagation(); ssClose(); return; }
   if(e.key !== "Tab") return;
   const stops = $$("input, button, a[href]", ssPal).filter(el => el.getClientRects().length && !el.closest(".ss-row"));
   if(!stops.length) return;
@@ -18524,7 +18595,14 @@ ssPal.addEventListener("keydown", e => {
   e.preventDefault();
   stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
 });
-ssRes.addEventListener("mouseover", e => {
+/* The pointer lights a row only when it moves: a pointer resting where the
+   rows are redrawn or scrolled under it must not take the light from the keys.
+   The first move after opening only says where it is. */
+ssRes.addEventListener("pointermove", e => {
+  const at = `${e.clientX},${e.clientY}`;
+  const moved = ssPointer !== null && ssPointer !== at;
+  ssPointer = at;
+  if(!moved) return;
   const r = e.target.closest("[data-k]");
   if(r && !r.classList.contains("on")) ssPick(+r.dataset.k, false);
 });
@@ -18546,15 +18624,17 @@ ssScrim.addEventListener("click", () => ssClose());
 if($("locationMapDialog")) $("locationMapDialog").addEventListener("close", () => { if(ssIsOpen()) setTimeout(() => ssInput.focus({preventScroll: true}), 0); });
 q(".ss-back", ssPal).addEventListener("click", () => ssClose());
 q(".ss-cancel", ssPal).addEventListener("click", () => ssClose());
-/* / and Ctrl+K (Cmd+K on a Mac) from anywhere on the board; / is left alone
-   while a field is being typed in. Nothing opens over a dialog, or before the
-   board itself is on screen. */
+/* / and Ctrl+K (Cmd+K on a Mac, the K key on any layout) from anywhere on the
+   board; / is left alone while a field is being typed in. Nothing opens or
+   closes under a dialog (the map a row opened sits over the palette), or
+   before the board itself is on screen. */
 document.addEventListener("keydown", e => {
   if(e.defaultPrevented || e.altKey) return;
   const mast = $("mast");
-  const ready = !!mast && mast.getClientRects().length > 0 && !document.querySelector("dialog[open]");
-  if((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey) && !e.shiftKey){
-    if(!ready && !ssIsOpen()) return;
+  const dialog = !!document.querySelector("dialog[open]");
+  const ready = !!mast && mast.getClientRects().length > 0 && !dialog;
+  if((e.key === "k" || e.key === "K" || e.code === "KeyK") && (e.ctrlKey || e.metaKey) && !e.shiftKey){
+    if(dialog || (!ready && !ssIsOpen())) return;
     e.preventDefault();
     if(ssIsOpen()) ssClose(); else ssOpen();
     return;
