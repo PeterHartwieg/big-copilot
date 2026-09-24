@@ -133,6 +133,11 @@ namespace BigCopilotLink
         private readonly DateTime _loadedAtUtc = DateTime.UtcNow;
         // MinValue, not now: the first refresh must not be throttled by the load itself.
         private DateTime _lastRefreshStarted = DateTime.MinValue;
+        // The seconds part of the last stamp this service published, so none is
+        // issued twice within a city session. The service is made anew at every
+        // city load; across loads and mod reloads, uniqueness rests on the wall
+        // clock having moved on since the last stamp.
+        private long _lastStampSeconds;
         private int _lastHourSeen = -1;
         private bool _lastSavingInProgress;
         private bool _lastHadChanges;
@@ -143,9 +148,6 @@ namespace BigCopilotLink
         // the main-thread path: a stall, but bytes that always arrive. After ten
         // main-thread refreshes the worker gets one more chance, so a bad minute does
         // not cost a whole evening; one more failure and it is back to the main thread.
-        // The seconds part of the last stamp published, kept across unloads so no
-        // stamp is ever issued twice. Main thread only, like the publish.
-        private long _lastStampSeconds;
         private int _backgroundFailures;
         private bool _backgroundSerialize = true;
         private int _fallbackRuns;

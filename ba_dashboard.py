@@ -19832,9 +19832,10 @@ function startWatching(){
     stale: markStale,
     /* The read that follows a write gave up, or its build failed. */
     followFailed: stamp => gwFollowFailed(stamp),
-    /* A look at the game found the board's bytes still current: an undo's
-       gate may open on the board as it is. */
-    vouched: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
+    /* What the link says of the board moved with no new board: a new
+       source, a look that found the board's bytes still current, a build
+       the board failed to take. An undo's gate weighs itself again. */
+    linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
     lost(){
       const dot = $("live");
       if(dot){ dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }

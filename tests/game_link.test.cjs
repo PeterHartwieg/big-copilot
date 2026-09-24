@@ -69,7 +69,7 @@ function harness({routes = {}} = {}) {
     stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
-    closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {},
+    closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
     idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
     startAttempt: () => true, finishAttempt() {},
     async buildFrom(file) { seen.builds.push(file); },

@@ -688,6 +688,15 @@ class MockWrites(unittest.TestCase):
         self.assertEqual(answer["rows"][0]["error"], "no_amounts")
 
 
+    def test_a_refresh_asked_through_debug_config_moves_the_stamp(self):
+        before = json.loads(call(self.url + "/health")[2])["stamp"]
+        status, _, raw = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
+                              json.dumps({"refresh": True}).encode())
+        self.assertEqual(status, 200)
+        after = json.loads(call(self.url + "/health")[2])["stamp"]
+        self.assertNotEqual(after, before)
+        self.assertEqual(json.loads(raw)["stamp"], after)
+
     def test_import_terms_cap_a_plain_amount_and_price_the_next_delivery(self):
         status, _, _ = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
                             json.dumps({"importTerms": {"CONTRACTthree": {"unitPrice": 2.5, "cap": 400}},

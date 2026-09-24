@@ -693,7 +693,7 @@ namespace BigCopilotLink
 
         /// <summary>
         /// The game's private method by reflection; should a later build rename it, its
-        /// build-3680 body: the item's maxOrderAmountPerImporter, times 0.66 rounded
+        /// build-3682 body: the item's maxOrderAmountPerImporter, times 0.66 rounded
         /// while the item is in a shortage event.
         /// </summary>
         private static int MaxPerImporter(string itemName)
@@ -706,7 +706,7 @@ namespace BigCopilotLink
                 }
                 catch (Exception e)
                 {
-                    LinkMod.LogWarn("GetMaxOrderAmountPerImporter could not be called (" + e.Message + "); using its build-3680 body.");
+                    LinkMod.LogWarn("GetMaxOrderAmountPerImporter could not be called (" + e.Message + "); using its build-3682 body.");
                 }
             }
             var item = BigAmbitions.Items.ItemsGetter.GetByName(itemName, true);

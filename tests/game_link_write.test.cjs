@@ -86,6 +86,8 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
       postMessage(msg) {
         if (msg.kind !== 'build') return;
         window.builds++;
+        // window.holdBuilds: the build is left unanswered, as a slow one is.
+        if (window.holdBuilds) return;
         queueMicrotask(() => this.onmessage({data: {id: msg.id, kind: 'built', history: '{}', data: window.buildData || data}}));
       }
       terminate() {}
@@ -861,6 +863,36 @@ const setAgainOn = (page, timeout) => page.waitForFunction(() => {
 const watchNow = (page) => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 const mockStamp = async () => (await (await fetch(mockUrl + '/health')).json()).stamp;
 
+// The game loads another of the character's saves: /health and /save both
+// name another company and a stamp of their own. Returns the way back.
+async function otherCompany(page) {
+  const health = async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({response: res, json: Object.assign(body, {company: 'Other Co', stamp: `${body.stamp}-other`})});
+  };
+  const save = async (route) => {
+    const headers = Object.assign({}, route.request().headers());
+    delete headers['if-none-match'];
+    const res = await route.fetch({headers});
+    const stamp = `${res.headers()['x-game-link-stamp']}-other`;
+    await route.fulfill({response: res, headers: Object.assign({}, res.headers(), {'x-game-link-stamp': stamp, etag: `"${stamp}"`})});
+  };
+  await page.route(`${mockUrl}/health`, health);
+  await page.route(`${mockUrl}/save`, save);
+  return async () => { await page.unroute(`${mockUrl}/health`, health); await page.unroute(`${mockUrl}/save`, save); };
+}
+const NOT_LINKED = 'The board is no longer linked to the game this was undone in.';
+// Apply the uniform, undo it, and wait for Set again.
+async function undoneAndOpen(page) {
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await setAgainOn(page, 20000);
+}
+
 test('undo gate: the apply\'s own read landing after the undo does not open it, whatever its stamp', async (t) => {
   const page = await linked(t, {approved: true});
   // The apply's follow read (1) is held across the undo; so is the undo's (2).
@@ -872,17 +904,13 @@ test('undo gate: the apply\'s own read landing after the undo does not open it, 
     if (gates[n]) await gates[n].held;
     await route.fulfill({response: res});
   });
-  // An hourly snapshot between the apply and the undo: the undo answers a
-  // stamp that is neither the board's nor the apply's read's.
-  await page.route(`${mockUrl}/write/undo`, async (route) => {
-    const res = await route.fetch();
-    const body = await res.json();
-    await route.fulfill({response: res, json: Object.assign(body, {stamp: 'hourly-snapshot'})});
-  });
   await button(page, GIFTS).click();
   await dialog(page).getByRole('button', {name: SET}).click();
   await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
   await until(() => saves >= 1, 8000);
+  // The game's hourly refresh between the apply and the undo: the undo
+  // answers a stamp that is neither the board's nor the apply's read's.
+  const hourly = (await configure({refresh: true})).stamp;
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
   const builds = await page.evaluate(() => window.builds);
@@ -890,7 +918,7 @@ test('undo gate: the apply\'s own read landing after the undo does not open it, 
   await page.waitForFunction((n) => window.builds > n, builds);
   // The board holds the apply's bytes, with a stamp of their own: still closed.
   const stamp = await page.evaluate(() => LEDGER_SOURCE.link().stamp);
-  assert.notEqual(stamp, 'hourly-snapshot');
+  assert.notEqual(stamp, hourly);
   assert.equal(await setAgain(page).isDisabled(), true, 'bytes fetched before the undo never open it');
   await dialog(page).getByText('Reading the game again').waitFor();
   assert.equal(await dialog(page).getByText('The board shows the game as it now stands').count(), 0,
@@ -901,6 +929,44 @@ test('undo gate: the apply\'s own read landing after the undo does not open it, 
   await setAgainOn(page, 20000);
   assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), await mockStamp());
   await dialog(page).getByText('The board shows the game as it now stands').waitFor();
+});
+
+test('undo gate: bytes read after the undo but still the apply\'s (a refresh not yet published) do not open it', async (t) => {
+  const page = await linked(t, {approved: true});
+  const s0 = await mockStamp();
+  // What the page is served: the board's own state while the apply's refresh
+  // is not published, then the apply's after the undo, then the game's own.
+  let serve = 'board', s1 = '', s1Bytes = null;
+  await page.route(`${mockUrl}/health`, async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    if (serve !== 'game') body.stamp = serve === 'board' ? s0 : s1;
+    await route.fulfill({response: res, json: body});
+  });
+  await page.route(`${mockUrl}/save`, async (route) => {
+    const headers = Object.assign({}, route.request().headers());
+    delete headers['if-none-match'];
+    const res = await route.fetch({headers});
+    if (serve === 'game') return route.fulfill({response: res});
+    await route.fulfill({response: res, body: s1Bytes,
+      headers: Object.assign({}, res.headers(), {'x-game-link-stamp': s1, etag: `"${s1}"`})});
+  });
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  s1 = await mockStamp();
+  s1Bytes = Buffer.from(await (await fetch(mockUrl + '/save')).arrayBuffer());
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  // The undo answered the stamp before its own refresh: the apply's, s1.
+  serve = 'apply';
+  await watchNow(page);
+  await until(async () => (await page.evaluate(() => LEDGER_SOURCE.link().stamp)) === s1, 20000);
+  assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), s1);
+  assert.equal(await setAgain(page).isDisabled(), true, 'the stamp the undo answered is never the undo\'s state');
+  serve = 'game';
+  await setAgainOn(page, 20000);
+  assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), await mockStamp());
 });
 
 test('undo gate: a board already current when the undo answers opens it without another read', async (t) => {
@@ -934,30 +1000,89 @@ test('undo gate: a board already current when the undo answers opens it without 
   assert.equal(saves, read, 'no second read of the same bytes');
 });
 
-test('undo gate: open, then a board of another company closes it again', async (t) => {
+test('undo gate: a read begun while the undo\'s answer was still coming in does not open it', async (t) => {
   const page = await linked(t, {approved: true});
   await button(page, GIFTS).click();
   await dialog(page).getByRole('button', {name: SET}).click();
   await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await until(async () => (await page.evaluate(() => LEDGER_SOURCE.link().stamp)) === await mockStamp(), 20000);
+  // The undo's headers come in, its body is held.
+  await page.evaluate(() => {
+    const real = window.fetch;
+    let release;
+    const body = new Promise((resolve) => { release = resolve; });
+    window.releaseUndoBody = release;
+    window.fetch = async (url, init) => {
+      const res = await real(url, init);
+      if (!String(url).endsWith('/write/undo')) return res;
+      const text = await res.text();
+      const stream = new ReadableStream({async start(c) { await body; c.enqueue(new TextEncoder().encode(text)); c.close(); }});
+      return new Response(stream, {status: res.status, headers: res.headers});
+    };
+  });
+  const builds = await page.evaluate(() => window.builds);
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
-  await setAgainOn(page, 20000);
-  // The game loads another of the character's saves before the player clicks.
-  await page.route(`${mockUrl}/health`, async (route) => {
-    const res = await route.fetch();
-    const body = await res.json();
-    await route.fulfill({response: res, json: Object.assign(body, {company: 'Other Co', stamp: `${body.stamp}-other`})});
-  });
-  await page.route(`${mockUrl}/save`, (route) => {
-    const headers = Object.assign({}, route.request().headers());
-    delete headers['if-none-match'];
-    return route.continue({headers});
-  });
+  await until(async () => (await applied()).length === 2, 8000);
   await watchNow(page);
-  await dialog(page).getByText('The board is no longer linked to the game this was undone in.').waitFor({timeout: 20000});
+  await page.waitForFunction((n) => window.builds > n, builds);
+  // Nothing more is read until the body is in and the gate has been weighed.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route(`${mockUrl}/health`, async (route) => { await held; await route.continue(); });
+  await page.evaluate(() => window.releaseUndoBody());
+  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  assert.equal(await setAgain(page).isDisabled(), true, 'the answer counts from when it was read whole');
+  release();
+  await setAgainOn(page, 20000);
+});
+
+test('undo gate: open, then a board of another company closes it again', async (t) => {
+  const page = await linked(t, {approved: true});
+  await undoneAndOpen(page);
+  // The game loads another of the character's saves before the player clicks.
+  await otherCompany(page);
+  await watchNow(page);
+  await dialog(page).getByText(NOT_LINKED).waitFor({timeout: 20000});
   assert.equal(await setAgain(page).isDisabled(), true);
   assert.equal(await setAgain(page).getAttribute('title'), 'The board is no longer linked to this game');
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo'], 'nothing asked of the game');
+});
+
+test('undo gate: open, then another source chosen closes it before any new board', async (t) => {
+  const page = await linked(t, {approved: true});
+  await undoneAndOpen(page);
+  // A save chosen by hand, whose build never comes back.
+  await page.evaluate(() => {
+    window.holdBuilds = true;
+    const input = document.getElementById('folderPick');
+    const file = new File(['x'], 'Link Co.hsg', {lastModified: Date.now()});
+    Object.defineProperty(file, 'webkitRelativePath', {value: 'Saves/abc/Link Co.hsg'});
+    Object.defineProperty(input, 'files', {value: [file], configurable: true});
+    input.dispatchEvent(new Event('change'));
+  });
+  await dialog(page).getByText(NOT_LINKED).waitFor();
+  assert.equal(await setAgain(page).isDisabled(), true);
+  assert.equal(await page.evaluate(() => LEDGER_SOURCE.link()), null);
+});
+
+test('undo gate: a board of another company, then a build of the undo\'s company that fails, stays closed', async (t) => {
+  const page = await linked(t, {approved: true});
+  await undoneAndOpen(page);
+  const back = await otherCompany(page);
+  await watchNow(page);
+  await dialog(page).getByText(NOT_LINKED).waitFor({timeout: 20000});
+  // The game is back on the undo's company; the board throws on its bytes.
+  await back();
+  await page.evaluate(() => {
+    const real = renderAll;
+    let once = true;
+    window.renderAll = function () { if (once) { once = false; throw new Error('the board broke once'); } return real.apply(this, arguments); };
+  });
+  await watchNow(page);
+  await page.waitForFunction(() => document.getElementById('srcStatus').textContent.startsWith('Could not read the save'), null, {timeout: 20000});
+  assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().company), 'Other Co', 'the company behind the board on screen');
+  assert.equal(await setAgain(page).isDisabled(), true);
+  await dialog(page).getByText(NOT_LINKED).waitFor();
 });
 
 test('a board that fails to take a build keeps the stamp behind it, and the next check reads those bytes again', async (t) => {
