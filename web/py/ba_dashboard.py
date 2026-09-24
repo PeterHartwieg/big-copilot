@@ -16971,6 +16971,7 @@ function renderAll(){
      strip on it that does is redrawn with everything else. */
   if(page === "wiki") wikiVisit();
   ssDataChanged();
+  ssCheckLanding();
 }
 
 /* --- pages ------------------------------------------------------------ */
@@ -17806,7 +17807,9 @@ function ssRing(el){
    The seven questions and where each lands: `go` navigates, `page` is the page it
    has to arrive on, `lit` is the block that answers (a selector, or a function
    returning the element), `wait` gives a block drawn after a file loads time to
-   appear, and `dim: false` keeps the page around it at full strength. One table, so a question can move
+   appear, `dim: false` keeps the page around it at full strength, and `holds`,
+   given the landing ({hash, site}), says whether what is lit is still the
+   answer to it (see ssLandingHolds()). One table, so a question can move
    in one place: "What am I playing on?" moves to the difficulty chip (R15), and
    "Is my factory fed?" and "Whom should I hire?" move once the factory pages (R8)
    and the company-wide Staff list (R14) exist. */
@@ -17819,21 +17822,23 @@ const SS_QUESTIONS = [
      drawPortfolio();
      reveal("secPortfolio");
    },
-   lit: "#secPortfolio"},
+   lit: "#secPortfolio", holds: () => view === "pnl"},
   {id: "open", q: "Where should I open next?", lands: "Map › Find a location · ranked by demand", page: "map",
-   go: () => ssFinder({cat: "retail", type: "", hoods: null}), lit: "#cityMapPage .places", dim: false, wait: true},
+   go: () => ssFinder({cat: "retail", type: "", hoods: null}), lit: "#cityMapPage .places", dim: false, wait: true,
+   holds: () => !!(cityMapPage && cityMapPage.finderOn())},
   {id: "fed", q: "Is my factory fed?", lands: "Supply › Checks › Feed the factories", page: "supply",
-   go: () => ssStock("feed"), lit: "#secStock"},
+   go: () => ssStock("feed"), lit: "#secStock", holds: () => stockView === "feed"},
   {id: "hire", q: "Whom should I hire?", page: "company",
    lands: () => { const b = D.businesses.find(x => x.key === ssStaffingSite());
      return b ? `Staffing on ${b.name} · hiring lines` : "Company › Results · the sites"; },
    go: () => ssOpenSite(ssStaffingSite(), "#sp-roster"),
-   lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio")},
+   lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio"),
+   holds: a => a.site === (siteOpen ? siteKey : null)},
   {id: "prices", q: "Are my prices right?", page: "wiki",
    lands: () => { const t = ssTopType(); return t ? `Wiki › ${t.type} › Prices in your save` : "Wiki"; },
-   go: ssPrices, lit: "#wk-prices", wait: true},
+   go: ssPrices, lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash},
   {id: "import", q: "What should I import this week?", lands: "Supply › Orders › Change checklist", page: "supply",
-   go: ssChecklist, lit: "#orderChecklist"},
+   go: ssChecklist, lit: "#orderChecklist", holds: () => $("orderChecklist").open},
   {id: "playing", q: "What am I playing on?", lands: "Company › Milestones · game settings", page: "company",
    go: () => reveal("secGoals"), lit: () => q("#secGoals .rules") || q("#secGoals .sechead")},
 ];
@@ -17885,11 +17890,9 @@ function ssAskPaint(){
   if($("ssAskMini")) $("ssAskMini").hidden = !used;
 }
 
-/* Where the reader was when a question was asked, so the next navigation can
-   take the strip and the lighting away again; and the landing still on its way,
-   with the address its question opened. */
+/* The landing on screen ({qn, strip, lit, host, hash, site}), and the landing
+   still on its way, with the address its question opened. */
 let ssAsked = null, ssTicket = 0, ssPending = null;
-const ssNavState = () => JSON.stringify([page, sub, siteOpen, siteKey, location.hash]);
 function ssAsk(id){
   const qn = SS_QUESTIONS.find(x => x.id === id);
   if(!qn || !hasData()) return;
@@ -17917,7 +17920,8 @@ function ssLand(qn, from, ticket, tries = 0){
      once its file is in; the map draws its finder once its file is: wait. */
   if(!el && qn.wait && tries < 40){ setTimeout(() => ssLand(qn, from, ticket, tries + 1), 100); return; }
   ssPending = null;
-  if(!arrived) return;
+  /* No answer on screen, nothing to point at. */
+  if(!el) return;
   const strip = document.createElement("div");
   strip.className = "ss-asked"; strip.setAttribute("role", "status");
   const back = PAGES.find(p => p.id === from) || PAGES[0];
@@ -17931,15 +17935,20 @@ function ssLand(qn, from, ticket, tries = 0){
     ssClearAsked();
     showPage(back.id);
   });
-  /* The strip sits right above the section that answers, so the two are read
-     together, and the window is brought to the strip. An answer outside any
-     section (the finder beside the map) has it on top of the page. */
-  const anchor = el ? el.closest("section") : null;
+  ssAsked = {qn, strip, lit: el, host, hash: location.hash, site: siteOpen ? siteKey : null};
+  ssPlace();
+  settleScroll(strip);
+}
+/* The strip sits right above the section that answers, so the two are read
+   together. An answer outside any section (the finder beside the map) has it
+   on top of the page. Then the answer is lit. */
+function ssPlace(){
+  const {strip, lit, host, qn} = ssAsked;
+  const anchor = lit.closest("section");
   if(anchor && host.contains(anchor) && anchor !== host) anchor.parentElement.insertBefore(strip, anchor);
   else host.insertBefore(strip, host.firstChild);
-  if(el) ssLight(el, qn.dim !== false, host);
-  settleScroll(strip);
-  ssAsked = {strip, lit: el, state: ssNavState()};
+  ssUnlight();
+  ssLight(lit, qn.dim !== false, host);
 }
 /* The site panel's lighting rule, anywhere: the answer outlined and tagged, and
    everything beside it on the way up to the page dimmed, except heads. Sections
@@ -17958,35 +17967,44 @@ function ssLight(el, dim, host){
       if(c !== node && !c.hidden && !keep(c)) c.classList.add("ss-dim");
     });
 }
+const ssUnlight = () => $$(".ss-lit, .ss-litpos, .ss-host, .ss-dim")
+  .forEach(el => el.classList.remove("ss-lit", "ss-litpos", "ss-host", "ss-dim"));
 function ssClearAsked(){
   if(ssAsked && ssAsked.strip) ssAsked.strip.remove();
   ssAsked = null;
-  $$(".ss-lit, .ss-litpos, .ss-host, .ss-dim").forEach(el => el.classList.remove("ss-lit", "ss-litpos", "ss-host", "ss-dim"));
+  ssUnlight();
 }
-/* The next navigation clears it: anything that changes the page, the view, the
-   open site or the hash, and any link, finding, card or view tab followed
-   outside the strip, the answer and the palette, which may reveal another
-   section of the same page. The answer's own controls (a roster's day tabs, a
-   check's views) are reading it, not leaving; an answer its own control has
-   redrawn away is gone, and takes the strip with it. Checked after the event
-   has done its work. A landing still on its way is dropped the same way. */
-const SS_NAV_CLICK = 'a[href^="#"]:not([href="#"]), [data-go], .find, .move, tr.kid, [data-key], [data-xl-item], .subhead .seg a, #nav a';
-const ssNavCheck = (moved = false) => setTimeout(() => {
-  if(ssAsked && (moved || ssNavState() !== ssAsked.state || !ssAsked.strip.isConnected
-    || (ssAsked.lit && !ssAsked.lit.isConnected))) ssClearAsked();
-}, 0);
-document.addEventListener("click", e => {
-  const t = e.target && e.target.closest ? e.target : null;
-  const moved = !!t && !!t.closest(SS_NAV_CLICK) && !t.closest(".ss-asked, .ss-lit, #ssPal, #ssAsk, #ssAskMini");
-  if(moved && ssPending) ssTicket++;
-  ssNavCheck(moved);
-});
-const ssAddressMoved = () => {
+/* The one rule a landing lives by: it stays while what is lit is still the
+   answer. That is its block on the page and on screen, and its question's
+   `holds` still true (the Checks still on Feed the factories, the portfolio
+   still on profit and loss, the same site open, the finder still on). A block
+   its own page has drawn again (a live refresh, the roster's plan pick) is
+   found again by the question and lit again, strip and all. */
+function ssLandingHolds(){
+  const a = ssAsked;
+  if(!a) return false;
+  if(a.qn.holds && !a.qn.holds(a)) return false;
+  if(!a.lit.isConnected || !a.strip.isConnected){
+    const again = typeof a.qn.lit === "function" ? a.qn.lit() : q(a.qn.lit);
+    if(!again || !a.host.contains(again)) return false;
+    a.lit = again;
+    ssPlace();
+  }
+  return a.lit.getClientRects().length > 0;
+}
+function ssCheckLanding(){
+  if(ssAsked && !ssLandingHolds()) ssClearAsked();
+}
+/* Checked after anything that can change what is on screen has done its work:
+   every click, a change of address, and every render (renderAll() calls it).
+   A landing still on its way is dropped once the address has moved on. */
+const ssAfter = () => setTimeout(() => {
   if(ssPending && location.hash !== ssPending.hash) ssTicket++;
-  ssNavCheck();
-};
-window.addEventListener("popstate", ssAddressMoved);
-window.addEventListener("hashchange", ssAddressMoved);
+  ssCheckLanding();
+}, 0);
+document.addEventListener("click", ssAfter);
+window.addEventListener("popstate", ssAfter);
+window.addEventListener("hashchange", ssAfter);
 
 /* --- the index ----------------------------------------------------------------
    Built each time the palette opens, from what is already on the page, so the

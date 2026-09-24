@@ -418,7 +418,7 @@ test('a live refresh while the palette is open re-reads the board, and keeps the
     // renderAll() is where a refresh, or another save, arrives.
     const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
     const body = source.slice(source.indexOf('function renderAll(){'), source.indexOf('/* --- pages ---'));
-    assert.match(body, /ssDataChanged\(\);/);
+    assert.match(body, /ssDataChanged\(\);\s*ssCheckLanding\(\);/);
     await page.keyboard.press('/');
     await typed(page, 'test');
     await page.keyboard.press('ArrowDown');
@@ -488,19 +488,6 @@ test('a landing still waiting for its page is dropped when the reader goes elsew
     assert.equal(await page.evaluate(() => page), 'supply');
     assert.equal(await page.locator('.ss-asked').count(), 0);
     assert.equal(await page.locator('.ss-lit').count(), 0);
-    assert.deepEqual(page.errors, []);
-  } finally { await page.close(); }
-});
-
-test('a tab or link on the same page clears the landing, though page and address stay', async () => {
-  const page = await board();
-  try {
-    await page.click('#ssAsk .ss-aq[data-ask="profit"]');
-    assert.equal(await page.locator('.ss-asked').count(), 1);
-    const state = await page.evaluate(() => ssNavState());
-    await page.click('#companyNav a[data-id="results"]');
-    assert.equal(await page.evaluate(() => ssNavState()), state);
-    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -678,7 +665,7 @@ test('a redraw keeps a lit question or "n more" row lit, so Enter does what it s
   } finally { await page.close(); }
 });
 
-test('the answer\'s own controls leave the landing up; redrawing the answer away takes it down', async () => {
+test('the answer\'s own controls leave the landing up, and a redrawn answer is lit again', async () => {
   const page = await board();
   try {
     // The profit landing: the chart's series toggles above it are a view, not a way out.
@@ -695,9 +682,11 @@ test('the answer\'s own controls leave the landing up; redrawing the answer away
     await page.waitForTimeout(50);
     assert.equal(await page.locator('.ss-asked').count(), 1);
     assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
-    // Picking the plan draws a new roster: the lit block is gone, so is the landing.
+    // Picking the plan draws a new roster in its place: that is still the answer.
     await page.click('#probePlan');
-    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator('#sp-roster.ss-lit').innerText(), 'plan');
+    assert.equal(await page.locator('.ss-asked').count(), 1);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -739,6 +728,87 @@ test('a touch never lights a row; the viewport is watched only while the palette
     assert.equal(moved, false);
     await page.keyboard.press('Escape');
     assert.deepEqual(await page.evaluate(() => [...window.__vv]), []);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// --- review round 3: one rule, the landing stays while its answer does ---------------------
+
+test('fed: switching the Checks to another view takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => {
+      // The Checks head as the real one draws it: view tabs that redraw the table.
+      wireAll = () => {};
+      drawStock = () => {
+        $('stockHead').innerHTML = '<div class="sechead"><h2>Stock checks</h2></div><span class="seg">'
+          + '<a href="#" id="probeImports">Before the import</a></span>';
+        $('stock').innerHTML = `<tbody><tr><td>${stockView}</td></tr></tbody>`;
+        $('probeImports').onclick = () => { stockView = 'imports'; drawStock(); };
+      };
+    });
+    await page.click('#ssAsk .ss-aq[data-ask="fed"]');
+    assert.equal(await page.locator('#secStock.ss-lit').count(), 1);
+    await page.click('#probeImports');
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('profit: switching the portfolio to Operations takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="profit"]');
+    await page.evaluate(() => {
+      $('portHead').innerHTML = '<div class="sechead"><h2>Portfolio</h2><span class="seg"><a href="#" id="probeOps">Operations</a></span></div>';
+      $('probeOps').onclick = () => { view = 'ops'; };
+    });
+    await page.click('#probeOps');
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('hire: a live redraw lights the roster again; another site takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="hire"]');
+    assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
+    // A save arrives: the panel is drawn again, and renderAll() checks the landing.
+    await page.evaluate(() => { drawSite(); ssCheckLanding(); });
+    assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
+    assert.equal(await page.locator('#sp-crew.ss-dim').count(), 1);
+    assert.equal(await page.locator('#sitePanel .ss-asked + #sp-roster').count(), 1);
+    await page.evaluate(site => { openSite(site); document.body.click(); }, GYM);
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('where to open: switching the finder off takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => {
+      // The finder beside the map, as far as the landing needs it.
+      $('cityMapPage').innerHTML = '<div class="citymap"><aside class="places" style="position:relative">finder</aside></div>';
+      cityMapPage = {fs: {on: false}, finderOn(){ return this.fs.on; }, paintView(){}};
+      openFinder = () => { showPage('map'); cityMapPage.fs.on = true; };
+    });
+    await page.click('#ssAsk .ss-aq[data-ask="open"]');
+    await page.waitForSelector('#pageMap .ss-asked');
+    assert.equal(await page.locator('#cityMapPage .places.ss-lit').count(), 1);
+    await page.evaluate(() => { cityMapPage.fs.on = false; document.body.click(); });
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('Ctrl+Alt+K (AltGr+K on Windows) leaves the palette alone', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown',
+      {key: 'k', code: 'KeyK', ctrlKey: true, altKey: true, bubbles: true, cancelable: true})));
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
