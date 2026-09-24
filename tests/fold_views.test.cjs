@@ -393,22 +393,29 @@ test('a live refresh gives focus back to the chip that had it, and to nothing el
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
-  // A resize hides the focused chip (the footer's is off screen), the reader
-  // clicks the page, then a refresh: focus is not pulled back to a chip.
-  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
+  // Focus inside the open popover (where a click on the chip puts it): the
+  // refresh refills the popover and focus stays in it, still open on the new chip.
+  ({page, errors} = await board({width: 1440}));
   try {
-    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, 400); });
-    const mast = page.locator('#clock .fv-diff');
-    await mast.click();
-    await mast.focus();
-    await page.setViewportSize({width: 1200, height: 800});
-    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
-    await page.mouse.click(600, 500);
+    await page.locator('#clock .fv-diff').click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
     await refresh(page);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
     const s = await state(page);
-    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
+    assert.deepEqual([s.open, s.expanded], [true, ['true', 'false']]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
+});
+
+test('renderAll asks which chip has focus before the chips are replaced', () => {
+  // The order the refresh test above stands in for: fvChipFocus() read before
+  // drawMast() and drawFooter(), and handed to drawDifficulty().
+  const src = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+  const body = src.slice(src.indexOf('function renderAll(){'), src.indexOf('\n}', src.indexOf('function renderAll(){')));
+  const at = needle => { const i = body.indexOf(needle); assert.ok(i >= 0, needle); return i; };
+  assert.ok(at('const diffFocus = fvChipFocus();') < at('drawMast();'));
+  assert.ok(at('drawMast();') < at('drawFooter();'));
+  assert.ok(at('drawFooter();') < at('drawDifficulty(diffFocus);'));
 });
 
 test('on a phone the chip moves to the footer stamp', async () => {
