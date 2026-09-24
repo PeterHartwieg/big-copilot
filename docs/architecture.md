@@ -202,6 +202,7 @@ text for two of them is supplied by the caller.
 | `/*__WIKI_SCRIPT__*/` | `render()`, from `web/wiki.js` if present |
 | `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki |
+| `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 
 Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
 checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of

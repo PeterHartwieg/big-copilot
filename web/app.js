@@ -1068,8 +1068,9 @@
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
     const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
     // One click asks the game at most once: a token this write asked for and
-    // got is not asked for again, busy retries and all.
-    let asked = "";
+    // got is not asked for again, busy retries and all; nor is one the game
+    // gave the Apply this dry run follows (`opts.asked`).
+    let asked = (opts && typeof opts.asked === "string" && opts.asked) || "";
     const approve = async () => {
       const got = await askApproval(bound, opts && opts.approval);
       if (got.token) asked = got.token;
@@ -1081,8 +1082,8 @@
       const got = await approve();
       if (!got.token) return got;
       // An apply or an undo is not sent on an approval given for it: the
-      // player sees what the game would do first.
-      if (!dryRun) return {status: 0, error: "reapproved", body: null};
+      // player sees what the game would do first, on that same approval.
+      if (!dryRun) return {status: 0, error: "reapproved", body: null, asked: got.token};
       token = got.token;
     }
     let busyLeft = WRITE_BUSY_RETRIES;
@@ -1114,10 +1115,18 @@
         // its own: the page asks the game afresh what it would do first.
         dropApproval(bound.link, token);
         if (token === asked) return {status: 401, error: "not_paired", body: answer};
+        // Another tab of this site has stored a newer approval meanwhile: that
+        // one is tried before the game is asked.
+        const other = approvalToken(bound.link);
+        if (other && other !== token) {
+          if (!dryRun) return {status: 0, error: "reapproved", body: null, asked: ""};
+          token = other;
+          continue;
+        }
         const got = await approve();
         if (!got.token) return got;
         token = got.token;
-        if (!dryRun) return {status: 0, error: "reapproved", body: null};
+        if (!dryRun) return {status: 0, error: "reapproved", body: null, asked: got.token};
         continue;
       }
       if (res.status === 503 && error === "busy" && busyLeft > 0) {
