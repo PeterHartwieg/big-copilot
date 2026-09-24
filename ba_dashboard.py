@@ -133,7 +133,10 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # only the CLI's page, which has no strip, repeats it down here.
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
-             else '<span class="sf-meta" id="footBuild"></span>')
+             else '<span class="sf-meta" id="footBuild"></span>'
+                  # The difficulty chip, shown here at 1300 px and under; wider
+                  # than that it ends the masthead clock's last line.
+                  '<span class="fv-footdiff" id="footDiff"></span>')
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
     <div class="sf-rule"><span class="sf-orb"></span></div>
@@ -808,6 +811,10 @@ RHYTHM_MAX_STEP = 1.6
 # little, eight say a good deal, and the threshold should reflect that rather
 # than treating every sample as if it were large.
 T_95 = {2: 12.71, 3: 4.30, 4: 3.18, 5: 2.78, 6: 2.57, 7: 2.45, 8: 2.36, 9: 2.31}
+# The company's own week, as the Daily result chart's By weekday draws it, reads
+# only the last four weeks: a company that opened a new line of shops a month
+# ago has a different week now, and eight weeks would mostly describe the old one.
+RHYTHM_RECENT_DAYS = 28
 
 
 # Consumption is measured, not declared, so two figures this close are the same
@@ -853,13 +860,20 @@ def _fit(need: float, provision: float) -> str:
     return "tight" if gap <= need * FIT_TIGHT else "short"
 
 
-def _weekday_profile(points: list) -> list | None:
+def _weekday_profile(points: list, last: int | None = None, end: int | None = None) -> list | None:
     """How each weekday compares with its own week, as a percentage.
 
     A business that grew tenfold over the sample would otherwise make late
     weekdays look strong purely because they happened later. Each day is divided
     by a centred seven-day mean first, which cancels the trend and leaves the
     weekly cycle behind.
+
+    ``last`` keeps only the days in that many calendar days before ``end``
+    (the latest day of the series by default): 28 give every weekday at most
+    four readings, and a series with gaps (profit leaves out the loss days) gets
+    fewer rather than reaching back into older weeks. ``end`` itself is left
+    out because it has no days after it to centre a week on. The days before
+    the window still serve as neighbours for the means.
     """
     values = {day: float(value) for day, value in points}
     if len(values) < RHYTHM_MIN_DAYS:
@@ -874,6 +888,10 @@ def _weekday_profile(points: list) -> list | None:
                 baselines[day] = baseline
 
     ordered = sorted(baselines)
+    if last:
+        anchor = end if end is not None else max(values)
+        ordered = [day for day in ordered if anchor - last <= day < anchor]
+        baselines = {day: baselines[day] for day in ordered}
     for earlier, later in zip(ordered, ordered[1:]):
         step = baselines[later] / baselines[earlier]
         if step > RHYTHM_MAX_STEP or step < 1 / RHYTHM_MAX_STEP:
@@ -1370,6 +1388,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         beat = product_rhythm.get(entry["item"])
         entry["peak"] = beat["peak"] if beat else None
         entry["swing"] = beat["swing"] if beat else 0
+        # How many weeks of sales the peak is read from, which the Products
+        # table names beside it.
+        entry["weeks"] = beat["weeks"] if beat else 0
     market = _market(save, names, businesses, day, history, character)
 
     profits = [d["profit"] for d in daily]
@@ -2118,6 +2139,19 @@ def _chain_rhythm(save: Save, buildings: list, daily: list, day: int) -> dict:
     profiles["today"] = {"day": today, "index": by_name.get(today)}
     profiles["yesterday"] = {"day": yesterday, "index": by_name.get(yesterday)}
     profiles["basis"] = "customers" if profiles["customers"] else "revenue"
+    # The same three series over the last four weeks only, for the chart. The
+    # full-length ones above stay what the supply sizing reads.
+    # The window is counted in calendar days back from the last finished day,
+    # the same for all three, so a series with gaps reads fewer weeks.
+    end = daily[-1]["day"] if daily else None
+    profiles["recent"] = {
+        "days": RHYTHM_RECENT_DAYS,
+        "revenue": _weekday_profile(
+            [(d["day"], d["revenue"]) for d in daily], RHYTHM_RECENT_DAYS, end),
+        "profit": _weekday_profile(
+            [(d["day"], d["profit"]) for d in daily if d["profit"] > 0], RHYTHM_RECENT_DAYS, end),
+        "customers": _weekday_profile(sorted(customers.items()), RHYTHM_RECENT_DAYS, end),
+    }
     return profiles
 
 
@@ -2136,6 +2170,7 @@ def _product_rhythm(save: Save, buildings: list, names: Names) -> dict:
                 "profile": profile,
                 "peak": _peak_day(profile),
                 "swing": _swing(profile),
+                "weeks": _weeks(profile),
             }
     return out
 
@@ -9408,6 +9443,70 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    text, so the glow behind it is too. */
 .clock small{display:block;width:fit-content;margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0;color:var(--ink-3);margin-top:3px}
 .clock small .flag{color:var(--warn)}
+/* The difficulty chip (fold-views, R15): at the end of the clock's last line
+   at 1301 px and over, where the masthead is a fixed 100 px with room to
+   spare, and at 1300 px and under beside the footer's game build instead.
+   Below the switch the clock is exactly the board's own: no width rules, and
+   its last line keeps its own glow. */
+.fv-diff{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:0;color:var(--ink-2);text-shadow:none;
+  padding:3px 7px;border-radius:4px;border:1px solid var(--rule);background:var(--surface);transition:color .15s,border-color .15s}
+.fv-diff:hover,.fv-diff[aria-expanded="true"]{color:var(--ink);border-color:var(--ink-3)}
+.fv-diff:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fv-diff svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.fv-diff:hover svg{transform:rotate(-12deg) scale(1.15)}
+.clock .fv-diff{display:none}
+.fv-diff.fv-plain{cursor:default}
+.fv-footdiff{display:inline-flex}
+/* A board with no difficulty to show adds no gap to the footer's line. */
+.fv-footdiff:empty{display:none}
+.fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
+@media(min-width:1301px){
+  .fv-footdiff{display:none}
+  /* On the clock's line it is no taller than the text: the negative margin
+     keeps the line box the height it had without it. The line's text carries
+     the glow, the chip its own ground. */
+  .clock .fv-diff{display:inline-flex;margin:-4px 0 -4px 6px;padding:1px 5px;gap:4px;font-size:10px;vertical-align:middle}
+  .clock .fv-diff svg{width:10px;height:10px}
+  .clock small.fv-diffline::before{display:none}
+  .clock .fv-glow{position:relative}
+  .clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
+    border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
+}
+.fv-pop{position:fixed;left:0;top:0;z-index:60;width:470px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-y:auto;
+  padding:18px 20px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0007;
+  opacity:0;visibility:hidden;transform:translateY(-6px);
+  transition:opacity .16s ease,transform .16s cubic-bezier(.2,.7,.2,1),visibility .16s}
+.fv-pop.fv-up{transform:translateY(6px)}
+/* Visible at once on opening, so focus can move into it on the same frame. */
+.fv-pop.on{opacity:1;visibility:visible;transform:none;transition:opacity .16s ease,transform .16s cubic-bezier(.2,.7,.2,1),visibility 0s}
+.fv-pop h3{margin:0;font-size:15px;font-weight:600;display:flex;align-items:center;gap:10px}
+.fv-pop .fv-popchips{margin-left:auto;display:inline-flex;gap:6px}
+.fv-pop p{margin:4px 0 12px;color:var(--ink-3);font-size:12.5px}
+.fv-rules{display:flex;flex-direction:column}
+.fv-rule{display:grid;grid-template-columns:minmax(0,1fr) 84px 92px;gap:14px;align-items:center;padding:8px 0;border-top:1px solid var(--rule-soft);cursor:default}
+.fv-rule .n{font-size:13px;font-weight:500}
+.fv-rule .n small{display:block;font-size:11px;color:var(--ink-3);font-weight:400;line-height:1.35;margin-top:1px}
+.fv-rule .v{font:500 13px/1 "IBM Plex Mono",monospace;text-align:right}
+.fv-rule .v small{display:block;white-space:nowrap;font-size:10px;color:var(--ink-3);margin-top:4px}
+/* One slider a setting, like the game's own: Normal is the tick, this game the
+   knob; right is always harder. */
+.fv-slide{position:relative;height:14px}
+.fv-slide::before{content:"";position:absolute;left:0;right:0;top:6px;height:2px;border-radius:2px;background:var(--rule)}
+.fv-slide .nm{position:absolute;top:2px;width:2px;height:10px;margin-left:-1px;background:var(--ink-3);border-radius:1px}
+.fv-slide .me{position:absolute;top:2px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--warn);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.fv-slide .me.easy{background:var(--accent)}
+.fv-slide .run{position:absolute;top:6px;height:2px;background:var(--warn);opacity:.55;border-radius:2px}
+.fv-slide .run.easy{background:var(--accent)}
+.fv-rule:hover .fv-slide .me{transform:scale(1.35)}
+.fv-popfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:6px;padding-top:10px;border-top:1px solid var(--rule-soft);font:500 10.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.fv-popfoot .lg{display:inline-flex;align-items:center;gap:6px}
+.fv-popfoot .lg i{display:inline-block;width:2px;height:10px;background:var(--ink-3);border-radius:1px}
+.fv-popfoot .lg u{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warn);text-decoration:none}
+@media(max-width:500px){
+  .fv-rule{grid-template-columns:minmax(0,1fr) 64px 84px;gap:10px}
+}
 /* Steady status dots let the compositor sleep while the board is idle. */
 .live{display:inline-flex;align-items:center;gap:6px;color:var(--accent);transition:color .3s}
 .live b{width:6px;height:6px;border-radius:50%;background:currentColor}
@@ -9578,6 +9677,8 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
 .move:hover span{transform:translateZ(10px)}
 .move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
 .move:hover .soon{color:var(--accent);border-color:var(--accent)}
+/* The Plan imports card names the product it would change first. */
+#planImportsCard .what b{font-size:inherit;font-weight:600;color:var(--ink);transform:none}
 /* where the card goes, said on the card: the last line of each one */
 .move .go{margin-top:auto;padding-top:4px;display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .move .go::after{content:"\2192";transition:transform .2s}
@@ -9766,6 +9867,25 @@ g[data-series].off{opacity:0}
 .wd:hover .d span{display:none}.wd:hover .d b{display:inline}
 .wd.now .d{color:var(--ink)}
 .wd.now .track{outline:1px dashed var(--rule);outline-offset:4px;border-radius:6px}
+/* The line over a weekday chart that names the series it reads (fold-views,
+   R15): By weekday in the Daily result chart and a site's own "Its week". */
+.fv-top{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;min-height:22px;margin-bottom:6px}
+.fv-top .readout{margin:0;flex-wrap:wrap}
+.fv-basis{display:inline-flex;align-items:center;gap:8px;font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
+.fv-basis b{color:var(--ink);font-weight:500}
+.fv-basis .dot{width:7px;height:7px;border-radius:50%;background:var(--fv-s,var(--accent));flex:none}
+.fv-week .week{height:190px}
+.fv-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.fv-legend .legend{margin:0}
+.fv-legend .link{margin-left:auto;font-size:12.5px}
+.fv-sites{margin-top:20px;overflow-x:auto}
+.fv-sites[hidden]{display:none}
+@media(max-width:500px){
+  .fv-wd{padding:12px}
+  .fv-wd .fv-top .readout{justify-content:flex-start;gap:10px}
+  .fv-week .week{gap:4px;height:170px}
+  .fv-week .wd .n{font-size:10px;padding:3px 5px}
+}
 
 /* heat grid --------------------------------------------------------------- */
 .heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
@@ -10439,9 +10559,6 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .mile .box svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .mile.done .box{background:var(--accent);border-color:var(--accent)}
 .mile .c{margin-left:auto;font:500 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
-.rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
-.rules span{padding:3px 8px;border-radius:4px;background:var(--raised);font:500 11px "IBM Plex Mono",monospace;color:var(--ink-2);cursor:help}
-.rules span b{color:var(--ink);font-weight:600;margin-left:4px}
 
 /* the sphere: the dot grown up. It rolls out of the wordmark onto the masthead
    rule and sits there; it watches the pointer, squishes when clicked and rolls
@@ -10701,13 +10818,13 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
 
     <!-- Next moves: each card carries what it can say about this save, filled
-         by drawFindLocation() and drawOptimizeStaffing(). The cards tilt from
-         wireCards(). -->
+         by paintPlanImports() (from the change checklist), drawFindLocation()
+         and drawOptimizeStaffing(). The cards tilt from wireCards(). -->
     <section class="sec rv" id="secMoves">
       <div class="sechead"><h2>Next moves</h2>
         <span class="why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
       <div class="moves">
-        <a class="move rv" href="#secLogistics" id="planImportsCard"><span class="soon">CHECKLIST</span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span class="what">Plan weekly orders and get a checklist of settings to enter in-game.</span><span class="go">Opens the change checklist</span></a>
+        <a class="move rv" href="#secLogistics" id="planImportsCard"><span class="soon"></span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span class="what"></span><span class="go">Opens the change checklist</span></a>
         <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
         <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go">Opens the finder on the map</span></a>
       </div>
@@ -10783,12 +10900,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
     <section class="sec rv" id="secDaily" data-sub="results">
       <div id="dailyHead"></div>
       <div id="dailyBox"></div>
-    </section>
-
-    <section class="sec rv" id="secRhythm" data-sub="results">
-      <div id="rhythmHead"></div>
-      <div id="rhythmChart"></div>
-      <div id="rhythmSitesBox" style="margin-top:20px" hidden><table id="rhythmSites"></table></div>
     </section>
 
     <section class="sec rv" id="secPortfolio" data-sub="results">
@@ -11157,12 +11268,16 @@ function seg(host, options, read, write, redraw){
 
 /* View state lives out here so a live refresh redraws the numbers without
    resetting whichever tab, filter or sort order the reader had chosen. */
+/* The Daily result chart's window: 30 days, 0 for all of them, or "wd" for
+   By weekday, the company's own week. */
 let chartWindow=30;
 let view="pnl", sortKey=null, sortDir=-1, stockView="shops", marketView="types";
 /* The demand grid sorts by one neighbourhood at a time; numbers in the cells are
    off until asked for, the shade carries the reading. */
 let marketSortHood=null, marketSortDir=-1;
-let rhythmView="customers";
+/* Which company series By weekday reads; null is the first that clears the
+   weekly-cycle test, Revenue before Profit before Customers. */
+let weekSeries=null;
 /* Everything that is folded away by default, so a refresh does not re-fold what
    the reader has just opened. */
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
@@ -11272,7 +11387,9 @@ function weekHtml(profile, todayName){
     const off = d.index - 100, up = off >= 0, side = up ? "bottom" : "top";
     /* 44 px keeps a downward bar's pill clear of the weekday label. */
     const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 44));
-    return `<div class="wd${d.day === todayName ? " now" : ""}"><div class="track">
+    /* A read-out line above the bars (By weekday has one) spells the column out. */
+    const read = `${d.day} <b>${d.index}%</b> of a normal day · from ${d.n} week${d.n === 1 ? "" : "s"}`;
+    return `<div class="wd${d.day === todayName ? " now" : ""}" data-read="${attr(read)}"><div class="track">
       <i class="bar2${up ? "" : " down"}" style="height:${h}px;${side}:50%"></i>
       <span class="n" style="${side}:calc(50% + ${h + 8}px)">${off > 0 ? "+" : ""}${off} pts</span>
       </div><span class="d"><span>${d.short.toUpperCase()}</span><b>${d.day}</b></span></div>`;
@@ -11292,22 +11409,25 @@ function miniWeek(profile){
   </svg>`;
 }
 
-const RHYTHM_VIEWS = {
-  customers: {label:"Customers", note:"Footfall across every shop"},
-  revenue:   {label:"Revenue",   note:"Takings across every site"},
-  profit:    {label:"Profit",    note:"Daily profit across every site"},
+/* By weekday: the company's week inside the Daily result chart. Each series
+   is the last four weeks of daily results against a normal day, and a series
+   that does not clear the weekly-cycle test has no chip; with none clearing it
+   the option is not offered at all. */
+const WEEK_SERIES = {
+  revenue:   {label:"Revenue",   what:"Company revenue",   scope:"every site", colour:"var(--info)"},
+  profit:    {label:"Profit",    what:"Company profit",    scope:"every site", colour:"var(--accent)"},
+  customers: {label:"Customers", what:"Company customers", scope:"every shop", colour:"var(--ink-2)"},
 };
 const signedPct = v => `${v > 0 ? "+" : ""}${v}%`;
-
-function drawRhythm(){
-  const r = D.rhythm, profile = r[rhythmView], weeks = weeksOf(profile);
-  const today = r.today, yest = r.yesterday;
-  const swingy = D.businesses.filter(b => b.rhythm).sort((a,z) => z.swing - a.swing);
-
-  /* Nine rows saying the same thing is a sentence, not a table. When most sites
-     peak on the same day within a narrow band, say that; the table stays a
-     click away for the sites that break the pattern. The sentence, today's and
-     yesterday's own weekday reading go behind the ? mark. */
+const weekdaySeries = () => {
+  const recent = (D && D.rhythm && D.rhythm.recent) || {};
+  return Object.keys(WEEK_SERIES).filter(id => Array.isArray(recent[id]) && recent[id].length)
+    .map(id => [id, recent[id]]);
+};
+/* Nine rows saying the same thing is a sentence, not a table. When most sites
+   peak on the same day within a narrow band, say that; the table stays a click
+   away, "site by site", for the sites that break the pattern. */
+function rhythmVerdict(swingy){
   const byDay = {};
   swingy.forEach(b => (byDay[b.peakDay] = byDay[b.peakDay] || []).push(b));
   const ranked = Object.entries(byDay).sort((a,z) => z[1].length - a[1].length);
@@ -11315,7 +11435,7 @@ function drawRhythm(){
   const swings = pack.map(b => b.swing);
   const spread = swings.length ? Math.max(...swings) - Math.min(...swings) : 0;
   const rest = ranked.slice(1);
-  const verdict = (pack.length >= 7 && spread <= 15)
+  return (pack.length >= 7 && spread <= 15)
     ? `${pack.length} site${pack.length===1?"":"s"} peak ${topDay}, +${Math.min(...swings)} to +${
         Math.max(...swings)} points between their best and worst day. ${rest.length
           ? rest.map(([d,bs]) => `${bs.map(b => shortName(b)).join(", ")} peak${
@@ -11324,36 +11444,60 @@ function drawRhythm(){
     : swingy.length
       ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.`
       : "No site has enough history to separate a weekly cycle from noise yet.";
-  const days = [
-    today && today.index ? `Today is ${today.day}, normally ${signedPct(today.index - 100)}.` : "",
-    yest && yest.index ? `Yesterday was ${yest.day}, normally ${signedPct(yest.index - 100)}.` : "",
+}
+const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function drawWeekday(series, tools){
+  const [id, profile] = series.find(([k]) => k === weekSeries) || series[0];
+  weekSeries = id;
+  const s = WEEK_SERIES[id], weeks = weeksOf(profile);
+  /* Day 1 was a Monday, so day % 7 counts from Sunday. */
+  const day = D.meta && D.meta.day;
+  const today = day ? WEEKDAY_NAMES[day % 7] : null, yest = day ? WEEKDAY_NAMES[(day - 1) % 7] : null;
+  const at = name => (profile.find(p => p.day === name) || {}).index;
+  const swingy = D.businesses.filter(b => b.rhythm).sort((a,z) => z.swing - a.swing);
+  /* The line above the bars names the series and how much history it reads;
+     its tooltip carries what the old section's ? did: the sites' verdict, and
+     what today and yesterday are normally worth. */
+  const tip = [`${s.what} against a normal day, from ${weeks} week${weeks===1?"":"s"} of daily results.`,
+    rhythmVerdict(swingy),
+    today && at(today) ? `Today is ${today}, normally ${signedPct(at(today) - 100)}.` : "",
+    yest && at(yest) ? `Yesterday was ${yest}, normally ${signedPct(at(yest) - 100)}.` : "",
   ].filter(Boolean).join(" ");
-  const note = `${RHYTHM_VIEWS[rhythmView].note} against a normal day${
-    profile ? `, from ${weeks} week${weeks===1?"":"s"} of history.` : "."}`;
-
-  $("rhythmHead").innerHTML = sechead("Weekly rhythm", {
-    why: [note, verdict, days].filter(Boolean).join(" "),
-    aside: `<span class="seg" id="rhythmTools"></span>${swingy.length
-      ? `<a class="link" href="#" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-          showRhythmSites ? "hide the table" : "site by site"}</a>` : ""}`,
+  const hi = profile.reduce((a, p) => p.index > a.index ? p : a);
+  const lo = profile.reduce((a, p) => p.index < a.index ? p : a);
+  const pts = v => `${v > 0 ? "+" : v < 0 ? "\u2212" : ""}${Math.abs(v)}`;
+  const peaks = `Peaks <b>${hi.day}</b> ${pts(hi.index - 100)} · lowest <b>${lo.day}</b> ${pts(lo.index - 100)}`;
+  const span = Math.round(((D.rhythm && D.rhythm.recent && D.rhythm.recent.days) || 28) / 7);
+  $("dailyHead").innerHTML = sechead("Daily result", {
+    why: `Each weekday against a normal day, from the company's last ${span} week${span === 1 ? "" : "s"} of daily results. Point at a weekday for its figure.`,
+    aside: `<span class="seg" id="chartTools"></span>`,
   });
-  seg($("rhythmTools"), Object.entries(RHYTHM_VIEWS).map(([id,v]) => [id, v.label]),
-    () => rhythmView, v => rhythmView = v, drawRhythm);
-  $("rhythmChart").innerHTML = profile
-    ? `<div class="chartbox" style="padding-bottom:16px">${weekHtml(profile, today && today.day)}</div>`
-    : `<p class="quiet">Not enough history to separate a weekly cycle from noise.</p>`;
-
+  seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
+  $("dailyBox").innerHTML = `
+    <div class="chartbox chart fv-wd" data-readzone>
+      <div class="fv-top">
+        <span class="fv-basis" style="--fv-s:${s.colour}" data-tip="${attr(tip)}"><span class="dot"></span><b>${s.what}</b> · ${
+          s.scope} · ${weeks} week${weeks===1?"":"s"}</span>
+        <span class="readout fv-readout"><span class="sp-readout">${peaks}</span></span>
+      </div>
+      <div class="fv-week">${weekHtml(profile, today)}</div>
+      <div class="fv-legend"><div class="legend">${series.map(([k]) =>
+        `<a class="${k === id ? "on" : ""}" data-week="${k}" href="#"><i style="background:${WEEK_SERIES[k].colour}"></i>${
+          WEEK_SERIES[k].label}</a>`).join("")}</div>${swingy.length
+        ? `<a class="link" href="#" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
+            showRhythmSites ? "hide the table" : "site by site"}</a>` : ""}</div>
+    </div>
+    <div class="fv-sites"${showRhythmSites && swingy.length ? "" : " hidden"}>${swingy.length ? `<table id="rhythmSites">
+      <thead><tr><th>Business</th><th class="l">Peaks</th><th>Swing</th>
+        <th class="l" style="width:38%">Across the week</th></tr></thead>
+      <tbody>${swingy.map(b => `<tr data-key="${attr(b.key)}" style="cursor:pointer">
+        <td class="l">${siteLabel(b)}</td>
+        <td class="l">${b.peakDay}</td>
+        <td>${b.swing} pts</td>
+        <td class="l">${miniWeek(b.rhythm)}</td></tr>`).join("")}</tbody></table>` : ""}</div>`;
+  $$("#dailyBox [data-week]").forEach(a => a.onclick = e => { e.preventDefault(); weekSeries = a.dataset.week; drawChart(); });
   const toggle = $("rhythmToggle");
-  if(toggle) toggle.onclick = e => { e.preventDefault(); showRhythmSites = !showRhythmSites; drawRhythm(); };
-  $("rhythmSitesBox").hidden = !showRhythmSites || !swingy.length;
-  $("rhythmSites").innerHTML = swingy.length ? `
-    <thead><tr><th>Business</th><th class="l">Peaks</th><th>Swing</th>
-      <th class="l" style="width:38%">Across the week</th></tr></thead>
-    <tbody>${swingy.map(b => `<tr data-key="${attr(b.key)}" style="cursor:pointer">
-      <td class="l">${siteLabel(b)}</td>
-      <td class="l">${b.peakDay}</td>
-      <td>${b.swing} pts</td>
-      <td class="l">${miniWeek(b.rhythm)}</td></tr>`).join("")}</tbody>` : "";
+  if(toggle) toggle.onclick = e => { e.preventDefault(); showRhythmSites = !showRhythmSites; drawChart(); };
   $$("#rhythmSites tr[data-key]").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
   wireTips();
 }
@@ -12166,7 +12310,14 @@ function drawMast(){
   const clock = $("clock");
   clock.innerHTML =
     `<b>Day ${m.day}<i>·</i>${wd} ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
-    + `<small>${bits.join(" · ")}</small>` + (flags.length ? `<small>${flags.join(" · ")}</small>` : "");
+    /* The difficulty chip (fold-views, R15) ends the clock's last line: the
+       flags line when there is one, else the sites and staff. A line of its
+       own made the sticky masthead taller wherever it wraps. The line's text
+       carries the glow; the chip has its own ground. */
+    + [bits.join(" · "), ...(flags.length ? [flags.join(" · ")] : [])].map((line, i, all) => {
+      const chip = i === all.length - 1 ? fvDiffChip(m.houseRules, "mast", m.difficulty) : "";
+      return chip ? `<small class="fv-diffline"><span class="fv-glow">${line}</span>${chip}</small>` : `<small>${line}</small>`;
+    }).join("");
   clock.dataset.tip = `Game time when the save was written: ${m.cityDate}. Day 1 was a Monday.`
     + (k.vacant ? ` ${k.vacant} lease${k.vacant === 1 ? "" : "s"} vacant on top of the ${k.businesses} sites.` : "");
   window.BigCopilotCommunity?.paintOnline();
@@ -12278,12 +12429,16 @@ const ALERT_LINKS = {
    section. */
 const SEC_PAGE = {
   alertSection:["today"],
+  /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
+     old link to it still opens Results, and reveal() lands it on the chart. */
   secDaily:["company","results"], secRhythm:["company","results"],
   secPortfolio:["company","results"], secDetail:["company","results"],
   secLogistics:["supply","orders"], secStock:["supply","checks"], secFlow:["supply","map"],
   secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company","products"], secPayroll:["company","payroll"], secGoals:["company","milestones"],
 };
+/* Sections that have gone, and the section that took their place. */
+const SEC_MOVED = {secRhythm: "secDaily"};
 /* Put something at the top of the window and keep it there while the page
    under it settles. Sections carry content-visibility:auto, so the ones above
    the target are estimated heights until they paint, and a single scroll to a
@@ -12314,7 +12469,7 @@ function reveal(secId, historyMode = "push", into = null){
   if(secId !== "secDetail") siteShut();
   showPage(p, false, historyMode);
   if(sv) showSub(p, sv);
-  const sec = $(secId);
+  const sec = $(SEC_MOVED[secId] || secId);
   if(!sec || sec.hidden) return;
   const target = into ? q(into) : null;
   if(target) settleScroll(target);
@@ -12673,6 +12828,12 @@ function niceStep(span, ticks){
 }
 
 function drawChart(){
+  const weekly = weekdaySeries();
+  /* A save that stops clearing the test (a reload, another save) falls back to
+     the default window rather than keeping an option that is not offered. */
+  if(chartWindow === "wd" && !weekly.length) chartWindow = 30;
+  const tools = [[30,"30 days"],[0,"All"]].concat(weekly.length ? [["wd","By weekday"]] : []);
+  if(chartWindow === "wd"){ chartRows = []; drawWeekday(weekly, tools); return; }
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
   const rows = chartRows, n = rows.length;
   /* A save on its first day has no finished day to plot yet. The web shell
@@ -12693,7 +12854,7 @@ function drawChart(){
       first.day} to ${last.day}. Click a legend chip to add or drop a line.`,
     aside: `<span class="seg" id="chartTools"></span>`,
   });
-  seg($("chartTools"), [[30,"30 days"],[0,"All"]], () => chartWindow, v => chartWindow = v, drawChart);
+  seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
 
   const W = 1140, H = 260, L = 56, R = 12, T = 16, B = 28;
   /* The axis fits every series, on or off, so a legend click never moves it. */
@@ -15633,7 +15794,12 @@ function drawSite(){
       </section>
       <section class="rv" data-block="week" id="sp-week">
         ${sechead("Its week", {icon: sp ? "week" : null, quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
-        <div class="chartbox" style="padding-bottom:16px">${b.rhythm ? weekHtml(b.rhythm, todayName)
+        <div class="chartbox" style="padding-bottom:16px">${b.rhythm
+          /* Named, like the company's By weekday, so the two stop reading as
+             two answers to one question: this is this site's revenue alone. */
+          ? `<div class="fv-top"><span class="fv-basis" style="--fv-s:var(--info)"><span class="dot"></span><b>This ${
+              b.status === "retail" ? "shop" : b.status === "office" ? "office" : "site"}’s revenue</b> · ${
+              weeksOf(b.rhythm)} week${weeksOf(b.rhythm) === 1 ? "" : "s"}</span></div>${weekHtml(b.rhythm, todayName)}`
           : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
       </section>
     </div>`}`;
@@ -15778,13 +15944,14 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
-  const add = (kind, s, item, current, proposed, reason, source = null, mode = null) => {
+  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false) => {
     const group = `${kind} · ${address(s)}`;
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]
                                .concat(mode === "smart" ? ["smart"] : []));
-    rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode});
+    rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode,
+               ...(paused ? {paused: true} : {})});
   };
   importRows.forEach(d => d.rows.forEach(r => {
     // The Set to box: the player's figure where they typed one, else the suggestion.
@@ -15802,7 +15969,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
           : `The estimated requirement is ${ceil100(r.total).toLocaleString()}. Review the quantity after resuming.`}`,
-        null, mode);
+        null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null
         && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
       const why = r.edited ? yours : r.factoryWeek
@@ -15865,6 +16032,49 @@ function reconcileOrderMarks(saved, rows, complete){
   if(!complete) return new Set(saved);
   const valid = new Set(rows.map(r => r.key));
   return new Set([...saved].filter(key => valid.has(key)));
+}
+
+/* Today's Plan imports card counts what the change checklist still has to do,
+   from the same rows and the same ticks, so the two can never disagree. Four
+   states: one change (said in full), several (counted, and where), all ticked,
+   and nothing to change. `nameOf` gives a site's short name from its index. */
+function planImportsState(rows, marks, nameOf, gaps = {}){
+  const esc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const left = rows.filter(r => !marks.has(r.key));
+  /* Nothing on the list is what the checklist found, not a promise: said in
+     its words, and with what it could not look at (the game's text missing,
+     recipes still unnamed), in which case the badge does not say ALL SET. */
+  if(!rows.length){
+    const missing = [
+      gaps.unnamed ? `${gaps.unnamed} factory recipe${gaps.unnamed === 1 ? " is" : "s are"} still unnamed and not included` : "",
+      gaps.complete === false ? "factory lines need the game's text to be included" : "",
+    ].filter(Boolean).join(", and ");
+    return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
+      : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
+  }
+  if(!left.length) return {badge: "ALL TICKED", live: false,
+    what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.`};
+  const n = v => v === null || v === undefined ? "not set" : v.toLocaleString();
+  /* A paused import the player gave a figure has no current setting: it is
+     a resume, not an order going from "not set". */
+  const resume = r => !!r.paused;
+  const change = r => r.proposed !== null && resume(r)
+    ? `resume the paused import, ${r.mode === "smart" ? `Smart Delivery stock ${n(r.proposed)}` : `${n(r.proposed)}/week`}`
+    : r.proposed === null
+    ? String(r.reason || "").split(". ")[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase())
+    : r.kind === "Before the next delivery" ? `add ${n(r.proposed)} units before the next delivery`
+    : `${r.mode === "smart" ? "Smart Delivery stock" : r.kind === "Weekly imports" ? "weekly order" : "daily top-up"} ${
+        n(r.current)} \u2192 ${n(r.proposed)}`;
+  const where = r => r.site === null || r.site === undefined ? null : nameOf(r.site);
+  if(left.length === 1){
+    const r = left[0], at = where(r);
+    return {badge: "1 TO CHANGE", live: true, what: `<b>${esc(r.item)}</b>${at ? ` at ${esc(at)}` : ""}: ${esc(change(r))}.`};
+  }
+  const places = [...new Set(left.map(where).filter(Boolean))];
+  const at = !places.length ? "" : places.length <= 2 ? ` at ${places.map(esc).join(" and ")}`
+    : ` at ${places.slice(0, 2).map(esc).join(", ")} and ${places.length - 2} more`;
+  return {badge: `${left.length} TO CHANGE`, live: true,
+    what: `<b>${left.length} changes</b>${at}, starting with ${esc(left[0].item)}.`};
 }
 
 const orderMarkCache = new Map();
@@ -15957,6 +16167,8 @@ function drawOrderChecklist(rows, factories){
     $("resetOrderMarks").disabled = !done;
     $("orderCopyFallback").hidden = true;
     $("orderCopyStatus").textContent = "";
+    paintPlanImports(planImportsState(rows, marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null,
+      {complete, unnamed: unnamedRecipes}));
   };
   body.querySelectorAll("input[data-order-mark]").forEach(input => {
     input.onchange = () => {
@@ -16769,9 +16981,19 @@ function drawProducts(){
   const showPeak = withPeak * 2 >= rows.length;
   /* The list is sorted by revenue, so the first row is the bar's full width. */
   const top = (rows.length && rows[0].revenue) || 1;
+  /* Units, not revenue, and across every store that sells the line: said at
+     each place a peak is named, so the product's Saturday is not read against
+     the company's own week, which is revenue. */
   const peakTip = p => p.peak
-    ? `Peaks ${p.peak}, ${p.swing} points between best and worst day`
+    ? `Units sold across ${plural(p.stores, "store")}${p.weeks ? `, last ${plural(p.weeks, "week")}` : ""}: peaks ${
+        p.peak}, ${p.swing} points between best and worst day`
     : "No weekly cycle clears the noise test";
+  /* Each product's peak reads its own weeks of sales (its cell says how many);
+     the header gives the range across the rows. */
+  const peakWeeks = rows.filter(p => p.peak && p.weeks).map(p => p.weeks);
+  const lo = Math.min(...peakWeeks), hi = Math.max(...peakWeeks);
+  const weekRange = !peakWeeks.length ? "" : lo === hi ? `the last ${plural(hi, "week")}` : `the last ${lo} to ${hi} weeks`;
+  const fromWeeks = weekRange ? `, from ${weekRange},` : "";
   const more = all.length > TOP
     ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
         showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
@@ -16780,14 +17002,15 @@ function drawProducts(){
     why: `Revenue and units are yesterday summed over every store that sells the line;`
       + ` units a week is the last seven days, and stores is how many carry it.`
       + (showPeak
-        ? " Peaks names the weekday that sells best and the points between best and worst day."
+        ? ` Peaks names the weekday that sells the most units${fromWeeks} and the points between best and worst day.`
         : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
     quiet: "by revenue yesterday",
     aside: more,
   }) + `<table>
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
       <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
-      <th>Avg price</th><th>Stores</th>${showPeak?`<th>Peaks</th>`:""}</tr></thead>
+      <th>Avg price</th><th>Stores</th>${showPeak?`<th data-tip="${attr(`The weekday each product sells most units, across every store that carries it${
+        weekRange ? `, from ${weekRange} of sales` : ""}`)}">Peaks · units</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>{
       /* The product opens the store that sells the most of it, Shelves lit,
          or with nothing sold yet one that stocks it: the Portfolio has no
@@ -16854,50 +17077,109 @@ function drawPayroll(){
         : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">No staff hired yet.</p>`);
 }
 
-/* The career totals as a checklist, then the house rules: the difficulty, and
-   every setting that differs from the game's Normal preset. They are worth
-   stating, because several of them are doing real work here. Normal is the
-   yardstick rather than ×1, because the presets are not ×1: Normal's urgent
-   wholesale fee is ×0.2. */
+/* The career totals as a checklist, and the running totals under it. The
+   difficulty used to follow here; it is the chip on the masthead's build line
+   now (the footer's at 1300 px and under), see fvDiffChip(). */
 function drawGoals(){
-  const g = D.goals, h = D.meta.houseRules;
-  const moved = (h?.rules || []).filter(r => r.lean !== "level");
-  const setting = (unit, v) => unit === "%" ? `${v}%` : `×${v}`;
-  /* "10 settings harder", "1 setting harder and 2 easier": the noun goes on the first count. */
-  const vsNormal = h ? [[h.harder, "harder"], [h.easier, "easier"]].filter(([n]) => n)
-    .map(([n, way], i) => `${i ? n : plural(n, "setting")} ${way}`).join(" and ") : "";
-  const playing = h && ({Custom: "custom settings", Unknown: "an unrecognised difficulty"}[h.label] || h.label);
-  /* The checklist is the design's: every business type run, every building
-     owned, the story rivals taken over, the personal goals, the diplomas —
-     each "n / total", the box filled only when complete. Personal goals have
-     no stored total, so show the completed count with an unfilled box. Goods
-     made and tax paid are running totals below the checklist. */
+  const g = D.goals;
+  /* The checklist is the design's: every business type run, the story rivals
+     taken over, the personal goals, the diplomas -- each "n / total", the box
+     filled only when complete. Personal goals have no stored total, so show
+     the completed count with an unfilled box. Goods made, tax paid and the
+     buildings owned are running totals below the checklist: owning all 885
+     buildings is not a goal anybody plays for. */
   const num = n => (n || 0).toLocaleString();
   const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${num(n)} / ${num(total)}`]] : [];
   const miles = [
     ...ofAll("Every business type run", g.typesRun, g.typesTotal),
-    ...ofAll("Every building owned", g.buildingsOwned, g.buildingsTotal),
     ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
     ...(g.goalsTotal > 0 ? ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal)
       : [["Personal goals done", false, `${num(g.goalsDone ?? g.completed)} done`]]),
     ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
   ];
-  $("secGoals").innerHTML = sechead("Milestones", {
-    why: h ? "Easy, Normal and Hard are the game's presets, and a custom game sets each slider"
-      + " itself. The house rules below are the settings that differ from Normal; hover one"
-      + " for Normal's value." : "",
-    quiet: h ? `career totals · playing on ${playing}${
-        vsNormal ? `, ${vsNormal} than Normal` : ""}, started on ${fmt(h.startingMoney)}`
-      : `career totals · playing on ${D.meta.difficulty}`,
-  }) + `<div class="miles">${miles.map(([label, done, text]) =>
+  $("secGoals").innerHTML = sechead("Milestones", {quiet: "career totals"})
+    + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
-    + `<p class="quiet">${num(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid</p>`
-    + (moved.length ? `<div class="rules">${moved.map(r =>
-        `<span data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Normal is ${
-          setting(r.unit, r.normal)}, so this game is ${r.lean}.`)}">${r.name}<b>${
-          setting(r.unit, r.value)}</b></span>`).join("")}</div>`
-      : "");
+    + `<p class="quiet">${num(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
+      plural(g.buildingsOwned || 0, "building")} owned</p>`;
+}
+
+/* The difficulty, as one chip and a popover with every setting that differs
+   from the game's Normal preset. Normal is the yardstick rather than x1,
+   because the presets are not x1: Normal's urgent wholesale fee is x0.2. The
+   chip ends the masthead's build line at 1301 px and over, and at 1300 px
+   and under sits beside the footer's game build. These three
+   build markup only;
+   drawDifficulty() places and wires the popover. */
+const FV_PRESETS = ["Easy", "Normal", "Hard"];
+function fvDiffWords(h){
+  const counts = [[h.harder, "harder"], [h.easier, "easier"]].filter(([n]) => n);
+  const preset = FV_PRESETS.includes(h.label);
+  /* A preset is its name; a custom game (or one the board does not know) says
+     how far it moved from Normal. */
+  const label = preset ? h.label : h.label === "Custom" ? "Custom" : "Unknown";
+  return {label, preset, counts,
+    chip: [label, ...(preset ? [] : counts.map(([n, way]) => `${n} ${way}`))].join(" · "),
+    vsNormal: counts.map(([n, way], i) => `${i ? n : plural(n, "setting")} ${way}`).join(" and ")};
+}
+function fvDiffChip(h, place, named){
+  /* A board built before the house rules still knows the difficulty's name:
+     said, with nothing to open. */
+  if(!h) return named ? `<span class="fv-diff fv-plain" data-fv-at="${place}" data-tip="${attr(`Difficulty: ${named}`)}"><span>${
+    attr(place === "mast" ? String(named).toUpperCase() : named)}</span></span>` : "";
+  const w = fvDiffWords(h);
+  const tip = (w.preset ? `The game's ${w.label} preset` : w.label === "Custom" ? "Custom difficulty" : "A difficulty the board does not recognise")
+    + (w.vsNormal ? `: ${w.vsNormal} than Normal` : "") + ". Click for each setting.";
+  const text = place === "mast" ? w.chip.toUpperCase() : w.chip[0] + w.chip.slice(1).toLowerCase();
+  return `<button type="button" class="fv-diff" data-fv-at="${place}" aria-expanded="false" aria-controls="fvDiffPop" aria-haspopup="dialog" data-tip="${
+    attr(tip)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg><span>${
+    attr(text)}</span></button>`;
+}
+function fvDiffPopHtml(h){
+  const w = fvDiffWords(h);
+  const moved = (h.rules || []).filter(r => r.lean !== "level");
+  const setting = (unit, v) => unit === "%" ? `${v}%` : `×${v}`;
+  const title = w.preset || w.label === "Custom" ? `${w.label} difficulty` : "Unrecognised difficulty";
+  /* What the ? on Milestones said about presets, now the popover's first line. */
+  const lead = w.label === "Normal" ? "The game's Normal preset, the yardstick every other difficulty is read against."
+    : w.preset ? `${w.label} is one of the game's presets: every setting where it differs from Normal.`
+    : w.label === "Custom" ? "Every setting that differs from the game's Normal preset."
+    : "A difficulty this board does not recognise: every setting that differs from the game's Normal preset.";
+  const started = Number.isFinite(h.startingMoney) ? ` Started with ${fmt(h.startingMoney)}.` : "";
+  /* Nothing moved on a game that is not Normal itself: say that, not "every
+     setting that differs" over an empty list. */
+  const lead2 = !moved.length && w.label !== "Normal" ? "No setting differs from the game's Normal preset." : lead;
+  /* One slider a setting, like the game's own: Normal is the tick, this game
+     the knob, and right is always harder -- so a setting where a lower number
+     is harder (Export price, Resale value) runs the other way. How far is the
+     ratio to Normal on a log scale, so x0.1 against x0.65 and x2 against x0.2
+     read as the big moves they are. */
+  const slider = r => {
+    const harder = r.lean === "harder";
+    const reach = r.value > 0 && r.normal > 0 ? Math.min(46, Math.abs(Math.log(r.value / r.normal)) * 18) : 46;
+    const me = 50 + (harder ? reach : -reach), lo = Math.min(50, me), cls = harder ? "" : " easy";
+    return `<span class="fv-slide" aria-hidden="true"><span class="run${cls}" style="left:${lo.toFixed(0)}%;width:${
+      Math.abs(me - 50).toFixed(0)}%"></span><span class="nm" style="left:50%"></span><span class="me${cls}" style="left:${me.toFixed(0)}%"></span></span>`;
+  };
+  const chips = w.counts.map(([n, way]) => `<span class="chip ${way === "harder" ? "warn" : "ok"}">${n} ${way}</span>`).join("");
+  return `<h3>${title}${chips ? `<span class="fv-popchips">${chips}</span>` : ""}</h3><p>${lead2}${started}</p>`
+    + (moved.length ? `<div class="fv-rules">${moved.map(r =>
+        `<div class="fv-rule" data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Normal is ${
+          setting(r.unit, r.normal)}, so this game is ${r.lean}.`)}"><span class="n">${r.name}<small>${r.what}</small></span>${
+          slider(r)}<span class="v">${setting(r.unit, r.value)}<small>Normal ${setting(r.unit, r.normal)}</small></span></div>`).join("")}</div>`
+      + `<div class="fv-popfoot"><span class="lg"><i></i> Normal <u></u> this game</span><span>right is harder</span></div>` : "");
+}
+
+/* Next moves: the Plan imports card, painted by the change checklist each time
+   it draws or a tick changes -- see planImportsState(). A count is green like
+   its siblings'; all ticked and all set are the quiet dashed badge. */
+function paintPlanImports(state){
+  const card = $("planImportsCard"); if(!card) return;
+  const badge = card.querySelector(".soon"), text = card.querySelector(".what");
+  badge.className = state.live ? "soon live" : "soon";
+  badge.textContent = state.badge;
+  text.innerHTML = state.what;
 }
 
 /* Next moves: the Find a location card carries the live count. A board built
@@ -17051,6 +17333,148 @@ function drawFooter(){
     f.dataset.tip = `Board built ${m.generated}`;
   }
   $("footBuild").textContent = `Game build ${m.build}`;
+  /* At 1300 px and under, where the masthead has no room to spare, the
+     difficulty chip stands beside the game build instead; the stylesheet shows
+     one or the other. */
+  const diff = $("footDiff");
+  if(diff) diff.innerHTML = fvDiffChip(m.houseRules, "foot", m.difficulty);
+}
+
+/* The difficulty popover: one element at body level, placed against whichever
+   chip opened it, the way #alertPop is -- a section's paint containment would
+   clip one rendered inside it. Built on first use, refilled on every render so
+   a live refresh cannot leave stale settings in it. */
+let fvDiffPop = null, fvDiffAnchor = null;
+/* Which chip has focus right now ("mast" or "foot"), or null. renderAll()
+   asks before drawMast() and drawFooter() replace the chips, and hands the
+   answer to drawDifficulty(), so a refresh gives focus back to the chip that
+   had it and to nothing else. */
+const fvChipFocus = () => {
+  const a = document.activeElement;
+  return a && a.matches && a.matches("button.fv-diff") ? a.dataset.fvAt : null;
+};
+/* The chip the popover can hang from right now: the masthead's at 1301 px
+   and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
+const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
+function fvPlaceDiffPop(){
+  if(!fvDiffPop || !fvDiffAnchor) return;
+  /* A resize across 1300 px hides the chip it hung from and shows the other,
+     which may be a page away (the footer's). Following it could leave the
+     popover off screen, so it closes instead. Focus moves only if it is in
+     the popover or on a chip right now, and then to the chip now shown when
+     that is in the window, else back to the page without scrolling. Focus the
+     reader put anywhere else stays where it is, and so does focus the browser
+     already dropped to the page with the chip it hid. */
+  if(!fvDiffAnchor.getClientRects().length){
+    const active = document.activeElement;
+    const ours = !!active && active !== document.body
+      && (fvDiffPop.contains(active) || !!(active.matches && active.matches("button.fv-diff")));
+    const shown = fvShownChip();
+    fvCloseDiff(false);
+    if(shown) fvDiffAnchor = shown;
+    if(ours){
+      const r = shown && shown.getBoundingClientRect();
+      const onScreen = r && r.bottom > 0 && r.right > 0
+        && r.top < (window.innerHeight || 0) && r.left < (window.innerWidth || 0);
+      if(onScreen) shown.focus({preventScroll: true});
+      else if(active && active.blur) active.blur();
+      hideTip();
+    }
+    return;
+  }
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  const r = fvDiffAnchor.getBoundingClientRect(), w = fvDiffPop.offsetWidth, h = fvDiffPop.offsetHeight;
+  /* Under the chip, its right edge on the chip's; above it when the window
+     has no room below, as the footer's chip usually does. */
+  let y = r.bottom + 10;
+  if(y + h > vh - 12) y = Math.max(12, r.top - 10 - h);
+  fvDiffPop.classList.toggle("fv-up", y < r.top);
+  fvDiffPop.style.left = Math.max(12, Math.min(r.right - w, vw - w - 12)) + "px";
+  fvDiffPop.style.top = Math.max(12, y) + "px";
+}
+/* `restore` hands focus back to the chip (Esc, or the chip clicked again); an
+   outside click leaves it wherever that click put it. The chip's own tooltip
+   would open on that focus, over a popover just closed, so it is put away. */
+function fvCloseDiff(restore){
+  if(!fvDiffPop || !fvDiffPop.classList.contains("on")) return;
+  fvDiffPop.classList.remove("on");
+  document.querySelectorAll(".fv-diff").forEach(b => b.setAttribute("aria-expanded", "false"));
+  if(restore && fvDiffAnchor && fvDiffAnchor.getClientRects().length){
+    fvDiffAnchor.focus({preventScroll: true});
+    hideTip();
+  }
+}
+function fvOpenDiff(anchor){
+  const h = D && D.meta && D.meta.houseRules;
+  if(!h) return;
+  drawDifficulty();
+  fvDiffAnchor = anchor;
+  fvDiffPop.innerHTML = fvDiffPopHtml(h);
+  hideTip();
+  fvDiffPop.classList.add("on");
+  anchor.setAttribute("aria-expanded", "true");
+  fvPlaceDiffPop();
+  wireTips();
+  /* Into the dialog, so a keyboard reads it and tabs through its settings. */
+  fvDiffPop.focus({preventScroll: true});
+}
+/* `hadFocus` is fvChipFocus() as it stood before this render replaced the
+   chips. */
+function drawDifficulty(hadFocus = null){
+  if(!fvDiffPop){
+    fvDiffPop = document.createElement("div");
+    fvDiffPop.className = "fv-pop";
+    fvDiffPop.id = "fvDiffPop";
+    fvDiffPop.tabIndex = -1;
+    fvDiffPop.setAttribute("role", "dialog");
+    fvDiffPop.setAttribute("aria-label", "Difficulty");
+    document.body.appendChild(fvDiffPop);
+    document.addEventListener("click", e => {
+      const chip = e.target.closest && e.target.closest("button.fv-diff");
+      if(!chip) return;
+      e.preventDefault();
+      if(fvDiffPop.classList.contains("on") && fvDiffAnchor === chip) fvCloseDiff(true);
+      else { fvCloseDiff(false); fvOpenDiff(chip); }
+    });
+    /* Outside click closes it; mousedown, so the click that follows lands on
+       whatever was clicked rather than on a popover that is still there. */
+    document.addEventListener("mousedown", e => {
+      if(!fvDiffPop.classList.contains("on")) return;
+      if(fvDiffPop.contains(e.target) || (e.target.closest && e.target.closest("button.fv-diff"))) return;
+      fvCloseDiff(false);
+    });
+    document.addEventListener("keydown", e => {
+      if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
+      fvCloseDiff(true);
+    });
+    window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
+    window.addEventListener("scroll", e => {
+      if(!fvDiffPop.classList.contains("on")) return;
+      if(e.target && e.target.nodeType === 1 && fvDiffPop.contains(e.target)) return;
+      fvPlaceDiffPop();
+    }, true);
+  }
+  /* A live refresh (drawMast, drawFooter) replaced the chip that had focus
+     just before it: give focus to the replacement, and only then. */
+  if(hadFocus && !fvChipFocus()){
+    const again = document.querySelector(`button.fv-diff[data-fv-at="${hadFocus}"]`);
+    if(again && again.getClientRects().length){ again.focus({preventScroll: true}); hideTip(); }
+  }
+  /* A redraw replaced the chip the popover hung from: follow the chip in the
+     same place, or close when the save has no difficulty to show. */
+  const h = D && D.meta && D.meta.houseRules;
+  if(!fvDiffPop.classList.contains("on")) return;
+  if(!h){ fvCloseDiff(false); return; }
+  const fresh = fvDiffAnchor && document.contains(fvDiffAnchor) ? fvDiffAnchor
+    : document.querySelector(`button.fv-diff[data-fv-at="${fvDiffAnchor ? fvDiffAnchor.dataset.fvAt : "mast"}"]`);
+  if(!fresh){ fvCloseDiff(false); return; }
+  const inside = fvDiffPop.contains(document.activeElement);
+  fvDiffAnchor = fresh;
+  fresh.setAttribute("aria-expanded", "true");
+  fvDiffPop.innerHTML = fvDiffPopHtml(h);
+  fvPlaceDiffPop();
+  if(inside) fvDiffPop.focus({preventScroll: true});
 }
 
 /*__MAP_SCRIPT__*/
@@ -17058,12 +17482,15 @@ function drawFooter(){
 /*__WIKI_SCRIPT__*/
 
 function renderAll(){
+  /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
+  const diffFocus = fvChipFocus();
   indexTrends();
   drawMast(); drawKpis(); drawAlerts();
-  drawChart(); drawRhythm(); drawPortfolio(); drawSitePicker(); drawSite();
+  drawChart(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawOptimizeStaffing(); drawFooter();
+  drawDifficulty(diffFocus);
   wireAll();
   refreshCityMaps();
   /* The wiki is the game's own text and does not move with a save, but the one
