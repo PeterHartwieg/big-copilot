@@ -17540,7 +17540,7 @@ function drawLogistics(){
   /* What the box holds, said per state: the board's suggestion, the figure
      already in game, or the player's own. */
   const boardSays = r => (r.smart
-    ? `the level at which the week's deliveries, in the game's order, bring ${sizing === "dem"
+    ? `the level${r.levelName ? ` at ${r.levelName}` : ""} at which the week's deliveries, in the game's order, bring ${sizing === "dem"
       ? "what the shops at the end of each chain use" : "everything this depot feeds at full capacity"}`
     : sizing === "dem" ? "a week of what the shops at the end of each chain use" : "a week of everything this depot feeds at full capacity")
     + (r.parts.route ? `, less the ${r.parts.route.toLocaleString()} a week a route brings` : "")

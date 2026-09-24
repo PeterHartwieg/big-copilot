@@ -27,6 +27,9 @@ after(async () => { await browser?.close(); });
 
 const contractOf = (order, importer, smart, amount, active = true) =>
   ({order, id: `c${order}`, importer, smart, amount, lastWeek: 0, active, repeating: true, agent: true});
+/* A depot line's fact, as _supply_facts() writes it for Weekly imports. */
+const depotFact = (st, use, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'warn', role: 'depot',
+  cad: 'weekly', use, need: use, have: use, setTo: null, parts: {lines: 0, sites: use, route: 0}, imp: true, ...extra});
 /* One depot, three materials, all synthetic. Sugar runs on a Smart Delivery
    level too low for its week and has two contracts; Flour's level is far above
    its week; Salt is a plain weekly order that covers its week. */
@@ -49,6 +52,13 @@ const fixture = () => ({
           contracts: [contractOf(2, 'Pier 1', false, 700)]},
       }},
       depotOther: {0: {sugar: 1400, flour: 1000, salt: 650}}},
+    /* Python's verdict on each line (supplyFact): the figure to set is the
+       fact's, the board only keeps the book around it. */
+    facts: {0: {
+      sugar: depotFact('short', 1400, {why: 'order', lvl: 'critical', setTo: 1400}),
+      flour: depotFact('covered', 1000),
+      salt: depotFact('covered', 650),
+    }},
   },
 });
 
@@ -223,6 +233,14 @@ const mixed = () => {
       arrivedLastWeek: 0, contracts: [contractOf(8, 'Pier 1', false, 0)]},
   });
   Object.assign(data.supply.factories.depotOther[0], {hops: 1800, malt: 1800, yeast: 300, rye: 2000});
+  // Python replays each pass for the level a week needs; the board shows its figure.
+  Object.assign(data.supply.facts[0], {
+    hops: depotFact('short', 1800, {why: 'order', setTo: 1400}),
+    malt: depotFact('short', 1800, {why: 'order', setTo: 1800}),
+    rye: depotFact('short', 2000, {why: 'order', setTo: 2000}),
+    oats: depotFact('covered', 900),
+    yeast: depotFact('short', 300, {why: 'order', setTo: 300}),
+  });
   return data;
 };
 
@@ -239,7 +257,7 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
     assert.doesNotMatch(rows.Rye.inGame, /plus/);
     // Exactly equal: it reaches the level rather than passing it.
     assert.match(rows.Oats.inGame, /1,000 a week delivered first already reaches it$/);
-    // The level a week needs is the pass replayed, never the plain taken off.
+    // The level a week needs is the fact's: Python replays the pass.
     assert.equal(rows.Hops.box, '1400');
     assert.equal(rows.Malt.box, '1800');
     assert.equal(rows.Rye.box, '2000');
