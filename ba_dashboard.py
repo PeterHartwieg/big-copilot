@@ -3462,86 +3462,183 @@ def _supply(
     }
     factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
 
-    # Every input a named factory line eats: the route advice below never
-    # tells a factory to stop receiving what its machines use.
-    all_eaten = {
-        (businesses[site["s"]]["key"], row["slug"])
-        for site in factories.get("sites", []) for row in site["needs"]
-    }
-
     # --- 3b. anything just sitting there
-    idle_rows = []
+    # Stock is idle when it is IDLE_WEEKS or more of what draws on it, and not
+    # moving when nothing does. What draws on it depends on where it sits: a
+    # shelf sells at its trading-day rate; a factory input is eaten at its
+    # machines' need in the sizing mode (a first fill is not stock sitting); a
+    # depot or a pass-through feeds the shelves and machines its plans reach,
+    # and only where they reach none is the measured outflow read instead. A
+    # shop too new to judge, or a depot whose only plan leads to one, waits.
+    need_rows, made_at = {}, set()
+    for site in factories.get("sites", []):
+        key = businesses[site["s"]]["key"]
+        made_at |= {(key, line["slug"]) for line in site["lines"]}
+        for row in site["needs"]:
+            need_rows[(key, row["slug"])] = row
+    machine_sites = {businesses[site["s"]]["key"] for site in factories.get("sites", [])}
+
+    def line_need(row, mode):
+        return row["perDay"] if mode == "cap" else row.get("demDay", row["perDay"])
+
+    def young_shop(key):
+        b = businesses[index[key]]
+        return b["status"] == "retail" and b.get("tradeDays", MIN_TRADE_DAYS) < MIN_TRADE_DAYS
+
+    def plan_draw(key, item, mode, seen=frozenset()):
+        """What the plans from `key` carry away a day: the shelves' sales, the
+        machines' need, and what a depot further on passes on in turn; and
+        whether a shop too new to judge is among them."""
+        total, waits = 0.0, False
+        for dest, dest_item, _amount in edges.get(key, []):
+            if dest_item != item or dest not in index or dest in seen or dest == key:
+                continue
+            if businesses[index[dest]]["status"] == "retail":
+                total += sold.get(dest, {}).get(item, 0.0)
+                waits = waits or young_shop(dest)
+                continue
+            row = need_rows.get((dest, item))
+            if row:
+                total += line_need(row, mode)
+            onward, later = plan_draw(dest, item, mode, seen | {key})
+            total += onward
+            waits = waits or later
+        return total, waits
+
+    # Own sites that sell or need an item no plan brings them: a shelf with
+    # sales and no top-up, a factory input with no top-up, import or maker.
+    unfed_by_item = collections.defaultdict(list)
     for business in businesses:
+        key = business["key"]
+        for line in business["lines"]:
+            item = line["slug"]
+            if (key, item) in target_at:
+                continue
+            if business["status"] == "retail":
+                rate = sold.get(key, {}).get(item, 0.0)
+                if rate > 0 and line["units"]:
+                    unfed_by_item[item].append(
+                        [index[key], round(rate), round(line["units"] / rate, 1)])
+    for (key, item), row in need_rows.items():
+        if (row["target"] or (key, item) in imports or index[key] in row["madeAt"]
+                or not row["perDay"]):
+            continue
+        units = held.get(key, {}).get(item, 0)
+        unfed_by_item[item].append([index[key], round(row["perDay"]), round(units / row["perDay"], 1)])
+
+    all_eaten = set(need_rows)
+    idle_by = collections.defaultdict(dict)  # (key, item) -> {mode: row}
+    for business in businesses:
+        if business["status"] == "vacant":
+            continue
+        key = business["key"]
+        factor, _peak = peak_of(business)
         for line in business["lines"]:
             item, units = line["slug"], line["units"]
-            if units < IDLE_UNITS:
+            if units < IDLE_UNITS or (key, item) in made_at and (key, item) not in need_rows:
                 continue
-            per_week = draw(business["key"], item) * 7
-            if per_week <= 0:
-                logged = shipped_per_day(business["key"], item)
-                supply = imports.get((business["key"], item))
-                taken = received_per_day(business["key"], item)
-                if logged:
-                    per_week = logged * 7
-                elif supply:
-                    per_week = supply["lastWeek"]
-                elif taken and units < taken * BUFFER_DAYS:
-                    # A factory neither sells nor ships its inputs. What the
-                    # round brings in each morning is what the machines used
-                    # the day before, and a holding smaller than two rounds is
-                    # the end-of-day buffer that keeps them running, not stock
-                    # that has stopped moving.
-                    per_week = taken * 7
+            target, source = target_at.get((key, item), (0, None))
+            supply = imports.get((key, item))
+            for mode in SIZING_MODES:
+                row = need_rows.get((key, item))
+                if business["status"] == "retail":
+                    if young_shop(key):
+                        continue
+                    per_day = sold.get(key, {}).get(item, 0.0)
+                    busiest = per_day * factor
+                elif row:
+                    if row.get("firstFill"):
+                        continue
+                    per_day = line_need(row, mode)
+                    onward, _waits = plan_draw(key, item, mode)
+                    per_day += onward
+                    busiest = per_day
+                elif key in machine_sites and not any(i == item for _d, i, _a in edges.get(key, [])):
+                    # A factory holding what no named line eats (a recipe the
+                    # board cannot read): what arrives is what its machines
+                    # draw, never nothing while deliveries come in.
+                    per_day = received_per_day(key, item) or 0.0
+                    busiest = per_day
                 else:
-                    per_week = 0
-            target, source = target_at.get((business["key"], item), (0, None))
-            if per_week <= 0:
-                if units >= DEAD_UNITS:
-                    row = {
-                        "s": index[business["key"]],
-                        "item": line["item"],
-                        "slug": item,
-                        "stock": units,
-                        "perWeek": 0,
-                        "weeks": None,
-                        "target": target,
-                        "price": line["price"],
-                        "value": money(units * line["price"]),
-                        "dead": True,
-                        "level": "warn",
-                    }
-                    # Routed here by a top-up target, and nothing here uses it
-                    # or sends it on: the route is the thing to change, so the
-                    # row names it.
-                    if (target and source in index and (business["key"], item) not in all_eaten
-                            and not any(i == item for _d, i, _a in edges.get(business["key"], []))):
-                        row["routedFrom"] = index[source]
-                    idle_rows.append(row)
-                continue
-            weeks = units / per_week
-            if weeks >= IDLE_WEEKS:
-                idle_rows.append(
-                    {
-                        "s": index[business["key"]],
-                        "item": line["item"],
-                        "slug": item,
-                        "stock": units,
-                        "perWeek": round(per_week),
-                        "weeks": round(weeks, 1),
-                        "target": target,
-                        "price": line["price"],
-                        "value": money(units * line["price"]),
-                        "dead": False,
-                        "level": "warn" if weeks >= IDLE_WEEKS * 2 else "info",
-                    }
-                )
-    idle_rows.sort(key=lambda r: -(r["weeks"] or 999))
+                    per_day, waits = plan_draw(key, item, mode)
+                    per_day += sold.get(key, {}).get(item, 0.0)
+                    if not per_day:
+                        if waits:
+                            continue
+                        per_day = shipped_per_day(key, item) or 0.0
+                    busiest = per_day
+                entry = {"target": target, "perWeek": round(per_day * 7)}
+                if per_day <= 0:
+                    if units < DEAD_UNITS:
+                        continue
+                    unfed = [u for u in unfed_by_item.get(item, []) if u[0] != index[key]]
+                    entry.update(weeks=None, dead=True, level="warn",
+                                 why="notRouted" if unfed else "notMoving")
+                    if unfed:
+                        entry["unfed"] = unfed
+                    # Routed here by a top-up target, and nothing here uses
+                    # it or sends it on: the route is the thing to change.
+                    elif (target and source in index and (key, item) not in all_eaten
+                            and not any(i == item for _d, i, _a in edges.get(key, []))):
+                        entry["routedFrom"] = index[source]
+                else:
+                    weeks = units / (per_day * 7)
+                    if weeks < IDLE_WEEKS:
+                        continue
+                    entry.update(weeks=round(weeks, 1), dead=False,
+                                 level="warn" if weeks >= IDLE_WEEKS * 2 else "info")
+                    brings = (supply["target"] if supply and supply.get("smart")
+                              else supply["weekly"] if supply else 0)
+                    if brings and brings >= IDLE_WEEKS * per_day * 7:
+                        entry.update(why="importHigh", importLevel=brings,
+                                     smart=bool(supply.get("smart")))
+                    elif target and target >= IDLE_WEEKS * 7 * busiest:
+                        entry["why"] = "targetHigh"
+                    else:
+                        entry["why"] = "overstock"
+                idle_by[(key, item)][mode] = entry
+
+    idle_rows = []
+    for (key, item), by_mode in idle_by.items():
+        line = next(l for l in businesses[index[key]]["lines"] if l["slug"] == item)
+        base = by_mode.get("cap") or by_mode["dem"]
+        row = {"s": index[key], "item": line["item"], "slug": item, "stock": line["units"],
+               "price": line["price"], "value": money(line["units"] * line["price"]),
+               **base, "modes": [mode for mode in SIZING_MODES if mode in by_mode]}
+        dem = by_mode.get("dem")
+        if dem and "cap" in by_mode:
+            changed = {k: v for k, v in dem.items() if base.get(k) != v}
+            if changed:
+                row["dem"] = changed
+        idle_rows.append(row)
+    idle_rows.sort(key=lambda r: (-(r["weeks"] or 999), r["s"], r["slug"]))
+
+    # What the facts carry: the idle verdict in each mode, and, for stock no
+    # plan sends on while own sites sell or need it, the sites it could feed
+    # (`unfed`), each of which names the depot holding the most of it (`via`).
+    idle_facts = collections.defaultdict(dict)
+    extra = collections.defaultdict(dict)
+    via = {}
+    for (key, item), by_mode in idle_by.items():
+        for mode, entry in by_mode.items():
+            idle_facts[(key, item)][mode] = {"idle": entry["why"], "idleLvl": entry["level"]}
+        cap = by_mode.get("cap") or by_mode["dem"]
+        if cap.get("unfed"):
+            extra[(key, item)]["unfed"] = cap["unfed"]
+            units = held[key][item]
+            for s, _per_day, _days in cap["unfed"]:
+                best = via.get((s, item))
+                if best is None or units > best[0]:
+                    via[(s, item)] = (units, index[key])
+    for (s, item), (_units, depot) in via.items():
+        extra[(businesses[s]["key"], item)]["via"] = depot
 
     # --- 3c. one fact per (site, item), with one status word, read by every
     # view of the board and by the findings (_supply_facts)
     facts = _supply_facts({
         "businesses": businesses, "index": index, "factories": factories,
         "targets": target_at, "import_rows": import_rows, "peak": peak_of,
+        "idle": idle_facts, "extra": extra,
     })
     factories.pop("_need", None)
     factories.pop("_ramp", None)
@@ -9741,7 +9838,7 @@ def _alerts(
             key=finding["key"],
         )
 
-    found.extend(_idle_notes(businesses, supply["idle"], silent))
+    found.extend(_idle_notes(businesses, supply["idle"], silent, mode))
     found.extend(_feed_notes(businesses, supply.get("factories", {}), silent, mode))
     found.extend(_staff_notes(businesses, supply.get("factories", {}), silent))
     found.extend(_unnamed_notes(businesses, supply.get("factories", {}), silent))
@@ -10039,29 +10136,60 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
     return notes
 
 
-def _idle_notes(businesses: list, idle: list, silent: set) -> list:
+def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") -> list:
     """Stock standing still, said once per cause rather than once per shelf.
 
     Six shops holding a thousand cupcakes each is not six findings; it is one
-    top-up target set too high. Anything with nothing at all flowing out is a
-    different problem and stays one line per site.
+    top-up target set too high (targetHigh), grouped by the target. Stock with
+    nothing moving out stays one line per holding (notMoving), and so does
+    stock a Smart Delivery level or a weekly order keeps too high (importHigh)
+    or stock that is simply weeks of what leaves (overstock); all three are
+    Idle stock. Stock no plan sends on while the company's own sites sell or
+    need it is Not routed (notrouted), one finding that names those sites,
+    whose own no-plan findings then give way to it. `idle` rows carry the
+    sizing modes they hold in (`modes`) and what Demand sizing changes (`dem`).
     """
-    live = [r for r in idle if businesses[r["s"]]["key"] not in silent]
+    rows = []
+    for row in idle:
+        if mode not in row.get("modes", ("cap",)):
+            continue
+        rows.append({**row, **row["dem"]} if mode == "dem" and row.get("dem") else row)
+    live = [r for r in rows if businesses[r["s"]]["key"] not in silent]
     notes = []
 
-    dead_by_site = collections.OrderedDict()
-    for row in (r for r in live if r["dead"]):
-        dead_by_site.setdefault(row["s"], []).append(row)
-    for site_index, rows in dead_by_site.items():
-        name, key = businesses[site_index]["name"], businesses[site_index]["key"]
-        for row in rows:
-            # Raw materials carry no retail price, so there is no honest dollar
-            # figure to gate them by — the units are the finding.
-            worth = (
-                row["value"] / max(1.0, (row["stock"] / max(row["perWeek"], 1)) * 7)
-                if row["price"]
-                else None
-            )
+    def worth_of(row):
+        # Raw materials carry no retail price, so there is no honest dollar
+        # figure to gate them by: the units are the finding.
+        weeks = row["weeks"] if row["weeks"] else row["stock"] / max(row["perWeek"], 1)
+        return row["value"] / max(1.0, weeks * 7) if row["price"] else None
+
+    for row in live:
+        why = row.get("why") or ("notMoving" if row["dead"] else None)
+        if why in (None, "targetHigh"):
+            continue
+        name, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
+        ev = {"slug": row["slug"]}
+        if why == "notRouted":
+            unfed = row.get("unfed") or []
+            sites = [businesses[s] for s, _per_day, _days in unfed]
+            types = {b["type"] for b in sites}
+            who = (sites[0]["name"] if len(sites) == 1
+                   else f"{len(sites)} {_plural(types.pop()).lower()}" if len(types) == 1
+                   else f"{len(sites)} sites")
+            per_day = sum(u[1] for u in unfed)
+            days = [u[2] for u in unfed if u[2] is not None]
+            one = len(sites) == 1
+            held_for = (f" and hold{'s' if one else ''} ~{round(sum(days) / len(days)):,} days"
+                        if days else "")
+            verb = "sells" if one else "sell"
+            if all(b["status"] != "retail" for b in sites):
+                verb = "needs" if one else "need"
+            notes.append(_finding(
+                "warn", name, "notrouted",
+                f"{name} holds {row['stock']:,} {row['item']} no plan sends on; "
+                f"{who} {verb} {per_day:,}/day{held_for}",
+                key=key, rank=-row["stock"], subject=row["item"], ev=ev))
+        elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
             route = (
@@ -10069,20 +10197,32 @@ def _idle_notes(businesses: list, idle: list, silent: set) -> list:
                 f"{row['target']:,} here and nothing here uses it, so remove that target"
                 if row.get("routedFrom") is not None else ""
             )
-            notes.append(
-                _finding(
-                    "info", name, "dead",
-                    f"{row['stock']:,} {row['item']} held with nothing moving out{route}",
-                    key=key, rank=-row["stock"], subject=row["item"], worth=worth,
-                    ev={"slug": row["slug"]},
-                )
-            )
+            notes.append(_finding(
+                "info", name, "dead",
+                f"{row['stock']:,} {row['item']} held with nothing moving out{route}",
+                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+        elif why == "importHigh":
+            level = row.get("importLevel") or 0
+            setting = (f"Smart Delivery keeps {level:,} in stock" if row.get("smart")
+                       else f"the import brings {level:,} a week")
+            notes.append(_finding(
+                "info", name, "dead",
+                f"{row['stock']:,} {row['item']} is {row['weeks']:.0f} weeks of what it feeds; "
+                f"{setting}, {level / max(row['perWeek'], 1):.0f} weeks of it, so lower the import",
+                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+        else:
+            notes.append(_finding(
+                "info", name, "dead",
+                f"{row['stock']:,} {row['item']} is {row['weeks']:.0f} weeks of what leaves",
+                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
 
-    # Everything else groups by the top-up target behind it: the same number in
-    # the same plan, repeated across shops, is one setting to change.
+    # A top-up target set too high groups by the target behind it: the same
+    # number in the same plan, repeated across shops, is one setting to change.
     by_target = collections.OrderedDict()
-    for row in (r for r in live if not r["dead"]):
-        by_target.setdefault(row["target"] or 0, []).append(row)
+    for row in live:
+        why = row.get("why") or ("notMoving" if row["dead"] else None)
+        if why in (None, "targetHigh"):
+            by_target.setdefault(row["target"] or 0, []).append(row)
     for target, rows in by_target.items():
         items = sorted({r["item"] for r in rows})
         sites = len({r["s"] for r in rows})
@@ -10128,7 +10268,8 @@ SUMMARIES = {
     "paused": "{n} imports are paused; soonest to run out is {subject}",
     "outruns": "{n} products outsell their daily top-up; worst {subject}",
     "unplanned": "{n} stocked products are on no distribution plan; largest {subject}",
-    "dead": "{n} products are held with nothing moving out; largest {subject}",
+    "dead": "{n} products sit idle; largest {subject}",
+    "notrouted": "{n} products are held where no plan sends them on; largest {subject}",
     "feed": "{n} factory inputs are not fed as the machines need; largest {subject}",
     "staff": "{n} factory machines are not staffed round the clock; worst {subject}",
     "unnamed": "{n} factory machines run recipes the board cannot name; {subject} the largest",

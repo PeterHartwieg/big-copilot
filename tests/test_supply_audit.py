@@ -311,8 +311,8 @@ class RouteAdviceTests(unittest.TestCase):
         f.units[DISTRIB] = {WATER: 5000}
         f.targets.append((DISTRIB, HUB, WATER, 10))
         f.run()
-        row = next(r for r in f.supply["idle"] if r["s"] == 2)
-        self.assertNotIn("routedFrom", row)
+        # It feeds the hub, which feeds the factory's line: not idle at all.
+        self.assertFalse([r for r in f.supply["idle"] if r["s"] == 2 and "routedFrom" in r])
 
 
 if __name__ == "__main__":

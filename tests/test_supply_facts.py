@@ -94,9 +94,9 @@ class Company:
         self.lines.setdefault(addr, {})
         return addr
 
-    def factory(self, addr, name, machines=1, **options):
+    def factory(self, addr, name, machines=1, rid=RID, **options):
         return self.site(addr, name, kind="ba:businesstype_factory",
-                         machines=[RID] * machines, **options)
+                         machines=[rid] * machines, **options)
 
     def shop(self, addr, name, **options):
         return self.site(addr, name, status="retail", kind="ba:businesstype_giftshop", **options)
@@ -283,7 +283,9 @@ class ShelfTests(unittest.TestCase):
         self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)])
 
     def test_a_shelf_on_no_plan_asks_for_one(self):
-        c, fact = self.verdict(units=150)
+        # The hub holds too little to count as stock no plan sends on, so the
+        # shelf says it itself.
+        c, fact = self.verdict(units=150, stock_at_hub=900)
         self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["setTo"]),
                          ("noplan", "target", "warn", 120))
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)]
@@ -382,6 +384,161 @@ class FindingsFollowFactsTests(unittest.TestCase):
         groups = {(f["siteKey"], f["group"]) for f in c.findings()}
         self.assertIn((site_key(HUB), "order"), groups)
         self.assertIn((site_key(DISTRIB), "paused"), groups)
+
+
+class IdleRuleTests(unittest.TestCase):
+    """The ten cases of the idle-stock investigation (research/ux-audit-2026-09-24,
+    section 6): stock is judged against what really draws on it."""
+
+    def idle(self, c, addr, slug):
+        return [r for r in c.supply["idle"] if r["s"] == c.index(addr) and r["slug"] == slug]
+
+    def found(self, c, addr, groups=("dead", "target", "notrouted", "unplanned")):
+        return [f for f in c.findings() if f["siteKey"] == site_key(addr) and f["group"] in groups]
+
+    def test_1_a_slow_gym_with_a_high_target_is_a_target_not_stock_standing_still(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.shop(GYM, "Gym")
+        c.hold(HUB, SODA, 100)
+        c.hold(GYM, SODA, 600, 5)
+        c.plan(HUB, GYM, SODA, 600)
+        c.run()
+        self.assertEqual((c.fact(GYM, SODA)["st"], c.fact(GYM, SODA)["why"]), ("idle", "targetHigh"))
+        self.assertEqual([f["group"] for f in self.found(c, GYM)], ["target"])
+
+    def not_routed(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.shop(GYM, "Gym")
+        c.hold(HUB, SODA, 3000)
+        c.hold(GYM, SODA, 1200, 120)
+        c.run()
+        return c
+
+    def test_2_stock_no_plan_sends_to_a_gym_that_sells_it_is_not_routed(self):
+        c = self.not_routed()
+        hub = c.fact(HUB, SODA)
+        self.assertEqual((hub["st"], hub["why"], hub["lvl"]), ("idle", "notRouted", "warn"))
+        self.assertEqual(hub["unfed"], [[c.index(GYM), 120, 10.0]])
+        gym = c.fact(GYM, SODA)
+        self.assertEqual((gym["st"], gym["via"]), ("noplan", c.index(HUB)))
+        [finding] = self.found(c, HUB)
+        self.assertEqual(finding["group"], "notrouted")
+        self.assertEqual(finding["text"],
+                         "Import Hub holds 3,000 Soda no plan sends on; Gym sells 120/day "
+                         "and holds ~10 days")
+        # The gym's own no-plan finding gives way to it, and nothing is dead.
+        self.assertEqual(self.found(c, GYM), [])
+        self.assertFalse([f for f in c.findings() if f["group"] == "dead"])
+
+    def test_3_stock_nobody_sells_or_needs_is_not_moving(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.hold(HUB, SODA, 5000)
+        c.run()
+        self.assertEqual((c.fact(HUB, SODA)["st"], c.fact(HUB, SODA)["why"]), ("idle", "notMoving"))
+        self.assertEqual([f["group"] for f in self.found(c, HUB)], ["dead"])
+
+    def test_4_a_factory_input_is_judged_on_its_machines_on_day_2_and_day_10(self):
+        for day in (2, 10):
+            with self.subTest(day=day):
+                c = Company(day=day)
+                c.site(HUB, "Import Hub")
+                c.factory(FACTORY, "Factory", machines=12)  # 2,880 water a day
+                c.hold(HUB, WATER, 400)
+                c.hold(FACTORY, WATER, 20000)
+                c.plan(HUB, FACTORY, WATER, 21600)
+                days = [1] if day == 2 else range(3, 10)
+                for d in days:
+                    c.ship(d, HUB, FACTORY, {WATER: 21600 if day == 2 else 2880})
+                c.run()
+                self.assertEqual(self.idle(c, FACTORY, WATER), [])
+                self.assertNotEqual(c.fact(FACTORY, WATER)["st"], "idle")
+
+    def test_5_an_input_no_named_machine_eats_and_nothing_brings_is_not_moving(self):
+        c = Company()
+        c.factory(FACTORY, "Factory", rid="unknown-recipe")
+        c.hold(FACTORY, WATER, 5000)
+        c.run()
+        [row] = self.idle(c, FACTORY, WATER)
+        self.assertEqual((row["dead"], row["why"]), (True, "notMoving"))
+
+    def shop(self, units, target, trade=225, calendar=136, trade_days=5):
+        c = Company(day=14)
+        c.site(HUB, "Import Hub")
+        c.shop(SHOP_A, "Soda Shop", trade_days=trade_days)
+        c.hold(HUB, SODA, 100)
+        c.hold(SHOP_A, SODA, units, calendar, tradeRate=trade)
+        c.plan(HUB, SHOP_A, SODA, target)
+        c.run()
+        return c
+
+    def test_6_a_new_shop_is_read_at_its_trading_day_rate(self):
+        # 4,455 is 2.8 weeks at 225 a trading day; at the calendar rate the
+        # zero days and the half opening day make of it, 4.7.
+        c = self.shop(4455, 4500)
+        self.assertEqual(self.idle(c, SHOP_A, SODA), [])
+        self.assertEqual(self.found(c, SHOP_A), [])
+
+    def test_7_a_target_28_busiest_days_deep_is_a_target_finding(self):
+        c = self.shop(6300, 28 * 225)
+        [row] = self.idle(c, SHOP_A, SODA)
+        self.assertEqual((row["why"], row["weeks"]), ("targetHigh", 4.0))
+        self.assertEqual([f["group"] for f in self.found(c, SHOP_A)], ["target"])
+
+    def smart_hub(self, weeks):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Factory")  # 240 water a day, 1,680 a week
+        level = round(weeks * 1680)
+        c.hold(HUB, WATER, level)
+        c.hold(FACTORY, WATER, 200)
+        c.plan(HUB, FACTORY, WATER, 300)
+        c.contract(HUB, WATER, level, smart=True)
+        for d in range(13, 20):
+            c.ship(d, HUB, FACTORY, {WATER: 240})
+        c.run()
+        return c
+
+    def test_8_a_smart_delivery_level_weeks_past_the_need_is_an_import_level_finding(self):
+        c = self.smart_hub(7)
+        [row] = self.idle(c, HUB, WATER)
+        self.assertEqual((row["why"], row["weeks"], row["importLevel"]), ("importHigh", 7.0, 11760))
+        [finding] = self.found(c, HUB)
+        self.assertEqual(finding["group"], "dead")
+        self.assertIn("Smart Delivery keeps 11,760 in stock, 7 weeks of it, so lower the import",
+                      finding["text"])
+        c = self.smart_hub(1.15)
+        self.assertEqual((self.idle(c, HUB, WATER), self.found(c, HUB)), ([], []))
+
+    def test_9_a_weekend_shop_is_judged_on_the_days_it_trades(self):
+        # 100 a day on Saturday and Sunday: 1,000 is 1.4 weeks of what it
+        # sells, not the five weeks the calendar rate of 29 a day makes of it.
+        c = self.shop(1000, 1000, trade=100, calendar=29)
+        self.assertEqual(self.idle(c, SHOP_A, SODA), [])
+
+    def test_10_the_idle_facts_and_the_findings_are_one_set(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.site(DISTRIB, "Distrib")
+        c.shop(GYM, "Gym")
+        c.shop(SHOP_A, "Soda Shop")
+        c.hold(HUB, SODA, 3000)                   # not routed: the gym sells it
+        c.hold(GYM, SODA, 1200, 120)
+        c.hold(DISTRIB, WATER, 5000)              # not moving
+        c.hold(SHOP_A, BEER, 6300, 225)           # a top-up target too high
+        c.plan(DISTRIB, SHOP_A, BEER, 6300)
+        c.run()
+        idle = {(c.business_list[int(s)]["key"], slug)
+                for s, items in c.supply["facts"].items()
+                for slug, fact in items.items() if fact["st"] == "idle"}
+        found = {(f["siteKey"], f["ev"]["slug"]) for f in c.findings()
+                 if f["group"] in ("dead", "target", "notrouted")}
+        self.assertEqual(idle, found)
+        self.assertEqual(len(idle), 3)
+        rows = {(c.business_list[r["s"]]["key"], r["slug"]) for r in c.supply["idle"]}
+        self.assertEqual(rows, idle)
 
 
 class StableOrderTests(unittest.TestCase):
