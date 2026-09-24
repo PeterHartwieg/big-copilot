@@ -16054,8 +16054,23 @@ const spLevelCell = (level, after, small) => `${spNum(level)}<small ${small}>in 
 const spImportWeek = r => r.routed
   ? `The import's week is <b>${spNum(r.weekNeed)}</b>, after <b>${spNum(r.routed)}</b> a day by route`
   : `A week draws <b>${spNum(r.weekNeed)}</b>`;
+/* The mark a row carries for a fact, in the words the finding hits and the
+   read-outs have always used: what the fact says is wrong, or nothing. */
+function szEl(f){
+  switch(f.st){
+    case "noplan": return "noplan";
+    case "paused": return "paused";
+    case "short": return {target: "target", dry: "dry", order: "import", shortfall: "short"}[f.why] || "short";
+    case "tight": return {target: "target", order: "import", shortfall: "short"}[f.why] || "tight";
+    case "stalled": return f.why === "waiting" ? "waiting" : "stalled";
+    case "idle": return f.why === "notMoving" || f.why === "notRouted" ? "dead" : "idle";
+    case "covered": return f.why === "staffing" ? "staffing" : "";
+    default: return "";
+  }
+}
 /* The depot's Stock table: an import row knows its cover and its next truck; a
-   holding that nothing draws on knows only that it is standing still. */
+   holding that nothing draws on knows only that it is standing still. Every
+   verdict is the line's fact (supplyFact); the rail and the days are figures. */
 function spStockRows(b){
   const supply = D.supply || {};
   const today = supply.day;
@@ -16064,10 +16079,16 @@ function spStockRows(b){
   const take = r => { const k = r.slug || r.item; if(seen.has(k)) return false; seen.add(k); return true; };
   const rows = [];
   imports.filter(take).forEach(r => {
+    const f = szFact(siteTab, r.slug);
     /* A route from the company's own site that brings everything that leaves
-       makes a paused import a backup: nothing to warn about. The rail still
-       draws no truck for it, since the contract is paused. */
-    const paused = r.paused && !r.covered;
+       makes a paused import a backup: its fact is covered, nothing to warn
+       about. The rail still draws no truck for it, since the contract is
+       paused. */
+    const paused = f.st === "paused";
+    const dry = f.why === "shortfall" && f.st === "short";
+    const close = f.why === "shortfall" && f.st === "tight";
+    const order = f.why === "order" && (f.st === "short" || f.st === "tight");
+    const covered = f.st === "covered" && f.why === "route";
     /* cover, runsOut and catchUp are about the delivery _scheduled_import_gap()
        projected through — the last upcoming drop, not necessarily the first —
        so that is the truck the rail puts them beside. Where an earlier drop
@@ -16079,73 +16100,79 @@ function spStockRows(b){
     /* A delivery is coming even when it lands past the seven days the rail
        draws, and the days before it are still dry. */
     const known = !r.paused && Number.isFinite(due) && Number.isFinite(today) && due >= today;
-    const el = [spKeyTok(r.slug, r.item), paused ? "paused" : "",
-                r.coverFit === "short" ? "short" : "",
-                r.orderFit === "short" || r.orderFit === "tight" ? "order" : ""].filter(Boolean);
+    const el = [spKeyTok(r.slug, r.item), szEl(f)].filter(Boolean);
     const act = paused
       ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
-      : r.coverFit === "short" && r.catchUp > 0
+      : dry && r.catchUp > 0
         ? spUp(`+${spNum(r.catchUp)}`, r.runsOut ? `by ${r.runsOut}` : "now", true)
         : "";
     /* A paused contract orders nothing this week; what it used to bring is the
-       only figure there is, and the chip beside it says it is not coming. */
-    /* A Smart Delivery figure is its stock level, not a week's delivery, and
-       says so beside the number; the level a week needs is the delivery pass
-       replayed (importLevelFor), not the week less the plain amounts. */
+       only figure there is, and the chip beside it says it is not coming. A
+       Smart Delivery figure is its stock level, not a week's delivery, and
+       says so beside the number; the figure to raise it to is the fact's. */
     const plainAfter = r.smart ? r.plainAfter || 0 : 0;
     const shown = r.smart && Number.isFinite(r.target) ? r.target : r.weekly;
-    const order = (paused ? spNum(r.smart && Number.isFinite(r.target) ? r.target : r.weekly || r.lastWeek)
-      : r.orderFit === "short" || r.orderFit === "tight"
-        ? spUp(spNum(shown), spNum(r.smart && (r.pass || []).length && Number.isInteger(r.levelAt)
-            ? importLevelFor(r.pass, r.levelAt, r.weekNeed) : r.weekNeed), r.orderFit === "short")
-        : spNum(shown)) + (r.smart ? `<small ${SMALL}>in stock${plainAfter ? ` +${spNum(plainAfter)}/wk` : ""}</small>` : "");
+    const orderCell = (paused ? spNum(r.smart && Number.isFinite(r.target) ? r.target : r.weekly || r.lastWeek)
+      : order && Number.isFinite(f.setTo) ? spUp(spNum(shown), spNum(f.setTo), f.st === "short")
+      : spNum(shown)) + (r.smart ? `<small ${SMALL}>in stock${plainAfter ? ` +${spNum(plainAfter)}/wk` : ""}</small>` : "");
     const read = paused ? `Import <b>paused</b>; <b>${spNum(r.cover)}</b> days left`
-      : r.coverFit === "short" && r.runsOut
+      : dry && r.runsOut
         ? r.covered ? `Runs dry <b>${spEsc(r.runsOut)}</b>, before the route's next round`
         : `Runs dry <b>${spEsc(r.runsOut)}</b>${truck !== null ? `, the truck lands <b>${
             SP_WEEK_FULL_DAY(today + truck)}</b>` : ""}`
-      : r.orderFit === "short" && r.smart
+      : f.st === "short" && order && r.smart
         ? `${spImportWeek(r)}; ${spKeeps(shown, plainAfter, r.plainBefore)}`
-      : r.orderFit === "short"
+      : f.st === "short" && order
         ? `${spImportWeek(r)}; the order brings <b>${spNum(r.weekly)}</b>`
-      : r.covered && r.coverFit === "tight" && r.runsOut
+      : f.st === "tight" && order
+        ? `${spImportWeek(r)}; the order covers it, not the margin`
+      : close && r.covered && r.runsOut
         ? `Runs close on <b>${spEsc(r.runsOut)}</b>, before the route's next round`
-      : r.covered ? `A route brings what leaves; the import is a backup`
+      : covered ? `A route brings what leaves; the import is a backup`
+      : f.st === "new" ? `<b>New</b> · ${spEsc(szTip(f))}`
+      : f.st === "idle" ? `<b>Idle stock</b> · ${spEsc(szTip(f))}`
       : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? "Covered through the week"
       : `<b>${spNum(r.cover)}</b> days on hand`;
     const draw = spItemDraw(r.slug, r.item);
     rows.push({item: r.item, hand: r.stock, draw: spNum(r.perDay),
                cover: paused || !Number.isFinite(r.cover) ? null : r.cover,
-               short: r.coverFit === "short",
-               rail: spRail(r.cover, truck, r.paused, false, early, known), act, order,
+               short: dry,
+               rail: spRail(r.cover, truck, r.paused, false, early, known), act, order: orderCell,
                feeds: draw.sites, el, read});
   });
   (supply.idle || []).filter(r => r.s === siteTab).filter(take).forEach(r => {
+    const f = szFact(siteTab, r.slug);
+    const still = !r.perWeek;
     rows.push({
       item: r.item, hand: r.stock, draw: r.perWeek ? spNum(r.perWeek / 7) : "—",
-      rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, r.dead, null, false),
+      rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, still, null, false),
       act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
-      el: [spKeyTok(r.slug, r.item), r.dead ? "dead" : "target"],
-      read: r.dead ? "<b>Idle stock</b> · nothing draws on these" : `<b>Idle stock</b> · <b>${spNum(r.weeks)}</b> weeks on hand`,
+      el: [spKeyTok(r.slug, r.item), szEl(f) || (still ? "dead" : "target")],
+      read: f.why === "notRouted" ? `<b>Not routed</b> · no plan sends these on`
+        : still ? "<b>Idle stock</b> · nothing draws on these" : `<b>Idle stock</b> · <b>${spNum(r.weeks)}</b> weeks on hand`,
     });
   });
   /* Everything else on the floor. A line nothing imports is made in-house or
-     bought elsewhere; its cover is what it holds against what leaves, and it
-     has no truck to draw. */
+     bought elsewhere; its use a day is its fact's week, and it has no truck
+     to draw. */
   ((b && b.lines) || []).filter(take).forEach(l => {
-    const draw = spItemDraw(l.slug, l.item);
+    const f = supplyFact(siteTab, l.slug);
+    const perDay = f && Number.isFinite(f.use) ? f.use / (f.cad === "weekly" ? 7 : 1) : 0;
     const units = Number.isFinite(l.units) ? l.units : 0;
-    if(!units && !draw.perDay) return;
+    if(!units && !perDay) return;
     const made = spMadeAt(l.slug, l.item);
-    const cover = draw.perDay ? units / draw.perDay : 0;
+    const cover = perDay ? units / perDay : 0;
     rows.push({
-      item: l.item, hand: l.units, draw: draw.perDay ? spNum(draw.perDay) : "—",
-      cover: draw.perDay ? cover : null, short: !!draw.perDay && cover < 1,
-      rail: spRail(cover, null, false, !draw.perDay, null, false),
-      act: "", feeds: draw.sites,
+      item: l.item, hand: l.units, draw: perDay ? spNum(perDay) : "—",
+      cover: perDay ? cover : null, short: !!f && f.st === "short",
+      rail: spRail(cover, null, false, !!f && !perDay, null, false),
+      act: "", feeds: spItemDraw(l.slug, l.item).sites,
       order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
-      el: [spKeyTok(l.slug, l.item), draw.perDay ? "" : "dead"].filter(Boolean),
-      read: !draw.perDay ? "<b>Idle stock</b> · nothing draws on these"
+      el: [spKeyTok(l.slug, l.item), f ? szEl(f) : ""].filter(Boolean),
+      /* No fact is no verdict: the next refresh judges the line. */
+      read: !f ? "Not judged yet"
+        : f.st === "idle" && !perDay ? "<b>Idle stock</b> · nothing draws on these"
+        : f && f.st !== "covered" && f.st !== "made" ? `<b>${spEsc(SZ_WORD[f.st] || f.st)}</b> · ${spEsc(szTip(f))}`
         : cover >= SP_RAIL_DAYS ? "Covered through the week"
         : `<b>${cover.toFixed(1)}</b> days on hand`,
     });
@@ -16154,31 +16181,26 @@ function spStockRows(b){
      routed from here with nothing on the floor is in none of the three lists
      above — no import, no idle pile, no holding — and its absence is the
      finding. The name is the recipe's, because the depot has no line of its
-     own to name it. */
+     own to name it. Why there is none of it here is the depot line's own
+     fact, never an assumption: a contract signed before its first delivery
+     has a live weekly order and no row on the floor, and goods made in one
+     of this company's factories are never imported at all. */
   (spFactorySites() || []).forEach(site => (site.needs || []).forEach(n => {
     if(n.from !== siteTab || !(n.perDay > 0)) return;
     if(!take({slug: n.slug, item: n.item})) return;
     const draw = spItemDraw(n.slug, n.item);
     const perDay = draw.perDay || n.perDay;
-    /* Why there is none of it here is the need's own verdict, never an
-       assumption: _supply() builds its import rows from what a site holds, so
-       a contract signed before its first delivery has a live weekly order and
-       no row on the floor to carry it, and goods made in one of this
-       company's factories are never imported at all. Only the two verdicts
-       that really mean nothing tops this up say so; the rest of the eleven
-       statuses _factories() can set leave the column at a dash rather than
-       inventing a reason. */
+    const f = szFact(siteTab, n.slug);
     const importing = Number.isFinite(n.importWeekly) && n.importWeekly > 0;
-    const made = n.status === "made" ? spMadeAt(n.slug, n.item) : null;
-    const unfed = n.status === "noimport" || n.status === "unplanned";
-    const order = n.status === "paused"
+    const made = f.st === "made" ? spMadeAt(n.slug, n.item) : null;
+    const order = f.st === "paused"
       ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
       : importing && n.importSmart ? spLevelCell(n.importTarget ?? n.importWeekly, n.importPlainAfter, SMALL)
       : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>/wk</small>`
       : made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
-      : unfed ? `<span class="sp-noplan">${spIcon("route")}no import</span>`
+      : f.st === "noplan" ? `<span class="sp-noplan">${spIcon("route")}no import</span>`
       : "—";
-    const read = n.status === "paused"
+    const read = f.st === "paused"
       ? `Import <b>paused</b>; <b>nothing</b> on hand`
       : importing && n.importSmart
         ? `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)}; <b>nothing</b> on hand yet`
@@ -16188,7 +16210,7 @@ function spStockRows(b){
       : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
     rows.push({
       item: n.item, hand: 0, draw: spNum(perDay),
-      rail: spRail(0, null, n.status === "paused", false, null, importing),
+      rail: spRail(0, null, f.st === "paused", false, null, importing),
       act: "", feeds: draw.sites, cover: 0, short: true,
       order, el: [spKeyTok(n.slug, n.item)], read,
     });
@@ -16240,15 +16262,14 @@ function spLinesRead(site){
   if(worst) return `Least staffed · <b>${spEsc(worst.l.item)}</b> · ${spMachineRead(worst.slot, worst.g)}`;
   return (site.lines || []).length ? `Every machine is rostered all <b>${SP_STAFF_HOURS} h</b> of the week` : "&nbsp;";
 }
-/* The Inputs block's read-out before a row is pointed at: the input in the
-   worst state, by how soon it stops the line. */
-const SP_NEED_WORST = ["dry", "paused", "unplanned", "import", "noimport", "target", "staffing", "waiting", "idle"];
+/* The Inputs block's read-out before a row is pointed at: the input whose
+   fact is worst, by how soon it stops the line. */
 function spInputsRead(site){
-  const rank = n => { const at = SP_NEED_WORST.indexOf(n.status); return at < 0 ? SP_NEED_WORST.length : at; };
-  const worst = (site.needs || []).reduce((w, n) => !w || rank(n) < rank(w) ? n : w, null);
+  const worst = (site.needs || []).reduce((w, n) => !w || szRank(szNeed(site, n)) < szRank(szNeed(site, w)) ? n : w, null);
   if(!worst) return "&nbsp;";
-  if(rank(worst) === SP_NEED_WORST.length) return "Every input arrives in step";
-  return `<b>${spEsc(worst.item)}</b> · ${spNeedRead(worst)}`;
+  const f = szNeed(site, worst);
+  if(f.st === "covered" || f.st === "made") return "Every input arrives in step";
+  return `<b>${spEsc(worst.item)}</b> · ${spNeedRead(worst, f)}`;
 }
 function spMachines(count, gaps, slots){
   const bySlot = new Map((gaps || []).filter(g => g && Number.isFinite(g.slot)).map(g => [g.slot, g]));
@@ -16306,27 +16327,29 @@ function spLines(site){
   });
   return `<div class="sp-lines">${html}</div>`;
 }
-/* What the machines eat, against the top-up set to feed them. The status the
-   Python already worked out decides the mark and the read-out; hovering a row
-   lights the lines that draw on it. */
-const SP_NEED_EL = {unplanned: "noplan", target: "target", paused: "paused",
-                    import: "import", noimport: "import", dry: "dry",
-                    idle: "idle", staffing: "staffing", waiting: "waiting"};
-function spNeedRead(n){
-  switch(n.status){
-    case "unplanned": return "<b>No plan</b> tops this up";
-    case "target": return `Tops up to <b>${spNum(n.target)}</b>, the machines eat <b>${spNum(n.dailyNeed)}</b>`;
+/* What the machines eat, against the top-up set to feed them. The input's
+   fact decides the mark and the read-out; hovering a row lights the lines
+   that draw on it. */
+function spNeedRead(n, f){
+  const use = szUse(f, n.dailyNeed ?? n.perDay);
+  switch(f.st){
+    case "noplan": return "<b>No plan</b> tops this up";
     case "paused": return "Import <b>paused</b>";
-    case "dry": return `<b>${spNum(n.arrives)}</b>/day arrives against <b>${spNum(n.perDay)}</b> needed`;
-    case "idle": return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
-    case "staffing": return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
-    case "waiting": return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
-    case "import": case "noimport":
-      if(n.importSmart)
-        return `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)} against the <b>${spNum(n.importNeed ?? n.depotNeed)}</b> a week`;
-      return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(n.importNeed ?? n.depotNeed)}</b> a week`;
+    case "short": case "tight":
+      if(f.why === "target") return `Tops up to <b>${spNum(n.target)}</b>, the machines eat <b>${spNum(use)}</b>${
+        f.st === "tight" ? ", with no margin" : ""}`;
+      if(f.why === "dry") return `<b>${spNum(n.arrives)}</b>/day arrives against <b>${spNum(use)}</b> needed`;
+      if(f.why === "order") return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(f.need)}</b> a week`;
+      return spEsc(szTip(f));
+    case "stalled":
+      if(f.why === "waiting") return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
+      return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
+    case "covered":
+      if(f.why === "staffing") return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
+      if(f.why === "limit") return "Held back by <b>Produce up to</b>";
+      return "In step";
     case "made": return "Made in-house";
-    default: return "In step";
+    default: return spEsc(szTip(f));
   }
 }
 /* An input's lines are named by their labels, and the line rows are keyed by
@@ -16339,13 +16362,13 @@ function spNeedLines(site, n){
 }
 function spInputs(site){
   return (site.needs || []).map(n => {
-    const el = [spKeyTok(n.slug, n.item), SP_NEED_EL[n.status] || "",
-                n.stalled ? "stalled" : ""].filter(Boolean);
+    const f = szNeed(site, n);
+    const el = [spKeyTok(n.slug, n.item), szEl(f)].filter(Boolean);
     const top = n.directImport
       ? (Number.isFinite(n.importWeekly) ? n.importSmart ? spLevelCell(n.importTarget ?? n.importWeekly, n.importPlainAfter, "")
         : `${spNum(n.importWeekly)}<small>/wk</small>` : "—")
       : !n.target ? `<span class="sp-noplan">${spIcon("route")}no plan</span>`
-      : n.raiseTarget ? spUp(spNum(n.target), spNum(n.raiseTarget), true)
+      : Number.isFinite(f.setTo) ? spUp(spNum(n.target), spNum(f.setTo), f.st === "short")
       : spNum(n.target);
     /* Nothing arrived is only a reading where the delivery log is long enough
        to be read; otherwise the column is blank, not zero. */
@@ -16354,7 +16377,7 @@ function spInputs(site){
     const from = n.directImport ? "direct import"
       : n.from === null || n.from === undefined ? "—" : siteLink(D.businesses[n.from]);
     return `<tr data-lines="${attr(spNeedLines(site, n))}" data-el="${attr(el.join(" "))}" data-read="${
-      attr(spNeedRead(n))}"><td class="l">${spEsc(n.item)}</td><td>${spNum(n.perDay)}</td><td>${top}</td>
+      attr(spNeedRead(n, f))}"><td class="l">${spEsc(n.item)}</td><td>${spNum(szUse(f, n.perDay))}${szRamp(f)}</td><td>${top}</td>
       <td>${arrived}</td><td>${spNum(n.stock)}</td><td class="l" style="color:var(--ink-2)">${from}</td></tr>`;
   }).join("");
 }
@@ -16645,10 +16668,12 @@ function drawSite(){
   const shelves = !shelved ? []
     : office ? shelvesAll
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
-  const gauge = t => {
+  /* The shelf's verdict is its fact: short is the red gauge, tight the amber. */
+  const shelfFact = l => szFact(siteTab, l.slug);
+  const gauge = (t, f) => {
     if(!t || t.pressure === null) return "—";
     const p = Math.round(t.pressure);
-    return `<i><b style="--w:${Math.min(100, p)}%${t.level === "warn" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
+    return `<i><b style="--w:${Math.min(100, p)}%${f.st === "tight" ? ";background:var(--warn)" : ""}"></b></i>${p}%`;
   };
   const products = !shelved ? "" : office ? (shelves.length ? `
     <table>
@@ -16662,11 +16687,12 @@ function drawSite(){
       <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
         <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
       <tbody>${shelves.map(l => {
-        const t = targets[l.item];
-        /* A busiest hour above the top-up is the shelf emptying before the
-           next drop: red, with the setting to change it to. Nothing planned is
-           a chip, not a dash, because it is a fix the player still owes. */
-        const over = sp && t && t.target && t.peakSold > t.target;
+        const t = targets[l.item], f = shelfFact(l);
+        /* A top-up the fact says to raise is the shelf emptying before the
+           next drop: red, with the fact's figure to change it to. Nothing
+           planned is a chip, not a dash, because it is a fix the player
+           still owes. */
+        const over = sp && t && t.target && Number.isFinite(f.setTo) && (f.st === "short" || f.st === "tight");
         const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
@@ -16674,9 +16700,9 @@ function drawSite(){
           <td>${over ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
           <td>${!t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}no plan</span>` : "—")
-            : over ? `<span class="sp-up${sp ? " bad" : ""}" data-el="raise">${t.target.toLocaleString()} ${spIcon("right")} <b>${
-                ceil100(Math.max(t.target, t.peakSold)).toLocaleString()}</b></span>` : t.target.toLocaleString()}</td>
-          <td class="gauge${t && t.level === "critical" ? " low" : ""}">${gauge(t)}</td>
+            : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${t.target.toLocaleString()} ${spIcon("right")} <b>${
+                f.setTo.toLocaleString()}</b></span>` : t.target.toLocaleString()}</td>
+          <td class="gauge${f.st === "short" ? " low" : ""}">${gauge(t, f)}</td>
           <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString()}</span>` : l.units.toLocaleString()}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
   const shelfMore = shelved && !office && sideShelves.length ? `
@@ -16770,7 +16796,7 @@ function drawSite(){
     </div>
     <section class="sec rv" data-block="stock" id="sp-stock" data-readzone>
       ${sechead("Stock", {icon: "crate", why: `The next seven days, left to right from today. A filled cell is a day covered, red hatching is a day dry, and the truck sits on the day it lands.${
-        rows.length ? "" : " Nothing is held or imported here yet."}`})}
+        rows.length ? "" : " Nothing is held or imported here yet."}`, aside: `<span class="seg" id="spSizing"></span>`})}
       ${rows.length ? `<div class="scrollx"><table>
         <thead><tr><th>Line</th><th>On hand</th><th>Draw / day</th><th class="l">${
           spDays(D.meta.day % 7)}</th><th></th><th>Weekly order</th><th>Feeds</th></tr></thead>
@@ -16831,8 +16857,9 @@ function drawSite(){
       <div class="sp-read sp-readout">${spLinesRead(site)}</div>
     </section>
     <section class="sec rv" data-block="inputs" id="sp-inputs" data-readzone>
-      ${sechead("Inputs", {icon: "pipe", why: `What the machines eat at full rate, against the daily top-up set to feed them.${
-        (site.needs || []).length ? "" : " No named line here draws on anything yet."}`})}
+      ${sechead("Inputs", {icon: "pipe", why: `What the machines eat, ${sizing === "dem"
+        ? "sized for what the shops at the end of the chain use" : "at full rate"}, against the daily top-up set to feed them.${
+        (site.needs || []).length ? "" : " No named line here draws on anything yet."}`, aside: `<span class="seg" id="spSizing"></span>`})}
       ${(site.needs || []).length ? `<div class="scrollx"><table>
         <thead><tr><th>Input</th><th>Eats / day</th><th>Top-up</th><th>Arrived / day</th>
           <th>On hand</th><th class="l">From</th></tr></thead>
@@ -16927,6 +16954,8 @@ function drawSite(){
       </section>
     </div>`}`;
   spPruneHits($("sitePanel"));
+  /* A depot's and a factory's page carry the sizing switch (supplyFact). */
+  if($("spSizing")) szSwitch("spSizing");
   /* A redraw leaves no block lit, so the dimming a hovered finding switched on
      has to come off with the markup it dimmed. */
   $("sitePanel").classList.remove("sp-focus");
@@ -20146,11 +20175,11 @@ function ssKindGo(id){
     if(row){ row.scrollIntoView({block: "nearest"}); ssRing(row); }
   }, 450);
 }
-/* The inputs arriving short of what the machines eat, by name. */
+/* The inputs Python judged not fed as the machines need, by name. */
 function ssShortInputs(){
   const names = [];
   ((D.supply && D.supply.factories && D.supply.factories.sites) || []).forEach(f => (f.needs || []).forEach(n => {
-    if(((f.arrivals || {})[n.slug] || 0) < n.perDay && !names.includes(n.item)) names.push(n.item);
+    if(["short", "noplan", "paused", "stalled"].includes(szFact(f.s, n.slug).st) && !names.includes(n.item)) names.push(n.item);
   }));
   return names;
 }
