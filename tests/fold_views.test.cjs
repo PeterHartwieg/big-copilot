@@ -326,6 +326,31 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
+  // A live refresh replaces the focused chip: focus goes to the new one, and
+  // a resize after it still hands focus on across the switch.
+  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
+  try {
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    await page.evaluate(() => { document.activeElement.dataset.old = '1'; });
+    // The pointer away from the chip, so a tooltip could only come from focus.
+    await page.mouse.move(5, 600);
+    // What renderAll() does to these two, with a save that has moved on.
+    await page.evaluate(() => { D.meta.minute = 14; drawMast(); drawFooter(); drawDifficulty(); });
+    assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.fvAt, document.activeElement.dataset.old,
+      document.activeElement.isConnected]), ['mast', undefined, true]);
+    assert.equal((await state(page)).tip, false);
+    assert.equal((await state(page)).open, true, 'the popover stays open, hung from the new chip');
+    assert.deepEqual((await state(page)).expanded, ['true', 'false']);
+    await page.setViewportSize({width: 1280, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'foot', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
   // Focus the reader put elsewhere while it was open stays there.
   ({page, errors} = await board({width: 1440}));
   try {

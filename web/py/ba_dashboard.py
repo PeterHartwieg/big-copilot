@@ -17101,6 +17101,9 @@ let fvDiffPop = null, fvDiffAnchor = null;
    holding focus lets the browser drop focus to <body> before any resize
    handler runs. */
 let fvFocusOurs = false;
+/* Which chip held focus ("mast" or "foot"), so a redraw that replaces it can
+   give focus to its replacement. */
+let fvFocusedAt = null;
 /* The chip the popover can hang from right now: the masthead's at 1301 px
    and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
@@ -17196,9 +17199,22 @@ function drawDifficulty(){
        only while the element left is still drawn: one hidden by a resize
        loses focus without the reader moving it, and it is still ours. */
     const isOurs = el => !!el && el.nodeType === 1 && (fvDiffPop.contains(el) || !!el.closest("button.fv-diff"));
-    document.addEventListener("focusin", e => { fvFocusOurs = isOurs(e.target); });
+    document.addEventListener("focusin", e => {
+      fvFocusOurs = isOurs(e.target);
+      const chip = e.target.closest && e.target.closest("button.fv-diff");
+      fvFocusedAt = chip ? chip.dataset.fvAt : null;
+    });
+    /* The window losing focus (another app, another tab) is not the reader
+       moving it on the page, so it changes nothing. Neither is a chip that a
+       redraw removed or a resize hid: the browser fires focusout for those
+       too, while the element is still in place, so the verdict waits until
+       the current task is done and then asks whether it is still there. */
     document.addEventListener("focusout", e => {
-      if(!e.relatedTarget && isOurs(e.target) && e.target.getClientRects().length) fvFocusOurs = false;
+      if(e.relatedTarget || !document.hasFocus() || !isOurs(e.target)) return;
+      const left = e.target;
+      queueMicrotask(() => {
+        if(left.isConnected && left.getClientRects().length && !isOurs(document.activeElement)) fvFocusOurs = false;
+      });
     });
     window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
     window.addEventListener("scroll", e => {
@@ -17206,6 +17222,14 @@ function drawDifficulty(){
       if(e.target && e.target.nodeType === 1 && fvDiffPop.contains(e.target)) return;
       fvPlaceDiffPop();
     }, true);
+  }
+  /* A live refresh (drawMast, drawFooter) replaced the chip that had focus,
+     and the browser dropped focus to the page: give it to the replacement, so
+     focus and fvFocusOurs agree again. */
+  const active = document.activeElement;
+  if(fvFocusOurs && fvFocusedAt && (!active || active === document.body)){
+    const again = document.querySelector(`button.fv-diff[data-fv-at="${fvFocusedAt}"]`);
+    if(again && again.getClientRects().length){ again.focus({preventScroll: true}); hideTip(); }
   }
   /* A redraw replaced the chip the popover hung from: follow the chip in the
      same place, or close when the save has no difficulty to show. */
