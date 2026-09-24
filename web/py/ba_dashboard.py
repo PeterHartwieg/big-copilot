@@ -859,7 +859,7 @@ def _fit(need: float, provision: float) -> str:
     return "tight" if gap <= need * FIT_TIGHT else "short"
 
 
-def _weekday_profile(points: list, last: int | None = None) -> list | None:
+def _weekday_profile(points: list, last: int | None = None, end: int | None = None) -> list | None:
     """How each weekday compares with its own week, as a percentage.
 
     A business that grew tenfold over the sample would otherwise make late
@@ -867,9 +867,12 @@ def _weekday_profile(points: list, last: int | None = None) -> list | None:
     by a centred seven-day mean first, which cancels the trend and leaves the
     weekly cycle behind.
 
-    ``last`` keeps only the latest that many days that have a centred mean,
-    so four weeks give every weekday four readings; the days before them
-    still serve as neighbours for the means.
+    ``last`` keeps only the days in that many calendar days before ``end``
+    (the latest day of the series by default): 28 give every weekday at most
+    four readings, and a series with gaps (profit leaves out the loss days) gets
+    fewer rather than reaching back into older weeks. ``end`` itself is left
+    out because it has no days after it to centre a week on. The days before
+    the window still serve as neighbours for the means.
     """
     values = {day: float(value) for day, value in points}
     if len(values) < RHYTHM_MIN_DAYS:
@@ -885,7 +888,8 @@ def _weekday_profile(points: list, last: int | None = None) -> list | None:
 
     ordered = sorted(baselines)
     if last:
-        ordered = ordered[-last:]
+        anchor = end if end is not None else max(values)
+        ordered = [day for day in ordered if anchor - last <= day < anchor]
         baselines = {day: baselines[day] for day in ordered}
     for earlier, later in zip(ordered, ordered[1:]):
         step = baselines[later] / baselines[earlier]
@@ -2136,13 +2140,16 @@ def _chain_rhythm(save: Save, buildings: list, daily: list, day: int) -> dict:
     profiles["basis"] = "customers" if profiles["customers"] else "revenue"
     # The same three series over the last four weeks only, for the chart. The
     # full-length ones above stay what the supply sizing reads.
+    # The window is counted in calendar days back from the last finished day,
+    # the same for all three, so a series with gaps reads fewer weeks.
+    end = daily[-1]["day"] if daily else None
     profiles["recent"] = {
         "days": RHYTHM_RECENT_DAYS,
         "revenue": _weekday_profile(
-            [(d["day"], d["revenue"]) for d in daily], RHYTHM_RECENT_DAYS),
+            [(d["day"], d["revenue"]) for d in daily], RHYTHM_RECENT_DAYS, end),
         "profit": _weekday_profile(
-            [(d["day"], d["profit"]) for d in daily if d["profit"] > 0], RHYTHM_RECENT_DAYS),
-        "customers": _weekday_profile(sorted(customers.items()), RHYTHM_RECENT_DAYS),
+            [(d["day"], d["profit"]) for d in daily if d["profit"] > 0], RHYTHM_RECENT_DAYS, end),
+        "customers": _weekday_profile(sorted(customers.items()), RHYTHM_RECENT_DAYS, end),
     }
     return profiles
 
@@ -9404,11 +9411,26 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fv-diff svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .fv-diff:hover svg{transform:rotate(-12deg) scale(1.15)}
-.clock small.fv-diffline{margin-top:6px}
 .clock small.fv-diffline::before{display:none}
+.clock .fv-glow{position:relative}
+.clock .fv-glow::before{content:"";position:absolute;inset:-2px -6px;z-index:-1;pointer-events:none;
+  border-radius:999px;background:var(--ground);opacity:.45;filter:blur(5px)}
+/* On the clock's line it is no taller than the text: the negative margin keeps
+   the line box the height it had without it. */
+.clock .fv-diff{margin:-4px 0 -4px 6px;padding:1px 5px;gap:4px;font-size:10px;vertical-align:middle}
+.clock .fv-diff svg{width:10px;height:10px}
+.fv-diff.fv-plain{cursor:default}
 .fv-footdiff{display:none}
 .fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
-@media(max-width:500px){
+/* Under 1100 px the masthead's first row is the wordmark and the clock, and
+   the clock may take what the wordmark leaves rather than half the row, so the
+   chip stays on its line instead of adding one. At 760 px and under there is
+   no room left for it at all; under 500 px the clock is hidden itself. */
+@media(max-width:1100px){
+  .wrap .mast .clock{max-width:calc(100% - 120px)}
+}
+@media(max-width:760px){
+  .clock .fv-diff{display:none}
   .fv-footdiff{display:inline-flex}
 }
 .fv-pop{position:fixed;left:0;top:0;z-index:60;width:470px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-y:auto;
@@ -9416,7 +9438,8 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   opacity:0;visibility:hidden;transform:translateY(-6px);
   transition:opacity .16s ease,transform .16s cubic-bezier(.2,.7,.2,1),visibility .16s}
 .fv-pop.fv-up{transform:translateY(6px)}
-.fv-pop.on{opacity:1;visibility:visible;transform:none}
+/* Visible at once on opening, so focus can move into it on the same frame. */
+.fv-pop.on{opacity:1;visibility:visible;transform:none;transition:opacity .16s ease,transform .16s cubic-bezier(.2,.7,.2,1),visibility 0s}
 .fv-pop h3{margin:0;font-size:15px;font-weight:600;display:flex;align-items:center;gap:10px}
 .fv-pop .fv-popchips{margin-left:auto;display:inline-flex;gap:6px}
 .fv-pop p{margin:4px 0 12px;color:var(--ink-3);font-size:12.5px}
@@ -10461,9 +10484,6 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .mile .box svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .mile.done .box{background:var(--accent);border-color:var(--accent)}
 .mile .c{margin-left:auto;font:500 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
-.rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
-.rules span{padding:3px 8px;border-radius:4px;background:var(--raised);font:500 11px "IBM Plex Mono",monospace;color:var(--ink-2);cursor:help}
-.rules span b{color:var(--ink);font-weight:600;margin-left:4px}
 
 /* the sphere: the dot grown up. It rolls out of the wordmark onto the masthead
    rule and sits there; it watches the pointer, squishes when clicked and rolls
@@ -11327,8 +11347,9 @@ function drawWeekday(series, tools){
   const lo = profile.reduce((a, p) => p.index < a.index ? p : a);
   const pts = v => `${v > 0 ? "+" : v < 0 ? "\u2212" : ""}${Math.abs(v)}`;
   const peaks = `Peaks <b>${hi.day}</b> ${pts(hi.index - 100)} · lowest <b>${lo.day}</b> ${pts(lo.index - 100)}`;
+  const span = Math.round(((D.rhythm && D.rhythm.recent && D.rhythm.recent.days) || 28) / 7);
   $("dailyHead").innerHTML = sechead("Daily result", {
-    why: "Each weekday against a normal day, from the company's last four weeks of daily results. Point at a weekday for its figure.",
+    why: `Each weekday against a normal day, from the company's last ${span} week${span === 1 ? "" : "s"} of daily results. Point at a weekday for its figure.`,
     aside: `<span class="seg" id="chartTools"></span>`,
   });
   seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
@@ -11337,7 +11358,7 @@ function drawWeekday(series, tools){
       <div class="fv-top">
         <span class="fv-basis" style="--fv-s:${s.colour}" data-tip="${attr(tip)}"><span class="dot"></span><b>${s.what}</b> · ${
           s.scope} · ${weeks} week${weeks===1?"":"s"}</span>
-        <span class="readout fv-readout sp-readout">${peaks}</span>
+        <span class="readout fv-readout"><span class="sp-readout">${peaks}</span></span>
       </div>
       <div class="fv-week">${weekHtml(profile, today)}</div>
       <div class="fv-legend"><div class="legend">${series.map(([k]) =>
@@ -12164,9 +12185,14 @@ function drawMast(){
   const clock = $("clock");
   clock.innerHTML =
     `<b>Day ${m.day}<i>·</i>${wd} ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
-    + `<small>${bits.join(" · ")}</small>` + (flags.length ? `<small>${flags.join(" · ")}</small>` : "")
-    /* The difficulty, on a line of its own under any flag (fold-views, R15). */
-    + (m.houseRules ? `<small class="fv-diffline">${fvDiffChip(m.houseRules, "mast")}</small>` : "");
+    /* The difficulty chip (fold-views, R15) ends the clock's last line: the
+       flags line when there is one, else the sites and staff. A line of its
+       own made the sticky masthead taller wherever it wraps. The line's text
+       carries the glow; the chip has its own ground. */
+    + [bits.join(" · "), ...(flags.length ? [flags.join(" · ")] : [])].map((line, i, all) => {
+      const chip = i === all.length - 1 ? fvDiffChip(m.houseRules, "mast", m.difficulty) : "";
+      return chip ? `<small class="fv-diffline"><span class="fv-glow">${line}</span>${chip}</small>` : `<small>${line}</small>`;
+    }).join("");
   clock.dataset.tip = `Game time when the save was written: ${m.cityDate}. Day 1 was a Monday.`
     + (k.vacant ? ` ${k.vacant} lease${k.vacant === 1 ? "" : "s"} vacant on top of the ${k.businesses} sites.` : "");
   window.BigCopilotCommunity?.paintOnline();
@@ -15769,14 +15795,27 @@ function reconcileOrderMarks(saved, rows, complete){
    from the same rows and the same ticks, so the two can never disagree. Four
    states: one change (said in full), several (counted, and where), all ticked,
    and nothing to change. `nameOf` gives a site's short name from its index. */
-function planImportsState(rows, marks, nameOf){
+function planImportsState(rows, marks, nameOf, gaps = {}){
   const esc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const left = rows.filter(r => !marks.has(r.key));
-  if(!rows.length) return {badge: "ALL SET", live: false, what: "Every import and top-up covers its week."};
+  /* Nothing on the list is what the checklist found, not a promise: said in
+     its words, and with what it could not look at (the game's text missing,
+     recipes still unnamed), in which case the badge does not say ALL SET. */
+  if(!rows.length){
+    const missing = gaps.unnamed ? `${gaps.unnamed} factory recipe${gaps.unnamed === 1 ? " is" : "s are"} still unnamed and not included`
+      : gaps.complete === false ? "factory lines need the game's text to be included" : "";
+    return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
+      : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
+  }
   if(!left.length) return {badge: "ALL TICKED", live: false,
     what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.`};
   const n = v => v === null || v === undefined ? "not set" : v.toLocaleString();
-  const change = r => r.proposed === null
+  /* A paused import the player gave a figure has no current setting: it is
+     a resume, not an order going from "not set". */
+  const resume = r => r.kind === "Weekly imports" && /^Resume the paused import/.test(r.reason || "");
+  const change = r => r.proposed !== null && resume(r)
+    ? `resume the paused import, ${r.mode === "smart" ? `Smart Delivery stock ${n(r.proposed)}` : `${n(r.proposed)}/week`}`
+    : r.proposed === null
     ? String(r.reason || "").split(". ")[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase())
     : r.kind === "Before the next delivery" ? `add ${n(r.proposed)} units before the next delivery`
     : `${r.mode === "smart" ? "Smart Delivery stock" : r.kind === "Weekly imports" ? "weekly order" : "daily top-up"} ${
@@ -15790,7 +15829,7 @@ function planImportsState(rows, marks, nameOf){
   const at = !places.length ? "" : places.length <= 2 ? ` at ${places.map(esc).join(" and ")}`
     : ` at ${places.slice(0, 2).map(esc).join(", ")} and ${places.length - 2} more`;
   return {badge: `${left.length} TO CHANGE`, live: true,
-    what: `<b>${left.length} settings</b>${at}, starting with ${esc(left[0].item)}.`};
+    what: `<b>${left.length} changes</b>${at}, starting with ${esc(left[0].item)}.`};
 }
 
 const orderMarkCache = new Map();
@@ -15883,7 +15922,8 @@ function drawOrderChecklist(rows, factories){
     $("resetOrderMarks").disabled = !done;
     $("orderCopyFallback").hidden = true;
     $("orderCopyStatus").textContent = "";
-    paintPlanImports(planImportsState(rows, marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null));
+    paintPlanImports(planImportsState(rows, marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null,
+      {complete, unnamed: unnamedRecipes}));
   };
   body.querySelectorAll("input[data-order-mark]").forEach(input => {
     input.onchange = () => {
@@ -16703,8 +16743,12 @@ function drawProducts(){
     ? `Units sold across ${plural(p.stores, "store")}${p.weeks ? `, last ${plural(p.weeks, "week")}` : ""}: peaks ${
         p.peak}, ${p.swing} points between best and worst day`
     : "No weekly cycle clears the noise test";
-  const peakWeeks = Math.max(0, ...rows.filter(p => p.peak).map(p => p.weeks || 0));
-  const fromWeeks = peakWeeks ? `, from the last ${plural(peakWeeks, "week")},` : "";
+  /* Each product's peak reads its own weeks of sales (its cell says how many);
+     the header gives the range across the rows. */
+  const peakWeeks = rows.filter(p => p.peak && p.weeks).map(p => p.weeks);
+  const lo = Math.min(...peakWeeks), hi = Math.max(...peakWeeks);
+  const weekRange = !peakWeeks.length ? "" : lo === hi ? `the last ${plural(hi, "week")}` : `the last ${lo} to ${hi} weeks`;
+  const fromWeeks = weekRange ? `, from ${weekRange},` : "";
   const more = all.length > TOP
     ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
         showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
@@ -16721,7 +16765,7 @@ function drawProducts(){
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
       <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
       <th>Avg price</th><th>Stores</th>${showPeak?`<th data-tip="${attr(`The weekday each product sells most units, across every store that carries it${
-        peakWeeks ? `, from the last ${plural(peakWeeks, "week")}` : ""}`)}">Peaks · units</th>`:""}</tr></thead>
+        weekRange ? `, from ${weekRange} of sales` : ""}`)}">Peaks · units</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>{
       /* The product opens the store that sells the most of it, Shelves lit:
          the Portfolio has no product filter, and the site panel already has
@@ -16813,8 +16857,9 @@ function drawGoals(){
 /* The difficulty, as one chip and a popover with every setting that differs
    from the game's Normal preset. Normal is the yardstick rather than x1,
    because the presets are not x1: Normal's urgent wholesale fee is x0.2. The
-   chip sits on the masthead's build line, and on a phone, where the clock is
-   hidden, beside the footer's game build. These three build markup only;
+   chip ends the masthead's build line, and at 760 px and under, where the
+   clock has no room for it, sits beside the footer's game build. These three
+   build markup only;
    drawDifficulty() places and wires the popover. */
 const FV_PRESETS = ["Easy", "Normal", "Hard"];
 function fvDiffWords(h){
@@ -16827,8 +16872,11 @@ function fvDiffWords(h){
     chip: [label, ...(preset ? [] : counts.map(([n, way]) => `${n} ${way}`))].join(" · "),
     vsNormal: counts.map(([n, way], i) => `${i ? n : plural(n, "setting")} ${way}`).join(" and ")};
 }
-function fvDiffChip(h, place){
-  if(!h) return "";
+function fvDiffChip(h, place, named){
+  /* A board built before the house rules still knows the difficulty's name:
+     said, with nothing to open. */
+  if(!h) return named ? `<span class="fv-diff fv-plain" data-fv-at="${place}" data-tip="${attr(`Difficulty: ${named}`)}"><span>${
+    attr(place === "mast" ? String(named).toUpperCase() : named)}</span></span>` : "";
   const w = fvDiffWords(h);
   const tip = (w.preset ? `The game's ${w.label} preset` : w.label === "Custom" ? "Custom difficulty" : "A difficulty the board does not recognise")
     + (w.vsNormal ? `: ${w.vsNormal} than Normal` : "") + ". Click for each setting.";
@@ -16848,6 +16896,9 @@ function fvDiffPopHtml(h){
     : w.label === "Custom" ? "Every setting that differs from the game's Normal preset."
     : "A difficulty this board does not recognise: every setting that differs from the game's Normal preset.";
   const started = Number.isFinite(h.startingMoney) ? ` Started with ${fmt(h.startingMoney)}.` : "";
+  /* Nothing moved on a game that is not Normal itself: say that, not "every
+     setting that differs" over an empty list. */
+  const lead2 = !moved.length && w.label !== "Normal" ? "No setting differs from the game's Normal preset." : lead;
   /* One slider a setting, like the game's own: Normal is the tick, this game
      the knob, and right is always harder -- so a setting where a lower number
      is harder (Export price, Resale value) runs the other way. How far is the
@@ -16861,7 +16912,7 @@ function fvDiffPopHtml(h){
       Math.abs(me - 50).toFixed(0)}%"></span><span class="nm" style="left:50%"></span><span class="me${cls}" style="left:${me.toFixed(0)}%"></span></span>`;
   };
   const chips = w.counts.map(([n, way]) => `<span class="chip ${way === "harder" ? "warn" : "ok"}">${n} ${way}</span>`).join("");
-  return `<h3>${title}${chips ? `<span class="fv-popchips">${chips}</span>` : ""}</h3><p>${lead}${started}</p>`
+  return `<h3>${title}${chips ? `<span class="fv-popchips">${chips}</span>` : ""}</h3><p>${lead2}${started}</p>`
     + (moved.length ? `<div class="fv-rules">${moved.map(r =>
         `<div class="fv-rule" data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Normal is ${
           setting(r.unit, r.normal)}, so this game is ${r.lean}.`)}"><span class="n">${r.name}<small>${r.what}</small></span>${
@@ -17031,10 +17082,11 @@ function drawFooter(){
     f.dataset.tip = `Board built ${m.generated}`;
   }
   $("footBuild").textContent = `Game build ${m.build}`;
-  /* On a phone the masthead's clock is hidden, so the difficulty chip stands
-     beside the game build instead; the stylesheet shows one or the other. */
+  /* On a phone, and up to 760 px where the clock has no room for it, the
+     difficulty chip stands beside the game build instead; the stylesheet shows
+     one or the other. */
   const diff = $("footDiff");
-  if(diff) diff.innerHTML = fvDiffChip(m.houseRules, "foot");
+  if(diff) diff.innerHTML = fvDiffChip(m.houseRules, "foot", m.difficulty);
 }
 
 /* The difficulty popover: one element at body level, placed against whichever
@@ -17042,8 +17094,20 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
+/* The chip the popover can hang from right now: the masthead's on a desktop,
+   the footer's on a phone, whichever the stylesheet shows. */
+const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
 function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
+  /* A resize across 500 px hides the chip it hung from and shows the other:
+     move to that one, or close when neither is on screen. */
+  if(!fvDiffAnchor.getClientRects().length){
+    const shown = fvShownChip();
+    if(!shown){ fvCloseDiff(false); return; }
+    fvDiffAnchor.setAttribute("aria-expanded", "false");
+    fvDiffAnchor = shown;
+    shown.setAttribute("aria-expanded", "true");
+  }
   const vw = document.documentElement.clientWidth || window.innerWidth;
   const vh = document.documentElement.clientHeight || window.innerHeight;
   const r = fvDiffAnchor.getBoundingClientRect(), w = fvDiffPop.offsetWidth, h = fvDiffPop.offsetHeight;
@@ -17055,10 +17119,17 @@ function fvPlaceDiffPop(){
   fvDiffPop.style.left = Math.max(12, Math.min(r.right - w, vw - w - 12)) + "px";
   fvDiffPop.style.top = Math.max(12, y) + "px";
 }
-function fvCloseDiff(){
+/* `restore` hands focus back to the chip (Esc, or the chip clicked again); an
+   outside click leaves it wherever that click put it. The chip's own tooltip
+   would open on that focus, over a popover just closed, so it is put away. */
+function fvCloseDiff(restore){
   if(!fvDiffPop || !fvDiffPop.classList.contains("on")) return;
   fvDiffPop.classList.remove("on");
   document.querySelectorAll(".fv-diff").forEach(b => b.setAttribute("aria-expanded", "false"));
+  if(restore && fvDiffAnchor && fvDiffAnchor.getClientRects().length){
+    fvDiffAnchor.focus({preventScroll: true});
+    hideTip();
+  }
 }
 function fvOpenDiff(anchor){
   const h = D && D.meta && D.meta.houseRules;
@@ -17071,33 +17142,35 @@ function fvOpenDiff(anchor){
   anchor.setAttribute("aria-expanded", "true");
   fvPlaceDiffPop();
   wireTips();
+  /* Into the dialog, so a keyboard reads it and tabs through its settings. */
+  fvDiffPop.focus({preventScroll: true});
 }
 function drawDifficulty(){
   if(!fvDiffPop){
     fvDiffPop = document.createElement("div");
     fvDiffPop.className = "fv-pop";
     fvDiffPop.id = "fvDiffPop";
+    fvDiffPop.tabIndex = -1;
     fvDiffPop.setAttribute("role", "dialog");
     fvDiffPop.setAttribute("aria-label", "Difficulty");
     document.body.appendChild(fvDiffPop);
     document.addEventListener("click", e => {
-      const chip = e.target.closest && e.target.closest(".fv-diff");
+      const chip = e.target.closest && e.target.closest("button.fv-diff");
       if(!chip) return;
       e.preventDefault();
-      if(fvDiffPop.classList.contains("on") && fvDiffAnchor === chip) fvCloseDiff();
-      else { fvCloseDiff(); fvOpenDiff(chip); }
+      if(fvDiffPop.classList.contains("on") && fvDiffAnchor === chip) fvCloseDiff(true);
+      else { fvCloseDiff(false); fvOpenDiff(chip); }
     });
     /* Outside click closes it; mousedown, so the click that follows lands on
        whatever was clicked rather than on a popover that is still there. */
     document.addEventListener("mousedown", e => {
       if(!fvDiffPop.classList.contains("on")) return;
-      if(fvDiffPop.contains(e.target) || (e.target.closest && e.target.closest(".fv-diff"))) return;
-      fvCloseDiff();
+      if(fvDiffPop.contains(e.target) || (e.target.closest && e.target.closest("button.fv-diff"))) return;
+      fvCloseDiff(false);
     });
     document.addEventListener("keydown", e => {
       if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
-      fvCloseDiff();
-      if(fvDiffAnchor) fvDiffAnchor.focus();
+      fvCloseDiff(true);
     });
     window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
     window.addEventListener("scroll", e => {
@@ -17110,14 +17183,16 @@ function drawDifficulty(){
      same place, or close when the save has no difficulty to show. */
   const h = D && D.meta && D.meta.houseRules;
   if(!fvDiffPop.classList.contains("on")) return;
-  if(!h){ fvCloseDiff(); return; }
+  if(!h){ fvCloseDiff(false); return; }
   const fresh = fvDiffAnchor && document.contains(fvDiffAnchor) ? fvDiffAnchor
-    : document.querySelector(`.fv-diff[data-fv-at="${fvDiffAnchor ? fvDiffAnchor.dataset.fvAt : "mast"}"]`);
-  if(!fresh){ fvCloseDiff(); return; }
+    : document.querySelector(`button.fv-diff[data-fv-at="${fvDiffAnchor ? fvDiffAnchor.dataset.fvAt : "mast"}"]`);
+  if(!fresh){ fvCloseDiff(false); return; }
+  const inside = fvDiffPop.contains(document.activeElement);
   fvDiffAnchor = fresh;
   fresh.setAttribute("aria-expanded", "true");
   fvDiffPop.innerHTML = fvDiffPopHtml(h);
   fvPlaceDiffPop();
+  if(inside) fvDiffPop.focus({preventScroll: true});
 }
 
 /*__MAP_SCRIPT__*/

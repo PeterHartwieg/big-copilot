@@ -35,7 +35,7 @@ const CUSTOM = {label: 'Custom', slot: 0, harder: 2, easier: 1, startingMoney: 0
   rule('Tax rate', 0, 5, 'easier', '%'), rule('Bank interest', 0.7, 0.7, 'level'),
 ]};
 
-async function board({width = 1280, recent, houseRules = CUSTOM, businesses = [], products = [], goals} = {}) {
+async function board({width = 1280, recent, houseRules = CUSTOM, difficulty, businesses = [], products = [], goals} = {}) {
   const page = await browser.newPage({viewport: {width, height: 1000}});
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -50,14 +50,14 @@ async function board({width = 1280, recent, houseRules = CUSTOM, businesses = []
     D = {
       meta: {save: 'Fixture', day: 73, hour: 11, minute: 13, cityDate: 'Year 2, day 13 of 60', build: 3682,
         verifiedBuild: 3682, locale: true, houseRules: o.houseRules, source: 'fixture.hsg', saved: 'today',
-        generated: 'now', difficulty: o.houseRules ? o.houseRules.label : 'Normal'},
+        generated: 'now', difficulty: o.difficulty},
       kpi: {businesses: 2, employees: 9, vacant: 0},
       daily, rhythm: {recent: o.recent || {}}, businesses: o.businesses, products: o.products,
       goals: o.goals || {typesRun: 1, typesTotal: 3, buildingsOwned: 0, buildingsTotal: 885, goodsProduced: 12, taxesPaid: 0},
     };
     showPage('company', false, 'none'); showSub('company', 'results');
     drawMast(); drawFooter(); drawDifficulty(); drawChart(); drawProducts(); drawGoals(); wireAll();
-  }, {recent, houseRules, businesses, products, goals});
+  }, {recent, houseRules, difficulty, businesses, products, goals});
   return {page, errors};
 }
 const tools = page => page.$$eval('#chartTools a', as => as.map(a => a.textContent));
@@ -88,6 +88,9 @@ test('By weekday is offered only when a company series clears the weekly-cycle t
     assert.equal((await some.page.locator('#dailyBox .fv-basis').innerText()).replace(/\s+/g, ' ').trim(),
       'Company revenue · every site · 4 weeks');
     assert.equal(await readout(some.page), 'Peaks Friday +16 · lowest Sunday −18');
+    assert.match(await some.page.locator('#dailyHead .why').getAttribute('data-tip'), /from the company's last 4 weeks of daily results/);
+    // One run of text: the read-out's flex gap does not split "Peaks Friday +16".
+    assert.equal(await some.page.locator('#dailyBox .fv-readout > *').count(), 1);
     // Day 73 is a Wednesday: its column is outlined, and the tooltip reads it.
     assert.equal(await some.page.locator('#dailyBox .wd.now').getAttribute('data-read'),
       'Wednesday <b>95%</b> of a normal day · from 4 weeks');
@@ -141,16 +144,18 @@ test('site by site keeps its table, and the verdict stays plain text', async () 
 });
 
 test('Products names its peaks in units, with the weeks they come from', async () => {
-  const product = (item, peak, swing) => ({item, revenue: 1000, units: 50, week: 350, price: 20, stores: 7,
-    peak, swing, weeks: peak ? 2 : 0});
-  const {page, errors} = await board({products: [product('Shirts', 'Saturday', 37), product('Hats', 'Sunday', 20),
+  const product = (item, peak, swing, weeks = peak ? 2 : 0) => ({item, revenue: 1000, units: 50, week: 350, price: 20, stores: 7,
+    peak, swing, weeks});
+  const {page, errors} = await board({products: [product('Shirts', 'Saturday', 37), product('Hats', 'Sunday', 20, 3),
     product('Socks', null, 0)]});
   try {
     const th = page.locator('#secProducts th', {hasText: 'Peaks'});
     assert.equal(await th.textContent(), 'Peaks · units');
-    assert.match(await th.getAttribute('data-tip'), /most units, across every store that carries it, from the last 2 weeks/);
-    assert.equal(await page.locator('#secProducts td.pos').first().getAttribute('data-tip'),
-      'Units sold across 7 stores, last 2 weeks: peaks Saturday, 37 points between best and worst day');
+    assert.match(await th.getAttribute('data-tip'), /most units, across every store that carries it, from the last 2 to 3 weeks of sales/);
+    // Each cell reads its own product's weeks.
+    assert.deepEqual(await page.locator('#secProducts td.pos').evaluateAll(tds => tds.map(td => td.dataset.tip)), [
+      'Units sold across 7 stores, last 2 weeks: peaks Saturday, 37 points between best and worst day',
+      'Units sold across 7 stores, last 3 weeks: peaks Sunday, 20 points between best and worst day']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -163,7 +168,7 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
     const mast = page.locator('#clock .fv-diff');
     assert.equal(await mast.textContent(), 'CUSTOM · 2 HARDER · 1 EASIER');
     assert.equal(await mast.isVisible(), true);
-    assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, 'the footer copy is for phones');
+    assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, 'the footer copy is for narrow windows');
     assert.equal(await mast.getAttribute('aria-expanded'), 'false');
     await mast.click();
     const pop = page.locator('#fvDiffPop');
@@ -184,11 +189,59 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
     // Under its chip, inside the window.
     const [chip, box] = await Promise.all([mast.boundingBox(), pop.boundingBox()]);
     assert.ok(box.y > chip.y + chip.height - 1 && box.x + box.width <= 1440);
+    // Focus goes into the dialog, and Esc brings it back to the chip with no
+    // tooltip left open over the closed popover.
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
     await page.keyboard.press('Escape');
     assert.equal(await mast.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'mast');
+    assert.equal(await page.evaluate(() => document.getElementById('tip').classList.contains('on')), false);
     await mast.click();
     await page.mouse.click(300, 600);
     assert.equal(await pop.evaluate(el => el.classList.contains('on')), false, 'an outside click closes it');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the chip ends the clock\'s last line and never makes the masthead taller', async () => {
+  const flagged = {locale: false, build: 3683};
+  for (const width of [1440, 1280, 900, 761, 760, 600, 540]) for (const flags of [false, true]) {
+    const heights = [];
+    for (const houseRules of [CUSTOM, null]) {
+      const {page, errors} = await board({width, houseRules});
+      try {
+        heights.push(await page.evaluate(([flags, flagged]) => {
+          if (flags) { Object.assign(D.meta, flagged); drawMast(); }
+          return Math.round(document.querySelector('.mast').getBoundingClientRect().height);
+        }, [flags, flagged]));
+        if (houseRules) {
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `${width} scrolls sideways`);
+          // On the clock's last line (the flags line when there is one), not a line of its own.
+          const lines = await page.$$eval('#clock > small', ls => ls.map(l => !!l.querySelector('.fv-diff')));
+          assert.deepEqual(lines, flags ? [false, true] : [true]);
+        }
+        assert.deepEqual(errors, []);
+      } finally { await page.close(); }
+    }
+    assert.equal(heights[0], heights[1], `masthead at ${width}${flags ? ' with flags' : ''}`);
+  }
+});
+
+test('a chip hidden by a resize hands the popover to the one now shown', async () => {
+  const {page, errors} = await board({width: 390});
+  try {
+    const foot = page.locator('#footDiff .fv-diff');
+    await foot.scrollIntoViewIfNeeded();
+    await foot.click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.setViewportSize({width: 844, height: 1000});
+    await page.waitForFunction(() => document.querySelector('#clock .fv-diff').getAttribute('aria-expanded') === 'true');
+    assert.equal(await foot.getAttribute('aria-expanded'), 'false');
+    const [chip, box] = await Promise.all([page.locator('#clock .fv-diff').boundingBox(), page.locator('#fvDiffPop').boundingBox()]);
+    assert.ok(box.y > chip.y + chip.height - 1, 'under the masthead chip');
+    // Esc returns focus to the chip that is on screen.
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'mast');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -224,11 +277,27 @@ test('a preset says its name, Normal included, and lists what differs', async ()
     assert.equal(await hard.page.locator('#clock .fv-diff').textContent(), 'HARD');
     assert.match(await hard.page.locator('#clock .fv-diff').getAttribute('data-tip'), /Hard preset: 1 setting harder than Normal/);
   } finally { await hard.page.close(); }
-  const old = await board({houseRules: null});
+  const old = await board({houseRules: null, difficulty: 'Hard'});
   try {
-    assert.equal(await old.page.locator('.fv-diff').count(), 0, 'a board without house rules shows no chip');
+    // A board built before the house rules still names the difficulty, with nothing to open.
+    const plain = old.page.locator('#clock .fv-diff');
+    assert.equal(await plain.textContent(), 'HARD');
+    assert.equal(await plain.evaluate(el => el.tagName), 'SPAN');
+    await plain.click();
+    assert.equal(await old.page.locator('#fvDiffPop.on').count(), 0);
     assert.deepEqual(old.errors, []);
   } finally { await old.page.close(); }
+  const none = await board({houseRules: null});
+  try {
+    assert.equal(await none.page.locator('.fv-diff').count(), 0, 'with neither, no chip');
+  } finally { await none.page.close(); }
+  const unmoved = await board({houseRules: {label: 'Custom', slot: 0, harder: 0, easier: 0, startingMoney: 0,
+    rules: [rule('Public prices', 0.7, 0.7, 'level')]}});
+  try {
+    assert.equal(await unmoved.page.locator('#clock .fv-diff').textContent(), 'CUSTOM');
+    await unmoved.page.locator('#clock .fv-diff').click();
+    assert.match(await unmoved.page.locator('#fvDiffPop p').textContent(), /^No setting differs from the game's Normal preset\./);
+  } finally { await unmoved.page.close(); }
 });
 
 test('the site page names its own week', async () => {

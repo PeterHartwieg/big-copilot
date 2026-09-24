@@ -349,7 +349,7 @@ test('the Plan imports card counts what the checklist has to do', async () => {
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');
     await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
-    assert.deepEqual((await card()).filter((_, i) => i !== 1), ['2 TO CHANGE', '2 settings at North Depot, starting with Sugar.', '2 to do']);
+    assert.deepEqual((await card()).filter((_, i) => i !== 1), ['2 TO CHANGE', '2 changes at North Depot, starting with Sugar.', '2 to do']);
     const tick = i => page.evaluate(i => {
       const input = document.querySelectorAll('#orderChecklistBody input[data-order-mark]')[i];
       input.checked = true; input.dispatchEvent(new Event('change'));

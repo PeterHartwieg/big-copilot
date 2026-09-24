@@ -40,6 +40,23 @@ class WeekdayWindowTests(unittest.TestCase):
         self.assertIn(peak(recent), ("Saturday", "Sunday"))
         self.assertEqual([p["day"] for p in recent][:1], ["Monday"])
 
+    def test_the_window_is_calendar_days_so_a_gappy_series_does_not_reach_back(self):
+        # Profit leaves out the loss days. Two Mondays in the last four weeks
+        # were losses: Monday reads from the two left, not from older Mondays.
+        points = [(d, v) for d, v in series(range(1, 60), switch=29)
+                  if not (d % 7 == 1 and d in (36, 50))]
+        recent = _weekday_profile(points, RHYTHM_RECENT_DAYS, end=59)
+        counts = {p["day"]: p["n"] for p in recent}
+        self.assertEqual(counts.pop("Monday"), 2)
+        self.assertEqual(set(counts.values()), {4})
+        # And the chain counts back from its last finished day, not from the
+        # last day a series happens to have.
+        daily = [{"day": d, "revenue": v, "profit": v / 2 if d not in (57, 58) else -1}
+                 for d, v in series(range(1, 60), switch=29)]
+        profit = _chain_rhythm(Save({}, {}, "test.hsg"), [], daily, 60)["recent"]["profit"]
+        self.assertLessEqual(max(p["n"] for p in profit), 4)
+        self.assertEqual(sum(p["n"] for p in profit), 26)
+
     def test_a_short_history_reads_the_same_either_way(self):
         points = series(range(1, 22), switch=0)
         self.assertEqual(_weekday_profile(points), _weekday_profile(points, RHYTHM_RECENT_DAYS))

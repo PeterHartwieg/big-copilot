@@ -353,8 +353,8 @@ test('a paused level shows the level in game', () => {
 /* Today's Plan imports card, from the same rows and ticks as the checklist:
    one change said in full, several counted, all ticked, and nothing to do. */
 const names = {0: 'Import Hub', 1: 'Factory', 2: 'Shop'};
-const card = (rows, ticked = []) => JSON.parse(JSON.stringify(context.planImportsState(
-  rows, new Set(ticked), s => names[s] ?? null)));
+const card = (rows, ticked = [], gaps = {complete: true, unnamed: 0}) => JSON.parse(JSON.stringify(
+  context.planImportsState(rows, new Set(ticked), s => names[s] ?? null, gaps)));
 
 test('the Plan imports card has four states, and counts what the checklist has to do', () => {
   const one = build({imports:[{s:0, rows:[order({item:'Metal Band', smart:true, current:15200, setTo:20200,
@@ -369,7 +369,7 @@ test('the Plan imports card has four states, and counts what the checklist has t
   });
   assert.equal(many.length, 3);
   assert.deepEqual(card(many), {badge:'3 TO CHANGE', live:true,
-    what:'<b>3 settings</b> at Import Hub and Shop, starting with Sugar.'});
+    what:'<b>3 changes</b> at Import Hub and Shop, starting with Sugar.'});
   // A tick takes a row off the count, as it takes it off the checklist's "to do".
   const left = card(many, [many[0].key]);
   assert.equal(left.badge, '2 TO CHANGE');
@@ -378,7 +378,30 @@ test('the Plan imports card has four states, and counts what the checklist has t
 
   assert.deepEqual(card(many, many.map(r => r.key)), {badge:'ALL TICKED', live:false,
     what:'You ticked all 3. A change the game has taken leaves the list with the next save.'});
-  assert.deepEqual(card([]), {badge:'ALL SET', live:false, what:'Every import and top-up covers its week.'});
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0}),
+    {badge:'ALL SET', live:false, what:'No changes found in the supply data.'});
+});
+
+test('an empty checklist that could not see everything does not say ALL SET', () => {
+  // The same caveats the checklist gives: recipes still unnamed, or no game text.
+  assert.deepEqual(card([], [], {complete: true, unnamed: 3}), {badge:'NONE FOUND', live:false,
+    what:'No changes found, but 3 factory recipes are still unnamed and not included.'});
+  assert.deepEqual(card([], [], {complete: true, unnamed: 1}).what,
+    'No changes found, but 1 factory recipe is still unnamed and not included.');
+  assert.deepEqual(card([], [], {complete: false, unnamed: 0}), {badge:'NONE FOUND', live:false,
+    what:"No changes found, but factory lines need the game's text to be included."});
+});
+
+test('a paused import with a figure reads as a resume, not an order from "not set"', () => {
+  const rows = build({imports:[{s:0, rows:[
+    order({item:'Sugar', paused:true, total:1400, edited:true, value:1600, pausedWeekly:1000}),
+    order({item:'Salt', smart:true, paused:true, total:900, edited:true, value:1200, pausedWeekly:700}),
+  ]}]});
+  assert.equal(rows.length, 2);
+  assert.equal(card(rows, [rows[1].key]).what,
+    `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
+  assert.equal(card(rows, [rows[0].key]).what,
+    `<b>Salt</b> at Import Hub: resume the paused import, Smart Delivery stock ${(1200).toLocaleString()}.`);
 });
 
 test('the card says a review in the checklist\u2019s own words, and escapes a save\u2019s names', () => {
