@@ -95,7 +95,12 @@ async function board(o = {}) {
       $('secDetail').hidden = !siteOpen;
       $('sitePanel').innerHTML = siteOpen ? '<div class="sitehead"><h2>site</h2></div>'
         + '<section class="sec" data-block="crew" id="sp-crew">crew</section>'
-        + '<section class="sec" data-block="roster" id="sp-roster">roster</section>' : '';
+        + '<section class="sec" data-block="roster" id="sp-roster"><span class="seg" id="probeDays">'
+        + '<a href="#" class="on">MON</a><a href="#">TUE</a></span>'
+        + '<button type="button" id="probePlan">Demand plan</button></section>' : '';
+      /* The plan pick redraws the roster block, as the real one does. */
+      const pick = $('probePlan');
+      if(pick) pick.onclick = () => { $('sp-roster').outerHTML = '<section class="sec" data-block="roster" id="sp-roster">plan</section>'; };
     };
     $('optimizeStaffingCard').dataset.site = SHOP;
     showPage('today', false, 'replace');
@@ -639,5 +644,101 @@ test('on a phone the sheet is as tall as the visible viewport', async () => {
     assert.equal(await page.evaluate(() => [ssPal.style.height, `${Math.round(visualViewport.height)}px`].join()), '700px,700px');
     await page.click('#ssPal .ss-cancel');
     assert.equal(await page.evaluate(() => ssPal.style.height), '');
+  } finally { await page.close(); }
+});
+
+// --- review round 2 -------------------------------------------------------------------
+
+test('a redraw keeps a lit question or "n more" row lit, so Enter does what it said', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await lit(page), 'Is my factory fed?');
+    await page.evaluate(() => ssDataChanged());
+    assert.equal(await lit(page), 'Is my factory fed?');
+    // The wiki finishing its load redraws the same way.
+    await page.evaluate(() => { ssIndex = ssBuild(); ssRender(true); });
+    assert.equal(await lit(page), 'Is my factory fed?');
+    await typed(page, 'gym');
+    await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"] .ss-more');
+    await page.evaluate(() => ssPick(+document.querySelector('#ssRes .ss-grp[aria-label="Wiki"] .ss-more').dataset.k));
+    await page.evaluate(() => ssDataChanged());
+    assert.equal(await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-more').evaluate(el => el.classList.contains('on')), true);
+    await typed(page, '');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.evaluate(() => ssDataChanged());
+    // Which question Enter asks is what is under test, not the Checks table it draws.
+    await page.evaluate(() => { ssStock = v => { window.__asked = v; }; });
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => window.__asked), 'feed');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('the answer\'s own controls leave the landing up; redrawing the answer away takes it down', async () => {
+  const page = await board();
+  try {
+    // The profit landing: the chart's series toggles above it are a view, not a way out.
+    await page.click('#ssAsk .ss-aq[data-ask="profit"]');
+    await page.evaluate(() => { $('dailyHead').innerHTML = '<span class="seg"><a href="#" id="probeSeries">Revenue</a></span>'; });
+    await page.click('#probeSeries');
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator('.ss-asked').count(), 1);
+    assert.equal(await page.locator('#secPortfolio.ss-lit').count(), 1);
+    // The hire landing: the roster's day tabs are the answer being read.
+    await page.click('.ss-asked [data-ss="another"]');
+    await page.click('#ssRes .ss-q2 >> text=Whom should I hire?');
+    await page.click('#probeDays a:nth-child(2)');
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator('.ss-asked').count(), 1);
+    assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
+    // Picking the plan draws a new roster: the lit block is gone, so is the landing.
+    await page.click('#probePlan');
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('Ctrl+K is the letter K; the K key\'s place counts only on a layout with no Latin letters', async () => {
+  const page = await board();
+  try {
+    const press = o => page.evaluate(o => document.dispatchEvent(new KeyboardEvent('keydown',
+      {ctrlKey: true, bubbles: true, cancelable: true, ...o})), o);
+    await press({key: 'e', code: 'KeyK'});  // Colemak's Ctrl+E
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
+    await press({key: 'k', code: 'KeyN'});  // K somewhere else on the board
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a touch never lights a row; the viewport is watched only while the palette is open', async () => {
+  const page = await board();
+  try {
+    const watched = await page.evaluate(() => {
+      const vv = window.visualViewport, on = new Set();
+      const add = vv.addEventListener.bind(vv), remove = vv.removeEventListener.bind(vv);
+      vv.addEventListener = (t, f, o) => { on.add(t); add(t, f, o); };
+      vv.removeEventListener = (t, f, o) => { on.delete(t); remove(t, f, o); };
+      window.__vv = on;
+      return [...on];
+    });
+    assert.deepEqual(watched, []);
+    await page.keyboard.press('/');
+    assert.deepEqual(await page.evaluate(() => [...window.__vv].sort()), ['resize', 'scroll']);
+    await typed(page, 'test');
+    const moved = await page.evaluate(() => {
+      const row = document.querySelectorAll('#ssRes .ss-row')[2], r = row.getBoundingClientRect();
+      [0, 6].forEach(d => row.dispatchEvent(new PointerEvent('pointermove',
+        {pointerType: 'touch', clientX: r.left + 20 + d, clientY: r.top + 10, bubbles: true})));
+      return row.classList.contains('on');
+    });
+    assert.equal(moved, false);
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await page.evaluate(() => [...window.__vv]), []);
+    assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

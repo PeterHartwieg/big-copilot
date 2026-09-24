@@ -12383,12 +12383,13 @@ function goToAlert(a){
     const b = alertSite(a);
     const pick = !b ? ALERT_SITE_PICK[a.group] || null : null;
     const picked = pick ? pick.site(a) : null;
-    if(b || picked) openSite((b || picked).key, false, a.id);
     /* A picked site does not list the finding, so there is no row of its own
-       to mark: the link lands on the block that shows it instead. */
+       to mark: the link lands on the block that shows it instead. Every site
+       is opened through ssOpenSite(), the one way into a site. */
     const ev = ALERT_EVIDENCE[a.group];
-    if(picked && ev){ xlArrive(`#sp-${ev.block}`, ev.hit || ""); return; }
-    if(pick && !picked){ reveal(pick.otherwise); return; }
+    if(picked && ev){ ssOpenSite(picked.key, `#sp-${ev.block}`, {finding: a.id, hit: ev.hit || ""}); return; }
+    if(b || picked){ ssOpenSite((b || picked).key, "", {finding: a.id}); return; }
+    if(pick){ reveal(pick.otherwise); return; }
   }
   reveal(link.sec);
 }
@@ -17827,7 +17828,7 @@ const SS_QUESTIONS = [
    lands: () => { const b = D.businesses.find(x => x.key === ssStaffingSite());
      return b ? `Staffing on ${b.name} · hiring lines` : "Company › Results · the sites"; },
    go: () => ssOpenSite(ssStaffingSite(), "#sp-roster"),
-   lit: () => ssStaffingSite() && siteOpen ? $("sp-roster") : $("secPortfolio")},
+   lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio")},
   {id: "prices", q: "Are my prices right?", page: "wiki",
    lands: () => { const t = ssTopType(); return t ? `Wiki › ${t.type} › Prices in your save` : "Wiki"; },
    go: ssPrices, lit: "#wk-prices", wait: true},
@@ -17888,7 +17889,7 @@ function ssAskPaint(){
    take the strip and the lighting away again; and the landing still on its way,
    with the address its question opened. */
 let ssAsked = null, ssTicket = 0, ssPending = null;
-const ssNavState = () => JSON.stringify([page, sub, siteOpen, siteKey, location.hash, stockView, view]);
+const ssNavState = () => JSON.stringify([page, sub, siteOpen, siteKey, location.hash]);
 function ssAsk(id){
   const qn = SS_QUESTIONS.find(x => x.id === id);
   if(!qn || !hasData()) return;
@@ -17938,7 +17939,7 @@ function ssLand(qn, from, ticket, tries = 0){
   else host.insertBefore(strip, host.firstChild);
   if(el) ssLight(el, qn.dim !== false, host);
   settleScroll(strip);
-  ssAsked = {strip, state: ssNavState()};
+  ssAsked = {strip, lit: el, state: ssNavState()};
 }
 /* The site panel's lighting rule, anywhere: the answer outlined and tagged, and
    everything beside it on the way up to the page dimmed, except heads. Sections
@@ -17963,17 +17964,20 @@ function ssClearAsked(){
   $$(".ss-lit, .ss-litpos, .ss-host, .ss-dim").forEach(el => el.classList.remove("ss-lit", "ss-litpos", "ss-host", "ss-dim"));
 }
 /* The next navigation clears it: anything that changes the page, the view, the
-   open site, the checks or portfolio view, or the hash, and any link, finding,
-   card or tab followed outside the strip and the palette, which may reveal
-   another section of the same page. Checked after the event has done its work.
-   A landing still on its way is dropped the same way. */
-const SS_NAV_CLICK = 'a[href^="#"]:not([href="#"]), [data-go], .find, .move, tr.kid, [data-key], [data-xl-item], .seg a, #nav a';
+   open site or the hash, and any link, finding, card or view tab followed
+   outside the strip, the answer and the palette, which may reveal another
+   section of the same page. The answer's own controls (a roster's day tabs, a
+   check's views) are reading it, not leaving; an answer its own control has
+   redrawn away is gone, and takes the strip with it. Checked after the event
+   has done its work. A landing still on its way is dropped the same way. */
+const SS_NAV_CLICK = 'a[href^="#"]:not([href="#"]), [data-go], .find, .move, tr.kid, [data-key], [data-xl-item], .subhead .seg a, #nav a';
 const ssNavCheck = (moved = false) => setTimeout(() => {
-  if(ssAsked && (moved || ssNavState() !== ssAsked.state || !ssAsked.strip.isConnected)) ssClearAsked();
+  if(ssAsked && (moved || ssNavState() !== ssAsked.state || !ssAsked.strip.isConnected
+    || (ssAsked.lit && !ssAsked.lit.isConnected))) ssClearAsked();
 }, 0);
 document.addEventListener("click", e => {
   const t = e.target && e.target.closest ? e.target : null;
-  const moved = !!t && !!t.closest(SS_NAV_CLICK) && !t.closest(".ss-asked, #ssPal, #ssAsk, #ssAskMini");
+  const moved = !!t && !!t.closest(SS_NAV_CLICK) && !t.closest(".ss-asked, .ss-lit, #ssPal, #ssAsk, #ssAskMini");
   if(moved && ssPending) ssTicket++;
   ssNavCheck(moved);
 });
@@ -18091,19 +18095,8 @@ function ssKindLands(id){
 }
 function ssKindGo(id){
   const rows = [...(D.alerts || []), ...((D.minor || {}).rows || [])].filter(a => a.group === id);
-  const a = rows[0], link = ALERT_LINKS[id] || {};
-  /* goToAlert()'s way to a site, through ssOpenSite() like every other. */
-  if(a && link.site){
-    const b = alertSite(a);
-    const pick = !b ? ALERT_SITE_PICK[a.group] || null : null;
-    const picked = pick ? pick.site(a) : null;
-    const ev = ALERT_EVIDENCE[a.group];
-    if(b) ssOpenSite(b.key, "", {finding: a.id});
-    else if(picked) ssOpenSite(picked.key, ev ? `#sp-${ev.block}` : "", {hit: ev ? ev.hit || "" : ""});
-    else reveal(pick ? pick.otherwise : link.sec);
-    return;
-  }
-  if(a){ goToAlert(a); return; }
+  /* The finding's own link: goToAlert() opens any site through ssOpenSite(). */
+  if(rows.length){ goToAlert(rows[0]); return; }
   /* Nothing of the kind today: the list's own switch for it, so the player
      sees what it is and whether it is on. */
   reveal("alertSection");
@@ -18391,6 +18384,7 @@ function ssOpen(text = ""){
   ssField.classList.add("on");
   if(typeof hideTip === "function") hideTip();
   ssInput.value = text;
+  ssWatchViewport(true);
   ssFitSheet();
   ssRender();
   ssInput.focus({preventScroll: true});
@@ -18411,15 +18405,17 @@ function ssFitSheet(){
   ssPal.style.height = fit ? `${Math.round(vv.height)}px` : "";
   ssPal.style.top = fit ? `${Math.round(vv.offsetTop)}px` : "";
 }
-if(window.visualViewport){
-  window.visualViewport.addEventListener("resize", ssFitSheet);
-  window.visualViewport.addEventListener("scroll", ssFitSheet);
+function ssWatchViewport(on){
+  const vv = window.visualViewport;
+  if(!vv) return;
+  ["resize", "scroll"].forEach(type => on ? vv.addEventListener(type, ssFitSheet) : vv.removeEventListener(type, ssFitSheet));
 }
 function ssClose(restore = true){
   if(!ssIsOpen()) return;
   ssScrim.hidden = ssPal.hidden = true;
   document.body.classList.remove("ss-open");
   ssField.classList.remove("on");
+  ssWatchViewport(false);
   ssFitSheet();
   clearTimeout(ssWikiWait);
   /* Focus must not stay in the hidden field, or the next / would be read as
@@ -18534,7 +18530,9 @@ function ssRender(keep = false){
   }
   ssRes.innerHTML = html;
   $("ssCount").textContent = count;
-  let at = was ? ssRows.findIndex(r => r === was || (r.e && was.e && r.e.id === was.e.id)) : -1;
+  const same = r => r === was || (r.e && was.e && r.e.id === was.e.id)
+    || (r.ask && was.ask && r.ask.id === was.ask.id) || (r.more && was.more && r.g === was.g);
+  let at = was ? ssRows.findIndex(same) : -1;
   /* Nothing found: the list below is a way on, not an answer, so nothing is lit. */
   if(at < 0 && (!qq || ssRows.some(r => r.e))) at = ssRows.findIndex(r => !r.more);
   ssPick(at, false);
@@ -18599,6 +18597,7 @@ ssPal.addEventListener("keydown", e => {
    rows are redrawn or scrolled under it must not take the light from the keys.
    The first move after opening only says where it is. */
 ssRes.addEventListener("pointermove", e => {
+  if(e.pointerType !== "mouse" && e.pointerType !== "pen") return;
   const at = `${e.clientX},${e.clientY}`;
   const moved = ssPointer !== null && ssPointer !== at;
   ssPointer = at;
@@ -18624,7 +18623,8 @@ ssScrim.addEventListener("click", () => ssClose());
 if($("locationMapDialog")) $("locationMapDialog").addEventListener("close", () => { if(ssIsOpen()) setTimeout(() => ssInput.focus({preventScroll: true}), 0); });
 q(".ss-back", ssPal).addEventListener("click", () => ssClose());
 q(".ss-cancel", ssPal).addEventListener("click", () => ssClose());
-/* / and Ctrl+K (Cmd+K on a Mac, the K key on any layout) from anywhere on the
+/* / and Ctrl+K (Cmd+K on a Mac; the K key's place on a layout without Latin
+   letters, never on one whose K sits elsewhere) from anywhere on the
    board; / is left alone while a field is being typed in. Nothing opens or
    closes under a dialog (the map a row opened sits over the palette), or
    before the board itself is on screen. */
@@ -18633,7 +18633,8 @@ document.addEventListener("keydown", e => {
   const mast = $("mast");
   const dialog = !!document.querySelector("dialog[open]");
   const ready = !!mast && mast.getClientRects().length > 0 && !dialog;
-  if((e.key === "k" || e.key === "K" || e.code === "KeyK") && (e.ctrlKey || e.metaKey) && !e.shiftKey){
+  const kKey = e.key === "k" || e.key === "K" || (!/^[a-z]$/i.test(e.key || "") && e.code === "KeyK");
+  if(kKey && (e.ctrlKey || e.metaKey) && !e.shiftKey){
     if(dialog || (!ready && !ssIsOpen())) return;
     e.preventDefault();
     if(ssIsOpen()) ssClose(); else ssOpen();
