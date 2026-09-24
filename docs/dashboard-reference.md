@@ -1141,7 +1141,7 @@ Two tables, one per number a logistics manager is set with.
   also feeds the line, *Used / week* is the depot's measured draw, as the Stock view
   measures it (never less than the factories eat at full rate), and what the route brings,
   named on hover, comes off it: the import answers for the rest. A route that brings the
-  whole draw marks the line *route brings it*: the import is a backup, with nothing to
+  whole draw marks the line *covered by route*: the import is a backup, with nothing to
   raise or resume, unless the factories' full-rate week is more than the depot's measured
   draw (a starved factory), when the import still answers for what the route leaves. The
   same holds for a depot line with no import contract at all that a route feeds: it is not

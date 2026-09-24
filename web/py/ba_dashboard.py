@@ -17527,7 +17527,7 @@ function drawLogistics(){
     : `${amount(r.inGame, r.smart)}${aroundLevel(r)}${r.paused ? ` ${chipHtml(r.covered ? "dim" : "warn", "paused")}` : ""}`;
   /* What the box is about: the board's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
-  const verdict = r => r.covered ? chipHtml("ok", "route brings it", routeTip(r))
+  const verdict = r => r.covered ? chipHtml("ok", "covered by route", routeTip(r))
     : r.setTo === null ? chipHtml("dim", "nothing draws it")
     : r.paused ? chipHtml("warn", "resume import")
     : r.edited ? ""

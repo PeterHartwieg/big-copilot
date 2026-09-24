@@ -212,12 +212,12 @@ for (const scenario of [
       const weekly = actions.filter(a => a.kind === 'Weekly imports');
       if (row.covered && scenario.typed) {
         // The player's own figure goes to the checklist; the chip still says why.
-        assert.match(imports, /route brings it/);
+        assert.match(imports, /covered by route/);
         assert.doesNotMatch(imports, /nothing draws it/);
         assert.equal(weekly.length, 1);
         assert.equal(weekly[0].proposed, scenario.typed);
       } else if (row.covered) {
-        assert.match(imports, /route brings it/);
+        assert.match(imports, /covered by route/);
         assert.doesNotMatch(imports, /resume import|raise|nothing draws it/);
         assert.deepEqual(actions, []);
         assert.equal(row.level, 'ok');
@@ -281,7 +281,7 @@ test('a depot line with no import that a route feeds is not asked to import', as
     assert.equal(without.status, 'noimport');
     const fed = await run({1: {[slug]: {routed: 1680, covered: true, drawWeek: 1680}}});
     assert.equal(fed.actions.filter(a => a.kind === 'Weekly imports').length, 0);
-    assert.match(fed.imports, /route brings it/);
+    assert.match(fed.imports, /covered by route/);
     assert.equal(fed.status, 'ok');
     // A route bringing 400 of the 1,680: the page works out the route's share
     // to the factories itself, as feedVerdict does, not the payload's.
