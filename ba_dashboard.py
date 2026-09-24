@@ -3843,9 +3843,13 @@ def _supply(
             row["raiseTarget"] = (fact["setTo"] if row["target"] and fact["cad"] == "daily"
                                   else None)
             # The factory's own contract, paused while the top-up falls short
-            # without it: the input's finding names it as the other way out.
-            own = fact.get("import") or {}
-            if own.get("st") == "paused" and own.get("lvl") != "info":
+            # without it: the input's finding names it as the other way out,
+            # in each sizing (Demand's under `dem`).
+            def own_paused(own):
+                return bool(own) and own.get("st") == "paused" and own.get("lvl") != "info"
+            paused_cap = own_paused(fact.get("import"))
+            paused_dem = own_paused((fact.get("dem") or {}).get("import", fact.get("import")))
+            if paused_cap:
                 row["ownPaused"] = True
             at = row["importSite"] if row["importSite"] is not None else site["s"]
             upstream_fact = facts.get(str(at), {}).get(row["slug"]) or {}
@@ -3856,6 +3860,8 @@ def _supply(
                 row["dem"] = {name: dem[field] for field, name in (
                     ("st", "status"), ("why", "why"), ("lvl", "level"), ("use", "use"),
                     ("setTo", "setTo")) if field in dem}
+            if paused_dem != paused_cap:
+                row.setdefault("dem", {})["ownPaused"] = paused_dem
 
     # --- 4. the chain as a graph, with what each node holds against what it needs
     COLUMN = {"import": 0, "factory": 1, "depot": 2, "shop": 3}
@@ -4593,10 +4599,11 @@ def _supply_facts(ctx: dict) -> dict:
                 ifields.pop("imp", None)
                 if not entry.get("weekly") and entry.get("pausedWeekly"):
                     # A paused contract beside a top-up: paused, and only a
-                    # warning where the input is short without it. Where the
-                    # top-up covers the line, the player most likely paused
-                    # it because the depot feeds the line now (why topup).
-                    if st in ("short", "noplan", "stalled"):
+                    # warning where the input is short without it (a line
+                    # waiting on another input is not). Where the top-up
+                    # covers the line, the player most likely paused it
+                    # because the depot feeds the line now (why topup).
+                    if st in ("short", "noplan") or (st == "stalled" and why == "notDrawn"):
                         cover = stock / row["perDay"] if row["perDay"] else 60
                         ist, iwhy, ilvl = "paused", "order", "warn" if cover >= 7 else "critical"
                     else:
@@ -10280,9 +10287,12 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                         if fact["why"] == "shortfall" else
                         f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
                         f"against the {fact['use']:,} it sells")
+                # Running out before the delivery ranks ahead of an order
+                # short of the week; the ratio breaks ties among each.
+                ratio = round(fact["have"] / fact["use"], 2) if fact["use"] else 0
                 notes.append(_finding(
                     fact["lvl"], b["name"], "wholesale", text, key=b["key"],
-                    rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
+                    rank=ratio - 10 if fact["why"] == "shortfall" else ratio,
                     subject=line["item"], ev={"slug": slug}))
             elif fact["st"] == "short" and fact["why"] == "target":
                 peak = (rows.get((s, slug)) or {}).get("peakDay")
@@ -10698,7 +10708,7 @@ SUMMARIES = {
     "paused": "{n} imports are paused; soonest to run out is {subject}",
     "outruns": "{n} products outsell their daily top-up; worst {subject}",
     "topup": "{n} products outrun the depot's daily top-up; worst {subject}",
-    "wholesale": "{n} products' wholesale deliveries fall short; worst {subject}",
+    "wholesale": "{n} products' wholesale deliveries fall short or arrive too late; worst {subject}",
     "unplanned": "{n} stocked products are on no distribution plan; largest {subject}",
     "dead": "{n} products sit idle; largest {subject}",
     "notrouted": "{n} products are held where no plan sends them on; largest {subject}",
@@ -10709,6 +10719,7 @@ SUMMARIES = {
     "target": "{n} top-up targets are set far above what sells; {subject} the deepest",
 }
 CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
+WORST_FIRST = {"wholesale"}  # condensed by severity first, then rank
 
 
 def _condense(found: list, gate: float) -> dict:
@@ -10722,7 +10733,12 @@ def _condense(found: list, gate: float) -> dict:
         if len(rows) < CONDENSE_AT or group not in SUMMARIES:
             out.extend(rows)
             continue
-        rows.sort(key=lambda r: r["rank"])
+        # A kind whose rows mix severities reads out its worst severity first,
+        # the rank breaking ties within it.
+        if group in WORST_FIRST:
+            rows.sort(key=lambda r: ({"critical": 0, "warn": 1, "info": 2}.get(r["level"], 3), r["rank"]))
+        else:
+            rows.sort(key=lambda r: r["rank"])
         worst = rows[0]
         worths = [r["worth"] for r in rows if r["worth"] is not None]
         out.append(
@@ -15016,6 +15032,10 @@ function findingAmount(a){
       break;
     case "shortfall":
       if((m = t.match(/([\d.]+) days before/))) return amtHtml(m[1], "days early");
+      break;
+    case "wholesale":
+      if((m = t.match(/against (?:the )?([\d,]+)/))) return amtHtml(m[1], "/week used");
+      if((m = t.match(/([\d,]+) left/))) return amtHtml(m[1], "left");
       break;
     case "hype":
       if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${m[1]}`, "/day under hype");

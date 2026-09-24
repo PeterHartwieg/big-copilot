@@ -260,6 +260,19 @@ test('Wholesale delivery too low is a kind of its own, landing on the shelves or
   assert.match(source, /wholesale: \["wholesale", "contract", "delivery"\]/);
 });
 
+test('a wholesale finding shows the week used, or the units left, in the amount column', () => {
+  const at = source.indexOf('const amtHtml =');
+  const ctx = vm.createContext({money: String, fmt: String});
+  vm.runInContext(source.slice(at, source.indexOf('/* A finding whose kind is switched off', at)), ctx);
+  const amount = a => vm.runInContext('findingAmount', ctx)(a);
+  assert.equal(amount({group: 'wholesale', text: "Soda's wholesale delivery brings 600 a week against the 700 it sells"}),
+    '700<small>/week used</small>');
+  assert.equal(amount({group: 'wholesale', text: "Water's wholesale delivery brings 1,000 a week against 1,680 used"}),
+    '1,680<small>/week used</small>');
+  assert.equal(amount({group: 'wholesale', text: "Beer runs out before Tuesday's wholesale delivery: 150 left at 100/day"}),
+    '150<small>left</small>');
+});
+
 /* Today reads the findings of the sizing on screen: Python runs the list
    twice, and Demand has its own (alertsDemand). */
 test('Today, the kinds popover and the map read the list of the sizing on screen', () => {

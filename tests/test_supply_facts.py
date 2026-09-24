@@ -1137,6 +1137,71 @@ class RoundThreeFixTests(unittest.TestCase):
         self.assertEqual(c["from"], 0)
 
 
+class RoundSixFixTests(unittest.TestCase):
+    """Review round 6."""
+
+    def test_a_paused_own_import_beside_a_line_waiting_on_another_input_is_quiet(self):
+        # The beer recipe here needs soda too, which nothing brings: the line
+        # stands still for want of it, whatever the water does.
+        recipes = {BEER: {**RECIPES[BEER], "ingredients": RECIPES[BEER]["ingredients"] + [
+            {"slug": SODA, "item": "Soda", "per": 5}]}}
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Mill")
+        c.hold(HUB, WATER, 2000)
+        c.hold(FACTORY, WATER, 300)
+        c.hold(FACTORY, BEER, 300)
+        c.plan(HUB, FACTORY, WATER, 300)
+        c.contract(HUB, WATER, 1700)
+        c.contract(FACTORY, WATER, 1000, active=False)
+        for d in range(13, 20):
+            c.ship(d, HUB, FACTORY, {WATER: 20})
+        c.business_list = c.businesses()
+        c.supply = _supply(c.save(), Names({}), c.business_list, c.day, {}, recipes)
+        fact = c.fact(FACTORY, WATER)
+        self.assertNotIn(fact["st"], ("short", "noplan"))
+        self.assertFalse(fact["st"] == "stalled" and fact["why"] == "notDrawn")
+        own = fact["import"]
+        self.assertEqual((own["st"], own["why"], own["lvl"]), ("paused", "topup", "info"))
+        need = next(n for s in c.supply["factories"]["sites"] for n in s["needs"] if n["slug"] == WATER)
+        self.assertNotIn("ownPaused", need)
+        self.assertFalse([f for f in c.findings() if "resume" in f["text"]])
+
+    def test_the_paused_own_import_is_named_in_the_sizing_where_the_top_up_falls_short(self):
+        # In 24/7 the 200 top-up is short of the 240 a day the line eats; the
+        # row carries ownPaused, and Demand's copy says the same where it holds.
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Mill")
+        c.hold(HUB, WATER, 2000)
+        c.hold(FACTORY, WATER, 250)
+        c.hold(FACTORY, BEER, 300)
+        c.plan(HUB, FACTORY, WATER, 200)
+        c.contract(HUB, WATER, 800)
+        c.contract(FACTORY, WATER, 1000, active=False)
+        c.run()
+        need = next(n for s in c.supply["factories"]["sites"] for n in s["needs"] if n["slug"] == WATER)
+        self.assertTrue(need["ownPaused"])
+        dem = _supply_fact(c.supply["facts"], c.index(FACTORY), WATER, "dem")
+        expected = dem["import"]["lvl"] != "info"
+        self.assertEqual({**need, **need.get("dem", {})}.get("ownPaused", False), expected)
+
+    def test_a_wholesale_shop_reads_out_the_delivery_that_runs_out_first(self):
+        # Three shelves on wholesale at one gym: two orders short of the week
+        # whose stock reaches the drop (warn), one that runs out before it.
+        c = Company()
+        c.shop(GYM, "Gym")
+        for slug, units, amount in ((SODA, 500, 600), (WATER, 500, 500), (BEER, 150, 900)):
+            c.hold(GYM, slug, units, 100)
+            c.wholesale(GYM, slug, amount)
+        c.run()
+        [line] = [f for f in c.findings() if f["group"] == "wholesale"]
+        self.assertEqual(line["level"], "critical")
+        self.assertEqual(line["text"], "3 products' wholesale deliveries fall short or arrive too late; "
+                                       "worst Beer")
+        self.assertIn("runs out before", line["detail"])
+
+
 class StableOrderTests(unittest.TestCase):
     def test_the_facts_do_not_depend_on_the_hash_seed(self):
         script = ("import json, test_supply_facts as t;"
