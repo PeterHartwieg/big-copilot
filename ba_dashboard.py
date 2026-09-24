@@ -12795,7 +12795,9 @@ function supplyFact(s, slug){
    save on the web, a re-run or --watch here) can judge. */
 const SZ_NEW = {st: "new", why: "named", lvl: "info", use: null, need: null, have: null, setTo: null,
                 parts: {lines: 0, sites: 0, route: 0}};
-const szFact = (s, slug) => supplyFact(s, slug) || SZ_NEW;
+/* And what it reads when Python judged nothing for it at all. */
+const SZ_NONE = {...SZ_NEW, why: "unjudged"};
+const szFact = (s, slug) => supplyFact(s, slug) || SZ_NONE;
 /* The nine words, and the chip colour from the fact's severity. */
 const SZ_WORD = {covered: "covered", tight: "tight", short: "short", noplan: "no plan", paused: "paused",
                  stalled: "stalled", idle: "idle", made: "made here", new: "new"};
@@ -12821,6 +12823,7 @@ const SZ_WHY = {
   firstFill: "A first fill: one-off fills never count as use",
   young: "Too young to judge yet",
   named: "Named in this browser: judged at the next refresh",
+  unjudged: "Not judged yet: the next refresh judges it",
 };
 const SZ_STATE = {
   covered: "Covers the use and the margin", tight: "Covers the use, not the margin",
