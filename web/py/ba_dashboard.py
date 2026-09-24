@@ -10944,6 +10944,13 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .order-item.just-marked::after{display:none}
 }
 
+/* Four tiles side by side need about 975 px for a seven-figure amount on
+   each ($3,667,464 cash on a real save) and about 1,040 px for eight;
+   narrower, they pair up two by two. The phone's own tile rules follow. */
+@media (max-width:1040px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi{min-width:0}
+}
 /* The phone: nothing on Today, Company or Growth may push the page sideways.
    Four tiles pair up two by two, the Next moves cards stack, and a finding's
    sentence takes a line of its own under its site, figure and arrow. Wide
@@ -18104,7 +18111,7 @@ function siteLinkClick(e){
      sat on, or the other site's page -- but not on the portfolio, whose own
      way back is the portfolio, nor in a site's picker, which walks between
      sites. */
-  siteOpenOver(key, a.closest("#secPortfolio, #sitePick, .ss-crumbs") ? false : siteHereFrom());
+  siteOpenOver(key, a.closest("#secPortfolio, #sitePick") ? false : siteHereFrom());
 }
 document.addEventListener("click", siteLinkClick, true);
 /* A site opened from over the search palette -- the map a palette row showed,

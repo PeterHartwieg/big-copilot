@@ -384,9 +384,9 @@ name and its own text, so every finding is reached from the keyboard; a silenced
 
 A plain click on a site's name records where it was clicked, as a finding, a search and a
 question do: the crumb reads "‹ Today", "‹ Checks" or "‹ Map", or names the other site's page
-the name sat on, and that is the browser's Back. Three places keep the portfolio as the way
-back: the Portfolio's own names, a site page's picker, and the crumb row, whose "‹ OtherSite"
-link is left to `wireSiteCrumbs()` so it goes Back rather than opening a new visit. The map's
+the name sat on, and that is the browser's Back. Two places keep the portfolio as the way back:
+the Portfolio's own names and a site page's picker. The crumb row's own "‹ OtherSite" link is
+left to `wireSiteCrumbs()` and goes Back rather than opening a new visit. The map's
 "its page" (its link and the card's Details action, through `siteOpenOver()`) follows the same
 rule when no palette is open; a map card opened from a Portfolio row therefore reads
 "‹ Results", the view the card was opened on, rather than "‹ Portfolio".

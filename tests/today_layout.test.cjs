@@ -289,3 +289,23 @@ test("an Overstaffed hours row, one per site, opens its site's page from its sen
     assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, spArrived]), ['#site/secondavenue-10', true, null]);
   } finally { await page.close(); }
 });
+
+test('between the phone and the desk the tiles pair up before an amount would clip', async () => {
+  for (const width of [700, 900, 1041]) {
+    const page = await today(width);
+    try {
+      const m = await page.evaluate(() => {
+        const tiles = [...document.querySelectorAll('#kpis .kpi')];
+        return {
+          rows: new Set(tiles.map(t => Math.round(t.getBoundingClientRect().top))).size,
+          clipped: tiles.filter(t => { const v = t.querySelector('.v'); return v.scrollWidth > v.clientWidth || t.scrollWidth > t.clientWidth; })
+            .map(t => t.querySelector('.v').textContent.trim()),
+          scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+        };
+      });
+      assert.equal(m.rows, width <= 1040 ? 2 : 1, `${width}: ${width <= 1040 ? 'two by two' : 'four in a row'}`);
+      assert.deepEqual(m.clipped, [], `${width}: every amount fits its tile`);
+      assert.equal(m.scroll, m.client, `${width}: no sideways scroll`);
+    } finally { await page.close(); }
+  }
+});
