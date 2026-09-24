@@ -54,7 +54,8 @@ class RecipeIdentityTests(unittest.TestCase):
                         for i in range(len(groups))},
             "imports": {(depot, WATER): {"weekly": 1000}},
             "shipped": lambda *args: None, "received": lambda *args: None,
-            "byDay": lambda *args: {}, "roundDays": lambda *args: [],
+            "forwarded": lambda *args: 0.0, "inByDay": lambda *args: {}, "outByDay": lambda *args: {},
+            "sentTo": lambda *args: {}, "roundDays": lambda *args: [],
         }
         flow["index"][depot] = len(groups)
         return _factories(SaveStub(groups, hours), Names({}), [], self.recipes,

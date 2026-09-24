@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c19f9e4f8a">
+<link rel="stylesheet" href="community.css?v=41e2a39e1e">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=c19f9e4f8a">
+<link rel="stylesheet" href="fonts/fonts.css?v=41e2a39e1e">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2711,8 +2711,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c19f9e4f8a";</script>
-<script>window.LEDGER_RELEASE = {"version":"c19f9e4f8a","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "41e2a39e1e";</script>
+<script>window.LEDGER_RELEASE = {"version":"41e2a39e1e","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=c19f9e4f8a"></script>
-<script src="community.js?v=c19f9e4f8a"></script>
+<script src="app.js?v=41e2a39e1e"></script>
+<script src="community.js?v=41e2a39e1e"></script>
 
 <script>
 
@@ -3411,7 +3411,9 @@ function drawFlowDetail(){
           <td class="l">${i.item}</td>
           <td>${i.stock.toLocaleString()}</td>
           <td>${i.need ? i.need.toLocaleString() : "—"}</td>
-          <td>${i.provision ? i.provision.toLocaleString() : "—"}</td>
+          <td>${i.provision ? i.keeps
+            ? `<span data-tip="${attr("Smart Delivery keeps this many in stock: a refill brings the level less what the depot holds that morning")}">keeps ${i.provision.toLocaleString()}</span>`
+            : i.provision.toLocaleString() : "—"}</td>
           <td class="l">${fitCell(i)}</td></tr>`).join("")}</tbody></table>`
       : `<p class="quiet" style="margin:0">Nothing stocked here; it only passes goods along.</p>`}
     </div>`;
@@ -3718,6 +3720,8 @@ const SUPPLY_VIEWS = {
         unplanned: () => `${chip("bad", "no top-up")} put ${r.item} on a plan at ${r.perDay.toLocaleString()} a day`,
         target: () => `${chip("bad", "top-up short")} raise ${depot}'s top-up to ${r.raiseTarget.toLocaleString()}${stalled}`,
         waiting: () => `${chip("dim", "waiting")} ${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${r.waitingOn.join(", ")}`,
+        limit: () => `${chip("ok", "at its limit")} ${r.lines.join(", ")} ${r.lines.length === 1 ? "is" : "are"} held by Produce up to, so ${
+                       r.lines.length === 1 ? "it eats" : "they eat"} only what leaves`,
         staffing: () => `${chip("warn", "understaffed")} the roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week; staff them and the need is the full ${r.perDay.toLocaleString()}`,
         dry: () => `${chip("bad", "depot out")} ${depot} holds ${r.depotStock.toLocaleString()}; the import is not keeping up`,
         idle: () => `${chip("warn", "not drawn")} ${depot} holds ${r.depotStock.toLocaleString()} but the line takes ${
@@ -3851,6 +3855,7 @@ function feedVerdict(n){
   else if(n.target < (n.dailyNeed ?? n.perDay) * 0.98){ status = "target"; level = "critical"; n.raiseTarget = ceil100(n.dailyNeed ?? n.perDay); }
   else if(n.known && n.arrives < n.perDay * 0.75){
     [status, level] = n.waitingOn.length ? ["waiting", "info"]
+      : n.limited ? ["limit", "ok"]
       : n.arrives >= n.perDay * (n.staffedShare ?? 1) * 0.85 ? ["staffing", "warn"]
       : n.depotStock < n.perDay ? ["dry", "critical"] : ["idle", "warn"]; }
   else if(n.importWeekly !== null && n.importFit === "short"){
@@ -3933,9 +3938,13 @@ function factoryView(){
                          return !(s.arrivals[a] || 0) && !held(s.s, a); })
         .map(ing => ing.item) : [];
       const share = u.fullWeek ? u.hoursWeek / u.fullWeek : 1;
+      /* No shipments are measured for a line named here, so it is held by its
+         Produce up to limit only once the output held has reached it. */
+      const limit = u.limit ?? null;
       s.lines.push({rid: u.rid, item: rec.item, slug, missing, workstation: u.workstation, slots: u.slots,
         machines: u.machines, rate: rec.out, makes, ships: 0, stock, toCity: 0, toPier: 0,
         basis: "you", piling: stock > makes * 3, atRoster: Math.round(makes * share),
+        limit, limitHeld: limit !== null && stock >= limit,
         hoursWeek: u.hoursWeek, fullWeek: u.fullWeek, gaps: u.gaps || []});
       rec.ingredients.forEach(ing => {
         const islug = view.aliases[ing.slug] || ing.slug, perDay = u.machines * ing.per * 24;
@@ -3985,14 +3994,16 @@ function factoryView(){
       });
     });
     view.sites.forEach(s => {
-      const stopped = {};
+      const stopped = {}, limitHeld = {};
       s.lines.forEach(l => { if(l.missing && l.missing.length) stopped[l.item] = l.missing; });
+      s.lines.forEach(l => { limitHeld[l.item] = (limitHeld[l.item] ?? true) && !!l.limitHeld; });
       s.needs.forEach(n => {
         const source = n.importSite ?? n.from;
         n.depotNeed = Math.round(depotNeed[source + "|" + n.slug] || 0);
         n.madeAt = madeAt[n.slug] || [];
         n.waitingOn = n.lines.every(l => stopped[l])
           ? [...new Set(n.lines.flatMap(l => stopped[l]).filter(m => m !== n.item))].sort() : [];
+        n.limited = !!(n.lines.length && n.lines.every(l => limitHeld[l]) && n.stock > 0);
         feedVerdict(n);
       });
       const rank = {critical: 0, warn: 1, info: 2, ok: 3};
@@ -6618,6 +6629,7 @@ function spNeedRead(n){
     case "idle": return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
     case "staffing": return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
     case "waiting": return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
+    case "limit": return `<b>${spNum(n.arrives)}</b>/day arrives; the line is held by its <b>Produce up to</b> limit`;
     case "import": case "noimport":
       if(n.importSmart)
         return `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)} against the <b>${spNum(n.depotNeed)}</b> a week`;
@@ -7313,8 +7325,8 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     } else if(r.edited ? r.changed : r.setTo !== null
         && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
       const why = r.edited ? yours : r.factoryWeek
-        ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}; confirm the production plan before increasing.`
-        : "Based on recorded shop deliveries over a week.";
+        ? `Full-rate factory inputs${r.otherWeek ? " plus deliveries to other sites" : ""}; confirm the production plan before increasing.`
+        : "Based on recorded deliveries to other sites over a week.";
       add("Weekly imports", r.s, r.item, r.inGame ?? r.current ?? null, value,
         `${setting(value)} ${why}`, null, mode);
     }
@@ -7535,6 +7547,7 @@ function drawLogistics(){
   const changesOnly = logisticsView === "changes";
   const f = factoryView();
   const other = (D.supply.factories && D.supply.factories.depotOther) || {};
+  const otherTo = (D.supply.factories && D.supply.factories.depotOtherTo) || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
   const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
@@ -7586,6 +7599,7 @@ function drawLogistics(){
       // The game's figure has moved since this was typed: the answer is stale.
       if(setting.stale){ impSetKeep(impId, null); setting = importSetting(total, contract, undefined); }
       return {...r, s, otherWeek, total, ...setting, impId, arrived: contract.arrivedLastWeek,
+              otherTo: otherWeek ? (otherTo[si] || {})[r.slug] || [] : [],
               contracts: contract.contracts || [], stock: held(s, r.slug)};
     }).sort((a, b) => b.total - a.total);
     importRows.push({s, rows});
@@ -7675,11 +7689,19 @@ function drawLogistics(){
   /* Who draws the material, and how the week splits between the factory
      lines and the shops, stay on hover: the material name says who, the
      Used / week figure says how much of each. */
-  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line draws it; what leaves goes to the shops";
+  /* The rest is whatever no factory line here eats: shops, other depots, a
+     factory that passes it on. Each shipment is traced to the site that got
+     it; the game logs nothing at a shop, so what reached no logged site is
+     the shops'. */
+  const otherPlaces = r => {
+    const to = [...new Set((r.otherTo || []).map(([s]) => s === null || !D.businesses[s] ? "shops" : shortName(D.businesses[s])))];
+    return to.length ? ` (to ${to.join(", ")})` : "";
+  };
+  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : `No factory line draws it; what leaves goes to other sites${otherPlaces(r)}`;
   const splitTip = r => r.factoryWeek && r.otherWeek
-    ? `Factories ${r.factoryWeek.toLocaleString()} · shops ${r.otherWeek.toLocaleString()} a week`
+    ? `Factories ${r.factoryWeek.toLocaleString()} · other sites ${r.otherWeek.toLocaleString()} a week${otherPlaces(r)}`
     : r.factoryWeek ? `All ${r.factoryWeek.toLocaleString()} a week to the factory lines`
-    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "";
+    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to other sites${otherPlaces(r)}` : "";
   const importRow = r => `<tr${r.changed ? ` class="imp-changed"` : ""}>
       <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}${contractLines(r)}</td>
       <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
@@ -7744,6 +7766,7 @@ function drawLogistics(){
       <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
         ? ` ${chipHtml("dim", "waiting", `${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`)}`
         : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
+        : r.status === "limit" ? ` ${chipHtml("dim", "at limit", "The lines eating it are held by their Produce up to limit: they make only what leaves, so less arrives than their full rate")}`
         : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
   };
   const topupCols = [["Material", r => r.item, "l"], ["Eats / day", r => r.dailyNeed ?? r.perDay],

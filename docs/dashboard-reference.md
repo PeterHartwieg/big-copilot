@@ -959,10 +959,19 @@ keeping a dozen paper bags in a drawer is not a depot.
 A Smart Delivery import is drawn at the week it tops up, not at its stock level: in a
 steady week the depot starts Monday at the level less the week's use, so the top-up is
 that use (the depot's measured draw, else what arrived last week), up to the level.
+A daily pipe is what the delivery log says went down it over the last week, each
+shipment traced to the site that received it (the game logs every shipment twice on the
+same day, negative where it left and positive where it arrived, so the two are paired by
+their items). The game keeps no log at a shop, so a pipe into a shop, or from a site with
+fewer than three rounds on record, is the shops' sales instead.
 
 Clicking a site dims everything it does not touch and opens its detail: what comes in
 and where from, what goes out and to whom, and a per-product table of **on hand** against
-**needs before next refill** against **what the refill brings**.
+**needs before next refill** against **what the refill brings**. For a depot line the need
+is the same walk to its next import as *Before the import* below: flat for a line that
+feeds machines, the weekday profile for one that feeds shelves. A Smart Delivery line
+reads *keeps N*, its level: a refill brings the level less what the depot holds that
+morning, not the level itself.
 
 Two different windows are being compared there, so both are named rather than merged.
 A shelf is refilled every morning, so it is judged on one peak day. A depot is refilled
@@ -1013,12 +1022,22 @@ views ask the questions that matter instead:
   running dry that has more than enough. Both sides of the comparison are counted from
   now: the delivery lands at the start of its day, so a Saturday-night save with a Monday
   import has 1.04 days to cover, not 2.
+  A depot whose draw is its own logged rounds is walked a round at a time instead, since
+  the logistics round empties it once each morning. Today's round counts only while it is
+  not in the log yet, and the delivery day's round counts too: it leaves before the import
+  lands (the save's stock closes exactly on that order). A Wednesday-afternoon save with a
+  Monday import therefore has five rounds to cover, Thursday to Monday, and cover, due and
+  catch-up are counted in rounds.
 - **Idle stock**: goods held far beyond what flows through them, including anything
   with no outflow at all, shown against the top-up target that put it there. A factory
   input is the exception: the machines neither sell nor ship it, so what the morning
   round brings in is what yesterday used, and a holding smaller than two rounds' worth
   (1,020 fabric against 23,040 arriving a day) is the end-of-day buffer that keeps the
-  line running, not a pile. Output that nothing collects still counts.
+  line running, not a pile. An input a named line eats and a top-up brings is never read
+  as having nothing moving, however short the log: a line set up yesterday is judged
+  against what its machines draw. Output that nothing collects still counts. Stock that a
+  top-up target brings to a site where no shelf, route or line uses it names that route
+  and suggests removing the target.
 
 Depots and factories reached by a paused import are flagged separately, since those
 drain with nothing scheduled to refill them.
@@ -1040,10 +1059,20 @@ Two more views turn the same log on the factories themselves:
   arrives short by exactly the roster's share reads as *understaffed*, not as a logistics
   fault, and every machine not staffed round the clock is one line in the alerts with the
   hours to fill and the output not made.
+- A machine with **Produce up to** switched on (`produceUpTo`, the figure in
+  `produceUpToValue`) stops once the factory holds that many of what it makes, and then
+  makes only what leaves. A line counts as *held by its limit* when its output held is at
+  the limit, or below it by no more than a day of what leaves (the morning round took
+  those, and the machines are making them back). An input every line eating it is held
+  this way, with some of it on hand, arrives short of the full rate by design: it reads
+  *at limit*, not as a feed fault. The needs, and the imports sized from them, stay at the
+  full rate the lines are staffed and set up for.
 - **Feed the factories**: the delta the set-up screen never shows. Each input a factory
   eats, per day and per week, beside the daily top-up that brings it, what arrived over
   the last week, and the weekly import order at the depot behind it, summed across every
-  factory drawing on that depot. The change column says what to move and by how much: a
+  factory drawing on that depot. *Arrives / day* is what came in less what the factory
+  sent on of the same item (an import passed to another depot's target is not eaten).
+  The change column says what to move and by how much: a
   top-up below the day's need (35,000 sugar for a 36,000 line runs the machines 23 hours,
   which is exactly why soda, energy drink and slushie ship at 96-98%), an input on no plan
   at all, an import order short of what the factories eat, or an input that is planned
@@ -1099,8 +1128,12 @@ Two tables, one per number a logistics manager is set with.
 
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
   *Used / week* is what all the factories drawing on it eat in a week (from their lines,
-  machines times recipe draw times 24 times 7) plus what else leaves for the shops
-  (measured from the delivery log). *Arrived last week* sums every contract's
+  machines times recipe draw times 24 times 7) plus what else leaves for other sites,
+  measured from the delivery log with each shipment traced to the site that received it.
+  A factory counts as taking an item only where one of its named lines eats it, so paper
+  bags a factory passes on are the other part, and what a factory forwards of an input it
+  eats is not the depot's outflow at all. The hover names where the other part went;
+  what reached no site with a log of its own went to the shops. *Arrived last week* sums every contract's
   `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
   cap shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
