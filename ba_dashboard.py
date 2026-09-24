@@ -2593,6 +2593,35 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today):
             "runsOut": runs_out, "catchUp": catch_up}
 
 
+def _import_arrivals(amounts: list, contracts: list) -> float | None:
+    """What reached a site one day that was not its own import, or None where
+    that cannot be told.
+
+    `amounts` are the day's arrivals of one item; `contracts` holds one entry
+    per contract product delivering that item there on that weekday, the
+    amount it brought last week. Each contract product brings at most one
+    arrival that day, whatever its amount. An arrival of exactly last week's
+    amount is taken as its contract's first, each contract excusing one. Any
+    contracts left then account for the arrivals left, but only when there are
+    no more of those than of them; with more, which is the import is unknown,
+    and the caller falls back to the old net reading of that day.
+    """
+    left = collections.Counter(contracts)
+    open_contracts = len(contracts)
+    rest = []
+    for amount in amounts:
+        if left[amount] > 0:
+            left[amount] -= 1
+            open_contracts -= 1
+        else:
+            rest.append(amount)
+    if not open_contracts or not rest:
+        return float(sum(rest))
+    if len(rest) <= open_contracts:
+        return 0.0
+    return None
+
+
 def _supply(
     save: Save,
     names: Names,
@@ -2697,17 +2726,21 @@ def _supply(
     # positive figure) apart from what reached it. Netted, a factory passing an
     # import on to a depot's target pulls its own intake down, and an import
     # landing the day a round leaves cancels that round. `taken_by_day` is what
-    # reached the site less its own import deliveries, recognised as the
-    # contract's: on its delivery weekday, the amount it brought last week.
+    # reached the site less its own import deliveries (_import_arrivals()).
     out_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     taken_by_day = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
-    delivered = collections.defaultdict(set)  # (site, item, weekday) -> amounts an import brings
+    arrivals = collections.defaultdict(list)  # (site, item, day) -> amounts, in log order
+    # One entry per contract product that delivers (it brought something last
+    # week, or is active and set above zero): the weekday its import lands on
+    # and the amount it brought last week.
+    contracted = collections.defaultdict(list)
     for partnership in save.items(save.root["importPartnerships"]):
         drop_day = (partnership.get("nextDeliveryDay") or 0) % 7
         for product in save.items(partnership["products"]):
-            if product.get("amountOrderedLastWeek"):
-                delivered[(site_key(save.address(product["assignedWarehouse"])),
-                           product["itemName"], drop_day)].add(product["amountOrderedLastWeek"])
+            last = product.get("amountOrderedLastWeek", 0)
+            if last or (partnership.get("isActive") and product.get("amount")):
+                contracted[(site_key(save.address(product["assignedWarehouse"])),
+                            product["itemName"], drop_day)].append(last)
     round_days = collections.defaultdict(set)
     inbound_days = collections.defaultdict(set)
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -2730,9 +2763,13 @@ def _supply(
                 elif amount > 0:
                     received[key][entry["itemName"]] += amount
                     inbound_days[key].add(when)
-                    if amount not in delivered.get((key, entry["itemName"], when % 7), ()):
-                        taken_by_day[key][entry["itemName"]][when] += amount
+                    arrivals[(key, entry["itemName"], when)].append(amount)
                 by_day[key][entry["itemName"]][when] += amount
+    for (key, item, when), amounts in arrivals.items():
+        taken = _import_arrivals(amounts, contracted.get((key, item, when % 7), []))
+        # Where the imports cannot be told from the rest, the day is read net,
+        # as before this was kept gross.
+        taken_by_day[key][item][when] = by_day[key][item][when] if taken is None else taken
 
     def shipped_per_day(key: str, item: str) -> float | None:
         """Measured daily outflow, or None when too few rounds are on record."""
@@ -3130,6 +3167,7 @@ def _supply(
         "received": received_per_day,
         "byDay": lambda key, item: by_day[key][item],
         "outByDay": lambda key, item: out_by_day[key][item],
+        "customerDriven": customer_driven,
         "takenByDay": lambda key, item: taken_by_day[key][item],
         "roundDays": lambda key: round_days.get(key, set()),
     }
@@ -3540,7 +3578,7 @@ def _ceil_hundred(value: float) -> int:
 
 
 def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict,
-                eaten: set | None = None) -> tuple:
+                eaten: set | None = None, blind: set = frozenset()) -> tuple:
     """What each depot imports a week, and what leaves it for the shops.
 
     Orders come from current import contracts, outflow from the delivery log,
@@ -3586,10 +3624,17 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict,
     # too small to size an order on is nothing. Both sides are gross (see
     # _supply()): the depot's rounds out, and what reached the factory less
     # its own imports, so a factory forwarding goods and an import landing on
-    # a round day change nothing here. A factory takes an item only where one
-    # of its named lines eats it (`eaten`); paper bags it passes on are the
-    # shops'. With no recipes to read the lines by, any factory the depot
-    # tops up with the item takes it.
+    # a round day change nothing here. Where a factory's own import cannot be
+    # told from the rest of a day's arrivals, that day is read net, as before.
+    # A factory takes an item only where one of its named lines eats it
+    # (`eaten`); paper bags it passes on are the shops'. With no recipes to
+    # read the lines by, or at a factory with a line the board cannot name
+    # (`blind`: the page may name it, and must not then count it twice), any
+    # factory the depot tops up with the item takes it. A factory that eats
+    # an item and also passes some on, along routes that all lead somewhere it
+    # is used (a shelf down the chain, a line that eats it, an export), took
+    # for itself only what it did not send on; one passing it to a depot
+    # where nothing uses it (a target set on the wrong route) keeps it all.
     depot_other = collections.defaultdict(dict)
     pairs = set(flow["imports"]) | {
         (source, slug) for (_dest, slug), (_amount, source) in flow["targets"].items() if source
@@ -3601,12 +3646,22 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict,
         if len(days) < SHIPPED_MIN_DAYS:
             continue
         sent = flow["outByDay"](depot, slug)
-        taken = [
-            flow["takenByDay"](fkey, slug)
-            for fkey in machines
-            if flow["targets"].get((fkey, slug), (0, None))[1] == depot
-            and (eaten is None or (fkey, slug) in eaten)
-        ]
+        takes = lambda site: eaten is None or site in blind or (site, slug) in eaten
+
+        def used(dest):
+            return dest not in index or flow["customerDriven"](dest, slug) or (
+                dest in machines and takes(dest))
+
+        taken = []
+        for fkey in machines:
+            if flow["targets"].get((fkey, slug), (0, None))[1] != depot or not takes(fkey):
+                continue
+            got = flow["takenByDay"](fkey, slug)
+            onward = [dest for dest, item, _ in flow["edges"].get(fkey, []) if item == slug]
+            if onward and all(used(dest) for dest in onward):
+                out = flow["outByDay"](fkey, slug)
+                got = {d: got.get(d, 0.0) - out.get(d, 0.0) for d in set(got) | set(out)}
+            taken.append(got)
         rest = sum(
             max(0.0, sent.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
             for d in days
@@ -3756,6 +3811,7 @@ def _factories(
     made_by = collections.defaultdict(set)
     sites, depot_need = [], collections.defaultdict(float)
     eaten_rows = []  # (factory, need row) for every input a named line eats
+    blind = set()  # factories with a line running a recipe the board cannot name
     for key, counter in machines.items():
         lines, unnamed, needs = [], [], {}
         for (station, rid), n in sorted(counter.items(), key=lambda kv: -kv[1]):
@@ -3769,6 +3825,8 @@ def _factories(
                 ],
             }
             if not slug:
+                if rid:
+                    blind.add(key)
                 unnamed.append(
                     {
                         "rid": rid,
@@ -3958,7 +4016,7 @@ def _factories(
         )
     sites.sort(key=lambda s: -s["machines"])
     eaten = {(key, row["slug"]) for key, row in eaten_rows}
-    depots, depot_other = _depot_flow(flow, index, machines, depot_need, eaten)
+    depots, depot_other = _depot_flow(flow, index, machines, depot_need, eaten, blind)
     return {
         "sites": sites,
         "machines": sum(s["machines"] for s in sites),
