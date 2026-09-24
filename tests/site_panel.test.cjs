@@ -193,50 +193,65 @@ test('a big crew folds into one row a role, a dozen still read as pills', async 
   } finally { await big.close(); }
 });
 
-// A law firm's crew: one role of eighty beside a small one. The Crew block sits
-// a third of the page wide beside Fees, and the three columns (role, dots,
-// count) left the eighty dots a single column, a dot a line, with the role and
-// its count adrift halfway down. Every role's row keeps its name and count on
-// its first line and lays its dots out in lines of many. At a tablet's width the
-// count took its full unbroken width and squashed the role's badge and name, so
-// the count now wraps at its breaks and the badge keeps its size.
-test('a big role in a narrow Crew block keeps its name, its count and its dots in lines', async () => {
-  const person = n => ({name: `Person ${n}`, role: n <= 3 ? 'Cleaning' : 'Lawyer',
-                        absent: n % 17 === 0, daily: n <= 3 ? 250 : 800});
+// A big crew in a narrow Crew block: one role of eighty beside a small one. The
+// block sits a third of the page wide beside Fees, and the three columns (role,
+// dots, count) left the eighty dots a single column, a dot a line, with the role
+// and its count adrift halfway down. Stacked instead, a role and its count still
+// fought for one line at a tablet's width: the badge squashed, the name ran into
+// the count, and a long role's count spilled out of the block. Every row now
+// keeps its whole name, its count inside the block and its dots in lines of many.
+test('a big role in a narrow Crew block keeps its name, its count and its dots inside it', async () => {
+  const person = n => ({name: `Person ${n}`, role: n <= 3 ? 'Customer service' : 'Logistics manager',
+                        absent: n % 17 === 0 || n === 2, daily: n <= 3 ? 250 : 800});
   const people = Array.from({length: 83}, (_, i) => person(i + 1));
-  for (const width of [1850, 1440, 900, 820, 768, 390]) {
+  for (const width of [1850, 1440, 900, 820, 768, 700, 390]) {
     const viewport = {width, height: 1000};
     const page = await site({viewport, shop: {status: 'office', type: 'Law Firm', basket: 387.89,
       staff: 83, staffCost: 64750, people,
-      crew: [{role: 'Cleaning', count: 3, daily: 750, absent: 0}, {role: 'Lawyer', count: 80, daily: 64000, absent: 4}]}});
+      crew: [{role: 'Customer service', count: 3, daily: 750, absent: 1},
+             {role: 'Logistics manager', count: 80, daily: 64000, absent: 4}]}});
     try {
       const rows = await page.$$eval('#sitePanel .sp-rrow', rows => rows.map(r => {
+        const roster = r.closest('.sp-roster').getBoundingClientRect();
+        const edge = roster.right;
         const top = r.getBoundingClientRect().top;
         const button = r.querySelector('.sp-rbtn');
         const btn = button.getBoundingClientRect();
-        const count = r.querySelector('.sp-rcount').getBoundingClientRect();
+        const countEl = r.querySelector('.sp-rcount');
+        const count = countEl.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(countEl);
         return {
+          role: button.textContent.trim(),
+          count: countEl.textContent,
+          btnTop: btn.top - top,
           badge: button.querySelector('i').getBoundingClientRect().width,
           overflow: button.scrollWidth - button.clientWidth,
-          gap: count.left - btn.right,
-          role: r.querySelector('.sp-rbtn').textContent.trim(),
-          count: r.querySelector('.sp-rcount').textContent,
-          btnTop: btn.top - top, btnWidth: btn.width, countTop: count.top - top,
+          // The role and its count never cover each other.
+          apart: btn.right <= count.left || btn.bottom <= count.top,
+          spill: Math.max(...[...range.getClientRects()].map(rc => rc.right)) - edge,
+          width: roster.width,
           dots: r.querySelectorAll('.sp-dot').length,
           lines: new Set([...r.querySelectorAll('.sp-dot')].map(d => Math.round(d.getBoundingClientRect().top))).size,
         };
       }));
-      assert.deepEqual(rows.map(r => [r.role, r.dots]), [['CLCleaning', 3], ['LALawyer', 80]], `${viewport.width}px`);
+      const at = `${viewport.width}px`;
+      assert.deepEqual(rows.map(r => [r.role, r.dots]),
+        [['CSCustomer service', 3], ['LMLogistics manager', 80]], at);
       for (const r of rows) {
-        assert.ok(r.btnTop < 12 && r.countTop < 30, `${viewport.width}px: ${r.role} starts its row ${JSON.stringify(r)}`);
-        assert.ok(r.btnWidth >= 90, `${viewport.width}px: ${r.role} has room for its name`);
-        assert.equal(Math.round(r.badge), 26, `${viewport.width}px: ${r.role}'s badge keeps its size`);
-        assert.ok(r.overflow <= 0, `${viewport.width}px: ${r.role}'s name fits its button`);
-        assert.ok(r.gap >= 0, `${viewport.width}px: ${r.role} ends before its count begins ${JSON.stringify(r)}`);
+        assert.ok(r.btnTop < 12, `${at}: ${r.role} starts its row ${JSON.stringify(r)}`);
+        assert.equal(Math.round(r.badge), 26, `${at}: ${r.role}'s badge keeps its size`);
+        assert.ok(r.overflow <= 0, `${at}: ${r.role}'s name fits its button`);
+        assert.ok(r.apart, `${at}: ${r.role} and its count overlap ${JSON.stringify(r)}`);
+        assert.ok(r.spill <= 0.5, `${at}: ${r.role}'s count runs ${r.spill.toFixed(1)}px out of the block`);
       }
-      assert.match(rows[1].count, /^80 · 4 off · \$64,000\/day$/);
-      // Eighty dots at 16px a dot run to a handful of lines, not eighty.
-      assert.ok(rows[1].lines <= 6, `${viewport.width}px: ${rows[1].lines} lines of dots`);
+      assert.match(rows[1].count, /^80\s·\s4 off\s·\s\$64,000\/day$/);
+      // Eighty dots at 16px a dot (11 and a 5px gap) fill the block's whole
+      // width: a handful of lines, not eighty. Six from 768px up; the block is
+      // barely 200px wide at 700px, which holds twelve a line.
+      const perLine = Math.floor((rows[1].width + 5) / 16);
+      assert.ok(rows[1].lines <= Math.min(Math.ceil(80 / perLine), width >= 768 ? 6 : 7),
+        `${at}: ${rows[1].lines} lines of dots in ${rows[1].width.toFixed(0)}px`);
     } finally { await page.close(); }
   }
 });

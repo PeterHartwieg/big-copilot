@@ -11210,14 +11210,17 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-rrow.open .sp-rpeople{display:block}
 /* The three columns leave the dots what the role and its count do not take.
    Beside Fees or Shelves the Crew block is a third of the page, and a big
-   role's dots were squeezed into one column, a dot a line. Too narrow, the
-   dots take a line of their own under the role and its count, as on a phone,
-   and the count wraps at its breaks rather than squeezing the role. */
+   role's dots were squeezed into one column, a dot a line; a role and its
+   count sharing one line squeezed each other, or pushed the count out of the
+   block. Too narrow, a row stacks: the role, its count, its dots, each on a
+   line of its own. */
 .sp-roster{container-type:inline-size}
 @container (max-width:620px){
-  .sp-rrow{grid-template-columns:auto minmax(0,1fr);gap:4px 12px}
-  .sp-rrow .sp-dots{grid-column:1/-1;grid-row:2}
-  .sp-rrow .sp-rcount{grid-column:2;grid-row:1;white-space:normal}
+  .sp-rrow{grid-template-columns:minmax(0,1fr);gap:0}
+  .sp-rrow .sp-rbtn{grid-row:1}
+  .sp-rrow .sp-rcount{grid-row:2;text-align:left;white-space:normal}
+  .sp-rrow .sp-dots{grid-row:3}
+  .sp-rrow .sp-rpeople{grid-row:4}
 }
 
 /* shelves: the three marks a shop's own table gains */
@@ -15018,8 +15021,9 @@ function spRoster(people, gaps, pairs){
       <span class="sp-dots">${r.people.map((p, k) => `<i class="sp-dot${p.absent ? " off" : ""}" style="--k:${k}" data-read="${attr(
         `<b>${spEsc(p.name)}</b> · ${spEsc(p.role)}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
       <span class="sp-rcount"><b>${r.people.length}</b>${
-        r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}${
-        r.people.every(p => typeof p.daily === "number") ? ` · ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
+        /* No-break before each dot: a count that wraps never starts a line on one. */
+        r.people.some(p => p.absent) ? `&nbsp;· ${r.people.filter(p => p.absent).length} off` : ""}${
+        r.people.every(p => typeof p.daily === "number") ? `&nbsp;· ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
       <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps, pairs)).join("")}</div></div>
     </div>`).join("")}</div><div class="sp-read sp-readout">${spCrewRead(people, roles.length)}</div></div>`;
 }
