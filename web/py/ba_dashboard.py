@@ -9397,7 +9397,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set) -> list:
                     f"{row['item']} has no standing import; {depot} holds "
                     f"{row['depotStock']:,}, {weeks:.1f} weeks of the {need:,} a week "
                     f"the factories eat"
-                    + (f" beyond the {row['importRoutedFactories']:,} a week a route brings the factories"
+                    + (f" beyond the {row['importRoutedFactories']:,} a week a route brings them"
                        if row.get("importRoutedFactories") else "")
                 )
             notes.append(
