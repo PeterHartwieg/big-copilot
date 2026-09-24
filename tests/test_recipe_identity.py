@@ -1,12 +1,16 @@
-"""Naming behavior and quantity regressions; these do not verify game mappings."""
+"""Naming behavior and quantity regressions; these do not verify game mappings.
+
+The board once named a line by hand in the browser and redid the factory
+figures there; Python is now the only verdict engine, and a line named in the
+browser reads as new until the next refresh, so only the Python side is
+checked here."""
 import copy
 import json
 from pathlib import Path
-import subprocess
 import tempfile
 import unittest
 
-from ba_dashboard import History, Names, RECIPE_ITEMS, TEMPLATE, _factories, _recipes, site_key
+from ba_dashboard import History, Names, RECIPE_ITEMS, _factories, _recipes, site_key
 
 
 BEER = "ba:itemname_beer"
@@ -74,7 +78,7 @@ class RecipeIdentityTests(unittest.TestCase):
             self.assertEqual(need["depotNeed"], 5040)
             self.assertFalse(need["known"])
             self.assertEqual(need["raiseImport"], None)  # daily target is the first issue
-            self.assertEqual(need["raiseTarget"], 500 if n == 2 else 300)
+            self.assertEqual(need["raiseTarget"], 480 if n == 2 else 240)
 
     def test_table_overrides_old_names_without_learning_or_deleting_history(self):
         self.history.book = {"company": {
@@ -129,29 +133,6 @@ class RecipeIdentityTests(unittest.TestCase):
         self.assertEqual(site["lines"][0]["atRoster"], 0)
         self.assertEqual(site["needs"][0]["perDay"], 168)
 
-    def browser_view(self, groups, choices):
-        initial = self.build(groups)
-        data = {"supply": {"factories": initial}, "plan": {"recipes": list(self.recipes.values())},
-                "businesses": [{"lines": []} for _ in range(len(groups) + 1)]}
-        script = "const D = " + json.dumps(data) + "; const LIVE = false;\n"
-        script += "const localStorage = {getItem: () => " + json.dumps(json.dumps(choices)) + "};\n"
-        script += TEMPLATE[TEMPLATE.index("const LINE_NAMES_KEY"):TEMPLATE.index("/* --- chrome, wired up once")]
-        script += "\nconsole.log(JSON.stringify(factoryView()));"
-        return json.loads(subprocess.run(["node", "-e", script], check=True, text=True,
-                                           capture_output=True).stdout)
-
-    def test_static_browser_manual_overlay_matches_python_and_preserves_table(self):
-        groups = [[RID], ["new-id"], ["new-id"]]
-        actual = self.browser_view(groups, {RID: "wrong", "new-id": BEER})
-        self.history.named("company", {"new-id": BEER})
-        expected = self.build(groups)
-        self.assertEqual(actual["unnamed"], 0)
-        for a, e in zip(actual["sites"], expected["sites"]):
-            for field in ("slug", "basis", "makes", "atRoster"):
-                self.assertEqual(a["lines"][0][field], e["lines"][0][field])
-            for field in ("perDay", "perWeek", "depotNeed", "raiseTarget", "status"):
-                self.assertEqual(a["needs"][0][field], e["needs"][0][field])
-
     def test_unusable_table_identity_allows_manual_recovery(self):
         original = copy.deepcopy(self.recipes[BEER])
         replacement = "replacement-beer"
@@ -167,22 +148,19 @@ class RecipeIdentityTests(unittest.TestCase):
                 self.assertEqual(unresolved["needs"], [])
                 self.history.named("company", {RID: BEER})
                 self.assertEqual(self.build([[RID]])["unnamed"], 1)
-                browser = self.browser_view([[RID]], {RID: replacement})
                 self.history.named("company", {RID: replacement})
-                desktop = self.build([[RID]])
-                for result in (desktop, browser):
-                    line = result["sites"][0]["lines"][0]
-                    self.assertEqual((line["slug"], line["basis"]), (replacement, "you"))
-                    self.assertEqual(result["sites"][0]["needs"][0]["perDay"], 240)
+                result = self.build([[RID]])
+                line = result["sites"][0]["lines"][0]
+                self.assertEqual((line["slug"], line["basis"]), (replacement, "you"))
+                self.assertEqual(result["sites"][0]["needs"][0]["perDay"], 240)
                 self.history.named("company", {RID: None})
                 self.assertEqual(self.build([[RID]])["unnamed"], 1)
                 self.history.named("company", {RID: replacement})
                 self.recipes[BEER] = original
-                for result in (self.build([[RID]]), self.browser_view([[RID]], {RID: replacement})):
-                    line = result["sites"][0]["lines"][0]
-                    self.assertEqual((line["slug"], line["basis"]), (BEER, "table"))
+                line = self.build([[RID]])["sites"][0]["lines"][0]
+                self.assertEqual((line["slug"], line["basis"]), (BEER, "table"))
 
-    def test_browser_lists_each_producing_factory_once_for_shared_product(self):
+    def test_each_producing_factory_is_listed_once_for_a_shared_product(self):
         drink = "drink"
         self.recipes[drink] = {
             "slug": drink, "item": "Drink", "out": 10, "workstation": "bottledgoods",
@@ -190,17 +168,14 @@ class RecipeIdentityTests(unittest.TestCase):
         }
         groups = [[RID, RID, "producer", "producer", "producer", "consumer"], [RID]]
         choices = {"producer": BEER, "consumer": drink}
-        browser = self.browser_view(groups, choices)
         self.history.named("company", choices)
-        desktop = self.build(groups)
-        for result in (desktop, browser):
-            site = result["sites"][0]
-            self.assertEqual(sum(l["machines"] for l in site["lines"] if l["slug"] == BEER), 5)
-            need = next(n for n in site["needs"] if n["slug"] == BEER)
-            self.assertEqual(need["madeAt"], [0, 1])
-            self.assertEqual(need["perDay"], 120)
-            water = next(n for n in site["needs"] if n["slug"] == WATER)
-            self.assertEqual((water["perDay"], water["depotNeed"]), (1200, 10080))
+        site = self.build(groups)["sites"][0]
+        self.assertEqual(sum(l["machines"] for l in site["lines"] if l["slug"] == BEER), 5)
+        need = next(n for n in site["needs"] if n["slug"] == BEER)
+        self.assertEqual(need["madeAt"], [0, 1])
+        self.assertEqual(need["perDay"], 120)
+        water = next(n for n in site["needs"] if n["slug"] == WATER)
+        self.assertEqual((water["perDay"], water["depotNeed"]), (1200, 10080))
 
     def test_bundled_catalogue_covers_the_pinned_identity_table(self):
         root = Path(__file__).resolve().parents[1]

@@ -648,6 +648,11 @@ const importRow = (over = {}) => Object.assign({
 }, over);
 const deadRow = {s: 0, item: 'Napkins', slug: 'napkins', stock: 5000, perWeek: 0, weeks: null,
                  target: 0, price: 1, value: 5000, dead: true, level: 'warn'};
+/* Python's verdict on a line (supplyFact), which the depot and factory blocks
+   read: a depot line's use is a week, an input's a day. */
+const LVL = {covered: 'ok', made: 'ok', new: 'info', tight: 'warn', stalled: 'warn', idle: 'warn'};
+const sf = (st, why = null, extra = {}) => ({st, why, lvl: LVL[st] || 'critical', role: 'depot', cad: 'weekly',
+  use: 0, need: 0, have: 0, setTo: null, parts: {lines: 0, sites: 0, route: 0}, ...extra});
 // Tokens are a one-to-one encoding of the item's own label, so the test spells
 // them the way the panel does rather than hand-rolling a second rule.
 const tok = s => 'sp-' + s.replace(/[^A-Za-z0-9-]/g, c => '_' + c.codePointAt(0).toString(16) + '_');
@@ -678,6 +683,7 @@ test('a depot draws its week of trucks, and no hour grid', async () => {
       idle: [deadRow],
       shops: [{s: 1, item: 'Soda', slug: 'soda', sold: 900, peakSold: 1000, peakDay: 'Friday',
                target: 1000, pressure: 100, stock: 40, from: 0, level: 'ok'}],
+      facts: {0: {soda: sf('short', 'shortfall'), cheapgift: sf('paused', 'order'), napkins: sf('idle', 'notMoving')}},
     },
   });
   try {
@@ -712,7 +718,7 @@ test('a paused import whose delivery day has gone by is dry all week', async () 
       shop: DEPOT,
       supply: {day: 29, imports: [importRow({cover: 2, coverFit: 'short', runsOut: 'Monday',
         catchUp: 0, paused: true, weekly: 0, lastWeek: 2200, arrives, coverageUntil: arrives,
-        reason: 'paused'})]},
+        reason: 'paused'})], facts: {0: {soda: sf('paused', 'order')}}},
     });
     try {
       const [row] = await railOf(page);
@@ -732,7 +738,7 @@ test('the truck the cover is measured against is the one the rail draws', async 
   const page = await site({
     shop: DEPOT,
     supply: {day: 29, imports: [importRow({arrives: 31, coverageUntil: 34, cover: 3,
-      coverFit: 'short', runsOut: 'Thursday', catchUp: 1200})]},
+      coverFit: 'short', runsOut: 'Thursday', catchUp: 1200})], facts: {0: {soda: sf('short', 'shortfall')}}},
   });
   try {
     const [row] = await railOf(page);
@@ -752,7 +758,7 @@ test('a delivery beyond the seven days still leaves the week dry', async () => {
   // dry before a delivery the rail has no room to draw.
   const far = await site({shop: DEPOT, supply: {day: 29, imports: [importRow({
     cover: 2, coverFit: 'short', runsOut: 'Monday', catchUp: 900,
-    arrives: 40, coverageUntil: 40})]}});
+    arrives: 40, coverageUntil: 40})], facts: {0: {soda: sf('short', 'shortfall')}}}});
   try {
     const [row] = await railOf(far);
     assert.deepEqual(row.cells, ['sp-c', 'sp-c', 'sp-d', 'sp-d', 'sp-d', 'sp-d', 'sp-d']);
@@ -765,7 +771,9 @@ test('a delivery beyond the seven days still leaves the week dry', async () => {
     shop: {...DEPOT, lines: [
       {item: 'Burger', slug: 'burger', units: 800, rate: 0, price: 1, revenue: 0, soldPerDay: 0}]},
     supply: {day: 29, shops: [{s: 1, item: 'Burger', slug: 'burger', sold: 400, peakSold: 400,
-      peakDay: 'Friday', target: 500, pressure: 80, stock: 10, from: 0, level: 'ok'}]},
+      peakDay: 'Friday', target: 500, pressure: 80, stock: 10, from: 0, level: 'ok'}],
+      // Its use a day is the fact's week: 2,800 over seven days.
+      facts: {0: {burger: sf('covered', null, {use: 2800})}}},
   });
   try {
     const [row] = await railOf(own);
@@ -805,6 +813,81 @@ test('a depot finding pulses the line it is about', async () => {
   } finally { await page.close(); }
 });
 
+test('a depot and a factory say each line\'s word as Checks does', async () => {
+  let page = await site({
+    shop: DEPOT,
+    supply: {day: 29, imports: [importRow()], idle: [deadRow],
+             facts: {0: {soda: sf('short', 'shortfall'), napkins: sf('idle', 'notMoving')}}},
+  });
+  try {
+    const words = await page.$$eval('#sp-stock tbody tr', rs => rs.map(r => r.cells[0].textContent.replace(/\s+/g, ' ').trim()));
+    assert.deepEqual(words, ['Soda short', 'Napkins idle']);
+  } finally { await page.close(); }
+  page = await site({shop: FACTORY, supply: {factories: factories(), facts: FACTORY_FACTS}});
+  try {
+    const words = await page.$$eval('#sp-inputs tbody tr', rs => rs.map(r => r.cells[0].textContent.replace(/\s+/g, ' ').trim()));
+    assert.ok(words.includes('Ground Beef short') && words.includes('Grapes covered'), JSON.stringify(words));
+  } finally { await page.close(); }
+});
+
+test('a wholesale finding opens its shop on the shelf row, lit, and a depot on its Stock', async () => {
+  const shop = {lines: [
+    {item: 'Gift', slug: 'gift', units: 40, rate: 30, price: 30, revenue: 900, soldPerDay: 30},
+    {item: 'Energy Drink', slug: 'energy', units: 100, rate: 10, price: 5, revenue: 5, soldPerDay: 10}]};
+  const a = finding('w1', 'wholesale', 'HART. Gifts', KEY, 'critical', {slug: 'energy'});
+  const page = await site({shop, alerts: [a], supply: {facts: {0: {energy: sf('short', 'order',
+    {role: 'shelf', cad: 'weekly', use: 70, need: 81, have: 50, setTo: 90, wholesale: true})}}}});
+  try {
+    const landed = await page.evaluate(async a => {
+      showPage('today'); goToAlert(a);
+      await new Promise(r => setTimeout(r, 1200));
+      const row = [...document.querySelectorAll('#sp-shelves tbody tr')].find(tr => /Energy Drink/.test(tr.textContent));
+      const r = row ? row.getBoundingClientRect() : null;
+      return {row: !!row, lit: !!row && row.classList.contains('sp-hit'), inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
+    }, a);
+    // The drink sits in the folded odds and ends: the fold opens for it.
+    assert.deepEqual(landed, {row: true, lit: true, inView: true});
+    // And its row says the word Checks says.
+    const cell = await page.$$eval('#sp-shelves tbody tr', rs => rs.map(r => r.cells[0].firstChild.textContent.trim() + ' ' +
+      (r.cells[0].querySelector('.chip') || {}).textContent));
+    assert.ok(cell.includes('Energy Drink short'), JSON.stringify(cell));
+  } finally { await page.close(); }
+  const depot = await site({shop: DEPOT, alerts: [finding('w2', 'wholesale', 'HART. Depot', KEY, 'warn', {slug: 'soda'})],
+    supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('short', 'order', {wholesale: true})}}}});
+  try {
+    const hit = await depot.$$eval('#sitePanel .sp-find', rs => rs.map(r => [r.dataset.ev, r.dataset.hit]));
+    assert.deepEqual(hit, [['stock', slugTok('soda')]]);
+  } finally { await depot.close(); }
+});
+
+/* A link from Today to a line of a depot's Stock opens the depot there with
+   the line lit, even where the depot holds none of it yet. */
+for (const width of [1440, 390]) {
+  test(`a top-up or wholesale finding on a depot lands on its Stock row, lit (${width} px)`, async () => {
+    for (const [group, slug, fact] of [
+      ['topup', 'cups', sf('short', 'target', {cad: 'daily', use: 100, need: 115, have: 80, setTo: 120, from: 1})],
+      ['wholesale', 'syrup', sf('short', 'order', {use: 1680, need: 1680, have: 1000, setTo: 1680, wholesale: true, day: 'Monday'})],
+    ]) {
+      const a = finding(`l-${group}`, group, 'HART. Depot', KEY, 'critical', {slug});
+      const page = await site({shop: DEPOT, alerts: [a], viewport: {width, height: 900},
+        supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('covered'), [slug]: fact}}}});
+      try {
+        const landed = await page.evaluate(async a => {
+          showPage('today'); goToAlert(a);
+          await new Promise(r => setTimeout(r, 1200));
+          const lit = [...document.querySelectorAll('#sp-stock tbody tr.sp-hit')];
+          const r = lit[0] ? lit[0].getBoundingClientRect() : null;
+          return {lit: lit.map(tr => tr.cells[0].textContent.replace(/\s+/g, ' ').trim()),
+                  inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
+        }, a);
+        assert.equal(landed.lit.length, 1, `${group}: ${JSON.stringify(landed)}`);
+        assert.match(landed.lit[0], /short$/);
+        assert.ok(landed.inView, group);
+      } finally { await page.close(); }
+    }
+  });
+}
+
 const FACTORY_SITE = {
   s: 0, machines: 5, targets: {}, known: true, arrivals: {},
   lines: [
@@ -840,6 +923,11 @@ const FACTORY_SITE = {
 const factories = (over = {}) => Object.assign(
   {sites: [FACTORY_SITE], machines: 5, unnamed: 2, character: 'sp-fixture',
    aliases: {}, depots: {}, depotOther: {}}, over);
+/* The two inputs' facts: the beef's top-up is below a day's need, the grapes are fed. */
+const FACTORY_FACTS = {0: {
+  gb: sf('short', 'target', {role: 'input', cad: 'daily', use: 9600, need: 9600, have: 8000, setTo: 9600}),
+  grapes: sf('covered', null, {role: 'input', cad: 'daily', use: 2400, need: 2400, have: 2400}),
+}};
 const FACTORY = {...DEPOT, name: 'HART. Works', type: 'Factory',
                  lines: [{item: 'Burger', slug: 'burger', units: 2100, rate: 0, price: 1,
                           revenue: 0, soldPerDay: 0}]};
@@ -888,7 +976,7 @@ test('the picker is offered on the same terms the Supply page offers it', async 
 });
 
 test('hovering a factory input lights the lines that draw on it', async () => {
-  const page = await site({shop: FACTORY, supply: {day: 29, factories: factories()}});
+  const page = await site({shop: FACTORY, supply: {day: 29, factories: factories(), facts: FACTORY_FACTS}});
   try {
     const rows = await page.$$eval('#sp-inputs tbody tr', rs =>
       rs.map(r => [r.dataset.lines, r.dataset.el, r.dataset.read]));
@@ -1036,6 +1124,7 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
         lines: [{...FACTORY_SITE.lines[0], item: 'Tomato Soup', slug: 'soup'}],
         needs: [{...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
                  perDay: 4100, lines: ['Tomato Soup'], from: 0}]}]}),
+      facts: {0: {tomato: sf('covered', null, {use: 28700}), napkins: sf('idle', 'notMoving')}},
     },
   });
   try {
@@ -1212,7 +1301,9 @@ test('a depot expected to hold something and holding none draws that row', async
       lines: [FACTORY_SITE.lines[0]],
       needs: [{...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
                perDay: 4100, lines: ['Burger'], from: 0, target: 0,
-               status: 'noimport', level: 'warn'}]}]})},
+               status: 'noplan', level: 'warn'}]}]}),
+      // Nothing brings it to the depot: no standing import.
+      facts: {0: {tomato: sf('noplan')}}},
     alerts: [finding('n1', 'feed', 'HART. Depot', KEY, 'warn', {slug: 'tomato'})],
   });
   try {
@@ -1341,7 +1432,7 @@ test('the same goods on a shelf and on a line are told apart by their block', as
 });
 
 test('the zero-stock row says why there is none of it, for every verdict', async () => {
-  // Every status _factories() can put on a need. _supply() builds its import
+  // Every state the depot line's fact can be in. _supply() builds its import
   // rows from what a site holds, so a contract signed before its first
   // delivery has a live order and no row on the floor; goods made in one of
   // this company's factories are never imported at all; and a verdict that
@@ -1351,23 +1442,23 @@ test('the zero-stock row says why there is none of it, for every verdict', async
                          importWeekly: null, madeAt: [], ...over});
   const nothing = /<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day is drawn from here/;
   const cases = [
-    ['paused', {importWeekly: 0}, /paused/, /Import <b>paused<\/b>; <b>nothing<\/b> on hand/],
-    ['import', {importWeekly: 8000}, /8,000\s*\/wk/,
+    [sf('paused', 'order'), {importWeekly: 0}, /paused/, /Import <b>paused<\/b>; <b>nothing<\/b> on hand/],
+    [sf('short', 'order'), {importWeekly: 8000}, /8,000\s*\/wk/,
      /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
-    ['ok', {importWeekly: 8000}, /8,000\s*\/wk/,
+    [sf('covered'), {importWeekly: 8000}, /8,000\s*\/wk/,
      /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
-    ['made', {madeAt: [1]}, /made at HART\. Other/,
+    [sf('made'), {madeAt: [1]}, /made at HART\. Other/,
      /Made at <b>HART\. Other<\/b>; <b>nothing<\/b> on hand here/],
-    ['noimport', {}, /no import/, nothing],
-    ['unplanned', {}, /no import/, nothing],
+    [sf('noplan'), {}, /no import/, nothing],
     // Nothing these say is about the supply, so nothing is claimed about it.
-    ['target', {}, /^—$/, nothing],
-    ['waiting', {}, /^—$/, nothing],
-    ['staffing', {}, /^—$/, nothing],
-    ['dry', {}, /^—$/, nothing],
-    ['idle', {}, /^—$/, nothing],
+    [sf('short', 'target'), {}, /^—$/, nothing],
+    [sf('stalled', 'waiting'), {}, /^—$/, nothing],
+    [sf('covered', 'staffing'), {}, /^—$/, nothing],
+    [sf('short', 'dry'), {}, /^—$/, nothing],
+    [sf('stalled', 'notDrawn'), {}, /^—$/, nothing],
   ];
-  for (const [status, over, order, read] of cases) {
+  for (const [fact, over, order, read] of cases) {
+    const status = `${fact.st}/${fact.why}`;
     const page = await site({
       shop: {...DEPOT, lines: []},
       // The site that makes it has to be a factory of this company for the
@@ -1375,7 +1466,7 @@ test('the zero-stock row says why there is none of it, for every verdict', async
       peer: {name: 'HART. Other', status: 'support'},
       supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, s: 1, unnamed: [],
         lines: [{...FACTORY_SITE.lines[0], item: 'Bag of Tomatoes', slug: 'tomato'}],
-        needs: [need({status, ...over})]}]})},
+        needs: [need(over)]}]}), facts: {0: {tomato: fact}}},
     });
     try {
       const cells = await page.$$eval('#sp-stock tbody tr:first-child td',
@@ -1639,4 +1730,22 @@ test('a factory and a depot on a phone scroll their wide blocks inside themselve
       if (kind === 'factory') assert.equal(seen.lines, true, 'the lines scroll inside their own box');
     } finally { await page.close(); }
   }
+});
+
+test('a factory page carries the sizing switch, and its inputs follow it', async () => {
+  const facts = JSON.parse(JSON.stringify(FACTORY_FACTS));
+  // Under Demand the beef is sized for the shops at the end of the chain, one of them new.
+  facts[0].gb.dem = {st: 'covered', why: null, lvl: 'ok', use: 7000, need: 8050, setTo: null, ramp: [1]};
+  const page = await site({shop: FACTORY, supply: {day: 29, factories: factories(), facts}});
+  try {
+    assert.equal(await page.locator('#sp-inputs #spSizing a.on').textContent(), '24/7');
+    assert.match(await page.locator('#sp-inputs tbody tr').first().innerText(), /9,600/);
+    await page.evaluate(() => { renderAll = () => drawSite(); });
+    await page.locator('#spSizing').getByText('Demand').click();
+    const row = await page.locator('#sp-inputs tbody tr').first();
+    assert.match(await row.innerText(), /7,000\s*may still be ramping/);
+    assert.equal(await row.locator('.sp-up').count(), 0, 'nothing to raise under Demand');
+    assert.match(await page.locator('#sp-inputs .sz-ramp').getAttribute('data-tip'), /HART\. Other/);
+    assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_sizing')), 'dem');
+  } finally { await page.close(); }
 });

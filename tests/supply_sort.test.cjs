@@ -22,6 +22,8 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 
+const imp = use => ({st: 'covered', why: null, lvl: 'ok', role: 'depot', cad: 'weekly', use, need: use,
+  have: use, setTo: null, parts: {lines: 0, sites: use, route: 0}, imp: true});
 /* Three shops, two depots and a factory, all synthetic. The shop rows are
    listed in an order no column sorts them into, so every sort shows. */
 const fixture = () => ({
@@ -65,6 +67,13 @@ const fixture = () => ({
       depots: {3: {apple: {weekly: 800}, pear: {weekly: 2400}, fig: {weekly: 200}},
         4: {kiwi: {weekly: 300}, lime: {weekly: 900}, kale: {weekly: 100}}},
       depotOther: {3: {apple: 400, pear: 1000, fig: 50}, 4: {kiwi: 200, lime: 800}}},
+    /* Python's verdict on each depot line (supplyFact): Weekly imports lists
+       the ones marked `imp`, Used / week is the fact's use. Kale is used by
+       nothing. */
+    facts: {
+      3: {apple: imp(750), pear: imp(2400), fig: imp(190)},
+      4: {kiwi: imp(200), lime: imp(800), kale: imp(0)},
+    },
   },
 });
 
@@ -317,5 +326,26 @@ test('top-ups sort inside each factory, a route with no reading last', async () 
     assert.equal(await page.locator('#topupPlan thead th', {hasText: 'From'}).locator('button').count(), 0);
     // Imports were not touched by the top-up sort.
     assert.equal(await page.locator('#importPlan thead th[data-dir]').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('the Status column sorts worst first, by the facts Python sent', async () => {
+  const data = fixture();
+  const slugs = {Milk: 'milk', Bread: 'bread', Eggs: 'eggs', Apples: 'apples'};
+  data.supply.shops.forEach(r => { r.slug = slugs[r.item]; });
+  const shelf = (st, lvl) => ({st, why: null, lvl, role: 'shelf', cad: 'daily', use: 1, need: 1, have: 1, setTo: null,
+    parts: {lines: 0, sites: 7, route: 0}});
+  Object.assign(data.supply.facts, {
+    0: {milk: shelf('covered', 'ok'), apples: shelf('tight', 'warn')},
+    1: {bread: shelf('short', 'critical')},
+    2: {eggs: shelf('noplan', 'critical')},
+  });
+  const page = await board(data);
+  try{
+    await header(page, 'Status').click();
+    assert.deepEqual(await products(page), ['Eggs', 'Bread', 'Apples', 'Milk']);
+    assert.match(await page.locator('#stockMore').textContent(), /Sorted by Status, worst first/);
+    await header(page, 'Status').click();
+    assert.deepEqual(await products(page), ['Milk', 'Apples', 'Bread', 'Eggs']);
   } finally { await page.close(); }
 });
