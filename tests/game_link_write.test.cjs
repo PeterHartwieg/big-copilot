@@ -208,6 +208,18 @@ test('a dry run, the game\'s approval, an apply that rebuilds the board, and und
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo', 'uniforms', 'undo']);
 });
 
+test('the page behind an open write dialog holds still, and scrolls again once it closes', async (t) => {
+  const page = await linked(t, {approved: true});
+  const overflow = () => page.evaluate(() => getComputedStyle(document.documentElement).overflowY);
+  assert.equal(await overflow(), 'visible');
+  await button(page, GIFTS).click();
+  await ready(page);
+  assert.equal(await overflow(), 'hidden');
+  assert.equal(await dialog(page).locator('.gw-body').evaluate((b) => getComputedStyle(b).overscrollBehaviorY), 'contain');
+  await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).overflowY === 'visible');
+});
+
 test('an approval survives a reload, and goes only to the linked mod on this computer', async (t) => {
   const page = await linked(t);
   const sentTo = [];

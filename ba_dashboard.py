@@ -9638,7 +9638,11 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 @keyframes gw-tick{to{transform:rotate(360deg)}}
 
 /* body and foot */
-.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 1 auto}
+.gw-body{display:flex;flex-direction:column;gap:14px;padding:16px 20px 2px;overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}
+/* While any modal dialog is open the page behind it holds still. The page
+   scrolls on the viewport (neither html nor body sets overflow); the gutter
+   stays so the page does not shift sideways as its scrollbar goes. */
+html:has(dialog:modal){overflow:hidden;scrollbar-gutter:stable}
 .gw-lead{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2);text-wrap:pretty}
 .gw-lead b{color:var(--ink);font-weight:600}
 .gw-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
