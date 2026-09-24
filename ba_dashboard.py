@@ -9857,7 +9857,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
 /* a site's own page ---------------------------------------------------------
-   #site/<address> shows the site on its own: the rest of Results and the
+   #site/<slug> shows the site on its own: the rest of Results and the
    Company views step aside while it is up (drawSite() sets ss-siteup). A crumb
    row above the head leads back to the portfolio, or to wherever a finding was
    clicked, and carries the picker. A site's name elsewhere on the board is a
@@ -17115,7 +17115,7 @@ Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e
   showSub(id, a.dataset.id);
 }));
 /* What a hash opens: a page, an old page name that has become a view, one of
-   the wiki's own routes (#wiki/<page>), a site's own page (#site/<address>),
+   the wiki's own routes (#wiki/<page>), a site's own page (#site/<slug>),
    which lives on Company, or a section, which knows its page and view.
    Anything else is not ours. */
 function pageFromHash(h){
@@ -17156,12 +17156,16 @@ let siteFrom = null, siteFor, siteKeysFor = [], siteKeySet = new Set();
    included -- is percent-encoded, UTF-8, in lower-case hex. So
    ba:street_fifthavenue#57 is fifthavenue-57, and ba:street_a-1 is a%2d1. A
    key without that head (none today) starts "%x", which no encoding of a
-   headed key can. Two keys never share a slug, and no other site decides a
-   site's slug: it is the same in every save that holds the site. */
+   headed key can, since "x" is no hex digit; and the bare head, whose rest
+   would write nothing, is "%x" alone -- a key without the head is never
+   empty, so "%x" is never followed by nothing otherwise. An empty slug is no
+   site on either side. Two keys never share a slug, and no other site decides
+   a site's slug: it is the same in every save that holds the site. */
 const SITE_KEY_HEAD = "ba:street_";
 function siteSlugOf(key){
   if(typeof key !== "string" || key === "") return "";
   const head = key.startsWith(SITE_KEY_HEAD);
+  if(key === SITE_KEY_HEAD) return "%x";
   let out = head ? "" : "%x";
   try{
     for(const c of head ? key.slice(SITE_KEY_HEAD.length) : key){
@@ -17177,6 +17181,8 @@ function siteSlugOf(key){
    only another spelling, since the slug writes none. null if it is no slug. */
 function siteKeyOf(slug){
   let s = String(slug ?? "").toLowerCase(), key = SITE_KEY_HEAD;
+  if(s === "") return null;
+  if(s === "%x") return SITE_KEY_HEAD;
   if(s.startsWith("%x")){ key = ""; s = s.slice(2); }
   for(let i = 0; i < s.length;){
     const c = s[i];
@@ -17275,8 +17281,8 @@ function closeSite(chain = null){
   reveal("secPortfolio", "push",
     chain !== null && typeof CSS !== "undefined" ? `#portfolio tr.chain[data-chain="${CSS.escape(chain)}"]` : null);
 }
-/* Another spelling of the open site's address -- capitals, upper-case hex --
-   gives way to its own. Nothing else is ever rewritten. The entry is replaced,
+/* Any other spelling that reads back to the open site's key -- capitals,
+   upper-case hex -- gives way to its own. Nothing else is ever rewritten. The entry is replaced,
    never added, and keeps its state. */
 function siteSyncAddress(){
   if(!siteOpen || page !== "company") return;

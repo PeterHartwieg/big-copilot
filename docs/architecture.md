@@ -358,14 +358,18 @@ views step aside. The slug is the site's key and nothing else, by one reversible
 (between the street and the number) is written `-`, and every other character — a literal `-`
 and capitals included — is percent-encoded as UTF-8 in lower-case hex. So
 `ba:street_fifthavenue#57` is `fifthavenue-57` and `ba:street_a-1` is `a%2d1`; a key without
-that head would start `%x`, which no headed key's slug can. `siteKeyOf(slug)` is the exact
+that head would start `%x`, which no headed key's slug can (`x` is no hex digit), and the bare
+head `ba:street_`, whose rest writes nothing, is `%x` alone, which no unheaded key (never empty)
+can be. An empty slug is no site on either side. `siteKeyOf(slug)` is the exact
 inverse, read case-insensitively, and `siteBySlug()` is that plus a check that the save holds
 the key (`siteKeys()`: every business and home). Two keys never share a slug, and no other site
 decides a site's slug, so a site has the same address in every save that holds it. The hash is
 never passed through `decodeURIComponent()` first: the slug's escapes are the key's own. A
+browser may show such escapes decoded in its address bar, but real keys are letters, digits and
+one `#`, so they never produce one. A
 site with an empty key has no address and opens under `#company` as before.
-`siteSyncAddress()` only trades another spelling of the open site's own address (capitals,
-upper-case hex) for the canonical one, replacing the entry and keeping its state.
+`siteSyncAddress()` only trades any other spelling that reads back to the open site's key
+(capitals, upper-case hex) for the canonical one, replacing the entry and keeping its state.
 
 **`siteHref(key)`** is the one way to link to a site: it returns `#site/<slug>`, or `""` for
 a site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that

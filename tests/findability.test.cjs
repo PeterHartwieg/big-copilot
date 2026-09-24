@@ -427,7 +427,7 @@ test("the address bar only ever trades another spelling of the open site's own a
     assert.equal(await page.evaluate(() => location.hash), HERE);
     assert.equal(await page.evaluate(() => history.state && history.state.other), 'kept');
     // Another site's address, or one that opens nothing, is left as it is.
-    for (const to of [THERE, '#site/nowhere'])
+    for (const to of [THERE, '#site/nowhere-1'])
       assert.equal(await page.evaluate(to => { history.replaceState(history.state, '', to); drawSite(); return location.hash; }, to), to);
   } finally { await page.close(); }
 });

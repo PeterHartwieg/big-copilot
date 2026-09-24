@@ -325,7 +325,7 @@ test('a save arriving while the wiki is open leaves the reader where they are', 
   assert.equal(vm.runInContext('shellOnly', b.context), false);
 });
 
-/* --- a site's own page (#site/<address>) --------------------------------- */
+/* --- a site's own page (#site/<slug>) ------------------------------------ */
 
 const SHOP = 'ba:street_fifthavenue#57', DEPOT = 'ba:street_secondstreet#51', FLAT = 'ba:street_broadway#13';
 const sites = () => ({
@@ -394,13 +394,13 @@ test('Company in the nav, and a Company hash, are the portfolio again', () => {
 
 test('an address that answers nothing lands on the portfolio and says so', () => {
   const b = board({data: sites(), saved: {ba_dash_company: 'payroll'}});
-  b.context.location.hash = '#site/99-nowhere-street';
+  b.context.location.hash = '#site/nowhere-1';
   b.boot();
   assert.equal(b.page(), 'company');
   assert.equal(b.sub('company'), 'results');
   assert.equal(b.site(), null);
   assert.equal(b.context.location.hash, '#company');
-  b.context.history.pushState(null, '', '#site/also-nowhere');
+  b.context.history.pushState(null, '', '#site/nowhere-2');
   b.move(0);
   assert.equal(b.site(), null);
   assert.equal(b.context.location.hash, '#company', 'typed into an open board too');
@@ -413,6 +413,11 @@ test('a slug is the key alone, written readably', () => {
                              ['ba:street_24thstreet#6', '24thstreet-6']])
     assert.equal(b.context.siteSlugOf(key), slug);
   assert.equal(b.context.siteSlugOf(''), '', 'a site with no key has no address');
+  assert.equal(b.context.siteKeyOf(''), null, 'and an empty slug is no site');
+  // A site whose key is the bare head is still reachable, at "%x".
+  b.context.D.businesses = [...b.context.D.businesses, {key: 'ba:street_', name: 'Bare', address: '', status: 'retail'}];
+  assert.equal(b.context.siteHref('ba:street_'), '#site/%x');
+  assert.equal(b.context.siteBySlug('%X'), 'ba:street_');
 });
 
 test('two keys never share a slug, and every slug reads back to its key', () => {
@@ -425,10 +430,13 @@ test('two keys never share a slug, and every slug reads back to its key', () => 
   const slugs = keys.map(k => b.context.siteSlugOf(k));
   assert.equal(new Set(slugs).size, keys.length, `injective: ${slugs.join(' ')}`);
   slugs.forEach((slug, i) => {
-    assert.match(slug, /^[a-z0-9%-]*$/, `${keys[i]} writes only a-z, 0-9, "-" and escapes`);
+    assert.match(slug, /^[a-z0-9%-]+$/, `${keys[i]} writes a slug, of only a-z, 0-9, "-" and escapes`);
     assert.equal(b.context.siteKeyOf(slug), keys[i], `${keys[i]} reads back from ${slug}`);
   });
   assert.equal(b.context.siteSlugOf('ba:street_a-1'), 'a%2d1', 'a literal "-" is escaped, "#" is the dash');
+  assert.equal(b.context.siteSlugOf('ba:street_'), '%x', 'the bare head has a slug of its own');
+  assert.equal(b.context.siteKeyOf('%x'), 'ba:street_');
+  assert.equal(b.context.siteSlugOf('x'), '%xx', 'which no key without the head can take');
   assert.equal(b.context.siteKeyOf('a%zz'), null, 'a broken escape is no slug');
   assert.equal(b.context.siteKeyOf('a%ff'), null, 'nor is a byte that is no UTF-8');
 });
@@ -464,7 +472,7 @@ test('capitals are only another spelling of the same address', () => {
 test('a history entry keeps what others stored on it; a new one starts clean', () => {
   const b = board({data: sites()});
   b.states[0] = {wiki: 'scroll'};
-  b.context.location.hash = '#site/99-nowhere-street';
+  b.context.location.hash = '#site/nowhere-1';
   b.boot();
   assert.equal(b.context.location.hash, '#company');
   assert.deepEqual({...b.states[0]}, {wiki: 'scroll'}, 'replacing the entry keeps its state');
