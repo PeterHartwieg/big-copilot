@@ -1180,6 +1180,79 @@ test('imports: inside the lock window the dry run refuses, in the game\'s words'
   assert.equal(await refusal.locator('.gw-lock .cells i.x').count(), 12, 'the window drawn, Sunday 20:00 to Monday 08:00');
   assert.equal(await dialog(page).locator('.gw-line.dim').count(), 1, 'the line waits with it');
   assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isDisabled(), true);
+  // Asked again from here, once the game takes it.
+  await configure({day: 36, hour: 9});
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await ready(page);
+  assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isEnabled(), true);
+});
+
+/* --- a write or an undo the game could not take now: Try again ------------ */
+test('an undo the game cannot take now is offered again, and goes through', async (t) => {
+  const page = await linked(t, {approved: true});
+  await button(page, GIFTS).click();
+  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await configure({refuseWrite: 'cannot_write:other'});
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).getByText('The game takes no changes right now.', {exact: false}).waitFor();
+  await configure({refuseWrite: null});
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
+});
+
+test('imports: an undo refused while a BizMan screen is open is offered again, and goes through', async (t) => {
+  const page = await linked(t, {approved: true});
+  await supply(page);
+  await setTo(page, 'Paperbag', 4200);
+  await applyImports(page).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
+  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await configure({refuseWrite: 'refused:screen_open'});
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
+  assert.match(await dialog(page).locator('.gw-verdict').textContent(), /The game refuses this/);
+  await configure({refuseWrite: null});
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
+  assert.deepEqual((await applied()).map((w) => w.kind), ['imports', 'undo']);
+});
+
+test('imports: an apply refused while a BizMan screen is open, and a refused dry run, are offered again', async (t) => {
+  const page = await linked(t, {approved: true});
+  await supply(page);
+  await setTo(page, 'Paperbag', 4200);
+  await applyImports(page).click();
+  await ready(page);
+  await configure({refuseWrite: 'refused:screen_open'});
+  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
+  await dialog(page).getByText('Close that BizMan screen in the game, then try again.').waitFor();
+  await configure({refuseWrite: null});
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
+  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  assert.deepEqual((await applied()).map((w) => w.kind), ['imports']);
+});
+
+test('schedule: in a run, an undo refused while a BizMan screen is open is offered again beside the way on', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters()});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText('HART. Corner: 1 entry set in place of 1.').waitFor();
+  await configure({refuseWrite: 'refused:screen_open'});
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Undo'}).click();
+  await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
+  assert.match(await dialog(page).locator('.gw-verdict').textContent(), /The game refuses this/);
+  await dialog(page).getByRole('button', {name: 'Next shop · 2 of 2'}).waitFor();
+  await configure({refuseWrite: null});
+  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByText('Undone: the schedule at HART. Corner is back as it was.').waitFor();
+  assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
 });
 
 test('imports: the ranked list is the game\'s order, read only, and a write sends no order', async (t) => {

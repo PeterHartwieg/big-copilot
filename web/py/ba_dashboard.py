@@ -18606,7 +18606,9 @@ function gwProblem(res){
   switch(res.error){
     case "changed": return {wire: "moved", say: "<b>The game moved on</b>", text: "The game has moved on since this board was read. Nothing was changed.",
       drift: true, sub: "Something was hired, set or sold in the game meanwhile. Refresh, and the board plans again from what the game holds.", refresh: true};
-    case "refused": return {wire: "no", say: "<b>The game refuses this</b>", text: "The game refused this. Nothing was changed."};
+    /* Most refusals are fixed in the game (a BizMan screen closed, a locker
+       placed): the same request can be tried again from here. */
+    case "refused": return {wire: "no", say: "<b>The game refuses this</b>", text: "The game refused this. Nothing was changed.", retry: true};
     case "cannot_write": { const [text, fix, icon] = cannot(body.reason);
       return {wire: "busy", say: "<b>Not now</b>", box: [icon, "dim"], text: `<b>${text}.</b> Nothing was changed. ${fix}`, retry: true}; }
     case "busy": return {wire: "busy", say: "<b>The game is busy</b>", text: "The game stayed busy saving its state. Nothing was changed.",
@@ -18934,8 +18936,10 @@ function gwConfirm(spec){
       /* Refused, nothing is left to cancel: the dialog closes. */
       buttons: [...(answer.ok || spec.next ? left : [["Close", () => dlg.close(), {kind: "ghost"}]]),
         /* The game moved on since the board was read: the way on is to read it again. */
-        gwMovedOn(answer) ? ["Refresh the board", () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]
-          : [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]]});
+        ...(gwMovedOn(answer) ? [["Refresh the board", () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
+          /* Refused: fixed in the game, the game is asked again from here. */
+          : [...(answer.ok ? [] : [["Try again", () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]]),
+             [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]])]});
     allowed = false;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
   };
