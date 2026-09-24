@@ -466,6 +466,8 @@ the two differ.
   (fixed: re-asks now update in place). After an undo, uniforms and schedule should be re-doable
   (fixed: see the open work below).
 
+**Update, 24 September 2026 afternoon.** Items 1 to 3 below are done. (1) The undo gate was simplified by Peter's call: "Set/Apply/Write again" opens on the next board built (or a read-back that ends well) after the undo, from the same source and company; the mod's `expect` compare-and-set catches a stale board. Review-green after rounds 8 to 12 (9c622e3). A character binding on writes was tried and dropped: no two buildings share an address. The mod's stamps now never repeat within a city session (`SaveService.cs`, "last + 1"), so the mod needs a Mac rebuild. (2) The narrow supply fix shipped as PR #80 and is deployed; main is merged in (de04baa). (3) Build 3682: all seven reflected private members and the public API the mod calls are unchanged; the README now says 3682. Next: item 4 (Mac build, Peter's in-game test), then item 5.
+
 **Open work, in order**
 
 1. **Undo gate** (commit b35d546). After an undo the dialog shows "Undone in the game" and a disabled
