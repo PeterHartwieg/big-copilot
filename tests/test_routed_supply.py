@@ -290,7 +290,8 @@ class RoutedSupplyTests(unittest.TestCase):
         texts = [a["text"] for a in result["lines"] + result["minor"]["rows"]]
         [text] = [t for t in texts if "Frozen Food" in t]
         self.assertIn("a route brings the week's draw (3,600/day)", text)
-        self.assertIn("before its next round", text)
+        # The headline is cut at the first comma: when it runs dry, and why.
+        self.assertRegex(text, r"^Frozen Food[^,;]* runs dry [^,;]+, before the route's next round; ")
         self.assertNotIn("import", text)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):

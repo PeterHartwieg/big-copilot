@@ -8964,8 +8964,8 @@ def _alerts(
                 "critical",
                 site,
                 "shortfall",
-                f"{row['item']} runs dry {when} although a route brings the week's draw "
-                f"({row['routed']:,}/day); a busy day outruns the shelf before its next round"
+                f"{row['item']} runs dry {when}, before the route's next round; a route brings "
+                f"the week's draw ({row['routed']:,}/day) but a busy day outruns the shelf"
                 + ("; the import is paused" if row["paused"] else ""),
                 row["cover"],
                 row["item"],
@@ -9877,14 +9877,6 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .kpi:hover::before{opacity:1}
 .kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .kpi .v{font-family:"IBM Plex Mono",monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.05}
-/* Today's figures are sized by their own length (--n, set by drawKpis()):
-   a figure keeps its 30 px until it would fill more than about 95% of its
-   tile, so only a long one ("$123,456,789", "-$1,234,567") shrinks. IBM Plex
-   Mono 500 advances 0.6em a character, 0.58em at this letter-spacing, and
-   0.58 / 0.95 is 0.61. A browser without container queries keeps the plain
-   30 px written first. */
-#kpis .kpi{container-type:inline-size}
-#kpis .kpi .v{font-size:30px;font-size:min(30px,calc(100cqi / (var(--n,10) * .61)))}
 .kpi .row{display:flex;align-items:center;gap:10px;min-height:20px}
 .chip{
   display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
@@ -11172,7 +11164,8 @@ body:has(#changelogDialog[open]){overflow:hidden}
 /* Four tiles side by side need about 975 px for a seven-figure amount at the
    full 30 px ($3,667,464 cash on a real save) and about 1,040 px for eight;
    narrower, they pair up two by two, and a longer figure still shrinks to
-   its tile (#kpis .kpi .v above). The phone's own tile rules follow. */
+   its tile (the @supports block after the phone's). The phone's own tile
+   rules follow. */
 @media (max-width:1040px){
   #kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   #kpis .kpi{min-width:0}
@@ -11184,7 +11177,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 @media (max-width:640px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:24px}
   .kpi{padding:14px 14px 12px;min-width:0}
-  #kpis .kpi .v{font-size:clamp(17px,5.4vw,24px);font-size:min(24px,calc(100cqi / (var(--n,10) * .61)))}
+  #kpis .kpi .v{font-size:clamp(17px,5.4vw,24px)}
   .kpi .row{flex-wrap:wrap;gap:4px 8px}
   .moves{grid-template-columns:minmax(0,1fr);gap:12px}
   #alertSection .find{grid-template-columns:18px minmax(0,1fr) auto 20px;gap:4px 10px}
@@ -11214,6 +11207,22 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .cell .rv2 i{width:2px;height:2px}
   .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
   #planBody > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
+}
+/* Today's figures are sized by their own length (--n, set by drawKpis()):
+   a figure keeps its 30 px (24 on a phone) until it would fill more than
+   about 95% of its tile, so only a long one ("$123,456,789", "-$1,234,567")
+   shrinks. IBM Plex Mono 500 advances 0.6em a character, 0.58em at this
+   letter-spacing, and 0.58 / 0.95 is 0.61. Only where container units exist:
+   a declaration with var() is accepted when it is read, so written beside a
+   fallback it would win and, unresolvable, leave the figure at the inherited
+   size. Elsewhere the plain sizes above stand. After the phone block, which
+   it overrides. */
+@supports (width:1cqi){
+  #kpis .kpi{container-type:inline-size}
+  #kpis .kpi .v{font-size:min(30px,calc(100cqi / (var(--n,10) * .61)))}
+  @media (max-width:640px){
+    #kpis .kpi .v{font-size:min(24px,calc(100cqi / (var(--n,10) * .61)))}
+  }
 }
 /* A site's page on a phone. The crumb row sticks under the masthead (its
    height is measured into --ss-mast) and keeps only the way back and the
@@ -18441,11 +18450,11 @@ const ALERT_GROUPS = [
   {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
   {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
-  {id:"paused",       label:"Import paused",          note:"An import switched off with the depot still drawing", on:true},
+  {id:"paused",       label:"Import paused",          note:"An import switched off, not covered by a route, with the depot still drawing", on:true},
   {id:"feed",         label:"Factory inputs",         note:"An input arriving short of what the machines need", on:true},
   {id:"unnamed",      label:"Unnamed factory line",   note:"A machine running a recipe the board cannot name", on:true},
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
-  {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import lands", on:true},
+  {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import or route round", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
   {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},

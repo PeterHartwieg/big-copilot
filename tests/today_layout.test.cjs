@@ -339,3 +339,32 @@ test('a figure shrinks only when it is long: 30 px on a desk, 24 px at most on a
     } finally { await page.close(); }
   }
 });
+
+test('the length-based sizes sit inside @supports (width:1cqi); the plain sizes stand outside it', async () => {
+  const page = await today(1440);
+  try {
+    const found = await page.evaluate(() => {
+      const out = {inside: [], outside: []};
+      const tile = /(^|,\s*)(#kpis )?\.kpi \.v$|^#kpis \.kpi$/;
+      const walk = (rules, supports) => [...rules].forEach(r => {
+        if (r instanceof CSSSupportsRule) return walk(r.cssRules, r.conditionText);
+        if (r instanceof CSSMediaRule) return walk(r.cssRules, supports);
+        if (!(r instanceof CSSStyleRule) || !tile.test(r.selectorText)) return;
+        const text = `${r.selectorText} { ${r.style.cssText} }`;
+        (supports ? out.inside : out.outside).push(supports ? `${supports} ${text}` : text);
+      });
+      [...document.styleSheets].forEach(sheet => { try { walk(sheet.cssRules, null); } catch (e) {} });
+      return out;
+    });
+    const list = xs => xs.join(' | ');
+    // Every rule that reads the tile's width is behind the check...
+    assert.ok(found.inside.length >= 3, list(found.inside));
+    assert.ok(found.inside.every(t => /width: ?1cqi/.test(t)), list(found.inside));
+    assert.ok(found.inside.some(t => /min\(30px/.test(t)) && found.inside.some(t => /min\(24px/.test(t)), list(found.inside));
+    assert.ok(found.inside.some(t => /container-type: inline-size/.test(t)), list(found.inside));
+    // ...and nothing outside it does, where the plain sizes are.
+    assert.ok(found.outside.every(t => !/cqi|var\(--n|container-type/.test(t)), list(found.outside));
+    assert.ok(found.outside.some(t => /^\.kpi \.v .*font-size: 30px/.test(t)), list(found.outside));
+    assert.ok(found.outside.some(t => /^#kpis \.kpi \.v .*clamp\(17px/.test(t)), list(found.outside));
+  } finally { await page.close(); }
+});
