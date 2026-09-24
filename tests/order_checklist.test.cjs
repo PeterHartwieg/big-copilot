@@ -377,6 +377,16 @@ test('a routed line is sized on the measured draw, not on the log net of the rou
   assert.equal(weekOf(18000, 0, {weekly:5000, routed:1000, covered:false, drawWeek:15000}).need, 17000);
 });
 
+test('a routed line feeding shops and a starved factory keeps what the shops take', () => {
+  // The factory eats 14,000 a week at full rate but draws 7,000; the shops
+  // take 11,200, and a route brings 3,000 of it, so the log counts 8,200 as
+  // leaving for them. The draw, 18,200, is held down by the factory: the
+  // week is the full-rate factory plus the shops, 22,200, and the import
+  // answers for 19,200 of it, not the draw's 15,200.
+  const w = weekOf(14000, 8200, {weekly:5000, routed:3000, covered:false, drawWeek:18200});
+  assert.deepEqual([w.gross, w.need], [22200, 19200]);
+});
+
 test('a depot line no contract covers asks for no import when a route brings its draw', () => {
   // _depot_routes: the route figures alone, with no weekly amount.
   const r = routedRow(1680, 0, {routed:1680, covered:true, drawWeek:1680});

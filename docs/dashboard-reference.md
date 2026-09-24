@@ -1141,7 +1141,9 @@ Two tables, one per number a logistics manager is set with.
   raise or resume, unless the factories' full-rate week is more than the depot's measured
   draw (a starved factory), when the import still answers for what the route leaves. The
   same holds for a depot line with no import contract at all that a route feeds: it is not
-  asked for an import the route already brings. For a plain order the
+  asked for an import the route already brings. The table suggests imports only where an
+  import contract exists or a factory line needs the material; a depot line that only
+  shops draw, with no contract, is not in it. For a plain order the
   suggestion is the import's week rounded up to the hundred. For Smart Delivery it names
   one contract, the one whose level holds: the last that still brings something when the
   game's delivery pass runs into an empty depot. A plain amount delivered before that

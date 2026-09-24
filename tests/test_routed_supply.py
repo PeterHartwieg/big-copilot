@@ -389,16 +389,19 @@ class RoutedFactoryViewTests(unittest.TestCase):
     """A factory drawing water from a depot with a 1,000 a week import; its one
     machine eats 240 a day, 1,680 a week."""
 
-    def need(self, routed=None):
+    def need(self, routed=None, route_only=None, target=100):
+        """The factory's water row; `route_only` feeds the depot by route
+        with no import of water there at all."""
         depot = "depot#1"
         flow = {
             "index": {site_key(("factory", 0)): 0, depot: 1},
             "held": {}, "edges": {},
-            "targets": {(site_key(("factory", 0)), WATER): (100, depot)},
-            "imports": {(depot, WATER): {"weekly": 1000}},
+            "targets": {(site_key(("factory", 0)), WATER): (target, depot)},
+            "imports": {} if route_only else {(depot, WATER): {"weekly": 1000}},
             "shipped": lambda *args: None, "received": lambda *args: None,
             "byDay": lambda *args: {}, "roundDays": lambda *args: [],
             "routed": {(depot, WATER): routed} if routed else {},
+            "routeOnly": {(depot, WATER): route_only} if route_only else {},
         }
         recipes = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
                           "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
@@ -423,6 +426,20 @@ class RoutedFactoryViewTests(unittest.TestCase):
     def test_a_covering_route_leaves_the_import_nothing(self):
         row = self.need((1680, True, 1680))
         self.assertEqual((row["importFit"], row["importCovered"], row["importNeed"]), ("ok", True, 0))
+
+    def test_a_depot_fed_by_route_alone_is_no_missing_import(self):
+        """Import Hub imports water and routes it daily to the depot, which
+        imports none: the factory's input is not "no import" when the route
+        brings the depot's week, and the page gets the route to agree."""
+        self.assertEqual(self.need(route_only=(0, False, 0), target=300)["status"], "noimport")
+        row = self.need(route_only=(1680, True, 1680), target=300)
+        self.assertEqual((row["status"], row["importCovered"], row["importRouted"],
+                          row["importDrawWeek"], row["importNeed"]), ("ok", True, 1680, 1680, 0))
+        # Half of it by route leaves the other half with no import.
+        row = self.need(route_only=(840, False, 1680), target=300)
+        self.assertEqual((row["status"], row["importNeed"]), ("noimport", 840))
+        # A route covering what a starved factory draws does not cover its need.
+        self.assertEqual(self.need(route_only=(200, True, 200), target=300)["status"], "noimport")
 
     def test_a_route_covering_a_starved_draw_does_not_cover_the_need(self):
         """The depot draws only 200 a week because the factory is starved; a

@@ -4288,9 +4288,11 @@ def _factories(
             # (the shops' part of the measured draw) comes off the factories'.
             # Covered is the route against the depot's measured draw; a
             # starved factory draws less than it needs, so it holds only where
-            # the need is no more than that draw.
-            routed_week, covered, draw_week = flow.get("routed", {}).get(
-                (source, row["slug"]), (0, False, 0))
+            # the need is no more than that draw. A depot with no import of
+            # the item may still be fed by a route (depot to depot, say):
+            # then the route is all there is, read the same way.
+            routes = flow.get("routed", {}) if supply else flow.get("routeOnly", {})
+            routed_week, covered, draw_week = routes.get((source, row["slug"]), (0, False, 0))
             # Worked on the rounded figures the page gets, so feedVerdict,
             # which redoes it, agrees.
             routed_week, draw_week = round(routed_week), round(draw_week)
@@ -13178,7 +13180,7 @@ function feedVerdict(n){
     status = "import"; level = "critical"; n.raiseImport = importRaise(n, need); }
   else if(n.importWeekly !== null && n.importFit === "tight"){ status = "import"; level = "warn"; }
   else if(n.importWeekly === null && n.madeAt.length){ status = "made"; level = "ok"; }
-  else if(n.importWeekly === null && n.depotStock < n.depotNeed){ status = "noimport"; level = "warn"; }
+  else if(n.importWeekly === null && n.depotStock < need){ status = "noimport"; level = "warn"; }
   else { status = "ok"; level = "ok"; }
   n.status = status; n.level = level;
 }
@@ -13204,6 +13206,11 @@ const importLine = (view, s, slug) => {
   const line = (view.depots[s] || {})[slug];
   return line && !line.zeroOnly ? line : undefined;
 };
+/* What routes bring a depot line, as _factories() reads it: the import line's
+   route figures, or, where the depot imports none of it, a route's alone
+   (depotRoutes: depot to depot, say). */
+const routeFeed = (view, s, slug) => s === null || s === undefined ? null
+  : importLine(view, s, slug) || ((view.depotRoutes || {})[s] || {})[slug] || null;
 /* Recompute the split after recipe choices change total input consumption. */
 function feedRoute(site, n, view, held){
   const t = site.targets?.[n.slug], target = t ? t[0] : 0, source = t ? t[1] : null;
@@ -13230,9 +13237,10 @@ function feedRoute(site, n, view, held){
   n.importLevelName = supply && supply.smart ? supply.levelName ?? supply.levelImporter ?? null : null;
   n.importPass = supply && supply.smart ? supply.pass || [] : [];
   n.importLevelAt = supply && supply.smart ? supply.levelAt ?? null : null;
-  n.importRouted = supply ? supply.routed || 0 : 0;
-  n.importDrawWeek = supply ? supply.drawWeek || 0 : 0;
-  n.importCovered = !!(supply && supply.covered);
+  const fed = routeFeed(view, n.importSite, n.slug);
+  n.importRouted = fed ? fed.routed || 0 : 0;
+  n.importDrawWeek = fed ? fed.drawWeek || 0 : 0;
+  n.importCovered = !!(fed && fed.covered);
   n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly);
 }
 
@@ -13280,9 +13288,10 @@ function factoryView(){
             row.importTarget = d && d.smart ? d.target : null;
             row.importPlainAfter = d && d.smart ? d.plainAfter || 0 : 0;
             row.importPlainBefore = d && d.smart ? d.plainBefore || 0 : 0;
-            row.importRouted = d ? d.routed || 0 : 0;
-            row.importDrawWeek = d ? d.drawWeek || 0 : 0;
-            row.importCovered = !!(d && d.covered);
+            const fed = routeFeed(view, importSite, islug);
+            row.importRouted = fed ? fed.routed || 0 : 0;
+            row.importDrawWeek = fed ? fed.drawWeek || 0 : 0;
+            row.importCovered = !!(fed && fed.covered);
             row.importPaused = !!(d && !d.weekly && d.pausedWeekly);
           }
           s.needs.push(row);
@@ -17031,8 +17040,10 @@ function importSetting(total, contract, edit){
    `contract` carries what _supply() measured on such a line: `drawWeek`, the
    week's gross draw, `routed`, what routes brought a week, and `covered`, a
    route bringing that draw. A routed line's week is that draw, never less
-   than the factories eat at full rate, and the route's week comes off it; a
-   line no route feeds is sized as it always was. A covered line asks
+   than the factories eat at full rate plus the net figure (a starved factory
+   holds the draw down, and the shops' share must not go with it), and the
+   route's week comes off it; a line no route feeds is sized as it always
+   was. A covered line asks
    nothing of the import, which is a backup, provided the factories'
    full-rate week is no more than the draw: a starved factory draws less than
    it needs, and a route covering what it draws does not cover what it needs.
@@ -17041,7 +17052,7 @@ function importSetting(total, contract, edit){
 function importWeek(factoryWeek, otherWeek, contract){
   const routed = contract.routed || 0, draw = contract.drawWeek || 0;
   const covered = !!contract.covered && factoryWeek <= draw * 1.05;
-  const gross = routed && draw ? Math.max(draw, factoryWeek) : factoryWeek + otherWeek;
+  const gross = routed && draw ? Math.max(draw, factoryWeek + otherWeek) : factoryWeek + otherWeek;
   return {routed, covered, gross, need: covered ? 0 : Math.max(0, gross - (draw ? routed : 0))};
 }
 

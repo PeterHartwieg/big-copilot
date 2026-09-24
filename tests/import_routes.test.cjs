@@ -264,13 +264,23 @@ test('a depot line with no import that a route feeds is not asked to import', as
       const draw = drawOrderChecklist;
       drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
       drawLogistics();
-      return {actions: window.fixtureActions, imports: document.getElementById('importPlan').textContent};
+      // The factory view's verdict on the same input, as the page redoes it.
+      const view = JSON.parse(JSON.stringify(D.supply.factories));
+      const site = view.sites[0], n = site.needs[0];
+      const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
+      feedRoute(site, n, view, held);
+      Object.assign(n, {depotNeed: n.perWeek, madeAt: [], waitingOn: []});
+      feedVerdict(n);
+      return {actions: window.fixtureActions, imports: document.getElementById('importPlan').textContent,
+              status: n.status};
     }, [data, routes]);
     const slug = data.supply.factories.sites[0].needs[0].slug;
     const without = await run({});
     assert.equal(without.actions.filter(a => a.kind === 'Weekly imports').length, 1, 'no route: an import to add');
+    assert.equal(without.status, 'noimport');
     const fed = await run({1: {[slug]: {routed: 1680, covered: true, drawWeek: 1680}}});
     assert.equal(fed.actions.filter(a => a.kind === 'Weekly imports').length, 0);
     assert.match(fed.imports, /route brings it/);
+    assert.equal(fed.status, 'ok');
   } finally { await page.close(); }
 });
