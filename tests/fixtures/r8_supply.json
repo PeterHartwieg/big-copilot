@@ -1,0 +1,1658 @@
+{
+ "meta": {
+  "character": "r8-fixture",
+  "save": "R8 fixture",
+  "day": 30,
+  "hour": 12,
+  "minute": 0,
+  "locale": true,
+  "build": 3680,
+  "verifiedBuild": 3680
+ },
+ "businesses": [
+  {
+   "key": "hub#1",
+   "name": "[IH] Import Hub",
+   "code": "IH",
+   "neighbourhood": "",
+   "type": "Warehouse",
+   "typeSlug": "warehouse",
+   "status": "support",
+   "address": "1 Pier Street",
+   "lines": [
+    {
+     "slug": "flour",
+     "item": "Flour",
+     "units": 6000,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "sugar",
+     "item": "Sugar",
+     "units": 800,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "coffee",
+     "item": "Coffee",
+     "units": 900,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "bags",
+     "item": "Paper Bag",
+     "units": 9000,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "butter",
+     "item": "Butter",
+     "units": 0,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "soda",
+     "item": "Soda Can",
+     "units": 3000,
+     "rate": 0,
+     "price": 0
+    }
+   ]
+  },
+  {
+   "key": "factory#2",
+   "name": "[FB] Bakery Factory",
+   "code": "FB",
+   "neighbourhood": "",
+   "type": "Factory",
+   "typeSlug": "factory",
+   "status": "support",
+   "address": "2 Mill Street",
+   "lines": [
+    {
+     "slug": "flour",
+     "item": "Flour",
+     "units": 900,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "sugar",
+     "item": "Sugar",
+     "units": 450,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "cake",
+     "item": "Cake",
+     "units": 400,
+     "rate": 0,
+     "price": 0
+    },
+    {
+     "slug": "bread",
+     "item": "Bread",
+     "units": 300,
+     "rate": 0,
+     "price": 0
+    }
+   ]
+  },
+  {
+   "key": "shop#3",
+   "name": "[DT] Cake Shop Downtown",
+   "code": "DT",
+   "neighbourhood": "",
+   "type": "Bakery",
+   "typeSlug": "bakery",
+   "status": "retail",
+   "address": "3 Main Street",
+   "lines": [
+    {
+     "slug": "cake",
+     "item": "Cake",
+     "units": 120,
+     "rate": 200,
+     "price": 9
+    },
+    {
+     "slug": "coffee",
+     "item": "Coffee",
+     "units": 40,
+     "rate": 60,
+     "price": 4
+    },
+    {
+     "slug": "bags",
+     "item": "Paper Bag",
+     "units": 90,
+     "rate": 90,
+     "price": 0
+    }
+   ],
+   "opened": 10
+  },
+  {
+   "key": "shop#4",
+   "name": "[MH] Cake Shop Midtown",
+   "code": "MH",
+   "neighbourhood": "",
+   "type": "Bakery",
+   "typeSlug": "bakery",
+   "status": "retail",
+   "address": "4 Park Avenue",
+   "lines": [
+    {
+     "slug": "cake",
+     "item": "Cake",
+     "units": 60,
+     "rate": 30,
+     "price": 9
+    }
+   ],
+   "opened": 26
+  },
+  {
+   "key": "gym#5",
+   "name": "[GD] Garden Gym",
+   "code": "GD",
+   "neighbourhood": "",
+   "type": "Gym",
+   "typeSlug": "gym",
+   "status": "retail",
+   "address": "5 Garden Lane",
+   "lines": [
+    {
+     "slug": "soda",
+     "item": "Soda Can",
+     "units": 30,
+     "rate": 53,
+     "price": 3
+    }
+   ],
+   "opened": 5
+  }
+ ],
+ "supply": {
+  "day": 30,
+  "today": "Tuesday",
+  "graph": {
+   "nodes": [
+    {
+     "id": "import:pier",
+     "name": "Importers",
+     "tag": "",
+     "sub": "5 contracts",
+     "hood": "",
+     "items": [],
+     "stock": 0,
+     "short": 0,
+     "tight": 0,
+     "low": 0,
+     "unsupplied": 0
+    },
+    {
+     "id": "hub#1",
+     "name": "[IH] Import Hub",
+     "tag": "IH",
+     "sub": "Warehouse",
+     "hood": "",
+     "items": [
+      {
+       "item": "Flour",
+       "slug": "flour",
+       "stock": 6000,
+       "need": 6400,
+       "cycleNeed": 11200,
+       "provision": 12000,
+       "cadence": "weekly",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Sugar",
+       "slug": "sugar",
+       "stock": 800,
+       "need": 1600,
+       "cycleNeed": 2800,
+       "provision": 0,
+       "cadence": "weekly",
+       "made": false,
+       "why": "paused",
+       "fit": "short",
+       "short": true,
+       "low": false
+      },
+      {
+       "item": "Coffee",
+       "slug": "coffee",
+       "stock": 900,
+       "need": 240,
+       "cycleNeed": 420,
+       "provision": 800,
+       "cadence": "weekly",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Paper Bag",
+       "slug": "bags",
+       "stock": 9000,
+       "need": 400,
+       "cycleNeed": 700,
+       "provision": 9000,
+       "cadence": "weekly",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Soda Can",
+       "slug": "soda",
+       "stock": 3000,
+       "need": 0,
+       "cycleNeed": 0,
+       "provision": 0,
+       "cadence": "weekly",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      }
+     ],
+     "stock": 19700,
+     "short": 0,
+     "tight": 0,
+     "low": 0,
+     "unsupplied": 0
+    },
+    {
+     "id": "factory#2",
+     "name": "[FB] Bakery Factory",
+     "tag": "FB",
+     "sub": "Factory",
+     "hood": "",
+     "items": [
+      {
+       "item": "Flour",
+       "slug": "flour",
+       "stock": 900,
+       "need": 1600,
+       "cycleNeed": 1600,
+       "provision": 1400,
+       "cadence": "daily",
+       "made": false,
+       "why": null,
+       "fit": "short",
+       "short": true,
+       "low": false
+      },
+      {
+       "item": "Sugar",
+       "slug": "sugar",
+       "stock": 450,
+       "need": 400,
+       "cycleNeed": 400,
+       "provision": 500,
+       "cadence": "daily",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Cake",
+       "slug": "cake",
+       "stock": 400,
+       "need": 0,
+       "cycleNeed": 0,
+       "provision": 0,
+       "cadence": "made",
+       "made": true,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Bread",
+       "slug": "bread",
+       "stock": 300,
+       "need": 0,
+       "cycleNeed": 0,
+       "provision": 0,
+       "cadence": "made",
+       "made": true,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      }
+     ],
+     "stock": 2050,
+     "short": 0,
+     "tight": 0,
+     "low": 0,
+     "unsupplied": 0
+    },
+    {
+     "id": "shop#3",
+     "name": "[DT] Cake Shop Downtown",
+     "tag": "DT",
+     "sub": "Bakery",
+     "hood": "",
+     "items": [
+      {
+       "item": "Cake",
+       "slug": "cake",
+       "stock": 120,
+       "need": 240,
+       "cycleNeed": 240,
+       "provision": 300,
+       "cadence": "daily",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Coffee",
+       "slug": "coffee",
+       "stock": 40,
+       "need": 80,
+       "cycleNeed": 80,
+       "provision": 100,
+       "cadence": "daily",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      },
+      {
+       "item": "Paper Bag",
+       "slug": "bags",
+       "stock": 90,
+       "need": 100,
+       "cycleNeed": 100,
+       "provision": 150,
+       "cadence": "daily",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      }
+     ],
+     "stock": 250,
+     "short": 0,
+     "tight": 0,
+     "low": 0,
+     "unsupplied": 0
+    },
+    {
+     "id": "shop#4",
+     "name": "[MH] Cake Shop Midtown",
+     "tag": "MH",
+     "sub": "Bakery",
+     "hood": "",
+     "items": [
+      {
+       "item": "Cake",
+       "slug": "cake",
+       "stock": 60,
+       "need": 30,
+       "cycleNeed": 30,
+       "provision": 100,
+       "cadence": "daily",
+       "made": false,
+       "why": null,
+       "fit": "ok",
+       "short": false,
+       "low": false
+      }
+     ],
+     "stock": 60,
+     "short": 0,
+     "tight": 0,
+     "low": 0,
+     "unsupplied": 0
+    },
+    {
+     "id": "gym#5",
+     "name": "[GD] Garden Gym",
+     "tag": "GD",
+     "sub": "Gym",
+     "hood": "",
+     "items": [
+      {
+       "item": "Soda Can",
+       "slug": "soda",
+       "stock": 30,
+       "need": 61,
+       "cycleNeed": 61,
+       "provision": 0,
+       "cadence": "daily",
+       "made": false,
+       "why": "unplanned",
+       "fit": "short",
+       "short": true,
+       "low": false
+      }
+     ],
+     "stock": 30,
+     "short": 0,
+     "tight": 0,
+     "low": 0,
+     "unsupplied": 0
+    }
+   ],
+   "links": [
+    {
+     "from": "import:pier",
+     "to": "hub#1",
+     "perDay": 3500,
+     "items": 5,
+     "cadence": "weekly",
+     "paused": false
+    },
+    {
+     "from": "hub#1",
+     "to": "factory#2",
+     "perDay": 1700,
+     "items": 2,
+     "cadence": "daily",
+     "paused": false
+    },
+    {
+     "from": "hub#1",
+     "to": "shop#3",
+     "perDay": 150,
+     "items": 2,
+     "cadence": "daily",
+     "paused": false
+    },
+    {
+     "from": "factory#2",
+     "to": "shop#3",
+     "perDay": 200,
+     "items": 1,
+     "cadence": "daily",
+     "paused": false
+    },
+    {
+     "from": "factory#2",
+     "to": "shop#4",
+     "perDay": 30,
+     "items": 1,
+     "cadence": "daily",
+     "paused": false
+    }
+   ]
+  },
+  "nextImportDay": 34,
+  "nextImportWeekday": "Saturday",
+  "daysToImport": 4,
+  "hoursToImport": 4.5,
+  "leftToday": 0.5,
+  "shops": [
+   {
+    "s": 2,
+    "item": "Cake",
+    "slug": "cake",
+    "sold": 200,
+    "peakSold": 240,
+    "peakDay": "Saturday",
+    "target": 300,
+    "pressure": 80,
+    "stock": 120,
+    "from": 1,
+    "level": "ok"
+   },
+   {
+    "s": 2,
+    "item": "Coffee",
+    "slug": "coffee",
+    "sold": 60,
+    "peakSold": 80,
+    "peakDay": "Friday",
+    "target": 100,
+    "pressure": 80,
+    "stock": 40,
+    "from": 0,
+    "level": "ok"
+   },
+   {
+    "s": 2,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "sold": 90,
+    "peakSold": 100,
+    "peakDay": "Saturday",
+    "target": 150,
+    "pressure": 67,
+    "stock": 90,
+    "from": 0,
+    "level": "ok"
+   },
+   {
+    "s": 3,
+    "item": "Cake",
+    "slug": "cake",
+    "sold": 30,
+    "peakSold": 30,
+    "peakDay": null,
+    "target": 100,
+    "pressure": 30,
+    "stock": 60,
+    "from": 1,
+    "level": "ok"
+   },
+   {
+    "s": 4,
+    "item": "Soda Can",
+    "slug": "soda",
+    "sold": 53,
+    "peakSold": 61,
+    "peakDay": "Sunday",
+    "target": 0,
+    "pressure": null,
+    "stock": 30,
+    "from": null,
+    "level": "critical"
+   }
+  ],
+  "imports": [
+   {
+    "s": 0,
+    "item": "Sugar",
+    "slug": "sugar",
+    "stock": 800,
+    "perDay": 400,
+    "routed": 0,
+    "importPerDay": 400,
+    "covered": false,
+    "basis": "shipped",
+    "peakDay": "Saturday",
+    "peakPerDay": 480,
+    "cover": 2.0,
+    "stockCover": 2.0,
+    "daysOnHand": 2.0,
+    "runsOut": null,
+    "weekly": 0,
+    "lastWeek": 2800,
+    "smart": false,
+    "target": null,
+    "plain": 0,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "levelImporter": null,
+    "levelName": null,
+    "levelId": null,
+    "levelAt": null,
+    "pass": [],
+    "arrivedLastWeek": 2800,
+    "contracts": [
+     {
+      "id": "c2",
+      "importer": "Sweet Co",
+      "amount": 2800,
+      "smart": false,
+      "active": false,
+      "agent": true,
+      "order": 1,
+      "group": 1,
+      "product": 0
+     }
+    ],
+    "weekNeed": 2800,
+    "orderFit": "short",
+    "coverFit": "ok",
+    "due": 4.5,
+    "shortBy": 0,
+    "catchUp": null,
+    "coverageUntil": 34,
+    "carry": null,
+    "paused": true,
+    "arrives": 34,
+    "from": "Sweet Co",
+    "level": "critical",
+    "reason": "paused"
+   },
+   {
+    "s": 0,
+    "item": "Flour",
+    "slug": "flour",
+    "stock": 6000,
+    "perDay": 1600,
+    "routed": 0,
+    "importPerDay": 1600,
+    "covered": false,
+    "basis": "shipped",
+    "peakDay": "Saturday",
+    "peakPerDay": 1920,
+    "cover": 3.8,
+    "stockCover": 3.8,
+    "daysOnHand": 3.8,
+    "runsOut": null,
+    "weekly": 12000,
+    "lastWeek": 12000,
+    "smart": false,
+    "target": null,
+    "plain": 12000,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "levelImporter": null,
+    "levelName": null,
+    "levelId": null,
+    "levelAt": null,
+    "pass": [
+     {
+      "amount": 12000,
+      "smart": false
+     }
+    ],
+    "arrivedLastWeek": 12000,
+    "contracts": [
+     {
+      "id": "c1",
+      "importer": "Mill Imports",
+      "amount": 12000,
+      "smart": false,
+      "active": true,
+      "agent": true,
+      "order": 0,
+      "group": 0,
+      "product": 0
+     }
+    ],
+    "weekNeed": 11200,
+    "orderFit": "ok",
+    "coverFit": "ok",
+    "due": 4.5,
+    "shortBy": 0,
+    "catchUp": null,
+    "coverageUntil": 34,
+    "carry": null,
+    "paused": false,
+    "arrives": 34,
+    "from": "Mill Imports",
+    "level": "ok",
+    "reason": null
+   },
+   {
+    "s": 0,
+    "item": "Coffee",
+    "slug": "coffee",
+    "stock": 900,
+    "perDay": 60,
+    "routed": 0,
+    "importPerDay": 60,
+    "covered": false,
+    "basis": "shipped",
+    "peakDay": "Saturday",
+    "peakPerDay": 72,
+    "cover": 15.0,
+    "stockCover": 15.0,
+    "daysOnHand": 15.0,
+    "runsOut": null,
+    "weekly": 800,
+    "lastWeek": 800,
+    "smart": false,
+    "target": null,
+    "plain": 800,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "levelImporter": null,
+    "levelName": null,
+    "levelId": null,
+    "levelAt": null,
+    "pass": [
+     {
+      "amount": 800,
+      "smart": false
+     }
+    ],
+    "arrivedLastWeek": 800,
+    "contracts": [
+     {
+      "id": "c3",
+      "importer": "Bean Traders",
+      "amount": 800,
+      "smart": false,
+      "active": true,
+      "agent": true,
+      "order": 2,
+      "group": 2,
+      "product": 0
+     }
+    ],
+    "weekNeed": 420,
+    "orderFit": "ok",
+    "coverFit": "ok",
+    "due": 4.5,
+    "shortBy": 0,
+    "catchUp": null,
+    "coverageUntil": 34,
+    "carry": null,
+    "paused": false,
+    "arrives": 34,
+    "from": "Bean Traders",
+    "level": "ok",
+    "reason": null
+   },
+   {
+    "s": 0,
+    "item": "Butter",
+    "slug": "butter",
+    "stock": 0,
+    "perDay": 100,
+    "routed": 0,
+    "importPerDay": 100,
+    "covered": false,
+    "basis": "order",
+    "peakDay": "Saturday",
+    "peakPerDay": 120,
+    "cover": 0.0,
+    "stockCover": 0.0,
+    "daysOnHand": 0.0,
+    "runsOut": null,
+    "weekly": 700,
+    "lastWeek": 0,
+    "smart": false,
+    "target": null,
+    "plain": 700,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "levelImporter": null,
+    "levelName": null,
+    "levelId": null,
+    "levelAt": null,
+    "pass": [
+     {
+      "amount": 700,
+      "smart": false
+     }
+    ],
+    "arrivedLastWeek": 0,
+    "contracts": [
+     {
+      "id": "c5",
+      "importer": "Dairy Direct",
+      "amount": 700,
+      "smart": false,
+      "active": true,
+      "agent": true,
+      "order": 4,
+      "group": 4,
+      "product": 0
+     }
+    ],
+    "weekNeed": 700,
+    "orderFit": "ok",
+    "coverFit": "ok",
+    "due": 4.5,
+    "shortBy": 0,
+    "catchUp": null,
+    "coverageUntil": 34,
+    "carry": null,
+    "paused": false,
+    "arrives": 34,
+    "from": "Dairy Direct",
+    "level": "ok",
+    "reason": null
+   }
+  ],
+  "idle": [
+   {
+    "s": 0,
+    "item": "Soda Can",
+    "slug": "soda",
+    "stock": 3000,
+    "perWeek": 0,
+    "weeks": null,
+    "target": 0,
+    "price": 3,
+    "value": 9000,
+    "dead": true,
+    "level": "warn"
+   },
+   {
+    "s": 0,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "stock": 9000,
+    "perWeek": 700,
+    "weeks": 12.9,
+    "target": 0,
+    "price": 0,
+    "value": 0,
+    "dead": false,
+    "level": "warn"
+   }
+  ],
+  "idleWeeks": 5,
+  "factories": {
+   "sites": [
+    {
+     "s": 1,
+     "machines": 4,
+     "lines": [
+      {
+       "rid": "r-cake",
+       "item": "Cake",
+       "slug": "cake",
+       "missing": [],
+       "workstation": "Oven",
+       "slots": [
+        1,
+        2
+       ],
+       "machines": 2,
+       "rate": 10,
+       "makes": 480,
+       "ships": 270,
+       "stock": 400,
+       "toCity": 270,
+       "toPier": 0,
+       "basis": "table",
+       "piling": false,
+       "atRoster": 480,
+       "hoursWeek": 336,
+       "fullWeek": 336,
+       "gaps": [],
+       "limit": 600,
+       "limitHeld": true
+      },
+      {
+       "rid": "r-bread",
+       "item": "Bread",
+       "slug": "bread",
+       "missing": [],
+       "workstation": "Oven",
+       "slots": [
+        3,
+        4
+       ],
+       "machines": 2,
+       "rate": 20,
+       "makes": 960,
+       "ships": 960,
+       "stock": 300,
+       "toCity": 0,
+       "toPier": 960,
+       "basis": "table",
+       "piling": false,
+       "atRoster": 960,
+       "hoursWeek": 336,
+       "fullWeek": 336,
+       "gaps": [],
+       "limit": null,
+       "limitHeld": false
+      }
+     ],
+     "unnamed": [],
+     "needs": [
+      {
+       "item": "Flour",
+       "slug": "flour",
+       "perDay": 1600,
+       "perWeek": 11200,
+       "lines": [
+        "Cake",
+        "Bread"
+       ],
+       "waitingOn": [],
+       "target": 1400,
+       "from": 0,
+       "directImport": false,
+       "factoryImportSite": null,
+       "directWeekly": null,
+       "directNeed": 0,
+       "warehouseNeed": 11200,
+       "dailyNeed": 1600,
+       "importSite": 0,
+       "known": true,
+       "arrives": 1400,
+       "stock": 900,
+       "depotStock": 6000,
+       "stalled": false,
+       "staffedShare": 1.0,
+       "depotNeed": 11200,
+       "importWeekly": 12000,
+       "importSmart": false,
+       "importTarget": null,
+       "importPlainAfter": 0,
+       "importPlainBefore": 0,
+       "importLevelImporter": null,
+       "importLevelName": null,
+       "importRouted": 0,
+       "importCovered": false,
+       "importDrawWeek": 0,
+       "importRoutedFactories": 0,
+       "importNeed": 11200,
+       "importPaused": false,
+       "importFit": "ok",
+       "madeAt": [],
+       "raiseTarget": 1840,
+       "raiseImport": null,
+       "status": "short",
+       "level": "critical"
+      },
+      {
+       "item": "Sugar",
+       "slug": "sugar",
+       "perDay": 400,
+       "perWeek": 2800,
+       "lines": [
+        "Cake"
+       ],
+       "waitingOn": [],
+       "target": 500,
+       "from": 0,
+       "directImport": false,
+       "factoryImportSite": null,
+       "directWeekly": null,
+       "directNeed": 0,
+       "warehouseNeed": 2800,
+       "dailyNeed": 400,
+       "importSite": 0,
+       "known": true,
+       "arrives": 300,
+       "stock": 450,
+       "depotStock": 800,
+       "stalled": false,
+       "staffedShare": 1.0,
+       "depotNeed": 2800,
+       "importWeekly": 0,
+       "importSmart": false,
+       "importTarget": null,
+       "importPlainAfter": 0,
+       "importPlainBefore": 0,
+       "importLevelImporter": null,
+       "importLevelName": null,
+       "importRouted": 0,
+       "importCovered": false,
+       "importDrawWeek": 0,
+       "importRoutedFactories": 0,
+       "importNeed": 2800,
+       "importPaused": true,
+       "importFit": null,
+       "madeAt": [],
+       "raiseTarget": null,
+       "raiseImport": null,
+       "status": "covered",
+       "level": "ok"
+      }
+     ],
+     "targets": {
+      "flour": [
+       1400,
+       0
+      ],
+      "sugar": [
+       500,
+       0
+      ]
+     },
+     "known": true,
+     "arrivals": {
+      "flour": 1400,
+      "sugar": 300
+     }
+    }
+   ],
+   "machines": 4,
+   "unnamed": 0,
+   "character": "r8-fixture",
+   "aliases": {},
+   "depots": {
+    "0": {
+     "flour": {
+      "weekly": 12000,
+      "pausedWeekly": 0,
+      "routed": 0,
+      "covered": false,
+      "drawWeek": 0,
+      "smart": false,
+      "target": null,
+      "plain": 12000,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "levelImporter": null,
+      "levelName": null,
+      "levelId": null,
+      "levelAt": null,
+      "pass": [
+       {
+        "amount": 12000,
+        "smart": false
+       }
+      ],
+      "arrivedLastWeek": 12000,
+      "contracts": [
+       {
+        "id": "c1",
+        "importer": "Mill Imports",
+        "amount": 12000,
+        "smart": false,
+        "active": true,
+        "agent": true,
+        "order": 0,
+        "group": 0,
+        "product": 0
+       }
+      ]
+     },
+     "sugar": {
+      "weekly": 0,
+      "pausedWeekly": 2800,
+      "routed": 0,
+      "covered": false,
+      "drawWeek": 0,
+      "smart": false,
+      "target": null,
+      "plain": 0,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "levelImporter": null,
+      "levelName": null,
+      "levelId": null,
+      "levelAt": null,
+      "pass": [],
+      "arrivedLastWeek": 2800,
+      "contracts": [
+       {
+        "id": "c2",
+        "importer": "Sweet Co",
+        "amount": 2800,
+        "smart": false,
+        "active": false,
+        "agent": true,
+        "order": 1,
+        "group": 1,
+        "product": 0
+       }
+      ]
+     },
+     "coffee": {
+      "weekly": 800,
+      "pausedWeekly": 0,
+      "routed": 0,
+      "covered": false,
+      "drawWeek": 0,
+      "smart": false,
+      "target": null,
+      "plain": 800,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "levelImporter": null,
+      "levelName": null,
+      "levelId": null,
+      "levelAt": null,
+      "pass": [
+       {
+        "amount": 800,
+        "smart": false
+       }
+      ],
+      "arrivedLastWeek": 800,
+      "contracts": [
+       {
+        "id": "c3",
+        "importer": "Bean Traders",
+        "amount": 800,
+        "smart": false,
+        "active": true,
+        "agent": true,
+        "order": 2,
+        "group": 2,
+        "product": 0
+       }
+      ]
+     },
+     "bags": {
+      "weekly": 9000,
+      "pausedWeekly": 0,
+      "routed": 0,
+      "covered": false,
+      "drawWeek": 0,
+      "smart": true,
+      "target": 9000,
+      "plain": 0,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "levelImporter": "Pack Ltd",
+      "levelName": "Pack Ltd",
+      "levelId": "c4",
+      "levelAt": 0,
+      "pass": [
+       {
+        "amount": 9000,
+        "smart": true
+       }
+      ],
+      "arrivedLastWeek": 700,
+      "contracts": [
+       {
+        "id": "c4",
+        "importer": "Pack Ltd",
+        "amount": 9000,
+        "smart": true,
+        "active": true,
+        "agent": true,
+        "order": 3,
+        "group": 3,
+        "product": 0
+       }
+      ]
+     },
+     "butter": {
+      "weekly": 700,
+      "pausedWeekly": 0,
+      "routed": 0,
+      "covered": false,
+      "drawWeek": 0,
+      "smart": false,
+      "target": null,
+      "plain": 700,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "levelImporter": null,
+      "levelName": null,
+      "levelId": null,
+      "levelAt": null,
+      "pass": [
+       {
+        "amount": 700,
+        "smart": false
+       }
+      ],
+      "arrivedLastWeek": 0,
+      "contracts": [
+       {
+        "id": "c5",
+        "importer": "Dairy Direct",
+        "amount": 700,
+        "smart": false,
+        "active": true,
+        "agent": true,
+        "order": 4,
+        "group": 4,
+        "product": 0
+       }
+      ]
+     }
+    }
+   },
+   "depotOther": {
+    "0": {
+     "coffee": 420,
+     "bags": 700
+    }
+   },
+   "depotRoutes": {}
+  },
+  "margin": 0.15,
+  "roundTo": 10,
+  "facts": {
+   "0": {
+    "flour": {
+     "st": "tight",
+     "why": "order",
+     "lvl": "warn",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 11200,
+     "need": 12880,
+     "have": 12000,
+     "setTo": 12880,
+     "parts": {
+      "lines": 11200,
+      "sites": 0,
+      "route": 0
+     },
+     "imp": true,
+     "dem": {
+      "st": "covered",
+      "why": null,
+      "lvl": "ok",
+      "use": 8120,
+      "need": 9340,
+      "setTo": null,
+      "parts": {
+       "lines": 8120,
+       "sites": 0,
+       "route": 0
+      },
+      "ramp": [
+       3
+      ]
+     }
+    },
+    "sugar": {
+     "st": "paused",
+     "why": "order",
+     "lvl": "critical",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 2800,
+     "need": 3220,
+     "have": 2800,
+     "setTo": 3220,
+     "parts": {
+      "lines": 2800,
+      "sites": 0,
+      "route": 0
+     },
+     "imp": true
+    },
+    "coffee": {
+     "st": "covered",
+     "why": null,
+     "lvl": "ok",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 420,
+     "need": 490,
+     "have": 800,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 420,
+      "route": 0
+     },
+     "imp": true,
+     "lower": 490
+    },
+    "bags": {
+     "st": "idle",
+     "why": "importHigh",
+     "lvl": "warn",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 700,
+     "need": 810,
+     "have": 9000,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 700,
+      "route": 0
+     },
+     "imp": true
+    },
+    "butter": {
+     "st": "new",
+     "why": "young",
+     "lvl": "info",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 700,
+     "need": 810,
+     "have": 700,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 0,
+      "route": 0
+     },
+     "imp": true
+    },
+    "soda": {
+     "st": "idle",
+     "why": "notRouted",
+     "lvl": "warn",
+     "role": "depot",
+     "cad": "weekly",
+     "use": 0,
+     "need": 0,
+     "have": 3000,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 0,
+      "route": 0
+     },
+     "unfed": [
+      [
+       4,
+       53,
+       57
+      ]
+     ]
+    }
+   },
+   "1": {
+    "flour": {
+     "st": "short",
+     "why": "target",
+     "lvl": "critical",
+     "role": "input",
+     "cad": "daily",
+     "use": 1600,
+     "need": 1840,
+     "have": 1400,
+     "setTo": 1840,
+     "parts": {
+      "lines": 11200,
+      "sites": 0,
+      "route": 0
+     },
+     "dem": {
+      "st": "covered",
+      "why": null,
+      "lvl": "ok",
+      "use": 1160,
+      "need": 1340,
+      "setTo": null,
+      "parts": {
+       "lines": 8120,
+       "sites": 0,
+       "route": 0
+      },
+      "ramp": [
+       3
+      ]
+     }
+    },
+    "sugar": {
+     "st": "covered",
+     "why": "limit",
+     "lvl": "ok",
+     "role": "input",
+     "cad": "daily",
+     "use": 400,
+     "need": 460,
+     "have": 500,
+     "setTo": null,
+     "parts": {
+      "lines": 2800,
+      "sites": 0,
+      "route": 0
+     }
+    },
+    "cake": {
+     "st": "made",
+     "why": null,
+     "lvl": "ok",
+     "role": "output",
+     "cad": "made",
+     "use": 270,
+     "need": 320,
+     "have": 400,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 1890,
+      "route": 0
+     }
+    },
+    "bread": {
+     "st": "made",
+     "why": null,
+     "lvl": "ok",
+     "role": "output",
+     "cad": "made",
+     "use": 0,
+     "need": 0,
+     "have": 300,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 0,
+      "route": 0
+     }
+    }
+   },
+   "2": {
+    "cake": {
+     "st": "covered",
+     "why": "route",
+     "lvl": "ok",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 240,
+     "need": 280,
+     "have": 300,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 1400,
+      "route": 1400
+     }
+    },
+    "coffee": {
+     "st": "stalled",
+     "why": "notDrawn",
+     "lvl": "warn",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 80,
+     "need": 100,
+     "have": 100,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 420,
+      "route": 0
+     }
+    },
+    "bags": {
+     "st": "covered",
+     "why": null,
+     "lvl": "ok",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 100,
+     "need": 120,
+     "have": 150,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 700,
+      "route": 0
+     }
+    }
+   },
+   "3": {
+    "cake": {
+     "st": "new",
+     "why": "young",
+     "lvl": "info",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 30,
+     "need": 40,
+     "have": 100,
+     "setTo": null,
+     "parts": {
+      "lines": 0,
+      "sites": 210,
+      "route": 210
+     }
+    }
+   },
+   "4": {
+    "soda": {
+     "st": "noplan",
+     "why": "notRouted",
+     "lvl": "critical",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 53,
+     "need": 70,
+     "have": 0,
+     "setTo": 70,
+     "parts": {
+      "lines": 0,
+      "sites": 371,
+      "route": 0
+     },
+     "via": 0
+    }
+   }
+  }
+ },
+ "plan": {
+  "recipes": [
+   {
+    "slug": "cake",
+    "item": "Cake",
+    "out": 10,
+    "workstation": "oven",
+    "ingredients": [
+     {
+      "slug": "flour",
+      "item": "Flour",
+      "per": 20
+     },
+     {
+      "slug": "sugar",
+      "item": "Sugar",
+      "per": 8
+     }
+    ]
+   },
+   {
+    "slug": "bread",
+    "item": "Bread",
+    "out": 20,
+    "workstation": "oven",
+    "ingredients": [
+     {
+      "slug": "flour",
+      "item": "Flour",
+      "per": 13
+     }
+    ]
+   }
+  ]
+ },
+ "alerts": [
+  {
+   "level": "critical",
+   "site": "[FB] Bakery Factory",
+   "group": "feed",
+   "text": "Flour top-up of 1,400 covers 21 hours of a 1,600/day line; raise it to 1,840",
+   "worth": null,
+   "unit": "",
+   "id": "r8feed",
+   "siteKey": "factory#2",
+   "ev": {
+    "slug": "flour"
+   }
+  },
+  {
+   "level": "critical",
+   "site": "[IH] Import Hub",
+   "group": "paused",
+   "text": "Sugar import is paused; resume the contract supplying [IH] Import Hub",
+   "worth": null,
+   "unit": "",
+   "id": "r8paused",
+   "siteKey": "hub#1",
+   "ev": {
+    "slug": "sugar"
+   }
+  },
+  {
+   "level": "warn",
+   "site": "[IH] Import Hub",
+   "group": "notrouted",
+   "text": "[IH] Import Hub holds 3,000 Soda Can no plan sends on; 1 gym sells 53/day",
+   "worth": null,
+   "unit": "",
+   "id": "r8notrouted",
+   "siteKey": "hub#1",
+   "ev": {
+    "slug": "soda"
+   }
+  },
+  {
+   "level": "info",
+   "site": "[IH] Import Hub",
+   "group": "dead",
+   "text": "Paper Bag Smart Delivery level of 9,000 is 12.9 weeks of what leaves",
+   "worth": null,
+   "unit": "",
+   "id": "r8dead",
+   "siteKey": "hub#1",
+   "ev": {
+    "slug": "bags"
+   }
+  }
+ ],
+ "minor": {
+  "count": 0,
+  "gate": 50,
+  "worth": 0,
+  "rows": []
+ },
+ "alertsDemand": {
+  "lines": [
+   {
+    "level": "critical",
+    "site": "[IH] Import Hub",
+    "group": "paused",
+    "text": "Sugar import is paused; resume the contract supplying [IH] Import Hub",
+    "worth": null,
+    "unit": "",
+    "id": "r8paused",
+    "siteKey": "hub#1",
+    "ev": {
+     "slug": "sugar"
+    }
+   },
+   {
+    "level": "warn",
+    "site": "[IH] Import Hub",
+    "group": "notrouted",
+    "text": "[IH] Import Hub holds 3,000 Soda Can no plan sends on; 1 gym sells 53/day",
+    "worth": null,
+    "unit": "",
+    "id": "r8notrouted",
+    "siteKey": "hub#1",
+    "ev": {
+     "slug": "soda"
+    }
+   },
+   {
+    "level": "info",
+    "site": "[IH] Import Hub",
+    "group": "dead",
+    "text": "Paper Bag Smart Delivery level of 9,000 is 12.9 weeks of what leaves",
+    "worth": null,
+    "unit": "",
+    "id": "r8dead",
+    "siteKey": "hub#1",
+    "ev": {
+     "slug": "bags"
+    }
+   }
+  ],
+  "minor": {
+   "count": 0,
+   "gate": 50,
+   "worth": 0,
+   "rows": []
+  }
+ }
+}
