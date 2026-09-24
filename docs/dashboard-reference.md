@@ -58,15 +58,25 @@ the map.
 - **Today**: four tiles and the *Needs attention* list, nothing else. Profit yesterday
   with its seven-day average and trend, revenue with customers served, cash on hand
   with where the profit went, and the daily fixed-cost base (rent plus payroll). Net
-  worth takes the fourth tile whenever the game reports it again. Bank debt only
-  appears, in the cash tile, when there is some. Site and staff counts sit in the
-  masthead. Sparklines cover the last 61 days.
+  worth takes the fourth tile whenever the game reports it again. The Profit tile opens
+  Company › Results at the daily result. Bank debt appears in the cash tile's note when
+  there is some, and on its sub line ("$1.89M owed on loans") once it is more than the
+  last seven days' profit. Site and staff counts sit in the masthead. Sparklines cover
+  the last 61 days. On a phone the tiles pair up two by two and the Next moves cards stack.
 - **Needs attention**: only what you can act on, each line with a number and a deadline
-  where one exists. Below the list, a count of everything too small to be worth a line.
-  *Filter kinds* chooses which kinds of finding make the list; switching one off moves its
-  findings down into that count rather than hiding them, the count line says how many were
-  moved, and nothing is ever dropped. Every *details ›* link opens the page and view the
-  finding is spelt out on and scrolls to it.
+  where one exists. Below the list, two lines, each with its own *show*: how many findings
+  fall below the materiality line ("1 below the $6,239/day line"), and how many sit in kinds
+  you switched off, naming each kind with its count and worth ("15 in kinds you switched
+  off: Overstaffed hours (15, $17k/day)"). The tune button chooses which kinds of finding
+  make the list; switching one off moves its findings to the second line rather than
+  hiding them, and nothing is ever dropped. *At capacity* is on by default and *Overstaffed
+  hours* off; a device keeps only the kinds its player switched, so a later change of
+  default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
+  site: the spare staff-hours of the whole week, its wages summed, with the days and hours
+  named as a shape ("Mon-Wed 8-20"); the site's own page still reads out its worst run.
+  A finding's headline never drops an item's variant: "Fabric (Expensive)", not "Fabric".
+  Every *details ›* link opens the page and view the finding is spelt out on and scrolls
+  to it.
   *Uniforms / locker* checks retail sites for an installed Uniform Locker. Gym
   Lockers and boxed Uniform Lockers do not count. With a locker installed, the
   warning names the roles working a station shift here that have no uniform set,
@@ -94,7 +104,9 @@ the map.
   - *Portfolio*: grouped by chain, with each chain's combined revenue, cost and margin
     on one line and its sites folded underneath. A week-on-week revenue column sits
     beside yesterday's takings. Every column sorts. Click a chain to open it, then a
-    site to open its detail.
+    site to open its detail. Under the sites' total, *Company costs outside sites* (loan
+    payments, health insurance, homes, parking; itemised on hover) leads to *Company
+    profit*, the figure on Today's Profit tile.
   - *Business detail*: nothing until a site is opened from the portfolio or a finding;
     then that site alone, with its profit history, cost breakdown, crew and shelves, and
     an hour-by-hour grid comparing historical customers with capacity from the
@@ -159,8 +171,10 @@ the map.
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
 - **Company / Products, Payroll, Milestones**: the reference tables and house
-  rules. There is no debt page; loans cap at $2M, which is beside the point at this
-  stage.
+  rules. Payroll names its two wage figures: "at today's rates" is every hourly wage
+  times its assigned weekly hours over seven, "booked yesterday" is what the statements
+  recorded (the Portfolio's Wages total); its ? names the sites where the two differ.
+  There is no debt page; loans cap at $2M, which is beside the point at this stage.
 
 - **Wiki**: browse the game's help without loading a save, starting with a shelf
   of categories and searchable pages. The Gift Shop guide presents setup

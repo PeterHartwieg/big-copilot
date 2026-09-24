@@ -78,7 +78,89 @@ test('with the defaults the smaller list is the gate rows and nothing is called 
   assert.equal(off, 0);
 });
 
-test('the count line says what was switched off', () => {
+test('the gate and the switches are two lines, not one "smaller" count (issue #51)', () => {
+  const alerts = [row('atcap', 9000, 'a'), row('jobdemand', 8000, 'b')];
+  const minor = [row('hype', 30, 'c'), row('idlestaff', 20, 'd')];
+  const {list, below, switchedOff} = split(alerts, minor, {atcap: false, idlestaff: false});
+  assert.deepEqual(list.map(r => r.id), ['b']);
+  // Below the line: only what the gate set aside of the kinds still on.
+  assert.deepEqual(below.map(r => r.id), ['c']);
+  // Switched off: from both sides of the gate, never counted as "below".
+  assert.deepEqual(switchedOff.map(r => r.id), ['d', 'a']);
+});
+
+test('the switched-off line names each kind with its count and worth', () => {
+  const kinds = vm.runInContext('switchedOffKinds', context);
+  const label = id => ({atcap: 'At capacity', idlestaff: 'Overstaffed hours', dead: 'Stock not moving'})[id];
+  const money = n => `$${Math.round(n / 1000)}k`;
+  const rows = [row('atcap', 97000, 'a'), row('atcap', 31000, 'b'), row('atcap', 8000, 'c'),
+                row('idlestaff', 400, 'd'), row('dead', null, 'e')];
+  assert.equal(kinds(rows, label, money),
+    'At capacity (3, $136k/day), Overstaffed hours (1, $0k/day), Stock not moving (1)');
+});
+
+test('the count lines say which is which', () => {
   assert.match(DRAW, /partitionFindings\(/);
-  assert.match(DRAW, /switched off/);
+  assert.match(DRAW, /below the \$\{fmt\(gate\)\}\/day line/);
+  assert.match(DRAW, /in kinds you switched off: /);
+});
+
+/* The kinds, their defaults and what a device already stores. The slice runs
+   from the list to the comment that follows the storage helpers. */
+const KINDS = source.slice(source.indexOf('const ALERT_GROUPS = ['),
+  source.indexOf('/* The control that opens the panel'));
+const kinds = vm.createContext({});
+vm.runInContext(KINDS, kinds);
+const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, kinds));
+
+test('At capacity is on by default; Overstaffed hours stays off', () => {
+  const on = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.on]));
+  assert.equal(on.atcap, true);
+  assert.equal(on.idlestaff, false);
+  assert.equal(run('kindPrefs({})').atcap, true);
+});
+
+test('a stored whole map keeps only what differs from the defaults it was saved under', () => {
+  // The first boards wrote every kind on any flip, At capacity off among them.
+  const legacy = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.id !== 'atcap' && g.id !== 'idlestaff']));
+  legacy.hype = false;  // the one kind this player really switched
+  const choices = run(`readKindChoices(${JSON.stringify(legacy)})`);
+  assert.deepEqual(choices, {hype: false});
+  const prefs = run(`kindPrefs(${JSON.stringify(choices)})`);
+  assert.equal(prefs.atcap, true, 'never touched: the new default applies');
+  assert.equal(prefs.hype, false, 'a real choice survives');
+  assert.equal(prefs.idlestaff, false);
+});
+
+test('a player who had switched At capacity on keeps it on, and an explicit off survives', () => {
+  assert.deepEqual(run('readKindChoices({atcap: true, idlestaff: true, loss: true})'),
+    {atcap: true, idlestaff: true});
+  // The new shape stores choices only, so an off written after the change is kept.
+  assert.equal(run('kindPrefs(readKindChoices({v: 2, set: {atcap: false}}))').atcap, false);
+  assert.deepEqual(run('readKindChoices(null)'), {});
+});
+
+/* R2: a headline cut at a bracket used to drop the item's variant, so
+   "Fabric (Expensive)" and "Fabric (Cheap)" both read "Fabric". */
+const SPLIT = source.slice(source.indexOf('/* A finding is a short verb phrase'),
+  source.indexOf('/* The figure on the right'));
+const splitting = vm.createContext({});
+vm.runInContext(SPLIT, splitting);
+const headline = a => vm.runInContext('splitFinding', splitting)(a).what;
+
+test('a finding keeps the variant in its headline', () => {
+  const site = 'Factory Clothing';
+  const text = v => `Fabric (${v}) arrives at 6,612/day against 11,520 needed while Import Hub holds 65,354; the line is not drawing it`;
+  const a = headline({site, text: text('Expensive')});
+  const b = headline({site, text: text('Cheap')});
+  assert.match(a, /^Fabric \(Expensive\)/);
+  assert.match(b, /^Fabric \(Cheap\)/);
+  assert.notEqual(a, b);
+  assert.match(headline({site, text: 'Clothing (Classic Cheap Female) sells 400 on a Saturday against a 300 top-up, and a much longer tail here'}),
+    /^Clothing \(Classic Cheap Female\)/);
+});
+
+test('a bracket of words is still a place to cut a long headline', () => {
+  const t = 'Revenue down 20% week on week with a very long explanation (mostly the weekend) after that';
+  assert.equal(headline({site: 'X', text: t}), 'Revenue down 20% week on week with a very long explanation');
 });

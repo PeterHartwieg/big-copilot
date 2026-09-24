@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c19f9e4f8a">
+<link rel="stylesheet" href="community.css?v=35112aa120">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=c19f9e4f8a">
+<link rel="stylesheet" href="fonts/fonts.css?v=35112aa120">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1002,6 +1002,14 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
   font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink);white-space:nowrap;transition:opacity .15s;
 }
 .kpi:hover .spark .pt,.kpi:hover .spark .scrub{opacity:1}
+/* A tile that opens its own page: the whole tile is the link, and a small
+   arrow by the label says so. */
+a.kpi.td-go{color:inherit;text-decoration:none;cursor:pointer;transition:border-color .2s}
+a.kpi.td-go:hover{border-color:var(--rule)}
+.kpi .lab{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.td-go-ic{display:inline-grid;place-items:center;color:var(--ink-3);transition:color .15s,transform .2s}
+.td-go-ic svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
 
 /* findings: a dot, a verb, a number ------------------------------------- */
 .sev{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--ink-2);font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent;transition:all .15s}
@@ -1042,6 +1050,10 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .find.hide{display:none}
 .silenced{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);display:none}
 .silenced.on{display:block}
+/* Under the list: what the gate set aside, and the kinds switched off, a line
+   each, each opening its own rows. */
+.td-minor .td-count{margin:12px 0 0}
+.td-minor .td-rows{margin-top:12px}
 
 /* next moves: things the board cannot do yet ------------------------------ */
 /* Each card carries its own perspective. One perspective on the grid put the
@@ -1186,6 +1198,10 @@ tbody td.l,td .sub{white-space:normal}
 .staff-gaps{font-size:11.5px;color:var(--ink-2);overflow-wrap:anywhere}
 .staff-gaps p{margin:8px 0 0}
 tfoot td{font-family:"IBM Plex Mono",monospace;font-weight:600;border-top:1px solid var(--ink);border-bottom:none}
+/* Portfolio: the company's own costs under the sites' total, and the profit
+   that leaves, which is Today's figure. */
+tfoot tr.td-outside td{border-top:none;font-weight:400;color:var(--ink-2)}
+tfoot tr.td-outside.td-net td{font-weight:600;color:var(--ink);border-top:1px solid var(--rule)}
 .sub{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400;font-family:Archivo,sans-serif}
 .chev{display:inline-block;width:16px;vertical-align:-1px;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
 tr.chain{cursor:pointer}
@@ -2029,6 +2045,32 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .sp-eqb .t b, .sp-promo i{transform:none}
   .order-item.just-marked::after{display:none}
 }
+
+/* The phone: nothing on Today, Company or Growth may push the page sideways.
+   Four tiles pair up two by two, the Next moves cards stack, and a finding's
+   sentence takes a line of its own under its site, figure and arrow. Wide
+   tables scroll inside their own box rather than widening the page. */
+@media (max-width:640px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:24px}
+  .kpi{padding:14px 14px 12px;min-width:0}
+  .kpi .v{font-size:clamp(17px,5.4vw,24px)}
+  .kpi .row{flex-wrap:wrap;gap:4px 8px}
+  .moves{grid-template-columns:minmax(0,1fr);gap:12px}
+  #alertSection .find{grid-template-columns:18px minmax(0,1fr) auto 20px;gap:4px 10px}
+  #alertSection .find .mark{grid-column:1;grid-row:1}
+  #alertSection .find .site{grid-column:2;grid-row:1;min-width:0}
+  #alertSection .find .amt{grid-column:3;grid-row:1}
+  #alertSection .find .amt small{display:inline;margin-left:4px}
+  #alertSection .find .go{grid-column:4;grid-row:1}
+  #alertSection .find .what{grid-column:2/-1;grid-row:2}
+  #alertSection .find .more{grid-column:2/-1}
+  #secDaily .legend{flex-wrap:wrap}
+  /* drawMarket() sets the grid's columns inline; the neighbourhood heads
+     break inside their own column instead of running past the last one. */
+  .heat .h{min-width:0;font-size:8px;letter-spacing:0;overflow-wrap:anywhere;overflow:hidden}
+  .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
+  #planBody > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
+}
 </style>
 <style>
 [hidden]{display:none!important}
@@ -2424,8 +2466,7 @@ details.help[open] summary::after{content:"\2013"}
       </div>
       <div class="finds" id="alerts"></div>
       <p class="silenced" id="silenced"><b></b> · <a class="link" href="#">undo</a></p>
-      <p class="quiet" id="alertMinor" style="margin:12px 0 0"></p>
-      <div class="finds" id="minorList" style="margin-top:12px" hidden></div>
+      <div class="td-minor" id="alertMinor"></div>
     </section>
 
     <!-- Next moves: each card carries what it can say about this save, filled
@@ -2711,8 +2752,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c19f9e4f8a";</script>
-<script>window.LEDGER_RELEASE = {"version":"c19f9e4f8a","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "35112aa120";</script>
+<script>window.LEDGER_RELEASE = {"version":"35112aa120","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2781,8 +2822,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=c19f9e4f8a"></script>
-<script src="community.js?v=c19f9e4f8a"></script>
+<script src="app.js?v=35112aa120"></script>
+<script src="community.js?v=35112aa120"></script>
 
 <script>
 
@@ -4061,6 +4102,9 @@ function drawKpis(){
      The arrow chips read ▲/▼ with the size of the move; the dim ones carry a
      plain fact. */
   const hist = key => D.daily.map(key);
+  /* Debt earns the sub line only once it outweighs a week of profit; below
+     that it stays in the chip's note. */
+  const heavyDebt = k.debt > 0 && k.debt > Math.max(0, k.profitSum7 || 0);
   const vs7 = k.profitAvg7 ? (k.profitYesterday - k.profitAvg7) / Math.abs(k.profitAvg7) : 0;
   const cashTile = cf
     ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
@@ -4078,12 +4122,14 @@ function drawKpis(){
        ? chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
            `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`)
        : chipHtml("dim", "no history", "No finished day in this save yet; there is no profit comparison to show"),
-     sub: D.daily.length ? "vs 7-day" : "no finished day", spark: hist(d => d.profit)},
+     sub: D.daily.length ? "vs 7-day" : "no finished day", spark: hist(d => d.profit),
+     /* The day's result has a page of its own; the tile is the way in. */
+     go: "secDaily", goTip: "Open Company › Results, the daily result"},
     {l: "Revenue yesterday", v: fmt(k.revenue),
      chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
      sub: "customers", spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
-    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip, sub: cashTile.sub},
+    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip, sub: heavyDebt ? `${compact(k.debt)} owed on loans` : cashTile.sub},
     k.netWorth === null
       ? {l: "Fixed cost / day", v: fmt(fixed),
          chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
@@ -4104,13 +4150,19 @@ function drawKpis(){
   ];
   /* The tiles are rebuilt on every render; the entrance plays only the first time. */
   const seen = !!q("#kpis .kpi.in");
+  const tag = t => t.go ? "a" : "div";
   $("kpis").innerHTML = tiles.map(t => `
-    <div class="kpi rv${seen ? " in" : ""}">
-      <span class="lab">${t.l}</span>
+    <${tag(t)} class="kpi rv${seen ? " in" : ""}${t.go ? " td-go" : ""}"${t.go ? ` href="#${t.go}" data-go="${t.go}" aria-label="${attr(`${t.l} ${t.v}. ${t.goTip}`)}"` : ""}>
+      <span class="lab">${t.l}${t.go ? `<span class="td-go-ic" data-tip="${attr(t.goTip)}">${icon("go")}</span>` : ""}</span>
       <span class="v">${t.v}</span>
       <div class="row">${t.chip}<span class="sub">${t.sub}</span></div>
       ${t.spark ? sparkHtml(t.spark, t.spark.map(money)) : ""}
-    </div>`).join("");
+    </${tag(t)}>`).join("");
+  $$("#kpis [data-go]").forEach(a => a.onclick = e => {
+    if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    reveal(a.dataset.go);
+  });
 }
 
 /* Where each kind of finding is spelt out on the board: a supply-chain view,
@@ -4280,9 +4332,15 @@ function splitFinding(a){
   }
   /* Still long: the last comma or bracket inside the limit ends the headline
      and the rest unfolds on hover, so the row keeps to the design's one line. */
+  /* A bracket that opens on a capital is part of a name the game gives,
+     "Fabric (Expensive)" or "Clothing (Classic Cheap Female)", and a headline
+     cut there named the item without its variant: two rows read "Fabric".
+     Only a bracket of words ("(important)", "(3 at peak)") is a place to cut. */
   if(what.length > HEADLINE_MAX){
-    let at = Math.max(what.lastIndexOf(", ", HEADLINE_MAX), what.lastIndexOf(" (", HEADLINE_MAX));
-    if(at < 20) at = Math.min(...[what.indexOf(", "), what.indexOf(" (")].filter(i => i > 0));
+    const cuts = [];
+    for(const m of what.matchAll(/, | \((?![A-Z])/g)) cuts.push(m.index);
+    let at = Math.max(-1, ...cuts.filter(i => i <= HEADLINE_MAX));
+    if(at < 20) at = Math.min(...cuts.filter(i => i > 0));
     if(isFinite(at) && at > 0){
       lead(what.slice(at).replace(/^[,\s(]+/, "").replace(/\)(?=[^)]*$)/, ""));
       what = what.slice(0, at);
@@ -4375,21 +4433,39 @@ function bindFindingRows(host, list){
 
 /* Where a finding shows is decided twice over, by the materiality gate and by
    its kind's switch, and neither drops it. `list` is every above-gate finding
-   whose kind is still on. `smaller` is what the gate set aside plus every
-   above-gate finding whose kind is switched off, with the switched-off rows
-   sorted after the gate rows so a switch visibly moves its own findings, even
-   the ones that were below the gate already. `off` counts the switched-off rows
-   in `smaller`, from either side of the gate, for the count line to carry.
+   whose kind is still on. `below` is what the gate set aside of the kinds that
+   are on; `switchedOff` is every finding whose kind is switched off, from
+   either side of the gate, so a switch visibly moves its own findings, even the
+   ones that were below the gate already. They are two lines under the list,
+   because "too small to read out" and "a kind you turned off" are two different
+   reasons (issue #51). `smaller` and `off` are the two together, as the site
+   page and the older callers count them.
    DOM-free and self-contained, so the switches can be tested without a page. */
 function partitionFindings(alerts, minorRows, prefs){
   const off = a => prefs[a.group] === false;
-  const kept = minorRows.filter(a => !off(a));
-  const smaller = kept.concat(minorRows.filter(off), alerts.filter(off));
-  return {list: alerts.filter(a => !off(a)), smaller, off: smaller.filter(off).length};
+  const below = minorRows.filter(a => !off(a));
+  const switchedOff = minorRows.filter(off).concat(alerts.filter(off));
+  const smaller = below.concat(switchedOff);
+  return {list: alerts.filter(a => !off(a)), below, switchedOff, smaller, off: switchedOff.length};
+}
+/* The switched-off line names each kind it holds, in the order the kinds
+   popover lists them, with how many and, where they carry money, what they are
+   worth: "At capacity (3, $136k/day), Overstaffed hours (15)". `label` turns a
+   kind id into its name; `money` prints a sum. */
+function switchedOffKinds(rows, label, money){
+  const by = new Map();
+  rows.forEach(r => {
+    const k = by.get(r.group) || {n: 0, worth: 0};
+    k.n++; k.worth += typeof r.worth === "number" ? Math.abs(r.worth) : 0;
+    by.set(r.group, k);
+  });
+  return [...by.entries()].map(([id, k]) =>
+    `${label(id)} (${k.n}${k.worth >= 1 ? `, ${money(k.worth)}/day` : ""})`).join(", ");
 }
 
+let showSwitchedOff = false;
 function drawAlerts(){
-  const {list, smaller, off} = partitionFindings(
+  const {list, below, switchedOff} = partitionFindings(
     D.alerts, (D.minor || {}).rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
@@ -4401,7 +4477,7 @@ function drawAlerts(){
   const tune = $("alertKindsToggle");
   $("alertHead").innerHTML = sechead("Needs attention", {
     why: `A site that is not trading always makes the list. Everything else needs to be worth ${
-      fmt(gate)}/day; smaller findings are counted below.`,
+      fmt(gate)}/day; smaller findings are counted below, and so are the kinds you switched off.`,
     aside: ["crit", "watch", "opp"].map(k =>
       `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
     ).join("") + `<span id="alertTuneSlot"></span>`,
@@ -4412,24 +4488,27 @@ function drawAlerts(){
     : `<span class="quiet" style="display:block;padding:12px 0">Nothing to flag here.</span>`;
   bindFindingRows($("alerts"), list);
 
-  /* Anything worth less than the materiality gate is counted rather than read
-     out, and a finding whose kind is switched off is demoted to it rather than
-     dropped: neither leaves the screen. The count and the money cover both,
-     and "show" lays the rows out like the list above, a switched-off kind
-     wearing its name as a dim chip. */
-  const rows = smaller;
-  const host = $("alertMinor"), more = $("minorList");
-  if(!rows.length){ host.innerHTML = ""; more.innerHTML = ""; more.hidden = true; }
-  else {
-    const worth = rows.reduce((s,r) => s + (r.worth || 0), 0);
-    host.innerHTML = `${rows.length} smaller · ${fmt(worth)}/day${
-      off ? ` · ${off} switched off` : ""} &nbsp;<a class="link" href="#" id="minorToggle" aria-expanded="${showMinor}">${
-      showMinor ? "hide" : "show"}</a>`;
-    $("minorToggle").onclick = e => { e.preventDefault(); showMinor = !showMinor; drawAlerts(); };
-    more.hidden = !showMinor;
-    more.innerHTML = showMinor ? rows.map(findingRow).join("") : "";
-    bindFindingRows(more, rows);
-  }
+  /* Nothing leaves the screen: under the list, one line counts what the
+     materiality gate set aside and one names the kinds switched off, each with
+     its own "show" that lays its rows out like the list above. A switched-off
+     row still wears its kind's name as a dim chip. */
+  const host = $("alertMinor");
+  const block = (rows, open, toggle, line) => !rows.length ? "" :
+    `<p class="quiet td-count">${line} &nbsp;<a class="link" href="#" data-td-toggle="${toggle}" aria-expanded="${open}">${
+      open ? "hide" : "show"}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(findingRow).join("")}</div>` : "");
+  const worth = below.reduce((s,r) => s + (r.worth || 0), 0);
+  host.innerHTML =
+    block(below, showMinor, "below",
+      `${below.length} below the ${fmt(gate)}/day line${worth >= 1 ? ` · ${fmt(worth)}/day` : ""}`)
+    + block(switchedOff, showSwitchedOff, "off",
+      `${switchedOff.length} in kinds you switched off: ${switchedOffKinds(switchedOff, kindLabel, compact)}`);
+  $$("[data-td-toggle]", host).forEach(a => a.onclick = e => {
+    e.preventDefault();
+    if(a.dataset.tdToggle === "below") showMinor = !showMinor; else showSwitchedOff = !showSwitchedOff;
+    drawAlerts();
+  });
+  const rowsOf = {below, off: switchedOff};
+  $$("[data-td-rows]", host).forEach(box => bindFindingRows(box, rowsOf[box.dataset.tdRows]));
   /* The kinds switches and the "show" link redraw this view outside
      renderAll(), so the sticky state (filtered severities, silenced ids) is
      re-applied here; both calls are idempotent. */
@@ -4541,6 +4620,28 @@ function chainRow(c, v){
 
 const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>`;
 
+/* The sites' profits add up to more than the company made: loan payments,
+   health insurance, the player's homes and parking are booked to the company,
+   not to any site. Two lines under the total say so, and end on the figure
+   Today's Profit tile shows. Read off the last finished day, whose `business`
+   is the sites' sum. */
+function outsideRows(span){
+  const days = D.daily || [];
+  const last = days[days.length - 1];
+  if(!last) return "";
+  const outside = (last.business || 0) - last.profit;
+  if(Math.abs(outside) < 1) return "";
+  const parts = [["loans", last.loans], ["health insurance", last.insurance],
+                 ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
+  const other = outside - parts.reduce((s, [, n]) => s + n, 0);
+  if(Math.abs(other) >= 1) parts.push(["other", other]);
+  const tip = `Day ${last.day}: ${parts.map(([l, n]) => `${l} ${fmt(n)}`).join(", ")}. The company pays these, no site does.`;
+  const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 2}"${
+    t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td></tr>`;
+  return row("Company costs outside sites", -outside, "", tip)
+    + row("Company profit", last.profit, " td-net", "The same figure as Today's Profit yesterday");
+}
+
 function drawPortfolio(){
   const v = VIEWS[view];
   $("portHead").innerHTML = sechead("Portfolio", {
@@ -4578,7 +4679,8 @@ function drawPortfolio(){
         i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
-      `<td class="${i?"":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr></tfoot>` : ""}`;
+      `<td class="${i?"":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr>${
+      view === "pnl" ? outsideRows(v.cols.length) : ""}</tfoot>` : ""}`;
   t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
     const i = +th.dataset.i;
     if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
@@ -8302,6 +8404,16 @@ function drawProducts(){
 /* Payroll is the headcount by role against the biggest role, and whatever needs
    doing as a chip beside the heading: nobody unhappy and nothing absent leaves
    one satisfaction chip. */
+function payrollWhy(){
+  const off = (D.businesses || [])
+    .map(b => [b, (b.wages || 0) - (b.staffCost || 0)])
+    .filter(([b, d]) => Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
+    .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
+  return "At today's rates: each person's hourly wage times their assigned weekly hours, over seven days. "
+    + "Booked yesterday: the wages yesterday's statements recorded, the Wages total of the Portfolio."
+    + (off.length ? ` They differ at ${off.slice(0, 4).map(([b, d]) => `${b.name} (${d > 0 ? "+" : ""}${fmt(d)})`).join(", ")}${
+        off.length > 4 ? ` and ${off.length - 4} more` : ""}.` : "");
+}
 function drawPayroll(){
   const st = D.staff;
   const trouble = [["unhappy", st.unhappy, "Satisfaction below 70%"],
@@ -8309,7 +8421,14 @@ function drawPayroll(){
                    ["complaining", st.complaining, "With an open complaint"]].filter(([,v]) => v);
   const max = Math.max(...st.roles.map(r => r.count), 1);
   $("secPayroll").innerHTML = sechead("Payroll", {
-    quiet: `${st.total} people · ${fmt(st.dailyCost)} / day`,
+    /* Two wage figures that legitimately differ, each saying what it is: the
+       rate is every hourly wage times its assigned weekly hours, over seven;
+       the books are what yesterday's statements recorded, the Portfolio's
+       Wages total. Where they part, the ? names the sites that booked more or
+       less than their people's rates and hours. */
+    why: payrollWhy(),
+    quiet: `${st.total} people · ${fmt(st.dailyCost)}/day at today's rates${
+      D.kpi && D.kpi.wageBill ? ` · ${fmt(D.kpi.wageBill)} booked yesterday` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
         `Average satisfaction across ${st.total} staff`)
       + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join("") : "",
@@ -12295,12 +12414,39 @@ const ALERT_GROUPS = [
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import lands", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
-  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:false},
+  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Stock not moving",       note:"Goods sitting in a depot no line draws from", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
+/* What is stored is only what the player switched: {v: 2, set: {kind: on}}, so
+   a kind whose default changes later moves with it unless the player chose.
+   The first boards stored the whole map on any flip, and every kind but these
+   two was on then. A legacy entry that matches the default it was saved under
+   is not a choice, only a copy, so it is dropped: At capacity turned on by
+   default, and a player who never touched it gets it on, while one who had
+   switched it on, or switched any other kind off, keeps that. (A player who
+   switched At capacity on and back off again stored the same false as one who
+   never touched it; the two cannot be told apart, and both get the new default.)
+   DOM-free, so the migration is tested without a page. */
+const ALERT_DEFAULTS_V1 = {atcap: false, idlestaff: false};
+function readKindChoices(saved){
+  if(!saved || typeof saved !== "object") return {};
+  if(saved.v === 2) return Object.assign({}, saved.set || {});
+  const set = {};
+  Object.keys(saved).forEach(id => {
+    const was = ALERT_DEFAULTS_V1.hasOwnProperty(id) ? ALERT_DEFAULTS_V1[id] : true;
+    if(!!saved[id] !== was) set[id] = !!saved[id];
+  });
+  return set;
+}
+function kindPrefs(choices){
+  const prefs = {};
+  ALERT_GROUPS.forEach(g => { prefs[g.id] = choices.hasOwnProperty(g.id) ? !!choices[g.id] : g.on; });
+  return prefs;
+}
+let alertKindChoices = {};
 /* The control that opens the panel: the tune button in the Needs attention
    section head, anything marked data-kinds, or the legacy "Filter kinds"
    button while the old markup is still there. Whichever one is clicked becomes
@@ -12389,9 +12535,15 @@ function toggleKindsPanel(anchor){
    counts are filled in each time it opens, so a live refresh cannot leave a
    stale number behind. */
 function buildAlertSettingsPanel(){
-  let saved = {};
-  try{ saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)) || {}; }catch(e){}
-  ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = saved.hasOwnProperty(g.id) ? !!saved[g.id] : g.on; });
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)); }catch(e){}
+  alertKindChoices = readKindChoices(saved);
+  Object.assign(alertGroupPrefs, kindPrefs(alertKindChoices));
+  /* A legacy map is rewritten in the new shape at once, so the migration runs
+     a single time and a later default change is never read against it. */
+  if(saved && saved.v !== 2){
+    try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
+  }
   if(kindsPop){ drawKindRows(); return; }
   kindsPop = document.createElement("div");
   kindsPop.className = "pop";
@@ -12399,7 +12551,7 @@ function buildAlertSettingsPanel(){
   kindsPop.setAttribute("role", "dialog");
   kindsPop.setAttribute("aria-label", "Which kinds make the list");
   kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
-    <p>Off is counted, never dropped: the kind leaves the list, and its findings show up in the "smaller" line under it, wearing the kind's name. Saved on this device.</p>
+    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds you switched off" line under it, with "show" to read them. Saved on this device.</p>
     <div class="kinds"></div>
     <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
     + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
@@ -12414,7 +12566,8 @@ function buildAlertSettingsPanel(){
     e.preventDefault();
     /* Back to the board's defaults, and out of storage entirely, so a later
        change to a default is picked up rather than frozen. */
-    ALERT_GROUPS.forEach(g => { alertGroupPrefs[g.id] = g.on; });
+    alertKindChoices = {};
+    Object.assign(alertGroupPrefs, kindPrefs(alertKindChoices));
     try{ localStorage.removeItem(ALERT_SETTINGS_KEY); }catch(e2){}
     drawKindRows();
     drawAlerts();
@@ -13362,8 +13515,8 @@ const bindKinds = once(() => on("click", ".sw", s => {
      state a screen reader hears has to move with the class. */
   if(s.getAttribute("role") === "switch") s.setAttribute("aria-checked", String(s.classList.contains("on")));
   const kind = s.dataset.kind; if(!kind) return;
-  alertGroupPrefs[kind] = s.classList.contains("on");
-  try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertGroupPrefs)); }catch(e){}
+  alertGroupPrefs[kind] = alertKindChoices[kind] = s.classList.contains("on");
+  try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
   drawAlerts();
 }));
 /* changed for kinds: bound once as before, plus the "n today" counts of an
