@@ -3980,7 +3980,7 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
         # Netted, a day an import can have landed takes its arrival off what
         # left, so the shops' draw that day reads as nothing: it is left out,
         # as the route's own figure leaves it out, rather than counted as a
-        # day nothing went to the shops. With too few days left, all of them.
+        # day nothing went to the shops.
         supply = flow["imports"].get((depot, slug))
         landed = _landings(supply) if supply and not routed else set()
         # A factory this depot tops up may take its own import of the item as
@@ -3988,13 +3988,18 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
         # can have landed what the factory took in is not what this depot
         # sent it, and taking it all off would take the shops' share with it:
         # those days are left out too, gross or net.
+        theirs = set()
         for fkey in feeders:
             own = flow["imports"].get((fkey, slug))
             if own:
-                landed |= _landings(own)
-        kept = [d for d in days if d not in landed]
-        if len(kept) >= SHIPPED_MIN_DAYS:
-            days = kept
+                theirs |= _landings(own)
+        # With too few days left, the depot's own landing days come back
+        # first (a day read short), the factories' last (a day read wrong).
+        for leave_out in (landed | theirs, theirs, set()):
+            kept = [d for d in days if d not in leave_out]
+            if len(kept) >= SHIPPED_MIN_DAYS:
+                days = kept
+                break
         rest = sum(
             max(0.0, gone.get(d, 0.0) - sum(t.get(d, 0.0) for t in taken))
             for d in days
@@ -13078,7 +13083,9 @@ const SUPPLY_VIEWS = {
         import: () => r.raiseImport
           ? `${chip("bad", "import short")} raise the ${r.importSmart ? "Smart Delivery stock level" : "weekly import"} to ${r.raiseImport.toLocaleString()}`
           : `${chip("warn", "import tight")} within 5% of what the factories eat`,
-        noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.depotNeed, 1)).toFixed(1)} weeks of it`,
+        // Weeks of what the import has to bring, after a route's share to the factories (_feed_notes).
+        noimport: () => `${chip("warn", "no import")} ${depot} holds ${(r.depotStock / Math.max(r.importNeed ?? r.depotNeed, 1)).toFixed(1)} weeks of it${
+          r.importRoutedFactories ? ` beyond the ${r.importRoutedFactories.toLocaleString()} a week a route brings them` : ""}`,
         made: () => `${chip("ok", "made in-house")} at ${r.madeAt.map(i => mapRef(D.businesses[i])).join(", ")}`,
         ok: () => chip("ok", "covered"),
       }[r.status]();
@@ -13195,6 +13202,7 @@ function feedVerdict(n){
      factory draws less than it needs, so it holds only up to that draw. */
   const covered = !!n.importCovered && n.depotNeed <= (n.importDrawWeek || 0) * 1.05;
   const need = covered ? 0 : Math.max(0, n.depotNeed - toFactories);
+  n.importRoutedFactories = Math.round(toFactories);
   n.importNeed = Math.round(need);
   n.importFit = n.importWeekly !== null
     ? need && !n.importWeekly ? "short" : feedFit(need, n.importWeekly) : null;

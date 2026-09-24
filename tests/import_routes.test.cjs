@@ -273,7 +273,7 @@ test('a depot line with no import that a route feeds is not asked to import', as
       Object.assign(n, {depotNeed: n.perWeek, madeAt: [], waitingOn: []});
       feedVerdict(n);
       return {actions: window.fixtureActions, imports: document.getElementById('importPlan').textContent,
-              status: n.status};
+              status: n.status, share: n.importRoutedFactories, need: n.importNeed};
     }, [data, routes]);
     const slug = data.supply.factories.sites[0].needs[0].slug;
     const without = await run({});
@@ -283,5 +283,30 @@ test('a depot line with no import that a route feeds is not asked to import', as
     assert.equal(fed.actions.filter(a => a.kind === 'Weekly imports').length, 0);
     assert.match(fed.imports, /route brings it/);
     assert.equal(fed.status, 'ok');
+    // A route bringing 400 of the 1,680: the page works out the route's share
+    // to the factories itself, as feedVerdict does, not the payload's.
+    const part = await run({1: {[slug]: {routed: 400, covered: false, drawWeek: 1680}}});
+    assert.deepEqual([part.status, part.share, part.need], ['noimport', 400, 1280]);
+  } finally { await page.close(); }
+});
+
+test('the factory inputs view counts the weeks at the depot against what a route leaves', async () => {
+  // As _feed_notes() says it: 1,000 at the depot against the 840 a week the
+  // import has to bring beyond the route's 840 to the factories, 1.2 weeks.
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_import_routes import ImportRoutesTests; '
+    + 'print(json.dumps(ImportRoutesTests().build([],routed=True)))'));
+  Object.assign(data.supply.factories.sites[0].needs[0], {status: 'noimport', level: 'warn',
+    depotStock: 1000, depotNeed: 1680, importNeed: 840, importRoutedFactories: 840});
+  const page = await browser.newPage();
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    const text = await page.evaluate(data => {
+      D = data; stockView = 'feed'; showAllStock = true;
+      drawStock();
+      return document.getElementById('stock').textContent;
+    }, data);
+    assert.match(text, /holds 1\.2 weeks of it beyond the 840 a week a route brings them/);
   } finally { await page.close(); }
 });

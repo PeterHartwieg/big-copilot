@@ -1129,12 +1129,12 @@ Two tables, one per number a logistics manager is set with.
   machines times recipe draw times 24 times 7) plus what else leaves for the shops
   (measured from the delivery log, leaving out the days an import can have landed, when
   the log nets the arrival off what left; on a line a route from your own site feeds,
-  what left is read gross, before any arrival, and only the next exception applies). A
-  factory the depot tops up that also takes its own import of the material has that
-  import's days left out as well, since the log cannot tell its import from the depot's
-  top-up. *Arrived last week* sums every contract's
-  `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
-  cap shows as an order cut short. *Set in game* is the figure in the purchasing
+  what left is read gross, before any arrival, so an import day is not left out for
+  that). A factory the depot tops up that also takes its own import of the material
+  still has that import's days left out, route or not, since the log cannot tell its
+  import from the depot's top-up. *Arrived last week* sums every contract's
+  `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly cap
+  shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
   *Set to* is a box: where the setting falls short of the week it holds the
   suggestion, elsewhere the figure in game. Where a logistics route from your own site
