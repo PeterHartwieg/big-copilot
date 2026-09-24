@@ -473,10 +473,21 @@ the two differ.
    undo. gpt-6-sol's review found two MUST-FIX races, and Opus's review of the same commit may not
    have landed. The fix to build: web/app.js tags every board build with the moment its `/save`
    fetch started (or a fetch sequence number). The gate opens only on a build whose fetch started
-   after the undo answer arrived, instead of comparing stamps. It keeps re-checking on every build
+   after the undo answer arrived, instead of comparing stamps. gpt-6-sol's findings are saved in
+   `research/write-back-handover/undo-gate-r7-sol.md`. The earlier review briefs are beside them
+   (`review_*.md`). It keeps re-checking on every build
    until the player clicks, and closes again on a source or company switch. The stamp should be
    committed (`lastLinkStamp`) only after the board accepts a build. Then run a scoped review round.
-2. **Narrow supply fix** on branch `supply-narrow` (worktree
+2. **Narrow supply fix: redo it literally.** Peter chose "only remove the phantom: goods a factory
+   forwards to a depot that then uses none of them don't count". The branch's gross in/out model went
+   broader than that, and review round 2 found two more MUST-FIXes: a factory, then a depot, then a
+   consuming factory; and a same-day import mixed with a top-up. Saved in
+   `research/write-back-handover/supply-narrow-r2-sol.md` in the main checkout. Next: keep the base
+   net model of main and change only this. When a factory's same-day outflow of an item goes to a
+   depot whose draw of that item is nil (a stock-target fill nothing uses, as Factory Jewelry to
+   Jewelry Distrib., Metal Band 5,000), don't let it pull the factory's intake down. Nothing else
+   should differ from base. Paper Bag's Monday undercount can stay: its 25,000 level covers it.
+   The current work is on branch `supply-narrow` (worktree
    `C:/Users/Peter/Coding_Projects/big-copilot-supply-narrow`, from main 92c3ef8). It uses gross
    in/out flows per site instead of per-day net figures. On Peter's save, Metal Band's Used / week is
    15,120 + 0 (it was 20,200) and Paper Bag's is 19,530. Review round 2 is on its latest commit.
