@@ -1255,6 +1255,20 @@ test('schedule: in a run, an undo refused while a BizMan screen is open is offer
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
 });
 
+test('schedule: a refusal the game cannot be talked out of (bad_hours) offers no Try again', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters()});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write this roster to the game'}).click();
+  await ready(page);
+  await configure({refuseWrite: 'refused:bad_hours'});
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
+  await dialog(page).getByText('A shift is not whole hours, at most 12, within the day').waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).count(), 0);
+  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).count(), 1);
+  assert.deepEqual(await applied(), []);
+});
+
 test('imports: the ranked list is the game\'s order, read only, and a write sends no order', async (t) => {
   const page = await linked(t, {approved: true});
   await supply(page);

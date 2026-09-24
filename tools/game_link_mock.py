@@ -399,6 +399,10 @@ class Link:
                 if rule == "locked":
                     row["reopens"] = {"day": self._monday(), "hour": 8}
             return 409, {"error": error, "rows": rows}
+        if error in ("changed", "refused") and kind == "undo":
+            # As the undo of that kind answers: its rows lead with the rule.
+            rule = detail or REFUSED_DEFAULT.get(body.get("kind"), "screen_open")
+            return 409, {"error": error, "rows": [] if error == "changed" else [{"error": rule}]}
         return 409, {"error": error}
 
     # uniforms ---------------------------------------------------------------------

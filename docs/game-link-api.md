@@ -430,7 +430,8 @@ skills it cleared in `set`; imports and schedule answer `before` as the state th
 found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
 game has moved on. An undo is not itself undoable; a new write of the kind replaces what
-undo would restore.
+undo would restore. One board per game: with two boards writing the same kind, an undo
+restores whichever write came last.
 
 ### Anything else
 
