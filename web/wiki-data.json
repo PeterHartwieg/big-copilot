@@ -5702,7 +5702,7 @@
       "id": "products-glass",
       "categoryId": "common_factory_ingredients",
       "title": "Glass",
-      "body": "**Glass** is a raw ingredient used by [Factories](businesstypes-factory).\n\nThe product can be used by the following Factory Workstations:\n\n* [Electronics Workstation](furniture-electronicsworkstation)\n* [Consumer Goods Workstation](furniture-consumergoodsworkstation)\n\nThe product can be used in the following recipes:\n\n* [Arty Fish Phone Recipe](recipes-smartphone1recipe)\n* [Arty Fish Smartwatch Recipe](recipes-smartwatch2recipe)\n* [Gift (Expensive) Recipe](recipes-expensivegiftrecipe)\n* [ZanaMan Phone Recipe](recipes-smartphone2recipe)\n* [ZanaMan Smartwatch Recipe](recipes-smartwatch1recipe)\n\nThe product can be imported from the following locations:\n* [Maritime Freight Line](address: 7 pier)"
+      "body": "**Glass** is a raw ingredient used by [Factories](businesstypes-factory).\n\nThe product can be used by the following Factory Workstations:\n\n* [Electronics Workstation](furniture-electronicsworkstation)\n* [Consumer Goods Workstation](furniture-consumergoodsworkstation)\n\nThe product can be used in the following recipes:\n\n* [Arty Fish Phone Recipe](recipes-smartphone1recipe)\n* [Arty Fish Smartwatch Recipe](recipes-smartwatch2recipe)\n* [Gift (Expensive) Recipe](recipes-expensivegiftrecipe)\n* [ZanaMan Phone Recipe](recipes-smartphone2recipe)\n* [ZanaMan Smartwatch Recipe](recipes-smartwatch1recipe)\n\nThe product can be imported from the following locations:\n* [Maritime Freight Line](address: 7 pier)\n* [Global Harvest Traders](importers-globalharvest)"
     },
     {
       "id": "products-grapes",
@@ -6061,14 +6061,14 @@
   ],
   "sample": {
     "SOURCES": {
-      "extracted": "2026-09-16",
-      "sourceDate": "2026-09-16",
+      "extracted": "2026-09-23",
+      "sourceDate": "2026-09-23",
       "files": [
         {
           "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-          "bytes": 821768,
-          "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-          "mtime": "2026-09-16T16:10:31Z",
+          "bytes": 814954,
+          "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+          "mtime": "2026-09-23T15:55:07Z",
           "note": "6054 locale keys. Guide facts and original help text are read from this file."
         },
         {
@@ -6122,7 +6122,7 @@
         },
         {
           "label": "Steam app / depot build",
-          "value": "app 1331550, buildid 25343755",
+          "value": "app 1331550, buildid 25482473",
           "where": "steamapps/appmanifest_1331550.acf",
           "certain": true,
           "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -7302,7 +7302,7 @@
       },
       {
         "what": "Three different build numbers",
-        "detail": "Steam's depot build id for this install is app 1331550, buildid 25343755. The shipped layouts counted for placement were authored at builds 3521, 3629. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
+        "detail": "Steam's depot build id for this install is app 1331550, buildid 25482473. The shipped layouts counted for placement were authored at builds 3521, 3629. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
       },
       {
         "what": "A wholesale 'no' is an absence, not a rule",
@@ -8660,14 +8660,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -8700,7 +8700,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -8741,7 +8741,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -9703,14 +9703,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -9743,7 +9743,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -9776,7 +9776,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -10989,14 +10989,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -11029,7 +11029,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -11062,7 +11062,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -12604,14 +12604,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -12644,7 +12644,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -12681,7 +12681,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -14209,14 +14209,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -14249,7 +14249,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -14290,7 +14290,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -15093,14 +15093,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -15133,7 +15133,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -15154,7 +15154,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -16739,14 +16739,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -16779,7 +16779,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -16816,7 +16816,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -18101,14 +18101,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -18141,7 +18141,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -18182,7 +18182,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -19321,14 +19321,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -19361,7 +19361,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -19398,7 +19398,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -21301,14 +21301,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -21362,7 +21362,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -21403,7 +21403,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. Shipped layouts used by this guide were authored at builds 3521, 3629. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. Shipped layouts used by this guide were authored at builds 3521, 3629. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -22206,14 +22206,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -22246,7 +22246,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -22267,7 +22267,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -23279,14 +23279,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -23319,7 +23319,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -23360,7 +23360,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -24088,14 +24088,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -24128,7 +24128,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -24165,7 +24165,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -25059,14 +25059,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -25099,7 +25099,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -25132,7 +25132,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -25933,14 +25933,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -25973,7 +25973,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -25994,7 +25994,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -27569,14 +27569,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -27609,7 +27609,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -27646,7 +27646,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -29187,14 +29187,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -29227,7 +29227,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -29264,7 +29264,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -31245,14 +31245,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -31285,7 +31285,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -31322,7 +31322,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -32287,14 +32287,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -32327,7 +32327,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -32360,7 +32360,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -33159,14 +33159,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -33199,7 +33199,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -33220,7 +33220,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -34011,14 +34011,14 @@
         }
       ],
       "SOURCES": {
-        "extracted": "2026-09-16",
-        "sourceDate": "2026-09-16",
+        "extracted": "2026-09-23",
+        "sourceDate": "2026-09-23",
         "files": [
           {
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-            "bytes": 821768,
-            "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-            "mtime": "2026-09-16T16:10:31Z",
+            "bytes": 814954,
+            "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+            "mtime": "2026-09-23T15:55:07Z",
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
@@ -34051,7 +34051,7 @@
           },
           {
             "label": "Steam app / depot build",
-            "value": "app 1331550, buildid 25343755",
+            "value": "app 1331550, buildid 25482473",
             "where": "steamapps/appmanifest_1331550.acf",
             "certain": true,
             "caveat": "This is Steam's depot build id. It is not the game build number that a save file carries, and the two must never be compared."
@@ -34072,7 +34072,7 @@
         },
         {
           "what": "Source build numbers",
-          "detail": "The installed Steam build is app 1331550, buildid 25343755. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
+          "detail": "The installed Steam build is app 1331550, buildid 25482473. No layout build number is available for this guide. A save's build number is not included because this payload is built without reading a save."
         },
         {
           "what": "Guide coverage",
@@ -34224,13 +34224,13 @@
   "provenance": {
     "schema": "ba-wiki-public",
     "builtBy": "tools/build_wiki_data.py",
-    "sourceDate": "2026-09-16",
+    "sourceDate": "2026-09-23",
     "sources": {
       "locale": {
         "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
-        "bytes": 821768,
-        "sha256": "2884345be7d9b1895d6627c9ecf1fe04f144fd4ad81a61bf78f33db12adfc5fe",
-        "mtime": "2026-09-16T16:10:31Z"
+        "bytes": 814954,
+        "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
+        "mtime": "2026-09-23T15:55:07Z"
       },
       "helpStructure": {
         "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
@@ -34274,13 +34274,13 @@
     },
     "steam": {
       "appId": "1331550",
-      "buildId": "25343755",
-      "steamLabel": "app 1331550, buildid 25343755",
+      "buildId": "25482473",
+      "steamLabel": "app 1331550, buildid 25482473",
       "source": "steamapps/appmanifest_1331550.acf",
       "saveBuildNumber": null,
       "product": "Big Ambitions - Hovgaard Games",
       "unity": "2022.3.62f2",
-      "extracted": "2026-09-16"
+      "extracted": "2026-09-23"
     },
     "saveBuildNumber": null,
     "counts": {
