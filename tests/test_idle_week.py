@@ -184,7 +184,7 @@ class IdleWeekTests(unittest.TestCase):
                  {"noun": "counters", "staff": 5, "when": "Thu 8-9", "spare": 4}]
         # The biggest two, in the week's own order, then how many more.
         self.assertEqual(_idle_parts(parts, "desks"),
-                         "3 desks Tue 8-20; 4 counters Wed 8-20; and 2 more")
+                         "3 desks Tue 8-20; 4 counters Wed 8-20 (and 2 more)")
         self.assertEqual(_idle_parts(parts[:2], "desks"), "2 counters Mon 8-20; 3 desks Tue 8-20")
 
     def test_a_role_with_no_wage_prices_nothing(self):

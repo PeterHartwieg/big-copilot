@@ -6936,7 +6936,9 @@ IDLE_PARTS = 2  # how many parts of an overstaffed week the line names
 
 def _idle_parts(parts: list, default: str) -> str:
     """The overstaffed week's parts as the line says them: the IDLE_PARTS with
-    the most spare staff-hours, in the week's own order, then how many more.
+    the most spare staff-hours, in the week's own order, then "(and N more)" --
+    in brackets, since "; and 2 more for 10 customers an hour" would read as
+    one more part.
 
     A part's hours can end "and 5 scattered hours" and join day shapes with
     "and", so the parts are kept apart by a semicolon. spIdleWeek() on the
@@ -6947,7 +6949,7 @@ def _idle_parts(parts: list, default: str) -> str:
         f"{parts[i]['staff']} {parts[i]['noun'] or default} {parts[i]['when']}" for i in named
     )
     more = len(parts) - len(named)
-    return f"{said}; and {more} more" if more else said
+    return f"{said} (and {more} more)" if more else said
 
 
 GLOBAL_HOOD = "ba:neighborhood_global"
@@ -12965,6 +12967,12 @@ function hourGrid(g, todayWd, lead = null, idle = []){
 /* A vending-machine side item earns a rounding error next to a store's real
    line — this is the cutoff, as a share of the best-selling line's revenue. */
 const SHELF_MAIN_SHARE = 0.02;
+/* Whether a line gets a row in a site's Shelves block at all (folded or not):
+   an office lists the fees it prices or bills, and not the phones and monitors
+   boxed up in its cargo; a shop lists what it sells or holds. drawSite() draws
+   by it and the Products link (xlSellers) picks by it, so a link never lands
+   on a row that is not there. */
+const spShelfListed = (b, l) => b.status === "office" ? l.price > 0 || l.rate > 0 : l.rate > 0 || l.units > 0;
 const SMALL = `style="font-size:12px;color:var(--ink-3);margin-left:6px"`;
 const CLOSE_ICON = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>`;
 /* Two letters for a role: the initials of its first two words. */
@@ -13027,7 +13035,7 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
    who was on and when, and the weekday-hours named. A finding written before
    `week` existed is a week of its one run, as _alerts() reads it. The parts
    are said as _idle_parts() says them: the SP_IDLE_PARTS with the most spare
-   staff-hours, in the week's order, apart by "; ", then how many more; every
+   staff-hours, in the week's order, apart by "; ", then "(and N more)"; every
    hour of the week is still lit. */
 const SP_IDLE_PARTS = 2;
 function spIdleParts(parts, noun){
@@ -13036,7 +13044,7 @@ function spIdleParts(parts, noun){
     .slice(0, SP_IDLE_PARTS).sort((a, z) => a - z);
   const said = named.map(i => `${parts[i].staff} ${parts[i].noun || noun} ${parts[i].when}`).join("; ");
   const more = parts.length - named.length;
-  return more ? `${said}; and ${more} more` : said;
+  return more ? `${said} (and ${more} more)` : said;
 }
 function spIdleWeek(n){
   const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
@@ -14991,7 +14999,7 @@ const xlGuideLink = (typeSlug, label, section = "") => {
    Shelves block to land on: a depot or a factory holding the goods is never
    the answer, and with no such store the product is not a link. */
 const xlSellers = item => D.businesses.filter(b => b.status === "retail" || b.status === "office")
-  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units))}))
+  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units) && spShelfListed(b, l))}))
   .filter(x => x.line)
   .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
 /* Open that store on its Shelves with the product's row pulsing. A bag or a
@@ -15188,7 +15196,7 @@ function drawSite(){
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
   const shelves = !shelved ? []
-    : office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
+    : office ? b.lines.filter(l => spShelfListed(b, l))
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
@@ -15198,7 +15206,7 @@ function drawSite(){
   const products = !shelved ? "" : office ? (shelves.length ? `
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
-      <tbody>${shelves.map(l => `<tr>
+      <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)

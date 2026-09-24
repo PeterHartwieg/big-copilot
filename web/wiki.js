@@ -156,6 +156,8 @@ let wikiShowFix = false;        // the setup list is showing every alternative
    business being read: navigation moves this, and nothing else. */
 let wikiActive = null;
 let wikiLanding = "";           // a section a link asked for, until the page has it
+let wikiReturnY = null;         // where Back or Forward puts the reader, until the page has it
+let wikiScrollWired = false;
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
@@ -286,20 +288,53 @@ function wikiTypeHref(typeSlug, section){
   const m = String(typeSlug ?? "").match(/businesstype_([a-z0-9]+)$/i);
   return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
+/* Where the reader stands on a Wiki page is kept on its own history entry, as
+   `y` in its state beside the board's stamp, written a moment after the
+   scrolling stops. Back and Forward then have one rule: go back to that y.
+   The write is dropped if the page or the address has moved on meanwhile, so a
+   scroll never lands on the entry a step has just brought up. */
+function wikiWatchScroll(){
+  if(wikiScrollWired || typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+  wikiScrollWired = true;
+  let timer = 0;
+  window.addEventListener("scroll", () => {
+    if(typeof location === "undefined" || typeof setTimeout !== "function") return;
+    if(typeof clearTimeout === "function") clearTimeout(timer);
+    const href = location.href;
+    timer = setTimeout(() => {
+      if((typeof page !== "undefined" && page !== "wiki") || location.href !== href) return;
+      try{ history.replaceState(Object.assign({}, history.state, {y: Math.round(window.scrollY)}), "", href); }catch(e){}
+    }, 120);
+  }, {passive: true});
+}
+/* The y kept on the entry on screen, or null when it has none. */
+function wikiEntryY(){
+  try{
+    const y = history.state && history.state.y;
+    return typeof y === "number" && isFinite(y) ? y : null;
+  }catch(e){ return null; }
+}
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
    while it is up. `entered` says the Wiki was not the page on screen before;
    `step` says Back or Forward brought the reader here. */
 function showWikiRoute(hash, entered = false, step = false){
+  wikiWatchScroll();
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
   /* A link into a section is a place to land once, each time it is followed;
      a redraw afterwards leaves the reader wherever they have scrolled to. The
      route outlives a visit to another page, so following the same link a
-     second time is not a move; coming in from elsewhere is what says so. Back
-     and Forward are not following a link: the reader returns to where they
-     had scrolled, not to the section the link once asked for. */
-  if(step) wikiLanding = "";
-  else if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+     second time is not a move; coming in from elsewhere is what says so.
+     Back and Forward are not following a link: the reader goes back to the y
+     their entry kept, into the Wiki or within it. An entry with none (the
+     reader never scrolled there) falls back to its section, else its top. */
+  if(step){
+    wikiReturnY = wikiEntryY();
+    wikiLanding = wikiReturnY === null && next.section ? next.section : "";
+  } else if(next.section && (entered || moved || next.section !== wikiRoute.section)){
+    wikiLanding = next.section;
+    wikiReturnY = null;
+  }
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -2000,7 +2035,25 @@ function drawWiki(hold){
    settleScroll() is the board's: the sections above are estimated heights
    until they paint, and one scroll would land short. */
 function wikiLand(){
-  if(!wikiLanding || wikiStatus !== "ready") return;
+  if(wikiStatus !== "ready") return;
+  if(wikiReturnY !== null){
+    /* Back to where the reader stood. Sections are estimated heights until
+       they paint, and the browser's scroll anchoring moves the page as the
+       ones around y do, so y is set again each frame for as long as that
+       keeps moving it, the way settleScroll() settles a landing. */
+    const y = wikiReturnY;
+    wikiReturnY = null;
+    wikiLanding = "";
+    let frames = 12, still = 0;
+    const go = () => {
+      if(typeof page !== "undefined" && page !== "wiki") return;
+      if(Math.abs(window.scrollY - y) > 1){ window.scrollTo(0, y); still = 0; } else still++;
+      if(still < 2 && --frames > 0 && typeof requestAnimationFrame === "function") requestAnimationFrame(go);
+    };
+    go();
+    return;
+  }
+  if(!wikiLanding) return;
   const el = $(WIKI_SECTIONS[wikiLanding]);
   wikiLanding = "";
   if(!el) return;

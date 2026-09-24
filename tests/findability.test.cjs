@@ -311,6 +311,31 @@ test('a depot or factory holding a product is never where its Products row lands
   } finally { await page.close(); }
 });
 
+test('an office fee opens its office with the Fees row lit, and office cargo is never a target', async () => {
+  const fee = {item: 'Lawyer Fee', slug: 'lawyerfee', revenue: 900, rate: 3, units: 0, price: 300, soldPerDay: 3};
+  // Phones boxed up in the office's cargo: more than the shop holds, but no row.
+  const cargo = {item: 'Phone', slug: 'phone', revenue: 0, rate: 0, units: 40, price: 0, soldPerDay: 0};
+  const phone = {item: 'Phone', slug: 'phone', revenue: 0, rate: 0, units: 6, price: 90, soldPerDay: 0};
+  const page = await board({
+    shop: {lines: [phone]},
+    peer: {status: 'office', type: 'Law Firm', typeSlug: 'ba:businesstype_lawfirm', lines: [fee, cargo]},
+    products: [
+      {item: 'Lawyer Fee', revenue: 900, units: 3, week: 21, stock: 0, stores: 1, price: 300, peak: null},
+      {item: 'Phone', revenue: 0, units: 0, week: 0, stock: 46, stores: 0, price: 0, peak: null},
+    ],
+  });
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
+    await page.locator('#secProducts .xl-sells', {hasText: 'Lawyer Fee'}).click();
+    assert.equal(await page.evaluate(() => siteKey), OTHER);
+    assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-lawyerfee')}"].sp-hit`).count(), 1);
+    await page.evaluate(() => { showSub('company', 'products'); });
+    await page.locator('#secProducts .xl-sells', {hasText: 'Phone'}).click();
+    assert.equal(await page.evaluate(() => siteKey), KEY);
+    assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-phone')}"].sp-hit`).count(), 1);
+  } finally { await page.close(); }
+});
+
 // --- the Portfolio --------------------------------------------------------------
 
 test('a chain row says what it is made of, not only how many sites', async () => {

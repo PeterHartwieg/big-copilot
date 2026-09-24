@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=62b23f35db">
+<link rel="stylesheet" href="community.css?v=8667a80540">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=62b23f35db">
+<link rel="stylesheet" href="fonts/fonts.css?v=8667a80540">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "62b23f35db";</script>
-<script>window.LEDGER_RELEASE = {"version":"62b23f35db","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "8667a80540";</script>
+<script>window.LEDGER_RELEASE = {"version":"8667a80540","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2851,8 +2851,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=62b23f35db"></script>
-<script src="community.js?v=62b23f35db"></script>
+<script src="app.js?v=8667a80540"></script>
+<script src="community.js?v=8667a80540"></script>
 
 <script>
 
@@ -4994,6 +4994,12 @@ function hourGrid(g, todayWd, lead = null, idle = []){
 /* A vending-machine side item earns a rounding error next to a store's real
    line — this is the cutoff, as a share of the best-selling line's revenue. */
 const SHELF_MAIN_SHARE = 0.02;
+/* Whether a line gets a row in a site's Shelves block at all (folded or not):
+   an office lists the fees it prices or bills, and not the phones and monitors
+   boxed up in its cargo; a shop lists what it sells or holds. drawSite() draws
+   by it and the Products link (xlSellers) picks by it, so a link never lands
+   on a row that is not there. */
+const spShelfListed = (b, l) => b.status === "office" ? l.price > 0 || l.rate > 0 : l.rate > 0 || l.units > 0;
 const SMALL = `style="font-size:12px;color:var(--ink-3);margin-left:6px"`;
 const CLOSE_ICON = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>`;
 /* Two letters for a role: the initials of its first two words. */
@@ -5056,7 +5062,7 @@ const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
    who was on and when, and the weekday-hours named. A finding written before
    `week` existed is a week of its one run, as _alerts() reads it. The parts
    are said as _idle_parts() says them: the SP_IDLE_PARTS with the most spare
-   staff-hours, in the week's order, apart by "; ", then how many more; every
+   staff-hours, in the week's order, apart by "; ", then "(and N more)"; every
    hour of the week is still lit. */
 const SP_IDLE_PARTS = 2;
 function spIdleParts(parts, noun){
@@ -5065,7 +5071,7 @@ function spIdleParts(parts, noun){
     .slice(0, SP_IDLE_PARTS).sort((a, z) => a - z);
   const said = named.map(i => `${parts[i].staff} ${parts[i].noun || noun} ${parts[i].when}`).join("; ");
   const more = parts.length - named.length;
-  return more ? `${said}; and ${more} more` : said;
+  return more ? `${said} (and ${more} more)` : said;
 }
 function spIdleWeek(n){
   const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
@@ -7020,7 +7026,7 @@ const xlGuideLink = (typeSlug, label, section = "") => {
    Shelves block to land on: a depot or a factory holding the goods is never
    the answer, and with no such store the product is not a link. */
 const xlSellers = item => D.businesses.filter(b => b.status === "retail" || b.status === "office")
-  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units))}))
+  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units) && spShelfListed(b, l))}))
   .filter(x => x.line)
   .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
 /* Open that store on its Shelves with the product's row pulsing. A bag or a
@@ -7217,7 +7223,7 @@ function drawSite(){
   /* An office bills fees; the phones and monitors boxed up in its cargo are
      furniture, not lines. Every fee it prices or bills is listed, idle or not. */
   const shelves = !shelved ? []
-    : office ? b.lines.filter(l => l.price > 0 || l.rate > 0)
+    : office ? b.lines.filter(l => spShelfListed(b, l))
     : showAllShelves ? shelvesAll : shelvesAll.filter(isMainShelf);
   const gauge = t => {
     if(!t || t.pressure === null) return "—";
@@ -7227,7 +7233,7 @@ function drawSite(){
   const products = !shelved ? "" : office ? (shelves.length ? `
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
-      <tbody>${shelves.map(l => `<tr>
+      <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${l.soldPerDay.toLocaleString()}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
@@ -10417,6 +10423,8 @@ let wikiShowFix = false;        // the setup list is showing every alternative
    business being read: navigation moves this, and nothing else. */
 let wikiActive = null;
 let wikiLanding = "";           // a section a link asked for, until the page has it
+let wikiReturnY = null;         // where Back or Forward puts the reader, until the page has it
+let wikiScrollWired = false;
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
@@ -10547,20 +10555,53 @@ function wikiTypeHref(typeSlug, section){
   const m = String(typeSlug ?? "").match(/businesstype_([a-z0-9]+)$/i);
   return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
+/* Where the reader stands on a Wiki page is kept on its own history entry, as
+   `y` in its state beside the board's stamp, written a moment after the
+   scrolling stops. Back and Forward then have one rule: go back to that y.
+   The write is dropped if the page or the address has moved on meanwhile, so a
+   scroll never lands on the entry a step has just brought up. */
+function wikiWatchScroll(){
+  if(wikiScrollWired || typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+  wikiScrollWired = true;
+  let timer = 0;
+  window.addEventListener("scroll", () => {
+    if(typeof location === "undefined" || typeof setTimeout !== "function") return;
+    if(typeof clearTimeout === "function") clearTimeout(timer);
+    const href = location.href;
+    timer = setTimeout(() => {
+      if((typeof page !== "undefined" && page !== "wiki") || location.href !== href) return;
+      try{ history.replaceState(Object.assign({}, history.state, {y: Math.round(window.scrollY)}), "", href); }catch(e){}
+    }, 120);
+  }, {passive: true});
+}
+/* The y kept on the entry on screen, or null when it has none. */
+function wikiEntryY(){
+  try{
+    const y = history.state && history.state.y;
+    return typeof y === "number" && isFinite(y) ? y : null;
+  }catch(e){ return null; }
+}
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
    while it is up. `entered` says the Wiki was not the page on screen before;
    `step` says Back or Forward brought the reader here. */
 function showWikiRoute(hash, entered = false, step = false){
+  wikiWatchScroll();
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
   /* A link into a section is a place to land once, each time it is followed;
      a redraw afterwards leaves the reader wherever they have scrolled to. The
      route outlives a visit to another page, so following the same link a
-     second time is not a move; coming in from elsewhere is what says so. Back
-     and Forward are not following a link: the reader returns to where they
-     had scrolled, not to the section the link once asked for. */
-  if(step) wikiLanding = "";
-  else if(next.section && (entered || moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
+     second time is not a move; coming in from elsewhere is what says so.
+     Back and Forward are not following a link: the reader goes back to the y
+     their entry kept, into the Wiki or within it. An entry with none (the
+     reader never scrolled there) falls back to its section, else its top. */
+  if(step){
+    wikiReturnY = wikiEntryY();
+    wikiLanding = wikiReturnY === null && next.section ? next.section : "";
+  } else if(next.section && (entered || moved || next.section !== wikiRoute.section)){
+    wikiLanding = next.section;
+    wikiReturnY = null;
+  }
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -12261,7 +12302,25 @@ function drawWiki(hold){
    settleScroll() is the board's: the sections above are estimated heights
    until they paint, and one scroll would land short. */
 function wikiLand(){
-  if(!wikiLanding || wikiStatus !== "ready") return;
+  if(wikiStatus !== "ready") return;
+  if(wikiReturnY !== null){
+    /* Back to where the reader stood. Sections are estimated heights until
+       they paint, and the browser's scroll anchoring moves the page as the
+       ones around y do, so y is set again each frame for as long as that
+       keeps moving it, the way settleScroll() settles a landing. */
+    const y = wikiReturnY;
+    wikiReturnY = null;
+    wikiLanding = "";
+    let frames = 12, still = 0;
+    const go = () => {
+      if(typeof page !== "undefined" && page !== "wiki") return;
+      if(Math.abs(window.scrollY - y) > 1){ window.scrollTo(0, y); still = 0; } else still++;
+      if(still < 2 && --frames > 0 && typeof requestAnimationFrame === "function") requestAnimationFrame(go);
+    };
+    go();
+    return;
+  }
+  if(!wikiLanding) return;
   const el = $(WIKI_SECTIONS[wikiLanding]);
   wikiLanding = "";
   if(!el) return;

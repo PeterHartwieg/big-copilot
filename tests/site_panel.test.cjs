@@ -1453,13 +1453,13 @@ test('a week of three headcounts names the biggest two, on the page as on Today,
   const page = await idleSite(MANY.findings, MANY);
   try {
     const worth = await page.evaluate(w => fmt(w), MANY.row.worth);
-    const runs = '3 fitness planning boards Tue 8-20; 4 fitness planning boards Wed 8-20; and 1 more';
-    assert.match(MANY.row.text, new RegExp(`: ${runs} for `));
+    const runs = '3 fitness planning boards Tue 8-20; 4 fitness planning boards Wed 8-20 (and 1 more)';
+    assert.ok(MANY.row.text.includes(`: ${runs} for `), MANY.row.text);
     const chip = page.locator('#sp-hours .sp-hchip.idle');
     assert.equal((await chip.textContent()).trim(), `72 staff-hours a week · ${runs} · ${worth}/day of wages`);
     assert.equal(await chip.getAttribute('data-tip'),
       `${MANY.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
-    // "and 1 more": every hour of the week is still lit, Monday's included.
+    // "(and 1 more)": every hour of the week is still lit, Monday's included.
     await chip.hover();
     assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2, 3], 8, 20));
     // On a phone the chip wraps inside the page rather than pushing it sideways.
