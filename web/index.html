@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=10de071829">
+<link rel="stylesheet" href="community.css?v=f221778e65">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=10de071829">
+<link rel="stylesheet" href="fonts/fonts.css?v=f221778e65">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "10de071829";</script>
-<script>window.LEDGER_RELEASE = {"version":"10de071829","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "f221778e65";</script>
+<script>window.LEDGER_RELEASE = {"version":"f221778e65","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2851,8 +2851,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=10de071829"></script>
-<script src="community.js?v=10de071829"></script>
+<script src="app.js?v=f221778e65"></script>
+<script src="community.js?v=f221778e65"></script>
 
 <script>
 
@@ -10423,6 +10423,7 @@ let wikiShowFix = false;        // the setup list is showing every alternative
    business being read: navigation moves this, and nothing else. */
 let wikiActive = null;
 let wikiLanding = "";           // a section a link asked for, until the page has it
+let wikiLandTop = false;        // that landing came with entering or a new page: no section there means the top
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
@@ -10566,10 +10567,12 @@ function showWikiRoute(hash, entered = false){
      wherever they have scrolled to. The route outlives a visit to another
      page, so following the same link a second time is not a move; coming in
      from elsewhere is what says so. A landing still waiting for the catalogue
-     is dropped when the reader goes somewhere else before it arrives. */
+     is dropped when the reader enters again, moves to another page, or steps
+     onto a route that names no section (Back from A/prices to A) before the
+     catalogue arrives. */
   const land = !!next.section && (entered || moved || next.section !== wikiRoute.section);
-  if(land) wikiLanding = next.section;
-  else if(entered || moved) wikiLanding = "";
+  if(land){ wikiLanding = next.section; wikiLandTop = entered || moved; }
+  else if(entered || moved || !next.section) wikiLanding = "";
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -10580,7 +10583,9 @@ function showWikiRoute(hash, entered = false){
     wikiShowFix = false;
   }
   /* A different page, or the Wiki come back to with no section to land on,
-     starts at its own top, however far down the reader was before. */
+     starts at its own top, however far down the reader was before. Entering
+     with a section to land on leaves the scroll to wikiLand(), which goes to
+     the top instead when the page turns out not to have that section. */
   if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
   drawWiki();
@@ -12267,14 +12272,19 @@ function drawWiki(hold){
 
 /* Scroll to the section a link asked for, once the page that holds it is
    drawn. Until the catalogue is in there is nothing to scroll to, so the wish
-   waits for the draw that has it; a guide without the section keeps its top.
+   waits for the draw that has it. A page without the section, entered or
+   moved to, starts at its top rather than keeping the last page's scroll; a
+   section asked for on the page already on screen leaves the reader be.
    settleScroll() is the board's: the sections above are estimated heights
    until they paint, and one scroll would land short. */
 function wikiLand(){
   if(!wikiLanding || wikiStatus !== "ready") return;
   const el = $(WIKI_SECTIONS[wikiLanding]);
   wikiLanding = "";
-  if(!el) return;
+  if(!el){
+    if(wikiLandTop && window.scrollY > 0) window.scrollTo(0, 0);
+    return;
+  }
   if(typeof settleScroll === "function") settleScroll(el);
   else if(typeof el.scrollIntoView === "function") el.scrollIntoView({block: "start"});
 }

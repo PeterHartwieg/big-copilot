@@ -218,6 +218,44 @@ test('a landing still waiting for the catalogue is dropped when the reader moves
   assert.deepEqual(errors, []);
 });
 
+test('Back to the same guide with no section drops a landing still waiting for the catalogue', async t => {
+  let release;
+  const holdData = new Promise(r => { release = r; });
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop', holdData});
+  await page.waitForFunction(() => page === 'wiki');
+  // The prices link, then Back to the guide itself, all before the catalogue is in.
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop/prices');
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop');
+  release();
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  await settled(page);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('a page without the section a link names starts at its top, not where the last page was', async t => {
+  // The same help page before and after, so only entering the Wiki moves the scroll.
+  const {page, errors} = await fixture(t, {hash:'#wiki/general-energy'});
+  await page.getByRole('heading', {name:'Energy',exact:true,level:1}).waitFor();
+  // A long Today read well down, and a Wiki tall enough to keep that scroll.
+  await page.evaluate(() => {
+    document.getElementById('pageWiki').style.minHeight = '6000px';
+    showPage('today');
+    document.getElementById('pageToday').style.minHeight = '5000px';
+    scrollTo(0, 1500);
+  });
+  assert.equal(await page.evaluate(() => scrollY), 1500);
+  // A help page has no Prices in your save.
+  await page.evaluate(() => { location.hash = '#wiki/general-energy/prices'; });
+  await page.getByRole('heading', {name:'Energy',exact:true,level:1}).waitFor();
+  await settled(page);
+  assert.equal(await page.locator('#wk-prices').count(), 0);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
 test('search keeps focus when cleared and preserves mid-query edits', async t => {
   const {page, errors} = await fixture(t);
   await openFromLanding(page);

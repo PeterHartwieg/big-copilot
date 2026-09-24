@@ -156,6 +156,7 @@ let wikiShowFix = false;        // the setup list is showing every alternative
    business being read: navigation moves this, and nothing else. */
 let wikiActive = null;
 let wikiLanding = "";           // a section a link asked for, until the page has it
+let wikiLandTop = false;        // that landing came with entering or a new page: no section there means the top
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
@@ -299,10 +300,12 @@ function showWikiRoute(hash, entered = false){
      wherever they have scrolled to. The route outlives a visit to another
      page, so following the same link a second time is not a move; coming in
      from elsewhere is what says so. A landing still waiting for the catalogue
-     is dropped when the reader goes somewhere else before it arrives. */
+     is dropped when the reader enters again, moves to another page, or steps
+     onto a route that names no section (Back from A/prices to A) before the
+     catalogue arrives. */
   const land = !!next.section && (entered || moved || next.section !== wikiRoute.section);
-  if(land) wikiLanding = next.section;
-  else if(entered || moved) wikiLanding = "";
+  if(land){ wikiLanding = next.section; wikiLandTop = entered || moved; }
+  else if(entered || moved || !next.section) wikiLanding = "";
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -313,7 +316,9 @@ function showWikiRoute(hash, entered = false){
     wikiShowFix = false;
   }
   /* A different page, or the Wiki come back to with no section to land on,
-     starts at its own top, however far down the reader was before. */
+     starts at its own top, however far down the reader was before. Entering
+     with a section to land on leaves the scroll to wikiLand(), which goes to
+     the top instead when the page turns out not to have that section. */
   if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
   drawWiki();
@@ -2000,14 +2005,19 @@ function drawWiki(hold){
 
 /* Scroll to the section a link asked for, once the page that holds it is
    drawn. Until the catalogue is in there is nothing to scroll to, so the wish
-   waits for the draw that has it; a guide without the section keeps its top.
+   waits for the draw that has it. A page without the section, entered or
+   moved to, starts at its top rather than keeping the last page's scroll; a
+   section asked for on the page already on screen leaves the reader be.
    settleScroll() is the board's: the sections above are estimated heights
    until they paint, and one scroll would land short. */
 function wikiLand(){
   if(!wikiLanding || wikiStatus !== "ready") return;
   const el = $(WIKI_SECTIONS[wikiLanding]);
   wikiLanding = "";
-  if(!el) return;
+  if(!el){
+    if(wikiLandTop && window.scrollY > 0) window.scrollTo(0, 0);
+    return;
+  }
   if(typeof settleScroll === "function") settleScroll(el);
   else if(typeof el.scrollIntoView === "function") el.scrollIntoView({block: "start"});
 }
