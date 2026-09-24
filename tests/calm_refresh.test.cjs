@@ -1,0 +1,175 @@
+// A live refresh shows the new numbers in place: when the save moves on and
+// the source hands the board a new payload through changed(), nothing on the
+// page fades, slides or drives in again. Entrances still play when the reader
+// causes an arrival: a page not visited yet, a site opened. The board is the
+// real page from render(), its payload the real extract() of the synthetic
+// company in tests/es3_fixture.py, and its source a stub that only keeps the
+// callbacks the board hands to watch(). Never a real save.
+// Install Playwright and its Chromium browser to run; NODE_PATH may point at
+// an existing Playwright installation.
+const {test, before, after} = require('node:test');
+const assert = require('node:assert/strict');
+const {spawnSync} = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {chromium} = require('playwright');
+
+const root = path.join(__dirname, '..');
+const PYTHON = process.env.PYTHON || 'python';
+const GIFTS = 'ba:street_secondavenue#10';
+const DEPOT = 'ba:street_pier#9';
+// The host page's source, as web/app.js hands one over: the board calls
+// watch() once at start-up, and every delivery after that is changed(data).
+const STUB = '<script>window.LEDGER_SOURCE = {label: "Live", data: async () => null, '
+  + 'name: async () => null, watch(h){ window.calmWatch = h; }};</script>';
+
+let browser, html, payload;
+before(async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'calm-refresh-'));
+  try {
+    const save = path.join(dir, 'calm.hsg'), data = path.join(dir, 'payload.json');
+    const made = spawnSync(PYTHON, [path.join(root, 'tests', 'es3_fixture.py'), save, data], {cwd: root});
+    assert.equal(made.status, 0, made.stderr?.toString());
+    payload = fs.readFileSync(data, 'utf8');
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+  const page = spawnSync(PYTHON, ['-c',
+    'from ba_dashboard import render; import sys; '
+    + 'sys.stdout.buffer.write(render(None, live=True, before_script=sys.argv[1]).encode("utf-8"))', STUB],
+  {cwd: root, maxBuffer: 16 * 1024 * 1024});
+  assert.equal(page.status, 0, page.stderr?.toString());
+  html = page.stdout.toString();
+  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+});
+after(async () => { await browser?.close(); });
+
+// The board after its first delivery. The window is tall enough to hold a
+// page whole, so every block on it arrives at once rather than on scroll.
+async function board(t) {
+  const context = await browser.newContext({viewport: {width: 1280, height: 2400}});
+  t.after(() => context.close());
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
+  await context.route('https://**', route => route.abort());
+  await context.route('https://calm.test/', route =>
+    route.fulfill({contentType: 'text/html; charset=utf-8', body: html}));
+  await page.goto('https://calm.test/', {waitUntil: 'load'});
+  await page.evaluate(() => { document.body.classList.add('has-board'); });
+  await deliver(page);
+  return page;
+}
+// What the source does when the save moves on: a fresh copy of the numbers.
+const deliver = page => page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), payload);
+
+// Finite animations and transitions running on the page on screen, and the
+// blocks on it that have not arrived. Loops (a ping, a belt) are not
+// entrances; the masthead's Live dot is outside the page, and says "new" on
+// purpose.
+const MOTION = () => {
+  const host = [...document.querySelectorAll('.page')].find(p => !p.hidden);
+  const name = el => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '')
+    + [...el.classList].map(c => '.' + c).join('');
+  const moving = document.getAnimations().filter(a => {
+    const el = a.effect && a.effect.target;
+    const t = a.effect.getComputedTiming();
+    return el && host.contains(el) && el.getClientRects().length && isFinite(t.endTime)
+      && a.playState !== 'finished';
+  }).map(a => `${a.animationName || a.transitionProperty} on ${name(a.effect.target)}`);
+  const waiting = [...host.querySelectorAll('.rv:not(.in)')].filter(el => el.getClientRects().length).map(name);
+  return {moving, waiting};
+};
+// Read two frames on, when the browser has started whatever the step set off.
+const motion = page => page.evaluate(async M => {
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  return new Function(`return (${M})()`)();
+}, MOTION.toString());
+// Every arrival on screen has played out.
+async function settle(page) {
+  await page.waitForFunction(`(m => !m.moving.length && !m.waiting.length)((${MOTION})())`,
+    null, {polling: 100, timeout: 8000});
+}
+// A refresh through changed(), read straight after it and again two frames
+// later, once the browser has given the element under the pointer its hover.
+async function refresh(page, probe) {
+  return page.evaluate(async ([p, probe, MOTION]) => {
+    const measure = new Function(`return (${MOTION})()`);
+    const old = document.querySelector(probe);
+    window.calmWatch.changed(JSON.parse(p));
+    const now = measure();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const later = measure();
+    const fresh = document.querySelector(probe);
+    return {now, later, rebuilt: !!old && !!fresh && old !== fresh};
+  }, [payload, probe, MOTION.toString()]);
+}
+const still = {moving: [], waiting: []};
+
+test('a refresh leaves Today, an open site and Supply standing as they were', async t => {
+  const page = await board(t);
+  assert.equal(await page.evaluate(() => page), 'today');
+  await settle(page);
+  const today = await refresh(page, '#alerts .find');
+  assert.ok(today.rebuilt, 'the refresh rebuilt the findings');
+  assert.deepEqual(today.now, still);
+  assert.deepEqual(today.later, still);
+
+  // A shop's own page, under the pointer: its head, tiles and blocks.
+  await page.evaluate(key => openSite(key, false), GIFTS);
+  await settle(page);
+  const box = await page.locator('#sitePanel .sitehead').boundingBox();
+  await page.mouse.move(box.x + 40, box.y + box.height / 2);
+  const shop = await refresh(page, '#sitePanel .sitehead');
+  assert.ok(shop.rebuilt, 'the refresh rebuilt the site panel');
+  assert.equal(await page.evaluate(() => siteOpen && siteKey), GIFTS, 'the site stays open');
+  assert.deepEqual(shop.now, still);
+  assert.deepEqual(shop.later, still);
+
+  // The depot's page too: its stock block is a panel of its own kind.
+  await page.evaluate(key => openSite(key, false), DEPOT);
+  await settle(page);
+  const depot = await refresh(page, '#sitePanel .sitehead');
+  assert.ok(depot.rebuilt);
+  assert.deepEqual(depot.now, still);
+  assert.deepEqual(depot.later, still);
+
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'checks'); });
+  await settle(page);
+  const supply = await refresh(page, '#stockHead > *');
+  assert.ok(supply.rebuilt, 'the refresh rebuilt the stock checks');
+  assert.deepEqual(supply.now, still);
+  assert.deepEqual(supply.later, still);
+});
+
+test('what a refresh redraws on a view out of sight is there on the way back', async t => {
+  const page = await board(t);
+  // Payroll has been seen: its role cards arrived.
+  await page.evaluate(() => { showPage('company'); showSub('company', 'payroll'); });
+  await settle(page);
+  assert.ok(await page.locator('#secPayroll .role.rv.in').count() > 0, 'the fixture has role cards');
+  await page.evaluate(() => showPage('today'));
+  await settle(page);
+  await page.evaluate(() => { window.calmOld = document.querySelector('#secPayroll .role'); });
+  await deliver(page);
+  await page.evaluate(() => showPage('company'));
+  assert.ok(await page.evaluate(() => window.calmOld !== document.querySelector('#secPayroll .role')),
+    'the refresh rebuilt the role cards');
+  assert.deepEqual(await motion(page), still);
+});
+
+test('going somewhere new and opening a site still arrive', async t => {
+  const page = await board(t);
+  await settle(page);
+  await deliver(page);
+  // A page not visited yet: its sections slide in.
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'orders'); });
+  const supply = await motion(page);
+  assert.ok(supply.moving.some(m => /^opacity on section#secLogistics\.sec\.rv\.in$/.test(m)), supply.moving.join('\n'));
+  await settle(page);
+  // A site opened: its head and blocks arrive, staggered.
+  await page.evaluate(key => openSite(key, false), GIFTS);
+  const shop = await motion(page);
+  assert.ok(shop.moving.some(m => /^opacity on div\.sitehead\.rv\.in$/.test(m)), shop.moving.join('\n'));
+  assert.ok(shop.moving.filter(m => /^opacity on /.test(m)).length > 2, shop.moving.join('\n'));
+});

@@ -18784,6 +18784,51 @@ function renderAll(){
   ssCheckLanding();
 }
 
+/* A live refresh: the board already on screen takes the new numbers in place.
+   Entrances play when the reader causes an arrival (the first boot, a page or
+   view not visited yet, a site opened, a row unfolded), never because the save
+   moved on. renderAll() rebuilds the markup, so what it puts back arrives
+   silently (rvSettle), and every finite animation or transition the rebuild
+   started -- a block fading in, a truck driving on, an open row sliding down
+   again -- is run to its end before the frame is painted. A row's "this
+   changed" flash (tr.bump) is the refresh's own signal and plays; loops
+   (a ping, a belt) are not entrances and go on. The element under a still
+   pointer is new too, and the browser gives it its hover a frame or two
+   later (and with it the demand grid's lit row and column): transitions on
+   what the refresh drew that start in those two frames are run to the end
+   as well, so the finding under the pointer does not unfold again in slow
+   motion. Anything else started in those frames is the reader's and plays. */
+const calmSignal = a => a.animationName === "bump";
+function calmSettle(skip, only){
+  let all;
+  try{ all = document.getAnimations(); }catch(e){ return; }
+  all.forEach(a => {
+    if(skip.has(a) || calmSignal(a) || only && !only(a)) return;
+    const t = a.effect && a.effect.getComputedTiming && a.effect.getComputedTiming();
+    if(!t || !isFinite(t.endTime)) return;
+    try{ a.finish(); }catch(e){}
+  });
+}
+function renderCalm(){
+  let was;
+  try{ was = new Set(document.getAnimations()); }catch(e){ was = new Set(); }
+  /* What the rebuild inserts, read back synchronously below. */
+  const drawn = new MutationObserver(() => {});
+  drawn.observe(document.body, {childList: true, subtree: true});
+  rvCalm = true;
+  try{ renderAll(); } finally { rvCalm = false; }
+  const fresh = new Set(drawn.takeRecords().flatMap(r => [...r.addedNodes]));
+  drawn.disconnect();
+  calmSettle(was);
+  if(typeof CSSTransition === "undefined" || !fresh.size) return;
+  try{ was = new Set(document.getAnimations()); }catch(e){ return; }
+  const drew = el => { for(let n = el; n; n = n.parentNode) if(fresh.has(n)) return true; return false; };
+  /* Never the Live dot's: it is about to say "new". */
+  const ours = a => a instanceof CSSTransition && !!a.effect.target && a.effect.target.isConnected
+    && !a.effect.target.closest(".live") && drew(a.effect.target);
+  requestAnimationFrame(() => { calmSettle(was, ours); requestAnimationFrame(() => calmSettle(was, ours)); });
+}
+
 /* --- pages ------------------------------------------------------------ */
 /* One page at a time. Today is the daily check: four tiles and the list.
    Everything else is a place you go on purpose — the company's own results and
@@ -19581,10 +19626,24 @@ function arrive(el){
   el.classList.add("in");
   setTimeout(() => { el.style.transitionDelay = ""; }, 600 + (parseFloat(el.style.transitionDelay) || 0));
 }
+/* A live refresh (renderCalm) rebuilds blocks the reader has already seen
+   arrive. What it puts back stands where an arrived block stood, so it is
+   simply there: the nearest .rv around it says whether that place has
+   arrived, and with none around it, being on the page now does. A block on a
+   page or view never visited yet is left to arrive when the reader goes
+   there. Document order puts a block before what it holds. */
+let rvCalm = false;
+function rvSettle(el){
+  let host = el.parentElement;
+  while(host && !host.classList.contains("rv")) host = host.parentElement;
+  if(host ? !host.classList.contains("in") : el.closest("[hidden]")) return false;
+  el.classList.add("in");
+  return true;
+}
 function wireReveal(){
   const vh = window.innerHeight || 1000;
   if(rvIO) rvIO.disconnect();
-  const pending = $$(".rv:not(.in)").filter(el => !el.closest("[hidden]"));
+  const pending = $$(".rv:not(.in)").filter(el => !(rvCalm && rvSettle(el)) && !el.closest("[hidden]"));
   pending.forEach((el, i) => {
     el.style.transitionDelay = (i % 8) * 70 + "ms";
     if(REDUCED || el.getBoundingClientRect().top < vh) arrive(el);
@@ -23098,7 +23157,7 @@ function startWatching(){
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      if(first) boot(); else renderAll();
+      if(first) boot(); else renderCalm();
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
