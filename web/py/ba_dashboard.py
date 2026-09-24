@@ -1371,9 +1371,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         addr = (b["StreetName"], b["StreetNumber"])
         if addr in residential:
             continue
-        businesses.append(
-            _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
-        )
+        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
+        # The game's own switch that shuts a site's doors, which the
+        # not-trading finding names as a reason of its own.
+        row["closed"] = bool(b.get("temporarilyClosed"))
+        businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
     _job_demands(save, names, businesses)
 
@@ -8784,11 +8786,16 @@ def _alerts(
         silent.add(b["key"])
         priced = [l for l in b["lines"] if l["price"] > 0]
         stocked = [l for l in priced if l["units"] > 0]
-        # Which of the five pre-flight checks fail is the finding, so the slugs
+        # Which of the six pre-flight checks fail is the finding, so the slugs
         # are kept on the business beside the words: the site panel reads the
         # same list and the two cannot drift apart. An office sells hours, not
-        # goods, so it has nothing to stock or deliver.
+        # goods, so it has nothing to stock or deliver. A site shut with the
+        # game's temporarily-closed switch books no day however ready it is,
+        # so that reason comes first.
         failed, reasons = [], []
+        if b.get("closed"):
+            failed.append("closed")
+            reasons.append("temporarily closed")
         if b["staff"] == 0:
             failed.append("staff")
             reasons.append("no staff")
@@ -8984,15 +8991,39 @@ def _alerts(
             and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * HYPE_TIGHT
         )
 
+    # A shop's takings under hype are one number however many waves carry them,
+    # so the waves are gathered by the shop they land hardest on and each shop
+    # gets one line. The waves come soonest-ending first, which the line keeps.
+    by_top = {}
     for wave in hype:
         top = max(wave["sites"], key=lambda s: s["revenue"])
-        when = (
-            "ends today"
-            if wave["daysLeft"] <= 0
-            else "ends tomorrow"
-            if wave["daysLeft"] == 1
-            else f"has {wave['daysLeft']} days left"
-        )
+        by_top.setdefault(top["key"], (top, []))[1].append(wave)
+
+    for top, waves in by_top.values():
+        waves.sort(key=lambda w: w["daysLeft"])
+        soonest = waves[0]["daysLeft"]
+        if len(waves) == 1:
+            left = waves[0]["daysLeft"]
+            lines = (
+                f"{waves[0]['count']} lines "
+                + (
+                    "ends today"
+                    if left <= 0
+                    else "ends tomorrow"
+                    if left == 1
+                    else f"has {left} days left"
+                )
+            )
+        else:
+            parts = []
+            for n, wave in enumerate(waves):
+                left = wave["daysLeft"]
+                ends = (
+                    "today" if left <= 0 else "tomorrow" if left == 1 else f"in {left} days"
+                )
+                parts.append(f"{wave['count']} {'end ' if n == 0 or left <= 1 else ''}{ends}")
+            lines = f"{sum(w['count'] for w in waves)} lines ({', '.join(parts)})"
+        wave_word = "the wave" if len(waves) == 1 else "the waves"
         # Pricing is somebody else's job in this company. When a wave lands on a
         # shop that is already full, the only lever left is capacity — and it has
         # the wave's end date on it.
@@ -9000,21 +9031,23 @@ def _alerts(
         queue = (
             f" It already runs within 10% of capacity for {full} hour"
             f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
-            f"of the wave away and capacity is the only lever left."
+            f"of {wave_word} away and capacity is the only lever left."
             if full
             else ""
         )
-        base = wave["baseline"]
+        # The baseline is the first wave's: the shop's own days before a later
+        # wave already carry the earlier one.
+        base = min(waves, key=lambda w: w["startDay"])["baseline"]
         if base:
             drop = max(top["revenue"] - base["revenue"], 0)
             note(
-                "critical" if wave["daysLeft"] <= 2 else "warn",
+                "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{waves[0]['hood']} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
                 f"${base['revenue']:,.0f} for {base['basis']}; "
-                f"about ${drop:,.0f}/day of revenue rides on the wave.{queue}",
+                f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
                 worth=drop,
                 key=top["key"],
             )
@@ -9023,11 +9056,11 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                f"{wave['hood']} hype on {wave['count']} lines {when}; "
+                f"{waves[0]['hood']} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
                 f"shop of the same kind trading without a wave and no trading days "
-                f"before this one started, so there is no baseline to say what the "
-                f"drop will be",
+                f"before {'this one' if len(waves) == 1 else 'the first of them'} "
+                f"started, so there is no baseline to say what the drop will be",
                 always=True,
                 key=top["key"],
             )
@@ -14885,29 +14918,32 @@ const spHypeRow = key => {
   return null;
 };
 
-/* The five pre-flight checks, in the order a shop needs them. Red is failing
-   (b.notTrading, the same list the not-trading finding reads out); grey was
-   never checked, because the alert stops at the first of prices, stock and
-   shelves that fails; green is in place. An office has nothing to stock,
-   shelve or deliver, so it shows two. Only a site the not-trading finding
-   looked at has the list at all, and an empty one means every check passed
-   and the site simply has not booked a day yet. */
+/* The six pre-flight checks, in the order a shop needs them: doors open (the
+   game's temporarily-closed switch off), then the five that make it ready. Red
+   is failing (b.notTrading, the same list the not-trading finding reads out);
+   grey was never checked, because the alert stops at the first of prices,
+   stock and shelves that fails; green is in place. An office has nothing to
+   stock, shelve or deliver, so it shows three. Only a site the not-trading
+   finding looked at has the list at all, and an empty one means every check
+   passed and the site simply has not booked a day yet. */
 function spPreflight(b){
   const failed = b.notTrading;
   const chain = ["prices", "stock", "shelves"];
   const stops = chain.findIndex(s => failed.includes(s));
-  return ["staff", "prices", "stock", "shelves", "plan"]
-    .filter(s => b.status !== "office" || s === "staff" || s === "prices")
+  return ["closed", "staff", "prices", "stock", "shelves", "plan"]
+    .filter(s => b.status !== "office" || s === "closed" || s === "staff" || s === "prices")
     .map(s => ({slug: s, state: failed.includes(s) ? "no"
       : stops >= 0 && chain.indexOf(s) > stops ? "unk" : "ok"}));
 }
 const SP_CHECK_WORD = {
-  staff: "staffed", prices: "prices set", stock: "stock on the shelves",
+  closed: "open", staff: "staffed", prices: "prices set", stock: "stock on the shelves",
   shelves: "shelves filled", plan: "delivery plan",
 };
+/* A failing check that reads better as its own words than as "missing: ". */
+const SP_CHECK_NO = {closed: "temporarily closed"};
 /* What the lamp's own state adds to that word, and the drawing it wears. */
 const SP_CHECK_STATE = {ok: "", no: "missing: ", unk: "not checked yet: "};
-const SP_CHECK_ICON = {staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
+const SP_CHECK_ICON = {closed: "door", staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
 /* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
 const SP_PRIORITY = ["nice to have", "important", "critical"];
 /* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
@@ -16762,7 +16798,7 @@ function drawSite(){
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${siteLink(depot)}` : ""].filter(Boolean).join(" · ");
   /* The head marks: whether the doors are open, and — where they are not — the
-     five pre-flight checks that say why, and the site's place by the profit of
+     six pre-flight checks that say why, and the site's place by the profit of
      its last seven days. */
   const headMarks = !sp ? "" : `
       <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
@@ -16771,7 +16807,8 @@ function drawSite(){
          written the list. An older silent shop has no list and no lamps. */
       b.notTrading === undefined ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
         `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
-          SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
+          p.state === "no" && SP_CHECK_NO[p.slug]
+          || SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
   /* The hour chips: one per ceiling the busy hours ran into — the site can be
      held by staffing at night and by its door by day — and one for idle

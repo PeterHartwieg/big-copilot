@@ -4,13 +4,18 @@ Three additions the panel cannot draw without: the door count behind each day
 of a site's series, the amenity-by-amenity reading a shop's standards lamps
 need, and the list of pre-flight checks a silent site fails.
 """
+import os
+import sys
+import tempfile
 import unittest
 
-from ba_dashboard import (
+sys.path.insert(0, os.path.dirname(__file__))
+import es3_fixture  # noqa: E402
+from ba_dashboard import (  # noqa: E402
     AMENITY_DEMANDS, NEW_SITE_DAYS, OFFICE_TYPES, RETAIL_TYPES, _alert_id, _alerts,
-    _business, _staff, site_key,
+    _business, _staff, extract, site_key,
 )
-from ba_save import Names, Save
+from ba_save import Names, Save, load_save  # noqa: E402
 
 FLORIST = "ba:businesstype_florist"
 LAW_FIRM = next(t for t in OFFICE_TYPES if "law" in t)
@@ -66,10 +71,11 @@ class SiteFieldTests(unittest.TestCase):
         return {"graph": {"links": [{"to": KEY}] if planned else []},
                 "shops": [], "idle": [], "imports": []}
 
-    def silent(self, planned=False, crew=(), **options):
+    def silent(self, planned=False, crew=(), closed=False, **options):
         """A site too new to judge, and the finding and checks it fails."""
         save, record = self.build(**options)
         b = self.business(save, record, day=NEW_SITE_DAYS, crew=crew)
+        b["closed"] = closed  # as extract() sets it from the registration
         alerts = _alerts([b], self.supply(planned), [], [], [], [], [], 8, 1e6)
         return b, alerts
 
@@ -143,6 +149,38 @@ class SiteFieldTests(unittest.TestCase):
             prices=[("gift", 10.0), ("card", 5.0)], crew=CREW)
         self.assertEqual(b["notTrading"], [])
         self.assertIn("no trading day booked yet", alerts["lines"][0]["text"])
+
+    def test_a_ready_site_shut_with_the_switch_says_it_is_closed(self):
+        # Everything in place, but the game's temporarily-closed switch is on:
+        # that is the reason, not "no trading day booked yet".
+        b, alerts = self.silent(
+            planned=True, closed=True, shelves=[("gift", 10), ("card", 10)],
+            prices=[("gift", 10.0), ("card", 5.0)], crew=CREW)
+        self.assertEqual(b["notTrading"], ["closed"])
+        self.assertEqual(alerts["lines"][0]["text"],
+                         "HART. Flowers opened day 1, not trading yet: temporarily closed, "
+                         "$0/day rent")
+
+    def test_a_closed_site_lists_its_other_failures_after_the_switch(self):
+        b, alerts = self.silent(closed=True)
+        self.assertEqual(b["notTrading"], ["closed", "staff", "prices", "plan"])
+        self.assertIn("not trading yet: temporarily closed, no staff, no prices set, "
+                      "no delivery plan", alerts["lines"][0]["text"])
+
+    def test_extract_carries_the_switch_onto_the_business(self):
+        # The flag lives on the building registration; extract() copies it on.
+        company = es3_fixture.link_company()
+        bare = next(r for r in company["BuildingRegistrations"] if r["BusinessName"] == "HART. Bare")
+        bare.update(temporarilyClosed=True, creationDay=company["Day"] - 1)
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "closed.hsg")
+            with open(path, "wb") as fh:
+                fh.write(es3_fixture.encode(company))
+            data = extract(load_save(path), Names({}), None)
+        by_name = {b["name"]: b for b in data["businesses"]}
+        self.assertTrue(by_name["HART. Bare"]["closed"])
+        self.assertFalse(by_name["HART. Gifts"]["closed"])
+        self.assertEqual(by_name["HART. Bare"]["notTrading"][0], "closed")
 
     def test_an_office_is_asked_about_staff_and_prices_only(self):
         b, _ = self.silent(name="HART. &Partners", btype=LAW_FIRM)
