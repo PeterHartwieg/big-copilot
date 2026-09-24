@@ -10678,6 +10678,11 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 @keyframes ss-peek{30%{transform:translate(-2px,-1px) rotate(-12deg)}70%{transform:translate(2px,1px) rotate(8deg)}}
 .ss-lens{display:inline-grid;place-items:center;flex:none}
 .ss-lens svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mast .ss-new{position:absolute;margin:0;pointer-events:none}
+.mast .ss-q .ss-new{top:-9px;right:10px}
+.mast .ss-qbtn .ss-new{top:-13px;left:50%;transform:translateX(-50%)}
+/* A phone's masthead is too short to carry it above the icon: beside it. */
+@media(max-width:560px){ .mast .ss-qbtn .ss-new{top:50%;left:auto;right:calc(100% + 6px);transform:translateY(-50%)} }
 .mast .ss-qbtn{display:none;margin-left:auto;width:36px;height:36px;border-radius:9px;flex:none;position:relative;z-index:7}
 .mast .ss-q ~ .clock{margin-left:0}
 .mast.ss-tight .ss-q{display:none}
@@ -18984,7 +18989,13 @@ function ssLand(qn, from, ticket, tries = 0){
     if(!b) return;
     if(b.dataset.ss === "another"){ ssOpen(); return; }
     ssClearAsked();
-    if(viaSite && siteOpen && siteStateFrom()){ history.back(); return; }
+    /* The crumb's own rule: Back while the entry carries the way back, else
+       its address, else the portfolio. */
+    if(viaSite && siteOpen){
+      if(siteStateFrom()) history.back();
+      else if(!openHash(viaSite.hash.slice(1), "push")) closeSite();
+      return;
+    }
     if(onSite && siteOpen){ closeSite(); return; }
     showPage(back.id);
   });
@@ -19397,12 +19408,18 @@ const ssField = document.createElement("button");
 ssField.type = "button"; ssField.className = "ss-q"; ssField.id = "ssField";
 ssField.setAttribute("aria-label", "Search the board (/ or Ctrl+K)");
 ssField.setAttribute("aria-keyshortcuts", "/ Control+K");
-ssField.innerHTML = `<span class="ss-lens">${ssSvg("search")}</span><span class="ss-ql">Search the board</span><span class="ss-kbd" aria-hidden="true">/</span>`;
+/* Search is new: both forms of the control wear the New badge until the
+   palette has been opened once (featureDiscovery, id "board-search"). The
+   badge hangs off the control's edge, so it takes no room the masthead fit
+   (ssFitMast()) measures. */
+const SS_NEW = `<span class="feature-new ss-new" data-new-feature="board-search" aria-hidden="true" hidden>New</span>`;
+ssField.innerHTML = `<span class="ss-lens">${ssSvg("search")}</span><span class="ss-ql">Search the board</span><span class="ss-kbd" aria-hidden="true">/</span>${SS_NEW}`;
 const ssFieldBtn = document.createElement("button");
 ssFieldBtn.type = "button"; ssFieldBtn.className = "ibtn ss-qbtn"; ssFieldBtn.id = "ssFieldBtn";
 ssFieldBtn.setAttribute("aria-label", "Search the board");
-ssFieldBtn.innerHTML = ssSvg("search");
+ssFieldBtn.innerHTML = ssSvg("search") + SS_NEW;
 if($("mast")){ $("mast").insertBefore(ssField, $("clock")); $("mast").insertBefore(ssFieldBtn, $("clock")); }
+featureDiscovery.refresh();
 ssField.addEventListener("click", () => ssOpen());
 ssFieldBtn.addEventListener("click", () => ssOpen());
 /* Whichever of the two is showing: the sphere keeps clear of it. */
@@ -19481,6 +19498,7 @@ function ssOpen(text = ""){
   ssWatchWiki();
   ssScrim.hidden = ssPal.hidden = false;
   document.body.classList.add("ss-open");
+  featureDiscovery.visit("board-search");
   ssField.classList.add("on");
   if(typeof hideTip === "function") hideTip();
   ssInput.value = text;

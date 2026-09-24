@@ -1197,3 +1197,34 @@ test("asked on a site's page opened with no way back, the strip goes back to the
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
+
+// --- the New badge -----------------------------------------------------------------------
+
+test('the search control wears the New badge until the palette first opens, and the badge takes no room', async () => {
+  for (const [width, chip] of [[1440, true], [1600, true], [1600, false], [390, true]]) {
+    const what = `${width}${chip ? ' with the chip' : ''}`;
+    const page = await board({width, height: 900});
+    try {
+      if (chip) await withChip(page);
+      await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+      const shown = () => page.evaluate(() => {
+        const c = ssMastControl(), b = c.querySelector('[data-new-feature="board-search"]');
+        const r = c.getBoundingClientRect(), br = b.getBoundingClientRect(), m = $('mast').getBoundingClientRect();
+        return {id: c.id, badge: !b.hidden && br.width > 0, box: [r.left, r.top, r.width, r.height].map(Math.round),
+          inside: br.top >= m.top && br.left >= 0 && br.right <= innerWidth, scroll: document.documentElement.scrollWidth};
+      });
+      const before = await shown();
+      assert.equal(before.badge, true, `${what}: the badge shows on ${before.id}`);
+      assert.ok(before.inside, `${what}: the badge stays inside the masthead and the window`);
+      assert.equal(before.scroll, width, `${what}: nothing scrolls sideways`);
+      // Opening the palette is the visit; both forms lose the badge together.
+      await page.evaluate(() => ssOpen());
+      await page.evaluate(() => ssClose());
+      assert.equal(await page.locator('[data-new-feature="board-search"]:not([hidden])').count(), 0, what);
+      assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_feature_seen:board-search')), '1');
+      await page.evaluate(() => { ssFitMast(); return new Promise(done => requestAnimationFrame(done)); });
+      assert.deepEqual((await shown()).box, before.box, `${what}: the control did not move when the badge went`);
+      assert.deepEqual(page.errors, []);
+    } finally { await page.close(); }
+  }
+});

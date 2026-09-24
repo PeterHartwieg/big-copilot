@@ -372,34 +372,33 @@ as before. `siteSyncAddress()` only trades any other spelling that reads back to
 site's key (capitals, upper-case hex, needless escapes) for the canonical one, replacing the
 entry and keeping its state.
 
-**`siteHref(key)`** is the one way to link to a site: it returns `#site/<slug>`, or `""` for
-a site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that
-link (`.ss-sl`), and a capture-phase listener, `siteLinkClick()`, turns a plain click on any
-`a[href^="#site/"]` into `openSite()`. It does not stop the click, so anything that closes on
-a click elsewhere still hears it; a row a name sits in (a finding, a portfolio row, the
-picker, the map card's "its page") asks `inSiteLink(e)` and leaves that click alone. A finding
-row's own control is its sentence, a `<button class="what">` labelled by a hidden copy of the
-site's name and its own text, so every finding is reached from the keyboard; a silenced row is `inert`. A
-modified click is left to the browser and opens the address in a new tab.
+**`siteHref(key)`** is the one way to link to a site: it returns `#site/<slug>`, or `""` for a
+site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that link
+(`.ss-sl`), and a capture-phase listener, `siteLinkClick()`, turns a plain click on any
+`a[href^="#site/"]` into `openSite()`. It does not stop the click, so anything that closes on a
+click elsewhere still hears it; a row a name sits in (a finding, a portfolio row, the picker,
+the map card's "its page") asks `inSiteLink(e)` and leaves that click alone. A finding row's
+own control is its sentence, a `<button class="what">` labelled by a hidden copy of the site's
+name and its own text, so every finding is reached from the keyboard; a silenced row is
+`inert`. A modified click is left to the browser and opens the address in a new tab.
 
-`openSite(key, scroll, finding, historyMode, cameFrom)` writes the address,
-`closeSite(chain)` goes back to the portfolio (to one chain's row, given a chain), and
-`siteShut()` takes the page down without going anywhere. `showPage()` takes it down for any page but Company; the nav, a
-non-site hash, `reveal()` of any section but `secDetail`, and a Company view other than
-Results take it down themselves. Arriving from a finding (`goToAlert()` passes its id) records
-where the reader came from in `siteFrom`, and in the history entry's state as `ssFrom`, so the
-crumb above the site head reads "‹ Today" and acts as Back, through Back, Forward and a reload
-too. A search or a question does the same: `ssOpenSite()`, and `siteOpenOver()` for a site
-opened from the map over the open palette, pass `cameFrom`. From another site's page,
-`siteHereFrom()` makes that site the way back ("‹ HART. Clothing", its own address), which is
-where Back goes, since the palette adds no visit of its own. The site already on screen, opened
-again, keeps the way back it had, and an Ask landing's "Back" does what the crumb does. The
-entry's state is merged, never replaced: `siteHistoryState()` keeps whatever else a replaced
-entry carries, and a new entry starts with only `ssFrom`. An address that answers
-nothing — a site given up, a link from another save — lands on the portfolio and replaces the
-hash with `#company`; so does a save of another character arriving under an open site's page
-(`siteFor` against `siteCharacter()`), which drops the crumb's way back and the lit finding
-with it.
+`openSite(key, scroll, finding, historyMode, cameFrom)` writes the address, `closeSite(chain)`
+goes back to the portfolio (to one chain's row, given a chain), and `siteShut()` takes the page
+down without going anywhere. `showPage()` takes it down for any page but Company; the nav, a
+non-site hash, `reveal()` of any section but `secDetail`, and a Company view other than Results
+take it down themselves. Arriving from a finding (`goToAlert()` passes its id) records where
+the reader came from in `siteFrom`, and in the history entry's state as `ssFrom`, so the crumb
+above the site head reads "‹ Today" and acts as Back, through Back, Forward and a reload too. A
+search or a question does the same: `ssOpenSite()`, and `siteOpenOver()` for a site opened from
+the map over the open palette, pass `cameFrom`. From another site's page, `siteHereFrom()`
+makes that site the way back ("‹ HART. Clothing", its own address), which is where Back goes,
+since the palette adds no visit of its own. The site already on screen, opened again, keeps the
+way back it had, and an Ask landing's "Back" does what the crumb does. The entry's state is
+merged, never replaced: `siteHistoryState()` keeps whatever else a replaced entry carries, and
+a new entry starts with only `ssFrom`. An address that answers nothing — a site given up, a
+link from another save — lands on the portfolio and replaces the hash with `#company`; so does
+a save of another character arriving under an open site's page (`siteFor` against
+`siteCharacter()`), which drops the crumb's way back and the lit finding with it.
 
 ## Pyodide
 
