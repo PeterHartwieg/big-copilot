@@ -11106,6 +11106,10 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-step.sp-done{color:var(--ink-3)}
 .sp-step small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sp-daytabs a{position:relative;min-width:30px;text-align:center}
+/* The two controls stretch to the height of the steps beside them, and a step
+   whose line wraps (who to add) is taller than a pill: centred, not left at the
+   top of the stretched pill. */
+.sp-nowplan a,.sp-daytabs a{display:flex;align-items:center;justify-content:center}
 .sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
 .sp-day{display:none}
 .sp-day.sp-on{display:block}
@@ -11190,7 +11194,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .sp-rrow{display:grid;grid-template-columns:200px 1fr auto;gap:18px;align-items:center;min-height:48px;border-bottom:1px solid var(--rule-soft)}
 .sp-rbtn{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;cursor:pointer;text-align:left}
-.sp-rbtn i{width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
+.sp-rbtn i{flex:none;width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
 .sp-rbtn .sp-i{color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
 .sp-rbtn:hover .sp-i{color:var(--accent);transform:translateX(2px)}
 .sp-rrow.open .sp-rbtn .sp-i{transform:rotate(90deg)}
@@ -11204,6 +11208,20 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-rcount b{color:var(--ink);font-weight:500}
 .sp-rpeople{display:none;grid-column:1/-1;padding:4px 0 14px}
 .sp-rrow.open .sp-rpeople{display:block}
+/* The three columns leave the dots what the role and its count do not take.
+   Beside Fees or Shelves the Crew block is a third of the page, and a big
+   role's dots were squeezed into one column, a dot a line; a role and its
+   count sharing one line squeezed each other, or pushed the count out of the
+   block. Too narrow, a row stacks: the role, its count, its dots, each on a
+   line of its own. */
+.sp-roster{container-type:inline-size}
+@container (max-width:620px){
+  .sp-rrow{grid-template-columns:minmax(0,1fr);gap:0}
+  .sp-rrow .sp-rbtn{grid-row:1}
+  .sp-rrow .sp-rcount{grid-row:2;text-align:left;white-space:normal}
+  .sp-rrow .sp-dots{grid-row:3}
+  .sp-rrow .sp-rpeople{grid-row:4}
+}
 
 /* shelves: the three marks a shop's own table gains */
 .sp-noplan{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px dashed var(--warn);border-radius:4px;color:var(--warn);font-size:11px}
@@ -11757,9 +11775,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sitePanel .sp-typed{margin-left:0}
   #sitePanel .sp-steps .sp-nowplan{margin-left:0!important}
   #sitePanel .sp-daytabs a{padding:6px 8px}
-  #sitePanel .sp-rrow{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
-  #sitePanel .sp-rrow .sp-dots{grid-column:1/-1;grid-row:2}
-  #sitePanel .sp-rrow .sp-rcount{grid-column:2;grid-row:1}
   #sitePanel table{font-size:12.5px}
   #sp-shelves > table{display:block;overflow-x:auto;max-width:100%}
   #sp-shelves td.l{white-space:nowrap}
@@ -15006,8 +15021,9 @@ function spRoster(people, gaps, pairs){
       <span class="sp-dots">${r.people.map((p, k) => `<i class="sp-dot${p.absent ? " off" : ""}" style="--k:${k}" data-read="${attr(
         `<b>${spEsc(p.name)}</b> · ${spEsc(p.role)}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
       <span class="sp-rcount"><b>${r.people.length}</b>${
-        r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}${
-        r.people.every(p => typeof p.daily === "number") ? ` · ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
+        /* No-break before each dot: a count that wraps never starts a line on one. */
+        r.people.some(p => p.absent) ? `&nbsp;· ${r.people.filter(p => p.absent).length} off` : ""}${
+        r.people.every(p => typeof p.daily === "number") ? `&nbsp;· ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
       <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps, pairs)).join("")}</div></div>
     </div>`).join("")}</div><div class="sp-read sp-readout">${spCrewRead(people, roles.length)}</div></div>`;
 }
