@@ -415,12 +415,43 @@ test('every site gets its own address: namesakes at one address, and none at all
   const b = board({data});
   b.boot();
   const hrefs = data.businesses.map(x => b.context.siteHref(x.key));
-  assert.deepEqual(hrefs, ['#site/57-fifth-avenue', '#site/51-second-street',
+  // A shared address belongs to neither site: both take their key's slug.
+  assert.deepEqual(hrefs, ['#site/fifthavenue-57', '#site/51-second-street',
     '#site/fifthavenue-57b', '#site/ninthavenue-3', '']);
   assert.equal(new Set(hrefs).size, hrefs.length, 'no two sites share an address');
   b.context.history.pushState(null, '', '#site/fifthavenue-57b');
   b.move(0);
   assert.equal(b.site(), 'ba:street_fifthavenue#57b', 'the second site at an address opens itself, not its namesake');
+  assert.equal(b.context.siteBySlug('57-fifth-avenue'), null, 'the shared address opens neither');
+});
+
+test("a namesake's address does not hang on the order of the list, or on the other staying", () => {
+  const pair = () => [
+    {key: SHOP, name: 'HART. Clothing', address: '57 Fifth Avenue', status: 'retail'},
+    {key: 'ba:street_fifthavenue#57b', name: 'Second at 57', address: '57 Fifth Avenue', status: 'retail'}];
+  const b = board({data: {businesses: pair(), homes: []}});
+  b.boot();
+  const before = [SHOP, 'ba:street_fifthavenue#57b'].map(k => b.context.siteHref(k));
+  b.context.D.businesses = pair().reverse();
+  assert.deepEqual([SHOP, 'ba:street_fifthavenue#57b'].map(k => b.context.siteHref(k)), before);
+  // The first goes: the second has its address to itself, and the link
+  // written while it was shared still opens it.
+  b.context.D.businesses = pair().slice(1);
+  assert.equal(b.context.siteHref('ba:street_fifthavenue#57b'), '#site/57-fifth-avenue');
+  b.context.history.pushState(null, '', before[1]);
+  b.move(0);
+  assert.equal(b.site(), 'ba:street_fifthavenue#57b');
+});
+
+test('a history entry keeps what others stored on it; a new one starts clean', () => {
+  const b = board({data: sites()});
+  b.states[0] = {wiki: 'scroll'};
+  b.context.location.hash = '#site/99-nowhere-street';
+  b.boot();
+  assert.equal(b.context.location.hash, '#company');
+  assert.deepEqual({...b.states[0]}, {wiki: 'scroll'}, 'replacing the entry keeps its state');
+  b.context.openSite(SHOP, false, 'a1');
+  assert.deepEqual(Object.keys(b.states[1]), ['ssFrom'], 'a new entry carries only the way back');
 });
 
 test('arriving from a finding names the page it was on, through Back, Forward and a reload', () => {
@@ -470,14 +501,17 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
 });
 
 test("a site's name opens its page; a modified click is left to the browser", () => {
+  /* The rows a name sits in skip a click inside it (inSiteLink); that is
+     tests/findability.test.cjs. */
   const b = board({data: sites()});
   b.boot();
   const plain = b.click('#site/51-second-street');
-  assert.ok(plain.prevented && plain.stopped, 'the row under the name never hears the click');
+  assert.ok(plain.prevented, 'the page opens here, not by the browser');
+  assert.ok(!plain.stopped, 'the click still travels on: a popover closing on a click elsewhere hears it');
   assert.equal(b.site(), DEPOT);
   assert.equal(b.context.location.hash, '#site/51-second-street');
   b.move(-1);
   const tab = b.click('#site/57-fifth-avenue', {ctrlKey: true});
-  assert.ok(tab.stopped && !tab.prevented, 'a new tab opens at the address; the row still does nothing');
+  assert.ok(!tab.stopped && !tab.prevented, 'a new tab opens at the address');
   assert.equal(b.site(), null);
 });

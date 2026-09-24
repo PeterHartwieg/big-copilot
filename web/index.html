@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=eb9832c6f3">
+<link rel="stylesheet" href="community.css?v=0cabffb4a8">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=eb9832c6f3">
+<link rel="stylesheet" href="fonts/fonts.css?v=0cabffb4a8">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -275,9 +275,6 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
 .map-dialog-head h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
 .map-dialog .stage{height:560px}
 body.map-modal-open{overflow:hidden}
-.finding-link{color:inherit;text-decoration:none}
-.find .site .finding-link{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.finding-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 /* The sixth page must remain reachable without widening the document. */
 @media(max-width:1100px){
  .wrap .mast{height:auto;min-height:100px;gap:10px 16px;flex-wrap:wrap;padding:12px 0}
@@ -1045,6 +1042,8 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
   letter-spacing:.06em;color:var(--ink-2);flex:none;
 }
 .find .what{font-weight:600;font-size:14px;color:var(--ink)}
+.find a.what{text-decoration:none}
+.find a.what:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
 .find .more{
   grid-column:3/5;max-height:0;overflow:hidden;opacity:0;font-size:12.5px;color:var(--ink-2);
   transition:max-height .28s ease,opacity .2s,margin .28s;margin:0;
@@ -2148,6 +2147,9 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .ss-pick > .ibtn[aria-disabled]{opacity:.4;cursor:default}
   .ss-pick > .seg{flex:1;min-width:0;border:0;padding:0;background:none;flex-wrap:nowrap}
   .ss-pick > .seg > span{display:none}
+  /* A block landed on (a finding, a cross-link) comes to rest under the
+     crumb row as well as the masthead, not beneath them. */
+  #sitePanel [data-block]{scroll-margin-top:calc(var(--ss-mast,100px) + 72px)}
   .ss-pick select.sitepick{flex:1;width:100%;min-width:0;max-width:none;height:34px;border-radius:8px;padding:0 10px;
     appearance:auto;-webkit-appearance:auto;background:var(--raised);color:var(--ink);border:1px solid var(--rule)}
   #sitePanel .sitehead{flex-wrap:wrap;gap:12px}
@@ -2856,8 +2858,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "eb9832c6f3";</script>
-<script>window.LEDGER_RELEASE = {"version":"eb9832c6f3","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "0cabffb4a8";</script>
+<script>window.LEDGER_RELEASE = {"version":"0cabffb4a8","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2926,8 +2928,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=eb9832c6f3"></script>
-<script src="community.js?v=eb9832c6f3"></script>
+<script src="app.js?v=0cabffb4a8"></script>
+<script src="community.js?v=0cabffb4a8"></script>
 
 <script>
 
@@ -4556,12 +4558,14 @@ function findingRow(a){
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   /* The name is a way to the site's own page; the rest of the row still opens
-     the finding. A synthetic site ("3 shops") has no page and stays text. */
+     the finding. A synthetic site ("3 shops") has no page and stays text. The
+     finding's own sentence is the row's link, so a keyboard reaches every
+     finding -- a synthetic one too -- without going through the name. */
   const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
   return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
     <span class="site">${site}</span>
-    <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</span>
+    <a class="what" href="#${alertPage(a)}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</a>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
     <span class="more">${more}</span>` : ""}</div>`;
@@ -4570,7 +4574,11 @@ function findingRow(a){
    capture phase by wireFinds() and never reaches this. */
 function bindFindingRows(host, list){
   $$(".find", host).forEach((node, i) => {
-    node.onclick = e => { e.preventDefault(); goToAlert(list[i]); };
+    node.onclick = e => {
+      /* A site's name inside the row is its own link, to the site's page. */
+      if(inSiteLink(e)) return;
+      e.preventDefault(); goToAlert(list[i]);
+    };
   });
 }
 
@@ -4854,7 +4862,7 @@ function drawPortfolio(){
     if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
     drawPortfolio();
   });
-  t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = () => openSite(tr.dataset.key));
+  t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = e => { if(!inSiteLink(e)) openSite(tr.dataset.key); });
   wirePortfolio(); wireTips();
 }
 
@@ -4905,7 +4913,7 @@ function drawSitePicker(){
   host.innerHTML = `${arrow(prev, "Previous", "M15 6l-6 6 6 6")}<span class="seg">${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
     support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}</span>${
     arrow(next, "Next", "M9 6l6 6-6 6")}`;
-  host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
+  host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a && !inSiteLink(e)){ e.preventDefault(); openSite(a.dataset.key); } };
   q("select", host).onchange = e => openSite(e.target.value);
 }
 /* The row above a site's head: the way back, where the site sits, and the
@@ -7148,6 +7156,11 @@ function xlArrive(sel, hit = ""){
 function drawSite(){
   const sec = $("secDetail");
   spViewCache = null;
+  /* A save of another character arrived under an open site's page. A
+     business of its own may stand at the same address, but it is not the site
+     that was open, and the way back and the finding that brought the reader
+     here belong to the other company: the page goes back to the portfolio. */
+  if(siteOpen && siteFor !== undefined && siteFor !== siteCharacter()) siteKey = null;
   siteTab = siteKey === null ? -1 : D.businesses.findIndex(x => x.key === siteKey);
   const b = siteTab >= 0 ? D.businesses[siteTab] : null;
   /* A flat is the one address that is not a business, so it is answered where
@@ -7161,7 +7174,7 @@ function drawSite(){
     paintSiteUp(true);
     $("sitePanel").innerHTML = spHomePanel(home);
     $("sitePanel").classList.remove("sp-focus");
-    wireSiteCrumbs(); wireTips(); wireReveal();
+    wireSiteCrumbs(); wireTips(); wireReveal(); siteSyncAddress();
     return;
   }
   if(!b || !siteOpen){
@@ -7170,7 +7183,7 @@ function drawSite(){
        last refresh. Its address answers nothing now, so the page becomes the
        portfolio it would have been reached from. */
     if(siteOpen){
-      siteOpen = false; spArrived = null; siteFrom = null;
+      siteOpen = false; spArrived = null; siteFrom = null; siteFor = undefined;
       if(page === "company") showPage("company", false, "replace");
     }
     return;
@@ -7605,7 +7618,7 @@ function drawSite(){
      has to come off with the markup it dimmed. */
   $("sitePanel").classList.remove("sp-focus");
   drawSitePicker();
-  wireSiteCrumbs();
+  wireSiteCrumbs(); siteSyncAddress();
   if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
   /* A factory's unnamed line is named here the same way it is on the Supply
      page: the same select, the same call. */
@@ -9267,7 +9280,8 @@ class CityMapView {
       if(action === 'reset') this.reset(true);
       if(action === 'full') this.toggleFullscreen();
       if(action === 'close') this.deselect();
-      if(action === 'details'){
+      // "its page" carries the site's address, which the board opens itself.
+      if(action === 'details' && !inSiteLink(e)){
         e.preventDefault();
         if($('locationMapDialog').open) $('locationMapDialog').close();
         openSite(this.selected);
@@ -10214,9 +10228,9 @@ class CityMapView {
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
     /* A business's or a home's name is a way to its own page, as it is
        everywhere else on the board. */
-    const page = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
+    const siteAddr = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
     const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
-    card.querySelector('h3').innerHTML = page ? `<a class="ss-sl" href="${attr(page)}" data-tip="Open its page">${shown}</a>` : shown;
+    card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="Open its page">${shown}</a>` : shown;
     const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}`
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText(loc?.hood || loc?.address || '');
@@ -10236,7 +10250,7 @@ class CityMapView {
        is in no picker. */
     const go = card.querySelector('.go2');
     go.hidden = !b && !home;
-    go.setAttribute('href', page || '#detail');
+    go.setAttribute('href', siteAddr || '#detail');
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }
@@ -12749,7 +12763,7 @@ function showPage(id, scroll = true, historyMode = "push"){
     const keep = historyMode === "replace" && !siteOpen && !SITE_HASH.test(now) && pageFromHash(now) === id;
     if(historyMode !== "none" && !keep && location.hash !== hash)
       history[historyMode === "replace" ? "replaceState" : "pushState"](
-        siteOpen && siteFrom ? {ssFrom: siteFrom} : null, "", hash);
+        siteHistoryState(historyMode === "replace"), "", hash);
   }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
@@ -12824,13 +12838,12 @@ function openHash(h, historyMode = "none"){
    address as a slug. It is what the address bar shows while the site is open,
    so a reload reopens it and Back and Forward walk between sites. A home the
    player rents has one too; it opens from its map card.
-   The slug is unique: a second site at an address already taken, or a site
-   with no address at all, falls back to a slug of its key, then to a number.
-   It is stable for as long as the save lists its sites in the same order,
-   which extract() keeps. A site with no key has no address and opens as it
-   always has, under #company. */
+   The slug is unique: sites that share an address, and a site with no
+   address at all, take a slug of their key instead, so the order the save
+   lists them in decides nothing. A site with no key has no address and opens
+   as it always has, under #company. */
 const SITE_HASH = /^site\//;
-let siteFrom = null, siteSlugsFor = [], siteSlugMap = {bySlug: new Map(), byKey: new Map()};
+let siteFrom = null, siteFor, siteSlugsFor = [], siteSlugMap = {bySlug: new Map(), byKey: new Map()};
 const siteSlugText = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 /* Counted on demand, and again whenever the data object or its lists of sites
    are replaced. */
@@ -12839,18 +12852,29 @@ function siteSlugs(){
   const of = [data, data && data.businesses, data && data.homes];
   if(of.every((x, i) => x === siteSlugsFor[i])) return siteSlugMap;
   const bySlug = new Map(), byKey = new Map();
-  const add = (key, address) => {
-    if(key === null || key === undefined || key === "" || byKey.has(key)) return;
-    let slug = siteSlugText(address);
-    if(!slug || bySlug.has(slug)) slug = siteSlugText(String(key).replace(/^ba:(street_)?/, ""));
-    const base = slug || "site";
-    for(let n = 2; !slug || bySlug.has(slug); n++) slug = `${base}-${n}`;
-    bySlug.set(slug, key); byKey.set(key, slug);
+  const sites = [], seen = new Set();
+  const take = (key, address) => {
+    if(key === null || key === undefined || key === "" || seen.has(key)) return;
+    seen.add(key); sites.push([key, siteSlugText(address)]);
   };
   if(data){
-    (data.businesses || []).forEach(b => add(b.key, b.address));
-    (data.homes || []).forEach(h => add(h.key, h.address));
+    (data.businesses || []).forEach(b => take(b.key, b.address));
+    (data.homes || []).forEach(h => take(h.key, h.address));
   }
+  /* An address two sites share belongs to neither: both take their key's slug,
+     so neither's address depends on which of them the save lists first, or on
+     the other one still being there. */
+  const shared = new Map();
+  sites.forEach(([, address]) => { if(address) shared.set(address, (shared.get(address) || 0) + 1); });
+  const keySlug = key => siteSlugText(String(key).replace(/^ba:(street_)?/, "")) || "site";
+  sites.forEach(([key, address]) => {
+    let slug = address && shared.get(address) === 1 ? address : keySlug(key);
+    for(let n = 2, base = slug; bySlug.has(slug); n++) slug = `${base}-${n}`;
+    bySlug.set(slug, key); byKey.set(key, slug);
+  });
+  /* A key's own slug always answers too: a link written while the address was
+     shared still opens its site once the other has gone. */
+  sites.forEach(([key]) => { const k = keySlug(key); if(!bySlug.has(k)) bySlug.set(k, key); });
   siteSlugsFor = of;
   return siteSlugMap = {bySlug, byKey};
 }
@@ -12873,6 +12897,20 @@ function siteCameFrom(){
   const v = SUBS[page] && SUBS[page].items.find(([k]) => k === sub[page]);
   return {label: v ? v[1] : p.label, hash: location.hash || "#" + page};
 }
+/* The state a history entry carries: a new entry starts empty, a replaced one
+   keeps what others stored on it, and either carries the crumb's way back
+   while a site opened from a finding is up. */
+function siteHistoryState(replace){
+  let state = {};
+  if(replace){ try{ state = {...(history.state || {})}; }catch(e){} }
+  delete state.ssFrom;
+  if(siteOpen && siteFrom) state.ssFrom = siteFrom;
+  return Object.keys(state).length ? state : null;
+}
+/* The company a site's page was opened in: a save of another character can
+   hold a business at the same address, which is not the site that was open. */
+const siteCharacter = () => !hasData() ? null
+  : (D.meta && D.meta.character) || (D.supply && D.supply.factories && D.supply.factories.character) || (D.meta && D.meta.save) || null;
 function siteStateFrom(){
   try{
     const s = history.state && history.state.ssFrom;
@@ -12891,7 +12929,7 @@ function openSite(key, scroll = true, finding = null, historyMode = "push"){
     : finding !== null && !(page === "company" && siteOpen) ? siteCameFrom() : null;
   if(key !== siteKey) spFindsAll = false;
   spArrived = finding;
-  siteKey = key; siteOpen = true; siteFrom = from;
+  siteKey = key; siteOpen = true; siteFrom = from; siteFor = siteCharacter();
   showPage("company", scroll, historyMode);
   showSub("company", "results");
   drawPortfolio();
@@ -12913,6 +12951,16 @@ function closeSite(chain = null){
   reveal("secPortfolio", "push",
     chain !== null && typeof CSS !== "undefined" ? `#portfolio tr.chain[data-chain="${CSS.escape(chain)}"]` : null);
 }
+/* The address bar follows the open site: a live refresh can change its slug
+   (a second site moving in at its address), and a key's own slug, still
+   answered, is shown as the site's address once it has opened. The entry is
+   replaced, never added, and keeps its state. */
+function siteSyncAddress(){
+  if(!siteOpen || page !== "company") return;
+  const want = siteHref(siteKey);
+  if(!want || location.hash === want) return;
+  try{ history.replaceState(siteHistoryState(true), "", want); }catch(e){}
+}
 /* A #site/ hash, typed, reloaded or replayed. An address that no longer
    answers -- a site given up, a link from another save -- lands on the
    portfolio, and the address bar says so. */
@@ -12928,14 +12976,15 @@ function openSiteHash(h, historyMode = "none"){
   return true;
 }
 /* A site's name is a plain link to its address, so it opens in a new tab like
-   any link. A plain click opens the page here instead, from the top, and goes
-   no further: the row the name sits in (a finding, a portfolio row) keeps its
-   own click for everywhere else on it. Caught on the way down, as the map
-   button is. */
+   any link. A plain click opens the page here instead, from the top. The
+   click still travels on, so a popover that closes on a click elsewhere still
+   hears it; the row the name sits in (a finding, a portfolio row) asks
+   inSiteLink() and leaves a click on the name alone, keeping its own click for
+   everywhere else on it. */
+const inSiteLink = e => !!(e.target && e.target.closest && e.target.closest('a[href^="#site/"]'));
 function siteLinkClick(e){
   const a = e.target.closest && e.target.closest('a[href^="#site/"]');
   if(!a || !hasData()) return;
-  e.stopImmediatePropagation();
   if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   const key = siteBySlug(a.getAttribute("href").slice(6));
   if(key === null) return;

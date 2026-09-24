@@ -255,7 +255,8 @@ class CityMapView {
       if(action === 'reset') this.reset(true);
       if(action === 'full') this.toggleFullscreen();
       if(action === 'close') this.deselect();
-      if(action === 'details'){
+      // "its page" carries the site's address, which the board opens itself.
+      if(action === 'details' && !inSiteLink(e)){
         e.preventDefault();
         if($('locationMapDialog').open) $('locationMapDialog').close();
         openSite(this.selected);
@@ -1202,9 +1203,9 @@ class CityMapView {
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
     /* A business's or a home's name is a way to its own page, as it is
        everywhere else on the board. */
-    const page = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
+    const siteAddr = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
     const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
-    card.querySelector('h3').innerHTML = page ? `<a class="ss-sl" href="${attr(page)}" data-tip="Open its page">${shown}</a>` : shown;
+    card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="Open its page">${shown}</a>` : shown;
     const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}`
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText(loc?.hood || loc?.address || '');
@@ -1224,7 +1225,7 @@ class CityMapView {
        is in no picker. */
     const go = card.querySelector('.go2');
     go.hidden = !b && !home;
-    go.setAttribute('href', page || '#detail');
+    go.setAttribute('href', siteAddr || '#detail');
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }

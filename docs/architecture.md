@@ -354,15 +354,20 @@ is one of:
 A site's page is the site panel (`drawSite()` in `#secDetail`) shown on its own on Company:
 while it is up, `#pageCompany` carries `ss-siteup` and the rest of Results and the Company
 views step aside. The address is the street address as a slug, built by `siteSlugs()` over
-`D.businesses` and then `D.homes`. A second site at an address already taken, or one with no
-address, falls back to a slug of its key, then to a number, so every address is unique; a site
-with an empty key has none and opens under `#company` as before.
+`D.businesses` and then `D.homes`. Sites that share an address, and a site with no address,
+take a slug of their key instead, so no site's address depends on the order of the list or on
+a namesake still being there; a key's own slug is always answered as well, so a link written
+while an address was shared still opens its site. A site with an empty key has no address and
+opens under `#company` as before. `siteSyncAddress()` keeps the address bar on the open site's
+current slug after a refresh, replacing the entry and keeping its state.
 
 **`siteHref(key)`** is the one way to link to a site: it returns `#site/<address>`, or `""` for
 a site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that
 link (`.ss-sl`), and a capture-phase listener, `siteLinkClick()`, turns a plain click on any
-`a[href^="#site/"]` into `openSite()` and stops it there, so the row a name sits in keeps its
-own click. A modified click is left to the browser and opens the address in a new tab.
+`a[href^="#site/"]` into `openSite()`. It does not stop the click, so anything that closes on
+a click elsewhere still hears it; a row a name sits in (a finding, a portfolio row, the
+picker, the map card's "its page") asks `inSiteLink(e)` and leaves that click alone. A
+modified click is left to the browser and opens the address in a new tab.
 
 `openSite(key, scroll, finding, historyMode)` writes the address, `closeSite(chain)` goes back
 to the portfolio (to one chain's row, given a chain), and `siteShut()` takes the page down
@@ -371,8 +376,12 @@ non-site hash, `reveal()` of any section but `secDetail`, and a Company view oth
 Results take it down themselves. Arriving from a finding (`goToAlert()` passes its id) records
 where the reader came from in `siteFrom`, and in the history entry's state as `ssFrom`, so the
 crumb above the site head reads "‹ Today" and acts as Back, through Back, Forward and a reload
-too. An address that answers nothing — a site given up, a link from another save — lands on
-the portfolio and replaces the hash with `#company`.
+too. The entry's state is merged, never replaced: `siteHistoryState()` keeps whatever else a
+replaced entry carries, and a new entry starts with only `ssFrom`. An address that answers
+nothing — a site given up, a link from another save — lands on the portfolio and replaces the
+hash with `#company`; so does a save of another character arriving under an open site's page
+(`siteFor` against `siteCharacter()`), which drops the crumb's way back and the lit finding
+with it.
 
 ## Pyodide
 
