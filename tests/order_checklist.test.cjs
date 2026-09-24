@@ -1,6 +1,8 @@
 // Run with: node --test tests/order_checklist.test.cjs
 // Exercise the pure checklist logic from the shared page template, without
 // copying the implementation into a test or requiring private save files.
+// Every figure the checklist proposes is a fact's (supplyFact, Python's
+// verdict); these tests hand it facts and check what it does with them.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,13 +13,10 @@ const start = source.indexOf('function buildOrderChecklist(');
 const end = source.indexOf('const orderMarkCache', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
-const fitStart = source.indexOf('const feedFit =');
-const fitEnd = source.indexOf('/* The same verdict', fitStart);
 // The row setting the imports table computes, which feeds the checklist.
 const settingStart = source.indexOf('function importSetting(');
 assert.ok(settingStart >= 0 && settingStart < start);
-vm.runInContext(source.slice(fitStart, fitEnd) + '\nconst ceil100 = v => Math.ceil(v / 100) * 100;\n'
-  + source.slice(settingStart, start) + source.slice(start, end), context);
+vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
@@ -28,51 +27,53 @@ const build = (overrides = {}) => {
   return JSON.parse(JSON.stringify(context.buildOrderChecklist(
     args.imports, args.loose, args.sites, args.shops, args.checks, args.businesses)));
 };
-const order = changes => ({s:0, item:'Sugar', current:1000, setTo:1500,
-  fit:'short', factoryWeek:1000, otherWeek:450, ...changes});
+// A fact as Python sends it, with only the fields a test cares about.
+const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'warn', setTo: null,
+  use: 1300, need: 1500, parts: {lines: 1000, sites: 300, route: 0}, ...extra});
+// A Weekly imports row as drawLogistics() builds it: the fact's figures, then the setting.
+const order = changes => ({s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
+  fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes});
 
-test('weekly order changes use the existing consolidated recommendation', () => {
+test('weekly order changes propose the fact\'s figure and say what it was sized on', () => {
   const rows = build({imports:[{s:0, rows:[order({})]}]});
   assert.equal(rows.length, 1);
   assert.equal(rows[0].current, 1000);
   assert.equal(rows[0].proposed, 1500);
-  assert.match(rows[0].reason, /factory inputs plus shop deliveries/);
+  assert.match(rows[0].reason, /Uses 1[,.]300 a week \(factory lines and shops\), plus a 15% margin/);
 });
 
-test('covered orders and deliberate surplus buffers are not cut automatically', () => {
+test('a row whose fact asks for nothing is not on the list', () => {
   assert.equal(build({imports:[{s:0, rows:[
-    order({fit:'ok', current:1600}),
-    order({item:'Flour', fit:'ok', current:5000, surplus:true}),
-    order({item:'Water', fit:'idle', setTo:null}),
+    order({fit:'covered', setTo:null, value:1600, inGame:1600}),
+    order({item:'Flour', fit:'covered', setTo:null, value:5000, inGame:5000, lower:1500}),
+    order({item:'Water', fit:'idle', setTo:null, value:null}),
+    order({item:'Butter', fit:'new', setTo:null, value:700, inGame:700}),
   ]}]}).length, 0);
-  // The existing fit helper treats zero as unknown; the checklist still exposes
-  // a known zero order when the existing planner has a positive recommendation.
-  assert.equal(build({imports:[{s:0, rows:[order({fit:'ok', current:0})]}]})[0].proposed, 1500);
 });
 
-test('shop top-ups cover a peak day and require a known delivery route', () => {
+test('a tight order is a change, marked so Today leaves it out', () => {
+  const [row] = build({imports:[{s:0, rows:[order({fit:'tight', current:1400, inGame:1400})]}]});
+  assert.equal(row.tight, true);
+  assert.match(row.reason, /covers the use but not the margin/);
+  const [short] = build({imports:[{s:0, rows:[order({})]}]});
+  assert.equal(short.tight, undefined);
+});
+
+test('shop top-ups propose the shelf fact\'s figure and need a route or a depot to send it', () => {
   const rows = build({shops:[
-    {s:2, item:'Flowers', target:100, peakSold:235, peakDay:'Saturday', from:0},
-    {s:2, item:'Coffee', target:0, peakSold:20, from:null},
-    {s:2, item:'Service', target:0, peakSold:20},
-    {s:2, item:'Gifts', target:300, peakSold:290, from:0},
+    {s:2, item:'Flowers', target:100, peakSold:235, peakDay:'Saturday', from:0, fact:fact('short', {setTo:280})},
+    {s:2, item:'Coffee', target:0, peakSold:20, from:null, fact:fact('noplan', {setTo:30})},
+    {s:2, item:'Service', target:0, peakSold:20, fact:fact('noplan', {setTo:30})},
+    {s:2, item:'Gifts', target:300, peakSold:290, from:0, fact:fact('covered')},
   ]});
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].proposed, 300); // daily, never seven times the peak
+  assert.equal(rows[0].proposed, 280); // daily, never seven times the peak
   assert.match(rows[0].reason, /Saturday/);
-});
-
-test('shop recommendations respect the existing absolute and percentage noise floors', () => {
-  const shop = {s:2, item:'Flowers', target:100, from:0};
-  for(const peakSold of [101, 104, 105]){
-    assert.deepEqual(build({shops:[{...shop, peakSold}]}), []);
-  }
-  assert.deepEqual(build({shops:[{...shop, target:1000, peakSold:1010}]}), []);
-  for(const peakSold of [106, 120]){
-    assert.equal(build({shops:[{...shop, peakSold}]})[0].proposed, 200);
-  }
-  assert.equal(build({shops:[{...shop, target:0, peakSold:4}]})[0].proposed, 100);
-  assert.deepEqual(build({shops:[{...shop, target:0, peakSold:0}]}), []);
+  // A shelf on no plan that a depot could send to names that depot (via).
+  const [via] = build({shops:[{s:2, item:'Soda', target:0, peakSold:61, from:null,
+    fact:fact('noplan', {setTo:70, via:0})}]});
+  assert.deepEqual([via.current, via.proposed, via.source], [0, 70, 0]);
+  assert.match(via.reason, /^From Depot · 1 Depot Street\./);
 });
 
 test('incomplete data preserves saved marks until a complete snapshot can reconcile them', () => {
@@ -81,12 +82,12 @@ test('incomplete data preserves saved marks until a complete snapshot can reconc
   marks = context.reconcileOrderMarks(marks, [], false);
   assert.ok(marks.has(rows[0].key), 'a missing recipe must not erase the saved mark');
   // Checking a different visible action during the gap must preserve hidden notes.
-  const other = build({shops:[{s:2, item:'Flowers', target:0, peakSold:120, from:0}]});
+  const other = build({shops:[{s:2, item:'Flowers', target:0, peakSold:120, from:0, fact:fact('noplan', {setTo:140})}]});
   marks.add(other[0].key);
   marks = new Set(JSON.parse(JSON.stringify([...marks]))); // save and reload
   marks = context.reconcileOrderMarks(marks, [...rows, ...other], true);
   assert.equal(marks.size, 2);
-  const changed = build({imports:[{s:0, rows:[order({setTo:1700})]}]});
+  const changed = build({imports:[{s:0, rows:[order({setTo:1700, value:1700})]}]});
   marks = context.reconcileOrderMarks(marks, [...changed, ...other], true);
   assert.ok(!marks.has(rows[0].key), 'a changed recommendation invalidates its old mark');
   assert.ok(!marks.has(changed[0].key), 'new quantities must not inherit completion');
@@ -97,28 +98,44 @@ test('incomplete data preserves saved marks until a complete snapshot can reconc
 
 test('a paused order or delivery gap is a review action, not an invented quantity', () => {
   const rows = build({checks:[
-    {s:0, item:'Flour', paused:true, from:'Importer'},
-    {s:0, item:'Sugar', paused:false, coverFit:'short', shortBy:1.2},
+    {s:0, item:'Flour', paused:true, from:'Importer', fact:fact('paused')},
+    {s:0, item:'Sugar', paused:false, shortBy:1.2, fact:fact('short', {why:'shortfall'})},
   ]});
   assert.equal(rows.length, 2);
   assert.ok(rows.every(r => r.proposed === null));
   assert.match(rows[0].reason, /paused/);
   assert.match(rows[1].reason, /one-off supply/);
+  // A paused backup a route covers is no action: its fact is covered.
+  assert.deepEqual(build({checks:[{s:0, item:'Water', paused:true, covered:true, from:'Importer',
+    fact:fact('covered', {why:'route'})}]}), []);
 });
 
-test('unassigned factories require depot selection and expose full-rate assumptions', () => {
+test('unassigned factories require depot selection; a top-up is the input fact\'s figure', () => {
   const rows = build({
     loose:[{item:'Flour', week:1501}],
-    sites:[{s:1, rows:[{item:'Flour', status:'unplanned', target:0, perDay:215, from:null}]}],
+    sites:[{s:1, rows:[{item:'Flour', target:0, perDay:215, from:null, fact:fact('noplan', {setTo:250})}]}],
   });
   assert.equal(rows[0].proposed, null);
   assert.match(rows[0].reason, /Choose a supplying depot/);
-  assert.equal(rows[1].proposed, 300);
-  assert.match(rows[1].reason, /confirm staffing and output limits/);
+  assert.match(rows[0].reason, /1[,.]501 units\/week/);
+  assert.equal(rows[1].proposed, 250);
+  assert.match(rows[1].reason, /Full-rate input requirement, plus the margin; confirm staffing and output limits/);
+  // Under Demand the reason says what the figure was sized for.
+  const [dem] = build({sites:[{s:1, rows:[{item:'Flour', target:100, perDay:215, from:0, margin:0.15,
+    sizedFor:'What the shops at the end of the chain use', fact:fact('short', {setTo:250})}]}]});
+  assert.match(dem.reason, /^From Depot · 1 Depot Street\. What the shops at the end of the chain use, plus a 15% margin/);
+});
+
+test('a stalled input asks to check the route; one waiting on another input does not', () => {
+  const rows = build({sites:[{s:1, rows:[
+    {item:'Flour', target:300, perDay:215, from:0, fact:fact('stalled', {why:'notDrawn'})},
+    {item:'Sugar', target:300, perDay:215, from:0, fact:fact('stalled', {why:'waiting'})},
+  ]}]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['Check the delivery route', 'Flour']]);
 });
 
 test('a measured delivery gap has a one-off quantity, separate from the recurring order', () => {
-  const gap = {s:0, item:'Sugar', coverFit:'short', shortBy:.8, catchUp:217, runsOut:'Sunday'};
+  const gap = {s:0, item:'Sugar', shortBy:.8, catchUp:217, runsOut:'Sunday', fact:fact('short', {why:'shortfall'})};
   const rows = build({checks:[gap]});
   assert.equal(rows[0].proposed, 217);
   assert.equal(rows[0].current, null);
@@ -130,19 +147,19 @@ test('a measured delivery gap has a one-off quantity, separate from the recurrin
 });
 
 test('completion identities survive site reordering but change with settings and sources', () => {
-  const shop = {s:2, item:'Flowers', target:100, peakSold:235, from:0};
+  const shop = {s:2, item:'Flowers', target:100, peakSold:235, from:0, fact:fact('short', {setTo:280})};
   const before = build({shops:[shop]})[0];
   const reordered = build({businesses:[businesses[2], businesses[1], businesses[0]],
     shops:[{...shop, s:0, from:2}]})[0];
   assert.equal(before.key, reordered.key);
   assert.notEqual(before.key, build({shops:[{...shop, target:150}]})[0].key);
-  assert.notEqual(before.key, build({shops:[{...shop, peakSold:350}]})[0].key);
+  assert.notEqual(before.key, build({shops:[{...shop, fact:fact('short', {setTo:360})}]})[0].key);
   assert.notEqual(before.key, build({shops:[{...shop, from:1}]})[0].key);
 });
 
 test('copied checklist groups actions and includes units and read-only instructions', () => {
   const rows = build({imports:[{s:0, rows:[order({})]}],
-    checks:[{s:0, item:'Sugar', paused:true, from:'Importer'}]});
+    checks:[{s:0, item:'Sugar', paused:true, from:'Importer', fact:fact('paused')}]});
   const text = context.orderChecklistText(rows, 'Company · day 12');
   assert.match(text, /Enter these settings in-game/);
   assert.match(text, /units, not boxes/);
@@ -154,294 +171,132 @@ test('empty or incomplete supply data does not invent an action', () => {
   assert.deepEqual(build(), []);
 });
 
-/* --- the Set to box: Smart Delivery levels and the player's own figures --- */
+/* --- the Set to box: the fact's figure, Smart Delivery levels and the player's own --- */
 /* A bare number is a figure typed while the game held what the contract
    holds now; an object says what the game held when it was typed. */
 const heldNow = c => c.smart && Number.isFinite(c.target) ? c.target : c.weekly || c.pausedWeekly || 0;
 const typed = (contract, edit) => typeof edit === 'number' ? {value: edit, inGame: heldNow(contract)} : edit;
-const setting = (total, contract, edit) => JSON.parse(JSON.stringify(
-  context.importSetting(total, contract, typed(contract, edit))));
-// A row as drawLogistics builds it: the factory week, then the setting.
-const row = (total, contract, edit, extra = {}) => ({s:0, item:'Sugar', factoryWeek:total, otherWeek:0,
-  total, need:total, ...setting(total, contract, edit), ...extra});
+const setting = (f, contract, edit) => JSON.parse(JSON.stringify(
+  context.importSetting(f, contract, typed(contract, edit))));
+// A row as drawLogistics builds it: the fact's figures, then the setting.
+const row = (f, contract, edit, extra = {}) => ({s:0, item:'Sugar', use:f.use, parts:f.parts, margin:0.15,
+  need:f.need, ...setting(f, contract, edit), ...extra});
 
-test('a Smart Delivery level is judged as a week of supply and shows the level in game', () => {
-  const covered = setting(1400, {weekly:1500, smart:true, target:1500});
-  assert.equal(covered.fit, 'ok');
+test('the box holds the figure in game until the fact asks for a change', () => {
+  const covered = setting(fact('covered'), {weekly:1500, smart:true, target:1500});
+  assert.equal(covered.fit, 'covered');
   assert.equal(covered.inGame, 1500);
   assert.equal(covered.value, 1500, 'nothing to change: the box holds the level in game');
   assert.equal(covered.changed, false);
-  const short = setting(1400, {weekly:900, smart:true, target:900});
+  const short = setting(fact('short', {setTo:1610}), {weekly:900, smart:true, target:900});
   assert.equal(short.fit, 'short');
-  assert.equal(short.value, 1400);
+  assert.equal(short.value, 1610);
   assert.equal(short.changed, true);
+  // A line with no contract yet that a factory line needs: an order from nothing.
+  const none = setting(fact('noplan', {setTo:1610}), {});
+  assert.deepEqual([none.inGame, none.value, none.changed], [null, 1610, true]);
 });
 
-test('a high Smart Delivery level only holds stock, so it is never told to lower', () => {
-  assert.equal(setting(1000, {weekly:5000, smart:true, target:5000}).surplus, false);
-  assert.equal(setting(1000, {weekly:5000}).surplus, true);
-});
-
-test('a mixed depot shows the level in game and judges what one delivery can bring', () => {
-  // A level of 1,000 with a plain 400 delivered after it: 1,400 a week at most.
-  const mixed = setting(1400, {weekly:1400, smart:true, target:1000, plain:400});
-  assert.equal(mixed.inGame, 1000);
-  assert.equal(mixed.fit, 'ok');
+test('could lower is Python\'s word, and only on a plain order', () => {
+  assert.equal(setting(fact('covered', {lower:1150}), {weekly:5000}).lower, 1150);
+  assert.equal(setting(fact('covered', {lower:1150}), {weekly:5000, smart:true, target:5000}).lower, null);
+  assert.equal(setting(fact('covered'), {weekly:5000}).lower, null);
 });
 
 test('a paused contract keeps its figure in the box until the player types one', () => {
-  const paused = setting(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000});
+  const paused = setting(fact('paused', {setTo:1610}), {weekly:0, pausedWeekly:3000, smart:true, target:3000});
   assert.equal(paused.fit, 'paused');
   assert.equal(paused.value, 3000);
   assert.equal(paused.changed, false);
-  assert.equal(setting(1400, {weekly:0, pausedWeekly:3000}, 2000).changed, true);
+  assert.equal(setting(fact('paused', {setTo:1610}), {weekly:0, pausedWeekly:3000}, 2000).changed, true);
+  // A paused level shows the level in game.
+  const level = setting(fact('paused'), {weekly:0, pausedWeekly:1400, smart:true, target:1000, plainAfter:400});
+  assert.deepEqual([level.paused, level.inGame], [true, 1000]);
 });
 
 test('the player\'s figure replaces the suggestion; typing the suggestion is no edit', () => {
-  const mine = setting(1400, {weekly:900, smart:true, target:900}, 2000);
+  const f = fact('short', {setTo:1400});
+  const mine = setting(f, {weekly:900, smart:true, target:900}, 2000);
   assert.deepEqual([mine.edited, mine.value, mine.suggested, mine.changed], [true, 2000, 1400, true]);
   // Typing the figure the game holds turns the suggestion down: an edit
   // that asks for no change, kept while the game's figure stays put.
-  const down = setting(1400, {weekly:900}, 900);
+  const down = setting(f, {weekly:900}, 900);
   assert.deepEqual([down.stale, down.edited, down.value, down.changed], [false, true, 900, false]);
   // Once the game's figure has moved, the typed figure answered a game that
   // is gone: stale, dropped, and the row reads as the board sees it again,
   // whether the game moved to the typed figure or elsewhere.
-  const entered = setting(1400, {weekly:1200}, {value:1200, inGame:900});
+  const entered = setting(f, {weekly:1200}, {value:1200, inGame:900});
   assert.deepEqual([entered.stale, entered.edited, entered.value], [true, false, 1400]);
-  const moved = setting(1400, {weekly:1000}, {value:2000, inGame:900});
+  const moved = setting(f, {weekly:1000}, {value:2000, inGame:900});
   assert.deepEqual([moved.stale, moved.edited, moved.value], [true, false, 1400]);
   // The turned-down 900 does not come back as an order to lower a short row.
-  const away = setting(1400, {weekly:1200}, {value:900, inGame:900});
+  const away = setting(f, {weekly:1200}, {value:900, inGame:900});
   assert.deepEqual([away.stale, away.edited, away.value], [true, false, 1400]);
-  const rows = build({imports:[{s:0, rows:[row(1400, {weekly:1200}, {value:900, inGame:900})]}]});
+  const rows = build({imports:[{s:0, rows:[row(f, {weekly:1200}, {value:900, inGame:900})]}]});
   assert.deepEqual([rows[0].current, rows[0].proposed], [1200, 1400]);
   // Not a number, or below zero, is not a figure.
-  assert.equal(setting(1400, {weekly:900}, -5).edited, false);
-  assert.equal(setting(1400, {weekly:900}, NaN).edited, false);
+  assert.equal(setting(f, {weekly:900}, -5).edited, false);
+  assert.equal(setting(f, {weekly:900}, NaN).edited, false);
 });
 
 test('the checklist names a Smart Delivery stock level, not a weekly order', () => {
-  const rows = build({imports:[{s:0, rows:[row(1400, {weekly:900, smart:true, target:900})]}]});
+  const f = fact('short', {setTo:1400});
+  const rows = build({imports:[{s:0, rows:[row(f, {weekly:900, smart:true, target:900})]}]});
   assert.equal(rows.length, 1);
   assert.deepEqual([rows[0].current, rows[0].proposed, rows[0].mode], [900, 1400, 'smart']);
   assert.match(rows[0].reason, /^Set Smart Delivery stock to 1[,.]400\./);
   const text = context.orderChecklistText(rows, 'Company');
   assert.match(text, /Smart Delivery stock 900 -> 1400 units/);
   assert.doesNotMatch(text, /units\/week/);
-  const plain = build({imports:[{s:0, rows:[row(1400, {weekly:900})]}]});
+  const plain = build({imports:[{s:0, rows:[row(f, {weekly:900})]}]});
   assert.match(plain[0].reason, /^Set the weekly order to 1[,.]400\./);
   assert.match(context.orderChecklistText(plain, 'Company'), /900 -> 1400 units\/week/);
   assert.notEqual(rows[0].key, plain[0].key, 'a level and an order are not the same mark');
 });
 
-test('an edited figure feeds the checklist, including on a row the board finds covered', () => {
-  const edited = build({imports:[{s:0, rows:[row(1400, {weekly:1500, smart:true, target:1500}, 3000)]}]});
-  assert.equal(edited.length, 1);
-  assert.deepEqual([edited[0].current, edited[0].proposed], [1500, 3000]);
-  assert.match(edited[0].reason, /Your own figure; the board suggests 1[,.]400/);
-  // An edit on a short row replaces the suggestion.
-  const short = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 2500)]}]});
-  assert.equal(short[0].proposed, 2500);
-  // Typing the figure in game turns the suggestion down: nothing to do.
-  assert.deepEqual(build({imports:[{s:0, rows:[row(1400, {weekly:900}, 900)]}]}), []);
-  // A new figure is a new action: an old tick does not carry over.
-  const other = build({imports:[{s:0, rows:[row(1400, {weekly:900}, 2600)]}]});
-  assert.notEqual(short[0].key, other[0].key);
-});
-
-test('a paused contract with a typed figure resumes at that figure', () => {
-  const rows = build({imports:[{s:0, rows:[row(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000}, 1600)]}]});
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].proposed, 1600);
-  assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3[,.]000 in stock\. Set Smart Delivery stock to 1[,.]600\./);
-  const untouched = build({imports:[{s:0, rows:[row(1400, {weekly:0, pausedWeekly:3000, smart:true, target:3000})]}]});
-  assert.equal(untouched[0].proposed, null);
-});
-
-test('a figure entered in game on a tight row goes back to the tight verdict', () => {
-  // 1,350 a week against a level of 1,300: tight. The player typed 1,300 when
-  // the game held 1,200, and the game now holds it, so the row is tight
-  // again, with the suggestion.
-  const was = {value:1300, inGame:1200};
-  const tight = setting(1350, {weekly:1300, smart:true, target:1300}, was);
-  assert.deepEqual([tight.fit, tight.stale, tight.edited, tight.value], ['tight', true, false, 1400]);
-  const rows = build({imports:[{s:0, rows:[row(1350, {weekly:1300, smart:true, target:1300}, was)]}]});
-  assert.deepEqual([rows[0].current, rows[0].proposed], [1300, 1400]);
-});
-
-/* A line as the payload carries it: the counted contracts in delivery order,
-   the named level's place in them, and what one pass brings. */
-const line = (pass, at, importer = 'Pier 1') => {
-  const d = (a, s = false) => ({amount: a, smart: s});
-  const drops = pass.map(([a, s]) => d(a, s));
-  let before = 0, after = 0;
-  drops.forEach((x, i) => { if(!x.smart){ if(i < at) before += x.amount; else if(i > at) after += x.amount; } });
-  return {weekly: context.importPassDelivers(drops, at, drops[at].amount), smart: true,
-    target: drops[at].amount, plainBefore: before, plainAfter: after, pass: drops, levelAt: at, levelImporter: importer};
-};
-
-test('a level with a plain amount after it shows the level and asks for what the replayed pass needs', () => {
-  // Level first, then 400 plain: a week brings 1,400 at most.
-  const after = setting(1800, line([[1000, true], [400]], 0));
-  assert.deepEqual([after.inGame, after.plainAfter, after.fit, after.setTo, after.value], [1000, 400, 'short', 1400, 1400]);
-  const rows = build({imports:[{s:0, rows:[row(1800, line([[1000, true], [400]], 0))]}]});
-  assert.deepEqual([rows[0].current, rows[0].proposed], [1000, 1400]);
-  assert.match(rows[0].reason, /^Set Smart Delivery stock at Pier 1 to 1[,.]400\./);
-  // Plain first, the 400 lands inside the level: the level alone is the week.
-  const inside = setting(1800, line([[400], [1000, true]], 1));
-  assert.deepEqual([inside.inGame, inside.plainBefore, inside.setTo], [1000, 400, 1800]);
-});
-
-test('a plain amount delivered before the level is never taken off the level', () => {
-  // Plain 1,400 then a level of 1,000, a week of 2,000: the level must be
-  // 2,000, since 1,600 would bring only max(1,400, 1,600).
-  const over = setting(2000, line([[1400], [1000, true]], 1));
-  assert.equal(over.setTo, 2000);
-  assert.equal(context.importPassDelivers(line([[1400], [1000, true]], 1).pass, 1, over.setTo), 2000);
-  // Plain 600, level 500, plain 200, a week of 1,000: 800, not 700.
-  const mixed = setting(1000, line([[600], [500, true], [200]], 1));
-  assert.equal(mixed.setTo, 800);
-});
-
 test('the checklist names the contract that holds the level', () => {
-  // A 500, plain 300, C 600: A holds the level, and a week of 1,100 needs A
-  // at 800. C at 800 would bring 500 + 300, then nothing: still short.
-  const held = line([[500, true], [300], [600, true]], 0, 'A');
-  const rows = build({imports:[{s:0, rows:[row(1100, held)]}]});
+  const held = {weekly:1100, smart:true, target:500, levelImporter:'A', levelName:'1 Pier, its 2nd of 2 contracts here'};
+  const rows = build({imports:[{s:0, rows:[row(fact('short', {setTo:800}), held)]}]});
   assert.equal(rows[0].proposed, 800);
-  assert.match(rows[0].reason, /^Set Smart Delivery stock at A to 800\./);
-  assert.ok(context.importPassDelivers(held.pass, 2, 800) < 1100);
-});
-
-test('an importer with two contracts on the line is named with the contract number', () => {
-  const held = {...line([[500, true], [600, true], [300]], 1, '1 Pier'), levelName: '1 Pier, its 2nd of 2 contracts here'};
-  const rows = build({imports:[{s:0, rows:[row(1100, held)]}]});
   assert.match(rows[0].reason, /^Set Smart Delivery stock at 1 Pier, its 2nd of 2 contracts here to 800\./);
 });
 
-test('without a pass the page and the board fall back the same way', () => {
-  // importSetting and importRaise both take the plain amount after the
-  // level off the week, as _raise_import does.
-  assert.equal(setting(1800, {weekly:1400, smart:true, target:1000, plainAfter:400}).setTo, 1400);
-  const importRaise = vm.runInContext('importRaise', context);  // a const, not a global property
-  assert.equal(importRaise({importSmart:true, importPlainAfter:400, depotNeed:1800}), 1400);
-  assert.equal(importRaise({importSmart:false, importPlainAfter:0, depotNeed:1800}), 1800);
+test('an edited figure feeds the checklist, including on a row the board finds covered', () => {
+  const edited = build({imports:[{s:0, rows:[row(fact('covered'), {weekly:1500, smart:true, target:1500}, 3000)]}]});
+  assert.equal(edited.length, 1);
+  assert.deepEqual([edited[0].current, edited[0].proposed], [1500, 3000]);
+  assert.match(edited[0].reason, /Your own figure\./);
+  // An edit on a short row replaces the suggestion.
+  const f = fact('short', {setTo:1400});
+  const short = build({imports:[{s:0, rows:[row(f, {weekly:900}, 2500)]}]});
+  assert.equal(short[0].proposed, 2500);
+  assert.match(short[0].reason, /Your own figure; the board suggests 1[,.]400/);
+  // Typing the figure in game turns the suggestion down: nothing to do.
+  assert.deepEqual(build({imports:[{s:0, rows:[row(f, {weekly:900}, 900)]}]}), []);
+  // A new figure is a new action: an old tick does not carry over.
+  const other = build({imports:[{s:0, rows:[row(f, {weekly:900}, 2600)]}]});
+  assert.notEqual(short[0].key, other[0].key);
 });
 
-test('the level search matches a plain replay over many orders', () => {
-  let seed = 3680;
-  const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  for(let k = 0; k < 400; k++){
-    const drops = Array.from({length: 1 + Math.floor(rand() * 5)},
-      () => ({amount: Math.floor(rand() * 61) * 50, smart: rand() < .5}));
-    if(!drops.some(d => d.smart)) drops[0].smart = true;
-    const at = drops.findIndex(d => d.smart);
-    const need = 1 + Math.floor(rand() * 8000);
-    const level = context.importLevelFor(drops, at, need);
-    let smallest = 0;
-    while(context.importPassDelivers(drops, at, smallest) < need) smallest += 100;
-    assert.equal(level, smallest, JSON.stringify({drops, at, need}));
-  }
+test('a paused contract resumes at a typed figure, or says the fact\'s week', () => {
+  const f = fact('paused', {setTo:1610, need:1610});
+  const rows = build({imports:[{s:0, rows:[row(f, {weekly:0, pausedWeekly:3000, smart:true, target:3000}, 1600)]}]});
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].proposed, 1600);
+  assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3[,.]000 in stock\. Set Smart Delivery stock to 1[,.]600\./);
+  const [untouched] = build({imports:[{s:0, rows:[row(f, {weekly:0, pausedWeekly:13000})]}]});
+  assert.equal(untouched.proposed, null);
+  assert.match(untouched.reason,
+    /Resume the paused import contract\. It is configured for 13[,.]000 units\/week\. Uses 1[,.]300 a week \(factory lines and shops\), plus a 15% margin: 1[,.]610 a week\./);
 });
 
-test('a paused level shows the level in game', () => {
-  const paused = setting(1400, {weekly:0, pausedWeekly:1400, smart:true, target:1000, plainAfter:400});
-  assert.deepEqual([paused.paused, paused.inGame], [true, 1000]);
-});
-
-/* --- a depot a route from the company's own site tops up --- */
-/* A row as drawLogistics builds it for a depot line: the import's week after
-   the routes (importWeek), then the setting on it. `contract` carries the
-   route figures _supply() measured: routed and drawWeek a week, and covered. */
-const routedRow = (factoryWeek, otherWeek, contract, edit) => {
-  const week = JSON.parse(JSON.stringify(context.importWeek(factoryWeek, otherWeek, contract)));
-  return {s:0, item:'Water', factoryWeek, otherWeek: Math.max(0, week.gross - factoryWeek), total: week.gross,
-          ...week, ...setting(week.need, contract, edit)};
-};
-const ROUTE_ALL = {routed:25200, covered:true, drawWeek:25200};
-
-const weekOf = (...args) => JSON.parse(JSON.stringify(context.importWeek(...args)));
-
-test('a line with no measured draw is sized on everything that leaves, as before', () => {
-  assert.deepEqual(weekOf(1000, 450, {weekly:1000}), {routed:0, covered:false, gross:1450, need:1450});
-});
-
-test('a routed line is sized on what leaves, less the route once', () => {
-  // The shops draw 25,200 a week and a route brings 12,600 of it; on a
-  // routed line depotOther is read gross, 25,200. The import answers for the
-  // draw less the route, 12,600.
-  assert.equal(weekOf(0, 25200, {weekly:5000, routed:12600, covered:false, drawWeek:25200}).need, 12600);
-  // The factories' full-rate week stays a floor under a draw a starved
-  // factory holds down.
-  assert.equal(weekOf(18000, 0, {weekly:5000, routed:1000, covered:false, drawWeek:15000}).need, 17000);
-});
-
-test('a routed line feeding shops and a starved factory keeps what the shops take', () => {
-  // The factory eats 14,000 a week at full rate but draws 7,000; the shops
-  // take 11,200 (depotOther, read gross on a routed line), and a route
-  // brings 3,000 a week. The draw, 18,200, is held down by the factory: the
-  // week is the full-rate factory plus the shops, 25,200, and the import
-  // answers for 22,200 of it, not the draw's 15,200.
-  const w = weekOf(14000, 11200, {weekly:5000, routed:3000, covered:false, drawWeek:18200});
-  assert.deepEqual([w.gross, w.need], [25200, 22200]);
-});
-
-test('a depot line no contract covers asks for no import when a route brings its draw', () => {
-  // _depot_routes: the route figures alone, with no weekly amount.
-  const r = routedRow(1680, 0, {routed:1680, covered:true, drawWeek:1680});
-  assert.deepEqual([r.covered, r.need, r.setTo, r.inGame], [true, 0, null, null]);
-  assert.deepEqual(build({imports:[{s:0, rows:[r]}]}), []);
-  // Half of it by route: the import is asked for the other half.
-  const [half] = build({imports:[{s:0, rows:[routedRow(1680, 0, {routed:840, covered:false, drawWeek:1680})]}]});
-  assert.deepEqual([half.current, half.proposed], [null, 900]);
-  assert.match(half.reason, /less the 840 a week a route brings/);
-});
-
-test('a paused backup beside a route that brings the week is neither short nor resumed', () => {
-  const r = routedRow(25200, 0, {weekly:0, pausedWeekly:5200, smart:true, target:5200, ...ROUTE_ALL});
-  assert.deepEqual([r.covered, r.need, r.setTo, r.changed], [true, 0, null, false]);
-  // The Stock view's row for the same line: covered, the backup paused, the shelf fine.
-  const rows = build({imports:[{s:0, rows:[r]}],
-    checks:[{s:0, item:'Water', paused:true, covered:true, coverFit:'ok', from:'Importer'}]});
-  assert.deepEqual(rows, []);
-});
-
-test('an active backup below the week asks for nothing when a route brings the week', () => {
-  const r = routedRow(18000, 7200, {weekly:5000, ...ROUTE_ALL});
-  assert.deepEqual([r.covered, r.need, r.fit, r.value, r.changed], [true, 0, 'ok', 5000, false]);
-  assert.deepEqual(build({imports:[{s:0, rows:[r]}]}), []);
-});
-
-test('a route covering part of the draw leaves the import the rest, not the whole week', () => {
-  // 25,200 leaves a week: 14,000 to the factories at full rate and 11,200 to
-  // the shops. The route brings 12,600 of it; the import answers for 12,600.
-  const contract = {weekly:5000, routed:12600, covered:false, drawWeek:25200};
-  const r = routedRow(14000, 11200, contract);
-  assert.deepEqual([r.need, r.fit, r.setTo], [12600, 'short', 12600]);
-  const [action] = build({imports:[{s:0, rows:[r]}]});
-  assert.equal(action.kind, 'Weekly imports');
-  assert.deepEqual([action.current, action.proposed], [5000, 12600]);
-  assert.match(action.reason, /Full-rate factory inputs plus shop deliveries, less the 12[,.]600 a week a route brings;/);
-  // Only a depot's shops: the same week, the route taken off once.
-  assert.equal(routedRow(0, 25200, contract).need, 12600);
-  // An order that covers the rest is left alone.
-  assert.deepEqual(build({imports:[{s:0, rows:[routedRow(14000, 11200, {...contract, weekly:13000})]}]}), []);
-});
-
-test('a paused import on a partly routed line resumes at what the route leaves', () => {
-  const r = routedRow(14000, 11200, {weekly:0, pausedWeekly:13000, routed:12600, covered:false, drawWeek:25200});
-  const [action] = build({imports:[{s:0, rows:[r]}]});
-  assert.equal(action.proposed, null);
-  assert.match(action.reason,
-    /Resume the paused import contract\. It is configured for 13[,.]000 units\/week\. The estimated requirement, after the 12[,.]600 a week a route brings, is 12[,.]600\./);
-});
-
-test('a route covering what a starved factory draws does not cover its full-rate week', () => {
-  // The factory draws 1,400 a week for want of staff and the route brings
-  // it; at full rate it eats 25,200, so the import still answers for 23,800.
-  const r = routedRow(25200, 0, {weekly:5000, routed:1400, covered:true, drawWeek:1400});
-  assert.deepEqual([r.covered, r.need, r.fit], [false, 23800, 'short']);
+test('a route that brings part of the week is named once, off the week', () => {
+  const f = fact('short', {setTo:14490, use:12600, parts:{lines:14000, sites:11200, route:12600}});
+  const [action] = build({imports:[{s:0, rows:[row(f, {weekly:5000})]}]});
+  assert.deepEqual([action.current, action.proposed], [5000, 14490]);
+  assert.match(action.reason, /less the 12[,.]600 a week a route brings, plus a 15% margin/);
+  // A route that brings the whole week covers the line: nothing to ask of the import.
+  assert.deepEqual(build({imports:[{s:0, rows:[row(fact('covered', {why:'route'}), {weekly:5000}, undefined, {covered:true, need:0})]}]}), []);
 });
 
 /* Today's Plan imports card, from the same rows and ticks as the checklist:
@@ -452,14 +307,14 @@ const card = (rows, ticked = [], gaps = {complete: true, unnamed: 0}) => JSON.pa
 
 test('the Plan imports card has four states, and counts what the checklist has to do', () => {
   const one = build({imports:[{s:0, rows:[order({item:'Metal Band', smart:true, current:15200, setTo:20200,
-    inGame:15200, levelName:'Import Hub'})]}]});
+    value:20200, inGame:15200, levelName:'Import Hub'})]}]});
   assert.equal(one.length, 1);
   assert.deepEqual(card(one), {badge:'1 TO CHANGE', live:true,
-    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock ${(15200).toLocaleString()} \u2192 ${(20200).toLocaleString()}.`});
+    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock ${(15200).toLocaleString()} → ${(20200).toLocaleString()}.`});
 
   const many = build({
     imports:[{s:0, rows:[order({item:'Sugar'}), order({item:'Flour'})]}],
-    shops:[{s:2, item:'Paper Bag', from:0, peakSold:400, target:100, peakDay:'Saturday'}],
+    shops:[{s:2, item:'Paper Bag', from:0, peakSold:400, target:100, peakDay:'Saturday', fact:fact('short', {setTo:460})}],
   });
   assert.equal(many.length, 3);
   assert.deepEqual(card(many), {badge:'3 TO CHANGE', live:true,
@@ -474,6 +329,16 @@ test('the Plan imports card has four states, and counts what the checklist has t
     what:'You ticked all 3. A change the game has taken leaves the list with the next save.'});
   assert.deepEqual(card([], [], {complete: true, unnamed: 0}),
     {badge:'ALL SET', live:false, what:'No changes found in the supply data.'});
+});
+
+test('tight never reaches Today: with only margin changes left, the card says nothing falls short', () => {
+  // drawOrderChecklist() hands the card the rows that are not tight, and how many are.
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:'ALL SET', live:false,
+    what:'Nothing falls short. Supply › Orders lists 2 changes that would restore the margin.'});
+  assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
+  const drawn = source.slice(source.indexOf('function drawOrderChecklist('), source.indexOf('/* The Set to figures the player typed'));
+  assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight\);/);
+  assert.match(drawn, /planImportsState\(urgent,/);
 });
 
 test('an empty checklist that could not see everything does not say ALL SET', () => {
@@ -491,8 +356,8 @@ test('an empty checklist that could not see everything does not say ALL SET', ()
 
 test('a paused import with a figure reads as a resume, not an order from "not set"', () => {
   const rows = build({imports:[{s:0, rows:[
-    order({item:'Sugar', paused:true, total:1400, edited:true, value:1600, pausedWeekly:1000}),
-    order({item:'Salt', smart:true, paused:true, total:900, edited:true, value:1200, pausedWeekly:700}),
+    order({item:'Sugar', fit:'paused', paused:true, need:1400, edited:true, value:1600, pausedWeekly:1000}),
+    order({item:'Salt', fit:'paused', smart:true, paused:true, need:900, edited:true, value:1200, pausedWeekly:700}),
   ]}]});
   assert.equal(rows.length, 2);
   // The row says it is paused; the card reads that, not the reason's wording.
@@ -506,8 +371,16 @@ test('a paused import with a figure reads as a resume, not an order from "not se
     `<b>Salt</b> at Import Hub: resume the paused import, Smart Delivery stock ${(1200).toLocaleString()}.`);
 });
 
-test('the card says a review in the checklist\u2019s own words, and escapes a save\u2019s names', () => {
+test('the card says a review in the checklist’s own words, and escapes a save’s names', () => {
   const rows = build({loose:[{item:'<Glue>', week:700}]});
   assert.deepEqual(card(rows), {badge:'1 TO CHANGE', live:true,
     what:'<b>&lt;Glue></b>: choose a supplying depot before setting an order.'});
+});
+
+test('the board keeps no verdict engine of its own', () => {
+  // Python is the only judge (supplyFact); the JS engine that recomputed
+  // factory inputs and import levels is gone.
+  for(const name of ['function feedVerdict(', 'function feedRoute(', 'const feedFit =', 'function importLevelFor(',
+                     'const importRaise =', 'function importWeek(', 'const ceil100 ='])
+    assert.equal(source.indexOf(name), -1, name);
 });
