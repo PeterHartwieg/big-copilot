@@ -436,8 +436,10 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertEqual(row["orderFit"], "ok")
         self.assertEqual(row["coverFit"], "short")
         self.assertEqual(row["reason"], "shortfall")
-        # Half of day 10 plus days 11-15, minus stock and the small day-11 drop.
-        self.assertEqual(row["catchUp"], 1030)
+        # The depot is emptied a round at a time: day 10's round, not yet in
+        # the log, through day 16's, which leaves before the import lands,
+        # minus stock and the small day-11 drop.
+        self.assertEqual(row["catchUp"], 7 * 240 - 240 - 50)
         self.assertEqual(row["coverageUntil"], 16)
 
     def test_browser_manual_recipe_choice_recognizes_direct_import(self):

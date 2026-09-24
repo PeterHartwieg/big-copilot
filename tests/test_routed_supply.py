@@ -185,10 +185,12 @@ class RoutedSupplyTests(unittest.TestCase):
 
     def test_a_partial_route_leaves_the_node_the_import_s_days(self):
         """Half the draw by route and 2,700 on the shelf: the import's 1,800 a
-        day builds up over the 3.5 days to its drop, 6,300, so the goods-flow
-        node reads the depot low, not the one day a covering route asks."""
+        day builds up over the five rounds to its drop (today's, not yet in
+        the log, to the drop day's, which leaves before the import lands),
+        9,000, so the goods-flow node reads the depot low, not the one day a
+        covering route asks."""
         _row, item = depot_row(0.5, [contract(13000, 13000, smart=False)], import_days=(7,))
-        self.assertEqual((item["need"], item["low"]), (6300, True))
+        self.assertEqual((item["need"], item["low"]), (9000, True))
 
     def test_a_busy_day_does_not_make_a_mostly_routed_depot_low(self):
         """A 90% route, Saturday at 1.6 times a quiet day and 6,000 on the shelf:
@@ -211,8 +213,9 @@ class RoutedSupplyTests(unittest.TestCase):
         row, item = depot_row(0.5, contracts, stock=4000)
         self.assertEqual((row["coverFit"], row["catchUp"]), ("ok", 0))
         self.assertEqual((item["need"], item["low"]), (row["carry"], False))
-        # The rest of today at the import's 1,800 a day, then day 11's drop.
-        self.assertEqual(row["carry"], 900)
+        # Today's round and day 11's, which leaves before the drop lands, at
+        # the import's 1,800 a day.
+        self.assertEqual(row["carry"], 3600)
 
     def test_a_small_first_drop_does_not_hide_the_stretch_after_it(self):
         """The same route with 200 due on day 11 and 6,500 on day 14: the small
@@ -287,9 +290,10 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual((row["covered"], row["weekNeed"], row["orderFit"]), (True, 0, "ok"))
         self.assertEqual((row["coverFit"], row["runsOut"]), ("short", "Saturday"))
         self.assertEqual((row["level"], row["reason"]), ("critical", "shortfall"))
-        # Wednesday afternoon, Thursday and Friday leave 2,700 on top of the
-        # 2,700 held; Saturday takes 6,480 beyond the route.
-        self.assertEqual(row["catchUp"], 6480 - 2700 - 2700)
+        # Wednesday's round (not yet in the log), Thursday's and Friday's
+        # leave 3,240 on top of the 2,700 held; Saturday takes 6,480 beyond
+        # the route.
+        self.assertEqual(row["catchUp"], 6480 - 2700 - 3240)
 
     def test_the_alert_for_a_covered_line_names_the_route_not_the_drop(self):
         """The Saturday above, with the backup active: the gap is the day before
@@ -325,7 +329,7 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual((row["covered"], row["paused"]), (True, True))
         self.assertEqual((row["coverFit"], row["runsOut"]), ("short", "Saturday"))
         self.assertEqual((row["level"], row["reason"]), ("critical", "shortfall"))
-        self.assertEqual(row["catchUp"], 6480 - 2700 - 2700)
+        self.assertEqual(row["catchUp"], 6480 - 2700 - 3240)
 
     def test_an_import_s_day_is_never_the_route_s_first(self):
         """The import landed on day 4 while the factory shipped elsewhere; the
@@ -381,17 +385,19 @@ class RoutedSupplyTests(unittest.TestCase):
 
     def test_a_depot_fed_only_by_imports_reads_as_before(self):
         """No route into the depot: the whole draw is the import's, and a 5,000
-        order against a 25,200 week is short, as on main. The figures are
-        main's, pinned."""
+        order against a 25,200 week is short, as on main. The depot is walked
+        a round at a time: today's round (not yet in the log) takes 3,600 of
+        the 2,700 held, and the stock has to carry five rounds, to the drop
+        day's, which leaves before the import lands."""
         row, item = depot_row(0.0, [contract(5000, 5000, smart=False)], import_days=(7,))
         self.assertEqual((row["perDay"], row["routed"], row["importPerDay"]), (DRAW, 0, DRAW))
         self.assertEqual((row["level"], row["reason"], row["covered"]), ("critical", "order", False))
         self.assertEqual((row["orderFit"], row["coverFit"]), ("short", "short"))
         self.assertEqual(row["weekNeed"], 7 * DRAW)
         self.assertEqual((row["catchUp"], row["runsOut"], row["cover"], row["shortBy"]),
-                         (9900, "Thursday", 0.8, 2.75))
+                         (5 * DRAW - 2700, "Wednesday", 0.8, 4.25))
         self.assertEqual((item["fit"], item["short"], item["low"], item["need"], item["cycleNeed"]),
-                         ("short", True, True, 12600, 7 * DRAW))
+                         ("short", True, True, 5 * DRAW, 7 * DRAW))
 
 
 class RoutedFactoryViewTests(unittest.TestCase):
