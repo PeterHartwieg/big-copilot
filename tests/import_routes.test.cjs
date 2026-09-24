@@ -236,9 +236,9 @@ for (const scenario of [
       const seen = await page.evaluate(() => {
         const facts = D.supply.facts, out = {imports: [], wanted: [], topups: []};
         Object.keys(facts).forEach(s => Object.keys(facts[s]).forEach(slug => {
-          const f = supplyFact(s, slug);
+          const f = supplyFact(s, slug), imp = f.import || f;
           if(f.imp) out.imports.push(slug);
-          if(f.imp && Number.isFinite(f.setTo) && f.st !== 'paused') out.wanted.push([+s, slug, f.setTo]);
+          if(f.imp && Number.isFinite(imp.setTo) && imp.st !== 'paused') out.wanted.push([+s, slug, imp.setTo]);
           if(f.role === 'input' && f.cad === 'daily' && Number.isFinite(f.setTo)) out.topups.push([+s, slug, f.setTo]);
         }));
         out.rows = gwImportRows.map(r => [r.s, r.slug, r.setTo]);

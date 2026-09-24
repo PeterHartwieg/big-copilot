@@ -1150,7 +1150,7 @@ test("imports: the figure written is the fact's, with no figure typed", async (t
   // Python sizes the week with the chain's margin, rounded up to ten; the board
   // offers that figure in the box and writes it as it stands.
   const d = JSON.parse(payload);
-  const [s, lines] = Object.entries(d.supply.facts).find(([, l]) => l['ba:itemname_paperbag']);
+  const [, lines] = Object.entries(d.supply.facts).find(([, l]) => l['ba:itemname_paperbag']);
   Object.assign(lines['ba:itemname_paperbag'], {st: 'short', why: 'order', lvl: 'critical', setTo: 4370});
   const page = await linked(t, {approved: true, data: JSON.stringify(d)});
   await supply(page);
@@ -1162,7 +1162,67 @@ test("imports: the figure written is the fact's, with no figure typed", async (t
   await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
   await dialog(page).getByText('1 amount set in the game.').waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4370);
-  assert.ok(s !== undefined);
+});
+
+/* The fixture's company with a week of rounds leaving the depot, built and
+   extracted by Python: the one payload here whose facts nobody laid in. */
+function drawnPayload() {
+  const file = path.join(dir, 'drawn.hsg');
+  const code = [
+    'import json, sys',
+    'sys.path.insert(0, "tests")',
+    'import es3_fixture as f, ba_dashboard',
+    'from ba_save import Names, load_save',
+    'c = f.link_company()',
+    'depot = next(b for b in c["BuildingRegistrations"] if b["BusinessName"] == "HART. Depot")',
+    'depot["deliveryTransactions"] = [{"dayOfDelivery": d, "deliveryItems": [',
+    '    {"itemName": "ba:itemname_paperbag", "amountDelivered": -800}]} for d in range(27, 34)]',
+    `open(${JSON.stringify(file)}, "wb").write(f.encode(c))`,
+    `sys.stdout.write(json.dumps(ba_dashboard.extract(load_save(${JSON.stringify(file)}), Names({}), None)))`,
+  ].join('\n');
+  const out = spawnSync(PYTHON, ['-c', code], {cwd: root, maxBuffer: 32 * 1024 * 1024});
+  assert.equal(out.status, 0, out.stderr?.toString());
+  return JSON.parse(out.stdout.toString());
+}
+
+test('imports: the figure written is the one extraction worked out, the margin and the rounding its own', async (t) => {
+  const d = drawnPayload();
+  const s = d.businesses.findIndex((b) => b.name === 'HART. Depot');
+  const fact = d.supply.facts[s]['ba:itemname_paperbag'];
+  // 800 a day leave against a 3,800 level: Python calls it short and sizes it.
+  assert.equal(fact.st, 'short');
+  assert.ok(Number.isFinite(fact.setTo) && fact.setTo > 3800, JSON.stringify(fact));
+  const page = await linked(t, {approved: true, data: JSON.stringify(d)});
+  await supply(page);
+  assert.equal(await importRow(page, 'Paperbag').locator('input[data-imp]').inputValue(), String(fact.setTo));
+  await applyImports(page).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
+  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  assert.equal((await applied())[0].body.contracts[0].products[0].amount, fact.setTo);
+});
+
+test('imports: a product the cap leaves nothing keeps its amount beside one the contract still writes', async (t) => {
+  const page = await linked(t, {approved: true});
+  const got = await page.evaluate(() => {
+    const saved = gwImportRows;
+    const depot = D.businesses[3].key;
+    const m = (slug, product, amount) => ({id: 'M', importer: 'P', group: 0, order: 0, product, amount,
+      active: true, smart: false, agent: true});
+    const row = (slug, item, value, contract) => ({s: 3, slug, item, value, smart: false, changed: true,
+      paused: false, total: value, impId: `m${slug}`, contracts: [contract]});
+    gwTerms.clear();
+    // The importer allows no more X this week, and Y as much as it likes.
+    gwTerms.set(`M|ba:itemname_x|${depot}`, {cap: 0, orderedThisWeek: 0, max: null});
+    gwImportRows = [row('ba:itemname_x', 'X', 300, m('ba:itemname_x', 0, 200)),
+                    row('ba:itemname_y', 'Y', 500, m('ba:itemname_y', 1, 100))];
+    const plan = gwImportPlan(null).map((l) => ({item: l.r.item,
+      set: l.contracts.map(({c, amount}) => [c.id, amount]), uncovered: l.uncovered}));
+    gwImportRows = saved; gwTerms.clear();
+    return plan;
+  });
+  // X is not written down to 0: it keeps its 200, and its 300 stay uncovered.
+  assert.deepEqual(got, [{item: 'X', set: [], uncovered: 300}, {item: 'Y', set: [['M', 500]], uncovered: 0}]);
 });
 
 test('imports: after an undo, Apply again asks from the board read after it', async (t) => {

@@ -23472,7 +23472,9 @@ function gwAllowance(importer, slug){
    gets something; started, all its products count and each one here is
    written, 0 included. A running contract whose every amount would come to 0
    keeps its amounts, since the game runs no contract with nothing to order
-   and a write never stops one. A contract with no purchasing agent cannot
+   and a write never stops one; and a product of a running contract that the
+   caps leave nothing while its line wants some keeps its own amount, however
+   its other products fare. A contract with no purchasing agent cannot
    deliver and is left out. */
 function gwImportPlan(depotKey){
   const lines = gwImportRows
@@ -23558,6 +23560,16 @@ function gwImportPlan(depotKey){
     if(group.some(e => e.c.amount > 0) && t.got.every(n => n === 0)){
       t = tryContract(group, true);
       group.filter(e => e.line).forEach(e => { if(!e.line.kept.includes(e.c)) e.line.kept.push(e.c); });
+    } else {
+      /* A product the caps leave nothing while its line still wants some,
+         beside one the contract still writes: writing it 0 would stop what
+         it brings. It keeps its standing amount, which the cap passes nothing
+         of, and the line's week stays uncovered, said in the dialog. */
+      group.forEach((e, n) => {
+        if(!e.line || t.got[n] !== 0 || !(e.c.amount > 0) || !(t.need.get(e.line) > 0)) return;
+        t.got[n] = e.c.amount;
+        if(!e.line.kept.includes(e.c)) e.line.kept.push(e.c);
+      });
     }
     commit(group, t);
   }
