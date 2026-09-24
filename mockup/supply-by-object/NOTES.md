@@ -43,9 +43,30 @@ verdict per supply fact), and revised after your review the same day. Nothing is
    tight, short, no plan, paused, stalled, idle, made here, new) and "Idle stock" are
    approved.
 5. Idle rows are grouped and open on a click.
-6. The "Run shorter?" hint is replaced by **Staffing for factory lines**. Per factory it
-   shows the hours each line should run for the chosen sizing, the factory workers to add or
-   cut, the wage effect, and a link to the factory's page.
+6. The "Run shorter?" hint is replaced by **Staffing for factory lines**, on the same rules
+   as a shop's Staffing. Factory workers follow the same rules as any worker:
+   - one person per machine per hour, and one shift per person per hour;
+   - 12 hours is the longest shift, and more than 14 h in a day is overworked;
+   - a line needs its machines × the hours it must run: 24 when sized 24/7, else the hours
+     that downstream demand plus the chain margin takes;
+   - each run is cut into shifts of at most 12 h (a 24 h run becomes 00–12 and 12–24; 17 h
+     becomes 06–15 and 15–23);
+   - the site needs ceil(machine-hours a week ÷ 50) factory workers, and hiring is one total
+     per role per site.
+
+   Per factory the block shows the per-line hours and shifts to post, workers needed against
+   those on staff, the wage effect ($211 a day each on this save), and a link to the
+   factory's page. The figures:
+
+   | Factory | Sized 24/7 | Sized for demand |
+   | --- | --- | --- |
+   | Factory Clothing (48 workers) | 41 needed for 2,016 machine-hours: 7 spare, −$1,477/day | 27 needed for 1,316: 21 spare, −$4,431/day |
+   | Factory Jewelry (8 workers) | 7 for 336: 1 spare, −$211/day (Jewelry (Cheap) 12 → 24 h) | 5 for 203: 3 spare, −$633/day (Cheap 12 → 18 h, Expensive 24 → 11 h) |
+   | Factory Electronics (8 workers) | 7 for 336: 1 spare, −$211/day | not planned: no shop sells a smartwatch yet |
+   | **Total** | **−9 workers, −$1,899/day** | **−24 workers, −$5,064/day** |
+
+   Even at 24/7 the factories hold more people than a full-time plan needs: 48 people at
+   about 42 hours each, where 41 at up to 50 would do.
 7. Approved:
    - Idle rows with a figure to type get a tick.
    - Only a line with too few hours is a change; cutting hours stays a suggestion.
@@ -67,13 +88,11 @@ verdict per supply fact), and revised after your review the same day. Nothing is
 2. **Who counts as "under a week".** Fewer than 7 days trading, so [MT] HART. Jewelry at
    exactly 7 days is not flagged. Should the extrapolation read the next week's average
    (drawn: about 96 and 90 a day) or day 7's value?
-3. **The staffing model.**
-   - One factory worker covers about 6 machine-hours a day (42 a week, shifts of 12 hours at
-     most), paid this save's $211 a day. Confirm, or let the port read shifts from the
-     roster.
-   - Demand sizing proposes cutting 17 of 62 factory workers (−$3,590 a day). Should the
-     card also show the shortest safe roster per line (which hours), as the shops' Staffing
-     does?
+3. **Factory shift times.** Settled: the shop rules apply. What is still open is where a
+   shorter run sits in the day. The canvas starts it at 06:00, because factories have no
+   customer curve to follow. Should the port place it to suit the workers' own shift
+   demands instead, the way the shop roster places people, for example avoiding someone's
+   blackout window?
 4. **The plan's own sizing.** Plan a chain sizes at 24/7, since no shop sells smartwatches
    yet. Under Demand, a plan for a range with no shops would size to zero. The canvas
    assumes a plan always uses 24/7.
@@ -87,8 +106,8 @@ The figures are from HART. YT, day 73. Six states are seeded so every verdict sh
 
 - [LM] HART. Jewelry, Jewelry (Cheap): Friday peak 162 (real 126).
 - Clothing Distr., Paper Bag top-up 2,000 (real 5,000).
-- Factory Jewelry, Jewelry (Cheap): rostered 12 h a day (real 24). Factory Jewelry has 6
-  workers on the canvas; the save has 8.
+- Factory Jewelry, Jewelry (Cheap): rostered 12 h a day (real 24). Its 8 workers are
+  real.
 - Factory Jewelry, Uncut Gems (Expensive): top-up 600 (real 750).
 - Import Hub, Uncut Gems (Expensive): Smart Delivery level 4,800 (real 5,100).
 - The plan: Factory Electronics at 12 machines, 5 placed (real 2 placed, 2 running).
@@ -153,12 +172,20 @@ Anchors are in `ba_dashboard.py` unless noted. Land it after R8 and the supply-a
 - **Factory lines.** Add `needHours247` = 24 and `needHoursDemand` = ceil(demand × (1 +
   margin) ÷ (rate × machines)), plus `hoursDay` = hoursWeek / 7 and the `produceUpTo` limit
   (supply-audit defect 3).
-- **Factory staffing (new; the staffing assistant covers shops only).** Per factory:
-  - `workers` (factory workers now) and `wage` (from `staffCost`, drivers excluded).
-  - Per line, hours now and needed for each sizing.
-  - `workersNeeded` = ceil(Σ machines × hours × 7 ÷ 42), a model to confirm (call 3).
-  - A later step could reuse the shops' shift builder for which hours to post. The factory
-    roster already comes through `_factories()` walking `scheduleDays`.
+- **Factory staffing: reuse the shop roster builder, not a new model.** The staffing
+  assistant (`docs/staffing-assistant-scope.md`, the `staffing` payload) builds need →
+  cut → headcount → place for shops. A factory feeds it one role, Factory Worker, with:
+  - one station per machine;
+  - `need` per weekday and hour = 1 on each machine for the hours its line must run: 24
+    sized 24/7, else ceil(demand × (1 + margin) ÷ (rate × machines)) hours, as one run from
+    a fixed start;
+  - no customer basis.
+
+  The builder's own cut (≤ 12 h shifts), `headcount` (ceil(total ÷ 50), `have`, `spare`,
+  `hire`), placement against `JOB_DEMANDS` and day sharing then apply unchanged. The
+  current roster comes through `_factories()` walking `scheduleDays`. It is built for both
+  sizings, so the switch needs no re-extract. Wages use the role's day rate from `staffCost`
+  (drivers excluded).
 - **Plan placement state.** Per factory site:
   - Machines placed, by recipe or workstation.
   - Running = a recipe and someone posted at some hour.
@@ -239,6 +266,6 @@ Anchors are in `ba_dashboard.py` unless noted. Land it after R8 and the supply-a
   - The route-demand sum (one-off fills excluded, one margin per chain, not per hop).
   - Both sizings.
   - The ramp extrapolation (a shop at 6 days is flagged, one at 7 is not).
-  - Factory `workersNeeded`.
+  - Factory staffing through the shop roster builder (two machines at 24/7: 336 machine-hours, 7 workers; runs cut at 12 h).
   - Second-tier depot rows.
   - The plan (placed vs running, *new* while saved, clearing when all run, the first fill).

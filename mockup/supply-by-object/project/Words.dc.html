@@ -1190,6 +1190,26 @@ tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:c
 .sb-stot b{color:var(--ink);font-weight:500}
 .sb-stot .dn{color:var(--accent)}.sb-stot .up{color:var(--warn)}
 .sb-staff .sb-srow .sp-dot{width:8px;height:8px}
+.sb-sfac{border-bottom:1px solid var(--rule-soft);padding:12px 0 8px}
+.sb-sfac.quiet{color:var(--ink-3)}
+.sb-sfh{display:grid;grid-template-columns:230px minmax(0,1fr) 150px 150px;gap:18px;align-items:center;font-size:13px}
+.sb-sfh .sb-hc{color:var(--ink-2)}
+.sb-sfh .sb-hc b{color:var(--ink);font-weight:600;font-family:"IBM Plex Mono",monospace}
+.sb-sfh .sb-hc small{display:block;margin-top:4px;font-size:11.5px;color:var(--ink-3)}
+.sb-sfh .d{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:4px;font:500 11px/1.5 "IBM Plex Mono",monospace}
+.sb-sfh .d.up{background:#f0913a22;color:var(--warn)}.sb-sfh .d.dn{background:var(--accent-soft);color:var(--accent)}
+.sb-sfh .wage{display:flex;flex-direction:column;align-items:flex-end;font:500 13.5px/1 "IBM Plex Mono",monospace}
+.sb-sfh .wage.dn{color:var(--accent)}.sb-sfh .wage.up{color:var(--warn)}
+.sb-sfh .wage small{margin-top:4px;font-size:10.5px;color:var(--ink-3)}
+.sb-sfh .go{justify-self:end}
+.sb-sln{display:grid;grid-template-columns:230px 250px minmax(0,1fr);gap:18px;align-items:center;padding:7px 0 3px 22px;font-size:12.5px;color:var(--ink-2)}
+.sb-sln .hrs{display:flex;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace}
+.sb-sln .hrs b{font-weight:500;color:var(--ink)}
+.sb-sln .shifts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sb-shift{display:inline-flex;align-items:baseline;gap:6px;padding:3px 9px;border-radius:6px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sb-shift small{font-size:10.5px;color:var(--ink-3)}
+.sb-shift:hover{transform:translateY(-2px)}
+.sb-per{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sb-srow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*25ms)}
 .sb-dot-gone{background:none!important;box-shadow:inset 0 0 0 1px var(--ink-3)}
 .sb-dot-new{background:none!important;border:1.5px dashed var(--warn);box-sizing:border-box}

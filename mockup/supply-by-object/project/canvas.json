@@ -30,7 +30,7 @@
    "x": 3120,
    "y": 560,
    "w": 1440,
-   "h": 1610,
+   "h": 1810,
    "title": "Factories \u00b7 sized 24/7",
    "is_interactive": true
   },
@@ -38,21 +38,21 @@
    "x": 4680,
    "y": 560,
    "w": 1440,
-   "h": 1250,
+   "h": 1370,
    "title": "Factories \u00b7 sized for demand",
    "is_interactive": true
   },
   "FactoriesAll.dc.html": {
    "x": 0,
-   "y": 2730,
+   "y": 2930,
    "w": 1440,
-   "h": 2600,
+   "h": 2790,
    "title": "Factories \u00b7 Everything, sized 24/7",
    "is_interactive": true
   },
   "ShopsEmpty.dc.html": {
    "x": 1560,
-   "y": 2730,
+   "y": 2930,
    "w": 1440,
    "h": 830,
    "title": "Shops \u00b7 nothing to change",
@@ -60,7 +60,7 @@
   },
   "Phone.dc.html": {
    "x": 3120,
-   "y": 2730,
+   "y": 2930,
    "w": 390,
    "h": 1560,
    "title": "Phone \u00b7 Warehouses",
@@ -68,7 +68,7 @@
   },
   "FlowToggle.dc.html": {
    "x": 0,
-   "y": 5890,
+   "y": 6280,
    "w": 1440,
    "h": 930,
    "title": "Goods flow \u00b7 a diagram view on each tab (chosen)",
@@ -76,7 +76,7 @@
   },
   "FlowTab.dc.html": {
    "x": 1560,
-   "y": 5890,
+   "y": 6280,
    "w": 1440,
    "h": 1370,
    "title": "Goods flow B \u00b7 not chosen",
@@ -84,7 +84,7 @@
   },
   "Words.dc.html": {
    "x": 0,
-   "y": 7820,
+   "y": 8210,
    "w": 1440,
    "h": 1040,
    "title": "One word per supply fact (R8)",
@@ -92,7 +92,7 @@
   },
   "PlanChain.dc.html": {
    "x": 0,
-   "y": 9420,
+   "y": 9810,
    "w": 1440,
    "h": 1350,
    "title": "Plan a chain \u00b7 order ahead, factory half built",
@@ -100,7 +100,7 @@
   },
   "SupplyPlan.dc.html": {
    "x": 1560,
-   "y": 9420,
+   "y": 9810,
    "w": 1440,
    "h": 1600,
    "title": "Warehouses \u00b7 while a plan is saved",
@@ -148,60 +148,60 @@
    "y": 280,
    "w": 620,
    "maxH": 230,
-   "text": "Factories, sized for demand: what the shops at the end of each chain use, plus one 12% margin for the whole chain. Two jewelry shops have traded 6 days, so their demand is a straight line and Factory Jewelry says it may still be ramping. The inputs all cover the need; the clothing lines need 15 to 17 of their 24 hours, and Staffing proposes cutting 17 factory workers."
+   "text": "Factories, sized for demand: what the shops at the end of each chain use, plus one 12% margin for the whole chain. Two jewelry shops have traded 6 days, so their demand is a straight line and Factory Jewelry says it may still be ramping. The inputs all cover the need; the clothing lines need 15 to 17 of their 24 hours, and Staffing for factory lines needs 27 of the 48 workers at Factory Clothing and 5 of 8 at Factory Jewelry."
   },
   "try-factoriesall": {
    "x": 0,
-   "y": 2450,
+   "y": 2650,
    "w": 620,
    "maxH": 230,
    "text": "Everything on Factories, sized 24/7: each line's day, a cell an hour; red outlines are hours needed and not staffed. Fabric reads tight here and on every other page: the top-up covers the rated need, not the one chain margin. Hover Eats / day for the chain."
   },
   "try-shopsempty": {
    "x": 1560,
-   "y": 2450,
+   "y": 2650,
    "w": 620,
    "maxH": 230,
    "text": "A tab with nothing to change: the badge turns into a tick, the shelf gets its moment, and the three closest to the edge still show, so the all-clear has something to stand on. Hover the drawing."
   },
   "try-phone": {
    "x": 3120,
-   "y": 2450,
+   "y": 2650,
    "w": 620,
    "maxH": 230,
    "text": "390 px: rows become cards, the setting to type gets its own line, the tabs fill the width. The same ticks and the same words."
   },
   "try-flowtoggle": {
    "x": 0,
-   "y": 5610,
+   "y": 6000,
    "w": 620,
    "maxH": 230,
    "text": "Chosen (Peter, 24 Sep). Goods flow is a view of the tab you are on (the icon pair by Needs a change). Click a site and the list opens on its rows, lit. Nothing on the diagram has its own table any more."
   },
   "try-flowtab": {
    "x": 1560,
-   "y": 5610,
+   "y": 6000,
    "w": 620,
    "maxH": 230,
    "text": "Not chosen (Peter, 24 Sep): Goods flow as a fourth tab. Kept for the record; option A, the diagram view on each tab, is the one to port."
   },
   "try-words": {
    "x": 0,
-   "y": 7540,
+   "y": 7930,
    "w": 620,
    "maxH": 230,
    "text": "R8, drawn: one status word per (site, item), with its reason, computed once and shown the same on Today, Supply, the site page and Goods flow."
   },
   "try-planchain": {
    "x": 0,
-   "y": 9140,
+   "y": 9530,
    "w": 620,
    "maxH": 230,
    "text": "Growth \u203a Plan a chain for a factory being built. The steppers set the finished layout (12 machines); what is already in Factory Electronics counts by itself: 5 placed, 2 running, the rest dashed. Save as plan turns the Company targets into the orders on Supply now, so Monday's import lands as the factory opens; a first fill covers the days before. Kept per character on this device; click Remove plan / Save as plan to see both states."
   },
   "try-supplyplan": {
    "x": 1560,
-   "y": 9140,
+   "y": 9530,
    "w": 620,
    "maxH": 230,
    "text": "Supply while the plan is saved: the ordered-ahead inputs read new ('ordered ahead \u00b7 plan: Factory Electronics, 12 machines') instead of idle, the five levels to raise are on the checklist, and the first fill is one ticked line. The plan clears itself once all 12 machines run, or on Remove."
@@ -223,28 +223,28 @@
   },
   "title-1": {
    "x": 0,
-   "y": 2210,
+   "y": 2410,
    "text": "States: everything, nothing to change, phone",
    "kind": "title1",
    "maxW": 3510
   },
   "title-2": {
    "x": 0,
-   "y": 5370,
+   "y": 5760,
    "text": "Goods flow: option A chosen",
    "kind": "title1",
    "maxW": 3000
   },
   "title-3": {
    "x": 0,
-   "y": 7300,
+   "y": 7690,
    "text": "One word per supply fact",
    "kind": "title1",
    "maxW": 1440
   },
   "title-4": {
    "x": 0,
-   "y": 8900,
+   "y": 9290,
    "text": "Plan a chain: order ahead for a factory being built",
    "kind": "title1",
    "maxW": 3000

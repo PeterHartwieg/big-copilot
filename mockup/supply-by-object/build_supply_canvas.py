@@ -366,6 +366,26 @@ tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:c
 .sb-stot b{color:var(--ink);font-weight:500}
 .sb-stot .dn{color:var(--accent)}.sb-stot .up{color:var(--warn)}
 .sb-staff .sb-srow .sp-dot{width:8px;height:8px}
+.sb-sfac{border-bottom:1px solid var(--rule-soft);padding:12px 0 8px}
+.sb-sfac.quiet{color:var(--ink-3)}
+.sb-sfh{display:grid;grid-template-columns:230px minmax(0,1fr) 150px 150px;gap:18px;align-items:center;font-size:13px}
+.sb-sfh .sb-hc{color:var(--ink-2)}
+.sb-sfh .sb-hc b{color:var(--ink);font-weight:600;font-family:"IBM Plex Mono",monospace}
+.sb-sfh .sb-hc small{display:block;margin-top:4px;font-size:11.5px;color:var(--ink-3)}
+.sb-sfh .d{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:4px;font:500 11px/1.5 "IBM Plex Mono",monospace}
+.sb-sfh .d.up{background:#f0913a22;color:var(--warn)}.sb-sfh .d.dn{background:var(--accent-soft);color:var(--accent)}
+.sb-sfh .wage{display:flex;flex-direction:column;align-items:flex-end;font:500 13.5px/1 "IBM Plex Mono",monospace}
+.sb-sfh .wage.dn{color:var(--accent)}.sb-sfh .wage.up{color:var(--warn)}
+.sb-sfh .wage small{margin-top:4px;font-size:10.5px;color:var(--ink-3)}
+.sb-sfh .go{justify-self:end}
+.sb-sln{display:grid;grid-template-columns:230px 250px minmax(0,1fr);gap:18px;align-items:center;padding:7px 0 3px 22px;font-size:12.5px;color:var(--ink-2)}
+.sb-sln .hrs{display:flex;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace}
+.sb-sln .hrs b{font-weight:500;color:var(--ink)}
+.sb-sln .shifts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sb-shift{display:inline-flex;align-items:baseline;gap:6px;padding:3px 9px;border-radius:6px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sb-shift small{font-size:10.5px;color:var(--ink-3)}
+.sb-shift:hover{transform:translateY(-2px)}
+.sb-per{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sb-srow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*25ms)}
 .sb-dot-gone{background:none!important;box-shadow:inset 0 0 0 1px var(--ink-3)}
 .sb-dot-new{background:none!important;border:1.5px dashed var(--warn);box-sizing:border-box}
@@ -1062,47 +1082,74 @@ def sizing(mode: str) -> str:
             f'<span class="mem" data-tip="Kept on this device. Warehouses sizes its imports the same way.">{svg("device")}remembered here</span></div>')
 
 
+WAGE = 211  # a factory worker's day on this save: $10,146 for 48
+
+
+def cut(start: int, hours: int) -> list[tuple[int, int]]:
+    """The shop Staffing cut: a run of L hours is one shift up to 12, else ceil(L/2) + floor(L/2)."""
+    if hours <= 12:
+        return [(start, start + hours)]
+    a = math.ceil(hours / 2)
+    return [(start, start + a), (start + a, start + hours)]
+
+
+def shifts_html(start: int, hours: int, machines: int) -> str:
+    chips = "".join(f'<span class="sb-shift">{a % 24:02d}–{b % 24 if b % 24 else 24:02d}<small>{b - a} h</small></span>' for a, b in cut(start, hours))
+    per = f'<small class="sb-per">× {machines} machines</small>' if machines > 1 else ""
+    return chips + per
+
+
 def staff_card(mode: str) -> str:
-    """Staffing for factory lines, like the shops' Staffing: hours each line should run for the
-    sizing, the factory workers that takes, and the wage effect. Planned on the factory's page."""
-    def dots(now, after):
-        out = ""
-        for k in range(max(now, after)):
-            cls = "sb-dot-gone" if k >= after else "sb-dot-new" if k >= now else ""
-            out += f'<span class="sp-dot {cls}" style="--k:{k}"></span>'
-        return f'<span class="dots">{out}</span>'
+    """Staffing for factory lines, on the same rules as a shop's Staffing: a line needs its machines
+    × the hours it must run; each run is cut into shifts of at most 12 h; the site needs
+    ceil(station-hours a week / 50) factory workers, one total per role."""
+    def line(label, machines, now, need, start):
+        return (f'<div class="sb-sln"><span class="nm">{label}</span>'
+                f'<span class="hrs">{day_strip(now, need, f"{now} h staffed, {need} h needed")}{chg(now, need, "h") if now != need else f"<b>{need} h</b>"}</span>'
+                f'<span class="shifts">{shifts_html(start, need, machines)}</span></div>')
 
-    def row(code, name, lines, now, after, wage, quiet=False, ramp=False):
-        d = after - now
-        chip = "" if not d else f'<span class="d {"up" if d > 0 else "dn"}">{"+" if d > 0 else "−"}{abs(d)}</span>'
-        ppl = f'<span class="ppl">{now}{f" → <b>{after}</b>" if d else ""} {chip}</span>' if not quiet else f'<span class="ppl">{now}</span>'
-        wg = ("" if not wage else f'<span class="wage {"up" if wage > 0 else "dn"}">{"+" if wage > 0 else "−"}${abs(wage):,}<small>a day in wages</small></span>')
+    def fac(code, name, lines, station_hours, have, quiet_text="", ramp=False):
+        if quiet_text:
+            return (f'<div class="sb-sfac quiet"><div class="sb-sfh"><span>{site(code, name)}</span><span class="sb-hc">{quiet_text}</span>'
+                    f'<span></span><a class="link go" href="#">Staffing on its page ›</a></div></div>')
+        need = math.ceil(station_hours / 50)
+        d = need - have
+        chip = "" if not d else f'<span class="d {"up" if d > 0 else "dn"}">{"hire " if d > 0 else ""}{"+" if d > 0 else "−"}{abs(d)}</span>'
+        hc = (f'<span class="sb-hc"><b>{need}</b> factory workers for {station_hours:,} machine-hours a week, you have <b>{have}</b> {chip}'
+              + (f'<small>{-d} have no hours in this plan: post them elsewhere</small>' if d < 0 else f'<small>hire {d} to fill this plan</small>' if d > 0 else "")
+              + "</span>")
+        wage = d * WAGE
+        wg = (f'<span class="wage {"up" if wage > 0 else "dn"}">{"+" if wage > 0 else "−"}${abs(wage):,}<small>a day in wages</small></span>' if wage else "<span></span>")
         rt = ' <span class="sb-rampt">ramping</span>' if ramp else ""
-        return (f'<div class="sb-srow{" quiet" if quiet else ""}"><span>{site(code, name)}{rt}</span><span class="lines">{lines}</span>'
-                f'{ppl if quiet else ppl.replace("</span>", "", 0)}{wg or "<span></span>"}'
-                f'<a class="link go" href="#">Staffing on its page ›</a></div>')
-
-    def ln(label, now, need):
-        return f'<span class="ln">{day_strip(now, need, f"{now} h staffed, {need} h needed")}<b>{label}</b>{chg(now, need, "h")}</span>'
+        return (f'<div class="sb-sfac"><div class="sb-sfh"><span>{site(code, name)}{rt}</span>{hc}{wg}'
+                f'<a class="link go" href="#">Staffing on its page ›</a></div>{lines}</div>'), d, wage
 
     if mode == "247":
-        rows = (row("IC", "Factory Jewelry", ln("Jewelry (Cheap)", 12, 24), 6, 8, 420)
-                + row("IC", "Factory Clothing", '<span class="ln">8 lines run 24 h, as sized</span>', 48, 48, 0, quiet=True)
-                + row("IC", "Factory Electronics", '<span class="ln">2 lines run 24 h · new since day 72</span>', 8, 8, 0, quiet=True))
-        tot = '<span>Sized 24/7:</span><b class="up">+2 factory workers</b><b class="up">+$420 a day</b>'
+        c = fac("IC", "Factory Clothing", line("4 expensive lines", 2, 24, 24, 0) + line("4 cheap lines", 1, 24, 24, 0), 12 * 24 * 7, 48)
+        jw = fac("IC", "Factory Jewelry", line("Jewelry (Cheap)", 1, 12, 24, 0) + line("Jewelry (Expensive)", 1, 24, 24, 0), 2 * 24 * 7, 8)
+        e = fac("IC", "Factory Electronics", line("2 smartwatch lines", 1, 24, 24, 0), 2 * 24 * 7, 8)
+        rows = [c, jw, e]
+        lead = "Sized 24/7"
     else:
-        rows = (row("IC", "Factory Clothing", ln("4 expensive lines", 24, 15) + ln("4 cheap lines", 24, 17), 48, 32, -3380)
-                + row("IC", "Factory Jewelry", ln("Jewelry (Cheap)", 12, 18) + ln("Jewelry (Expensive)", 24, 11), 6, 5, -210, ramp=True)
-                + row("IC", "Factory Electronics", '<span class="ln">too new to plan: judged from day 76</span>', 8, 8, 0, quiet=True))
-        tot = '<span>Sized for demand:</span><b class="dn">−17 factory workers</b><b class="dn">−$3,590 a day</b>'
-    why = ("Hours each line should run for the sizing you picked, and the factory workers that takes. A worker covers about 6 machine-hours "
-           "a day (42 a week, 12-hour shifts at most); wages are this save's $211 a day each. A dashed dot is a hire, a hollow one a post to cut. "
-           "Only too few hours is a change to type; cutting hours is a suggestion.")
+        c = fac("IC", "Factory Clothing", line("4 expensive lines", 2, 24, 15, 6) + line("4 cheap lines", 1, 24, 17, 6), 4 * 2 * 15 * 7 + 4 * 17 * 7, 48)
+        jw = fac("IC", "Factory Jewelry", line("Jewelry (Cheap)", 1, 12, 18, 6) + line("Jewelry (Expensive)", 1, 24, 11, 6), 18 * 7 + 11 * 7, 8, ramp=True)
+        e = (fac("IC", "Factory Electronics", "", 0, 8, quiet_text="No shop sells a smartwatch yet, so Demand would stop both lines: keeps its 8 until a shop opens or day 76"), 0, 0)
+        rows = [c, jw, e]
+        lead = "Sized for demand"
+    dsum = sum(r[1] for r in rows)
+    wsum = sum(r[2] for r in rows)
+    tot = (f'<span>{lead}:</span><b class="{"up" if dsum > 0 else "dn"}">{"+" if dsum > 0 else "−"}{abs(dsum)} factory workers</b>'
+           f'<b class="{"up" if wsum > 0 else "dn"}">{"+" if wsum > 0 else "−"}${abs(wsum):,} a day</b>')
+    why = ("The same rules as a shop's Staffing: one person per machine per hour, one shift per person per hour, 12 hours the longest shift "
+           "(over 14 in a day is overworked). A line needs its machines × the hours it must run: 24 when sized 24/7, else the hours "
+           "downstream demand plus the chain margin takes. Each run is cut into shifts of at most 12 hours. A site needs "
+           "station-hours a week ÷ 50 factory workers, rounded up (full-time weeks are 30 to 50 hours); hiring is one total per site. "
+           "Wages are this save's $211 a day each. Only too few hours is a change to type; cutting is a suggestion.")
     return f"""
 <section class="sb-staff rv">
   <div class="sechead"><span class="sp-ico">{svg("crew")}</span><h2>Staffing for factory lines</h2><span class="why" data-tip="{esc(why)}"><i>?</i></span>
-    <span class="quiet">hours a line should run, people, wages</span></div>
-  <div class="sb-srows">{rows}</div>
+    <span class="quiet">hours each line should run, the shifts to post, people, wages</span></div>
+  <div class="sb-srows">{"".join(r[0] for r in rows)}</div>
   <div class="sb-stot">{tot}</div>
 </section>"""
 
@@ -1650,9 +1697,9 @@ DESK, PHONE = 1440, 390
 BOARDS = [
     ("Main.dc.html", "Shops", lambda: shops({"s0", "s1"}), DESK, 990, ""),
     ("Warehouses.dc.html", "Warehouses · arrived from a finding", lambda: warehouses(), DESK, 1590, ""),
-    ("Factories.dc.html", "Factories · sized 24/7", lambda: factories(), DESK, 1610, ""),
-    ("FactoriesDemand.dc.html", "Factories · sized for demand", lambda: factories(mode="demand"), DESK, 1250, ""),
-    ("FactoriesAll.dc.html", "Factories · Everything, sized 24/7", lambda: factories(every=True), DESK, 2600, "sb-every"),
+    ("Factories.dc.html", "Factories · sized 24/7", lambda: factories(), DESK, 1810, ""),
+    ("FactoriesDemand.dc.html", "Factories · sized for demand", lambda: factories(mode="demand"), DESK, 1370, ""),
+    ("FactoriesAll.dc.html", "Factories · Everything, sized 24/7", lambda: factories(every=True), DESK, 2790, "sb-every"),
     ("ShopsEmpty.dc.html", "Shops · nothing to change", shops_empty, DESK, 830, ""),
     ("Phone.dc.html", "Phone · Warehouses", phone, PHONE, 1560, "phone"),
     ("FlowToggle.dc.html", "Goods flow · a diagram view on each tab (chosen)", flow_toggle, DESK, 930, "sb-diag"),
@@ -1669,7 +1716,7 @@ TIPS = {
     "Main.dc.html": "Shops: every shelf against tomorrow morning's round. It opens on the 10 rows that need a change; Everything lists all 100. The checklist is the tick at the head of each row, and the figure to type sits where the setting lives (Daily top-up). Tick a row: the truck drives along the road, the tab badge counts down. Two gym rows are ticked already. Click a heading to sort; a third click puts the usual order back.",
     "Warehouses.dc.html": "Warehouses: every depot, including the second tier that no import reaches (#78). Each head says what fills it and what it takes a day, which is what the site upstream has to deliver. A daily round reads as a gauge, a weekly import as the rail from the depot page. An import's figure to type is what the routes use plus one 12% margin for the whole chain; hover Uses / week for the chain. Idle lines fold into one group: click it. This board arrived from the Today finding on Metal Band: that row and its depot are lit, and the crumb clears it.",
     "Factories.dc.html": "Factories, sized 24/7 (today's behaviour): every line should run round the clock, and its Factory inputs top up the rated need plus the one chain margin. The switch under the checklist picks 24/7 or Demand and is remembered per device; click Demand to go to the next board. Below the lines: Staffing for factory lines, the hours, people and wages the sizing asks for (the top vote, 42).",
-    "FactoriesDemand.dc.html": "Factories, sized for demand: what the shops at the end of each chain use, plus one 12% margin for the whole chain. Two jewelry shops have traded 6 days, so their demand is a straight line and Factory Jewelry says it may still be ramping. The inputs all cover the need; the clothing lines need 15 to 17 of their 24 hours, and Staffing proposes cutting 17 factory workers.",
+    "FactoriesDemand.dc.html": "Factories, sized for demand: what the shops at the end of each chain use, plus one 12% margin for the whole chain. Two jewelry shops have traded 6 days, so their demand is a straight line and Factory Jewelry says it may still be ramping. The inputs all cover the need; the clothing lines need 15 to 17 of their 24 hours, and Staffing for factory lines needs 27 of the 48 workers at Factory Clothing and 5 of 8 at Factory Jewelry.",
     "FactoriesAll.dc.html": "Everything on Factories, sized 24/7: each line's day, a cell an hour; red outlines are hours needed and not staffed. Fabric reads tight here and on every other page: the top-up covers the rated need, not the one chain margin. Hover Eats / day for the chain.",
     "ShopsEmpty.dc.html": "A tab with nothing to change: the badge turns into a tick, the shelf gets its moment, and the three closest to the edge still show, so the all-clear has something to stand on. Hover the drawing.",
     "Phone.dc.html": "390 px: rows become cards, the setting to type gets its own line, the tabs fill the width. The same ticks and the same words.",
