@@ -332,3 +332,38 @@ test('the imports table scrolls inside its box, not the page, on a phone', async
     assert.ok(sizes.page <= sizes.view, JSON.stringify(sizes));
   } finally { await page.close(); }
 });
+
+/* Board data built by tests/test_supply_audit.py from its synthetic save. */
+const payload = kind => {
+  const result = spawnSync(process.env.PYTHON || 'python', ['-c', 'import json, sys; sys.path[:0] = [".", "tests"]; '
+    + 'import test_supply_audit as t; sys.stdout.write(json.dumps(t.page_payload(sys.argv[1])))', kind],
+    {cwd: root, maxBuffer: 4 * 1024 * 1024});
+  assert.equal(result.status, 0, result.stderr?.toString());
+  return JSON.parse(result.stdout.toString());
+};
+const usedWeek = page => page.$$eval('#importPlan tbody tr', rows => Object.fromEntries(rows.map(r =>
+  [r.cells[0].firstChild.textContent.trim(), [r.cells[1].textContent.trim(), r.cells[1].dataset.tip || '']])));
+
+test('a factory fed by a factory is counted on the import behind it', async () => {
+  const page = await board({data: payload('chain')});
+  try{
+    // Hub -> Factory (240 a day) -> Factory 2 (240 a day): both on the hub's week.
+    const used = await usedWeek(page);
+    assert.equal(used.Water[0], '3,360');
+    assert.match(used.Water[1], /All 3,?360 a week to the factory lines/);
+    assert.equal((await cells(page)).length, 1);
+  } finally { await page.close(); }
+});
+
+test('a line named only in this browser is not counted again as other sites', async () => {
+  const data = payload('browser');
+  const rid = data.supply.factories.sites[0].unnamed[0].rid;
+  // The board could not name the line, so it counted the factory's intake as other sites.
+  assert.equal(data.supply.factories.depotOther[1]['ba:itemname_water'], 1680);
+  const page = await board({data, before: ['ba_line_names', JSON.stringify({[rid]: 'ba:itemname_beer'})]});
+  try{
+    const used = await usedWeek(page);
+    assert.equal(used.Water[0], '1,680');
+    assert.match(used.Water[1], /All 1,?680 a week to the factory lines/);
+  } finally { await page.close(); }
+});

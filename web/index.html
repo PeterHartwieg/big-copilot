@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=41e2a39e1e">
+<link rel="stylesheet" href="community.css?v=ab4385af10">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=41e2a39e1e">
+<link rel="stylesheet" href="fonts/fonts.css?v=ab4385af10">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2711,8 +2711,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "41e2a39e1e";</script>
-<script>window.LEDGER_RELEASE = {"version":"41e2a39e1e","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "ab4385af10";</script>
+<script>window.LEDGER_RELEASE = {"version":"ab4385af10","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=41e2a39e1e"></script>
-<script src="community.js?v=41e2a39e1e"></script>
+<script src="app.js?v=ab4385af10"></script>
+<script src="community.js?v=ab4385af10"></script>
 
 <script>
 
@@ -3855,9 +3855,9 @@ function feedVerdict(n){
   else if(n.target < (n.dailyNeed ?? n.perDay) * 0.98){ status = "target"; level = "critical"; n.raiseTarget = ceil100(n.dailyNeed ?? n.perDay); }
   else if(n.known && n.arrives < n.perDay * 0.75){
     [status, level] = n.waitingOn.length ? ["waiting", "info"]
-      : n.limited ? ["limit", "ok"]
       : n.arrives >= n.perDay * (n.staffedShare ?? 1) * 0.85 ? ["staffing", "warn"]
-      : n.depotStock < n.perDay ? ["dry", "critical"] : ["idle", "warn"]; }
+      : n.depotStock < n.perDay ? ["dry", "critical"]
+      : n.limited ? ["limit", "ok"] : ["idle", "warn"]; }
   else if(n.importWeekly !== null && n.importFit === "short"){
     status = "import"; level = "critical"; n.raiseImport = importRaise(n); }
   else if(n.importWeekly !== null && n.importFit === "tight"){ status = "import"; level = "warn"; }
@@ -3889,6 +3889,20 @@ const importLine = (view, s, slug) => {
   return line && !line.zeroOnly ? line : undefined;
 };
 /* Recompute the split after recipe choices change total input consumption. */
+/* The site whose import carries a need topped up from `s`: a factory with no
+   import of its own passes on what its own top-up brings (upstream() in the
+   Python). */
+function feedUpstream(view, s, slug){
+  const seen = new Set();
+  while(s !== null && s !== undefined && !seen.has(s)){
+    const site = view.sites.find(x => x.s === s);
+    if(!site || importLine(view, s, slug)) break;
+    const t = site.targets?.[slug];
+    if(!t || t[1] === null || t[1] === undefined) break;
+    seen.add(s); s = t[1];
+  }
+  return s;
+}
 function feedRoute(site, n, view, held){
   const t = site.targets?.[n.slug], target = t ? t[0] : 0, source = t ? t[1] : null;
   const own = importLine(view, site.s, n.slug);
@@ -3898,7 +3912,7 @@ function feedRoute(site, n, view, held){
   n.directNeed = mixed ? Math.min(own.weekly, n.perWeek) : own ? n.perWeek : 0;
   n.warehouseNeed = source !== null && (mixed || !own) ? Math.max(n.perWeek - n.directNeed, 0) : 0;
   n.directImport = !!(own && !n.warehouseNeed);
-  n.importSite = n.directImport ? site.s : source;
+  n.importSite = n.directImport ? site.s : feedUpstream(view, source, n.slug);
   n.target = target;
   n.from = n.directImport ? null : source;
   n.dailyNeed = n.perDay; // Fill-to level still has to cover a full day.
@@ -3944,7 +3958,7 @@ function factoryView(){
       s.lines.push({rid: u.rid, item: rec.item, slug, missing, workstation: u.workstation, slots: u.slots,
         machines: u.machines, rate: rec.out, makes, ships: 0, stock, toCity: 0, toPier: 0,
         basis: "you", piling: stock > makes * 3, atRoster: Math.round(makes * share),
-        limit, limitHeld: limit !== null && stock >= limit,
+        limit, limitHeld: limit !== null && stock > 0 && stock >= limit, browser: true,
         hoursWeek: u.hoursWeek, fullWeek: u.fullWeek, gaps: u.gaps || []});
       rec.ingredients.forEach(ing => {
         const islug = view.aliases[ing.slug] || ing.slug, perDay = u.machines * ing.per * 24;
@@ -3983,8 +3997,9 @@ function factoryView(){
     view.sites.forEach(s => {
       s.needs.forEach(n => {
         feedRoute(s, n, view, held);
-        for(const [source, week] of [[n.factoryImportSite, n.directNeed], [n.from, n.warehouseNeed]]){
-          if(source === null) continue;
+        for(const [source, week] of [[n.factoryImportSite, n.directNeed],
+                                     [n.directImport ? null : n.importSite ?? n.from, n.warehouseNeed]]){
+          if(source === null || source === undefined) continue;
           const k = source + "|" + n.slug; depotNeed[k] = (depotNeed[k] || 0) + week;
         }
       });
@@ -7573,7 +7588,10 @@ function drawLogistics(){
       row.week += n.perWeek; row.users.push({s: s.s, perDay: n.perDay, lines: n.lines});
       return;
     }
-    for(const [source, week] of [[own, n.directNeed ?? n.perWeek], [n.from, n.warehouseNeed ?? n.perWeek]]){
+    /* A need topped up from a factory with no import of its own is carried to
+       the import behind that factory (importSite). */
+    for(const [source, week] of [[own, n.directNeed ?? n.perWeek],
+                                 [n.directImport ? null : n.importSite ?? n.from, n.warehouseNeed ?? n.perWeek]]){
       if(source === null || !week) continue;
       const d = depots[source] = depots[source] || {};
       const row = d[n.slug] = d[n.slug] || {item: n.item, slug: n.slug, factoryWeek: 0, users: []};
@@ -7586,12 +7604,22 @@ function drawLogistics(){
       d[slug] = d[slug] || {item: label(+si, slug), slug, factoryWeek: 0, users: []};
     });
   });
+  /* A line named only in this browser is unknown to the board that measured
+     depotOther, which counted what reached its factory as other sites' draw;
+     its need is in factoryWeek now, so that part comes off. */
+  const browserEats = new Set();
+  f.sites.forEach(s => {
+    const named = new Set(s.lines.filter(l => l.browser).map(l => l.item));
+    s.needs.forEach(n => { if(n.lines.some(l => named.has(l))) browserEats.add(`${s.s}|${n.slug}`); });
+  });
   const importRows = [];
   const {edits} = impSetEdits();
   Object.entries(depots).forEach(([si, items]) => {
     const s = +si;
     const rows = Object.values(items).map(r => {
-      const otherWeek = (other[si] || {})[r.slug] || 0;
+      const sentTo = (otherTo[si] || {})[r.slug] || [];
+      const eatenHere = sentTo.filter(([d]) => browserEats.has(`${d}|${r.slug}`));
+      const otherWeek = Math.max(0, ((other[si] || {})[r.slug] || 0) - eatenHere.reduce((n, [, w]) => n + w, 0));
       const total = r.factoryWeek + otherWeek;
       const contract = (depotsKnown[si] || {})[r.slug] || {};
       const impId = impSetId(D.businesses[s] ? D.businesses[s].key : si, r.slug);
@@ -7599,7 +7627,7 @@ function drawLogistics(){
       // The game's figure has moved since this was typed: the answer is stale.
       if(setting.stale){ impSetKeep(impId, null); setting = importSetting(total, contract, undefined); }
       return {...r, s, otherWeek, total, ...setting, impId, arrived: contract.arrivedLastWeek,
-              otherTo: otherWeek ? (otherTo[si] || {})[r.slug] || [] : [],
+              otherTo: otherWeek ? sentTo.filter(e => !eatenHere.includes(e)) : [],
               contracts: contract.contracts || [], stock: held(s, r.slug)};
     }).sort((a, b) => b.total - a.total);
     importRows.push({s, rows});
@@ -7691,10 +7719,10 @@ function drawLogistics(){
      Used / week figure says how much of each. */
   /* The rest is whatever no factory line here eats: shops, other depots, a
      factory that passes it on. Each shipment is traced to the site that got
-     it; the game logs nothing at a shop, so what reached no logged site is
-     the shops'. */
+     it; the game logs nothing at a shop or a pier, so what reached no logged
+     site went to the shops or out as an export. */
   const otherPlaces = r => {
-    const to = [...new Set((r.otherTo || []).map(([s]) => s === null || !D.businesses[s] ? "shops" : shortName(D.businesses[s])))];
+    const to = [...new Set((r.otherTo || []).map(([s]) => s === null || !D.businesses[s] ? "shops or exports" : shortName(D.businesses[s])))];
     return to.length ? ` (to ${to.join(", ")})` : "";
   };
   const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : `No factory line draws it; what leaves goes to other sites${otherPlaces(r)}`;

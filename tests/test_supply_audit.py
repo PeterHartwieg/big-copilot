@@ -17,7 +17,7 @@ from test_recipe_identity import BEER, RID, WATER, SaveStub
 
 BAG = "ba:itemname_paperbag"
 DAY = 10  # the save's day; days 3 to 9 are the log's window
-FACTORY, HUB, DISTRIB = ("factory", 0), ("depot", 1), ("depot", 2)
+FACTORY, HUB, DISTRIB, FACTORY2 = ("factory", 0), ("depot", 1), ("depot", 2), ("factory", 1)
 
 
 def tx(day, items):
@@ -45,18 +45,24 @@ def import_contract(item, amount, *, smart=False, last=0, day=14):
 class Fixture:
     """Build the save and run _supply() on it."""
 
-    def __init__(self):
+    def __init__(self, rids=(RID,)):
+        """One factory per recipe id in `rids`: factory 0 at index 0, then the
+        hub (1) and the second depot (2), then factory 1 (3)."""
+        self.rids = rids
         self.log = {}
         self.contracts = []
         self.targets = []  # (source, dest, item, amount)
-        self.units = {FACTORY: {WATER: 50, BEER: 400}, HUB: {WATER: 3000}, DISTRIB: {}}
+        self.units = {FACTORY: {WATER: 50, BEER: 400}, HUB: {WATER: 3000}, DISTRIB: {},
+                      FACTORY2: {WATER: 50, BEER: 400}}
         self.machine = {}
+        self.registration = None  # reorders the building registrations
 
     def run(self, hour=12):
-        save = SaveStub([[RID]], hours=24)
+        save = SaveStub([[rid] for rid in self.rids], hours=24)
         save.address = lambda value: value
         save.root["BuildingRegistrations"][0]["itemInstances"][0]["$v"].update(self.machine)
-        save.root["BuildingRegistrations"][0]["deliveryTransactions"] = self.log.get(FACTORY, [])
+        for number, building in enumerate(save.root["BuildingRegistrations"]):
+            building["deliveryTransactions"] = self.log.get(("factory", number), [])
         for site in (HUB, DISTRIB):
             save.root["BuildingRegistrations"].append({
                 "RentedByPlayer": True, "StreetName": site[0], "StreetNumber": site[1],
@@ -67,6 +73,8 @@ class Fixture:
             plan = plans.setdefault(source, {"targetAddress": source, "destinations": []})
             plan["destinations"].append({"deliveryTargetAddress": dest,
                                          "stockTargets": [{"itemName": item, "targetAmount": amount}]})
+        if self.registration:
+            save.root["BuildingRegistrations"] = self.registration(save.root["BuildingRegistrations"])
         save.root.update(Hour=hour, Minute=0, importPartnerships=self.contracts,
                          logisticsManagerPlans=list(plans.values()))
         label = {WATER: "Water", BEER: "Beer", BAG: "Paper Bag"}
@@ -76,15 +84,24 @@ class Fixture:
             "lines": [{"slug": slug, "item": label[slug], "units": units, "rate": 0, "price": 0}
                       for slug, units in self.units[site].items()],
         } for site, name, kind in [(FACTORY, "Factory", "factory"), (HUB, "Import Hub", "warehouse"),
-                                   (DISTRIB, "Distrib", "warehouse")]]
+                                   (DISTRIB, "Distrib", "warehouse")]
+          + ([(FACTORY2, "Factory 2", "factory")] if len(self.rids) > 1 else [])]
         recipes = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
                           "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
+        self.recipes = recipes
         self.supply = _supply(save, Names({}), self.businesses, DAY, {}, recipes)
         return self.supply
 
+    def payload(self):
+        """The board's data for the page tests (tests/import_setto.test.cjs)."""
+        return {"meta": {"character": "supply-audit", "day": DAY, "save": "Fixture"},
+                "businesses": self.businesses, "supply": self.supply,
+                "plan": {"recipes": list(self.recipes.values())}}
+
     # Readers
-    def need(self, slug=WATER):
-        return next(n for n in self.supply["factories"]["sites"][0]["needs"] if n["slug"] == slug)
+    def need(self, slug=WATER, site=0):
+        return next(n for s in self.supply["factories"]["sites"] if s["s"] == site
+                    for n in s["needs"] if n["slug"] == slug)
 
     def other(self, site=1):
         return self.supply["factories"]["depotOther"].get(site, {})
@@ -131,6 +148,40 @@ class DeliveryDestinationTests(unittest.TestCase):
         self.assertEqual(dict(sent[("b", WATER)]), {"a": 5})
 
 
+    def test_the_plan_decides_between_identical_shipments_in_either_order(self):
+        """Two depots each send 100 water on the same day, one to each factory:
+        the mirrors are identical, so only the plan can say which went where."""
+        routes = {"d1": [("fA", WATER)], "d2": [("fB", WATER)]}
+        out = [("d1", 3, {WATER: -100}), ("d2", 3, {WATER: -100})]
+        arrive = [("fB", 3, {WATER: 100}), ("fA", 3, {WATER: 100})]
+        for moves in (out + arrive, list(reversed(out)) + list(reversed(arrive))):
+            with self.subTest(first=moves[0][0]):
+                sent = _delivery_destinations(moves, routes)
+                self.assertEqual(dict(sent[("d1", WATER)]), {"fA": 100})
+                self.assertEqual(dict(sent[("d2", WATER)]), {"fB": 100})
+
+    def test_an_import_of_the_same_amount_is_never_taken_for_a_mirror(self):
+        # The factory's own import of 100 lands on day 3, its contract's
+        # weekday; the hub's 100 that day went to a shop, which keeps no log.
+        moves = [("hub", 3, {WATER: -100}), ("factory", 3, {WATER: 100})]
+        sent = _delivery_destinations(moves, {}, {("factory", WATER, 3)})
+        self.assertEqual(dict(sent[("hub", WATER)]), {None: 100})
+        # Planned there, the transfer is the likelier reading, and both land
+        # at the same site either way.
+        sent = _delivery_destinations(moves, {"hub": [("factory", WATER)]}, {("factory", WATER, 3)})
+        self.assertEqual(dict(sent[("hub", WATER)]), {"factory": 100})
+
+    def test_a_trimmed_destination_log_keeps_the_planned_route(self):
+        """The game keeps a site's last sixty transactions: a shipment older
+        than the destination's log went where the plan sends it, not to shops."""
+        moves = [("hub", day, {WATER: -100}) for day in (3, 4, 5, 6)] + [("factory", 6, {WATER: 100})]
+        sent = _delivery_destinations(moves, {"hub": [("factory", WATER)]}, set(), {"factory": 6})
+        self.assertEqual(dict(sent[("hub", WATER)]), {"factory": 400})
+        # With the log reaching back, an unmatched shipment stays unknown.
+        sent = _delivery_destinations(moves, {"hub": [("factory", WATER)]}, set(), {"factory": 2})
+        self.assertEqual(dict(sent[("hub", WATER)]), {"factory": 100, None: 300})
+
+
 class ForwardingTests(unittest.TestCase):
     """Defects 1, 5 and 7: a factory forwarding an import to a depot target."""
 
@@ -152,6 +203,12 @@ class ForwardingTests(unittest.TestCase):
     def test_arrives_leaves_out_what_the_factory_sent_on(self):
         # 1,680 arrived over seven days, 250 of it passed on: 204 a day eaten.
         self.assertEqual(self.f.need()["arrives"], 204)
+
+    def test_a_trimmed_factory_log_does_not_turn_its_intake_into_other_sites(self):
+        f = forwarding_fixture()
+        f.log[FACTORY] = [t for t in f.log[FACTORY] if t["dayOfDelivery"] >= 6]
+        f.run()
+        self.assertEqual(f.other()[WATER], 0)
 
     def test_daily_pipes_are_sized_from_the_log_by_destination(self):
         # Following sales down the chain saw nothing going into the factory.
@@ -222,6 +279,30 @@ class ProductionLimitTests(unittest.TestCase):
         f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=400, shipped_beer=150)
         self.assertEqual(f.need()["status"], "limit")
 
+    def test_shipping_more_than_the_limit_with_nothing_held_is_a_dry_depot(self):
+        """A day's shipments above the limit must not stretch the tolerance to
+        cover a starved line: the depot's shortage comes first."""
+        f = Fixture()
+        f.machine = {"produceUpTo": True, "produceUpToValue": 500}
+        f.units[FACTORY][BEER] = 0
+        f.units[HUB][WATER] = 100
+        f.targets = [(HUB, FACTORY, WATER, 300)]
+        f.contracts = [import_contract(WATER, 1700, last=700)]
+        for day in range(3, 10):
+            ship(f.log, day, HUB, FACTORY, {WATER: 100})
+            ship(f.log, day, FACTORY, None, {BEER: 600})
+        f.run()
+        self.assertFalse(f.supply["factories"]["sites"][0]["lines"][0]["limitHeld"])
+        self.assertEqual(f.need()["status"], "dry")
+
+    def test_the_tolerance_is_bounded_by_a_share_of_the_limit(self):
+        # 600 a day leave a 500 limit; 100 held is far under it, not held by it.
+        f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=100, shipped_beer=600)
+        self.assertEqual(f.need()["status"], "idle")
+        # 400 held is within a quarter of the limit: the machines are making it back.
+        f = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=400, shipped_beer=600)
+        self.assertEqual(f.need()["status"], "limit")
+
     def test_the_page_gives_the_same_verdict(self):
         import json
         import subprocess
@@ -284,6 +365,19 @@ class RoundWalkTests(unittest.TestCase):
                 self.assertEqual(row["dueNeed"], 240 * due)
                 self.assertEqual(row["catchUp"], catch_up)
 
+    def test_todays_round_is_read_per_item(self):
+        """Two items, and only one of them has left in today's round so far."""
+        f = Fixture()
+        f.units[HUB] = {WATER: 1000, BAG: 1000}
+        f.targets = [(HUB, FACTORY, WATER, 300), (HUB, FACTORY, BAG, 300)]
+        f.contracts = [import_contract(WATER, 1700, smart=True, last=1680),
+                       import_contract(BAG, 1700, smart=True, last=1680)]
+        for day in range(3, 10):
+            ship(f.log, day, HUB, FACTORY, {WATER: 240, BAG: 240})
+        ship(f.log, 10, HUB, FACTORY, {WATER: 240})
+        f.run()
+        self.assertEqual((f.row(WATER)["due"], f.row(BAG)["due"]), (4, 5))
+
     def test_the_goods_flow_panel_uses_the_rows_own_walk(self):
         """Defects 8 and 9: a flat walk for a machine-fed line, and a Smart
         Delivery level said as what the depot keeps."""
@@ -292,6 +386,48 @@ class RoundWalkTests(unittest.TestCase):
         item = next(i for i in node["items"] if i["item"] == "Water")
         self.assertEqual(item["need"], f.row()["dueNeed"])
         self.assertEqual((item["provision"], item["keeps"]), (1700, True))
+
+
+def chain_fixture():
+    """Hub -> factory 0 (its line eats water) -> factory 1 (so does its line).
+    Factory 0 has no import of water: it passes on what its top-up brings."""
+    f = Fixture(rids=(RID, RID))
+    f.targets = [(HUB, FACTORY, WATER, 600), (FACTORY, FACTORY2, WATER, 300)]
+    f.contracts = [import_contract(WATER, 3400, last=3360)]
+    for day in range(3, 10):
+        ship(f.log, day, HUB, FACTORY, {WATER: 480})
+        ship(f.log, day, FACTORY, FACTORY2, {WATER: 240})
+    return f
+
+
+class FactoryChainTests(unittest.TestCase):
+    def test_a_factory_fed_by_a_factory_is_sized_on_the_import_behind_it(self):
+        f = chain_fixture()
+        f.run()
+        first, second = f.need(site=0), f.need(site=3)
+        # Both lines' week, 2 x 240 x 7, rests on the hub's import.
+        self.assertEqual(first["depotNeed"], 3360)
+        self.assertEqual((second["from"], second["importSite"]), (0, 1))
+        self.assertEqual((second["depotNeed"], second["importWeekly"]), (3360, 3400))
+        self.assertEqual(second["status"], "ok")
+        # Nothing about the hub's water is left for "other sites".
+        self.assertEqual(f.other()[WATER], 0)
+
+
+def page_payload(kind):
+    """Synthetic board data for the page tests: 'chain' is chain_fixture();
+    'browser' is a hub feeding a factory whose recipe the board cannot name
+    (the page names it from localStorage)."""
+    if kind == "chain":
+        f = chain_fixture()
+    else:
+        f = Fixture(rids=("unknown-recipe",))
+        f.targets = [(HUB, FACTORY, WATER, 300)]
+        f.contracts = [import_contract(WATER, 1700, last=1680)]
+        for day in range(3, 10):
+            ship(f.log, day, HUB, FACTORY, {WATER: 240})
+    f.run()
+    return f.payload()
 
 
 class IdleTests(unittest.TestCase):
@@ -317,6 +453,14 @@ class IdleTests(unittest.TestCase):
         text = next(n["text"] for n in notes if n["site"] == "Distrib")
         self.assertIn("Factory tops it up to 250 here and nothing here uses it", text)
         self.assertIn("remove that target", text)
+
+    def test_no_route_advice_where_the_depot_sends_it_on(self):
+        f = forwarding_fixture()
+        f.units[DISTRIB] = {WATER: 5000}
+        f.targets.append((DISTRIB, HUB, WATER, 10))
+        f.run()
+        row = next(r for r in f.supply["idle"] if r["s"] == 2)
+        self.assertNotIn("routedFrom", row)
 
 
 if __name__ == "__main__":

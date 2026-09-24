@@ -962,8 +962,12 @@ that use (the depot's measured draw, else what arrived last week), up to the lev
 A daily pipe is what the delivery log says went down it over the last week, each
 shipment traced to the site that received it (the game logs every shipment twice on the
 same day, negative where it left and positive where it arrived, so the two are paired by
-their items). The game keeps no log at a shop, so a pipe into a shop, or from a site with
-fewer than three rounds on record, is the shops' sales instead.
+their items; where several match, a site the sender's plan routes them to comes first, and
+an inbound that could be an import on its contract's weekday is never taken for one; the
+game keeps only a site's last sixty transactions, so a shipment older than a planned
+destination's trimmed log goes to that destination). The game keeps no log at a shop, so
+a pipe into a shop, or from a site with fewer than three rounds on record, is the shops'
+sales instead.
 
 Clicking a site dims everything it does not touch and opens its detail: what comes in
 and where from, what goes out and to whom, and a per-product table of **on hand** against
@@ -1024,7 +1028,7 @@ views ask the questions that matter instead:
   import has 1.04 days to cover, not 2.
   A depot whose draw is its own logged rounds is walked a round at a time instead, since
   the logistics round empties it once each morning. Today's round counts only while it is
-  not in the log yet, and the delivery day's round counts too: it leaves before the import
+  not in the log yet (per item), and the delivery day's round counts too: it leaves before the import
   lands (the save's stock closes exactly on that order). A Wednesday-afternoon save with a
   Monday import therefore has five rounds to cover, Thursday to Monday, and cover, due and
   catch-up are counted in rounds.
@@ -1061,9 +1065,11 @@ Two more views turn the same log on the factories themselves:
   hours to fill and the output not made.
 - A machine with **Produce up to** switched on (`produceUpTo`, the figure in
   `produceUpToValue`) stops once the factory holds that many of what it makes, and then
-  makes only what leaves. A line counts as *held by its limit* when its output held is at
-  the limit, or below it by no more than a day of what leaves (the morning round took
-  those, and the machines are making them back). An input every line eating it is held
+  makes only what leaves. A line counts as *held by its limit* when it holds some output,
+  at the limit or below it by no more than the machines could have made back of what the
+  morning round took: the least of a day of what leaves, what the line makes in the hours
+  of today so far, and a quarter of the limit. A depot that cannot supply a day comes
+  first: that is *depot out*, whatever the limit. An input every line eating it is held
   this way, with some of it on hand, arrives short of the full rate by design: it reads
   *at limit*, not as a feed fault. The needs, and the imports sized from them, stay at the
   full rate the lines are staffed and set up for.
@@ -1132,8 +1138,10 @@ Two tables, one per number a logistics manager is set with.
   measured from the delivery log with each shipment traced to the site that received it.
   A factory counts as taking an item only where one of its named lines eats it, so paper
   bags a factory passes on are the other part, and what a factory forwards of an input it
-  eats is not the depot's outflow at all. The hover names where the other part went;
-  what reached no site with a log of its own went to the shops. *Arrived last week* sums every contract's
+  eats is not the depot's outflow at all. A need a factory tops up from another factory
+  with no import of its own is carried to the import behind that factory. The hover
+  names where the other part went; what reached no site with a log of its own went to
+  the shops or out as an export ("shops or exports"). *Arrived last week* sums every contract's
   `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
   cap shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
