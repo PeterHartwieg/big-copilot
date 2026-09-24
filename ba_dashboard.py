@@ -3436,9 +3436,46 @@ def _supply(
             route_only[(key, item)] = (
                 routed * 7, 7 * routed >= week_draw * (1 - FIT_TIGHT), week_draw)
 
+    # Demand sizing reads a factory line's use off what the ends draw of its
+    # product down the plan. A shop under a week old has not settled yet: its
+    # coming week is read off a straight line through its trading days
+    # (_coming_week), and every such shop behind a figure is named (ramp).
+    sold_dem, ramping = {}, set()
+    for business in businesses:
+        key = business["key"]
+        young = (business["status"] == "retail"
+                 and day - business.get("opened", day) < NEW_SITE_DAYS)
+        rates = dict(sold.get(key, {}))
+        for line in business["lines"]:
+            if young and rates.get(line["slug"], 0) > 0:
+                ramping.add(key)
+                ahead = _coming_week(line.get("soldDays") or [], day)
+                if ahead is not None:
+                    rates[line["slug"]] = ahead
+        sold_dem[key] = rates
+    dem_drawn = {}
+
+    def demand(key: str, item: str, seen: frozenset = frozenset()) -> tuple:
+        """What the ends draw of `item` a day from this site down the plan, as
+        Demand sizing reads it, and the young shops behind that figure."""
+        if key not in index or key in seen:
+            return 0.0, frozenset()
+        if (key, item) in dem_drawn:
+            return dem_drawn[(key, item)]
+        total = sold_dem.get(key, {}).get(item, 0.0)
+        ramp = {index[key]} if key in ramping and total > 0 else set()
+        for dest_key, dest_item, _ in edges.get(key, []):
+            if dest_item == item:
+                more, behind = demand(dest_key, item, seen | {key})
+                total += more
+                ramp |= behind
+        dem_drawn[(key, item)] = (total, frozenset(ramp))
+        return dem_drawn[(key, item)]
+
     # --- 3. the factories: what each line makes and eats, against the flow
     flow = {
         "day": day,
+        "demand": demand,
         "index": index,
         "held": held,
         "targets": target_at,

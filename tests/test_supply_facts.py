@@ -541,6 +541,95 @@ class IdleRuleTests(unittest.TestCase):
         self.assertEqual(rows, idle)
 
 
+def beer_chain(import_amount=1700, opened_b=0, sold_b=100, sold_days_b=None, target=300):
+    """The hub imports water for a factory (one machine: 240 water a day into
+    720 beer), which tops up a depot that tops up two shops selling beer, 200
+    and `sold_b` a day. Shop B opened on `opened_b`."""
+    c = Company()
+    c.site(HUB, "Import Hub")
+    c.factory(FACTORY, "Brewery")
+    c.site(DISTRIB, "Distrib")
+    c.shop(SHOP_A, "Beer Bar")
+    c.shop(SHOP_B, "Beer Shop", opened=opened_b)
+    c.hold(HUB, WATER, 2000)
+    c.hold(FACTORY, WATER, 250)
+    c.hold(FACTORY, BEER, 300)
+    c.hold(DISTRIB, BEER, 400)
+    c.hold(SHOP_A, BEER, 200, 200)
+    c.hold(SHOP_B, BEER, 100, sold_b, **({"soldDays": sold_days_b} if sold_days_b else {}))
+    c.plan(HUB, FACTORY, WATER, target)
+    c.plan(FACTORY, DISTRIB, BEER, 400)
+    c.plan(DISTRIB, SHOP_A, BEER, 240)
+    c.plan(DISTRIB, SHOP_B, BEER, 240)
+    c.contract(HUB, WATER, import_amount)
+    for d in range(13, 20):
+        c.ship(d, HUB, FACTORY, {WATER: 240})
+    c.run()
+    return c
+
+
+class DemandSizingTests(unittest.TestCase):
+    """24/7 sizes a factory line at capacity with no margin; Demand at what
+    the ends draw of its product, plus the margin once, never past capacity.
+    A fact carries under `dem` only what Demand sizing changes."""
+
+    def test_the_factory_input_is_sized_on_the_shops_in_demand_mode(self):
+        c = beer_chain()
+        fact = c.fact(FACTORY, WATER)
+        # 24/7: the machine's 240 a day, no margin; the top-up of 300 covers it.
+        self.assertEqual((fact["st"], fact["use"], fact["need"], fact["have"]),
+                         ("covered", 240, 240, 300))
+        # Demand: the shops sell 300 beer a day of the 720 the line could make,
+        # so it eats 100 water, 115 with the margin, added once.
+        self.assertEqual(fact["dem"], {"use": 100, "need": 115})
+        dem = c.fact(FACTORY, WATER, "dem")
+        self.assertEqual((dem["st"], dem["use"], dem["need"], dem["have"]), ("covered", 100, 115, 300))
+
+    def test_the_import_is_sized_on_the_lines_in_each_mode(self):
+        c = beer_chain(import_amount=900)
+        cap, dem = c.fact(HUB, WATER), c.fact(HUB, WATER, "dem")
+        self.assertEqual((cap["st"], cap["use"], cap["need"], cap["setTo"]), ("short", 1680, 1680, 1680))
+        self.assertEqual(cap["parts"], {"lines": 1680, "sites": 0, "route": 0})
+        self.assertEqual((dem["st"], dem["use"], dem["need"], dem["setTo"]), ("covered", 700, 805, None))
+        self.assertEqual(dem["parts"], {"lines": 700, "sites": 0, "route": 0})
+        # The finding follows the mode.
+        cap_found = [f for f in c.findings("cap") if f["siteKey"] == site_key(HUB)]
+        self.assertEqual([f["group"] for f in cap_found], ["feed"])
+        self.assertFalse([f for f in c.findings("dem") if f["siteKey"] == site_key(HUB)])
+
+    def test_a_fact_demand_sizing_leaves_alone_carries_no_dem(self):
+        c = beer_chain()
+        for addr, slug in ((SHOP_A, BEER), (SHOP_B, BEER), (DISTRIB, BEER), (FACTORY, BEER)):
+            with self.subTest(addr=addr):
+                self.assertNotIn("dem", c.fact(addr, slug))
+
+    def test_a_shop_open_four_days_is_extrapolated_and_named(self):
+        # Opened on day 16, selling 50, 75 and 100 on days 17 to 19: the coming
+        # week centres on day 23, where the line reads 200 a day.
+        c = beer_chain(opened_b=16, sold_b=75, sold_days_b=[[17, 50], [18, 75], [19, 100]])
+        dem = c.fact(FACTORY, WATER, "dem")
+        # 200 + 200 = 400 beer a day of 720: 133 water, 153 with the margin.
+        self.assertEqual((dem["use"], dem["need"]), (133, 153))
+        self.assertEqual(dem["ramp"], [c.index(SHOP_B)])
+        self.assertEqual(c.fact(HUB, WATER, "dem")["ramp"], [c.index(SHOP_B)])
+        self.assertNotIn("ramp", c.fact(FACTORY, WATER))
+
+    def test_a_shop_open_a_week_is_read_as_it_sells(self):
+        c = beer_chain(opened_b=13, sold_b=75, sold_days_b=[[17, 50], [18, 75], [19, 100]])
+        dem = c.fact(FACTORY, WATER, "dem")
+        self.assertEqual(dem["use"], round(240 * 275 / 720))
+        self.assertNotIn("ramp", dem)
+
+    def test_demand_never_sizes_past_capacity(self):
+        c = beer_chain()
+        c.lines[SHOP_A][BEER]["rate"] = 2000
+        c.run()
+        fact = c.fact(FACTORY, WATER)
+        # The shops want more than the line can make: both modes read 240.
+        self.assertNotIn("dem", fact)
+        self.assertEqual((fact["use"], fact["need"]), (240, 240))
+
+
 class StableOrderTests(unittest.TestCase):
     def test_the_facts_do_not_depend_on_the_hash_seed(self):
         script = ("import json, test_supply_facts as t;"
