@@ -438,9 +438,6 @@
   const LINK_POLL_MS = 1000;
   let linkUrl = null;     // the mod's base URL while the link is the source
   let lastLinkStamp = ""; // the stamp of the bytes behind the board on screen
-  // The character those bytes are of (X-Game-Link-Character): every write
-  // names it, and the mod refuses one for another character than it has loaded.
-  let boardCharacter = "";
   // The /health body read with the newest bytes, for the strip; after a
   // failed build it names the failed bytes' game, not the board's.
   let linkHealth = null;
@@ -584,7 +581,6 @@
     // IndexedDB, and choosing it again is one click, not one picker trip.
     linkUrl = null;
     lastLinkStamp = "";
-    boardCharacter = "";
     linkHealth = null;
     linkGone = false;
     linkNotReady = 0;
@@ -598,7 +594,6 @@
     // A board built from a folder or an earlier link is not this link's: the
     // first stamp the mod answers has to be read, whatever it is.
     lastLinkStamp = "";
-    boardCharacter = "";
     linkHealth = null;
     linkGone = false;
     linkNotReady = 0;
@@ -717,7 +712,6 @@
         const file = new File([bytes], `${health.character}-live.hsg`,
           {lastModified: Date.parse(health.refreshedAt) || Date.now()});
         file.linkStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
-        file.linkCharacter = res.headers.get("X-Game-Link-Character") || health.character || "";
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -1083,9 +1077,7 @@
     const bound = bindSource();
     const notLinked = {status: 0, error: "not_linked", body: null};
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
-    // The character of the board's bytes: the mod answers `changed` should the
-    // game have loaded another since (docs/game-link-api.md, "Whose game").
-    const payload = JSON.stringify(Object.assign({}, body, {dryRun, character: boardCharacter}));
+    const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
     // One click asks the game at most once: a token this write asked for and
     // got is not asked for again, busy retries and all; nor is one the game
     // gave the Apply this dry run follows (`opts.asked`).
@@ -1303,13 +1295,12 @@
       company = (data.meta && data.meta.save) || company;
       // The board on screen is these bytes once it has taken them; while it
       // takes them, link().stamp is already theirs. Should it throw, the stamp
-      // and character before stay, so the watcher reads these bytes again, not
-      // skips them, and a write names the board's character, not theirs.
-      const was = [lastLinkStamp, boardCharacter];
-      if (file.linkStamp) { lastLinkStamp = file.linkStamp; boardCharacter = file.linkCharacter || ""; }
+      // before stays, so the watcher reads these bytes again, not skips them.
+      const was = lastLinkStamp;
+      if (file.linkStamp) lastLinkStamp = file.linkStamp;
       note("");
       try { if (handlers) { handlers.stale(""); handlers.changed(data); } }
-      catch (err) { [lastLinkStamp, boardCharacter] = was; throw err; }
+      catch (err) { lastLinkStamp = was; throw err; }
       enterBoard();
       state("ok", "Up to date", line(`built in ${((performance.now() - t) / 1000).toFixed(1)} s`));
     } catch (err) {

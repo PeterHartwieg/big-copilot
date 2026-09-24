@@ -357,19 +357,10 @@ class Link:
         dry = body.get("dryRun", False)
         if not isinstance(dry, bool):
             raise BadRequest("dryRun must be true or false")
-        # Whose game the page read: another character's board never writes here.
-        character = body.get("character")
-        if not isinstance(character, str):
-            raise BadRequest("character must be the id of the character the page read")
         with self.lock:
             if self.busy_writes > 0:
                 self.busy_writes -= 1
                 return 503, {"error": "busy"}
-            if character != self.character:
-                if dry:
-                    return 200, {"ok": False, "kind": body.get("kind") if kind == "undo" else kind,
-                                 "dryRun": True, "siteError": "changed", "rows": []}
-                return 409, {"error": "changed", "rows": []}
             if not dry and self.refuse_write:
                 return self._refusal(kind, body)
             if kind == "undo":

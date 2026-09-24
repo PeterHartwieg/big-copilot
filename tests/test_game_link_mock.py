@@ -171,7 +171,6 @@ class MockWrites(unittest.TestCase):
         self.dir.cleanup()
 
     def post(self, kind, body, token=TOKEN, origin=None):
-        body = dict({"character": "abc"}, **body)  # the character the page read
         headers = {"Content-Type": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -204,7 +203,7 @@ class MockWrites(unittest.TestCase):
         self.assertEqual(self.link.applied, [])
         # The scheme in any case.
         status, _, _ = call(f"{self.url}/write/uniforms", "POST", {"Authorization": f"bEARER {TOKEN}"},
-                            json.dumps({"dryRun": True, "sites": [], "character": "abc"}).encode())
+                            json.dumps({"dryRun": True, "sites": []}).encode())
         self.assertEqual(status, 200)
         # The applies the tests read back never carry a token.
         self.assertNotIn(TOKEN, call(self.url + "/debug/writes")[2].decode())
@@ -688,21 +687,6 @@ class MockWrites(unittest.TestCase):
             {"id": "CONTRACTone", "products": [dict(paper, amount=0)]}]})
         self.assertEqual(answer["rows"][0]["error"], "no_amounts")
 
-
-    def test_a_write_from_another_characters_board_is_changed_and_writes_nothing(self):
-        site = {"address": GIFTS, "skills": None, "presetId": None}
-        status, answer = self.post("uniforms", {"dryRun": True, "sites": [site], "character": "other"})
-        self.assertEqual(status, 200)
-        self.assertEqual((answer["ok"], answer["siteError"], answer["rows"]), (False, "changed", []))
-        self.assertEqual(self.post("uniforms", {"sites": [site], "character": "other"}),
-                         (409, {"error": "changed", "rows": []}))
-        self.assertEqual(self.post("undo", {"kind": "uniforms", "character": "other"}),
-                         (409, {"error": "changed", "rows": []}))
-        self.assertEqual(self.link.applied, [])
-        status, answer = self.post("uniforms", {"dryRun": True, "sites": [site], "character": None})
-        self.assertEqual((status, answer["error"]), (400, "bad_request"))
-        # The character the page read: written.
-        self.assertEqual(self.post("uniforms", {"sites": [site]})[0], 200)
 
     def test_import_terms_cap_a_plain_amount_and_price_the_next_delivery(self):
         status, _, _ = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},

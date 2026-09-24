@@ -193,12 +193,6 @@ approved it (see "Approving a browser" below).
   mismatch refuses an apply with `409 {"error":"changed", ...}` (a dry run answers `200`,
   `ok` false, the row's error `changed`); the page refreshes and re-plans. `changed` is
   checked before any rule, after `not_found` (there is nothing to compare without the target).
-- **Whose game.** Every body, an undo's included, carries `"character"`: the character id
-  of the bytes the page's board was built from (`X-Game-Link-Character`). Missing or not a
-  string is `400 bad_request`. A different character from the one loaded now refuses an
-  apply or an undo with `409 {"error":"changed","rows":[]}`, and a dry run answers `200`
-  with `ok` false, `"siteError": "changed"` and no rows; nothing is written. It is checked
-  on the main thread before any other rule.
 - **Threading.** The mod runs the whole check-and-apply on the game's main thread. While a
   refresh walk is in flight on the worker thread the main thread holds the write until the
   walk has published; if the write has not started within three seconds it is withdrawn
