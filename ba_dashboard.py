@@ -9853,6 +9853,38 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .person.more{color:var(--ink-2);border-style:dashed}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
 
+/* a site's own page ---------------------------------------------------------
+   #site/<address> shows the site on its own: the rest of Results and the
+   Company views step aside while it is up (drawSite() sets ss-siteup). A crumb
+   row above the head leads back to the portfolio, or to wherever a finding was
+   clicked, and carries the picker. A site's name elsewhere on the board is a
+   quiet link to this page (.ss-sl). */
+#pageCompany.ss-siteup > .subhead,
+#pageCompany.ss-siteup > section:not(#secDetail){display:none}
+#pageCompany.ss-siteup > #secDetail{margin-top:0}
+.ss-i{display:inline-grid;place-items:center;flex:none}
+.ss-i svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ss-crumbs{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:28px}
+.ss-crumb{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px 0 9px;box-sizing:border-box;border:1px solid var(--rule);border-radius:8px;background:var(--surface);font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;white-space:nowrap;transition:color .15s,border-color .15s}
+.ss-crumb .ss-i{transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.ss-crumb:hover{color:var(--ink);border-color:var(--ink-3)}
+.ss-crumb:hover .ss-i{transform:translateX(-3px)}
+.ss-crumb.from{border-color:color-mix(in srgb,var(--accent) 55%,var(--rule));color:var(--ink)}
+.ss-crumb.from .ss-i{color:var(--accent)}
+.ss-trail{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12.5px;color:var(--ink-3);min-width:0}
+.ss-trail a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule)}
+.ss-trail a:hover{color:var(--ink);border-color:var(--ink-3)}
+.ss-trail i{font-style:normal;opacity:.6}
+.ss-pick{display:flex;align-items:center;gap:6px;margin-left:auto;min-width:0}
+.ss-pick > .ibtn{display:none;width:34px;height:34px;flex:none}
+#sitePanel .ss-crumbs + .sitehead{margin-top:22px}
+.ss-sl{color:inherit;text-decoration:none;border-bottom:1px solid transparent;transition:border-color .15s,color .15s}
+.ss-sl:hover,.ss-sl:focus-visible{color:var(--ink);border-bottom-color:var(--ink-3)}
+.find .site .ss-sl{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ss-pagego{display:inline-flex;align-items:center;gap:5px;font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2);text-decoration:none;padding:6px 9px;border:1px solid var(--rule);border-radius:6px;white-space:nowrap;transition:color .15s,border-color .15s}
+.ss-pagego:hover{color:var(--accent);border-color:var(--accent)}
+.ss-pagego .ss-i svg{width:13px;height:13px}
+
 /* the site panel ----------------------------------------------------------
    Everything a shop's or an office's own page draws that the rest of the
    board does not: the findings about this site, the head marks, the tiles'
@@ -10547,6 +10579,48 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .cell .rv2 i{width:2px;height:2px}
   .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
   #planBody > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
+}
+/* A site's page on a phone. The crumb row sticks under the masthead (its
+   height is measured into --ss-mast) and keeps only the way back and the
+   picker, whose neighbours become two arrows round the list. The tiles pair
+   up, the duos stack, and the wide blocks -- the hour grid, the factory's
+   lines, the shelves -- keep a width they can be read at and scroll sideways
+   inside their own box. */
+@media (max-width:640px){
+  .ss-crumbs{position:sticky;top:var(--ss-mast,100px);z-index:4;background:var(--ground);margin:0 -16px;padding:10px 16px;border-bottom:1px solid var(--rule-soft);gap:8px;flex-wrap:nowrap}
+  .ss-crumbs .ss-crumb{padding:0 11px 0 7px}
+  .ss-trail{display:none}
+  .ss-pick{flex:1}
+  .ss-pick > .ibtn{display:grid}
+  .ss-pick > .ibtn[aria-disabled]{opacity:.4;cursor:default}
+  .ss-pick > .seg{flex:1;min-width:0;border:0;padding:0;background:none;flex-wrap:nowrap}
+  .ss-pick > .seg > span{display:none}
+  .ss-pick select.sitepick{flex:1;width:100%;min-width:0;max-width:none;height:34px;border-radius:8px;padding:0 10px;
+    appearance:auto;-webkit-appearance:auto;background:var(--raised);color:var(--ink);border:1px solid var(--rule)}
+  #sitePanel .sitehead{flex-wrap:wrap;gap:12px}
+  #sitePanel .sitehead > div{min-width:0}
+  #sitePanel .sitehead h2{font-size:20px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 0}
+  #sitePanel .sp-rank{margin-left:10px}
+  #sitePanel .sstats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  #sitePanel .sstat{min-width:0}
+  #sitePanel .duo{grid-template-columns:minmax(0,1fr)!important;gap:0}
+  #sitePanel .duo > section{margin-top:40px;min-width:0}
+  #sitePanel .sp-find{grid-template-columns:18px 24px minmax(0,1fr) auto 18px;gap:0 8px}
+  #sitePanel .sp-std{gap:18px}
+  #sitePanel .sp-lamps{margin-left:0}
+  #sp-hours .chartbox{overflow-x:auto;overscroll-behavior-x:contain}
+  #sp-hours .chartbox > .hours{min-width:620px}
+  #sitePanel .sp-lines{min-width:760px}
+  #sitePanel .sp-ba{gap:18px 26px}
+  #sitePanel .sp-typed{margin-left:0}
+  #sitePanel .sp-steps .sp-nowplan{margin-left:0!important}
+  #sitePanel .sp-daytabs a{padding:6px 8px}
+  #sitePanel .sp-rrow{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+  #sitePanel .sp-rrow .sp-dots{grid-column:1/-1;grid-row:2}
+  #sitePanel .sp-rrow .sp-rcount{grid-column:2;grid-row:1}
+  #sitePanel table{font-size:12.5px}
+  #sp-shelves > table{display:block;overflow-x:auto;max-width:100%}
+  #sp-shelves td.l{white-space:nowrap}
 }
 </style>
 <!--__BANNER__-->
@@ -11396,8 +11470,13 @@ function drawFlowDetail(){
   const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
   const flags = (node.short ? chipHtml("bad", flowShortText(node)) : "")
     + (node.tight ? chipHtml("warn", `${plural(node.tight, "order")} running tight`) : "");
+  /* A site picked here is one click from its own page: by its name, or the
+     labelled button beside the map's. An import node is no site. */
+  const site = D.businesses.find(b => b.key === node.id);
+  const pageHref = site ? siteHref(site.key) : "";
   host.innerHTML = `
-    ${sechead(shortText(node.name, 60), {after: hoodHtml({code: node.tag}) + mapButton(node.id.replace(/^import:/,""),node.name),
+    ${sechead(site ? siteLink(site, shortText(node.name, 60)) : shortText(node.name, 60), {after: hoodHtml({code: node.tag}) + mapButton(node.id.replace(/^import:/,""),node.name)
+      + (pageHref ? `<a class="ss-pagego" href="${attr(pageHref)}">${SS_PAGE}its page</a>` : ""),
       quiet: `${node.sub}${node.hood ? ` · ${node.hood}` : ""}`,
       aside: `<a class="link" href="#" id="flowClear">clear selection</a>`})}
     <div class="flowpipes">
@@ -12182,6 +12261,9 @@ function settleScroll(el, frames = 12){
 /* `into` is a block within the section to land on instead of its top. */
 function reveal(secId, historyMode = "push", into = null){
   const [p, sv] = SEC_PAGE[secId] || ["today"];
+  /* The open site's own section keeps its page up; every other one is
+     somewhere else. */
+  if(secId !== "secDetail") siteShut();
   showPage(p, false, historyMode);
   if(sv) showSub(p, sv);
   const sec = $(secId);
@@ -12404,10 +12486,12 @@ function findingRow(a){
   const {what, more} = splitFinding(a);
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
-  const site = !b ? a.site : b.code ? hoodHtml(b) + baseName(b) : shortName(b);
+  /* The name is a way to the site's own page; the rest of the row still opens
+     the finding. A synthetic site ("3 shops") has no page and stays text. */
+  const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
   return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
     <span class="mark" data-tip="Silence this finding"></span>
-    <span class="site"><a class="finding-link" href="#${alertPage(a)}">${site}</a>${b ? mapButton(b.key,b.name) : ""}</span>
+    <span class="site">${site}</span>
     <span class="what">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</span>
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
@@ -12592,10 +12676,11 @@ function drawChart(){
    means anything, so the chain total comes first and the sites fold underneath. */
 const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
 /* A site in a table: its neighbourhood pill, its short name, and the type and
-   address underneath. With `chev`, the arrow that says the row opens. */
-const siteLabel = (b, chev) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortName(b)}${chev ? ` ${CHEV()}` : ""}
+   address underneath. With `chev`, the arrow that says the row opens; with
+   `link`, the name is also a link to the site's own page. */
+const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : shortName(b)}${chev ? ` ${CHEV()}` : ""}
   ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
-const kidCell = b => siteLabel(b, true);
+const kidCell = b => siteLabel(b, true, true);
 
 /* What a chain is made of, in words: "7 shops, 1 warehouse, 1 factory". A
    chain is named after its shops but carries the depots and factories that
@@ -12742,28 +12827,71 @@ function drawSitePicker(){
   /* A site's name is the player's own text: it is escaped here, as everywhere
      else the panel composes it into markup. */
   const opt = b => `<option value="${attr(b.key)}"${b.key === siteKey ? " selected" : ""}>${spEsc(shortName(b))}</option>`;
-  const step = b => b ? `<span><a href="#" data-key="${attr(b.key)}">${spEsc(shortName(b))}</a>${mapButton(b.key,b.name)}</span>` : "";
-  host.innerHTML = `${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
-    support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}`;
+  const href = b => attr(siteHref(b.key) || "#");
+  const step = b => b ? `<span><a href="${href(b)}" data-key="${attr(b.key)}">${spEsc(shortName(b))}</a>${mapButton(b.key,b.name)}</span>` : "";
+  /* A phone has no room for the neighbours' names: two arrows stand in for
+     them, either side of the list (the stylesheet swaps one for the other). */
+  const arrow = (b, word, path) => `<a class="ibtn"${b ? ` href="${href(b)}" data-key="${attr(b.key)}" aria-label="${
+    attr(`${word} site: ${shortName(b)}`)}"` : ` aria-disabled="true" aria-label="No ${word.toLowerCase()} site"`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></a>`;
+  host.innerHTML = `${arrow(prev, "Previous", "M15 6l-6 6 6 6")}<span class="seg">${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
+    support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}</span>${
+    arrow(next, "Next", "M9 6l6 6-6 6")}`;
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a){ e.preventDefault(); openSite(a.dataset.key); } };
   q("select", host).onchange = e => openSite(e.target.value);
 }
+/* The row above a site's head: the way back, where the site sits, and the
+   picker. The way back is the portfolio, or -- arrived at from a finding --
+   the page the finding was on, and then it is the browser's own Back. The
+   trail names the chain the portfolio files the site under, which opens that
+   chain there. A home is in no chain and no picker. */
+const SS_BACK = `<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></span>`;
+function siteCrumbs(key, name, picker){
+  const back = siteFrom
+    ? `<a class="ss-crumb from" href="${attr(siteFrom.hash)}" data-ss="back">${SS_BACK}${spEsc(siteFrom.label)}</a>`
+    : `<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">${SS_BACK}Portfolio</a>`;
+  const chain = (D.chains || []).find(c => (c.sites || []).includes(key));
+  const trail = [
+    siteFrom ? `<a href="#secPortfolio" data-ss="portfolio">Portfolio</a>` : "",
+    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(chain.name)}">${spEsc(chain.name)}</a>` : "",
+    `<span aria-current="page">${spEsc(name)}</span>`].filter(Boolean).join("<i>›</i>");
+  return `<nav class="ss-crumbs" aria-label="Where this page sits">${back}<span class="ss-trail">${trail}</span>${
+    picker ? `<div class="ss-pick" id="sitePick"></div>` : ""}</nav>`;
+}
+function wireSiteCrumbs(){
+  const nav = q("#sitePanel .ss-crumbs");
+  if(!nav) return;
+  nav.onclick = e => {
+    const a = e.target.closest("a[data-ss]");
+    if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if(a.dataset.ss === "back"){
+      /* The entry before this one is the page the finding was on. */
+      if(siteStateFrom()){ history.back(); return; }
+      if(openHash(a.getAttribute("href").slice(1), "push")) return;
+    }
+    closeSite(a.dataset.ss === "chain" ? a.dataset.chain : null);
+  };
+}
+/* The site's page stands on its own: Results' other sections and the Company
+   views step aside while it is up. */
+function paintSiteUp(on){
+  const host = $("pageCompany");
+  if(host) host.classList.toggle("ss-siteup", on);
+  if(on) ssMeasureMast();
+}
+/* On a phone the crumb row sticks just under the masthead, whose height
+   depends on how its nav wraps at this width. */
+function ssMeasureMast(){
+  const mast = $("mast");
+  if(mast) document.documentElement.style.setProperty("--ss-mast", `${mast.offsetHeight}px`);
+}
+window.addEventListener("resize", () => { if(siteOpen) ssMeasureMast(); });
 /* The one address the panel knows that is not a business. A home is reached
    from its map card alone, so it never enters the picker and the portfolio
    never lists it. */
 const spHome = key => key === null ? null : (D.homes || []).find(h => h.key === key) || null;
-function openSite(key, scroll = true, finding = null){
-  if(!D.businesses.some(b => b.key === key) && !spHome(key)) return;
-  if(key !== siteKey) spFindsAll = false;
-  spArrived = finding;
-  siteKey = key; siteOpen = true;
-  drawSite(); drawPortfolio();
-  if(scroll) reveal("secDetail");
-}
-function closeSite(){
-  siteOpen = false; spArrived = null;
-  drawSite(); drawPortfolio();
-}
+/* openSite() and closeSite() live with the routes, beside openHash(): opening
+   a site is going to its address. */
 
 /* A small area chart for one site's history: same grammar as the big one,
    without the axes it does not have room for. */
@@ -14846,7 +14974,7 @@ function spInputs(site){
     const arrived = !n.known ? "—"
       : n.arrives ? spNum(n.arrives) : `<span class="sp-red">0</span>`;
     const from = n.directImport ? "direct import"
-      : n.from === null || n.from === undefined ? "—" : spEsc(shortName(D.businesses[n.from]));
+      : n.from === null || n.from === undefined ? "—" : siteLink(D.businesses[n.from]);
     return `<tr data-lines="${attr(spNeedLines(site, n))}" data-el="${attr(el.join(" "))}" data-read="${
       attr(spNeedRead(n))}"><td class="l">${spEsc(n.item)}</td><td>${spNum(n.perDay)}</td><td>${top}</td>
       <td>${arrived}</td><td>${spNum(n.stock)}</td><td class="l" style="color:var(--ink-2)">${from}</td></tr>`;
@@ -14894,12 +15022,11 @@ function spHomePanel(home){
     + spTile("Rent / week", fmt(day * 7))
     + spTile("Size", m === null ? "—" : `${m.toLocaleString()}<small>m²</small>`)
     + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
-  return `
+  return `${siteCrumbs(home.key, home.address, false)}
     <div class="sitehead rv">
       ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
       <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">Home${
         home.hood ? ` · ${spEsc(home.hood)}` : ""}</span></div>
-      <div class="aside" style="margin-left:auto;display:flex;gap:8px"><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
     <div class="sp-home rv" data-block="home">
       <div class="sp-house">${spHouse()}</div>
@@ -14962,14 +15089,25 @@ function drawSite(){
   const home = !b && siteOpen ? spHome(siteKey) : null;
   if(home){
     sec.hidden = false;
+    paintSiteUp(true);
     $("sitePanel").innerHTML = spHomePanel(home);
     $("sitePanel").classList.remove("sp-focus");
-    $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
-    wireTips(); wireReveal();
+    wireSiteCrumbs(); wireTips(); wireReveal();
     return;
   }
-  if(!b || !siteOpen){ sec.hidden = true; $("sitePanel").innerHTML = ""; return; }
+  if(!b || !siteOpen){
+    sec.hidden = true; $("sitePanel").innerHTML = ""; paintSiteUp(false);
+    /* The site this page was for has gone from the save -- given up since the
+       last refresh. Its address answers nothing now, so the page becomes the
+       portfolio it would have been reached from. */
+    if(siteOpen){
+      siteOpen = false; spArrived = null; siteFrom = null;
+      if(page === "company") showPage("company", false, "replace");
+    }
+    return;
+  }
   sec.hidden = false;
+  paintSiteUp(true);
 
   const targets = {};
   D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.item] = r; });
@@ -15174,7 +15312,7 @@ function drawSite(){
       spI("exit")}<b>${b.quitWarnings}</b></span>` : ""}</div>` : "";
 
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
-    depot ? `supplied from ${shortName(depot)}` : ""].filter(Boolean).join(" · ");
+    depot ? `supplied from ${siteLink(depot)}` : ""].filter(Boolean).join(" · ");
   /* The head marks: whether the doors are open, and — where they are not — the
      five pre-flight checks that say why, and the site's place by the profit of
      its last seven days. */
@@ -15318,11 +15456,10 @@ function drawSite(){
       ${crew}${demandChips}
     </section>`;
   }
-  $("sitePanel").innerHTML = `
+  $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${b.code}</span>` : ""}
       <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
-      <div class="aside" style="margin-left:auto;display:flex;gap:8px"><span class="seg" id="sitePick"></span><a href="#" class="ibtn tr" id="siteClose" data-tip="Close the detail">${CLOSE_ICON}</a></div>
     </div>
     ${spFinds(finds, b, kind)}
     ${spBody || `
@@ -15399,7 +15536,7 @@ function drawSite(){
      has to come off with the markup it dimmed. */
   $("sitePanel").classList.remove("sp-focus");
   drawSitePicker();
-  $("siteClose").onclick = e => { e.preventDefault(); closeSite(); };
+  wireSiteCrumbs();
   if($("shelfToggle")) $("shelfToggle").onclick = e => { e.preventDefault(); showAllShelves = !showAllShelves; drawSite(); };
   /* A factory's unnamed line is named here the same way it is on the Supply
      page: the same select, the same call. */
@@ -15411,7 +15548,7 @@ function drawSite(){
 
 /* The site cell of the redesign's tables: the hood pill, the short name, and
    the type on a line under the name. */
-const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${mapRef(b)}<span class="sub"${
+const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${siteLink(b)}${mapButton(b.key, b.name || b.address)}<span class="sub"${
   b.code ? ` style="padding-left:34px"` : ""}>${b.type}</span>`;
 const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
 
@@ -16867,6 +17004,8 @@ Object.entries(SUBS).forEach(([id, sv]) => {
 function showSub(pageId, id){
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
+  /* A site's page lives on Results; any other Company view takes it down. */
+  if(pageId === "company" && id !== "results") siteShut();
   sub[pageId] = id;
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
   /* The site panel is only on screen while a site is open, so it owns its own
@@ -16878,13 +17017,17 @@ function showSub(pageId, id){
   /* A view that was hidden until now measured nothing while it was: the chart
      inside Results has to be drawn again once its container is on screen. Same
      rule as in showPage. */
-  if(page === pageId && id === "results" && hasData()) drawChart();
+  if(page === pageId && id === "results" && !siteOpen && hasData()) drawChart();
   wireReveal();
 }
+/* Another page takes an open site's page down. Company itself does not: the
+   site's page is on it, and the ways onto Company that mean the portfolio (the
+   nav, a hash, a section) take the site down themselves. */
 function showPage(id, scroll = true, historyMode = "push"){
   /* An old page hash opens the view that replaced it. */
   if(PAGE_ALIASES[id]){ showSub(...PAGE_ALIASES[id]); id = PAGE_ALIASES[id][0]; }
   if(!PAGES.some(p => p.id === id)) id = "today";
+  if(id !== "company") siteShut();
   page = id;
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
@@ -16892,15 +17035,22 @@ function showPage(id, scroll = true, historyMode = "push"){
   /* Clicks add a visit; boot normalises the current entry. History replay
      only renders, so Back/Forward never changes the stack it is traversing. A
      hash that already resolves to this page is left alone while normalising, so
-     a section link or a wiki page survives a reload. */
+     a section link or a wiki page survives a reload -- but not a site's
+     address, which is only kept while that site is the one on screen. An open
+     site writes its own address, and the page it was reached from rides along
+     in the entry's state, so the crumb can name it again after Back, Forward
+     or a reload. */
   try{
-    const keep = historyMode === "replace" && pageFromHash(location.hash.slice(1)) === id;
-    if(historyMode !== "none" && !keep && location.hash !== "#" + id)
-      history[historyMode === "replace" ? "replaceState" : "pushState"](null, "", "#" + id);
+    const now = location.hash.slice(1);
+    const hash = id === "company" && siteOpen && siteHref(siteKey) || "#" + id;
+    const keep = historyMode === "replace" && !siteOpen && !SITE_HASH.test(now) && pageFromHash(now) === id;
+    if(historyMode !== "none" && !keep && location.hash !== hash)
+      history[historyMode === "replace" ? "replaceState" : "pushState"](
+        siteOpen && siteFrom ? {ssFrom: siteFrom} : null, "", hash);
   }catch(e){}
   /* The chart sizes itself from its rendered width, which was zero while its
      page was hidden. */
-  if(id === "company" && sub.company === "results" && hasData()) drawChart();
+  if(id === "company" && sub.company === "results" && !siteOpen && hasData()) drawChart();
   if(id === "map") showCityMap();
   if(id === "wiki") wikiVisit();
   featureDiscovery.visit(PAGES.find(p => p.id === id).newFeature);
@@ -16929,6 +17079,8 @@ $("nav").addEventListener("click", e => {
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   if(!hasData() && a.dataset.id !== "wiki") return;
+  /* Company from the nav is the portfolio, even from a site's own page. */
+  siteShut();
   showPage(a.dataset.id);
 });
 Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e => {
@@ -16938,12 +17090,14 @@ Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e
   showSub(id, a.dataset.id);
 }));
 /* What a hash opens: a page, an old page name that has become a view, one of
-   the wiki's own routes (#wiki/<page>), or a section, which knows its page and
-   view. Anything else is not ours. */
+   the wiki's own routes (#wiki/<page>), a site's own page (#site/<address>),
+   which lives on Company, or a section, which knows its page and view.
+   Anything else is not ours. */
 function pageFromHash(h){
   if(PAGES.some(p => p.id === h)) return h;
   if(PAGE_ALIASES[h]) return PAGE_ALIASES[h][0];
   if(/^wiki(\/|$)/.test(h)) return "wiki";
+  if(SITE_HASH.test(h)) return "company";
   if(SEC_PAGE[h]) return SEC_PAGE[h][0];
   return null;
 }
@@ -16952,13 +17106,142 @@ function pageFromHash(h){
    to Company first — mapping it first would leave whichever Company view was
    last used on screen. */
 function openHash(h, historyMode = "none"){
-  if(PAGE_ALIASES[h]){ showPage(h, false, historyMode); return true; }
+  if(PAGE_ALIASES[h]){ siteShut(); showPage(h, false, historyMode); return true; }
   const id = pageFromHash(h);
   if(!id) return false;
+  if(openSiteHash(h, historyMode)) return true;
+  siteShut();
   if(SEC_PAGE[h]){ reveal(h, historyMode); return true; }
   showPage(id, false, historyMode);
   return true;
 }
+
+/* --- a site's own page ------------------------------------------------- */
+/* Every site has an address on the board: #site/57-fifth-avenue, its street
+   address as a slug. It is what the address bar shows while the site is open,
+   so a reload reopens it and Back and Forward walk between sites. A home the
+   player rents has one too; it opens from its map card.
+   The slug is unique: a second site at an address already taken, or a site
+   with no address at all, falls back to a slug of its key, then to a number.
+   It is stable for as long as the save lists its sites in the same order,
+   which extract() keeps. A site with no key has no address and opens as it
+   always has, under #company. */
+const SITE_HASH = /^site\//;
+let siteFrom = null, siteSlugsFor = [], siteSlugMap = {bySlug: new Map(), byKey: new Map()};
+const siteSlugText = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+/* Counted on demand, and again whenever the data object or its lists of sites
+   are replaced. */
+function siteSlugs(){
+  const data = hasData() ? D : null;
+  const of = [data, data && data.businesses, data && data.homes];
+  if(of.every((x, i) => x === siteSlugsFor[i])) return siteSlugMap;
+  const bySlug = new Map(), byKey = new Map();
+  const add = (key, address) => {
+    if(key === null || key === undefined || key === "" || byKey.has(key)) return;
+    let slug = siteSlugText(address);
+    if(!slug || bySlug.has(slug)) slug = siteSlugText(String(key).replace(/^ba:(street_)?/, ""));
+    const base = slug || "site";
+    for(let n = 2; !slug || bySlug.has(slug); n++) slug = `${base}-${n}`;
+    bySlug.set(slug, key); byKey.set(key, slug);
+  };
+  if(data){
+    (data.businesses || []).forEach(b => add(b.key, b.address));
+    (data.homes || []).forEach(h => add(h.key, h.address));
+  }
+  siteSlugsFor = of;
+  return siteSlugMap = {bySlug, byKey};
+}
+/* A site's address as a link target, "#site/57-fifth-avenue", or "" for a
+   site the board cannot address. Anything that links to a site uses this. */
+function siteHref(key){
+  const slug = siteSlugs().byKey.get(key);
+  return slug ? `#site/${slug}` : "";
+}
+function siteBySlug(slug){
+  const key = siteSlugs().bySlug.get(slug);
+  return key === undefined ? null : key;
+}
+/* Where a finding sent the reader from, for the crumb that leads back: the
+   view's own word where the page has views ("Checks"), else the page's
+   ("Today"), and the address that was on screen. */
+function siteCameFrom(){
+  const p = PAGES.find(x => x.id === page);
+  if(!p) return null;
+  const v = SUBS[page] && SUBS[page].items.find(([k]) => k === sub[page]);
+  return {label: v ? v[1] : p.label, hash: location.hash || "#" + page};
+}
+function siteStateFrom(){
+  try{
+    const s = history.state && history.state.ssFrom;
+    return s && typeof s.label === "string" && typeof s.hash === "string" ? s : null;
+  }catch(e){ return null; }
+}
+/* A site opens from its portfolio row, its name anywhere on the board, the
+   picker, a map card or a finding. `finding` is the finding's id, which the
+   page lights as the reason for coming; a finding also names the page it was
+   clicked on for the crumb. `scroll` puts the page's top at the top of the
+   window; a caller landing on a block inside it passes false and reveals that
+   block itself. */
+function openSite(key, scroll = true, finding = null, historyMode = "push"){
+  if(!hasData() || !D.businesses.some(b => b.key === key) && !spHome(key)) return false;
+  const from = historyMode !== "push" ? siteStateFrom()
+    : finding !== null && !(page === "company" && siteOpen) ? siteCameFrom() : null;
+  if(key !== siteKey) spFindsAll = false;
+  spArrived = finding;
+  siteKey = key; siteOpen = true; siteFrom = from;
+  showPage("company", scroll, historyMode);
+  showSub("company", "results");
+  drawPortfolio();
+  return true;
+}
+/* Take the site's page down without going anywhere: the caller is on its way
+   to another page or view. */
+function siteShut(){
+  if(!siteOpen) return false;
+  siteOpen = false; spArrived = null; siteFrom = null;
+  if(hasData()){ drawSite(); drawPortfolio(); }
+  return true;
+}
+/* Back to the portfolio, landing on it -- or, given a chain, on that chain's
+   row with its sites unfolded. */
+function closeSite(chain = null){
+  siteShut();
+  if(chain !== null && hasData()){ openChains.add(chain); drawPortfolio(); }
+  reveal("secPortfolio", "push",
+    chain !== null && typeof CSS !== "undefined" ? `#portfolio tr.chain[data-chain="${CSS.escape(chain)}"]` : null);
+}
+/* A #site/ hash, typed, reloaded or replayed. An address that no longer
+   answers -- a site given up, a link from another save -- lands on the
+   portfolio, and the address bar says so. */
+function openSiteHash(h, historyMode = "none"){
+  if(!SITE_HASH.test(h)) return false;
+  let slug = h.slice(5);
+  try{ slug = decodeURIComponent(slug); }catch(e){}
+  const key = siteBySlug(slug);
+  if(key !== null && openSite(key, false, null, historyMode)) return true;
+  siteShut();
+  showSub("company", "results");
+  showPage("company", false, "replace");
+  return true;
+}
+/* A site's name is a plain link to its address, so it opens in a new tab like
+   any link. A plain click opens the page here instead, from the top, and goes
+   no further: the row the name sits in (a finding, a portfolio row) keeps its
+   own click for everywhere else on it. Caught on the way down, as the map
+   button is. */
+function siteLinkClick(e){
+  const a = e.target.closest && e.target.closest('a[href^="#site/"]');
+  if(!a || !hasData()) return;
+  e.stopImmediatePropagation();
+  if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  const key = siteBySlug(a.getAttribute("href").slice(6));
+  if(key === null) return;
+  e.preventDefault();
+  const dialog = $("locationMapDialog");
+  if(dialog && dialog.open) dialog.close();
+  openSite(key);
+}
+document.addEventListener("click", siteLinkClick, true);
 /* The wiki module, when the build carries it, owns everything under #wiki. */
 function wikiVisit(){ if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1)); }
 window.addEventListener("hashchange", () => {
@@ -18164,9 +18447,11 @@ function boot(){
     return;
   }
   paintNav();
-  /* An old page name is handed over whole, so the view that replaced it is the
-     one that opens — not whichever view of its new page was last used. */
-  showPage(PAGE_ALIASES[h] ? h : pageFromHash(h) || remembered(PAGE_KEY) || "today", false, "replace");
+  /* A site's address reopens that site. An old page name is handed over
+     whole, so the view that replaced it is the one that opens — not whichever
+     view of its new page was last used. */
+  if(!openSiteHash(h, "replace"))
+    showPage(PAGE_ALIASES[h] ? h : pageFromHash(h) || remembered(PAGE_KEY) || "today", false, "replace");
   /* Bound once: the nav underline, the coin, and the sphere's entrance. A live
      refresh re-renders the numbers but never replays these. */
   wireNav(); wireCoin(); wireSphere();

@@ -21,6 +21,19 @@ function mapButton(key, label = "this building"){
 function mapRef(b, label){
   return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
 }
+/* A site's name, wherever the board prints it, is a way to the site's own
+   page (siteHref() in the board script): plain text until the pointer is on
+   it. `label` is text, not markup. A site the board cannot address stays
+   text. The map button, where there is one, sits beside the link, never in it. */
+function siteLink(b, label){
+  if(!b) return "—";
+  const text = mapText(label === undefined ? shortName(b) : label);
+  const href = typeof siteHref === "function" ? siteHref(b.key) : "";
+  return href ? `<a class="ss-sl" href="${attr(href)}" data-tip="Open its page">${text}</a>` : text;
+}
+/* The labelled way to a site's page where a name alone would be easy to miss:
+   the map card, the goods-flow panel. */
+const SS_PAGE = '<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>';
 let cityMapAssets = null, cityMapPage = null, cityMapOverlay = null, cityMapCharacter;
 const mapViews = new Set();
 const mapText = value => String(value ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -297,7 +310,7 @@ class CityMapView {
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details">${SS_PAGE}its page</a></div>
       </div>
       ${this.panel ? this.finderControls() : ""}
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
@@ -830,7 +843,8 @@ class CityMapView {
   renterOf(b){
     const who = b.occupant;
     // A place you rent is yours whether or not a business trades from it.
-    if(b.status === 'mine') return who?.name ? `${mapText(who.name)} (you)` : 'You';
+    // Your own is named by a way to its page.
+    if(b.status === 'mine') return who?.name ? `${siteLink({key: b.key, name: who.name}, who.name)} (you)` : 'You';
     if(!who) return 'Nobody';
     // A hospital or a casino is occupied while still being unavailable, so the
     // occupant is named whatever the status says about taking the place.
@@ -1186,7 +1200,11 @@ class CityMapView {
     // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
-    card.querySelector('h3').textContent = title.replace(/^\[\w+\]\s*/, '');
+    /* A business's or a home's name is a way to its own page, as it is
+       everywhere else on the board. */
+    const page = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
+    const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
+    card.querySelector('h3').innerHTML = page ? `<a class="ss-sl" href="${attr(page)}" data-tip="Open its page">${shown}</a>` : shown;
     const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}`
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText(loc?.hood || loc?.address || '');
@@ -1201,12 +1219,12 @@ class CityMapView {
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
-    /* The arrow opens the site panel. A business has always had one; a home
-       has one too now, and it is the only way in — a flat is in no picker. */
+    /* "its page" opens the site's own page, at its address. A business has
+       always had one; a home has one too, and it is the only way in — a flat
+       is in no picker. */
     const go = card.querySelector('.go2');
     go.hidden = !b && !home;
-    go.setAttribute('aria-label', b ? 'Open business details' : 'Open home details');
-    if(this.panel) go.dataset.tip = b ? 'Open business details' : 'Open home details';
+    go.setAttribute('href', page || '#detail');
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }

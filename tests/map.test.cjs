@@ -671,12 +671,18 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     assert.match(await card.locator('.sub').innerText(),/Home/);
     assert.equal(await card.locator('.nums .num').count(),1);
     assert.match(await card.locator('.nums').innerText(),/\$34/);
-    // The arrow is the only way into a flat's panel: it is in no picker.
+    // "its page" is the only way into a flat's panel besides its name: it is
+    // in no picker. Both go to the flat's own address.
     assert.equal(await card.locator('.go2').isHidden(),false);
-    assert.equal(await card.locator('.go2').getAttribute('aria-label'),'Open home details');
+    assert.equal(await card.locator('.go2').innerText(),'its page');
+    const address=await page.evaluate(k=>siteHref(k),home.key);
+    assert.match(address,/^#site\/[a-z0-9-]+$/);
+    assert.equal(await card.locator('.go2').getAttribute('href'),address);
+    assert.equal(await card.locator('h3 a.ss-sl').getAttribute('href'),address);
     await card.locator('.go2').click();
     assert.equal(await page.locator('#secDetail').evaluate(s=>!s.hidden),true);
     assert.equal(await page.locator('#sitePanel .sp-house').count(),1);
+    assert.equal(await page.evaluate(()=>location.hash),address,'the flat opens at its address');
     const panel=await page.locator('#sitePanel').textContent();
     assert.match(panel,new RegExp(home.address.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
     assert.deepEqual(await page.$$eval('#sitePanel .sp-hometiles .sstat .lab',ls=>ls.map(l=>l.textContent)),

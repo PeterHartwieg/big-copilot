@@ -1282,6 +1282,14 @@ test('the card says who owns the place and who trades from it', async () => {
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts').textContent.includes('HART. Gym'));
     assert.equal(await row('Owner').textContent(), 'OwnerYou');
     assert.equal(await row('Renter').textContent(), 'RenterHART. Gym (you)');
+    // Once the save carries the business, its name is a way to its own page.
+    await page.evaluate(key => {
+      D.businesses = [{key, name: 'HART. Gym', address: '5 Test Street', status: 'retail', type: 'Gym'}];
+      refreshCityMaps(); cityMapPage.select(key);
+    }, MT[5]);
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site .facts a.ss-sl'));
+    assert.equal(await row('Renter').locator('a.ss-sl').getAttribute('href'), '#site/5-test-street');
+    assert.equal(await row('Renter').textContent(), 'RenterHART. Gym (you)');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

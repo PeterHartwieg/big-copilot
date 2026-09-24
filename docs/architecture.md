@@ -66,9 +66,9 @@ this column is where to look when you change a key's shape — not a complete ca
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawSite`, `drawOrderChecklist`, `drawLogistics`, `drawGoals`, `drawFooter`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
 | `kpi` | `extract()` inline, with `_net_worth()` | `drawMast`, `drawKpis` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
-| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `drawSite`, `drawRhythm`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteSlugs`, `drawSite`, `drawFlowDetail`, `drawRhythm`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
 | `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
-| `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`; `web/map.js` `CityMapView.update`, `openLocationMap` |
+| `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteSlugs`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
@@ -76,7 +76,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `rhythm` | `_chain_rhythm()` | `drawRhythm`, `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
-| `chains` | `_chains()` | `drawPortfolio` |
+| `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
@@ -337,6 +337,42 @@ Outside the pages, `drawMast` and `drawFooter` own the masthead and footer, and
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
 it deserves a badge — see [contributing.md](contributing.md)), and a draw function called
 from `renderAll()`.
+
+### Routes
+
+The hash is the board's address bar, and `pageFromHash()` / `openHash()` read it. A hash
+is one of:
+
+| Hash | Opens |
+| --- | --- |
+| `#today`, `#company`, … | a page (`PAGES`), on the view it was last left on |
+| `#results` | an old page name, through `PAGE_ALIASES`, on the view that replaced it |
+| `#secPortfolio`, `#secStock`, … | a section: its page and view (`SEC_PAGE`), scrolled to it by `reveal()` |
+| `#wiki/<page>` | a wiki route, handed whole to `showWikiRoute()` in `web/wiki.js` |
+| `#site/<address>` | one site's own page, for example `#site/57-fifth-avenue` |
+
+A site's page is the site panel (`drawSite()` in `#secDetail`) shown on its own on Company:
+while it is up, `#pageCompany` carries `ss-siteup` and the rest of Results and the Company
+views step aside. The address is the street address as a slug, built by `siteSlugs()` over
+`D.businesses` and then `D.homes`. A second site at an address already taken, or one with no
+address, falls back to a slug of its key, then to a number, so every address is unique; a site
+with an empty key has none and opens under `#company` as before.
+
+**`siteHref(key)`** is the one way to link to a site: it returns `#site/<address>`, or `""` for
+a site the board cannot address. `siteLink(b)` in `web/map.js` wraps a site's name in that
+link (`.ss-sl`), and a capture-phase listener, `siteLinkClick()`, turns a plain click on any
+`a[href^="#site/"]` into `openSite()` and stops it there, so the row a name sits in keeps its
+own click. A modified click is left to the browser and opens the address in a new tab.
+
+`openSite(key, scroll, finding, historyMode)` writes the address, `closeSite(chain)` goes back
+to the portfolio (to one chain's row, given a chain), and `siteShut()` takes the page down
+without going anywhere. `showPage()` takes it down for any page but Company; the nav, a
+non-site hash, `reveal()` of any section but `secDetail`, and a Company view other than
+Results take it down themselves. Arriving from a finding (`goToAlert()` passes its id) records
+where the reader came from in `siteFrom`, and in the history entry's state as `ssFrom`, so the
+crumb above the site head reads "‹ Today" and acts as Back, through Back, Forward and a reload
+too. An address that answers nothing — a site given up, a link from another save — lands on
+the portfolio and replaces the hash with `#company`.
 
 ## Pyodide
 

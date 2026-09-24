@@ -241,10 +241,11 @@
 .site .f .fa{display:inline-block;font-family:"IBM Plex Mono",monospace;color:var(--ink);margin-left:6px;white-space:nowrap}
 .site .f .fa small{font-size:9.5px;letter-spacing:.08em;color:var(--ink-3);margin-left:3px}
 .site .num b .pos{color:var(--pos)}.site .num b .neg{color:var(--neg)}
-.site .go2{position:absolute;right:10px;bottom:12px;width:26px;height:26px;display:grid;place-items:center;border-radius:6px;color:var(--ink-3);text-decoration:none}
-.site .go2:hover{color:var(--accent);background:var(--raised)}
+/* "its page": the labelled way to the site's own page, under what the card
+   says, so it never sits on a finding's last line. The button's look is the
+   board's .ss-pagego. */
+.site .go2{display:flex;width:max-content;margin:12px 0 0 auto}
 .site .go2[hidden]{display:none}
-.site .go2 svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
 .site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
 

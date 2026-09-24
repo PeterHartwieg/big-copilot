@@ -282,3 +282,119 @@ test('a chain row says what it is made of, not only how many sites', async () =>
     assert.deepEqual(words, ['2 shops, 2 factories, 1 warehouse', '1 headquarters', '1 shop', '2 sites']);
   } finally { await page.close(); }
 });
+
+/* --- a site's own page, and the names that lead to it ------------------ */
+
+const CHAIN = {name: 'Gift Shops', sites: [KEY, OTHER], count: 2, suppliedBy: [], revenue: 1400, change: null,
+  last7: 0, prev7: 0, cogs: 0, wages: 600, rent: 200, marketing: 0, theft: 0, profit: 400, margin: 28.6};
+const FINDING = {id: 'loss1', level: 'crit', site: 'HART. Gifts', siteKey: KEY, group: 'loss',
+  text: 'Lost $200 yesterday', worth: 200};
+
+test("a site's page stands on its own, under a crumb row that carries the picker", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
+    assert.equal(await page.evaluate(() => location.hash), '#site/10-second-avenue');
+    // The rest of Results and the Company views step aside.
+    for (const sel of ['#secDaily', '#secRhythm', '#secPortfolio', '#companyNav'])
+      assert.equal(await page.locator(sel).isHidden(), true, sel);
+    assert.equal(await page.locator('#secDetail').isVisible(), true);
+    assert.equal(await page.locator('#nav a.on').getAttribute('data-id'), 'company', 'Company stays lit');
+    // The crumb row sits above the head and holds the picker; the close is gone.
+    assert.equal(await page.locator('#sitePanel > .ss-crumbs + .sitehead').count(), 1);
+    assert.equal(await page.locator('.ss-crumbs #sitePick select.sitepick').count(), 1);
+    assert.equal(await page.locator('#siteClose').count(), 0);
+    assert.equal(await page.locator('.ss-crumb').textContent(), 'Portfolio');
+    assert.equal(await page.locator('.ss-trail').textContent(), 'Gift Shops›HART. Gifts');
+    // The picker's neighbour is a link to its address. The two shops share
+    // one, so the second has its key's.
+    assert.equal(await page.locator('#sitePick .seg a[data-key]').first().getAttribute('href'), '#site/broadway-2');
+    // "Portfolio" is the way back: Results whole again, the portfolio in view.
+    await page.locator('.ss-crumb').click();
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#company false');
+    for (const sel of ['#secDaily', '#secPortfolio', '#companyNav'])
+      assert.equal(await page.locator(sel).isVisible(), true, sel);
+    assert.equal(await page.locator('#secDetail').isHidden(), true);
+    // The chain in the trail opens that chain there.
+    await page.evaluate(key => openSite(key), KEY);
+    await page.locator('.ss-trail a[data-ss="chain"]').click();
+    assert.equal(await page.evaluate(() => openChains.has('Gift Shops')), true);
+    assert.equal(await page.locator(`#portfolio tr.kid.show[data-key="${KEY}"]`).count(), 1);
+  } finally { await page.close(); }
+});
+
+test("a finding row's name opens the site's page; the rest of the row still opens the finding", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(f => {
+      siteOpen = false; drawSite();
+      D.alerts = [f]; drawAlerts(); showPage('today');
+    }, FINDING);
+    const name = page.locator('#alertSection .find .site a.ss-sl');
+    assert.equal(await name.innerText(), 'HART. Gifts');
+    assert.equal(await name.getAttribute('href'), '#site/10-second-avenue');
+    assert.equal(await name.getAttribute('data-tip'), 'Open its page');
+    // The map button stays beside the name, outside the link.
+    assert.equal(await page.locator('#alertSection .find .site > .map-shortcut').count(), 1);
+    await name.click();
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')),
+                 '#site/10-second-avenue true  ');
+    assert.equal(await page.locator('.ss-crumb').textContent(), 'Portfolio', 'a name is no finding');
+    // The row itself: the finding, lit, and the crumb names Today.
+    await page.evaluate(() => showPage('today'));
+    await page.locator('#alertSection .find .what').click();
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived].join(' ')),
+                 '#site/10-second-avenue true loss1');
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Today');
+    assert.equal(await page.locator('.ss-trail').textContent(), 'Portfolio›Gift Shops›HART. Gifts');
+    await page.locator('.ss-crumb.from').click();
+    await page.waitForFunction(() => location.hash === '#today' && page === 'today');
+    assert.equal(await page.evaluate(() => siteOpen), false);
+  } finally { await page.close(); }
+});
+
+test('the portfolio, the checks and the goods flow name a site by a link to its page', async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.evaluate(() => { siteOpen = false; drawSite(); openChains.add('Gift Shops'); drawPortfolio(); });
+    const kid = page.locator(`#portfolio tr.kid[data-key="${OTHER}"] a.ss-sl`);
+    assert.equal(await kid.getAttribute('href'), '#site/broadway-2');
+    assert.equal(await page.evaluate(() => siteTd(D.businesses[0])).then(h => /<a class="ss-sl" href="#site\/10-second-avenue"/.test(h)), true);
+    // The goods flow: the picked site's name, and a labelled button beside the map's.
+    const head = await page.evaluate(key => {
+      D.supply.graph = {nodes: [{id: key, name: 'HART. Gifts', tag: 'HK', sub: 'Gift Shop', hood: '', items: []}], links: []};
+      flowPickId = key; drawFlowDetail();
+      return document.getElementById('flowDetail').querySelector('.sechead').innerHTML;
+    }, KEY);
+    assert.match(head, /<h2><a class="ss-sl" href="#site\/10-second-avenue"/);
+    assert.match(head, /<a class="ss-pagego" href="#site\/10-second-avenue">.*its page<\/a>/);
+    // A click on a portfolio name opens the page, as the row does.
+    await page.evaluate(() => showPage('company'));
+    await kid.click();
+    assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `#site/broadway-2 ${OTHER}`);
+  } finally { await page.close(); }
+});
+
+test('a site given up while its page is open hands the page back to the portfolio', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, OTHER);
+    await page.evaluate(() => { D = {...D, businesses: D.businesses.slice(0, 1)}; drawSite(); });
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#company false');
+    assert.equal(await page.locator('#secPortfolio').isVisible(), true);
+  } finally { await page.close(); }
+});
+
+test("a site's page on a phone: a sticky crumb row, arrows round the list, nothing sideways", async () => {
+  const page = await board({chains: [CHAIN]});
+  try {
+    await page.setViewportSize({width: 390, height: 844});
+    await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, KEY);
+    assert.equal(await page.locator('.ss-trail').isHidden(), true);
+    assert.equal(await page.locator('.ss-crumbs').evaluate(n => getComputedStyle(n).position), 'sticky');
+    assert.equal(await page.locator('#sitePick > a.ibtn').count(), 2);
+    assert.equal(await page.locator('#sitePick > a.ibtn').first().isVisible(), true);
+    assert.equal(await page.locator('#sitePick .seg > span').first().isHidden(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+  } finally { await page.close(); }
+});
