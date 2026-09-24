@@ -14587,7 +14587,7 @@ function nameLine(rid, slug){
   const again = () => { drawStock(); drawLogistics(); drawSite(); wireAll(); };
   if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
-    .then(data => { if(data){ D = data; renderAll(); } else again(); })
+    .then(data => { if(data){ D = data; renderCalm(); } else again(); })
     .catch(again);
 }
 /* A name kept in this browser that the live board does not yet have — the
@@ -14601,7 +14601,7 @@ function syncLocalNames(view){
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
-    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderAll(); } })
+    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderCalm(); } })
     .catch(() => {});
 }
 
@@ -20175,15 +20175,31 @@ function drawDifficulty(hadFocus = null){
 
 /*__WIKI_SCRIPT__*/
 
+/* Everything the board draws from the numbers. A live refresh of the same
+   company (renderCalm(), with calmLazy set) draws only the page and view on
+   screen, plus everything outside the pages; the rest is marked out of date
+   (PAGE_DRAWS, pageStale) and drawn as it is opened (drawStale()). Every
+   other caller -- the first boot, another company or save -- draws it all. */
+let calmLazy = false;
 function renderAll(){
   /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
   const diffFocus = fvChipFocus();
+  const here = calmLazy ? viewOf(page) : null;
   indexTrends();
-  drawMast(); drawKpis(); drawAlerts();
-  drawChart(); drawPortfolio(); drawSitePicker(); drawSite();
-  drawLogistics(); drawStock(); drawFlow();
-  drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
-  drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawOptimizeStaffing(); drawFooter();
+  /* Painted back straight after the fresh dot, so a row that throws below
+     cannot leave it green, and again once the rows that drew have cleared
+     their marks. */
+  const marked = !!(staleSource || staleDraws.size);
+  drawMast();
+  if(marked) paintStale();
+  PAGE_DRAWS.forEach(row => {
+    if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
+    pageStale.delete(row);
+    row[1]();
+    staleDraws.delete(row);
+  });
+  if(marked) paintStale();
+  drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
   refreshCityMaps();
@@ -20192,6 +20208,61 @@ function renderAll(){
   if(page === "wiki") wikiVisit();
   ssDataChanged();
   ssCheckLanding();
+}
+
+/* A live refresh: the board already on screen takes the new numbers in place.
+   Entrances play when the reader causes an arrival (the first boot, a page or
+   view not visited yet, a site opened, a row unfolded), never because the save
+   moved on. renderAll() rebuilds the markup, so what it puts back arrives
+   silently (rvSettle), and every finite animation or transition the rebuild
+   started -- a block fading in, a truck driving on, an open row sliding down
+   again -- is run to its end before the frame is painted. A row's "this
+   changed" flash (tr.bump) is the refresh's own signal and plays; loops
+   (a ping, a belt) are not entrances and go on. The element under a still
+   pointer is new too, and the browser gives it its hover a frame or two
+   later (and with it the demand grid's lit row and column): transitions on
+   what the refresh drew that start in those two frames are run to the end
+   as well, so the finding under the pointer does not unfold again in slow
+   motion. Anything else started in those frames is the reader's and plays.
+   Only the board is settled: an open dialog (a game-link write's "ready
+   again" nod) and the write toast are the reader's own and play through a
+   refresh. The search palette is settled too: a refresh rebuilds its list
+   (ssDataChanged()), and the lit row's hop would replay on every one; what
+   the reader set going in it before the refresh is in `was` and plays on. */
+const calmSignal = a => a.animationName === "bump";
+const CALM_OWN = "dialog[open], #gwToast";
+function calmSettle(skip, only){
+  let all;
+  try{ all = document.getAnimations(); }catch(e){ return; }
+  all.forEach(a => {
+    if(skip.has(a) || calmSignal(a) || only && !only(a)) return;
+    const el = a.effect && a.effect.target;
+    if(el && el.closest && el.closest(CALM_OWN)) return;
+    const t = a.effect && a.effect.getComputedTiming && a.effect.getComputedTiming();
+    if(!t || !isFinite(t.endTime)) return;
+    try{ a.finish(); }catch(e){}
+  });
+}
+/* `lazy`: the same company's next numbers, so only what is on screen is
+   drawn now (see renderAll()); false for another company or save. */
+function renderCalm(lazy = true){
+  let was;
+  try{ was = new Set(document.getAnimations()); }catch(e){ was = new Set(); }
+  /* What the rebuild inserts, read back synchronously below. */
+  const drawn = new MutationObserver(() => {});
+  drawn.observe(document.body, {childList: true, subtree: true});
+  rvCalm = true; calmLazy = lazy;
+  try{ renderAll(); } finally { rvCalm = false; calmLazy = false; }
+  const fresh = new Set(drawn.takeRecords().flatMap(r => [...r.addedNodes]));
+  drawn.disconnect();
+  calmSettle(was);
+  if(typeof CSSTransition === "undefined" || !fresh.size) return;
+  try{ was = new Set(document.getAnimations()); }catch(e){ return; }
+  const drew = el => { for(let n = el; n; n = n.parentNode) if(fresh.has(n)) return true; return false; };
+  /* Never the Live dot's: it is about to say "new". */
+  const ours = a => a instanceof CSSTransition && !!a.effect.target && a.effect.target.isConnected
+    && !a.effect.target.closest(".live") && drew(a.effect.target);
+  requestAnimationFrame(() => { calmSettle(was, ours); requestAnimationFrame(() => calmSettle(was, ours)); });
 }
 
 /* --- pages ------------------------------------------------------------ */
@@ -20236,12 +20307,89 @@ Object.entries(SUBS).forEach(([id, sv]) => {
   sub[id] = sv.items.some(([k]) => k === saved) ? saved : sv.start;
 });
 
+/* What each draw function fills, in the order renderAll() draws them: the
+   page or view ("page/view") its markup is on, space-separated when it is on
+   two, or "" for one a live refresh always draws. Read from what each writes
+   into and what other code reads back, not from the names:
+   - drawLogistics() is Today's too: its change checklist paints the Plan
+     imports card there.
+   - drawSite() is drawn every time: it hides the site panel when no site is
+     open (cheap), draws the open one where it is (on Company > Results, the
+     view on screen whenever a site is open), and resets the factory view the
+     site kinds are read from (spViewCache).
+   - drawOptimizeStaffing() names on its card the site the search and Ask
+     the board open, from any page; drawFindLocation() is a line of text.
+   Everything outside the pages -- the masthead, the footer, the difficulty
+   chips, the city maps (the location-map dialog opens from any page), the
+   search index -- is drawn by renderAll() itself on every refresh. Each row
+   calls its function by name when it runs, so a test that swaps one out is
+   heard. */
+const PAGE_DRAWS = [
+  ["today", () => drawKpis()], ["today", () => drawAlerts()],
+  ["company/results", () => drawChart()], ["company/results", () => drawPortfolio()],
+  ["company/results", () => drawSitePicker()], ["", () => drawSite()],
+  ["today supply/orders", () => drawLogistics()], ["supply/checks", () => drawStock()], ["supply/map", () => drawFlow()],
+  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
+  ["company/products", () => drawProducts()], ["company/payroll", () => drawPayroll()],
+  ["company/milestones", () => drawGoals()], ["", () => drawFindLocation()], ["", () => drawOptimizeStaffing()],
+];
+/* The rows a live refresh left out: drawn for older numbers than D. */
+const pageStale = new Set();
+/* The Live dot's "Stale". Two things hold it, each cleared only by its own
+   side: the source, when the save moved on but the board would not rebuild
+   (stale(why) from SOURCE.watch(), cleared by its next good read), and the
+   board, when a row left out of date by a live refresh would not draw as its
+   view was opened (drawStale(); cleared when that row draws, or by the next
+   board). drawMast() puts a fresh dot up on every render, so renderAll()
+   paints the mark back. Without a live source, or once the dot is off, it
+   does nothing. */
+let staleSource = "";
+const staleDraws = new Map();  // a PAGE_DRAWS row -> what it threw
+function markStale(why){ staleSource = why || ""; paintStale(); }
+function paintStale(){
+  const dot = $("live");
+  if(!dot || dot.classList.contains("off")) return;
+  const drew = staleDraws.size ? [...staleDraws.values()][0] : "";
+  const stale = !!(staleSource || drew);
+  dot.classList.toggle("stale", stale);
+  dot.querySelector("em").textContent = stale ? "Stale" : String(SOURCE.label).toUpperCase();
+  dot.title = staleSource ? "The save moved on but the board would not rebuild: " + staleSource
+    : drew ? "A page could not be drawn with the latest numbers and shows older ones: " + drew : "";
+  window.BigCopilotCommunity?.paintOnline();
+}
+/* The page, with its view where it has views: "today", "company/payroll". */
+const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
+/* Draw what a live refresh left out of date on the page's view about to show,
+   before it shows (showPage(), showSub()). It is drawn while still hidden, as
+   the refresh would have drawn it, so it arrives the same way: a block rebuilt
+   where an arrived block stood is simply there (rvSettle), and a view never
+   visited yet still arrives when it opens. A draw that throws stays out of
+   date, is tried again on the next visit and marks the Live dot Stale (the
+   view shows older numbers than the dot would otherwise claim); the page
+   still opens, and the other rows due on it still draw. */
+function drawStale(pageId){
+  if(!pageStale.size || !hasData()) return;
+  const view = viewOf(pageId);
+  const due = PAGE_DRAWS.filter(row => pageStale.has(row) && row[0].split(" ").includes(view));
+  if(!due.length) return;
+  const had = new Set($$(".rv")), marked = [...staleDraws.values()].join("\n");
+  due.forEach(row => {
+    pageStale.delete(row);
+    try{ row[1](); staleDraws.delete(row); }
+    catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
+  });
+  if([...staleDraws.values()].join("\n") !== marked) paintStale();
+  $$(".rv:not(.in)").forEach(el => { if(!had.has(el) && el.closest("[hidden]")) rvSettle(el); });
+  wireAll();
+}
+
 function showSub(pageId, id){
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   /* A site's page lives on Results; any other Company view takes it down. */
   if(pageId === "company" && id !== "results") siteShut();
   sub[pageId] = id;
+  drawStale(pageId);
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
   /* The site panel is only on screen while a site is open, so it owns its own
      visibility and the sweep above is corrected by the panel itself. */
@@ -20265,6 +20413,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   const from = page;
   if(id !== "company") siteShut();
   page = id;
+  drawStale(id);
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
   document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
   remember(PAGE_KEY, id);
@@ -20996,10 +21145,24 @@ function arrive(el){
   el.classList.add("in");
   setTimeout(() => { el.style.transitionDelay = ""; }, 600 + (parseFloat(el.style.transitionDelay) || 0));
 }
+/* A live refresh (renderCalm) rebuilds blocks the reader has already seen
+   arrive. What it puts back stands where an arrived block stood, so it is
+   simply there: the nearest .rv around it says whether that place has
+   arrived, and with none around it, being on the page now does. A block on a
+   page or view never visited yet is left to arrive when the reader goes
+   there. Document order puts a block before what it holds. */
+let rvCalm = false;
+function rvSettle(el){
+  let host = el.parentElement;
+  while(host && !host.classList.contains("rv")) host = host.parentElement;
+  if(host ? !host.classList.contains("in") : el.closest("[hidden]")) return false;
+  el.classList.add("in");
+  return true;
+}
 function wireReveal(){
   const vh = window.innerHeight || 1000;
   if(rvIO) rvIO.disconnect();
-  const pending = $$(".rv:not(.in)").filter(el => !el.closest("[hidden]"));
+  const pending = $$(".rv:not(.in)").filter(el => !(rvCalm && rvSettle(el)) && !el.closest("[hidden]"));
   pending.forEach((el, i) => {
     el.style.transitionDelay = (i % 8) * 70 + "ms";
     if(REDUCED || el.getBoundingClientRect().top < vh) arrive(el);
@@ -24512,28 +24675,31 @@ window.BigCopilotBoard = {
 };
 
 /* --- live refresh --------------------------------------------------- */
+/* Two payloads of one company: the same character and the same save name,
+   as each autosave of a game in play is. Anything else is a new board. */
+const sameCompany = (a, b) => !!(a && b && a.meta && b.meta)
+  && a.meta.character === b.meta.character && a.meta.save === b.meta.save;
 /* The save on disk only changes when the game writes one, so this polls a
    cheap stamp and pulls fresh numbers only when that stamp moves. */
 function startWatching(){
   /* A failing rebuild otherwise reads as "nothing has changed" -- a green
      Live dot over an hour-old board -- so the source says why it is stuck and
-     the dot shows it. The last good board stays on screen. */
-  const markStale = (why) => {
-    const dot = $("live");
-    if(!dot || dot.classList.contains("off")) return;
-    dot.classList.toggle("stale", !!why);
-    dot.querySelector("em").textContent = why ? "Stale" : SOURCE.label;
-    dot.title = why ? "The save moved on but the board would not rebuild: " + why : "";
-    window.BigCopilotCommunity?.paintOnline();
-  };
+     the dot shows it (markStale()). The last good board stays on screen. */
   SOURCE.watch({
     changed(data){
       const first = !D;
+      /* The same company's next numbers redraw what is on screen and leave the
+         rest to be drawn as it is opened; another company or save redraws it
+         all. */
+      const same = !first && sameCompany(D, data);
       D = data;
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      if(first) boot(); else renderAll();
+      if(first) boot(); else renderCalm(same);
+      /* A row that would not draw failed on older numbers than these: the
+         next board clears its mark, and it is tried again when it opens. */
+      if(staleDraws.size){ staleDraws.clear(); paintStale(); }
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
@@ -24547,7 +24713,8 @@ function startWatching(){
     linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
     lost(){
       const dot = $("live");
-      if(dot){ dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
+      /* "Not live" replaces a Stale mark: nothing repaints an off dot. */
+      if(dot){ dot.classList.remove("stale"); dot.title = ""; dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
     },
   });
 }
