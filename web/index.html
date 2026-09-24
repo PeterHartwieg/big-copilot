@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=5bd4884762">
+<link rel="stylesheet" href="community.css?v=b697e6026f">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=5bd4884762">
+<link rel="stylesheet" href="fonts/fonts.css?v=b697e6026f">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2711,8 +2711,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "5bd4884762";</script>
-<script>window.LEDGER_RELEASE = {"version":"5bd4884762","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "b697e6026f";</script>
+<script>window.LEDGER_RELEASE = {"version":"b697e6026f","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2781,8 +2781,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=5bd4884762"></script>
-<script src="community.js?v=5bd4884762"></script>
+<script src="app.js?v=b697e6026f"></script>
+<script src="community.js?v=b697e6026f"></script>
 
 <script>
 
@@ -3840,13 +3840,17 @@ function feedVerdict(n){
      week, or all of it; the import answers for the rest (_factories). */
   const toFactories = Math.max(0, (n.importRouted || 0)
     - Math.max(0, (n.importDrawWeek || 0) - n.depotNeed));
-  const need = n.importCovered ? 0 : Math.max(0, n.depotNeed - toFactories);
+  /* Covered is the route against the depot's measured draw; a starved
+     factory draws less than it needs, so it holds only up to that draw. */
+  const covered = !!n.importCovered && n.depotNeed <= (n.importDrawWeek || 0) * 1.05;
+  const need = covered ? 0 : Math.max(0, n.depotNeed - toFactories);
+  n.importNeed = Math.round(need);
   n.importFit = n.importWeekly !== null
     ? need && !n.importWeekly ? "short" : feedFit(need, n.importWeekly) : null;
   n.raiseTarget = n.raiseImport = null;
   n.stalled = !!(n.known && !n.arrives && n.depotStock > 0);
   let status, level;
-  if(n.importPaused){ status = "paused"; level = "critical"; }
+  if(n.importPaused && !covered){ status = "paused"; level = "critical"; }
   else if(n.directImport){
     n.known = false; n.stalled = false;
     if(n.importFit === "short"){
@@ -3919,7 +3923,7 @@ function feedRoute(site, n, view, held){
   n.importRouted = supply ? supply.routed || 0 : 0;
   n.importDrawWeek = supply ? supply.drawWeek || 0 : 0;
   n.importCovered = !!(supply && supply.covered);
-  n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly && !supply.covered);
+  n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly);
 }
 
 /* The factories as the board built them, plus any line named in this browser. */
@@ -3969,7 +3973,7 @@ function factoryView(){
             row.importRouted = d ? d.routed || 0 : 0;
             row.importDrawWeek = d ? d.drawWeek || 0 : 0;
             row.importCovered = !!(d && d.covered);
-            row.importPaused = !!(d && !d.weekly && d.pausedWeekly && !d.covered);
+            row.importPaused = !!(d && !d.weekly && d.pausedWeekly);
           }
           s.needs.push(row);
         }
@@ -6643,8 +6647,8 @@ function spNeedRead(n){
     case "waiting": return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
     case "import": case "noimport":
       if(n.importSmart)
-        return `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)} against the <b>${spNum(n.depotNeed)}</b> a week`;
-      return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(n.depotNeed)}</b> a week`;
+        return `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)} against the <b>${spNum(n.importNeed ?? n.depotNeed)}</b> a week`;
+      return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(n.importNeed ?? n.depotNeed)}</b> a week`;
     case "made": return "Made in-house";
     default: return "In step";
   }
@@ -7347,7 +7351,10 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   imports.forEach(r => {
     if(r.paused && !r.covered && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if((!r.paused || r.covered) && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+    else if(r.paused && r.covered && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+      Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
+      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply or resume the import.`);
+    else if(!r.paused && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
       Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
       `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });

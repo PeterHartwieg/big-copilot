@@ -236,6 +236,14 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual((row["level"], row["reason"]), ("critical", "shortfall"))
         self.assertEqual(row["catchUp"], 6480 - 2700 - 2700)
 
+    def test_an_import_s_day_is_never_the_route_s_first(self):
+        """The import landed on day 4 while the factory shipped elsewhere; the
+        route to this depot began on day 7. Day 4 is the import's, so the
+        route is read from day 7, not diluted by days 5 and 6."""
+        row, _item = depot_row(1.0, [contract(5200, 5200, smart=True, due=11)],
+                               import_days=(4,), route_from=7, sent_elsewhere=5000)
+        self.assertEqual((row["routed"], row["covered"], row["level"]), (DRAW, True, "ok"))
+
     def test_a_full_log_s_partial_oldest_day_is_left_out(self):
         """The depot's log is at its sixty and its oldest day, day 3, has lost
         the route's arrival: that day is not read as a day the route brought
@@ -302,7 +310,15 @@ class RoutedFactoryViewTests(unittest.TestCase):
 
     def test_a_covering_route_leaves_the_import_nothing(self):
         row = self.need((1680, True, 1680))
-        self.assertEqual((row["importFit"], row["importCovered"]), ("ok", True))
+        self.assertEqual((row["importFit"], row["importCovered"], row["importNeed"]), ("ok", True, 0))
+
+    def test_a_route_covering_a_starved_draw_does_not_cover_the_need(self):
+        """The depot draws only 200 a week because the factory is starved; a
+        route bringing those 200 covers the draw, not the 1,680 the machine
+        needs, so the import still answers for 1,480."""
+        row = self.need((200, True, 200))
+        self.assertEqual((row["importFit"], row["importCovered"], row["importNeed"]),
+                         ("short", False, 1480))
 
 
 if __name__ == "__main__":
