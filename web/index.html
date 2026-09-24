@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=b7ab55fca6">
+<link rel="stylesheet" href="community.css?v=dc9c8286aa">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=b7ab55fca6">
+<link rel="stylesheet" href="fonts/fonts.css?v=dc9c8286aa">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3086,8 +3086,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "b7ab55fca6";</script>
-<script>window.LEDGER_RELEASE = {"version":"b7ab55fca6","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "dc9c8286aa";</script>
+<script>window.LEDGER_RELEASE = {"version":"dc9c8286aa","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3156,8 +3156,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=b7ab55fca6"></script>
-<script src="community.js?v=b7ab55fca6"></script>
+<script src="app.js?v=dc9c8286aa"></script>
+<script src="community.js?v=dc9c8286aa"></script>
 
 <script>
 
@@ -5219,8 +5219,9 @@ function drawSitePicker(){
   q("select", host).onchange = e => openSite(e.target.value);
 }
 /* The row above a site's head: the way back, where the site sits, and the
-   picker. The way back is the portfolio, or -- arrived at from a finding --
-   the page the finding was on, and then it is the browser's own Back. The
+   picker. The way back is the portfolio, or -- arrived at from a finding, a
+   search or a question -- the page it was asked on, or the other site's page
+   it was asked on (siteHereFrom()), and then it is the browser's own Back. The
    trail names the chain the portfolio files the site under, which opens that
    chain there. A home is in no chain and no picker. */
 const SS_BACK = `<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></span>`;
@@ -5244,7 +5245,8 @@ function wireSiteCrumbs(){
     if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     if(a.dataset.ss === "back"){
-      /* The entry before this one is the page the finding was on. */
+      /* The entry before this one is where the finding, search or question
+         was: a page, or another site's page. */
       if(siteStateFrom()){ history.back(); return; }
       if(openHash(a.getAttribute("href").slice(1), "push")) return;
     }
@@ -13576,8 +13578,9 @@ function siteStateFrom(){
    clicked on for the crumb, and so does a search or a question (`cameFrom`,
    which ssOpenSite() sets): each is asked from somewhere and leads away from
    it. `cameFrom` can also be the way back itself ({label, hash}), for a site
-   opened from another site's page (siteHereFrom()). `scroll` puts the page's top at the top of the window; a caller landing
-   on a block inside it passes false and reveals that block itself. */
+   opened from another site's page (siteHereFrom()). `scroll` puts the page's
+   top at the top of the window; a caller landing on a block inside it passes
+   false and reveals that block itself. */
 function openSite(key, scroll = true, finding = null, historyMode = "push", cameFrom = finding !== null){
   if(!hasData() || !D.businesses.some(b => b.key === key) && !spHome(key)) return false;
   /* The site already on screen, opened again (its name, a search), keeps the
@@ -14529,14 +14532,18 @@ function ssLand(qn, from, ticket, tries = 0){
   const strip = document.createElement("div");
   strip.className = "ss-asked"; strip.setAttribute("role", "status");
   const back = PAGES.find(p => p.id === from) || PAGES[0];
+  /* A question that opened a site's page goes back the way the page's own
+     crumb does: the browser's Back, to where it was asked. */
+  const viaSite = siteOpen && page === "company" && siteStateFrom() ? siteFrom : null;
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>YOU ASKED</small><br><b>${ssEsc(qn.q)}</b></span>`
-    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(back.label)}</button>`
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(viaSite ? viaSite.label : back.label)}</button>`
     + `<button type="button" data-ss="another">Ask another</button></span>`;
   strip.addEventListener("click", e => {
     const b = e.target.closest("[data-ss]");
     if(!b) return;
     if(b.dataset.ss === "another"){ ssOpen(); return; }
     ssClearAsked();
+    if(viaSite && siteOpen && siteStateFrom()){ history.back(); return; }
     showPage(back.id);
   });
   ssAsked = {qn, strip, lit: el, litId: el.id || "", host, hash: location.hash, site: siteOpen ? siteKey : null};
@@ -15072,8 +15079,12 @@ function ssClose(restore = true){
   /* Focus must not stay in the hidden field, or the next / would be read as
      typing in it. */
   if(ssPal.contains(document.activeElement)) document.activeElement.blur();
-  const back = ssReturn;
+  let back = ssReturn;
   ssReturn = null;
+  /* A difficulty chip hidden or replaced while the palette was up (a resize
+     across 1500 px, a live refresh) hands over to the chip shown now. */
+  if(back && back.matches && back.matches("button.fv-diff") && (!back.isConnected || !back.getClientRects().length))
+    back = fvShownChip();
   if(restore && back && back.isConnected && back !== document.body && typeof back.focus === "function")
     try{ back.focus({preventScroll: true}); }catch(e){}
   /* A chip given focus back would open its tooltip over the page. */

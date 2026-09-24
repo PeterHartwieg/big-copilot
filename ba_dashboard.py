@@ -13229,8 +13229,9 @@ function drawSitePicker(){
   q("select", host).onchange = e => openSite(e.target.value);
 }
 /* The row above a site's head: the way back, where the site sits, and the
-   picker. The way back is the portfolio, or -- arrived at from a finding --
-   the page the finding was on, and then it is the browser's own Back. The
+   picker. The way back is the portfolio, or -- arrived at from a finding, a
+   search or a question -- the page it was asked on, or the other site's page
+   it was asked on (siteHereFrom()), and then it is the browser's own Back. The
    trail names the chain the portfolio files the site under, which opens that
    chain there. A home is in no chain and no picker. */
 const SS_BACK = `<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></span>`;
@@ -13254,7 +13255,8 @@ function wireSiteCrumbs(){
     if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     if(a.dataset.ss === "back"){
-      /* The entry before this one is the page the finding was on. */
+      /* The entry before this one is where the finding, search or question
+         was: a page, or another site's page. */
       if(siteStateFrom()){ history.back(); return; }
       if(openHash(a.getAttribute("href").slice(1), "push")) return;
     }
@@ -17929,8 +17931,9 @@ function siteStateFrom(){
    clicked on for the crumb, and so does a search or a question (`cameFrom`,
    which ssOpenSite() sets): each is asked from somewhere and leads away from
    it. `cameFrom` can also be the way back itself ({label, hash}), for a site
-   opened from another site's page (siteHereFrom()). `scroll` puts the page's top at the top of the window; a caller landing
-   on a block inside it passes false and reveals that block itself. */
+   opened from another site's page (siteHereFrom()). `scroll` puts the page's
+   top at the top of the window; a caller landing on a block inside it passes
+   false and reveals that block itself. */
 function openSite(key, scroll = true, finding = null, historyMode = "push", cameFrom = finding !== null){
   if(!hasData() || !D.businesses.some(b => b.key === key) && !spHome(key)) return false;
   /* The site already on screen, opened again (its name, a search), keeps the
@@ -18882,14 +18885,18 @@ function ssLand(qn, from, ticket, tries = 0){
   const strip = document.createElement("div");
   strip.className = "ss-asked"; strip.setAttribute("role", "status");
   const back = PAGES.find(p => p.id === from) || PAGES[0];
+  /* A question that opened a site's page goes back the way the page's own
+     crumb does: the browser's Back, to where it was asked. */
+  const viaSite = siteOpen && page === "company" && siteStateFrom() ? siteFrom : null;
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>YOU ASKED</small><br><b>${ssEsc(qn.q)}</b></span>`
-    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(back.label)}</button>`
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(viaSite ? viaSite.label : back.label)}</button>`
     + `<button type="button" data-ss="another">Ask another</button></span>`;
   strip.addEventListener("click", e => {
     const b = e.target.closest("[data-ss]");
     if(!b) return;
     if(b.dataset.ss === "another"){ ssOpen(); return; }
     ssClearAsked();
+    if(viaSite && siteOpen && siteStateFrom()){ history.back(); return; }
     showPage(back.id);
   });
   ssAsked = {qn, strip, lit: el, litId: el.id || "", host, hash: location.hash, site: siteOpen ? siteKey : null};
@@ -19425,8 +19432,12 @@ function ssClose(restore = true){
   /* Focus must not stay in the hidden field, or the next / would be read as
      typing in it. */
   if(ssPal.contains(document.activeElement)) document.activeElement.blur();
-  const back = ssReturn;
+  let back = ssReturn;
   ssReturn = null;
+  /* A difficulty chip hidden or replaced while the palette was up (a resize
+     across 1500 px, a live refresh) hands over to the chip shown now. */
+  if(back && back.matches && back.matches("button.fv-diff") && (!back.isConnected || !back.getClientRects().length))
+    back = fvShownChip();
   if(restore && back && back.isConnected && back !== document.body && typeof back.focus === "function")
     try{ back.focus({preventScroll: true}); }catch(e){}
   /* A chip given focus back would open its tooltip over the page. */

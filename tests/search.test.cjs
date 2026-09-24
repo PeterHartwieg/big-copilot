@@ -349,7 +349,8 @@ test('a question lands on its answer, lit, and the row folds into a button after
     assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_ask_used')), '1');
     // Back to Today: the strip and the lighting go, and the row has folded.
     await strip.locator('[data-ss="back"]').click();
-    assert.equal(await page.evaluate(() => page), 'today');
+    // The question opened a site's page, so Back is the browser's, as the crumb's is.
+    await page.waitForFunction(() => page === 'today');
     assert.equal(await page.locator('.ss-asked').count(), 0);
     assert.equal(await page.locator('.ss-lit, .ss-dim').count(), 0);
     assert.equal(await page.locator('#ssAsk').isHidden(), true);
@@ -1105,6 +1106,8 @@ test('the palette opened over the difficulty popover hands focus back to its chi
     await withChip(page);
     await page.locator('#clock .fv-diff').click();
     assert.equal(await page.evaluate(() => document.activeElement.id), 'fvDiffPop');
+    // The pointer leaves the chip: a tooltip under a resting pointer is the hover's, not the focus's.
+    await page.mouse.move(2, 990);
     await page.keyboard.press('Control+k');
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#ssPal').isHidden(), true);
@@ -1126,6 +1129,57 @@ test("a press on a site's name in the palette leaves focus in the field", async 
     });
     assert.equal(prevented, true);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'ssInput');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// --- release round 3 ---------------------------------------------------------------------
+
+test("a question that opened a site's page goes back the way its crumb does", async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => { showSub('supply', 'checks'); showPage('supply'); });
+    const before = await page.evaluate(() => history.length);
+    // Asked from the Checks, where the Ask row is the palette's.
+    await page.evaluate(() => ssAsk('hire'));
+    const strip = page.locator('.ss-asked');
+    assert.match(await strip.innerText(), /Back to Checks/);
+    await strip.locator('[data-ss="back"]').click();
+    await page.waitForFunction(() => page === 'supply' && !siteOpen);
+    assert.deepEqual(await page.evaluate(() => [location.hash, sub.supply]), ['#supply', 'checks']);
+    // Back, not a new visit: Forward reaches the site again.
+    assert.equal(await page.evaluate(() => history.length), before + 1);
+    await page.goForward();
+    await page.waitForFunction(() => siteOpen);
+    // A landing with no site keeps its page's own way back.
+    await page.evaluate(() => { showPage('today'); ssAsk('import'); });
+    assert.match(await page.locator('.ss-asked').innerText(), /Back to Today/);
+    await page.locator('.ss-asked [data-ss="back"]').click();
+    assert.equal(await page.evaluate(() => page), 'today');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('the palette closed after a resize across 1500 px hands focus to the chip shown now', async () => {
+  const page = await board({width: 1600});
+  try {
+    await withChip(page);
+    await page.locator('#clock .fv-diff').click();
+    await page.mouse.move(2, 990);
+    await page.keyboard.press('Control+k');
+    await page.setViewportSize({width: 1400, height: 1000});
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.fvAt), 'foot');
+    assert.equal(await page.evaluate(() => document.getElementById('tip').classList.contains('on')), false);
+    // No chip shown at all: focus is left on the page.
+    await page.evaluate(() => { $('footDiff').innerHTML = ''; });
+    await page.setViewportSize({width: 1600, height: 1000});
+    await page.locator('#clock .fv-diff').click();
+    await page.mouse.move(2, 990);
+    await page.keyboard.press('Control+k');
+    await page.setViewportSize({width: 1400, height: 1000});
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
