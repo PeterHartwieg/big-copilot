@@ -12767,9 +12767,93 @@ function drawFlowDetail(){
   $("flowClear").onclick = e => { e.preventDefault(); flowPickId = null; applyFlow(); drawFlowDetail(); };
 }
 
+/* --- one verdict per supply fact ---------------------------------------
+   Python judges every (site, item) the company holds, needs or plans once,
+   in D.supply.facts[s][slug], and every supply view reads that verdict here.
+   The board works none out of its own. The base fields are the 24/7 sizing;
+   `dem` holds only what the Demand sizing changes, merged in by the one
+   accessor, so the switch needs no new extract. */
+const SIZING_KEY = "ba_dash_sizing";
+/* cap (24/7, the default) or dem (Demand), set from storage once the page's
+   remember() helpers exist (see SUBS). */
+let sizing = "cap";
+function supplyFact(s, slug){
+  const f = ((((typeof D !== "undefined" && D) || {}).supply || {}).facts || {})[s];
+  const fact = f && f[slug];
+  if(!fact) return null;
+  return sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
+}
+/* What a row reads when Python sent no fact for it: a recipe named in this
+   browser since the last extract, whose figures only the next refresh (a new
+   save on the web, a re-run or --watch here) can judge. */
+const SZ_NEW = {st: "new", why: "named", lvl: "info", use: null, need: null, have: null, setTo: null,
+                parts: {lines: 0, sites: 0, route: 0}};
+const szFact = (s, slug) => supplyFact(s, slug) || SZ_NEW;
+/* The nine words, and the chip colour from the fact's severity. */
+const SZ_WORD = {covered: "covered", tight: "tight", short: "short", noplan: "no plan", paused: "paused",
+                 stalled: "stalled", idle: "idle", made: "made here", new: "new"};
+const SZ_CHIP = {critical: "bad", warn: "warn", info: "dim", ok: "ok"};
+/* Worst first: the order a view ranks rows in and a site's read-out picks. */
+const SZ_RANK = ["paused", "noplan", "short", "stalled", "idle", "tight", "new", "covered", "made"];
+const szRank = f => { const i = SZ_RANK.indexOf(f.st); return i < 0 ? SZ_RANK.length : i; };
+/* Why, in a line: the chip's tip. */
+const SZ_WHY = {
+  order: "The order does not bring the week it has to cover",
+  shortfall: "Runs dry before the next delivery lands",
+  target: "The daily top-up is less than a day's need",
+  dry: "The depot it comes from is out of it",
+  route: "A route from your own site brings it",
+  limit: "Produce up to holds the line back, not the supply",
+  staffing: "The roster runs the machines only part of the week",
+  waiting: "The line stands still for want of another input",
+  notDrawn: "The source holds it, yet little or nothing arrives",
+  notMoving: "Nothing draws on it",
+  notRouted: "No plan sends it on, though your own sites sell or need it",
+  targetHigh: "The top-up target is far above what is used",
+  importHigh: "The import is far above what leaves",
+  firstFill: "A first fill: one-off fills never count as use",
+  young: "Too young to judge yet",
+  named: "Named in this browser: judged at the next refresh",
+};
+const SZ_STATE = {
+  covered: "Covers the use and the margin", tight: "Covers the use, not the margin",
+  short: "Less than the use", noplan: "Nothing brings it", paused: "The import is paused",
+  stalled: "Planned, but little or nothing arrives", idle: "Held far beyond what moves",
+  made: "Made at this site", new: "Too young to judge",
+};
+const szTip = f => SZ_WHY[f.why] || SZ_STATE[f.st] || "";
+const szChip = (f, word) => chipHtml(SZ_CHIP[f.lvl] || "dim", word || SZ_WORD[f.st] || f.st, szTip(f)) + szRamp(f);
+/* Under Demand, a figure built on a shop open under a week is its coming
+   week's straight-line average, and says so; the tip names the shops. */
+function szRamp(f){
+  if(sizing !== "dem" || !f || !(f.ramp || []).length) return "";
+  const names = f.ramp.map(s => D.businesses[s] ? shortName(D.businesses[s]) : null).filter(Boolean);
+  return ` <span class="sz-ramp" data-tip="${attr(`Open under a week, so its use is the coming week's straight-line average: ${
+    names.join(", ")}`)}">may still be ramping</span>`;
+}
+/* Used / week, split the way Python summed it up the routes. */
+function szParts(p){
+  if(!p) return "";
+  return [p.lines ? `Factory lines ${p.lines.toLocaleString()}` : "", p.sites ? `shops ${p.sites.toLocaleString()} a week` : "",
+    p.route ? `a route from your own site brings ${p.route.toLocaleString()}` : ""].filter(Boolean).join(" · ");
+}
+/* Today's findings for the sizing on screen: Python runs the list twice. */
+const alertLines = () => (sizing === "dem" && D.alertsDemand ? D.alertsDemand.lines : D.alerts) || [];
+const alertMinor = () => (sizing === "dem" && D.alertsDemand ? D.alertsDemand.minor : D.minor) || {};
+/* The sizing switch. The page redraws whole, since every supply figure and
+   Today's list follow it. */
+const SZ_SWITCH_TIP = "How factory lines and the imports behind them are sized. 24/7: rated output, round the clock. Demand: what the shops at the end of each chain use, plus the margin.";
+function szSwitch(host){
+  if(typeof host === "string") host = $(host);
+  if(!host) return;
+  seg(host, [["cap", "24/7"], ["dem", "Demand"]], () => sizing,
+    v => { sizing = v; remember(SIZING_KEY, v); }, () => renderAll());
+  host.classList.add("sz-switch");
+  host.setAttribute("aria-label", "Size factories for");
+  host.dataset.tip = SZ_SWITCH_TIP;
+}
+
 /* --- supply chain ---------------------------------------------------- */
-// Match the missing-plan chips, independently of the days-of-cover grade.
-const stockUnplanned = r => r.pressure === null || r.status === "unplanned";
 /* Sortable Supply tables. A table's columns are [label, key, class, tip]:
    key reads what the column sorts on, and a column without one does not
    sort. A left-aligned column is a name and reads A to Z first; a number
@@ -13523,6 +13607,7 @@ const ALERT_LINKS = {
   paused: {sec:"secStock", view:"imports"},
   outruns: {sec:"secStock", view:"shops"}, unplanned: {sec:"secStock", view:"shops"},
   dead: {sec:"secStock", view:"idle"}, target: {sec:"secStock", view:"idle"},
+  notrouted: {sec:"secStock", view:"idle"},
   feed: {sec:"secStock", view:"feed"}, staff: {sec:"secStock", view:"lines"},
   unnamed: {sec:"secStock", view:"lines"}, unset: {sec:"secStock", view:"lines"},
   atcap: {sec:"secDetail", site:true}, idlestaff: {sec:"secDetail", site:true},
@@ -13677,6 +13762,8 @@ const ALERT_EVIDENCE = {
   unplanned: {block: "shelves", hit: "noplan"},
   target: {block: "shelves"},
   dead: {block: "shelves"},
+  /* About the depot that holds the stock; its shelves-to-be are named in the sentence. */
+  notrouted: {block: "stock"},
   shortfall: {block: "stock"},
   order: {block: "stock"},
   paused: {block: "stock"},
@@ -13889,10 +13976,10 @@ function switchedOffKinds(rows, label, money, order = []){
 let showSwitchedOff = false;
 function drawAlerts(){
   const {list, below, switchedOff, smaller} = partitionFindings(
-    D.alerts, (D.minor || {}).rows || [], alertGroupPrefs);
+    alertLines(), alertMinor().rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
-  const gate = (D.minor || {}).gate || 0;
+  const gate = alertMinor().gate || 0;
 
   /* The head: title, the threshold behind the ?, the three severity counters
      that filter the list, and the tune button. That button is bound once at
@@ -14429,7 +14516,7 @@ function spKind(b){
 
 /* The findings about this site, out of the loud list and the counted-away one
    beneath it, in the order the list reads them out. */
-const spSiteFindings = key => [].concat(D.alerts || [], (D.minor || {}).rows || [])
+const spSiteFindings = key => [].concat(alertLines(), alertMinor().rows || [])
   .filter(a => a.siteKey && a.siteKey === key);
 
 /* Where this site stands by the profit of its last seven series entries,
@@ -14934,7 +15021,7 @@ const SP_BLOCKS = {
      on a factory;
    - neither draws a profit chart, so a trend lands on the tiles. */
 const SP_EVIDENCE_KIND = {
-  depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock",
+  depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
           shortfall: "stock", order: "stock", paused: "stock"},
   factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
             feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
@@ -18742,6 +18829,8 @@ const SUBS = {
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
 const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
+/* The sizing switch is per device, not per character (supplyFact). */
+sizing = remembered(SIZING_KEY) === "dem" ? "dem" : "cap";
 let page = "today";
 const sub = {};
 Object.entries(SUBS).forEach(([id, sv]) => {
@@ -19132,6 +19221,7 @@ const ALERT_GROUPS = [
   {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Idle stock",             note:"Goods sitting in a depot no line draws from", on:true},
+  {id:"notrouted",    label:"Not routed",             note:"Stock at a depot no plan sends on, while your own sites sell or need it", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
@@ -19184,7 +19274,7 @@ let kindsPop = null, kindsAnchor = null;
 function kindCounts(){
   const n = {};
   const add = rows => (rows || []).forEach(r => { n[r.group] = (n[r.group] || 0) + 1; });
-  if(D){ add(D.alerts); add((D.minor || {}).rows); }
+  if(D){ add(alertLines()); add(alertMinor().rows); }
   return n;
 }
 function drawKindRows(){
@@ -19793,7 +19883,7 @@ function ssPrices(){
 const ssStaffingSite = () => ($("optimizeStaffingCard") || {dataset: {}}).dataset.site || "";
 /* Whose crew to show: a site with unmet staff demands, else the first that trades. */
 function ssCrewSite(){
-  const a = (D.alerts || []).find(x => x.group === "jobdemand" && x.siteKey);
+  const a = alertLines().find(x => x.group === "jobdemand" && x.siteKey);
   const b = (a && D.businesses.find(x => x.key === a.siteKey))
     || D.businesses.find(x => x.status === "retail" || x.status === "office");
   return b ? b.key : "";
@@ -20064,7 +20154,7 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    hand, next to what they name: `need` is false for what works without a save. */
 const SS_VIEWS = [
   {id: "alerts", t: "Needs attention", p: "Today", ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
-   live: () => ({tag: `${(D.alerts || []).length} today`}), go: () => reveal("alertSection")},
+   live: () => ({tag: `${alertLines().length} today`}), go: () => reveal("alertSection")},
   {id: "moves", t: "Next moves", p: "Today", ic: "today", syn: ["tools", "what next"],
    go(){ showPage("today", false); settleScroll($("secMoves")); }},
   {id: "cash", t: "Cash on hand", p: "Today", ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
@@ -20108,7 +20198,7 @@ const SS_VIEWS = [
   {id: "idle", check: "idle", p: "Supply › Checks", ic: "crate", syn: ["dead stock", "not moving", "overstock", "too much stock"]},
   {id: "lines", check: "lines", p: "Supply › Checks · machines and staffed hours", ic: "gear", syn: ["machines", "recipes", "24/7", "staffed hours"]},
   {id: "feed", check: "feed", p: "Supply › Checks", ic: "pipe", syn: ["inputs", "ingredients", "fed", "factory inputs", "is my factory fed"],
-   live(){ const short = (D.alerts || []).filter(a => a.group === "feed");
+   live(){ const short = alertLines().filter(a => a.group === "feed");
      return short.length ? {p: `Supply › Checks · ${plural(short.length, "input")} short`, dot: ssWorst(short), kw: ssShortInputs()} : {}; }},
   {id: "flow", t: "Goods flow", p: "Supply › Goods flow", ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
    go: () => reveal("secFlow")},
@@ -20139,6 +20229,7 @@ const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: [
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
+  notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],
   satisfaction: ["standards"], promotion: ["pull"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
 /* ...and for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
@@ -20154,7 +20245,7 @@ function ssKindLands(id){
   return {secMarket: "Growth › Demand", secPortfolio: "Company › Portfolio"}[link.sec] || "Today";
 }
 function ssKindGo(id){
-  const rows = [...(D.alerts || []), ...((D.minor || {}).rows || [])].filter(a => a.group === id);
+  const rows = [...alertLines(), ...(alertMinor().rows || [])].filter(a => a.group === id);
   /* The finding's own link: goToAlert() opens any site through ssOpenSite(). */
   if(rows.length){ goToAlert(rows[0]); return; }
   /* Nothing of the kind today: the list's own switch for it, so the player
@@ -20195,7 +20286,7 @@ function ssBuild(){
     const eats = {};
     facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); });
     const siteRows = {};
-    (D.alerts || []).forEach(a => { if(a.siteKey) (siteRows[a.siteKey] = siteRows[a.siteKey] || []).push(a); });
+    alertLines().forEach(a => { if(a.siteKey) (siteRows[a.siteKey] = siteRows[a.siteKey] || []).push(a); });
     D.businesses.forEach((b, i) => {
       const inputs = eats[i] || [];
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
@@ -20258,7 +20349,7 @@ function ssBuild(){
     const counts = kindCounts();
     ALERT_GROUPS.forEach(g => {
       const n = counts[g.id] || 0, on = !!alertGroupPrefs[g.id];
-      const rows = [...(D.alerts || []), ...((D.minor || {}).rows || [])].filter(a => a.group === g.id);
+      const rows = [...alertLines(), ...(alertMinor().rows || [])].filter(a => a.group === g.id);
       out.push(ssEntry({id: `kind:${g.id}`, g: "kinds", t: g.label, p: `lands on ${ssKindLands(g.id)}`, ic: "list",
         syn: SS_KIND_SYN[g.id] || [], kw: g.id === "feed" ? ssShortInputs() : [],
         tag: !on ? `switched off${n ? ` · ${n}` : ""}` : n ? `${n} today` : "",
@@ -21424,7 +21515,7 @@ const gwUniformSites = () => (D.businesses || []).filter(b => (b.uniformGapSkill
 const gwDressable = x => { const s = x.group === "uniform" && alertSite(x); return !!s && gwUniformSites().includes(s); };
 let gwUniformAllId = null;  // the finding row that carries "Set for all"; drawAlerts() picks it
 function gwUniformAll(){
-  const finds = [...(D.alerts || []), ...((D.minor || {}).rows || [])]
+  const finds = [...alertLines(), ...(alertMinor().rows || [])]
     .filter(x => gwDressable(x) && !silencedIds.has(x.id));
   return [...new Set(finds.map(alertSite))];
 }
