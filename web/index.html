@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=c19f9e4f8a">
+<link rel="stylesheet" href="community.css?v=109da18516">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=c19f9e4f8a">
+<link rel="stylesheet" href="fonts/fonts.css?v=109da18516">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -23,7 +23,10 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
 
 /* header row: layer chips, the ? mark, search with the live count -------------- */
 .map-head{margin-top:28px;position:relative;z-index:1} /* below the sticky masthead when scrolled */
-.layers{display:inline-flex;gap:2px}
+.layers{display:inline-flex;flex-wrap:wrap;gap:2px}
+/* Each layer names itself beside its count: "Mine 26 · Owned 0 · Homes 3". */
+.sev.lay .lw{color:var(--ink-2)}
+.sev.lay .n{color:var(--ink)}
 .sev.lay{border:1px solid transparent;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;appearance:none;-webkit-appearance:none}
 .sev.lay.off{opacity:.35}.sev.lay.off:hover{opacity:.6}
 .sev.mine i{background:var(--accent)}.sev.own i{background:var(--info)}.sev.home i{background:var(--ink)}.sev.fnd i{background:var(--warn)}.sev.all i{background:transparent;border:1px solid var(--ink-3);box-sizing:border-box}
@@ -55,7 +58,8 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
 /* The switch sits in the map window, in the same button the zoom controls use;
    the accent marks it pressed, the way a layer chip marks itself on. */
 .fswitch{position:absolute;left:16px;top:16px;z-index:5}
-.fswitch .ibtn{box-shadow:0 2px 8px #0003}
+.fswitch .ibtn{box-shadow:0 2px 8px #0003;width:auto;display:inline-flex;align-items:center;gap:7px;padding:0 12px 0 10px;
+  font:500 12.5px/1 Archivo,"Helvetica Neue",Arial,sans-serif;white-space:nowrap}
 .fswitch .ibtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 /* The stage keeps its dark artwork in either theme, so the pressed state tints
    the button's own surface rather than replacing it with a translucent wash. */
@@ -303,6 +307,9 @@ body.map-modal-open{overflow:hidden}
  .fchip.num input,.fchip.fname input{font-size:16px}
  .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
+ /* The named chips wrap onto a second line; the ? stays beside them. */
+ .map-head > .layers{flex:1 1 0;min-width:0}
+ .sev.lay{padding:6px 7px;gap:5px}
  .srch,.srch:focus-within{width:100%}
  .srch input{font-size:16px}
  .map-dialog{width:calc(100vw - 12px);max-height:calc(100dvh - 12px);padding:12px}
@@ -1624,6 +1631,11 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 /* arrived here from Today: one ring, then out of the way */
 @keyframes sp-arrive{from{box-shadow:0 0 0 2px var(--accent)}to{box-shadow:0 0 0 2px transparent}}
 #sp-roster.sp-arrived{border-radius:12px;animation:sp-arrive 2.4s ease-out}
+/* a cross-link landed on this block (xlArrive): the same ring */
+#sitePanel [data-block].xl-arrived{border-radius:12px;animation:sp-arrive 2.4s ease-out}
+/* the cross-links themselves: a quiet link that says where it goes */
+.xl-guide{white-space:nowrap}
+.heat .r .xl-guide{font-size:11px}
 .sp-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .sp-step{display:inline-flex;align-items:center;gap:9px;min-height:36px;padding:0 12px 0 9px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,transform .2s}
 .sp-step:hover{border-color:var(--ink-3);transform:translateY(-1px)}
@@ -2711,8 +2723,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "c19f9e4f8a";</script>
-<script>window.LEDGER_RELEASE = {"version":"c19f9e4f8a","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "109da18516";</script>
+<script>window.LEDGER_RELEASE = {"version":"109da18516","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2781,8 +2793,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=c19f9e4f8a"></script>
-<script src="community.js?v=c19f9e4f8a"></script>
+<script src="app.js?v=109da18516"></script>
+<script src="community.js?v=109da18516"></script>
 
 <script>
 
@@ -4129,7 +4141,7 @@ const ALERT_LINKS = {
   uniform: {sec:"secDetail", site:true}, bathroom: {sec:"secDetail", site:true},
   toiletprivacy: {sec:"secDetail", site:true}, sink: {sec:"secDetail", site:true},
   music: {sec:"secDetail", site:true}, interior: {sec:"secDetail", site:true},
-  jobdemand: {sec:"secDetail", site:true}, companydemand: {sec:"secPayroll"},
+  jobdemand: {sec:"secDetail", site:true}, companydemand: {sec:"secDetail", site:true},
   hype: {sec:"secMarket"}, vacant: {sec:"secPortfolio"},
   promotion: {sec:"secPortfolio", port:"ops"},
 };
@@ -4187,6 +4199,25 @@ function alertSite(a){
   if(a.siteKey === undefined) return D.businesses.find(x => x.name === a.site) || null;
   return null;
 }
+/* A finding about the company as a whole carries no site, yet it is still
+   shown on one: `site` picks the site where it bites hardest, `otherwise` is
+   where the link goes when no site has it. */
+const ALERT_SITE_PICK = {
+  /* Health insurance and a happy boss are asked for at each site and settled
+     company-wide, so the Crew with the most people lacking one of them is the
+     place that shows the demand. A tie keeps the first site in the save's
+     order. */
+  companydemand: {otherwise: "secPayroll", site: () => {
+    let best = null, most = 0;
+    D.businesses.forEach(b => {
+      if(b.status === "vacant") return;
+      const n = b.staffLackingCompany
+        ?? Math.max(0, ...(b.staffDemands || []).filter(d => d.company).map(d => d.count));
+      if(n > most){ best = b; most = n; }
+    });
+    return best;
+  }},
+};
 function goToAlert(a){
   const link = ALERT_LINKS[a.group];
   if(!link) return;
@@ -4202,7 +4233,14 @@ function goToAlert(a){
      finding's id goes along, so the panel can mark the row it came from. */
   if(link.site){
     const b = alertSite(a);
-    if(b) openSite(b.key, false, a.id);
+    const pick = !b ? ALERT_SITE_PICK[a.group] || null : null;
+    const picked = pick ? pick.site(a) : null;
+    if(b || picked) openSite((b || picked).key, false, a.id);
+    /* A picked site does not list the finding, so there is no row of its own
+       to mark: the link lands on the block that shows it instead. */
+    const ev = ALERT_EVIDENCE[a.group];
+    if(picked && ev){ xlArrive(`#sp-${ev.block}`, ev.hit || ""); return; }
+    if(pick && !picked){ reveal(pick.otherwise); return; }
   }
   reveal(link.sec);
 }
@@ -4223,6 +4261,9 @@ const ALERT_EVIDENCE = {
   idlestaff: {block: "hours"},
   staff: {block: "crew"},
   jobdemand: {block: "crew"},
+  /* Never on a site's own list; the link picks the site (ALERT_SITE_PICK) and
+     lands here, pulsing the company-wide demand chips. */
+  companydemand: {block: "crew", hit: "company"},
   satisfaction: {block: "standards"},
   /* The hit depends on the site, so SP_EVIDENCE_HIT decides it: the locker
      while there is none, the roles once there is one. */
@@ -4528,12 +4569,36 @@ const siteLabel = (b, chev) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${shortN
   ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
 const kidCell = b => siteLabel(b, true);
 
+/* What a chain is made of, in words: "7 shops, 1 warehouse, 1 factory". A
+   chain is named after its shops but carries the depots and factories that
+   mostly supply them, and a bare "9 sites" under "Clothing Stores" read as
+   nine shops. A support site says what the game calls it (Warehouse,
+   Headquarters), a factory is one because it has lines. */
+const XL_KIND_ORDER = ["shop", "office"];
+function xlMembers(c){
+  const factories = new Set((((D.supply || {}).factories || {}).sites || []).map(r => r.s));
+  const counts = new Map();
+  c.sites.forEach(k => {
+    const i = D.businesses.findIndex(b => b.key === k);
+    const b = D.businesses[i];
+    if(!b) return;
+    const word = b.status === "retail" ? "shop" : b.status === "office" ? "office"
+      : b.status === "vacant" ? "vacant lease"
+      : factories.has(i) ? "factory" : String(b.type || "site").toLowerCase();
+    counts.set(word, (counts.get(word) || 0) + 1);
+  });
+  if(!counts.size) return `${c.count} site${c.count === 1 ? "" : "s"}`;
+  const rank = w => { const at = XL_KIND_ORDER.indexOf(w); return at < 0 ? XL_KIND_ORDER.length : at; };
+  const many = w => /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
+  return [...counts].sort((a, z) => rank(a[0]) - rank(z[0]) || z[1] - a[1] || a[0].localeCompare(z[0]))
+    .map(([w, n]) => `${n} ${n === 1 ? w : many(w)}`).join(", ");
+}
 function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
     ? `${compact(c.external)} of it sold outside the company by its factory`
     : c.suppliedBy.length ? `supplied from ${c.suppliedBy.join(", ")}` : "";
-  const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${c.count} site${c.count===1?"":"s"}${
+  const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
   return `<tr class="chain" data-chain="${attr(c.name)}">${
     cells.map((cell, i) => `<td class="${i ? "" : "l"}">${i === 0 ? name : cell}</td>`).join("")}</tr>`;
@@ -4723,8 +4788,24 @@ function roleRead(r, wd, h){
   return `${n} of ${r.stationCount} ${r.stationCount === 1 ? (r.one || many) : many} · ${r.staffed[wd][h]}/h`;
 }
 
-function hourGrid(g, todayWd){
+/* The hour the grid's read-out opens on before one is pointed at: the busiest
+   hour spent at the ceiling, or with none at it, the busiest hour. */
+function hourLeadCell(g){
+  let best = null;
+  HOUR_ROWS.forEach(wd => {
+    for(let h = 0; h < 24; h++){
+      const seen = g.customers[wd][h], cap = g.effective[wd][h];
+      if(seen === null) continue;
+      const atCap = !!(!g.thin[wd] && cap && seen >= cap * AT_CAP);
+      if(!best || atCap > best.atCap || (atCap === best.atCap && seen > best.seen)) best = {wd, h, seen, atCap};
+    }
+  });
+  return best;
+}
+/* `lead`, when given, gets the read of hourLeadCell()'s cell and its label. */
+function hourGrid(g, todayWd, lead = null){
   const peak = Math.max(g.peak, 1);
+  const top = lead ? hourLeadCell(g) : null;
   let cells = `<div></div>${[...Array(24).keys()].map(h => `<div class="hh">${h % 3 === 0 ? h : ""}</div>`).join("")}`;
   HOUR_ROWS.forEach(wd => {
     cells += `<div class="dd${wd === todayWd ? " now" : ""}">${WEEK_SHORT[wd].toUpperCase()}${g.thin[wd] ? "*" : ""}</div>`;
@@ -4764,6 +4845,7 @@ function hourGrid(g, todayWd){
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */
       const held = atCap ? spCellLimit(g, wd, h) : "";
+      if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap ? "Worst hour" : "Busiest hour"; }
       cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}"${
         held ? ` data-caps="${attr(held)}"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
@@ -5364,8 +5446,13 @@ function spStandards(b){
   const big = `<div class="sp-big ${overall === null || overall === undefined ? "unk" : spBand(overall) === "bad" ? "bad" : spBand(overall) ? "warn" : ""}">${
     overall === null || overall === undefined ? "—" : `${overall}<small>%</small>`}</div>`;
   const eq = `<div class="sp-std">${big}<div class="sp-eq"><span class="th"></span>${bars}</div>`;
-  if(b.status !== "retail")
-    return `${eq}</div><div class="sp-read sp-readout">Hover a bar</div>`;
+  if(b.status !== "retail"){
+    /* The part furthest below the line reads out until a bar is pointed at. */
+    const low = unknown ? null : SP_SAT_PARTS.filter(([key]) => Number.isFinite(sat[key]))
+      .reduce((w, p) => !w || sat[p[0]] < sat[w[0]] ? p : w, null);
+    return `${eq}</div><div class="sp-read sp-readout">${low
+      ? `Lowest · ${low[1]} <b>${sat[low[0]]}%</b>` : "Not scored yet"}</div>`;
+  }
   const amenities = b.amenities || {};
   const lamp = (slug, label) => {
     if(amenities[slug] === undefined) return "";
@@ -5431,7 +5518,8 @@ function spPull(b){
         ? `<i class="base" style="width:${100 - hype.site.share}%"></i><i class="lift" style="width:${hype.site.share}%"></i>` : ""}</div>
       <span><span class="sp-pips">${[...Array(7).keys()].map(k =>
         `<i${k < hype.wave.daysLeft ? ` class="on"` : ""}></i>`).join("")}</span>&nbsp; ${hype.wave.daysLeft}d</span></div>` : ""}
-    <div class="sp-read sp-readout">&nbsp;</div>`;
+    <div class="sp-read sp-readout">Foot traffic <b>${traffic}</b> + marketing <b>${marketing}</b> · ${
+      total >= 100 ? "<b>at the cap</b>" : `<b>${100 - total}</b> short of the cap`}</div>`;
 }
 
 /* The crew of a big site: one row a role, one dot a person, the pills one
@@ -5452,7 +5540,15 @@ function spRoster(people, gaps, pairs){
         r.people.some(p => p.absent) ? ` · ${r.people.filter(p => p.absent).length} off` : ""}${
         r.people.every(p => typeof p.daily === "number") ? ` · ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
       <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps, pairs)).join("")}</div></div>
-    </div>`).join("")}</div><div class="sp-read sp-readout">Hover a dot</div></div>`;
+    </div>`).join("")}</div><div class="sp-read sp-readout">${spCrewRead(people, roles.length)}</div></div>`;
+}
+/* A big crew's read-out before a dot is pointed at: who is off today, the
+   thing a row of dots hides, or that nobody is. */
+function spCrewRead(people, roles){
+  const off = people.filter(p => p.absent);
+  if(!off.length) return `<b>${people.length}</b> people in ${plural(roles, "role")} · nobody off today`;
+  const named = off.slice(0, 2).map(p => `<b>${spEsc(p.name)}</b>`).join(", ");
+  return `Off today · ${named}${off.length > 2 ? ` and ${off.length - 2} more` : ""}`;
 }
 /* Name → the roster's index for that person, for the names that pick out
    exactly one person on each side. A save permits two people with one name,
@@ -6259,7 +6355,9 @@ function spRosterBlock(b){
     <div class="chartbox sp-gantt">${hours}${
       HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
     ${spRosterCount(c)}
-    <div class="sp-read sp-readout">Hover an entry</div>
+    <div class="sp-read sp-readout">${/* What the week asks for, until an entry is pointed at. */""}${
+      c.cover ? "Cover" : "The week"} · <b>${planHours} h</b> to set in ${plural(counts.staffed, "entry", "entries")}${
+      counts.hire ? ` · <b>${posts}</b> to hire` : ""}</div>
   </section>`;
 }
 
@@ -6545,6 +6643,39 @@ const spFactorySite = () => spFactorySites().find(r => r.s === siteTab) || null;
 /* One square a machine, filled by the share of the week somebody is posted to
    it: full unless the line lists it among its gaps. Each square carries its
    own list position, which is what a staffing finding names. */
+function spMachineRead(slot, gap){
+  const hours = gap ? gap.hours : SP_STAFF_HOURS;
+  return `Machine ${spEsc(slot)} · ${Number.isFinite(hours)
+    ? `<b>${hours} of ${SP_STAFF_HOURS} h</b> rostered` : `hours <b>not known</b>`}${
+    gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`;
+}
+/* The Lines block's read-out before a machine is pointed at: one staffed and
+   rented that makes nothing, else the machine rostered for the fewest hours,
+   else the word that every one runs around the clock. */
+function spLinesRead(site){
+  const idle = (site.unnamed || []).find(u => u.idle);
+  if(idle){
+    const slot = (idle.slots || [])[0];
+    return `Making nothing · ${slot !== undefined ? `Machine ${spEsc(slot)}` : "a machine"} is staffed and rented with <b>no recipe</b>`;
+  }
+  let worst = null;
+  (site.lines || []).forEach(l => (l.gaps || []).forEach((g, k) => {
+    if(g && Number.isFinite(g.hours) && (!worst || g.hours < worst.g.hours))
+      worst = {l, g, slot: Number.isFinite(g.slot) ? g.slot : (l.slots || [])[k] ?? k + 1};
+  }));
+  if(worst) return `Least staffed · <b>${spEsc(worst.l.item)}</b> · ${spMachineRead(worst.slot, worst.g)}`;
+  return (site.lines || []).length ? `Every machine is rostered all <b>${SP_STAFF_HOURS} h</b> of the week` : "&nbsp;";
+}
+/* The Inputs block's read-out before a row is pointed at: the input in the
+   worst state, by how soon it stops the line. */
+const SP_NEED_WORST = ["dry", "paused", "unplanned", "import", "noimport", "target", "staffing", "waiting", "idle"];
+function spInputsRead(site){
+  const rank = n => { const at = SP_NEED_WORST.indexOf(n.status); return at < 0 ? SP_NEED_WORST.length : at; };
+  const worst = (site.needs || []).reduce((w, n) => !w || rank(n) < rank(w) ? n : w, null);
+  if(!worst) return "&nbsp;";
+  if(rank(worst) === SP_NEED_WORST.length) return "Every input arrives in step";
+  return `<b>${spEsc(worst.item)}</b> · ${spNeedRead(worst)}`;
+}
 function spMachines(count, gaps, slots){
   const bySlot = new Map((gaps || []).filter(g => g && Number.isFinite(g.slot)).map(g => [g.slot, g]));
   const posts = (slots && slots.length ? slots
@@ -6554,9 +6685,7 @@ function spMachines(count, gaps, slots){
     /* A machine listed among the gaps is not fully rostered by definition, so
        one whose hours did not come through is unknown, never full. */
     const hours = gap ? gap.hours : SP_STAFF_HOURS;
-    const read = `Machine ${spEsc(slot)} · ${Number.isFinite(hours)
-      ? `<b>${hours} of ${SP_STAFF_HOURS} h</b> rostered` : `hours <b>not known</b>`}${
-      gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`;
+    const read = spMachineRead(slot, gap);
     return Number.isFinite(hours)
       ? `<span class="sp-m" style="--h:${Math.round(hours / SP_STAFF_HOURS * 100)}%" data-el="${
           attr(spSlotTok(slot))}" data-read="${attr(read)}">${spIcon("gear")}</span>`
@@ -6708,6 +6837,48 @@ function spHomePanel(home){
       <div class="sp-house">${spHouse()}</div>
       <div class="sp-hometiles">${tiles}</div>
     </div>`;
+}
+
+/* --- cross-links -------------------------------------------------------------
+   From the thing on screen to the page that answers the next question about
+   it. A business type's Wiki guide is reached by the type slug the save
+   carries; a build without the wiki module draws no link rather than a dead
+   one. */
+const xlGuideLink = (typeSlug, label, section = "") => {
+  const href = typeof wikiTypeHref === "function" ? wikiTypeHref(typeSlug, section) : "";
+  return href ? `<a class="link xl-guide" href="${attr(href)}">${label} ›</a>` : "";
+};
+/* The stores selling a product yesterday, the biggest seller first: the same
+   lines, by item name, that _products() adds up for the Products table. */
+const xlSellers = item => D.businesses.filter(b => b.status !== "vacant")
+  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && l.revenue)}))
+  .filter(x => x.line).sort((x, y) => y.line.revenue - x.line.revenue);
+/* Open that store on its Shelves with the product's row pulsing. A bag or a
+   drink sits among the folded odds and ends (drawSite's SHELF_MAIN_SHARE
+   rule), so the fold is opened first or the row would not be there. */
+function xlOpenSeller(item){
+  const top = xlSellers(item)[0];
+  if(!top) return;
+  const {b, line} = top;
+  const peak = Math.max(0, ...(b.lines || []).filter(l => l.item !== "Paper Bag").map(l => l.revenue));
+  if(line.item === "Paper Bag" || line.revenue < peak * SHELF_MAIN_SHARE) showAllShelves = true;
+  openSite(b.key, false);
+  xlArrive("#sp-shelves", spKeyTok(line.slug, line.item));
+}
+/* Land on a block of the open site's panel and say so: the block rings once,
+   the way the Roster does when Optimize staffing lands on it, and the rows the
+   link was about pulse for a few seconds. `hit` names them by data-el, as a
+   finding's evidence does. */
+function xlArrive(sel, hit = ""){
+  reveal("secDetail", "push", sel);
+  const block = q(sel);
+  if(!block) return;
+  block.classList.remove("xl-arrived");
+  void block.offsetWidth;  // restart the ring on a second click
+  block.classList.add("xl-arrived");
+  const lit = hit.split(" ").filter(Boolean).flatMap(h => $$(`[data-el~="${CSS.escape(h)}"]`, block));
+  lit.forEach(el => el.classList.add("sp-hit"));
+  setTimeout(() => lit.forEach(el => el.classList.remove("sp-hit")), 3200);
 }
 
 function drawSite(){
@@ -6920,7 +7091,7 @@ function drawSite(){
     b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
   const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     /* The tip lands as textContent: attr() alone, no markup escaping. */
-    wants.map(d => `<span class="sp-dem" data-el="demand" data-tip="${attr(`${d.demand} for ${d.count} · ${
+    wants.map(d => `<span class="sp-dem" data-el="demand${d.company ? " company" : ""}" data-tip="${attr(`${d.demand} for ${d.count} · ${
       SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}`)}">${
       spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
       d.company ? `<span class="sp-i sp-co">${icon("company")}</span>` : ""}</span>`).join("")}${
@@ -6956,6 +7127,8 @@ function drawSite(){
       String(idleNote.from).padStart(2,"0")}:00–${String(idleNote.to).padStart(2,"0")}:00 a ${idleNote.day} · ${fmt(idleNote.worth)}/day of wages</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
   const desks = sp && office && grid && grid.stationCount ? spDesks(grid) : null;
+  /* hourGrid() fills this with the hour its read-out opens on. */
+  const hourLead = {};
   /* The two weeks the chip above compares, shaded on the chart with their own
      daily averages: the same day numbers the trend uses, and only where the
      trend is ready. Anything less and the line is dashed instead, because
@@ -7007,7 +7180,8 @@ function drawSite(){
           <td class="l">${r.rail}</td><td>${r.act}</td><td>${r.order}</td>
           <td>${r.feeds || "—"}</td></tr>`).join("")}</tbody></table></div>`
         : spNone("No stock")}
-      <div class="sp-read sp-readout">Hover a line</div>
+      <div class="sp-read sp-readout">${thin ? `Thinnest · <b>${spEsc(thin.item)}</b> · ${thin.read}`
+        : rows.length ? "Nothing here is drawn down" : "&nbsp;"}</div>
     </section>
     <div class="duo sec" style="grid-template-columns:1fr 1fr">
       <section class="rv" data-block="feeds" id="sp-feeds">
@@ -7054,7 +7228,7 @@ function drawSite(){
         lines.length || unnamed.length ? "" : " No machine could be read at this site."}`})}
       ${lines.length || unnamed.length ? `<div class="scrollx">${spLines(site)}</div>`
         : spNone("No machines")}
-      <div class="sp-read sp-readout">Hover a machine</div>
+      <div class="sp-read sp-readout">${spLinesRead(site)}</div>
     </section>
     <section class="sec rv" data-block="inputs" id="sp-inputs" data-readzone>
       ${sechead("Inputs", {icon: "pipe", why: `What the machines eat at full rate, against the daily top-up set to feed them.${
@@ -7064,7 +7238,7 @@ function drawSite(){
           <th>On hand</th><th class="l">From</th></tr></thead>
         <tbody>${spInputs(site)}</tbody></table></div>`
         : spNone("No inputs")}
-      <div class="sp-read sp-readout">Hover an input</div>
+      <div class="sp-read sp-readout">${spInputsRead(site)}</div>
     </section>
     <section class="sec rv" data-block="crew" id="sp-crew">
       ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
@@ -7116,7 +7290,8 @@ function drawSite(){
               ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
               : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
         grid.door ? `, ${grid.door}/h building capacity` : ", no building capacity"}`})}
-      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7)}<div class="sp-read sp-readout" id="hourRead">Hover an hour</div></div>
+      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7, hourLead)}<div class="sp-read sp-readout" id="hourRead">${
+        hourLead.read ? `${hourLead.label} · ${hourLead.read}` : "No hour reported yet"}</div></div>
       ${hourChips}
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
@@ -7128,7 +7303,9 @@ function drawSite(){
         ${crew}${spAny ? demandChips : demandNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
-        ${office ? sechead("Fees", {icon: sp ? "fees" : null}) : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up"})}
+        ${office ? sechead("Fees", {icon: sp ? "fees" : null, aside: xlGuideLink(b.typeSlug, "Compare with market prices", "prices")})
+          : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up",
+              aside: xlGuideLink(b.typeSlug, "Compare with market prices", "prices")})}
         ${products}${shelfMore}
       </section>
     </div>
@@ -7900,7 +8077,9 @@ function drawMovers(){
    products, which is the number the grid ranks by, so a one-product type shows
    that product's own demand. */
 function typeRow(r, i, hoods){
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}</small></div>`;
+  const guide = xlGuideLink(r.slug, "Setup guide");
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
+    guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const range = r.products === 1 ? `demand ${c.demand} for its one product`
@@ -7921,7 +8100,9 @@ function typeRow(r, i, hoods){
    included. Neighbourhoods without an office building have no reading, and
    say so. */
 function officeRow(r, i, hoods, trendDays, noOffices){
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}</small></div>`;
+  const guide = xlGuideLink(r.slug, "Setup guide");
+  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
+    guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
       noOffices.includes(hoods[j]) ? "no office buildings here" : "no reading"}`)}">—</div>`; return; }
@@ -8135,7 +8316,7 @@ function drawPlan(){
     ? `<span class="field" style="margin:0"><select id="planPick" aria-label="Another business type">
         <option value="" ${others.includes(planType) ? "" : "selected"} disabled>Another type…</option>${
         others.map(k => `<option value="${attr(k)}" ${k === planType ? "selected" : ""}>${cat[k].type} · ${cat[k].products.length}</option>`).join("")}
-      </select></span>` : "");
+      </select></span>` : "") + xlGuideLink(planType, "Setup guide");
   if(owned.length) seg($("planTypes"), owned.map(k => [k, cat[k].type]), () => planType, k => { planType = k; planCounts = {}; }, drawPlan);
   const sel = $("planPick");
   if(sel) sel.onchange = e => pick(e.target.value);
@@ -8286,15 +8467,23 @@ function drawProducts(){
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
       <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
       <th>Avg price</th><th>Stores</th>${showPeak?`<th>Peaks</th>`:""}</tr></thead>
-    <tbody>${rows.map(p=>`<tr>
-      <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${p.item}</td>
+    <tbody>${rows.map(p=>{
+      /* The product opens the store that sells the most of it, Shelves lit:
+         the Portfolio has no product filter, and the site panel already has
+         the landing and the lit row, so one click costs no new machinery. */
+      const top = xlSellers(p.item)[0];
+      const name = top ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.item)}" data-tip="${attr(
+        `Open ${shortName(top.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`)}">${p.item}</a>` : p.item;
+      return `<tr>
+      <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
       <td>${p.units.toLocaleString()}</td>
       <td>${(p.week ?? p.units * 7).toLocaleString()}</td>
       <td>$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td>${p.stores}</td>
       ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
-        p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`).join("")}</tbody></table>`;
+        p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
+  $$("#secProducts [data-xl-item]").forEach(a => a.onclick = e => { e.preventDefault(); xlOpenSeller(a.dataset.xlItem); });
   const toggle = $("productsToggle");
   if(toggle) toggle.onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
 }
@@ -8803,13 +8992,13 @@ class CityMapView {
     // in the map window and its filters in the panel.
     const head = this.panel ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
+      <span class="why" data-tip="The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
@@ -8877,7 +9066,9 @@ class CityMapView {
      thing rather than as chrome scattered over the map. */
   finderControls(){
     if(!premises()) return "";
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" aria-label="Find a location" data-tip="Find a location">${ICON.pin}</button></div>`;
+    /* A chip with its name on it: a bare pin in the corner was the most
+       hidden way into a headline feature. */
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-tip="Rank the buildings you could take for a business type">${ICON.pin}<span>Find a location</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
@@ -10020,6 +10211,7 @@ let wikiShowFix = false;        // the setup list is showing every alternative
    pieces that run after it. The payload is never rewritten to point at the
    business being read: navigation moves this, and nothing else. */
 let wikiActive = null;
+let wikiLanding = "";           // a section a link asked for, until the page has it
 
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
@@ -10116,7 +10308,11 @@ function loadWikiData(){
 }
 
 /* --- routes ------------------------------------------------------------- */
-/* #wiki, #wiki/c/<category>, #wiki/q/<query>, #wiki/<page>. */
+/* #wiki, #wiki/c/<category>, #wiki/q/<query>, #wiki/<page>, and
+   #wiki/<page>/<section> for a guide's section the board links into. */
+/* The sections a link may land on, each by the id its heading carries. Only
+   these are read off the end of a route, so a page id is never cut short. */
+const WIKI_SECTIONS = {prices: "wk-prices"};
 /* A hash is whatever the address bar holds, so a half-typed escape decodes to
    itself rather than throwing the page away. */
 const wikiDecode = s => { try{ return decodeURIComponent(s); }catch(e){ return s; } };
@@ -10128,19 +10324,32 @@ function wikiParse(hash){
   const tail = parts.join("/");
   if(head === "c" && tail) return {kind: "category", id: wikiDecode(tail), query: ""};
   if(head === "q") return {kind: "home", id: "", query: wikiDecode(tail || "")};
-  return {kind: "page", id: wikiDecode([head, ...parts].join("/")), query: ""};
+  const section = parts.length && WIKI_SECTIONS[parts[parts.length - 1]] ? parts.pop() : "";
+  return {kind: "page", id: wikiDecode([head, ...parts].join("/")), query: "", section};
 }
 function wikiHref(route){
   if(!route || route.kind === "home")
     return route && route.query ? `#wiki/q/${encodeURIComponent(route.query)}` : "#wiki";
   if(route.kind === "category") return `#wiki/c/${encodeURIComponent(route.id)}`;
-  return `#wiki/${encodeURIComponent(route.id)}`;
+  return `#wiki/${encodeURIComponent(route.id)}${route.section && WIKI_SECTIONS[route.section] ? `/${route.section}` : ""}`;
+}
+/* The board's way in: a business type's own guide, by the type slug the save
+   carries ("ba:businesstype_gym"), which the help files name
+   "businesstypes-gym". It needs no catalogue loaded, so a link can be drawn
+   before the wiki has ever been opened; a type the help does not cover lands
+   on the wiki's own "no page" note. */
+function wikiTypeHref(typeSlug, section){
+  const m = String(typeSlug ?? "").match(/businesstype_([a-z0-9]+)$/i);
+  return m ? wikiHref({kind: "page", id: `businesstypes-${m[1].toLowerCase()}`, section: section || ""}) : "";
 }
 /* Called by showPage whenever the Wiki page comes up, and by the hash listener
    while it is up. */
 function showWikiRoute(hash){
   const next = wikiParse(hash);
   const moved = next.kind !== wikiRoute.kind || next.id !== wikiRoute.id;
+  /* A link into a section is a place to land once, when it is followed; a
+     redraw afterwards leaves the reader wherever they have scrolled to. */
+  if(next.section && (moved || next.section !== wikiRoute.section)) wikiLanding = next.section;
   wikiRoute = next;
   if(moved){
     wikiShowAll = false;
@@ -11672,7 +11881,7 @@ function wikiGuidePrices(g, offers){
   if(!offers.length) return "";
   const heading = `<div class="sechead"><h2>Prices in your save</h2>
     <span class="aside">${wikiChip("save", hasData() ? `save day ${D.meta?.day ?? "unknown"}` : "no save open")}</span></div>`;
-  if(!hasData()) return `<section class="sec">${heading}
+  if(!hasData()) return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
     <p class="quiet">Open a save to see your configured prices and neighbourhood market prices.</p></section>`;
   const mine = (D.businesses || []).filter(b => b.typeSlug === g.BUSINESS.nameSrc && b.status !== "vacant");
   const hoodOf = b => b.neighbourhood || "Unknown neighbourhood";
@@ -11703,7 +11912,7 @@ function wikiGuidePrices(g, offers){
         <thead><tr><th scope="col">Product or service</th><th scope="col">Your configured price</th>
         <th scope="col">Lowest market price</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
   }).join("");
-  return `<section class="sec">${heading}
+  return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
     <p class="quiet">Prices per unit or service. The market minimum includes your shops and other business types selling the item.
     Reconstructed from this save; MarketInsider's cached display may differ. These are not recommended prices.</p>
     ${body || '<p class="quiet">No matching shops or neighbourhood market data in this save.</p>'}</section>`;
@@ -11823,6 +12032,7 @@ function drawWiki(hold){
   wikiGraph();
   wireTips();
   wireReveal();
+  wikiLand();
   const search = $("wikiSearch");
   if(search && held){
     search.focus();
@@ -11832,6 +12042,20 @@ function drawWiki(hold){
     return;
   }
   wikiRestore(hold);
+}
+
+/* Scroll to the section a link asked for, once the page that holds it is
+   drawn. Until the catalogue is in there is nothing to scroll to, so the wish
+   waits for the draw that has it; a guide without the section keeps its top.
+   settleScroll() is the board's: the sections above are estimated heights
+   until they paint, and one scroll would land short. */
+function wikiLand(){
+  if(!wikiLanding || wikiStatus !== "ready") return;
+  const el = $(WIKI_SECTIONS[wikiLanding]);
+  wikiLanding = "";
+  if(!el) return;
+  if(typeof settleScroll === "function") settleScroll(el);
+  else if(typeof el.scrollIntoView === "function") el.scrollIntoView({block: "start"});
 }
 
 /* --- what the reader can do --------------------------------------------- */
@@ -13208,11 +13432,24 @@ function wirePlan(){ bindPlan(); planDraw(); }
    data-hit, and an hour chip picks its hours out of the grid. All delegated, so
    a redraw needs no rebinding. */
 const wireSiteReads = once(() => {
+  /* Each line opens on a reading of its own -- the worst hour, the thinnest
+     line -- so the block says something before anything is pointed at. A
+     pointer replaces it, and leaving the block puts it back. */
   const show = el => {
     const out = q(".sp-readout", el.closest("[data-readzone]"));
-    if(out) out.innerHTML = el.dataset.read;
+    if(!out) return;
+    if(out.dataset.rest === undefined) out.dataset.rest = out.innerHTML;
+    out.innerHTML = el.dataset.read;
+  };
+  const rest = zone => {
+    const out = q(".sp-readout", zone);
+    if(out && out.dataset.rest !== undefined) out.innerHTML = out.dataset.rest;
   };
   onEnter("[data-readzone] [data-read]", show);
+  onLeave("[data-readzone]", rest);
+  on("focusout", "[data-readzone]", (zone, e) => {
+    if(!(e.relatedTarget && zone.contains(e.relatedTarget))) rest(zone);
+  });
   /* The same line on focus: every read-out in the panel was a hover away, so a
      keyboard could reach a shift bar and still not find out whose it was --
      and tabbing to a bar has to be able to say that without the click that

@@ -787,7 +787,9 @@ test('an unmeasured shop with cover to type gets the whole block, not the empty 
     assert.equal(await page.locator('#sp-roster button.sp-shift').count(), 8);
     assert.equal(await page.locator('#sp-roster .sp-daytabs a').count(), 7);
     assert.equal(await page.locator('#sp-roster .sp-nowplan a').count(), 2);
-    assert.equal(await page.locator('#sp-roster .sp-read.sp-readout').innerText(), 'Hover an entry');
+    // Before an entry is pointed at, the line reads out what the week asks for.
+    assert.equal(await page.locator('#sp-roster .sp-read.sp-readout').innerText(),
+      'Cover · 96 h to set in 8 entries · 2 to hire');
     // Two more cleaners to hire, and no locker here, so nothing is marked as
     // new spending: the hiring line is the only thing the cover week needs.
     assert.match(await page.locator('#sp-roster .sp-hc').innerText(), /hire 2/);

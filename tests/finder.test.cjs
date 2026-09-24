@@ -179,6 +179,9 @@ test('the switch is in the map window; every filter lives in the panel', async (
     // button, and is on screen whether the finder is on or off.
     assert.equal(await page.locator('#cityMapPage [data-stage] .fswitch .ibtn').count(), 1);
     assert.equal(await page.locator(chip).isVisible(), true);
+    // A chip with its name on it, not a bare pin that only a tooltip names.
+    assert.equal((await page.locator(chip).innerText()).trim(), 'Find a location');
+    assert.equal(await page.getByRole('button', {name: 'Find a location', exact: true}).count(), 1);
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'false');
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), true);
     assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);

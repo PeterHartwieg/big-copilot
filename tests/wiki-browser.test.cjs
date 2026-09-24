@@ -87,6 +87,24 @@ test('a cold Wiki article link and reload work without a save', async t => {
   assert.deepEqual(errors, []);
 });
 
+test('a link into Prices in your save lands on that section, and only once', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop/prices'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  // The shelves' "Compare with market prices" lands here: the section's head
+  // at the top of the window, under the sticky masthead, not the guide's top.
+  await page.waitForFunction(() => {
+    const el = document.getElementById('wk-prices');
+    return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+  });
+  assert.match(await page.locator('#wk-prices h2').innerText(), /Prices in your save/);
+  assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
+  // A redraw afterwards leaves the reader where they have scrolled to.
+  await page.evaluate(() => { scrollTo(0, 0); drawWiki(); });
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
 test('search keeps focus when cleared and preserves mid-query edits', async t => {
   const {page, errors} = await fixture(t);
   await openFromLanding(page);
