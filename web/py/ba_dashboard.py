@@ -7242,12 +7242,12 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 ),
             }
             if limits[0][0] == "the building":
+                # The building's capacity comes with the lease, and the board
+                # has no advice for it: the finding names the ceiling and what
+                # goes through it, and no fix. _alerts() raises no line for it;
+                # it shows on the site page's hour grid and chip only.
                 finding["limit"] = "the building"
-                finding["fix"] = (
-                    "a bigger office or a second one nearby"
-                    if office
-                    else "a bigger site or a second shop nearby"
-                )
+                finding["fix"] = ""
             else:
                 # One role reads exactly as it always has, which is what keeps
                 # a shop's and an office's alert ids. Roles tied on the same
@@ -9025,13 +9025,13 @@ def _alerts(
             lines = f"{sum(w['count'] for w in waves)} lines ({', '.join(parts)})"
         wave_word = "the wave" if len(waves) == 1 else "the waves"
         # Pricing is somebody else's job in this company. When a wave lands on a
-        # shop that is already full, the only lever left is capacity — and it has
-        # the wave's end date on it.
+        # shop that is already full, the door turns part of it away — until the
+        # wave's end date.
         full = full_hours(top["key"])
         queue = (
             f" It already runs within 10% of capacity for {full} hour"
             f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
-            f"of {wave_word} away and capacity is the only lever left."
+            f"of {wave_word} away."
             if full
             else ""
         )
@@ -9203,10 +9203,16 @@ def _alerts(
     # Five shops hitting the same 30/h ceiling in the same hours is one finding
     # about five shops, not five findings. Offices group only with offices, and
     # a role's stations only with the same stations: two findings that name two
-    # different answers are two lines, whatever else they share.
+    # different answers are two lines, whatever else they share. A site held by
+    # its building's own capacity is no line at all: there is nothing to do
+    # about it, so it stays on the site page's hour grid and chip only.
     same = collections.OrderedDict()
     for finding in hours:
-        if finding["kind"] == "cap" and finding["key"] not in silent:
+        if (
+            finding["kind"] == "cap"
+            and finding["key"] not in silent
+            and finding["limit"] != "the building"
+        ):
             same.setdefault(
                 (
                     finding.get("office", False),
@@ -9228,26 +9234,18 @@ def _alerts(
             else f"{len(group)} {'offices' if office else 'shops'}"
         )
         who = "" if len(group) == 1 else ": " + ", ".join(f["site"] for f in group)
-        subject = "is" if len(group) == 1 else "are"
         ceiling = f"{cap}/h" if cap == top else f"{cap}-{top}/h"
-        if limit == "the building":
-            text = (
-                f"{where} {subject} at the {cap}/h building capacity {when}, {per_week} hours a "
-                f"week at the ceiling with ${worth:,.0f}/day of trade going through it. "
-                f"The building is the limit, so the answer is {group[0]['fix']}{who}"
-            )
-        else:
-            noun = group[0].get("noun") or ("workstations" if office else "counters")
-            text = (
-                f"{where} fill{'s' if len(group) == 1 else ''} "
-                f"the {noun} {when}, "
-                f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
-                # Only the first character: a tie joins two limits, and
-                # str.capitalize() would lowercase "DJ booths" in the second.
-                f"ceiling. {limit[:1].upper() + limit[1:]} "
-                f"{'are' if group[0].get('limits', 1) > 1 else 'is'} the "
-                f"limit, so the answer is {group[0]['fix']}{who}"
-            )
+        noun = group[0].get("noun") or ("workstations" if office else "counters")
+        text = (
+            f"{where} fill{'s' if len(group) == 1 else ''} "
+            f"the {noun} {when}, "
+            f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
+            # Only the first character: a tie joins two limits, and
+            # str.capitalize() would lowercase "DJ booths" in the second.
+            f"ceiling. {limit[:1].upper() + limit[1:]} "
+            f"{'are' if group[0].get('limits', 1) > 1 else 'is'} the "
+            f"limit, so the answer is {group[0]['fix']}{who}"
+        )
         # One site can be at more than one ceiling, and the limit is what keeps
         # the ids apart: a role short of people says "Gym Trainer staffing" and
         # the same role short of posts says "fitness planning boards", so
@@ -10949,6 +10947,10 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .hc:hover{transform:scale(1.3);box-shadow:0 4px 14px #0007;z-index:2;position:relative}
 .hc.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
 .hc.cap:hover{box-shadow:inset 0 0 0 1.5px var(--neg),0 4px 14px #0007}
+/* An hour held by the building's own capacity is information, not a warning:
+   a well-run shop often sits there, so its ring is neutral. */
+.hc.cap.sp-bcap{box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.hc.cap.sp-bcap:hover{box-shadow:inset 0 0 0 1.5px var(--ink-3),0 4px 14px #0007}
 /* An hour with two or more on shift and capacity well above the customers seen. */
 .hc.slack{box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--info) 45%, transparent)}
 .hc.slack:hover{box-shadow:inset 0 0 0 1px var(--info),0 4px 14px #0007}
@@ -11091,6 +11093,7 @@ section:hover > .sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
 .sp-spark i:hover{transform:scaleY(1.15)}
 .sp-ceil{display:flex;gap:10px;margin-top:11px;color:var(--ink-3)}
 .sp-ceil .on{color:var(--neg)}
+.sp-ceil .on.sp-bcap{color:var(--ink)}
 
 /* standards: the four parts against the 80 line, and the lamps beside them */
 .sp-std{display:flex;align-items:flex-end;gap:30px;flex-wrap:wrap}
@@ -11175,6 +11178,9 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-hchip .sp-sw{width:12px;height:12px;border-radius:3px;flex:none;background:var(--raised)}
 .sp-hchip.cap .sp-sw{box-shadow:inset 0 0 0 1.5px var(--neg)}
 .sp-hchip.cap .sp-i{color:var(--neg)}
+/* the building's capacity chip is neutral, as its grid cells are */
+.sp-hchip.cap.sp-bcap .sp-sw{box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.sp-hchip.cap.sp-bcap .sp-i{color:var(--ink-2)}
 /* the idle swatch matches the grid's own idle ring, which is the --info one */
 .sp-hchip.idle .sp-sw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--info) 45%,transparent)}
 .sp-hchip.idle .sp-i{color:var(--info)}
@@ -14366,7 +14372,8 @@ function miniChart(series, key, colour, o = {}){
    professionals posted at its computers, and a site asking for several skills
    is only as fast as its slowest role. The door cap is the building's own
    limit. Shade is how busy against the site's own busiest hour; a red outline
-   is an hour spent at the ceiling that was on. The sentence under the grid
+   is an hour spent at the ceiling that was on (a neutral one where the
+   building's own capacity held it). The sentence under the grid
    says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -14396,14 +14403,17 @@ function roleRead(r, wd, h){
 }
 
 /* The hour the grid's read-out opens on before one is pointed at: the busiest
-   hour spent at the ceiling, or with none at it, the busiest hour. */
+   hour at a ceiling other than the building's, or with none, the busiest hour. */
 function hourLeadCell(g){
   let best = null;
   HOUR_ROWS.forEach(wd => {
     for(let h = 0; h < 24; h++){
       const seen = g.customers[wd][h], cap = g.effective[wd][h];
       if(seen === null) continue;
-      const atCap = !!(!g.thin[wd] && cap && seen >= cap * AT_CAP);
+      /* An hour held by the building's own capacity is a busy hour, not a
+         bad one: it competes on its customers like any other, so the worst
+         hour is one with something to fix. */
+      const atCap = !!(!g.thin[wd] && cap && seen >= cap * AT_CAP) && spCellLimit(g, wd, h) !== "door";
       if(!best || atCap > best.atCap || (atCap === best.atCap && seen > best.seen)) best = {wd, h, seen, atCap};
     }
   });
@@ -14450,13 +14460,15 @@ function hourGrid(g, todayWd, lead = null, idle = []){
       const idleWord = roles.length > 1 && idle.length
         ? `${idle.map(r => r.label || "capacity").join(", ")} idle`
         : "capacity idle";
-      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
-        atCap ? " · <b>at the ceiling</b>" : slack ? ` · ${idleWord}` : ""}`;
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */
       const held = atCap ? spCellLimit(g, wd, h) : "";
-      if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap ? "Worst hour" : "Busiest hour"; }
-      cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}"${
+      /* Held by the building's own capacity: a busy hour, not a bad one. */
+      const bcap = held === "door";
+      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
+        atCap ? ` · <b>${bcap ? "at building capacity" : "at the ceiling"}</b>` : slack ? ` · ${idleWord}` : ""}`;
+      if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap && !bcap ? "Worst hour" : "Busiest hour"; }
+      cells += `<div class="hc${atCap ? ` cap${bcap ? " sp-bcap" : ""}` : slack && !atCap ? " slack" : ""}"${
         held ? ` data-caps="${attr(held)}"` : ""}${week.has(`${wd}:${h}`) ? ` data-el="idle"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
@@ -16014,7 +16026,7 @@ const spCeiling = (office, limits) => {
   const lit = limits.flatMap(l => spLimitIcons(l, office));
   return `<div class="sp-ceil">${
     ["door", office ? "monitor" : "counter", "person"].map(k =>
-      `<span class="sp-i${lit.includes(k) ? " on" : ""}">${spIcon(k)}</span>`).join("")}</div>`;
+      `<span class="sp-i${lit.includes(k) ? ` on${k === "door" ? " sp-bcap" : ""}` : ""}">${spIcon(k)}</span>`).join("")}</div>`;
 };
 
 /* --- the depot and the factory ----------------------------------------------
@@ -16618,7 +16630,11 @@ function drawSite(){
      hours ran into, and one for idle capacity. */
   const capNotes = sp ? spCapNotes(b.key) : [];
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
-  const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
+  /* The building's own capacity is no warning: plenty of good sites run at it,
+     and there is nothing to fix, so its sentence only says how much. */
+  const capSentence = n => n.limit === "the building"
+    ? `At the building's capacity ${n.hours} hours a week (${n.when}); ${fmt(n.throughput)}/day of trade goes through those hours.`
+    : `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`;
   /* The idle chip reads the whole week, as the site's Today line does: the
@@ -16814,10 +16830,10 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap${n.limit === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
-      fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
+      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${n.limit === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
+      fmt(n.throughput)}/day through it${n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
     (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
@@ -19196,7 +19212,7 @@ const ALERT_GROUPS = [
   {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
   {id:"jobdemand",    label:"Staff demands",          note:"Schedule, desk or building demands of a site's staff not met", on:true},
   {id:"companydemand",label:"Insurance / happy boss", note:"Staff demands only the owner can meet", on:true},
-  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:true},
+  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:false},
   {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
   {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
   {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
@@ -19206,7 +19222,7 @@ const ALERT_GROUPS = [
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import or route round", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
-  {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:true},
+  {id:"atcap",        label:"At capacity",            note:"Hours a week the staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
   {id:"dead",         label:"Idle stock",             note:"Goods sitting in a depot no line draws from", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
@@ -19371,6 +19387,7 @@ function buildAlertSettingsPanel(){
     try{ localStorage.removeItem(ALERT_SETTINGS_KEY); }catch(e2){}
     drawKindRows();
     drawAlerts();
+    refreshCityMaps();
   });
   /* A switch is not a button, so the keyboard needs saying out loud. */
   kindsPop.addEventListener("keydown", e => {
@@ -19450,7 +19467,8 @@ buildAlertSettingsPanel();
 
    FilterKinds — wireKinds:
      .sw[data-kind=<alert group id>]  click toggles .on, flips alertGroupPrefs,
-                          saves under ALERT_SETTINGS_KEY, redraws the findings.
+                          saves under ALERT_SETTINGS_KEY, redraws the findings
+                          and the map's Findings layer.
                           A .sw without data-kind only toggles .on.
      the panel itself    a body-level popover (#alertPop), built once by
                           buildAlertSettingsPanel(). toggleKindsPanel(anchor)
@@ -20141,7 +20159,8 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    hand, next to what they name: `need` is false for what works without a save. */
 const SS_VIEWS = [
   {id: "alerts", t: "Needs attention", p: "Today", ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
-   live: () => ({tag: `${(D.alerts || []).length} today`}), go: () => reveal("alertSection")},
+   /* What the list reads out: above the gate, and of a kind still on. */
+   live: () => ({tag: `${(D.alerts || []).filter(a => !kindOff(a)).length} today`}), go: () => reveal("alertSection")},
   {id: "moves", t: "Next moves", p: "Today", ic: "today", syn: ["tools", "what next"],
    go(){ showPage("today", false); settleScroll($("secMoves")); }},
   {id: "cash", t: "Cash on hand", p: "Today", ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
@@ -20212,7 +20231,7 @@ const SS_VIEWS = [
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
 /* The words players use for a kind of finding. */
-const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "door cap", "turned away"],
+const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
@@ -20271,8 +20290,10 @@ function ssBuild(){
     const facSites = (fac && fac.sites) || [];
     const eats = {};
     facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); });
+    /* A site's dot is the worst finding the list reads out for it: a kind
+       switched off does not colour it. */
     const siteRows = {};
-    (D.alerts || []).forEach(a => { if(a.siteKey) (siteRows[a.siteKey] = siteRows[a.siteKey] || []).push(a); });
+    (D.alerts || []).forEach(a => { if(a.siteKey && !kindOff(a)) (siteRows[a.siteKey] = siteRows[a.siteKey] || []).push(a); });
     D.businesses.forEach((b, i) => {
       const inputs = eats[i] || [];
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
@@ -21401,6 +21422,8 @@ const bindKinds = once(() => on("click", ".sw", s => {
   alertKindChoices = setKindChoice(alertKindChoices, kind, alertGroupPrefs[kind]);
   try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
   drawAlerts();
+  /* The map's Findings layer reads the same switches. */
+  refreshCityMaps();
 }));
 /* changed for kinds: bound once as before, plus the "n today" counts of an
    open panel, which a live refresh would otherwise leave a day behind. */

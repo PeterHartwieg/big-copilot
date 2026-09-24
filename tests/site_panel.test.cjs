@@ -374,7 +374,7 @@ test("the tiles carry the fortnight, the costs of the day and the ceilings", asy
     shop: {series: fortnight(), cogs: 400, profit: 200},
     trends: READY,
     hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 3,
-                    when: 'Fri 12-13', limit: 'the building', fix: 'a bigger site nearby',
+                    when: 'Fri 12-13', limit: 'the building', fix: '',
                     cap: 50, capTop: 50, basket: 30, throughput: 900}],
     hours: grid(false, 3),
   });
@@ -473,12 +473,15 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
   const page = await site({
     hours: mixedGrid(),
     hourFindings: [
-      cap('every day 9', 'the building', 'a bigger site or a second shop nearby', 50, 1500),
+      cap('every day 9', 'the building', '', 50, 1500),
       cap('every day 12', 'staffing', 'more service staff on those hours', 2, 60, 1),
       cap('every day 15', 'registers', 'another counter', 3, 90, 1),
     ],
   });
   try {
+    // Before anything is pointed at, the read-out opens on the worst hour with
+    // something to fix: 15:00, not the building's busier 09:00.
+    assert.match(await page.locator('#hourRead').textContent(), /^Worst hour · Monday 15:00 /);
     // A cell says which kind of ceiling held it and whose role held it, as
     // `<kind>:<skill>`; the door is nobody's role, so its token stands alone.
     const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
@@ -487,6 +490,28 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
       ['the building', 'door'],
       ['staffing', `staff:${SERVICE}`],
       ['registers', `post:${SERVICE}`]]);
+    // The building's chip is information, not a warning: the neutral
+    // modifier, no fix arrow, and a tip that only says how much. The staffing
+    // and registers chips keep their warning look and their fixes.
+    const chipLook = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
+      els.map(e => [e.classList.contains('sp-bcap'),
+        e.querySelector('.fix') ? e.querySelector('.fix').textContent : null,
+        /so the answer is/.test(e.dataset.tip)]));
+    assert.deepEqual(chipLook, [
+      [true, null, false],
+      [false, 'more service staff on those hours', true],
+      [false, 'another counter', true]]);
+    const door = page.locator('#sp-hours .sp-hchip[data-show="door"]');
+    assert.match(await door.getAttribute('data-tip'),
+      /^At the building's capacity 7 hours a week \(every day 9\); \$[\d.,]+k?\/day of trade goes through those hours\.$/);
+    assert.match(await door.innerText(), /at building capacity/);
+    // Its hours wear the neutral ring too; the other ceilings' hours do not.
+    const rings = await page.$$eval('#sp-hours .hc.cap', els =>
+      [...new Set(els.map(e => `${e.dataset.caps.split(':')[0]}:${e.classList.contains('sp-bcap')}`))].sort());
+    assert.deepEqual(rings, ['door:true', 'post:false', 'staff:false']);
+    // And the ceiling tile's door icon is lit without the warning colour.
+    assert.deepEqual(await page.$$eval('#sp-tiles .sp-ceil .sp-i.on', els => els.map(e => e.classList.contains('sp-bcap'))),
+      [true, false, false]);
     // All three ceilings held hours here, so all three icons are lit.
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));
@@ -513,6 +538,24 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
         .filter(h => h !== null));
       assert.deepEqual(lit, Array(7).fill(hour), `the ${mine} chip lights ${hour}:00 and nothing else`);
     }
+  } finally { await page.close(); }
+});
+
+test('a site held only by its building opens on its busiest hour, at building capacity', async () => {
+  // mixedGrid() with the 12:00 and 15:00 hours emptied: only the door's 09:00 is full.
+  const [g] = mixedGrid();
+  [g.customers, g.staffed, g.onShift, g.effective, g.roles[0].staffed, g.roles[0].onShift]
+    .forEach(week => week.forEach(day => { day[12] = 0; day[15] = 0; }));
+  const page = await site({
+    hours: [g],
+    hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 7,
+      when: 'every day 9', limit: 'the building', fix: '', cap: 50, capTop: 50, basket: 30, throughput: 1500}],
+  });
+  try {
+    const read = await page.locator('#hourRead').textContent();
+    assert.match(read, /^Busiest hour · Monday 09:00 50 customers/);
+    assert.match(read, /at building capacity$/);
+    assert.doesNotMatch(read, /at the ceiling/);
   } finally { await page.close(); }
 });
 
