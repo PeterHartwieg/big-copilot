@@ -176,6 +176,17 @@ class RoutedSupplyTests(unittest.TestCase):
         _row, item = depot_row(0.5, [contract(13000, 13000, smart=False)], import_days=(7,))
         self.assertEqual((item["need"], item["low"]), (6300, True))
 
+    def test_a_busy_day_does_not_make_a_mostly_routed_depot_low(self):
+        """A 90% route, Saturday at 1.6 times a quiet day and 6,000 on the shelf:
+        the row's own walk reaches the drop with room to spare, so the node
+        does not read the depot low by counting every day as a Saturday."""
+        rhythm = [90] * 6 + [160]
+        row, item = depot_row(0.9, [contract(26000, 26000, smart=False)], stock=6000,
+                              import_days=(7,), rhythm=rhythm)
+        self.assertEqual((row["coverFit"], row["level"]), ("ok", "ok"))
+        self.assertEqual((item["need"], item["low"]), (row["carry"], False))
+        self.assertLess(item["need"], 6000)
+
     def test_an_import_before_the_route_s_first_arrival_does_not_dilute_it(self):
         """The import landed on day 4 and the route's first round on day 5:
         the route still brings the whole draw on the days it ran."""
