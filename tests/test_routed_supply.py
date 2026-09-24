@@ -8,7 +8,7 @@ draw. A depot fed by imports alone reads exactly as before.
 """
 import unittest
 
-from ba_dashboard import Names, _supply, site_key
+from ba_dashboard import WEEKDAYS, Names, _supply, site_key
 
 DAY = 10  # the save's day; days 3 to 9 are the log's window
 FACTORY, DEPOT, SHOP = ("factory", 0), ("depot", 1), ("shop", 2)
@@ -50,9 +50,9 @@ def plan(source, dest, amount):
         "stockTargets": [{"itemName": FOOD, "targetAmount": amount}]}]}
 
 
-def contract(amount, last_week, smart):
-    """An import to the depot, next due on day 14 (the weekday of day 7)."""
-    partnership = {"importAddress": ("pier", 2), "isActive": True, "nextDeliveryDay": 14,
+def contract(amount, last_week, smart, due=14, active=True):
+    """An import to the depot, next due on `due` (day 14 is the weekday of day 7)."""
+    partnership = {"importAddress": ("pier", 2), "isActive": active, "nextDeliveryDay": due,
                    "isRepeatingOrder": True,
                    "products": [{"itemName": FOOD, "amount": amount,
                                  "amountOrderedLastWeek": last_week, "assignedWarehouse": DEPOT}]}
@@ -61,26 +61,34 @@ def contract(amount, last_week, smart):
     return partnership
 
 
-def depot_row(routed_share, contracts, stock=2700, import_days=(), route=None, target=7000):
+def depot_row(routed_share, contracts, stock=2700, import_days=(), route=None, target=7000,
+              route_from=4, arrivals=(), sent_elsewhere=0, rhythm=None):
     """_supply() over a factory, a depot and a shop; returns the depot's import
     row and its node in the goods-flow graph.
 
-    Every day the depot sends the shop DRAW. Each morning the factory's route
-    brings `routed_share` of the day before's draw, as the logistics round
+    Every day the depot sends the shop DRAW. From `route_from` each morning
+    the factory's route brings `routed_share` of it, as the logistics round
     tops the depot back up to its target; on `import_days` the import lands
-    what the contracts brought last week. The log opens on day 3 with that
-    day's round out and no arrival, as a site's last sixty transactions can
-    open part-way through a day. `route` sets the route up (by default,
-    where it brings something).
+    what the contracts brought last week, and `arrivals` are (day, amount)
+    one-offs nobody's route brought. The factory also ships `sent_elsewhere`
+    a day to somewhere else. The log opens on day 3 with that day's round out
+    and no arrival, as a site's last sixty transactions can open part-way
+    through a day. `route` sets the route up (by default, where it brings
+    something); `rhythm` is the depot's weekday profile, by weekday index.
     """
     logs = {FACTORY: [], DEPOT: []}
     for day in range(3, DAY):
-        if routed_share and day > 3:
+        if routed_share and day >= route_from:
             logs[DEPOT].append(tx(day, round(DRAW * routed_share)))
-            logs[FACTORY].append(tx(day, -round(DRAW * routed_share)))
+        sent = (round(DRAW * routed_share) if routed_share and day >= route_from else 0)
+        if sent + sent_elsewhere:
+            logs[FACTORY].append(tx(day, -(sent + sent_elsewhere)))
         if day in import_days:
             logs[DEPOT].append(tx(day, sum(
                 p["products"][0]["amountOrderedLastWeek"] for p in contracts)))
+        for when, amount in arrivals:
+            if when == day:
+                logs[DEPOT].append(tx(day, amount))
         logs[DEPOT].append(tx(day, -DRAW))
     plans = [plan(DEPOT, SHOP, 5000)]
     if routed_share if route is None else route:
@@ -99,6 +107,9 @@ def depot_row(routed_share, contracts, stock=2700, import_days=(), route=None, t
         business(SHOP, "Shop", "supermarket", "retail",
                  [{"slug": FOOD, "item": "Frozen Food", "units": 500, "rate": DRAW, "price": 1}]),
     ]
+    if rhythm:
+        businesses[1]["rhythm"] = [{"day": WEEKDAYS[wd], "index": index}
+                                   for wd, index in enumerate(rhythm)]
     supply = _supply(save, Names({}), businesses, DAY, {})
     row = next(r for r in supply["imports"] if r["s"] == 1)
     node = next(n for n in supply["graph"]["nodes"] if n.get("id") == site_key(DEPOT))
@@ -114,21 +125,41 @@ class RoutedSupplyTests(unittest.TestCase):
         and the goods-flow node agrees."""
         row, item = depot_row(1.0, [contract(5200, 0, smart=True)])
         self.assertEqual((row["perDay"], row["routed"], row["importPerDay"]), (DRAW, DRAW, 0))
-        self.assertEqual((row["level"], row["reason"]), ("ok", None))
+        self.assertEqual((row["level"], row["reason"], row["covered"]), ("ok", None, True))
         self.assertEqual((row["orderFit"], row["coverFit"]), ("ok", "ok"))
         self.assertEqual(row["weekNeed"], 0)
         self.assertFalse(row["catchUp"])
         self.assertIsNone(row["runsOut"])
         self.assertEqual((item["fit"], item["short"], item["low"]), ("ok", False, False))
 
+    def test_a_route_within_noise_of_the_draw_covers_it(self):
+        """The route's average and the draw's are two measurements; 97% of the
+        draw is the route covering it, not 108 a day for the import."""
+        row, _item = depot_row(0.97, [contract(5200, 0, smart=True)])
+        self.assertEqual((row["covered"], row["importPerDay"], row["weekNeed"]), (True, 0, 0))
+        self.assertEqual((row["level"], row["orderFit"]), ("ok", "ok"))
+
+    def test_a_paused_backup_beside_a_covering_route_is_ok(self):
+        row, _item = depot_row(1.0, [contract(5200, 0, smart=True, active=False)])
+        self.assertTrue(row["paused"])
+        self.assertEqual((row["level"], row["reason"], row["covered"]), ("ok", None, True))
+
     def test_a_route_covering_part_of_the_draw_leaves_the_rest_to_the_import(self):
         """Half the draw comes by route, so a week asks the import for half of
-        it: 12,600, which a 13,000 plain order covers."""
+        it: 12,600, which a 13,000 plain order covers. The import's own day
+        is left out of the route's average."""
         row, _item = depot_row(0.5, [contract(13000, 13000, smart=False)],
                                stock=9000, import_days=(7,))
         self.assertEqual((row["routed"], row["importPerDay"]), (DRAW // 2, DRAW // 2))
         self.assertEqual(row["weekNeed"], 7 * DRAW // 2)
-        self.assertEqual((row["orderFit"], row["level"]), ("ok", "ok"))
+        self.assertEqual((row["orderFit"], row["level"], row["covered"]), ("ok", "ok", False))
+
+    def test_an_import_before_the_route_s_first_arrival_does_not_dilute_it(self):
+        """The import landed on day 4 and the route's first round on day 5:
+        the route still brings the whole draw on the days it ran."""
+        row, _item = depot_row(1.0, [contract(5200, 5200, smart=True, due=11)],
+                               import_days=(4,), route_from=5)
+        self.assertEqual((row["routed"], row["covered"], row["level"]), (DRAW, True, "ok"))
 
     def test_the_import_s_own_arrivals_are_not_counted_as_the_route(self):
         """A route is set up but the factory sent nothing: the only arrival is
@@ -140,11 +171,35 @@ class RoutedSupplyTests(unittest.TestCase):
         row, _item = depot_row(0.0, [contract(5000, 5000, smart=False)], route=True)
         self.assertEqual(row["routed"], 0)
 
+    def test_a_one_off_arrival_is_claimed_no_further_than_the_senders_sent(self):
+        """The route brings 720 a day; the factory ships 5,000 a day elsewhere
+        too, and 14,000 land on day 5 from no route (a contract since
+        removed). The route can claim no more that day than the factory
+        sent: 5,720 on day 5 and 720 on the other four days (day 7 is the
+        import's), 1,720 a day. That over-reads the route, but most of the
+        import's week stays the import's, and a 5,200 level against it is
+        still critical."""
+        row, _item = depot_row(0.2, [contract(5200, 0, smart=True)],
+                               arrivals=((5, 14000),), sent_elsewhere=5000)
+        self.assertEqual(row["routed"], 1720)
+        self.assertEqual((row["covered"], row["level"], row["reason"]), (False, "critical", "order"))
+
     def test_a_route_claims_no_more_than_its_target(self):
         """A morning round tops the depot up to its target and brings no more,
         so arrivals past it (a hand delivery, say) are not the route's."""
         row, _item = depot_row(1.0, [contract(5200, 0, smart=True)], target=2000)
         self.assertEqual((row["routed"], row["importPerDay"]), (2000, DRAW - 2000))
+
+    def test_a_busy_day_s_extra_falls_to_the_import(self):
+        """The route brings a flat 2,000 each morning; the depot's draw peaks
+        at twice the average on Saturday. The import's week is each day's
+        draw less the route, never below nothing, not the average less the
+        route scaled by the profile."""
+        rhythm = [50, 100, 100, 100, 100, 50, 200]
+        row, _item = depot_row(1.0, [contract(5200, 0, smart=True)], target=2000, rhythm=rhythm)
+        week = sum(max(0.0, DRAW * i / 100 - 2000) for i in rhythm)
+        self.assertEqual(row["weekNeed"], round(week))
+        self.assertNotEqual(row["weekNeed"], round((DRAW - 2000) * sum(rhythm) / 100))
 
     def test_a_depot_fed_only_by_imports_reads_as_before(self):
         """No route into the depot: the whole draw is the import's, and a 5,000
@@ -152,7 +207,7 @@ class RoutedSupplyTests(unittest.TestCase):
         main's, pinned."""
         row, item = depot_row(0.0, [contract(5000, 5000, smart=False)], import_days=(7,))
         self.assertEqual((row["perDay"], row["routed"], row["importPerDay"]), (DRAW, 0, DRAW))
-        self.assertEqual((row["level"], row["reason"]), ("critical", "order"))
+        self.assertEqual((row["level"], row["reason"], row["covered"]), ("critical", "order", False))
         self.assertEqual((row["orderFit"], row["coverFit"]), ("short", "short"))
         self.assertEqual(row["weekNeed"], 7 * DRAW)
         self.assertEqual((row["catchUp"], row["runsOut"], row["cover"], row["shortBy"]),
