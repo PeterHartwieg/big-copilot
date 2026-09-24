@@ -94,6 +94,32 @@ test("an ampersand in a demand's own name reads as one, on the chip and in its t
   } finally { await page.close(); }
 });
 
+test("a demand failed only on the week already worked says so in the chip's tip", async () => {
+  // The roster meets the demand; the hours or days worked so far this week
+  // have passed its top. The whole count, part of it, and a days demand.
+  const page = await site([
+    {slug: 'ba:jobdemand_fulltime', demand: 'Full-time', count: 4, priority: 2, company: false,
+     workedOver: {count: 4, max: 50, unit: 'hours'}},
+    {slug: 'ba:jobdemand_parttime', demand: 'Part-time', count: 3, priority: 2, company: false,
+     workedOver: {count: 1, max: 30, unit: 'hours'}},
+    {slug: 'ba:jobdemand_fivedaysweek', demand: 'Five days a week', count: 2, priority: 1, company: false,
+     workedOver: {count: 2, max: 5, unit: 'days'}},
+    {slug: 'ba:jobdemand_fourdaysweek', demand: 'Four days a week', count: 1, priority: 1, company: false},
+  ]);
+  try {
+    const tips = await page.$$eval('#sitePanel .sp-dem', els => els.map(e => e.getAttribute('data-tip')));
+    assert.deepEqual(tips, [
+      'Full-time for 4 · critical · worked over 50 hours this week',
+      'Part-time for 3 · critical · 1 worked over 30 hours this week',
+      'Five days a week for 2 · important · worked over 5 days this week',
+      'Four days a week for 1 · important',
+    ]);
+    // The chip itself keeps to the demand and its count.
+    assert.equal((await page.locator('#sitePanel .sp-dem').first().innerText()).replace(/\s+/g, ' ').trim(),
+                 'Full-time ×4');
+  } finally { await page.close(); }
+});
+
 test('a site with every demand met says nothing', async () => {
   const page = await site([]);
   try {

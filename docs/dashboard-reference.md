@@ -217,7 +217,8 @@ into a counted line with the worst of them underneath. Six shops holding a thous
 cupcakes each is not six findings, it is one top-up target set too high, and it reads as
 the action: *lower the target*. A site that opened this week with no staff, no stock or
 no delivery plan is one line naming all of it, not a separate loss alert and a separate
-staffing alert for the same empty shop.
+staffing alert for the same empty shop. A site shut with the game's *temporarily closed*
+switch says so first, because it books no day however ready it is.
 
 **It has to be news.** An order that exactly matched last week's consumption is a
 correctly sized order. What the board asks instead is whether the standing order covers
@@ -229,12 +230,16 @@ is the line above it said twice.
 
 What is on the list is what moves the number:
 
-- **Hype exposure.** What each running wave is carrying, per wave, with the days left and
-  a baseline: *Industry City hype on 5 lines ends tomorrow; that store does $286k/day
-  under it against $146k for the no-hype Hamptons store.* The baseline is the same shop's
-  own trading before the wave landed where the history reaches back that far, otherwise
-  the same kind of shop somewhere no wave is running. Where neither exists the board says
-  there is no baseline rather than inventing one.
+- **Hype exposure.** What the running waves are carrying, one line per shop they land
+  hardest on, with the days left and a baseline: *Industry City hype on 5 lines ends
+  tomorrow; that store does $286k/day under it against $146k for the no-hype Hamptons
+  store.* The baseline is the same shop's own trading before the wave landed where the
+  history reaches back that far, otherwise the same kind of shop somewhere no wave is
+  running. Where neither exists the board says there is no baseline rather than inventing
+  one. Two or more waves over the same shop are one line that lists each wave's lines and
+  days left, because the shop's takings under hype are one number: *hype on 10 lines (7 end
+  in 4 days, 3 in 13 days)*. The line's level follows the soonest end, and its baseline is
+  the first wave's, since the shop's days before a later wave already carry the earlier one.
 - **Week on week per site.** Any trading site whose seven-day revenue moved more than 15%
   against the seven days before it, with both figures. Sites open under two weeks have no
   previous week to be compared with and are left out.
@@ -648,7 +653,10 @@ its code at build 3680:
 - **Hours and days.** Full-time is 30 to 50 assigned hours a week, part-time 10 to 30, and
   the hours worked so far this week must not pass the top. Four or five days a week counts
   the days assigned, and the days worked so far must not pass it; free weekends means no
-  Saturday or Sunday among them.
+  Saturday or Sunday among them. A roster changed mid-week can meet the demand while the
+  week already worked has passed its top, so where that is the only failure the finding and
+  the site's Crew say so: *Full-time for 4 (critical, worked over 50 hours this week)*, or
+  *4 worked over 50 hours this week* when only some of the count fail that way.
 - **No shifts in a window.** Mornings 6-10, afternoons 14-16, evenings 18-22, nights 22-4.
   Any shift of the employee's that touches the window, on a day their building is open,
   breaks it. No cleaning shifts means no cleaning duty on an open day.
@@ -808,10 +816,11 @@ hovering a finding lights the block that holds its evidence, pulses the thing in
 and dims the rest; clicking scrolls there.
 
 - **The head.** A lamp says whether the doors are open. A site that is not trading adds
-  the five pre-flight checks that say why — staffed, prices set, stock, shelves,
-  delivery plan — red for a failing one, green for one in place, and grey for one that
-  was never checked, because the check stops at the first of prices, stock and shelves
-  that fails. The chip beside them is the site's place by the profit of its last seven
+  the six pre-flight checks that say why — open (the game's temporarily-closed switch
+  off), staffed, prices set, stock, shelves, delivery plan — red for a failing one, green
+  for one in place, and grey for one that was never checked, because the check stops at
+  the first of prices, stock and shelves that fails. An office shows open, staffed and
+  prices set. The chip beside them is the site's place by the profit of its last seven
   days, among the sites that trade; a site with under seven days of trading has no place
   and reads `–`.
 - **Needs attention here.** The findings about this site alone, loud ones first and the

@@ -16,6 +16,7 @@ LABELS = {
     "ba:jobdemand_goldhealthinsurance": "Gold Health Insurance",
     "ba:jobdemand_peacefulworkenvironment": "Happy boss",
     "ba:jobdemand_fulltime": "Full-time",
+    "ba:jobdemand_fivedaysweek": "Five days a week",
     "ba:businesstype_lawfirm": "Law Firm",
 }
 
@@ -224,6 +225,42 @@ class JobDemandFindingTests(unittest.TestCase):
                          ["ba:jobdemand_fulltime"])
         five = {"assignedWeeklyDays": {"$items": [1, 2, 3, 4, 5]}, "workedDays": 6}
         self.assertEqual(unmet("ba:jobdemand_fivedaysweek", employee=five), ["ba:jobdemand_fivedaysweek"])
+
+    def test_a_right_roster_over_the_week_worked_says_it_was_the_hours_worked(self):
+        full = "ba:jobdemand_fulltime"
+        staff = [employee([full], eid=e, assignedWeeklyHours=36, workedHoursThisWeek=55) for e in "ab"]
+        b = evaluate(staff)
+        self.assertEqual(b["staffDemands"][0]["workedOver"], {"count": 2, "max": 50, "unit": "hours"})
+        [line] = self.alerts(b)
+        self.assertEqual(line["text"], "2 staff with unmet demands: "
+                         "Full-time for 2 (critical, worked over 50 hours this week)")
+
+    def test_a_roster_outside_the_band_is_a_roster_failure_whatever_was_worked(self):
+        full = "ba:jobdemand_fulltime"
+        staff = [employee([full], eid="a", assignedWeeklyHours=25),
+                 employee([full], eid="b", assignedWeeklyHours=55, workedHoursThisWeek=60)]
+        b = evaluate(staff)
+        self.assertNotIn("workedOver", b["staffDemands"][0])
+        [line] = self.alerts(b)
+        self.assertEqual(line["text"], "2 staff with unmet demands: Full-time for 2 (critical)")
+
+    def test_mixed_causes_count_the_ones_that_only_worked_over(self):
+        full = "ba:jobdemand_fulltime"
+        staff = [employee([full], eid="a", assignedWeeklyHours=25),
+                 employee([full], eid="b", workedHoursThisWeek=51),
+                 employee([full], eid="c", workedHoursThisWeek=58)]
+        [line] = self.alerts(evaluate(staff))
+        self.assertEqual(line["text"], "3 staff with unmet demands: "
+                         "Full-time for 3 (critical, 2 worked over 50 hours this week)")
+
+    def test_a_days_demand_names_the_days_worked(self):
+        five = "ba:jobdemand_fivedaysweek"
+        staff = [employee([five], workedDays=6)]
+        b = evaluate(staff)
+        self.assertEqual(b["staffDemands"][0]["workedOver"], {"count": 1, "max": 5, "unit": "days"})
+        [line] = self.alerts(b)
+        self.assertEqual(line["text"], "1 staff with unmet demands: "
+                         "Five days a week for 1 (important, worked over 5 days this week)")
 
     def test_staff_at_no_site_or_somewhere_else_are_not_counted(self):
         away = [employee(["ba:jobdemand_hasmousepad"], eid="a", assignedAddress=None),
