@@ -10,7 +10,7 @@ The board's own stylesheet comes from mockup/revamp/build_canvas.py and the site
 from mockup/site-panel/build_site_canvas.py, both of which the live board already carries,
 so the rail, the machine squares and the tick look the same here as on a depot or factory
 page. Every class added here carries the sb- prefix. The figures are typed in below: they
-are modelled on the HART. YT save of day 73, with five states seeded so every verdict
+are modelled on the HART. YT save of day 73, with six states seeded so every verdict
 shows (NOTES.md lists them). Nothing is read from a save at build time.
 
 Never hand-edit project/: change this and rerun. `--preview DIR` also writes plain HTML
@@ -103,7 +103,10 @@ button{font:inherit;color:inherit}
 .board.sb-every .sb-only{display:none}
 .board:not(.sb-every) .sb-evonly{display:none}
 .sb-t tr.sb-kid{display:none}
-.sb-t.open-kids tr.sb-kid{display:table-row;animation:rowin .3s ease}
+.sb-t tr.sb-kid.sb-open{display:table-row;animation:rowin .3s ease}
+.sb-t tr.sb-gr{cursor:pointer}
+.sb-t tr.sb-gr:hover td{background:var(--surface)}
+.sb-t tr.sb-kid td{background:color-mix(in srgb,var(--surface) 55%,transparent)}
 .sb-t tr.sb-edge td{border-top:1px dashed var(--rule)}
 .sb-t tr.sb-edge ~ tr.sb-edge td{border-top-style:none}
 .sb-t tr.sb-lit td{background:var(--accent-soft)}
@@ -230,7 +233,7 @@ tr:hover .sb-v.bad svg,tr:hover .sb-v.plan svg{animation:sp-wiggle .5s ease-in-o
 .sb-kids{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:1px 7px;border-radius:10px;border:1px solid var(--rule);background:none;color:var(--ink-2);font:500 11px/1.5 "IBM Plex Mono",monospace;cursor:pointer}
 .sb-kids:hover{border-color:var(--ink-3);color:var(--ink)}
 .sb-kids svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.2;transition:transform .25s}
-.open-kids .sb-kids svg{transform:rotate(90deg)}
+tr.sb-opened .sb-kids svg{transform:rotate(90deg)}
 tr.sb-kid td.nm{padding-left:26px;color:var(--ink-2)}
 
 /* a factory's day: one cell an hour; staffed, needed, spare -------------------- */
@@ -320,6 +323,102 @@ tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:c
 .sb-node .d{width:9px;height:9px;border-radius:50%}
 .sb-node small{font:400 10.5px "IBM Plex Mono",monospace;color:var(--ink-3)}
 
+/* sizing: 24/7 or demand, remembered per device ------------------------------ */
+.sb-sizing{display:flex;align-items:center;gap:14px;margin-top:16px;font-size:12.5px;color:var(--ink-3)}
+.sb-sizing .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.sb-sizing .seg a{display:inline-flex;align-items:center;gap:6px}
+.sb-sizing .seg a svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-sizing .seg a:hover svg{animation:sp-spin 1.6s linear infinite}
+.sb-sizing .what{max-width:560px}
+.sb-sizing .what b{color:var(--ink-2);font-weight:500}
+.sb-sizing .mem{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:500 11px/1 "IBM Plex Mono",monospace;white-space:nowrap}
+.sb-sizing .mem svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* a young shop downstream: its demand is a straight line so far ---------------- */
+.sb-ramp{display:flex;align-items:flex-start;gap:12px;margin:12px 0 4px;padding:10px 14px;border-radius:8px;background:#f0913a14;box-shadow:inset 0 0 0 1px #f0913a55;font-size:12.5px;color:var(--ink-2)}
+.sb-ramp b{color:var(--ink);font-weight:600}
+.sb-ramp .ic{color:var(--warn);flex:none;margin-top:1px}
+.sb-ramp .ic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-ramp:hover .ic svg{animation:sb-climb 1s ease-in-out infinite}
+@keyframes sb-climb{50%{transform:translate(2px,-2px)}}
+.sb-rampt{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#f0913a22;color:var(--warn);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
+
+/* staffing for factory lines: hours for the sizing, people, wages --------------- */
+.sb-staff{margin-top:34px}
+.sb-staff .sechead .sp-ico{width:28px;height:28px}
+.sb-srows{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sb-srow{display:grid;grid-template-columns:230px minmax(0,1fr) 150px 130px 150px;gap:18px;align-items:center;padding:14px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+.sb-srow.quiet{color:var(--ink-3)}
+.sb-srow .lines{display:flex;flex-direction:column;gap:7px}
+.sb-srow .ln{display:flex;align-items:center;gap:10px;color:var(--ink-2)}
+.sb-srow .ln b{color:var(--ink);font-weight:500}
+.sb-srow .ln .sb-chg{font:500 12px/1 "IBM Plex Mono",monospace}
+.sb-srow .ppl{display:flex;align-items:center;gap:8px;font:500 13px/1 "IBM Plex Mono",monospace}
+.sb-srow .ppl .d{padding:2px 7px;border-radius:4px;font-size:11px}
+.sb-srow .ppl .d.up{background:#f0913a22;color:var(--warn)}
+.sb-srow .ppl .d.dn{background:var(--accent-soft);color:var(--accent)}
+.sb-srow .ppl .dots{display:inline-flex;gap:2px;flex-wrap:wrap;max-width:70px}
+.sb-srow .wage{display:flex;flex-direction:column;align-items:flex-end;font:500 13.5px/1 "IBM Plex Mono",monospace;text-align:right}
+.sb-srow .wage.dn{color:var(--accent)}.sb-srow .wage.up{color:var(--warn)}
+.sb-srow .wage small{display:block;margin-top:4px;font-size:10.5px;color:var(--ink-3)}
+.sb-srow .go{justify-self:end}
+.sb-stot{display:flex;align-items:center;gap:18px;padding:12px 0;font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sb-stot b{color:var(--ink);font-weight:500}
+.sb-stot .dn{color:var(--accent)}.sb-stot .up{color:var(--warn)}
+.sb-staff .sb-srow .sp-dot{width:8px;height:8px}
+.sb-srow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*25ms)}
+.sb-dot-gone{background:none!important;box-shadow:inset 0 0 0 1px var(--ink-3)}
+.sb-dot-new{background:none!important;border:1.5px dashed var(--warn);box-sizing:border-box}
+
+/* the option not chosen ------------------------------------------------------- */
+.sb-notchosen{display:inline-flex;align-items:center;gap:8px;margin-top:22px;padding:6px 12px;border-radius:6px;border:1px dashed var(--rule);font:500 11.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.board.sb-dim .wrap>*:not(.sb-notchosen):not(.mast){opacity:.55}
+
+/* plan a chain: the finished layout, what is placed, what runs ------------------ */
+.sb-growsub{display:flex;align-items:center;gap:14px;margin-top:28px}
+.sb-planhead{display:flex;align-items:center;gap:14px;margin-top:34px}
+.sb-planhead h2{margin:0;font-size:17px;font-weight:600}
+.sb-planhead .aside{margin-left:auto;display:flex;gap:10px;align-items:center}
+.sb-planhead select,.sb-build select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:7px 10px}
+.sb-build{display:flex;align-items:center;gap:14px;margin-top:18px;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);font-size:13px;color:var(--ink-2)}
+.sb-build .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sb-build .state{display:inline-flex;align-items:center;gap:10px;font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sb-build .state i{font-style:normal;color:var(--ink-3)}
+.sb-build .why{margin-left:2px}
+.sb-pm{display:inline-flex;gap:4px;flex-wrap:nowrap;vertical-align:middle}
+.sb-pm i{width:14px;height:14px;border-radius:4px;display:block;box-sizing:border-box;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sb-pm i.run{background:var(--accent)}
+.sb-pm i.placed{box-shadow:inset 0 0 0 1.5px var(--accent);background:var(--accent-soft)}
+.sb-pm i.plan{border:1.5px dashed var(--ink-3)}
+.sb-pm:hover i.plan{transform:translateY(-2px)}
+.sb-pm:hover i.run{animation:sp-hop .6s ease-in-out;animation-delay:calc(var(--k)*40ms)}
+.sb-build .state span{white-space:nowrap}
+.sb-build .lab{white-space:nowrap}
+.sb-pmleg{display:flex;gap:16px;white-space:nowrap;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-pmleg span{display:inline-flex;align-items:center;gap:6px}
+.sb-pmleg .sb-pm i{width:11px;height:11px}
+.sb-save{display:flex;align-items:center;gap:16px;margin-top:22px;padding:14px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent-soft)}
+.sb-save .txt{font-size:13px;color:var(--ink-2);flex:1}
+.sb-save .txt b{color:var(--ink);font-weight:600}
+.sb-save .btn2.primary svg{width:14px;height:14px}
+.sb-save .saved{display:none;align-items:center;gap:8px;font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.sb-save.is-saved .saved{display:inline-flex}
+.sb-save.is-saved .dosave{display:none}
+.sb-save .rm{font-size:12.5px}
+.sb-save:not(.is-saved) .rm{display:none}
+.sb-fill{display:flex;align-items:center;gap:12px;margin-top:12px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px dashed var(--warn);font-size:13px;color:var(--ink-2)}
+.sb-fill b{color:var(--ink);font-weight:600}
+.sb-fill .ic{color:var(--warn);display:grid;place-items:center}
+.sb-fill .ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-fill .mono{color:var(--ink)}
+.sb-plan{display:flex;align-items:center;gap:14px;margin-top:16px;padding:11px 14px;border-radius:10px;border:1px solid var(--rule);background:var(--surface);font-size:13px;color:var(--ink-2)}
+.sb-plan .ic{width:30px;height:30px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--accent);flex:none}
+.sb-plan .ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-plan:hover .ic svg{animation:sp-spin 2.4s linear infinite}
+.sb-plan b{color:var(--ink);font-weight:600}
+.sb-plan .aside{margin-left:auto;display:flex;align-items:center;gap:14px}
+.sb-plantag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
+
 /* phone ---------------------------------------------------------------------- */
 .phone .wrap{width:calc(100% - 32px)}
 .phone .mast{height:auto;flex-wrap:wrap;gap:12px 10px;padding:16px 0 10px;position:static}
@@ -389,6 +488,10 @@ P.update({
     "map": '<path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path>',
     "x": '<path d="M6 6l12 12M18 6L6 18"></path>',
     "wiki": '<rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 7h6M9 11h6M9 15h4"></path>',
+    "clock247": '<circle cx="12" cy="12" r="8.500"></circle><path d="M12 7v5l3.500 2"></path>',
+    "target": '<circle cx="12" cy="12" r="8.500"></circle><circle cx="12" cy="12" r="4.500"></circle><circle cx="12" cy="12" r=".800"></circle>',
+    "ramp": '<path d="M4 19h16M5 16l5-5 3 3 6-7"></path><path d="M15 7h4v4"></path>',
+    "device": '<rect x="7" y="3" width="10" height="18" rx="2"></rect><path d="M11 17h2"></path>',
 })
 
 
@@ -541,8 +644,8 @@ NAV = [("today", "Today", ""), ("building", "Company", ""), ("supply", "Supply",
        ("map", "Map", "NEW"), ("wiki", "Wiki", "NEW")]
 
 
-def masthead() -> str:
-    items = "".join(f'<a class="{"on" if key == "supply" else ""}" href="#">{svg(key)}<span>{label}</span>'
+def masthead(active: str = "supply") -> str:
+    items = "".join(f'<a class="{"on" if key == active else ""}" href="#">{svg(key)}<span>{label}</span>'
                     f'{f"<em class=\"feature-new\">{new}</em>" if new else ""}</a>' for key, label, new in NAV)
     return f"""
 <header class="mast">
@@ -556,10 +659,12 @@ TABS = [("Shops", "store", "Shops.dc.html"), ("Warehouses", "warehouse", "Wareho
         ("Factories", "factory", "Factories.dc.html")]
 FLOW_TAB = ("Goods flow", "flow", "FlowTab.dc.html")
 # the ticks still to type, per tab, for this state of the canvas
-LEFT = {"Shops": 10, "Warehouses": 7, "Factories": 2}
+LEFT = {"Shops": 10, "Warehouses": 7, "Factories": 6}  # sized 24/7
+LEFT_DEMAND = {"Shops": 10, "Warehouses": 2, "Factories": 1}  # sized for demand
+TOTAL, TOTAL_DEMAND = sum(LEFT.values()), sum(LEFT_DEMAND.values())
 
 
-def subhead(active: str, every: bool = False, left: dict | None = None, fourth: bool = False, diagram: bool | None = None,
+def subhead(active: str, every: bool = False, left: dict | None = None, fourth: bool = False, diagram: bool | None = False,
             tabs_only: bool = False) -> str:
     left = LEFT if left is None else left
     tabs = ""
@@ -616,7 +721,7 @@ SHOP_COLS = [("Shop", "l", True, ""), ("Product", "l", True, "", "nm"), ("Sells 
              ("Daily top-up", "", True, "What the warehouse brings each morning. With a change, the figure to type in its delivery plan."),
              ("Status", "l", True, "", "st")]
 
-SHOP_W = [210, 170, 80, 90, 80, 110, 160, None]
+SHOP_W = [200, 170, 90, 100, 80, 100, 160, None]
 # (code, shop, item, sells, peakday, peak, onhand, pressure, now, new, where, word, why, tip, done)
 IDLE_DRINK = {"Energy Drink": "4,000", "Soda Can": "3,000"}
 SHOP_CHANGES = [
@@ -663,6 +768,21 @@ def shop_rows(done_keys: set, fine_edge: int = 0) -> list[dict]:
                      "cells": [(site(code, shop), f"{shop} {code}"), (item, item), (n(sells), sells), (f"{pday} {n(peak)}", peak),
                                (n(hand), hand), (g, pres if pres is not None else 999),
                                (chg(now, new, "/day", where), new), (v(word, why, tip), f"0{word}")]})
+    # idle rows fold into one group that opens on a click (Peter, 24 Sep)
+    kids = [r for r in rows if 'class="sb-v idle"' in r["cells"][7][0]]
+    if len(kids) > 1:
+        at = rows.index(kids[0])
+        for r in kids:
+            rows.remove(r)
+            r["cls"] = (r.get("cls", "") + " sb-kid").strip()
+            r["kid"] = "bags"
+        parent = {"cls": "sb-gr", "cells": [
+            ('<span class="sb-site"><span class="hood">3</span>3 jewelry shops</span>', "3 jewelry shops"),
+            (f'Paper Bag<button type="button" class="sb-kids" data-kids="bags" aria-label="Open the 3 shops">{svg("chev")}+3</button>', "Paper Bag"),
+            ("309", 309), ("—", None), ("9,407", 9407), (gauge(4), 4),
+            ('<span class="sb-chg"><b>3 to type</b></span><span class="sub r">click to open</span>', None),
+            (v("idle", "top-ups hold 30 to 31 days of sales", "Paper Bag top-up targets 30 to 31 times daily sales at MT, MH and GD HART. Jewelry. A week's worth is 1,200 and 700."), "0idle")]}
+        rows[at:at] = [parent] + kids
     for k, (code, shop, item, sells, pday, peak, hand, pres, top) in enumerate(SHOP_FINE):
         edge = k < fine_edge
         rows.append({"cls": ("sb-edge" if edge else "sb-ev"),
@@ -680,7 +800,7 @@ def shops(done_keys: set) -> str:
     total_done = len(done_keys)
     return f"""
 {subhead("Shops", left={**LEFT, "Shops": left})}
-{tray(total_done, 19)}
+{tray(total_done, TOTAL)}
 {verdict("<b>6 shelves have no plan and 1 runs short on Fridays</b>; 90 of 100 clear tomorrow's round. 3 hold a month of paper bags.")}
 {table(SHOP_COLS, shop_rows(done_keys), "shopsT", SHOP_W)}
 {more(10, 100, "shelves")}
@@ -688,7 +808,7 @@ def shops(done_keys: set) -> str:
 
 
 def shops_empty() -> str:
-    left = {"Shops": 0, "Warehouses": 7, "Factories": 2}
+    left = {"Shops": 0, "Warehouses": 7, "Factories": 6}
     edge = [r for r in shop_rows(set(), fine_edge=3) if "sb-edge" in r.get("cls", "")]
     art = f"""<svg class="art" viewBox="0 0 260 150" role="img" aria-label="A stocked shelf and a delivery van">
   <path class="shelf" d="M20 40h150M20 84h150M20 128h150M24 20v112M166 20v112"></path>
@@ -700,7 +820,7 @@ def shops_empty() -> str:
 </svg>"""
     return f"""
 {subhead("Shops", left=left)}
-{tray(0, 9)}
+{tray(0, 13)}
 <div class="sb-empty rv">
   {art}
   <div>
@@ -729,11 +849,16 @@ WH_W = [180, 75, 80, 95, 125, 200, 120, None]
 MARGIN = 12
 
 
-def uses(val: str, parts: list[str], rated: bool = False) -> str:
-    """What a week uses at the ends of the routes, with the sites behind it on hover."""
-    tip = "Uses a week, summed up the logistics routes. " + " · ".join(parts)
-    tag = ('<span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, '
-           'not at what they measurably use. Peter has not settled which.">rated</span>') if rated else ""
+def uses(val: str, parts: list[str], rated: bool = False, demand: str = "") -> str:
+    """What a week uses at the ends of the routes, with the chain behind it on hover: end demand
+    along the routes, one margin for the whole chain, the order."""
+    total = int(val.replace(",", ""))
+    with_m = total * (100 + MARGIN) / 100
+    order_ = math.ceil(with_m / 100) * 100
+    tip = ("End demand along the routes: " + " · ".join(parts) + f". Sum {val} a week. One {MARGIN}% margin for the whole chain, "
+           f"import to sale: {with_m:,.0f}. Order {order_:,} (rounded up to 100). The depots and factories on the way add no margin of their own.")
+    tag = (f'<span class="sb-rated" data-tip="Sized 24/7 (the switch on Factories): factory lines at their rated output round the clock. '
+           f'Sized for Demand this line would use {demand} a week.">24/7</span>') if rated else ""
     return f'<span class="sb-uses" data-tip="{esc(tip)}">{val}</span>{tag}'
 
 
@@ -770,45 +895,49 @@ def _num(s) -> float | None:
     return None
 
 
-def warehouses(arrived: bool = True, every: bool = False) -> str:
+def warehouses(arrived: bool = True, every: bool = False, diag: bool = False) -> str:
     ELEC = [("Resistors", "127,900", "3,086", "151,300"), ("Transistors", "127,900", "3,086", "151,300"), ("Speaker", "50,960", "1,234", "60,500"),
             ("Integrated Circuits", "42,400", "1,029", "50,500"), ("Microphone", "33,700", "829", "40,400"),
             ("Copper Clad Laminate", "20,800", "514", "25,300"), ("Battery", "16,300", "429", "20,200"), ("Plastic", "14,350", "343", "16,900"),
             ("Glass", "9,950", "243", "11,800")]
-    R = "Factory lines at their rated rate, 24 hours a day, 7 days"
+    R = "sized 24/7: the lines at their rated rate, 24 hours a day, 7 days"
     hub = [
         wh_row("Uncut Gems (Expensive)", "4,342", "488", "488", rail(8.9, 5), order(4800, 5040, 5700, "7 Pier"),
-               uses("5,040", ["Factory Jewelry: Jewelry (Expensive), 1 machine × 30 an hour × 24 h × 7 = 5,040", R], rated=True),
+               uses("5,040", ["Factory Jewelry: Jewelry (Expensive), 1 machine × 30 an hour × 24 h × 7 = 5,040", R], rated=True, demand="1,890"),
                "short", "uses 5,040 a week; the level brings 4,800",
                "Holdings reach Monday's import, but the Smart Delivery level refills less than a week of what the jewelry line uses.", key="w0", wv=5040),
         wh_row("Fabric (Cheap)", "63,824", "7,770", "7,770", rail(8.2, 5), order(80700, 80640, 90400, "7 Pier"),
-               uses("80,640", ["Factory Clothing: 4 cheap lines, 4 machines × 60 an hour × 24 h × 7 = 80,640", R], rated=True),
+               uses("80,640", ["Factory Clothing: 4 cheap lines, 4 machines × 60 an hour × 24 h × 7 = 80,640", R], rated=True, demand="48,972"),
                "tight", "covers the 80,640 a week it uses, not the 12% margin", key="w3", wv=80640),
         wh_row("Fabric (Expensive)", "65,354", "6,612", "6,612", rail(9.9, 5), order(80700, 80640, 90400, "7 Pier"),
-               uses("80,640", ["Factory Clothing: 4 expensive lines, 8 machines × 30 an hour × 24 h × 7 = 80,640", R], rated=True),
+               uses("80,640", ["Factory Clothing: 4 expensive lines, 8 machines × 30 an hour × 24 h × 7 = 80,640", R], rated=True, demand="42,994"),
                "tight", "covers the 80,640 a week it uses, not the 12% margin", key="w4", wv=80640),
         wh_row("Metal Band", "12,442", "1,644", "1,644", rail(7.6, 5), order(15200, 15120, 17000, "7 Pier"),
                uses("15,120", ["Factory Jewelry: Jewelry (Expensive) 30 an hour and Jewelry (Cheap) 60 an hour, × 24 h × 7 = 15,120",
-                               "Not counted: the one-off 5,000 filled into Jewelry Distrib. on days 66 to 68", R], rated=True),
+                               "Not counted: the one-off 5,000 filled into Jewelry Distrib. on days 66 to 68", R], rated=True, demand="8,631"),
                "tight", "covers the 15,120 a week it uses, not the 12% margin", key="w5", wv=15120),
         wh_row("Uncut Gems (Cheap)", "8,200", "897", "897", rail(9.1, 5), order(10200, 10080, 11300, "7 Pier"),
-               uses("10,080", ["Factory Jewelry: Jewelry (Cheap), 1 machine × 60 an hour × 24 h × 7 = 10,080 (rostered 12 h today)", R], rated=True),
+               uses("10,080", ["Factory Jewelry: Jewelry (Cheap), 1 machine × 60 an hour × 24 h × 7 = 10,080 (rostered 12 h today)", R], rated=True, demand="6,741"),
                "tight", "covers the 10,080 a week it uses, not the 12% margin", key="w6", wv=10080),
+        wh_row(f'Idle stock<button type="button" class="sb-kids" data-kids="idle" aria-label="Open the 12 idle lines">{svg("chev")}+12</button>',
+               "579,160", "—", "—", rail(None, None, dead=True), '<span class="sub r">click to open</span>', "—", "idle",
+               '7,000 drinks nothing draws; 10 electronics parts hold 6 weeks', cls="sb-gr"),
         wh_row("Energy Drink", "4,000", "—", "—", rail(None, None, dead=True), order(4000, None, None, "1 Pier"), "—", "idle",
-               'nothing draws it; <a href="Shops.dc.html">3 gyms sell 554 a day with no plan</a>'),
+               'nothing draws it; <a href="Shops.dc.html">3 gyms sell 554 a day with no plan</a>', cls="sb-kid", kid="idle"),
         wh_row("Soda Can", "3,000", "—", "—", rail(None, None, dead=True), order(3000, None, None, "1 Pier"), "—", "idle",
-               'nothing draws it; <a href="Shops.dc.html">the same gyms sell 369 a day</a>'),
+               'nothing draws it; <a href="Shops.dc.html">the same gyms sell 369 a day</a>', cls="sb-kid", kid="idle"),
         wh_row("Capacitors", "127,900", "3,086", "3,086", rail(41, 5), order(151300, 20160, None, "7 Pier"),
-               uses("20,160", ["Factory Electronics: 2 smartwatch lines, 2 machines × 2 capacitors × 30 an hour × 24 h × 7 = 20,160", R], rated=True), "idle",
-               "10 electronics parts hold 6 weeks: 572,160 units", "Smart Delivery keeps these at levels 5 to 7 times what a week uses.", kids=("elec", 9), wv=20160),
+               uses("20,160", ["Factory Electronics: 2 smartwatch lines, 2 machines × 2 capacitors × 30 an hour × 24 h × 7 = 20,160", R], rated=True,
+                    demand="0 (no shop sells a smartwatch yet)"), "idle",
+               "the level holds 7.5 weeks of what the lines use", cls="sb-kid", kid="idle", wv=20160),
     ]
     for item, hand, draw, lvl in ELEC:
-        hub.append(wh_row(item, hand, draw, draw, rail(41, 5), chg(int(lvl.replace(",", "")), None, "in stock", ""), "—", "idle", "", cls="sb-kid", kid="elec"))
+        hub.append(wh_row(item, hand, draw, draw, rail(41, 5), chg(int(lvl.replace(",", "")), None, "in stock", ""), "—", "idle", "", cls="sb-kid", kid="idle"))
     hub += [
         wh_row("Paper Bag", "17,387", "2,790", "Fri 3,236", rail(6.3, 5), order(25000, 20300, None, "1 Pier"),
-               uses("20,300", ["7 clothing shops 14,970 · via Clothing Distr. ← Factory Clothing ← here",
-                               "7 jewelry shops 5,330 · via Jewelry Distrib. ← Factory Jewelry ← here",
-                               "The factories only pass bags on, so they add nothing of their own"]),
+               uses("20,300", ["7 clothing shops 14,970, via Clothing Distr. and Factory Clothing",
+                               "7 jewelry shops 5,330, via Jewelry Distrib. and Factory Jewelry",
+                               "the factories only pass bags on"]),
                "covered", "uses 20,300 a week; the level holds that and 12% more", cls="sb-edge", wv=20300),
     ]
     clo = [
@@ -854,13 +983,13 @@ def warehouses(arrived: bool = True, every: bool = False) -> str:
                f'<span>{ic("right")}<em>feeds 7 jewelry shops</em></span>')
     crumb = "from Today · Idle stock" if arrived else ""
     return f"""
-{subhead("Warehouses", every=every, left={**LEFT, "Shops": 8})}
-{tray(2, 19)}
+{subhead("Warehouses", every=every, left={**LEFT, "Shops": 8}, diagram=diag)}
+{tray(2, TOTAL)}
 {verdict("<b>2 settings fall short and 4 import levels sit inside their 12% margin</b>; 29 of 35 lines reach their next delivery with room. <b>7,000 drinks and 5,000 Metal Band sit idle</b>.", crumb=crumb)}
 <div class="sb-listonly">
 {block("warehouse", "GD", "Clothing Distr.", clo_how, stat("On the floor", "13,653") + stat("Takes / day", "8,973", "Sat 10,590", "What the rounds into here have to bring, and on its busiest day", "take"), clo, "whClo", "1 to change")}
 {block("warehouse", "GD", "Jewelry Distrib.", jew_how, stat("On the floor", "10,307") + stat("Takes / day", "1,696", "Fri 1,970", "", "take"), jew, "whJew", "1 to change", lit=arrived)}
-{block("warehouse", "GD", "Import Hub", hub_how, stat("On the floor", "750,709") + stat("Uses / week", "321,000", "rated", "What a week uses along every route out of here, factory lines at their rated rate: what the two import contracts have to bring, before the margin", "take"), hub, "whHub", "5 to change")}
+{block("warehouse", "GD", "Import Hub", hub_how, stat("On the floor", "750,709") + stat("Uses / week", "321,000", "24/7", "What a week uses along every route out of here, factory lines sized 24/7: what the two import contracts have to bring, before the one chain margin. Sized for Demand: 173,000.", "take"), hub, "whHub", "5 to change")}
 </div>
 """
 
@@ -881,10 +1010,11 @@ LINE_W = [250, 90, 150, 110, 80, 90, None]
 INPUT_W = [250, 100, 90, 100, 170, None]
 
 
-def line_row(item, ws, count, staffed, need, makes, ships, held, word, why, tip="", key=None, cls="", done=False, set_hours=None):
+def line_row(item, ws, count, staffed, need, makes, ships, held, word, why, tip="", key=None, cls="", done=False, set_hours=None, mode="247"):
     share = staffed / 24
     mtip = f"{staffed} of 24 hours a day someone is posted here"
-    hours = (f'<span class="sb-hrs">{day_strip(staffed, need, f"Staffed {staffed} h, needs {need} h a day for what ships")}'
+    what = "sized 24/7" if mode == "247" else "for what the shops use, plus the chain margin"
+    hours = (f'<span class="sb-hrs">{day_strip(staffed, need, f"Staffed {staffed} h; needs {need} h a day {what}")}'
              + (f'<span class="n">{chg(staffed, set_hours, "h")}</span>' if set_hours else f'<span class="n"><b>{staffed} h</b> · needs {need}</span>')
              + "</span>")
     r = {"cells": [(f'{item}<span class="sub">{ws}</span>', item), (machines(share, count, mtip), None), (hours, staffed - need),
@@ -895,40 +1025,141 @@ def line_row(item, ws, count, staffed, need, makes, ships, held, word, why, tip=
     return r
 
 
-def input_row(item, eats, hand, arrived, top, word, why, tip="", key=None, cls=""):
-    r = {"cells": [(item, item), (eats, _num(eats)), (hand, _num(hand)), (arrived, _num(arrived)), (top, None), (v(word, why, tip), word)], "cls": cls}
+def input_row(item, eats, hand, arrived, top, word, why, tip="", key=None, cls="", ev=None):
+    r = {"cells": [(item, item), (eats, ev if ev is not None else _num(eats)), (hand, _num(hand)), (arrived, _num(arrived)), (top, None),
+                   (v(word, why, tip), word)], "cls": cls}
     if key:
         r["key"] = key
         r["tick"] = tick(f"{item}: typed in")
     return r
 
 
-def factories(every: bool = False) -> str:
+def eats(val: str, parts: list[str], ramp: bool = False) -> str:
+    """What the lines eat a day, and on hover the chain behind it: one margin, the top-up."""
+    total = int(val.replace(",", ""))
+    with_m = total * (100 + MARGIN) / 100
+    top = math.ceil(with_m / 100) * 100
+    tip = (" · ".join(parts) + f". One {MARGIN}% margin for the whole chain: {with_m:,.0f}. Daily top-up {top:,} (rounded up to 100), "
+           "the same margin the import behind it carries, not a second one.")
+    rt = ('<span class="sb-rampt" data-tip="Includes [GD] and [MH] HART. Jewelry, open 6 days: their demand is a straight line '
+          'through the days they have traded, so it may still be ramping.">ramping</span>') if ramp else ""
+    return f'<span class="sb-uses" data-tip="{esc(tip)}">{val}</span>{rt}'
+
+
+RAMP = ("<b>2 shops downstream have traded under a week</b>: [GD] HART. Jewelry and [MH] HART. Jewelry, open 6 days each. "
+        "Their demand is a straight line through those 6 days (78 and 74 a day of Jewelry (Cheap), heading for about 96 and 90), "
+        "so the figures below <b>may still be ramping</b>.")
+
+
+def sizing(mode: str) -> str:
+    """The player's choice: size factory lines for their rated output or for demand. Remembered per device."""
+    a = lambda m, lab, icon, href: (f'<a class="{"on" if m == mode else ""}" href="{href}">{svg(icon)}{lab}</a>')
+    what = ("<b>24/7</b>: every line, its Factory inputs and the imports behind them are sized for the machines' rated output, round the clock."
+            if mode == "247" else
+            f"<b>Demand</b>: sized for what the shops at the end of each chain use, plus one {MARGIN}% margin, import to sale.")
+    return (f'<div class="sb-sizing"><span class="lab">Size lines for</span><span class="seg">{a("247", "24/7", "clock247", "Factories.dc.html")}'
+            f'{a("demand", "Demand", "target", "FactoriesDemand.dc.html")}</span><span class="what">{what}</span>'
+            f'<span class="mem" data-tip="Kept on this device. Warehouses sizes its imports the same way.">{svg("device")}remembered here</span></div>')
+
+
+def staff_card(mode: str) -> str:
+    """Staffing for factory lines, like the shops' Staffing: hours each line should run for the
+    sizing, the factory workers that takes, and the wage effect. Planned on the factory's page."""
+    def dots(now, after):
+        out = ""
+        for k in range(max(now, after)):
+            cls = "sb-dot-gone" if k >= after else "sb-dot-new" if k >= now else ""
+            out += f'<span class="sp-dot {cls}" style="--k:{k}"></span>'
+        return f'<span class="dots">{out}</span>'
+
+    def row(code, name, lines, now, after, wage, quiet=False, ramp=False):
+        d = after - now
+        chip = "" if not d else f'<span class="d {"up" if d > 0 else "dn"}">{"+" if d > 0 else "−"}{abs(d)}</span>'
+        ppl = f'<span class="ppl">{now}{f" → <b>{after}</b>" if d else ""} {chip}</span>' if not quiet else f'<span class="ppl">{now}</span>'
+        wg = ("" if not wage else f'<span class="wage {"up" if wage > 0 else "dn"}">{"+" if wage > 0 else "−"}${abs(wage):,}<small>a day in wages</small></span>')
+        rt = ' <span class="sb-rampt">ramping</span>' if ramp else ""
+        return (f'<div class="sb-srow{" quiet" if quiet else ""}"><span>{site(code, name)}{rt}</span><span class="lines">{lines}</span>'
+                f'{ppl if quiet else ppl.replace("</span>", "", 0)}{wg or "<span></span>"}'
+                f'<a class="link go" href="#">Staffing on its page ›</a></div>')
+
+    def ln(label, now, need):
+        return f'<span class="ln">{day_strip(now, need, f"{now} h staffed, {need} h needed")}<b>{label}</b>{chg(now, need, "h")}</span>'
+
+    if mode == "247":
+        rows = (row("IC", "Factory Jewelry", ln("Jewelry (Cheap)", 12, 24), 6, 8, 420)
+                + row("IC", "Factory Clothing", '<span class="ln">8 lines run 24 h, as sized</span>', 48, 48, 0, quiet=True)
+                + row("IC", "Factory Electronics", '<span class="ln">2 lines run 24 h · new since day 72</span>', 8, 8, 0, quiet=True))
+        tot = '<span>Sized 24/7:</span><b class="up">+2 factory workers</b><b class="up">+$420 a day</b>'
+    else:
+        rows = (row("IC", "Factory Clothing", ln("4 expensive lines", 24, 15) + ln("4 cheap lines", 24, 17), 48, 32, -3380)
+                + row("IC", "Factory Jewelry", ln("Jewelry (Cheap)", 12, 18) + ln("Jewelry (Expensive)", 24, 11), 6, 5, -210, ramp=True)
+                + row("IC", "Factory Electronics", '<span class="ln">too new to plan: judged from day 76</span>', 8, 8, 0, quiet=True))
+        tot = '<span>Sized for demand:</span><b class="dn">−17 factory workers</b><b class="dn">−$3,590 a day</b>'
+    why = ("Hours each line should run for the sizing you picked, and the factory workers that takes. A worker covers about 6 machine-hours "
+           "a day (42 a week, 12-hour shifts at most); wages are this save's $211 a day each. A dashed dot is a hire, a hollow one a post to cut. "
+           "Only too few hours is a change to type; cutting hours is a suggestion.")
+    return f"""
+<section class="sb-staff rv">
+  <div class="sechead"><span class="sp-ico">{svg("crew")}</span><h2>Staffing for factory lines</h2><span class="why" data-tip="{esc(why)}"><i>?</i></span>
+    <span class="quiet">hours a line should run, people, wages</span></div>
+  <div class="sb-srows">{rows}</div>
+  <div class="sb-stot">{tot}</div>
+</section>"""
+
+
+def factories(every: bool = False, mode: str = "247") -> str:
     ev = "" if every else "sb-ev"
-    jl = [
-        line_row("Jewelry (Cheap)", "Jewelry Workstation · #2 · 60 an hour", 1, 12, 15, "720<span class=\"sub\">of 1,440 at 24 h</span>", "897",
-                 "540<span class=\"sub\">3 days left</span>", "short", "ships 897 a day; 12 hours make 720",
-                 "The shelf behind this line shrinks by about 180 a day. Post a worker to machine #2 for 15 hours a day.", key="f0", set_hours=15),
-        line_row("Jewelry (Expensive)", "Jewelry Workstation · #1 · 30 an hour", 1, 24, 14, "720", "411", "902<span class=\"sub\">of 1,000</span>", "covered",
-                 "needs 14 of its 24 hours", cls=ev),
-    ]
-    ji = [
-        input_row("Uncut Gems (Expensive)", "720", "480", "488", chg(600, 800, "/day", "from Import Hub"), "short",
-                  "tops up 600; the machine eats 720 a day", "At 24 hours the expensive line eats 720 gems a day; the morning round brings 600.", key="f1"),
-        input_row("Uncut Gems (Cheap)", "720<span class=\"sub\">at 12 h</span>", "960", "897", chg(1500, None, "/day", "from Import Hub"), "covered", "2 days on the floor", cls=ev),
-        input_row("Metal Band", "1,440", "1,390", "1,644", chg(2200, None, "/day", "from Import Hub"), "covered", "", cls=ev),
-    ]
-    CL = [("Clothing (Classic Expensive Female)", "#4 #12", 2, 30, 14, 1440, 827, 1737), ("Clothing (Modern Expensive Female)", "#3 #10", 2, 30, 14, 1440, 827, 1716),
-          ("Clothing (Modern Expensive Male)", "#2 #11", 2, 30, 14, 1440, 827, 1736), ("Clothing (Classic Expensive Male)", "#5 #9", 2, 30, 14, 1440, 825, 1730),
-          ("Clothing (Classic Cheap Female)", "#1", 1, 60, 16, 1440, 914, 1638), ("Clothing (Modern Cheap Male)", "#8", 1, 60, 16, 1440, 917, 1629),
-          ("Clothing (Classic Cheap Male)", "#6", 1, 60, 16, 1440, 913, 1630), ("Clothing (Modern Cheap Female)", "#7", 1, 60, 16, 1440, 912, 1630)]
-    cl = [line_row(item, f"Clothing Workstation · {slots} · {rate} an hour", m, 24, need, n(mk), n(sh), f'{n(hd)}<span class="sub">of 2,000</span>', "covered",
-                   f"needs {need} of its 24 hours") for item, slots, m, rate, need, mk, sh, hd in CL]
-    ci = [input_row("Fabric (Expensive)", "11,520", "7,280", "6,612", chg(11600, None, "/day", "from Import Hub"), "covered",
-                    "the lines stop at Produce up to 2,000, so they draw 6,612",
-                    "Every clothing machine has Produce up to switched on. Once 2,000 of its garment sit on the shelves it stops, so it eats only what ships."),
-          input_row("Fabric (Cheap)", "11,520", "7,280", "7,770", chg(11600, None, "/day", "from Import Hub"), "covered",
-                    "the lines stop at Produce up to 2,000, so they draw 7,770")]
+    dm = mode == "demand"
+    if not dm:
+        jl = [
+            line_row("Jewelry (Cheap)", "Jewelry Workstation · #2 · 60 an hour", 1, 12, 24, "720<span class=\"sub\">of 1,440 at 24 h</span>", "897",
+                     "540<span class=\"sub\">3 days left</span>", "short", "sized 24/7; staffed 12 of its 24 hours",
+                     "The line is sized to run round the clock and is staffed 12 hours a day. Post a worker to machine #2 for the other 12.", key="f0", set_hours=24),
+            line_row("Jewelry (Expensive)", "Jewelry Workstation · #1 · 30 an hour", 1, 24, 24, "720", "411", "902<span class=\"sub\">of 1,000</span>", "covered",
+                     "runs 24/7, as sized", cls=ev),
+        ]
+        ji = [
+            input_row("Uncut Gems (Expensive)", eats("720", ["Jewelry (Expensive) at 24/7: 1 machine × 30 an hour × 24 h = 720 gems a day"]), "480", "488",
+                      chg(600, 900, "/day", "from Import Hub"), "short", "tops up 600; the line eats 720 a day", key="f1", ev=720),
+            input_row("Uncut Gems (Cheap)", eats("1,440", ["Jewelry (Cheap) at 24/7: 1 machine × 60 an hour × 24 h = 1,440 a day"]), "960", "897",
+                      chg(1500, 1700, "/day", "from Import Hub"), "tight", "covers the 1,440 a day, not the margin", key="f2", ev=1440),
+            input_row("Metal Band", eats("2,160", ["both jewelry lines at 24/7: 720 + 1,440 a day"]), "1,390", "1,644",
+                      chg(2200, 2500, "/day", "from Import Hub"), "tight", "covers the 2,160 a day, not the margin", key="f3", ev=2160),
+        ]
+        ci = [input_row("Fabric (Expensive)", eats("11,520", ["4 expensive lines at 24/7: 8 machines × 30 an hour × 24 h × 2 fabric = 11,520 a day"]), "7,280", "6,612",
+                        chg(11600, 13000, "/day", "from Import Hub"), "tight", "covers the 11,520 a day, not the margin",
+                        "Every clothing machine has Produce up to switched on, so today they draw 6,612. Sized 24/7, the top-up covers the rated need plus the chain margin.", key="f4", ev=11520),
+              input_row("Fabric (Cheap)", eats("11,520", ["4 cheap lines at 24/7: 4 machines × 60 an hour × 24 h × 2 fabric = 11,520 a day"]), "7,280", "7,770",
+                        chg(11600, 13000, "/day", "from Import Hub"), "tight", "covers the 11,520 a day, not the margin", key="f5", ev=11520)]
+        cneed, cwhy = {30: 24, 60: 24}, "runs 24/7, as sized"
+    else:
+        jl = [
+            line_row("Jewelry (Cheap)", "Jewelry Workstation · #2 · 60 an hour", 1, 12, 18, "720<span class=\"sub\">of 1,440 at 24 h</span>", "897",
+                     "540<span class=\"sub\">3 days left</span>", "short", "shops use 963 a day, 1,079 with the margin; 12 hours make 720 · may still be ramping",
+                     "Demand is what the 14 shops that sell Jewelry (Cheap) use, two of them extrapolated from 6 days. Post a worker to machine #2 for 18 hours a day.",
+                     key="f0", set_hours=18, mode="demand"),
+            line_row("Jewelry (Expensive)", "Jewelry Workstation · #1 · 30 an hour", 1, 24, 11, "720", "411", "902<span class=\"sub\">of 1,000</span>", "covered",
+                     "needs 11 of its 24 hours · may still be ramping", cls=ev, mode="demand"),
+        ]
+        ji = [
+            input_row("Uncut Gems (Expensive)", eats("270", ["7 jewelry shops 210 + 7 clothing shops 60 = 270 jewels a day, 1 gem each"], ramp=True), "480", "488",
+                      chg(600, None, "/day", "from Import Hub"), "covered", "600 holds the 400 it needs with the margin", cls=ev, ev=270),
+            input_row("Uncut Gems (Cheap)", eats("963", ["jewelry and clothing shops 963 Jewelry (Cheap) a day, 1 gem each"], ramp=True), "960", "897",
+                      chg(1500, None, "/day", "from Import Hub"), "covered", "", cls=ev, ev=963),
+            input_row("Metal Band", eats("1,233", ["963 + 270 jewels a day, 1 band each"], ramp=True), "1,390", "1,644",
+                      chg(2200, None, "/day", "from Import Hub"), "covered", "", cls=ev, ev=1233),
+        ]
+        ci = [input_row("Fabric (Expensive)", eats("6,142", ["7 clothing shops 3,071 expensive garments a day × 2 fabric"]), "7,280", "6,612",
+                        chg(11600, None, "/day", "from Import Hub"), "covered", "needs 6,900 with the margin", ev=6142),
+              input_row("Fabric (Cheap)", eats("6,996", ["7 clothing shops 3,498 cheap garments a day × 2 fabric"]), "7,280", "7,770",
+                        chg(11600, None, "/day", "from Import Hub"), "covered", "needs 7,900 with the margin", ev=6996)]
+        cneed, cwhy = {30: 15, 60: 17}, "needs {n} of its 24 hours"
+    CL = [("Clothing (Classic Expensive Female)", "#4 #12", 2, 30, 1440, 827, 1737), ("Clothing (Modern Expensive Female)", "#3 #10", 2, 30, 1440, 827, 1716),
+          ("Clothing (Modern Expensive Male)", "#2 #11", 2, 30, 1440, 827, 1736), ("Clothing (Classic Expensive Male)", "#5 #9", 2, 30, 1440, 825, 1730),
+          ("Clothing (Classic Cheap Female)", "#1", 1, 60, 1440, 914, 1638), ("Clothing (Modern Cheap Male)", "#8", 1, 60, 1440, 917, 1629),
+          ("Clothing (Classic Cheap Male)", "#6", 1, 60, 1440, 913, 1630), ("Clothing (Modern Cheap Female)", "#7", 1, 60, 1440, 912, 1630)]
+    cl = [line_row(item, f"Clothing Workstation · {slots} · {rate} an hour", m, 24, cneed[rate], n(mk), n(sh), f'{n(hd)}<span class="sub">of 2,000</span>', "covered",
+                   cwhy.format(n=cneed[rate]), mode=mode, cls=ev if not every else "") for item, slots, m, rate, mk, sh, hd in CL]
     el = [line_row("ZanaMan Smartwatch", "Electronics Workstation · #1 · 30 an hour", 1, 24, 24, "720", "0", "269<span class=\"sub\">of 500</span>", "new",
                    "first run day 72; no shop sells it yet"),
           line_row("Arty Fish Smartwatch", "Electronics Workstation · #2 · 30 an hour", 1, 24, 24, "720", "0", "270<span class=\"sub\">of 500</span>", "new",
@@ -949,31 +1180,50 @@ def factories(every: bool = False) -> str:
     def stat(lab, val, small="", tip=""):
         return f'<span class="sb-stat"{f" data-tip=\"{esc(tip)}\"" if tip else ""}><span class="lab">{lab}</span><span class="v">{val}{f"<small>{small}</small>" if small else ""}</span></span>'
 
-    jparts = (f'<p class="sb-part">Lines</p>{table(LINE_COLS, jl, "facJl", LINE_W)}'
-              f'<p class="sb-part">Factory inputs</p>{table(INPUT_COLS, ji, "facJi", INPUT_W)}')
-    if every:
-        cparts = (f'<p class="sb-part">Lines</p>{table(LINE_COLS, cl, "facCl", LINE_W)}<p class="sb-part">Factory inputs</p>{table(INPUT_COLS, ci, "facCi", INPUT_W)}')
-        eparts = (f'<p class="sb-part">Lines</p>{table(LINE_COLS, el, "facEl", LINE_W)}<p class="sb-part">Factory inputs</p>{table(INPUT_COLS, ei, "facEi", INPUT_W)}')
-        rest = (block("IC", "Factory Clothing", f'<span>{ic("truck")}<em>each morning from <b>Import Hub</b></em></span><span>{ic("right")}<em>ships to Clothing Distr.</em></span>',
-                      stat("Machines", "12", "all 24 h") + stat("Staffed", "288", "h a day"), cparts, "all covered")
-                + block("IC", "Factory Electronics", f'<span>{ic("truck")}<em>each morning from <b>Import Hub</b></em></span><span>{ic("right")}<em>ships to Jewelry Distrib.</em></span>',
-                        stat("Machines", "2", "since day 72") + stat("Staffed", "48", "h a day"), eparts, "new"))
-    else:
-        rest = f"""
-<div class="sb-flat"><span class="ic">{svg("gear")}</span><span>{site("IC", "Factory Clothing")} &nbsp; 8 lines and 2 factory inputs, all covered</span><span class="check">{svg("tick")}</span></div>
+    def parts(lines, inputs, a, b):
+        tab = table(INPUT_COLS, inputs, b, INPUT_W)
+        if not every and all("sb-ev" in r.get("cls", "") for r in inputs):
+            tab = (f'<div class="sb-clear sb-only"><span class="check">{svg("tick")}</span>All {len(inputs)} Factory inputs cover what the lines need, with the chain margin</div>'
+                   f'<div class="sb-evonly">{tab}</div>')
+        ltab = table(LINE_COLS, lines, a, LINE_W)
+        if not every and all("sb-ev" in r.get("cls", "") for r in lines):
+            ltab = (f'<div class="sb-clear sb-only"><span class="check">{svg("tick")}</span>All {len(lines)} lines run the hours they need{" , as sized 24/7".replace(" ,", ",") if not dm else ""}</div>'
+                    f'<div class="sb-evonly">{ltab}</div>')
+        return (f'<p class="sb-part">Lines</p>{ltab}'
+                f'<p class="sb-part">Factory inputs</p>{tab}')
+
+    ramp = f'<div class="sb-ramp"><span class="ic">{svg("ramp")}</span><span>{RAMP}</span></div>' if dm else ""
+    jcnt = "1 to change" if dm else "4 to change"
+    jblock = block("IC", "Factory Jewelry", f'<span>{ic("truck")}<em>each morning from <b>Import Hub</b></em></span><span>{ic("right")}<em>ships to Jewelry Distrib. and Clothing Distr.</em></span>',
+                   stat("Machines", "2", "1 short of hours") + stat("Staffed", "36", "h a day", "Hours a day someone is posted to a machine, all lines together"),
+                   ramp + parts(jl, ji, "facJl", "facJi"), jcnt)
+    cblock = block("IC", "Factory Clothing", f'<span>{ic("truck")}<em>each morning from <b>Import Hub</b></em></span><span>{ic("right")}<em>ships to Clothing Distr.</em></span>',
+                   stat("Machines", "12", "all 24 h") + stat("Staffed", "288", "h a day"), parts(cl, ci, "facCl", "facCi"),
+                   "2 to change" if not dm else "all covered")
+    eparts = parts(el, ei, "facEl", "facEi")
+    eblock = block("IC", "Factory Electronics", f'<span>{ic("truck")}<em>each morning from <b>Import Hub</b></em></span><span>{ic("right")}<em>ships to Jewelry Distrib.</em></span>',
+                   stat("Machines", "2", "since day 72") + stat("Staffed", "48", "h a day"), eparts, "new")
+    eflat = f"""
 <div class="sb-flat"><span class="ic">{svg("gear")}</span><span>{site("IC", "Factory Electronics")} &nbsp; 2 lines and 10 inputs, too new to judge until day 76</span>{v("new")}</div>"""
-    hint = f"""
-<div class="sb-hint"><span class="ic">{svg("moon")}</span>
-  <span><b>Run shorter?</b> 9 lines keep up with what ships on 14 to 16 hours a day. Rostering them to that would free about <b>$4,000 a day</b> of factory wages.</span>
-  <a class="link" href="FactoriesAll.dc.html">See their hours</a></div>"""
+    cflat = f"""
+<div class="sb-flat"><span class="ic">{svg("gear")}</span><span>{site("IC", "Factory Clothing")} &nbsp; 8 lines and 2 factory inputs, all covered</span><span class="check">{svg("tick")}</span></div>"""
+    if every:
+        body = jblock + cblock + eblock
+    elif dm:
+        body = jblock + cflat + eflat
+    else:
+        body = jblock + cblock + eflat
+    left = LEFT_DEMAND if dm else LEFT
+    verdict_text = ("<b>1 line is short of its hours</b>; every Factory input covers what the shops use with the margin. 2 machines are too new to judge."
+                    if dm else
+                    "<b>1 line is short of its 24 hours; 1 Factory input tops up short and 4 sit inside the margin</b>. 2 machines are too new to judge.")
     return f"""
-{subhead("Factories", every=every, left={**LEFT, "Shops": 8})}
-{tray(2, 19)}
-{verdict("<b>1 line is short of its hours and 1 factory input tops up short</b>; 13 of 16 machines keep up with what ships, 2 are too new to judge.")}
-{block("IC", "Factory Jewelry", f'<span>{ic("truck")}<em>each morning from <b>Import Hub</b></em></span><span>{ic("right")}<em>ships to Jewelry Distrib. and Clothing Distr.</em></span>',
-       stat("Machines", "2", "1 short of hours") + stat("Staffed", "36", "h a day", "Hours a day someone is posted to a machine, all lines together"), jparts, "2 to change")}
-{rest}
-{"" if every else hint}
+{subhead("Factories", every=every, left={**left, "Shops": 8})}
+{tray(2, TOTAL_DEMAND if dm else TOTAL)}
+{sizing(mode)}
+{verdict(verdict_text)}
+{body}
+{staff_card(mode)}
 """
 
 
@@ -1036,9 +1286,7 @@ LEGEND = ('<div class="sb-flowleg"><span><u></u>weekly import</span><span><u cla
 
 def flow_toggle() -> str:
     """Option A: the diagram is a view of the tab you are on."""
-    body = warehouses(arrived=False)
-    body = body.replace(subhead("Warehouses", left={**LEFT, "Shops": 8}),
-                        subhead("Warehouses", left={**LEFT, "Shops": 8}, diagram=True))
+    body = warehouses(arrived=False, diag=True)
     diag = f"""
 <div class="sb-diagonly">
   <div class="sb-flowbox">{flow_svg("cd")}{LEGEND}</div>
@@ -1063,8 +1311,9 @@ def flow_tab() -> str:
     <tr><td class="l">7 clothing shops</td><td>8,973</td></tr><tr><td class="l quiet">busiest, Saturday</td><td>10,590</td></tr></tbody></table>
 </div>"""
     return f"""
-{subhead("Goods flow", left={**LEFT, "Shops": 8}, fourth=True, tabs_only=True)}
-{tray(2, 19)}
+<p class="sb-notchosen">Not chosen · Peter picked option A on 24 Sep 2026</p>
+{subhead("Goods flow", left={**LEFT, "Shops": 8}, fourth=True, tabs_only=True, diagram=None)}
+{tray(2, TOTAL)}
 <div class="sb-flowbox" style="margin-top:22px">{flow_svg("cd")}{LEGEND}</div>
 <div class="sb-detail">
   <div class="head"><h3>{site("GD", "Clothing Distr.")}</h3><span class="quiet">Warehouse · fed each morning · 11 lines</span>
@@ -1073,6 +1322,123 @@ def flow_tab() -> str:
   <p class="sb-part" style="margin-top:18px">Held against need · the same rows and words as Warehouses</p>
   {table(WH_COLS, rows, "flowT", WH_W)}
 </div>"""
+
+
+# --------------------------------------------------------------------------
+# PLAN A CHAIN: order ahead for a factory still being built
+# --------------------------------------------------------------------------
+PLAN = "Factory Electronics, 12 machines"
+
+
+def pm(run: int, placed: int, planned: int) -> str:
+    """The finished layout, a square a machine: running, placed but not running, still to place."""
+    out = "".join(f'<i class="run" style="--k:{k}"></i>' for k in range(run))
+    out += '<i class="placed"></i>' * (placed - run) + '<i class="plan"></i>' * (planned - placed)
+    return f'<span class="sb-pm" data-tip="{run} running · {placed - run} placed, not running yet · {planned - placed} still to place">{out}</span>'
+
+
+# ingredient, used by, per day, per week, company target, on order now, change
+PLAN_ING = [
+    ("Capacitors", "both watches · 2 each", 17280, 120960, 135500, "151,300 Smart Delivery · 7 Pier", None),
+    ("Resistors", "both watches · 2 each", 17280, 120960, 135500, "151,300 Smart Delivery · 7 Pier", None),
+    ("Transistors", "both watches · 2 each", 17280, 120960, 135500, "151,300 Smart Delivery · 7 Pier", None),
+    ("Battery", "both watches", 8640, 60480, 67800, "20,200 Smart Delivery · 7 Pier", 47600),
+    ("Copper Clad Laminate", "both watches", 8640, 60480, 67800, "25,300 Smart Delivery · 7 Pier", 42500),
+    ("Microphone", "both watches", 8640, 60480, 67800, "40,400 Smart Delivery · 7 Pier", 27400),
+    ("Integrated Circuits", "both watches", 8640, 60480, 67800, "50,500 Smart Delivery · 7 Pier", 17300),
+    ("Speaker", "both watches", 8640, 60480, 67800, "60,500 Smart Delivery · 7 Pier", 7300),
+    ("Glass", "both watches · 1 in 6", 1440, 10080, 11300, "11,800 Smart Delivery · 7 Pier", None),
+    ("Plastic", "both watches · 1 in 6", 1440, 10080, 11300, "16,900 Smart Delivery · 7 Pier", None),
+]
+HUB_ELEC = {"Capacitors": ("127,900", "3,086"), "Resistors": ("127,900", "3,086"), "Transistors": ("127,900", "3,086"), "Battery": ("16,300", "429"),
+            "Copper Clad Laminate": ("20,800", "514"), "Microphone": ("33,700", "829"), "Integrated Circuits": ("42,400", "1,029"),
+            "Speaker": ("50,960", "1,234"), "Glass": ("9,950", "243"), "Plastic": ("14,350", "343")}
+FIRST_FILL = "Battery 18,300 · Copper Clad Laminate 13,800 · Microphone 900"
+
+
+def plan_chain() -> str:
+    rows = ""
+    for item, ws, run, placed, planned in [("ZanaMan Smartwatch", "Electronics Workstation", 1, 3, 6), ("Arty Fish Smartwatch", "Electronics Workstation", 1, 2, 6)]:
+        rows += (f'<tr><td class="l">{item}<span class="sub">30/h rated · {ws}</span></td>'
+                 f'<td class="l"><span class="step"><a href="#" aria-label="one machine fewer">−</a><b>{planned}</b><a href="#" aria-label="one machine more">+</a></span> {pm(run, placed, planned)}</td>'
+                 f'<td>{planned * 30 * 24 * 7:,}</td><td class="l"><span class="quiet">no electronics shop yet: all export</span></td>'
+                 f'<td class="l"><span class="ing">capacitors, resistors, transistors <b>×2</b>; battery, laminate, ICs, microphone, speaker <b>×1</b>; glass, plastic <b>1 in 6</b></span></td></tr>')
+    ing = ""
+    for item, used, day, week, target, on, change in PLAN_ING:
+        ch = (f'<span class="sb-chg"><b>+{change:,}</b></span>' if change else '<span class="quiet">covered</span>')
+        ing += (f'<tr><td class="l">{item}</td><td class="l" style="color:var(--ink-2)">{used}</td><td>{day:,}</td><td>{week:,}</td>'
+                f'<td><span class="sb-uses" data-tip="{esc(f"{week:,} a week at the finished layout, 12 machines at 24/7. One {MARGIN}% margin for the whole chain: {week * 1.12:,.0f}. Rounded up to 100.")}">{target:,}</span></td>'
+                f'<td class="l" style="color:var(--ink-2);font-family:Archivo,sans-serif;font-size:12.5px">{on}</td><td>{ch}</td></tr>')
+    growth_seg = '<nav class="seg" aria-label="Growth"><a href="#">Market demand</a><a class="on" href="#">Plan a chain</a></nav>'
+    return f"""
+<div class="sb-growsub">{growth_seg}</div>
+<div class="sb-planhead"><h2>Plan a chain</h2><span class="why" data-tip="The steppers set the finished layout. Machines already placed in the factory count as built; a placed machine with no recipe or nobody posted counts as built but not running, so a half-built factory reads right without anything to type." tabindex="0"><i>?</i></span>
+  <span class="quiet">2 products · sold at an Electronics Store, which you do not run yet</span>
+  <div class="aside"><span class="seg"><a href="#">Clothing Store</a><a href="#">Jewelry Store</a><a href="#">Gym</a></span>
+    <select aria-label="Another business type"><option>Electronics Store · 2</option></select></div></div>
+<div class="sb-build">
+  <span class="lab">Built at</span><select aria-label="The factory this plan builds"><option>Factory Electronics · Industry City</option><option>A new factory</option></select>
+  <span class="state">{pm(2, 5, 12)} <span>12 planned <i>·</i> 5 placed <i>·</i> 2 running</span></span>
+  <span class="sb-pmleg" style="margin-left:auto"><span><span class="sb-pm"><i class="run"></i></span>running</span><span data-tip="Placed in the factory, but no recipe chosen or nobody posted to it yet"><span class="sb-pm"><i class="placed"></i></span>placed, not running</span><span><span class="sb-pm"><i class="plan"></i></span>to place</span></span>
+</div>
+<div class="planstats" style="margin-top:18px">
+  <div class="planstat"><span class="lab">Machines</span><div class="v">12<small>5 placed · 2 running</small></div></div>
+  <div class="planstat"><span class="lab">Made / week</span><div class="v">60,480<small>at the finished layout</small></div></div>
+  <div class="planstat"><span class="lab">Raw material / week</span><div class="v">685,440<small>units to import</small></div></div>
+</div>
+<table style="margin-top:8px"><thead><tr><th>Product</th><th class="l">Machines, finished layout</th><th>Made / week</th><th class="l">Supplies</th><th class="l">Raw material / unit</th></tr></thead>
+<tbody>{rows}</tbody></table>
+<div class="sb-save is-saved">
+  <span class="txt"><b>Order ahead for the finished factory.</b> Saving turns the Company targets below into the orders on Supply: the weekly imports go to the full layout now, so Monday's delivery (day 78) lands as the factory opens. Kept on this device for HART. YT.</span>
+  <button type="button" class="btn2 primary dosave" data-save>{svg("tick")}<span>Save as plan</span></button>
+  <span class="saved">{svg("tick")}Saved · 5 changes on Supply</span>
+  <a class="link rm" href="#" data-save>Remove plan</a>
+</div>
+<div class="sb-fill"><span class="ic">{svg("truck")}</span><span><b>First fill before Monday:</b> the factory opens Friday, 4 rounds before the import lands. One urgent import: <span class="mono">{FIRST_FILL}</span>.</span></div>
+<div class="sechead" style="margin-top:34px"><h2>Ingredients</h2><span class="why" data-tip="Company target: the finished layout's week plus one 12% margin for the whole chain, rounded up to 100, on top of what the running factories already eat. Change is what saving the plan puts on Supply's checklist." tabindex="0"><i>?</i></span></div>
+<table class="ingtable"><thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Company target</th><th class="l">On order now</th><th>Change</th></tr></thead>
+<tbody>{ing}</tbody></table>
+"""
+
+
+def supply_plan() -> str:
+    """Warehouses while a plan is saved and its machines are not all running."""
+    kids = []
+    for item, used, day, week, target, on, change in PLAN_ING:
+        now = int(on.split()[0].replace(",", ""))
+        setting = order(now, week if change else None, target if change else None, "7 Pier")
+        if change:
+            setting = setting.replace(f"{n(week)} + {MARGIN}% · ", f"plan {n(week)} + {MARGIN}% · ")
+        tag = '<span class="sb-plantag" data-tip="What the planned layout will use, 12 machines at 24/7">plan</span>'
+        why = (f"order ahead: the plan uses {week:,} a week, {target:,} with the margin" if change
+               else f"ordered ahead · plan: {PLAN}")
+        hand, draw = HUB_ELEC[item]
+        kids.append(wh_row(item, hand, draw, draw, rail(41, 5), setting, f'<span class="sb-uses">{week:,}</span>{tag}', "new", why,
+                           key=f"p{len(kids)}" if change else None, cls="sb-kid sb-open", kid="plan", wv=week))
+    parent = wh_row(f'Plan: {PLAN}<button type="button" class="sb-kids" data-kids="plan" aria-expanded="true">{svg("chev")}+10</button>',
+                    "572,160", "—", "—", rail(None, None, dead=True), '<span class="sub r">5 to raise</span>', "685,440", "new",
+                    "ordered ahead for a factory still being built", cls="sb-gr sb-opened")
+    body = f"""
+<details class="sb-obj" open>
+  <summary><span class="ic">{svg("warehouse")}</span>
+    <span class="who">{site("GD", "Import Hub", go=True)}<span class="how"><span>{ic("ship")}<em>weekly from <b>7 Pier</b> and <b>1 Pier</b>, Monday · 4.5 days</em></span></span></span>
+    <span class="sb-stats"></span><span class="cnt red">11 to change</span><span class="tog">{svg("chev")}</span></summary>
+  <div class="body">{table(WH_COLS, [parent] + kids, "planT", WH_W)}
+  <p class="sb-more">+ 5 other Import Hub lines to change, as on Warehouses &nbsp;<a class="link" href="Warehouses.dc.html">Warehouses</a></p></div>
+</details>
+<div class="sb-flat"><span class="ic">{svg("warehouse")}</span><span>{site("GD", "Clothing Distr.")} &nbsp; and {site("GD", "Jewelry Distrib.")} &nbsp; 1 change each, as on Warehouses</span><span></span></div>"""
+    plan = f"""
+<div class="sb-plan"><span class="ic">{svg("gear")}</span>
+  <span><b>Plan saved: {PLAN}.</b> {pm(2, 5, 12)} &nbsp;5 placed · 2 running. Its inputs read <b>new</b> until all 12 run; then the plan clears itself.</span>
+  <span class="aside"><a class="link" href="PlanChain.dc.html">Open the plan</a><a class="link" href="#">Remove</a></span></div>
+<div class="sb-fill" data-chg="pf">{tick("First fill typed in")}<span class="ic">{svg("truck")}</span><span><b>First fill before Monday</b>, one urgent import: <span class="mono">{FIRST_FILL}</span>.</span></div>"""
+    return f"""
+{subhead("Warehouses", left={**LEFT, "Shops": 8, "Warehouses": 13})}
+{tray(2, TOTAL + 6)}
+{plan}
+{verdict("<b>The plan adds 5 import levels to raise and a first fill</b>; its other 5 inputs are already ordered ahead. Nothing it holds reads idle while the factory is being built.")}
+{body}
+"""
 
 
 # --------------------------------------------------------------------------
@@ -1091,7 +1457,7 @@ def phone() -> str:
         return "".join(f"<span>{k} <b>{val}</b></span>" for k, val in pairs)
     return f"""
 {subhead("Warehouses", left={**LEFT, "Shops": 8})}
-{tray(2, 19)}
+{tray(2, TOTAL)}
 {verdict("<b>2 levels fall short, 4 sit inside their margin</b>; 29 of 35 lines reach their next delivery with room.")}
 <div class="sb-grp">{site("GD", "Clothing Distr.")}<span class="cnt">1 to change</span></div>
 <p class="how">Each morning from Factory Clothing · takes 8,973 a day, 10,590 on Saturdays</p>
@@ -1103,13 +1469,12 @@ def phone() -> str:
       chg(5000, 0), "in Factory Jewelry's plan", key="w2")}
 <div class="sb-grp">{site("GD", "Import Hub")}<span class="cnt">5 to change</span></div>
 <p class="how">Weekly from 7 Pier and 1 Pier, Monday · 4.5 days</p>
-{card("Uncut Gems (Expensive)", "short", "uses 5,040 a week (rated); the level brings 4,800", f(("on hand", "4,342"), ("uses", "5,040/wk"), ("cover", "8.9 d")),
-      chg(4800, 5700, "in stock"), "uses 5,040 + 12% · Smart Delivery · 7 Pier", key="w0")}
-{card("Fabric (Cheap)", "tight", "covers the 80,640 a week it uses (rated), not the 12% margin", f(("on hand", "63,824"), ("uses", "80,640/wk")),
-      chg(80700, 90400, "in stock"), "uses 80,640 + 12% · 7 Pier", key="w3")}
+{card("Uncut Gems (Expensive)", "short", "uses 5,040 a week (24/7); the level brings 4,800", f(("on hand", "4,342"), ("uses", "5,040/wk"), ("cover", "8.9 d")),
+      chg(4800, 5700, "in stock"), "5,040 a week + one 12% chain margin · 7 Pier", key="w0")}
+{card("Fabric (Cheap)", "tight", "covers the 80,640 a week it uses (24/7), not the 12% margin", f(("on hand", "63,824"), ("uses", "80,640/wk")),
+      chg(80700, 90400, "in stock"), "80,640 + one 12% chain margin · 7 Pier", key="w3")}
 <p class="more3">+ 3 more inside their margin: Fabric (Expensive), Metal Band, Uncut Gems (Cheap)</p>
-{card("Energy Drink", "idle", 'nothing draws it; <a href="Shops.dc.html">3 gyms sell 554 a day with no plan</a>', f(("on hand", "4,000")))}
-{card("Capacitors +9", "idle", "10 electronics parts hold 6 weeks", f(("on hand", "572,160"), ("levels", "5–7× a week")))}
+{card("Idle stock · 12 lines", "idle", '7,000 drinks nothing draws (<a href="Shops.dc.html">the gyms have no plan</a>); 10 electronics parts hold 6 weeks. Tap to open.', f(("on hand", "579,160")))}
 """
 
 
@@ -1139,8 +1504,10 @@ def vocabulary() -> str:
                 f'<tr><td class="l">Paper Bag</td><td>2,997</td><td>2,139</td><td class="l">{v("short", "Saturdays draw 2,540; the round brings 2,000")}</td></tr></tbody></table>')
     node = (f'<span class="sb-node"><span class="d" style="background:var(--neg)"></span><span>Clothing Distr.<br><small>13,653 held</small></span></span>'
             f'&nbsp; <span class="quiet">its row in the node detail:</span> {v("short")}')
-    fab_supply = (f'<table><tbody><tr><td class="l">Fabric (Expensive)</td><td>11,600</td><td class="l">'
-                  f'{v("covered", "the lines stop at Produce up to 2,000, so they draw 6,612")}</td></tr></tbody></table>')
+    fab_247 = (f'<table><tbody><tr><td class="l">Fabric (Expensive)</td><td>{chg(11600, 13000, "/day")}</td><td class="l">'
+               f'{v("tight", "covers the 11,520 a day, not the margin")}</td></tr></tbody></table>')
+    fab_dem = (f'<table><tbody><tr><td class="l">Fabric (Expensive)</td><td>11,600</td><td class="l">'
+               f'{v("covered", "needs 6,900 with the margin")}</td></tr></tbody></table>')
 
     def place(icon, tag, body):
         return f'<div class="sb-place"><span class="tag">{svg(icon)}{tag}</span>{body}</div>'
@@ -1154,10 +1521,10 @@ def vocabulary() -> str:
     {place("supply", "Supply › Warehouses", supply_row)}
     {place("warehouse", "Clothing Distr. · its page", page_row)}
     {place("flow", "Goods flow · the node", node)}
-    <p class="sb-part" style="margin:14px 0 0">A fact that is fine: Fabric (Expensive) into Factory Clothing (five answers today)</p>
+    <p class="sb-part" style="margin:14px 0 0">Fabric (Expensive) into Factory Clothing: five answers today, one word per sizing</p>
     <div class="sb-pair">
-      {place("today", "Today", '<div class="sb-quiet"><span class="dash"></span>no finding: a covered fact makes none</div>')}
-      {place("supply", "Supply › Factories · and the factory page", fab_supply)}
+      {place("clock247", "Sized 24/7 · Supply, the factory page, Goods flow", fab_247)}
+      {place("target", "Sized for demand · the same places", fab_dem)}
     </div>
   </div>
 </div>"""
@@ -1196,6 +1563,7 @@ WIRE = r"""
 
     // ticks: one checklist for the page, counted on the road
     const tray = $('.sb-tray');
+    $$('[data-save]').forEach(a => a.addEventListener('click', () => a.closest('.sb-save').classList.toggle('is-saved')));
     const count = () => { if (!tray) return; const all = $$('[data-chg]').filter(r => !r.closest('.sb-place'));
       const mine = all.filter(r => r.classList.contains('sb-done')).length;
       const total = +tray.dataset.total, other = +tray.dataset.other - (tray.dataset.base ? +tray.dataset.base : 0);
@@ -1217,7 +1585,11 @@ WIRE = r"""
       count(); }
 
     // bundle rows open into their parts
-    $$('.sb-kids').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); b.closest('table').classList.toggle('open-kids'); }));
+    const kids = (b) => { const t = b.closest('table'), id = b.dataset.kids, rows = $$('tr[data-kid="' + id + '"]', t);
+      const open = !rows.some(r => r.classList.contains('sb-open')); rows.forEach(r => r.classList.toggle('sb-open', open));
+      b.closest('tr').classList.toggle('sb-opened', open); b.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    $$('.sb-kids').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); kids(b); }));
+    $$('tr.sb-gr').forEach(r => r.addEventListener('click', (e) => { if (e.target.closest('a,input,button')) return; const b = $('.sb-kids', r); if (b) kids(b); }));
     // the crumb from a finding clears the lit row
     $$('[data-crumb]').forEach(b => b.addEventListener('click', () => { b.closest('.sb-crumb').remove(); $$('.sb-arrived').forEach(r => r.classList.remove('sb-arrived')); $$('.sb-obj.lit').forEach(o => o.classList.remove('lit')); }));
 
@@ -1276,28 +1648,35 @@ __BODY__
 DESK, PHONE = 1440, 390
 # file, title, builder, width, height, board classes
 BOARDS = [
-    ("Main.dc.html", "Shops", lambda: shops({"s0", "s1"}), DESK, 1100, ""),
-    ("Warehouses.dc.html", "Warehouses · arrived from a finding", lambda: warehouses(), DESK, 1720, ""),
-    ("Factories.dc.html", "Factories", lambda: factories(), DESK, 930, ""),
-    ("FactoriesAll.dc.html", "Factories · Everything", lambda: factories(every=True), DESK, 2250, "sb-every"),
+    ("Main.dc.html", "Shops", lambda: shops({"s0", "s1"}), DESK, 990, ""),
+    ("Warehouses.dc.html", "Warehouses · arrived from a finding", lambda: warehouses(), DESK, 1590, ""),
+    ("Factories.dc.html", "Factories · sized 24/7", lambda: factories(), DESK, 1610, ""),
+    ("FactoriesDemand.dc.html", "Factories · sized for demand", lambda: factories(mode="demand"), DESK, 1250, ""),
+    ("FactoriesAll.dc.html", "Factories · Everything, sized 24/7", lambda: factories(every=True), DESK, 2600, "sb-every"),
     ("ShopsEmpty.dc.html", "Shops · nothing to change", shops_empty, DESK, 830, ""),
-    ("Phone.dc.html", "Phone · Warehouses", phone, PHONE, 1620, "phone"),
-    ("FlowToggle.dc.html", "Goods flow A · a diagram view on each tab", flow_toggle, DESK, 930, "sb-diag"),
-    ("FlowTab.dc.html", "Goods flow B · a fourth tab", flow_tab, DESK, 1300, ""),
-    ("Words.dc.html", "One word per supply fact (R8)", vocabulary, DESK, 1010, ""),
+    ("Phone.dc.html", "Phone · Warehouses", phone, PHONE, 1560, "phone"),
+    ("FlowToggle.dc.html", "Goods flow · a diagram view on each tab (chosen)", flow_toggle, DESK, 930, "sb-diag"),
+    ("FlowTab.dc.html", "Goods flow B · not chosen", flow_tab, DESK, 1370, "sb-dim"),
+    ("Words.dc.html", "One word per supply fact (R8)", vocabulary, DESK, 1040, ""),
+    ("PlanChain.dc.html", "Plan a chain · order ahead, factory half built", plan_chain, DESK, 1350, ""),
+    ("SupplyPlan.dc.html", "Warehouses · while a plan is saved", supply_plan, DESK, 1600, ""),
 ]
+ACTIVE = {"PlanChain.dc.html": "growth"}
 # the tab links point at artboards; Shops is the entry artboard
 LINK_FIX = {"Shops.dc.html": "Main.dc.html"}
 
 TIPS = {
     "Main.dc.html": "Shops: every shelf against tomorrow morning's round. It opens on the 10 rows that need a change; Everything lists all 100. The checklist is the tick at the head of each row, and the figure to type sits where the setting lives (Daily top-up). Tick a row: the truck drives along the road, the tab badge counts down. Two gym rows are ticked already. Click a heading to sort; a third click puts the usual order back.",
-    "Warehouses.dc.html": "Warehouses: every depot, including the second tier that no import reaches (#78). Each head says what fills it and what it takes a day, which is what the site upstream has to deliver. A daily round reads as a gauge, a weekly import as the rail from the depot page. An import's figure to type is what the routes use plus a 12% margin; hover Uses / week for the sites behind it. This board arrived from the Today finding on Metal Band: that row and its depot are lit, and the crumb clears it.",
-    "Factories.dc.html": "Factories: lines with the hours they are staffed against the hours they need for what ships (the top vote, 42), then Factory inputs. A factory with nothing to change folds to one line. The dashed strip is an idea, not a fault.",
-    "FactoriesAll.dc.html": "Everything on Factories: each line's day, a cell an hour. Hatched hours are staffed but more than what ships needs; red outlines are needed and not staffed. Fabric reads covered here and everywhere else: the lines stop at Produce up to, so they draw what ships.",
+    "Warehouses.dc.html": "Warehouses: every depot, including the second tier that no import reaches (#78). Each head says what fills it and what it takes a day, which is what the site upstream has to deliver. A daily round reads as a gauge, a weekly import as the rail from the depot page. An import's figure to type is what the routes use plus one 12% margin for the whole chain; hover Uses / week for the chain. Idle lines fold into one group: click it. This board arrived from the Today finding on Metal Band: that row and its depot are lit, and the crumb clears it.",
+    "Factories.dc.html": "Factories, sized 24/7 (today's behaviour): every line should run round the clock, and its Factory inputs top up the rated need plus the one chain margin. The switch under the checklist picks 24/7 or Demand and is remembered per device; click Demand to go to the next board. Below the lines: Staffing for factory lines, the hours, people and wages the sizing asks for (the top vote, 42).",
+    "FactoriesDemand.dc.html": "Factories, sized for demand: what the shops at the end of each chain use, plus one 12% margin for the whole chain. Two jewelry shops have traded 6 days, so their demand is a straight line and Factory Jewelry says it may still be ramping. The inputs all cover the need; the clothing lines need 15 to 17 of their 24 hours, and Staffing proposes cutting 17 factory workers.",
+    "FactoriesAll.dc.html": "Everything on Factories, sized 24/7: each line's day, a cell an hour; red outlines are hours needed and not staffed. Fabric reads tight here and on every other page: the top-up covers the rated need, not the one chain margin. Hover Eats / day for the chain.",
     "ShopsEmpty.dc.html": "A tab with nothing to change: the badge turns into a tick, the shelf gets its moment, and the three closest to the edge still show, so the all-clear has something to stand on. Hover the drawing.",
     "Phone.dc.html": "390 px: rows become cards, the setting to type gets its own line, the tabs fill the width. The same ticks and the same words.",
-    "FlowToggle.dc.html": "Option A: Goods flow is a view of the tab you are on (the icon pair by Needs a change). Click a site and the list opens on its rows, lit. Nothing on the diagram has its own table any more.",
-    "FlowTab.dc.html": "Option B: Goods flow stays a fourth tab. Its node detail is no longer Held against need with its own verdicts; it is the object's own rows, the same words.",
+    "FlowToggle.dc.html": "Chosen (Peter, 24 Sep). Goods flow is a view of the tab you are on (the icon pair by Needs a change). Click a site and the list opens on its rows, lit. Nothing on the diagram has its own table any more.",
+    "FlowTab.dc.html": "Not chosen (Peter, 24 Sep): Goods flow as a fourth tab. Kept for the record; option A, the diagram view on each tab, is the one to port.",
+    "PlanChain.dc.html": "Growth › Plan a chain for a factory being built. The steppers set the finished layout (12 machines); what is already in Factory Electronics counts by itself: 5 placed, 2 running, the rest dashed. Save as plan turns the Company targets into the orders on Supply now, so Monday's import lands as the factory opens; a first fill covers the days before. Kept per character on this device; click Remove plan / Save as plan to see both states.",
+    "SupplyPlan.dc.html": "Supply while the plan is saved: the ordered-ahead inputs read new ('ordered ahead · plan: Factory Electronics, 12 machines') instead of idle, the five levels to raise are on the checklist, and the first fill is one ticked line. The plan clears itself once all 12 machines run, or on Remove.",
     "Words.dc.html": "R8, drawn: one status word per (site, item), with its reason, computed once and shown the same on Today, Supply, the site page and Goods flow.",
 }
 
@@ -1319,10 +1698,11 @@ def build(preview_dir: str | None = None) -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     boards, order, notes = {}, [], {}
     layout = {  # row, column; x is summed per row
-        "Main.dc.html": (0, 0), "Warehouses.dc.html": (0, 1), "Factories.dc.html": (0, 2),
+        "Main.dc.html": (0, 0), "Warehouses.dc.html": (0, 1), "Factories.dc.html": (0, 2), "FactoriesDemand.dc.html": (0, 3),
         "FactoriesAll.dc.html": (1, 0), "ShopsEmpty.dc.html": (1, 1), "Phone.dc.html": (1, 2),
         "FlowToggle.dc.html": (2, 0), "FlowTab.dc.html": (2, 1),
         "Words.dc.html": (3, 0),
+        "PlanChain.dc.html": (4, 0), "SupplyPlan.dc.html": (4, 1),
     }
     rows_h: dict[int, int] = {}
     for name, title, builder, w, h, cls in BOARDS:
@@ -1337,7 +1717,7 @@ def build(preview_dir: str | None = None) -> None:
         props = {"dark": {"editor": "boolean", "default": True, "section": "Theme"}, "$preview": {"width": w, "height": h}}
         page = (PAGE.replace("__TITLE__", "Supply: " + title).replace("__FONTS__", FONTS.replace("&", "&amp;"))
                 .replace("__CSS__", css("dark")).replace("__W__", str(w)).replace("__H__", str(h)).replace("__CLS__", cls)
-                .replace("__MAST__", masthead()).replace("__BODY__", body)
+                .replace("__MAST__", masthead(ACTIVE.get(name, "supply"))).replace("__BODY__", body)
                 .replace("__PROPS__", json.dumps(props, separators=(",", ":"))).replace("__LOGIC__", LOGIC))
         (ROOT / name).write_text(page, encoding="utf-8", newline="\n")
         if preview_dir:
@@ -1346,7 +1726,7 @@ def build(preview_dir: str | None = None) -> None:
             for theme in ("", "light"):
                 (out / f"{name.split('.')[0]}{'-light' if theme else ''}.html").write_text(
                     PREVIEW.replace("__TITLE__", title).replace("__FONTS__", FONTS.replace("&", "&amp;")).replace("__CSS__", css(theme or "dark"))
-                    .replace("__THEME__", theme).replace("__CLS__", cls).replace("__W__", str(w)).replace("__MAST__", masthead())
+                    .replace("__THEME__", theme).replace("__CLS__", cls).replace("__W__", str(w)).replace("__MAST__", masthead(ACTIVE.get(name, "supply")))
                     .replace("__BODY__", body).replace("__WIRE__", WIRE), encoding="utf-8", newline="\n")
         r, c = layout[name]
         x = sum(b["w"] + 120 for k, b in boards.items() if layout[k][0] == r and layout[k][1] < c)
@@ -1354,14 +1734,15 @@ def build(preview_dir: str | None = None) -> None:
         order.append(name)
         notes["try-" + name.split(".")[0].lower()] = {"x": x, "y": row_y[r] - 280, "w": 620, "maxH": 230, "text": TIPS[name]}
     wx = boards["Warehouses.dc.html"]["x"]
-    notes["open-rated"] = {"x": wx + 680, "y": row_y[0] - 280, "w": 620, "maxH": 230, "fill": "orange",
-                           "text": "Open decision (Peter): the weekly order is now what the ends of the routes use plus a 12% margin, rounded up (R8). "
-                                   "Factory lines are drawn here at their rated 24/7 rate, flagged 'rated'. At measured use they draw far less "
-                                   "(fabric about 46k and 54k a week, not 80,640), and the four 'tight' import rows would read covered. Which one counts is not settled."}
+    notes["decided-sizing"] = {"x": wx + 680, "y": row_y[0] - 280, "w": 620, "maxH": 230, "fill": "green",
+                               "text": "Decided (Peter, 24 Sep): the player picks the sizing, 24/7 (rated output, today's behaviour) or Demand (what the shops at the end use), "
+                                       "on the Factories tab. One 12% margin for the whole chain, import to sale, never stacked per hop; the daily factory top-ups carry the same one. "
+                                       "Warehouses is drawn sized 24/7, tagged '24/7'; hover Uses / week for the chain."}
     titles = {0: "Supply by object: Shops, Warehouses, Factories", 1: "States: everything, nothing to change, phone",
-              2: "Goods flow: pick one", 3: "One word per supply fact"}
+              2: "Goods flow: option A chosen", 3: "One word per supply fact", 4: "Plan a chain: order ahead for a factory being built"}
     for r, t in titles.items():
-        notes[f"title-{r}"] = {"x": 0, "y": row_y[r] - 520, "text": t, "kind": "title1", "maxW": 4560}
+        width = max(b["x"] + b["w"] for k, b in boards.items() if layout[k][0] == r)
+        notes[f"title-{r}"] = {"x": 0, "y": row_y[r] - 520, "text": t, "kind": "title1", "maxW": width}
     index = {"v": 3, "createdOnFiles": {"v": 1, "at": CREATED_AT}, "title": "Big Copilot Supply by object", "launch": {"view": "canvas"},
              "pages": [], "boards": boards, "order": order, "notes": notes, "designSystems": []}
     (ROOT / "canvas.json").write_text(json.dumps(index, indent=1), encoding="utf-8", newline="\n")

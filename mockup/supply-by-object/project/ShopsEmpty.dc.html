@@ -927,7 +927,10 @@ button{font:inherit;color:inherit}
 .board.sb-every .sb-only{display:none}
 .board:not(.sb-every) .sb-evonly{display:none}
 .sb-t tr.sb-kid{display:none}
-.sb-t.open-kids tr.sb-kid{display:table-row;animation:rowin .3s ease}
+.sb-t tr.sb-kid.sb-open{display:table-row;animation:rowin .3s ease}
+.sb-t tr.sb-gr{cursor:pointer}
+.sb-t tr.sb-gr:hover td{background:var(--surface)}
+.sb-t tr.sb-kid td{background:color-mix(in srgb,var(--surface) 55%,transparent)}
 .sb-t tr.sb-edge td{border-top:1px dashed var(--rule)}
 .sb-t tr.sb-edge ~ tr.sb-edge td{border-top-style:none}
 .sb-t tr.sb-lit td{background:var(--accent-soft)}
@@ -1054,7 +1057,7 @@ tr:hover .sb-v.bad svg,tr:hover .sb-v.plan svg{animation:sp-wiggle .5s ease-in-o
 .sb-kids{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:1px 7px;border-radius:10px;border:1px solid var(--rule);background:none;color:var(--ink-2);font:500 11px/1.5 "IBM Plex Mono",monospace;cursor:pointer}
 .sb-kids:hover{border-color:var(--ink-3);color:var(--ink)}
 .sb-kids svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.2;transition:transform .25s}
-.open-kids .sb-kids svg{transform:rotate(90deg)}
+tr.sb-opened .sb-kids svg{transform:rotate(90deg)}
 tr.sb-kid td.nm{padding-left:26px;color:var(--ink-2)}
 
 /* a factory's day: one cell an hour; staffed, needed, spare -------------------- */
@@ -1144,6 +1147,102 @@ tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:c
 .sb-node .d{width:9px;height:9px;border-radius:50%}
 .sb-node small{font:400 10.5px "IBM Plex Mono",monospace;color:var(--ink-3)}
 
+/* sizing: 24/7 or demand, remembered per device ------------------------------ */
+.sb-sizing{display:flex;align-items:center;gap:14px;margin-top:16px;font-size:12.5px;color:var(--ink-3)}
+.sb-sizing .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.sb-sizing .seg a{display:inline-flex;align-items:center;gap:6px}
+.sb-sizing .seg a svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-sizing .seg a:hover svg{animation:sp-spin 1.6s linear infinite}
+.sb-sizing .what{max-width:560px}
+.sb-sizing .what b{color:var(--ink-2);font-weight:500}
+.sb-sizing .mem{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:500 11px/1 "IBM Plex Mono",monospace;white-space:nowrap}
+.sb-sizing .mem svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* a young shop downstream: its demand is a straight line so far ---------------- */
+.sb-ramp{display:flex;align-items:flex-start;gap:12px;margin:12px 0 4px;padding:10px 14px;border-radius:8px;background:#f0913a14;box-shadow:inset 0 0 0 1px #f0913a55;font-size:12.5px;color:var(--ink-2)}
+.sb-ramp b{color:var(--ink);font-weight:600}
+.sb-ramp .ic{color:var(--warn);flex:none;margin-top:1px}
+.sb-ramp .ic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-ramp:hover .ic svg{animation:sb-climb 1s ease-in-out infinite}
+@keyframes sb-climb{50%{transform:translate(2px,-2px)}}
+.sb-rampt{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#f0913a22;color:var(--warn);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
+
+/* staffing for factory lines: hours for the sizing, people, wages --------------- */
+.sb-staff{margin-top:34px}
+.sb-staff .sechead .sp-ico{width:28px;height:28px}
+.sb-srows{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sb-srow{display:grid;grid-template-columns:230px minmax(0,1fr) 150px 130px 150px;gap:18px;align-items:center;padding:14px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+.sb-srow.quiet{color:var(--ink-3)}
+.sb-srow .lines{display:flex;flex-direction:column;gap:7px}
+.sb-srow .ln{display:flex;align-items:center;gap:10px;color:var(--ink-2)}
+.sb-srow .ln b{color:var(--ink);font-weight:500}
+.sb-srow .ln .sb-chg{font:500 12px/1 "IBM Plex Mono",monospace}
+.sb-srow .ppl{display:flex;align-items:center;gap:8px;font:500 13px/1 "IBM Plex Mono",monospace}
+.sb-srow .ppl .d{padding:2px 7px;border-radius:4px;font-size:11px}
+.sb-srow .ppl .d.up{background:#f0913a22;color:var(--warn)}
+.sb-srow .ppl .d.dn{background:var(--accent-soft);color:var(--accent)}
+.sb-srow .ppl .dots{display:inline-flex;gap:2px;flex-wrap:wrap;max-width:70px}
+.sb-srow .wage{display:flex;flex-direction:column;align-items:flex-end;font:500 13.5px/1 "IBM Plex Mono",monospace;text-align:right}
+.sb-srow .wage.dn{color:var(--accent)}.sb-srow .wage.up{color:var(--warn)}
+.sb-srow .wage small{display:block;margin-top:4px;font-size:10.5px;color:var(--ink-3)}
+.sb-srow .go{justify-self:end}
+.sb-stot{display:flex;align-items:center;gap:18px;padding:12px 0;font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sb-stot b{color:var(--ink);font-weight:500}
+.sb-stot .dn{color:var(--accent)}.sb-stot .up{color:var(--warn)}
+.sb-staff .sb-srow .sp-dot{width:8px;height:8px}
+.sb-srow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*25ms)}
+.sb-dot-gone{background:none!important;box-shadow:inset 0 0 0 1px var(--ink-3)}
+.sb-dot-new{background:none!important;border:1.5px dashed var(--warn);box-sizing:border-box}
+
+/* the option not chosen ------------------------------------------------------- */
+.sb-notchosen{display:inline-flex;align-items:center;gap:8px;margin-top:22px;padding:6px 12px;border-radius:6px;border:1px dashed var(--rule);font:500 11.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.board.sb-dim .wrap>*:not(.sb-notchosen):not(.mast){opacity:.55}
+
+/* plan a chain: the finished layout, what is placed, what runs ------------------ */
+.sb-growsub{display:flex;align-items:center;gap:14px;margin-top:28px}
+.sb-planhead{display:flex;align-items:center;gap:14px;margin-top:34px}
+.sb-planhead h2{margin:0;font-size:17px;font-weight:600}
+.sb-planhead .aside{margin-left:auto;display:flex;gap:10px;align-items:center}
+.sb-planhead select,.sb-build select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:7px 10px}
+.sb-build{display:flex;align-items:center;gap:14px;margin-top:18px;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);font-size:13px;color:var(--ink-2)}
+.sb-build .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sb-build .state{display:inline-flex;align-items:center;gap:10px;font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sb-build .state i{font-style:normal;color:var(--ink-3)}
+.sb-build .why{margin-left:2px}
+.sb-pm{display:inline-flex;gap:4px;flex-wrap:nowrap;vertical-align:middle}
+.sb-pm i{width:14px;height:14px;border-radius:4px;display:block;box-sizing:border-box;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sb-pm i.run{background:var(--accent)}
+.sb-pm i.placed{box-shadow:inset 0 0 0 1.5px var(--accent);background:var(--accent-soft)}
+.sb-pm i.plan{border:1.5px dashed var(--ink-3)}
+.sb-pm:hover i.plan{transform:translateY(-2px)}
+.sb-pm:hover i.run{animation:sp-hop .6s ease-in-out;animation-delay:calc(var(--k)*40ms)}
+.sb-build .state span{white-space:nowrap}
+.sb-build .lab{white-space:nowrap}
+.sb-pmleg{display:flex;gap:16px;white-space:nowrap;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-pmleg span{display:inline-flex;align-items:center;gap:6px}
+.sb-pmleg .sb-pm i{width:11px;height:11px}
+.sb-save{display:flex;align-items:center;gap:16px;margin-top:22px;padding:14px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent-soft)}
+.sb-save .txt{font-size:13px;color:var(--ink-2);flex:1}
+.sb-save .txt b{color:var(--ink);font-weight:600}
+.sb-save .btn2.primary svg{width:14px;height:14px}
+.sb-save .saved{display:none;align-items:center;gap:8px;font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.sb-save.is-saved .saved{display:inline-flex}
+.sb-save.is-saved .dosave{display:none}
+.sb-save .rm{font-size:12.5px}
+.sb-save:not(.is-saved) .rm{display:none}
+.sb-fill{display:flex;align-items:center;gap:12px;margin-top:12px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px dashed var(--warn);font-size:13px;color:var(--ink-2)}
+.sb-fill b{color:var(--ink);font-weight:600}
+.sb-fill .ic{color:var(--warn);display:grid;place-items:center}
+.sb-fill .ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-fill .mono{color:var(--ink)}
+.sb-plan{display:flex;align-items:center;gap:14px;margin-top:16px;padding:11px 14px;border-radius:10px;border:1px solid var(--rule);background:var(--surface);font-size:13px;color:var(--ink-2)}
+.sb-plan .ic{width:30px;height:30px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--accent);flex:none}
+.sb-plan .ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-plan:hover .ic svg{animation:sp-spin 2.4s linear infinite}
+.sb-plan b{color:var(--ink);font-weight:600}
+.sb-plan .aside{margin-left:auto;display:flex;align-items:center;gap:14px}
+.sb-plantag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
+
 /* phone ---------------------------------------------------------------------- */
 .phone .wrap{width:calc(100% - 32px)}
 .phone .mast{height:auto;flex-wrap:wrap;gap:12px 10px;padding:16px 0 10px;position:static}
@@ -1199,14 +1298,14 @@ tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:c
   <div class="clock" data-tip="Game time when the save was written. Day 1 was a Monday."><b>Day 73<i>·</i>Wed 11:13</b><small>YEAR 2 · 26 SITES · 529 STAFF</small></div>
 </header>
 
-<div class="sb-sub"><nav class="seg sb-tabs" aria-label="Supply"><a class="on" href="Main.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v10h16V10"></path><path d="M3 10l2-6h14l2 6"></path><path d="M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path><path d="M10 20v-5h4v5"></path></svg><span>Shops</span><span class="sb-n zero" data-tip="Nothing to change"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></span></a><a class="" href="Warehouses.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg><span>Warehouses</span><span class="sb-n" data-tab="Warehouses" data-tip="7 changes to type in">7</span></a><a class="" href="Factories.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V11l6 3.500V11l6 3.500V5h5v16z"></path><path d="M7 18h2M12 18h2M16.500 9v.01"></path></svg><span>Factories</span><span class="sb-n" data-tab="Factories" data-tip="2 changes to type in">2</span></a></nav><div class="aside"><span class="seg sb-mode" aria-label="Which rows to list"><a class="on" href="#" data-mode="changes">Needs a change</a><a class="" href="#" data-mode="all">Everything</a></span></div></div>
+<div class="sb-sub"><nav class="seg sb-tabs" aria-label="Supply"><a class="on" href="Main.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v10h16V10"></path><path d="M3 10l2-6h14l2 6"></path><path d="M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path><path d="M10 20v-5h4v5"></path></svg><span>Shops</span><span class="sb-n zero" data-tip="Nothing to change"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></span></a><a class="" href="Warehouses.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg><span>Warehouses</span><span class="sb-n" data-tab="Warehouses" data-tip="7 changes to type in">7</span></a><a class="" href="Factories.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V11l6 3.500V11l6 3.500V5h5v16z"></path><path d="M7 18h2M12 18h2M16.500 9v.01"></path></svg><span>Factories</span><span class="sb-n" data-tab="Factories" data-tip="6 changes to type in">6</span></a></nav><div class="aside"><span class="seg sb-mode" aria-label="Which rows to list"><a class="on" href="#" data-mode="changes">Needs a change</a><a class="" href="#" data-mode="all">Everything</a></span><span class="seg sb-view" aria-label="List or diagram"><a class="on" href="#" data-view="list" aria-label="List" data-tip="List"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></a><a class="" href="#" data-view="diagram" aria-label="Diagram" data-tip="How the goods move"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="6" r="2"></circle><circle cx="5" cy="18" r="2"></circle><circle cx="19" cy="12" r="2"></circle><path d="M7 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3h1M7 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3"></path></svg></a></span></div></div>
 
-<div class="sb-tray" data-total="9" data-other="0" style="--p:0.000">
+<div class="sb-tray" data-total="13" data-other="0" style="--p:0.000">
   <span class="lab">Change checklist</span>
-  <span class="txt"><b class="d">0</b> of 9 typed in</span>
+  <span class="txt"><b class="d">0</b> of 13 typed in</span>
   <span class="sb-road" aria-hidden="true"><i></i><span class="trk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><span class="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg></span></span>
   <span class="why" data-tip="Tick a row once you have typed its setting in the game. Ticks are your own notes, kept on this device per character; a row goes once a newer save shows the change. Amounts are units, not boxes." tabindex="0"><i>?</i></span>
-  <button type="button" class="btn2 sb-copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg><span>Copy remaining</span><small class="l">9</small></button>
+  <button type="button" class="btn2 sb-copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg><span>Copy remaining</span><small class="l">13</small></button>
   <button type="button" class="ibtn sb-reset" aria-label="Clear your ticks" data-tip="Clear your ticks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.300-5.700"></path><path d="M20 4v5h-5"></path></svg></button>
 </div>
 <div class="sb-empty rv">
@@ -1225,7 +1324,7 @@ tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:c
   </div>
 </div>
 <p class="sb-part" style="margin-top:30px">Closest to the edge</p>
-<div class="scrollx"><table class="sb-t fixed" id="emptyT"><colgroup><col style="width:34px"><col style="width:210px"><col style="width:170px"><col style="width:80px"><col style="width:90px"><col style="width:80px"><col style="width:110px"><col style="width:160px"><col></colgroup><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l" data-col="0"><button type="button" class="supply-sort">Shop<span class="arr"></span></button></th><th class="l" data-col="1"><button type="button" class="supply-sort">Product<span class="arr"></span></button></th><th data-col="2"><button type="button" class="supply-sort">Sells / day<span class="arr"></span></button></th><th data-col="3"><button type="button" class="supply-sort">Busiest day<span class="arr"></span></button></th><th data-col="4"><button type="button" class="supply-sort">On hand<span class="arr"></span></button></th><th data-tip="How much of the round the busiest day takes. Past the mark the shelf runs dry before the next morning." data-col="5"><button type="button" class="supply-sort">Pressure<span class="arr"></span></button></th><th data-tip="What the warehouse brings each morning. With a change, the figure to type in its delivery plan." data-col="6"><button type="button" class="supply-sort">Daily top-up<span class="arr"></span></button></th><th class="l" data-col="7"><button type="button" class="supply-sort">Status<span class="arr"></span></button></th></tr></thead><tbody><tr class="sb-edge"><td class="sb-tk"></td><td class="l" data-v="HART. Jewelry HA"><span class="sb-site"><span class="hood">HA</span><a class="nm" href="#" data-tip="Open its page">HART. Jewelry</a><button type="button" class="sb-map" aria-label="Show HART. Jewelry on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button></span></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="104">104</td><td data-v="121">Fri 121</td><td data-v="129">129</td><td data-v="81"><span class="sb-g " style="--w:81%" data-tip="The busiest day takes 81% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>81%</b></span></td><td data-v="150">150</td><td class="l st" data-v="9covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 81% of the round</span></td></tr><tr class="sb-edge"><td class="sb-tk"></td><td class="l" data-v="HART. Jewelry HK"><span class="sb-site"><span class="hood">HK</span><a class="nm" href="#" data-tip="Open its page">HART. Jewelry</a><button type="button" class="sb-map" aria-label="Show HART. Jewelry on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button></span></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="102">102</td><td data-v="118">Fri 118</td><td data-v="129">129</td><td data-v="79"><span class="sb-g " style="--w:79%" data-tip="The busiest day takes 79% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>79%</b></span></td><td data-v="150">150</td><td class="l st" data-v="9covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 79% of the round</span></td></tr><tr class="sb-edge"><td class="sb-tk"></td><td class="l" data-v="HART. Jewelry IC"><span class="sb-site"><span class="hood">IC</span><a class="nm" href="#" data-tip="Open its page">HART. Jewelry</a><button type="button" class="sb-map" aria-label="Show HART. Jewelry on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button></span></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="114">114</td><td data-v="132">Fri 132</td><td data-v="149">149</td><td data-v="78"><span class="sb-g " style="--w:78%" data-tip="The busiest day takes 78% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>78%</b></span></td><td data-v="170">170</td><td class="l st" data-v="9covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 78% of the round</span></td></tr></tbody></table></div>
+<div class="scrollx"><table class="sb-t fixed" id="emptyT"><colgroup><col style="width:34px"><col style="width:200px"><col style="width:170px"><col style="width:90px"><col style="width:100px"><col style="width:80px"><col style="width:100px"><col style="width:160px"><col></colgroup><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l" data-col="0"><button type="button" class="supply-sort">Shop<span class="arr"></span></button></th><th class="l" data-col="1"><button type="button" class="supply-sort">Product<span class="arr"></span></button></th><th data-col="2"><button type="button" class="supply-sort">Sells / day<span class="arr"></span></button></th><th data-col="3"><button type="button" class="supply-sort">Busiest day<span class="arr"></span></button></th><th data-col="4"><button type="button" class="supply-sort">On hand<span class="arr"></span></button></th><th data-tip="How much of the round the busiest day takes. Past the mark the shelf runs dry before the next morning." data-col="5"><button type="button" class="supply-sort">Pressure<span class="arr"></span></button></th><th data-tip="What the warehouse brings each morning. With a change, the figure to type in its delivery plan." data-col="6"><button type="button" class="supply-sort">Daily top-up<span class="arr"></span></button></th><th class="l" data-col="7"><button type="button" class="supply-sort">Status<span class="arr"></span></button></th></tr></thead><tbody><tr class="sb-edge"><td class="sb-tk"></td><td class="l" data-v="HART. Jewelry HA"><span class="sb-site"><span class="hood">HA</span><a class="nm" href="#" data-tip="Open its page">HART. Jewelry</a><button type="button" class="sb-map" aria-label="Show HART. Jewelry on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button></span></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="104">104</td><td data-v="121">Fri 121</td><td data-v="129">129</td><td data-v="81"><span class="sb-g " style="--w:81%" data-tip="The busiest day takes 81% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>81%</b></span></td><td data-v="150">150</td><td class="l st" data-v="9covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 81% of the round</span></td></tr><tr class="sb-edge"><td class="sb-tk"></td><td class="l" data-v="HART. Jewelry HK"><span class="sb-site"><span class="hood">HK</span><a class="nm" href="#" data-tip="Open its page">HART. Jewelry</a><button type="button" class="sb-map" aria-label="Show HART. Jewelry on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button></span></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="102">102</td><td data-v="118">Fri 118</td><td data-v="129">129</td><td data-v="79"><span class="sb-g " style="--w:79%" data-tip="The busiest day takes 79% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>79%</b></span></td><td data-v="150">150</td><td class="l st" data-v="9covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 79% of the round</span></td></tr><tr class="sb-edge"><td class="sb-tk"></td><td class="l" data-v="HART. Jewelry IC"><span class="sb-site"><span class="hood">IC</span><a class="nm" href="#" data-tip="Open its page">HART. Jewelry</a><button type="button" class="sb-map" aria-label="Show HART. Jewelry on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button></span></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="114">114</td><td data-v="132">Fri 132</td><td data-v="149">149</td><td data-v="78"><span class="sb-g " style="--w:78%" data-tip="The busiest day takes 78% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>78%</b></span></td><td data-v="170">170</td><td class="l st" data-v="9covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 78% of the round</span></td></tr></tbody></table></div>
 
 </div>
 </div>
@@ -1263,6 +1362,7 @@ class Component extends DCLogic {
 
     // ticks: one checklist for the page, counted on the road
     const tray = $('.sb-tray');
+    $$('[data-save]').forEach(a => a.addEventListener('click', () => a.closest('.sb-save').classList.toggle('is-saved')));
     const count = () => { if (!tray) return; const all = $$('[data-chg]').filter(r => !r.closest('.sb-place'));
       const mine = all.filter(r => r.classList.contains('sb-done')).length;
       const total = +tray.dataset.total, other = +tray.dataset.other - (tray.dataset.base ? +tray.dataset.base : 0);
@@ -1284,7 +1384,11 @@ class Component extends DCLogic {
       count(); }
 
     // bundle rows open into their parts
-    $$('.sb-kids').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); b.closest('table').classList.toggle('open-kids'); }));
+    const kids = (b) => { const t = b.closest('table'), id = b.dataset.kids, rows = $$('tr[data-kid="' + id + '"]', t);
+      const open = !rows.some(r => r.classList.contains('sb-open')); rows.forEach(r => r.classList.toggle('sb-open', open));
+      b.closest('tr').classList.toggle('sb-opened', open); b.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    $$('.sb-kids').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); kids(b); }));
+    $$('tr.sb-gr').forEach(r => r.addEventListener('click', (e) => { if (e.target.closest('a,input,button')) return; const b = $('.sb-kids', r); if (b) kids(b); }));
     // the crumb from a finding clears the lit row
     $$('[data-crumb]').forEach(b => b.addEventListener('click', () => { b.closest('.sb-crumb').remove(); $$('.sb-arrived').forEach(r => r.classList.remove('sb-arrived')); $$('.sb-obj.lit').forEach(o => o.classList.remove('lit')); }));
 
