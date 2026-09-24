@@ -1,0 +1,1313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Supply: Warehouses · arrived from a finding</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+
+body{margin:0;background:#0d100f}
+a{color:#43c07a}a:hover{color:#6fd39a}
+.board{
+  --ground:#0d100f;--surface:#151917;--raised:#1c211e;
+  --ink:#e9ece6;--ink-2:#9aa39d;--ink-3:#6b756f;
+  --rule:#262c28;--rule-soft:#1e2320;
+  --accent:#43c07a;--accent-soft:#43c07a26;
+  --pos:#43c07a;--neg:#ff6257;--warn:#f0913a;--info:#6ea8ff;
+  --tip-bg:#e9ece6;--tip-ink:#0d100f;
+  width:100%;min-width:1240px;min-height:100vh;box-sizing:border-box;padding:0 0 72px;position:relative;overflow:clip;
+  background:var(--ground);color:var(--ink);
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.board.light{
+  --ground:#eef0ea;--surface:#fdfdfb;--raised:#f3f4ef;
+  --ink:#15181a;--ink-2:#5b6469;--ink-3:#8b9499;
+  --rule:#d2d6cd;--rule-soft:#e0e3da;
+  --accent:#00703a;--accent-soft:#00703a1f;
+  --pos:#00703a;--neg:#cc2a20;--warn:#c25400;--info:#2a5ea8;
+  --tip-bg:#15181a;--tip-ink:#f3f4ef;
+}
+.board *{box-sizing:border-box}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}
+.wrap{width:min(1180px,calc(100% - 80px));margin:0 auto;position:relative;z-index:1}
+svg{display:block}
+
+/* everything arrives: sections slide in when they come into view -------- */
+.rv{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
+.rv.in{opacity:1;transform:none}
+
+/* masthead: wordmark, five places, the clock ------------------------------ */
+.mast{display:flex;align-items:center;gap:40px;height:100px;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5;background:var(--ground)}
+.brand{display:flex;align-items:baseline;gap:2px;user-select:none}
+.wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer}
+.dot{
+  display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--accent);
+  transform-origin:50% 100%;transition:transform .25s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
+}
+.brand:hover .dot{transform:translateY(-6px) scale(1.15)}
+.dot.spin{animation:coinspin .6s linear}
+.dot.kick{animation:kick .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes kick{30%{transform:translateY(-6px) scale(1.8)}60%{transform:scale(.6)}100%{transform:none}}
+@keyframes coinspin{from{transform:rotateY(0)}to{transform:rotateY(720deg)}}
+.coin{
+  position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);
+  pointer-events:none;animation:fall 1.1s cubic-bezier(.2,.7,.4,1) forwards;z-index:9;
+}
+@keyframes fall{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.6);opacity:0}}
+.nav{position:relative;display:flex;gap:4px;margin-left:8px}
+.nav a{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:6px;
+  color:var(--ink-2);text-decoration:none;font-weight:500;font-size:13.5px;transition:color .15s;
+}
+.nav a svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.nav a:hover svg{transform:translateY(-2px) rotate(-6deg)}
+.nav a:hover,.nav a.on{color:var(--ink)}
+.nav .ink{
+  position:absolute;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;
+  left:var(--nx,0);width:var(--nw,0);transition:left .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1);
+}
+.clock{margin-left:auto;text-align:right;cursor:default}
+.clock b{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px;letter-spacing:.01em}
+.clock b i{font-style:normal;color:var(--ink-3);margin:0 6px}
+@keyframes blink{50%{opacity:.25}}
+.clock small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-3);margin-top:3px}
+
+/* tooltips: the sentence lives here now, not on the page --------------------- */
+[data-tip]{position:relative}
+[data-tip]::after{
+  content:attr(data-tip);position:absolute;left:0;top:calc(100% + 8px);z-index:8;
+  background:var(--tip-bg);color:var(--tip-ink);padding:7px 10px;border-radius:5px;
+  font:400 12px/1.4 Archivo,sans-serif;white-space:normal;width:max-content;max-width:300px;
+  opacity:0;transform:translateY(-3px);pointer-events:none;transition:opacity .15s,transform .15s;
+}
+[data-tip]:hover::after{opacity:1;transform:translateY(0)}
+[data-tip].tr::after{left:auto;right:0}
+
+/* sections ----------------------------------------------------------------- */
+.sec{margin-top:44px}
+.sechead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.sechead h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.sechead .aside{margin-left:auto;display:flex;align-items:center;gap:8px}
+.why{
+  width:18px;height:18px;border-radius:50%;border:1px solid var(--rule);color:var(--ink-3);
+  display:grid;place-items:center;font:500 11px/1 "IBM Plex Mono",monospace;cursor:help;overflow:visible;z-index:30;
+}
+.why i{font-style:normal;display:block}
+.why:hover{color:var(--ink);border-color:var(--ink-3)}
+.why:hover i{animation:qdrop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes qdrop{0%{transform:translateY(-16px);opacity:0}100%{transform:none;opacity:1}}
+.why::after{left:calc(100% + 12px);top:50%;transform:translate(-6px,-50%)}
+.why:hover::after{transform:translate(0,-50%)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:7px;padding:2px;gap:2px;background:var(--surface)}
+.seg a{padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
+.seg a:hover{color:var(--ink)}
+.seg a.on{background:var(--ink);color:var(--ground)}
+.ibtn{
+  width:32px;height:32px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);
+  display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:color .15s,border-color .15s;
+}
+.ibtn:hover{color:var(--ink);border-color:var(--ink-3)}
+.ibtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.quiet{color:var(--ink-3);font-size:12.5px}
+.link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
+.link:hover{color:var(--ink);border-color:var(--ink-3)}
+
+/* kpis: a number, a chip, a line ----------------------------------------- */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:36px}
+.kpi{
+  position:relative;padding:18px 20px 16px;border-radius:10px;background:var(--surface);
+  border:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:8px;
+}
+.kpi::before{
+  content:"";position:absolute;inset:0;border-radius:10px;pointer-events:none;opacity:0;transition:opacity .25s;
+  background:radial-gradient(220px circle at var(--mx,50%) var(--my,50%),var(--accent-soft),transparent 70%);
+}
+.kpi:hover::before{opacity:1}
+.kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.kpi .v{font-family:"IBM Plex Mono",monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.05}
+.kpi .row{display:flex;align-items:center;gap:10px;min-height:20px}
+.chip{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;
+  font:500 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;
+}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.bad{background:#ff625722;color:var(--neg)}
+.chip.warn{background:#f0913a22;color:var(--warn)}
+.chip.dim{background:#ffffff10;color:var(--ink-2)}
+.light .chip.dim{background:#00000010}
+.kpi .sub{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2)}
+.spark{position:relative;height:34px;margin-top:2px}
+.spark svg{width:100%;height:34px;overflow:visible}
+.spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round}
+.spark .area{fill:var(--accent);opacity:.08}
+.spark .pt{fill:var(--accent);opacity:0;transition:opacity .15s}
+.spark .scrub{
+  position:absolute;top:-22px;left:0;transform:translateX(-50%);opacity:0;
+  font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink);white-space:nowrap;transition:opacity .15s;
+}
+.kpi:hover .spark .pt,.kpi:hover .spark .scrub{opacity:1}
+
+/* findings: a dot, a verb, a number ------------------------------------- */
+.sev{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--ink-2);font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent;transition:all .15s}
+.sev i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.sev.crit i{background:var(--neg)}.sev.watch i{background:var(--warn)}.sev.opp i{background:var(--accent)}
+.sev:hover{color:var(--ink);border-color:var(--rule)}
+.sev.off{opacity:.35}
+.finds{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.find{
+  display:grid;grid-template-columns:22px 150px 1fr auto 28px;gap:0 14px;align-items:center;
+  padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;
+  transition:background .15s,opacity .35s,transform .35s;border-radius:0 6px 6px 0;
+}
+.find:hover{background:var(--surface);color:inherit}
+.find.gone{opacity:0;transform:translateX(40px);pointer-events:none;max-height:0;padding:0;overflow:hidden;border:none}
+.find .mark{width:8px;height:8px;border-radius:50%;justify-self:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1);cursor:pointer;position:relative}
+.find .mark::after{content:"";position:absolute;inset:-8px;border-radius:50%}
+.find:hover .mark{transform:scale(1.6)}
+.find .mark:hover{transform:scale(2.2)}
+.find.crit .mark{background:var(--neg)}.find.watch .mark{background:var(--warn)}.find.opp .mark{background:var(--accent)}
+.find .site{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+.hood{
+  display:inline-grid;place-items:center;min-width:24px;height:20px;padding:0 4px;border-radius:4px;
+  background:var(--raised);border:1px solid var(--rule);font:600 10px/1 "IBM Plex Mono",monospace;
+  letter-spacing:.06em;color:var(--ink-2);flex:none;
+}
+.find .what{font-weight:600;font-size:14px;color:var(--ink)}
+.find .more{
+  grid-column:3/5;max-height:0;overflow:hidden;opacity:0;font-size:12.5px;color:var(--ink-2);
+  transition:max-height .28s ease,opacity .2s,margin .28s;margin:0;
+}
+.find:hover .more{max-height:60px;opacity:1;margin-top:4px}
+.find .amt{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.find .amt small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+.find .go{color:var(--ink-3);display:grid;place-items:center;transition:transform .2s,color .15s}
+.find .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.find:hover .go{color:var(--accent);transform:translateX(3px)}
+.find.hide{display:none}
+.silenced{margin:12px 0 0;font-size:12.5px;color:var(--ink-3);display:none}
+.silenced.on{display:block}
+
+/* next moves: things the board cannot do yet ------------------------------ */
+.moves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;perspective:900px}
+.move{
+  position:relative;padding:20px 20px 18px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);
+  text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;
+  transform:rotateX(var(--rx,0)) rotateY(var(--ry,0));transition:transform .12s ease-out,border-color .2s;transform-style:preserve-3d;
+}
+.move:hover{border-color:var(--rule);color:inherit}
+.move .ic{
+  width:40px;height:40px;border-radius:10px;background:var(--raised);display:grid;place-items:center;color:var(--accent);
+  transform:translateZ(24px);transition:transform .2s;
+}
+.move .ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.move b{font-size:15px;font-weight:600;transform:translateZ(16px)}
+.move span{font-size:12.5px;color:var(--ink-2);transform:translateZ(10px)}
+.move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
+.move:hover .soon{color:var(--accent);border-color:var(--accent)}
+.move.add{border-style:dashed;background:none;justify-content:center;align-items:center;color:var(--ink-3);min-height:120px}
+.move.add:hover{color:var(--ink)}
+
+/* tables ----------------------------------------------------------------- */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:10px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule-soft)}
+th:first-child,td:first-child,.l{text-align:left}
+thead th{font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--rule)}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:var(--surface)}
+tbody td{font-family:"IBM Plex Mono",monospace}
+tbody td.l{font-family:Archivo,sans-serif}
+tfoot td{font-family:"IBM Plex Mono",monospace;font-weight:600;border-top:1px solid var(--ink);border-bottom:none}
+.sub{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400;font-family:Archivo,sans-serif}
+.chev{display:inline-block;width:16px;vertical-align:-1px;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+tr.chain{cursor:pointer}
+tr.chain:hover .chev{transform:translateX(2px)}
+tr.chain.open .chev{transform:rotate(90deg)}
+tr.kid{display:none}
+tr.kid.show{display:table-row;animation:rowin .3s ease}
+@keyframes rowin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+tr.kid td:first-child{padding-left:42px}
+tr.bump td{animation:bump .6s ease}
+@keyframes bump{0%{background:var(--accent-soft)}100%{background:transparent}}
+.grp td{background:var(--raised);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;color:var(--ink-2);padding:7px 12px}
+.bar{display:inline-block;vertical-align:middle;width:64px;height:4px;border-radius:3px;background:var(--rule);overflow:hidden;margin-right:8px}
+.bar i{display:block;height:100%;background:var(--accent);transform-origin:left;transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+tr:hover .bar i{transform:scaleX(1.04)}
+.set{color:var(--accent);font-weight:600}
+.up{display:inline-flex;align-items:center;gap:3px;color:var(--warn);font-size:11px;margin-left:6px;cursor:pointer;padding:2px 6px;border-radius:4px;border:1px solid transparent;transition:all .15s}
+.up:hover{border-color:var(--warn)}
+.up svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.up.done{color:var(--accent);border-color:transparent}
+.check{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.check svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+td.gauge{position:relative}
+td.gauge i{position:absolute;left:12px;right:12px;bottom:6px;height:2px;background:var(--rule);border-radius:2px;overflow:hidden}
+td.gauge i b{display:block;height:100%;background:var(--accent);width:var(--w,0);transition:width .5s cubic-bezier(.2,.7,.2,1)}
+td.gauge.low i b{background:var(--neg)}
+
+/* charts ----------------------------------------------------------------- */
+.chartbox{position:relative;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);padding:14px 20px 12px}
+.readout{display:flex;justify-content:flex-end;align-items:center;gap:14px;min-height:22px;margin-bottom:6px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.readout b{color:var(--ink);font-weight:500}
+.readout i{width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:6px;vertical-align:1px}
+.legend{display:flex;gap:8px;margin-top:10px}
+.legend a{display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:5px;font-size:12px;color:var(--ink-2);text-decoration:none;border:1px solid transparent;transition:all .15s;cursor:pointer}
+.legend a i{width:12px;height:3px;border-radius:2px;background:var(--ink-3);transition:transform .2s}
+.legend a.on{color:var(--ink);border-color:var(--rule)}
+.legend a:hover{color:var(--ink)}
+.legend a:hover i{transform:scaleX(1.4)}
+.xh{opacity:0;transition:opacity .12s}
+.chartbox:hover .xh{opacity:1}
+g[data-series]{transition:opacity .25s}
+g[data-series].off{opacity:0}
+.chart rect{transition:opacity .15s}
+.chart rect:hover{opacity:1}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;align-items:end;height:170px;padding-top:30px}
+.wd{display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end}
+.wd .track{position:relative;width:100%;flex:1;display:flex;align-items:center}
+.wd .track::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--rule)}
+.wd .bar2{
+  position:absolute;left:18%;right:18%;border-radius:4px;background:var(--accent);
+  transform-origin:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1),filter .2s;
+}
+.wd .bar2.down{background:var(--warn)}
+.wd:hover .bar2{transform:scaleX(1.18);filter:brightness(1.15)}
+.wd .n{
+  position:absolute;left:50%;transform:translate(-50%,4px);padding:3px 7px;border-radius:4px;
+  background:var(--ink);color:var(--ground);font:600 11px/1 "IBM Plex Mono",monospace;
+  opacity:0;transition:opacity .15s,transform .2s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap;
+}
+.wd:hover .n{opacity:1;transform:translate(-50%,0)}
+.wd .d{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3)}
+.wd .d b{display:none;font-weight:500}
+.wd:hover .d span{display:none}.wd:hover .d b{display:inline}
+.wd.now .d{color:var(--ink)}
+.wd.now .track{outline:1px dashed var(--rule);outline-offset:4px;border-radius:6px}
+
+/* heat grid --------------------------------------------------------------- */
+.heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
+.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s}
+.heat .h.hl{color:var(--ink)}
+.heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
+.heat .r.hl{color:var(--accent)}
+.heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.cell{
+  position:relative;height:44px;border-radius:6px;display:grid;place-items:center;cursor:pointer;
+  font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,outline-color .15s,filter .15s;
+}
+.cell.hl{filter:brightness(1.18)}
+.cell:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
+.cell.picked{outline:2px solid var(--ink);outline-offset:-2px}
+.cell .rv2{position:absolute;right:6px;bottom:5px;display:flex;gap:2px}
+.cell .rv2 i{width:3px;height:3px;border-radius:50%;background:var(--ink);opacity:.5}
+.cell.mine{outline:1.5px solid var(--accent);outline-offset:-1.5px}
+.cell::after{top:auto;bottom:calc(100% + 8px);left:50%;transform:translate(-50%,3px)}
+.cell:hover::after{transform:translate(-50%,0)}
+.celldetail{margin-top:14px;min-height:22px;font-size:13px;color:var(--ink-2)}
+.celldetail b{color:var(--ink);font-weight:600}
+.celldetail .link{margin-left:10px}
+
+/* waves ------------------------------------------------------------------ */
+.waves{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+.wave{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:7px;border:1px solid var(--rule);
+  font-size:12.5px;color:var(--ink-2);text-decoration:none;background:var(--surface);transition:border-color .15s,color .15s,transform .2s;
+}
+.wave:hover{color:var(--ink);border-color:var(--ink-3);transform:translateY(-2px)}
+.wave b{color:var(--ink);font-weight:600}
+.wave .t{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
+.wave svg{width:12px;height:12px;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;fill:none;transition:transform .3s}
+.wave.up svg{stroke:var(--accent)}.wave.dn svg{stroke:var(--neg)}
+.wave:hover svg{transform:translateY(-2px) scale(1.2)}
+.wave.dn:hover svg{transform:translateY(2px) scale(1.2)}
+
+/* plan a chain ------------------------------------------------------------ */
+.plan{display:grid;grid-template-columns:300px 1fr;gap:32px;align-items:start}
+.field{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+.field label{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.field select{font:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:8px 10px}
+.field input[type=range]{width:100%;accent-color:var(--accent)}
+.field output{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink)}
+.machines{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 14px}
+.machines i{width:22px;height:22px;border-radius:5px;background:var(--rule);transition:background .25s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.machines i.on{background:var(--accent);transform:scale(1)}
+.machines i.new{animation:pop .35s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pop{from{transform:scale(.3)}to{transform:scale(1)}}
+.shops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 14px}
+.shops i{width:12px;height:12px;border-radius:3px;background:var(--rule);transition:background .2s}
+.shops i.on{background:var(--ink-2)}
+.planstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.planstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
+.planstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.planstat .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
+.planstat .v small{font-size:12px;color:var(--ink-3);margin-left:4px;letter-spacing:0}
+
+.step{display:inline-flex;align-items:center;gap:6px}
+.step a{width:24px;height:24px;border-radius:6px;border:1px solid var(--rule);display:grid;place-items:center;color:var(--ink-2);text-decoration:none;font:500 14px/1 "IBM Plex Mono",monospace;transition:all .15s}
+.step a:hover{color:var(--ink);border-color:var(--ink-3);transform:scale(1.1)}
+.step b{font:600 14px/1 "IBM Plex Mono",monospace;min-width:14px;text-align:center}
+.step .machines{margin:0 0 0 8px;gap:4px}
+.step .machines i{width:14px;height:14px;border-radius:3px}
+td .ing{font-size:12px;color:var(--ink-2);white-space:normal;font-family:Archivo,sans-serif}
+td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
+.planline{margin:14px 0 0;font-size:13.5px;color:var(--ink-2)}
+.planline b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500}
+
+/* flow map ---------------------------------------------------------------- */
+.flow .node rect{fill:var(--surface);stroke:var(--rule);transition:stroke .15s,transform .2s}
+.flow .node{cursor:pointer}
+.flow .node:hover rect{stroke:var(--ink-3)}
+.flow .node.on rect{stroke:var(--accent);stroke-width:1.5}
+.flow .node.faded{opacity:.35}
+.flow .node text{font:500 11.5px Archivo,sans-serif;fill:var(--ink)}
+.flow .node text.s{font:400 10px "IBM Plex Mono",monospace;fill:var(--ink-3)}
+.flow .pipe{fill:none;stroke:var(--ink-3);stroke-opacity:.45;stroke-linecap:round;transition:stroke-opacity .2s,stroke .2s}
+.flow .pipe.weekly{stroke-dasharray:6 7}
+.flow .pipe:hover,.flow .pipe.lit{stroke:var(--accent);stroke-opacity:1;animation:flowdash .9s linear infinite}
+.flow .pipe.daily:hover,.flow .pipe.daily.lit{stroke-dasharray:1 9;stroke-width:3}
+.flow .pipe.dim{stroke-opacity:.12}
+@keyframes flowdash{to{stroke-dashoffset:-26}}
+.flow .cargo{fill:var(--accent);display:none}
+.flow .cargo.go{display:block}
+.flow .col{font:500 10px "IBM Plex Mono",monospace;letter-spacing:.14em;fill:var(--ink-3)}
+.flow .warnd{fill:var(--warn)}.flow .badd{fill:var(--neg)}
+
+/* site detail -------------------------------------------------------------- */
+.sitehead{display:flex;align-items:center;gap:16px;margin-top:32px}
+.bullet{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font:600 12px/1 "IBM Plex Mono",monospace;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sitehead:hover .bullet{transform:rotate(-12deg) scale(1.08)}
+.sitehead h2{margin:0;font-size:22px;font-weight:600;letter-spacing:-.02em}
+.sitehead .sub{font-size:13px}
+.sstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px}
+.sstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
+.sstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sstat .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
+.hours{display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center}
+.hours .hh{font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:center;padding-bottom:4px}
+.hours .dd{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3)}
+.hours .dd.now{color:var(--ink)}
+.hc{height:20px;border-radius:3px;background:var(--raised);cursor:pointer;transition:transform .15s cubic-bezier(.34,1.56,.64,1),box-shadow .15s}
+.hc:hover{transform:scale(1.3);box-shadow:0 4px 14px #0007;z-index:2;position:relative}
+.hc.cap{box-shadow:inset 0 0 0 1.5px var(--neg)}
+.hc.cap:hover{box-shadow:inset 0 0 0 1.5px var(--neg),0 4px 14px #0007}
+.hourread{min-height:22px;margin-top:12px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.hourread b{color:var(--ink);font-weight:500}
+.crew{display:flex;flex-wrap:wrap;gap:8px}
+.person{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:20px;background:var(--surface);border:1px solid var(--rule-soft);font-size:12.5px;transition:transform .2s}
+.person:hover{transform:translateY(-2px)}
+.person i{width:22px;height:22px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.person small{color:var(--ink-3)}
+.person.off{opacity:.5}
+.person.off i{background:#ff625733}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
+
+/* kinds popover ------------------------------------------------------------ */
+.pop{width:520px;margin:40px auto;padding:20px 22px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0008}
+.pop h3{margin:0 0 4px;font-size:15px;font-weight:600}
+.pop p{margin:0 0 14px;color:var(--ink-3);font-size:12.5px}
+.kind{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule-soft)}
+.kind:last-of-type{border-bottom:none}
+.kind b{font-weight:500;font-size:13.5px}
+.kind small{display:block;color:var(--ink-3);font-size:11.5px}
+.kind .c{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--rule);position:relative;cursor:pointer;transition:background .2s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sw.on{background:var(--accent)}
+.sw.on::after{transform:translateX(14px);background:#fff}
+.pop .foot2{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+
+/* source strip states -------------------------------------------------------- */
+.strip{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);margin-top:14px}
+.strip .st{display:flex;align-items:center;gap:10px;font-size:13px}
+.strip .st .led{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.strip .st .led.busy{background:var(--info);animation:blink 1s steps(1) infinite}
+.strip .st .led.err{background:var(--neg)}
+.strip .file{font:400 12px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.strip .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.strip .prog{position:relative;width:160px;height:3px;border-radius:2px;background:var(--rule);overflow:hidden}
+.strip .prog i{position:absolute;top:0;bottom:0;width:40%;background:var(--info);border-radius:2px;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{left:-40%}100%{left:100%}}
+.strip .err{color:var(--neg);font-size:12.5px}
+.btn2{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:500;text-decoration:none;cursor:pointer;transition:border-color .15s,transform .15s}
+.btn2:hover{border-color:var(--ink-3);transform:translateY(-1px);color:var(--ink)}
+.btn2 svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn2.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.btn2.primary:hover{color:var(--ground)}
+.btn2[aria-disabled="true"]{opacity:.4;pointer-events:none}
+.statelabel{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:32px}
+
+/* company ------------------------------------------------------------------ */
+.roles{display:flex;flex-direction:column;gap:8px}
+.role{display:grid;grid-template-columns:130px 1fr 44px;gap:12px;align-items:center;font-size:13px}
+.role .tr{height:8px;border-radius:4px;background:var(--rule-soft);overflow:hidden}
+.role .tr i{display:block;height:100%;background:var(--ink-2);border-radius:4px;transform-origin:left;transition:background .2s,transform .3s cubic-bezier(.2,.7,.2,1)}
+.role:hover .tr i{background:var(--accent);transform:scaleX(1.03)}
+.role .c{font:500 12px "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+.role .c b{display:none;font-weight:500;color:var(--ink)}
+.role:hover .c span{display:none}.role:hover .c b{display:inline}
+.miles{display:flex;flex-direction:column;gap:2px}
+.mile{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--rule-soft);font-size:13.5px;cursor:pointer}
+.mile .box{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rule);display:grid;place-items:center;color:var(--ground);transition:all .25s cubic-bezier(.34,1.56,.64,1)}
+.mile .box svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.mile.done .box{background:var(--accent);border-color:var(--accent)}
+.mile:not(.done):hover .box{border-color:var(--accent);transform:rotate(-8deg)}
+.mile.just .box{animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+.mile .c{margin-left:auto;font:500 12px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.rules span{padding:3px 8px;border-radius:4px;background:var(--raised);font:500 11px "IBM Plex Mono",monospace;color:var(--ink-2);cursor:help}
+.rules span b{color:var(--ink);font-weight:600;margin-left:4px}
+
+/* landing ------------------------------------------------------------------ */
+.landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:80px 0;perspective:1000px}
+.landing .wordmark{font-size:44px}
+.landing p{margin:0;color:var(--ink-2);font-size:15px;max-width:460px;text-align:center;text-wrap:pretty}
+.drop{
+  width:560px;height:280px;border-radius:16px;border:1.5px dashed var(--rule);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;cursor:pointer;transition:border-color .2s,background .2s,transform .12s ease-out;position:relative;
+  transform:rotateX(var(--rx,0)) rotateY(var(--ry,0));transform-style:preserve-3d;
+}
+.drop:hover{border-color:var(--accent);background:var(--surface)}
+.drop .folder{width:64px;height:52px;position:relative;transform:translateZ(30px)}
+.drop .folder i{position:absolute;inset:0;border-radius:6px;background:var(--raised);border:1.5px solid var(--rule)}
+.drop .folder i.tab{width:26px;height:10px;top:-8px;left:0;border-bottom:none;border-radius:6px 6px 0 0}
+.drop .folder i.flap{top:10px;transform-origin:50% 100%;transition:transform .35s cubic-bezier(.34,1.56,.64,1);background:var(--surface)}
+.drop:hover .folder i.flap{transform:perspective(200px) rotateX(-38deg)}
+.drop .folder .file{position:absolute;left:18px;right:18px;top:4px;height:30px;border-radius:3px;background:var(--accent);opacity:0;transform:translateY(8px);transition:all .3s .05s}
+.drop:hover .folder .file{opacity:1;transform:translateY(-10px)}
+.drop b{font-size:15px;font-weight:600;transform:translateZ(16px)}
+.drop span{font-size:12.5px;color:var(--ink-3);transform:translateZ(10px)}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;background:var(--ink);color:var(--ground);
+  font-weight:600;font-size:13.5px;text-decoration:none;transition:transform .15s,opacity .15s;
+}
+.btn:hover{transform:translateY(-1px);opacity:.92;color:var(--ground)}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.landing .row{display:flex;align-items:center;gap:18px}
+.landing footer{margin-top:40px;display:flex;gap:18px;align-items:center;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
+
+/* the sphere: the dot grown up. It rolls out of the wordmark onto the masthead
+   rule and sits there; it watches the pointer, squishes when clicked and rolls
+   along its shelf as the page scrolls ---------------------------------------- */
+.orb{position:absolute;left:0;top:0;width:100px;height:100px;z-index:6;cursor:pointer;will-change:transform;opacity:0}
+.orb.live{opacity:1}
+.orb i{
+  display:block;width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at var(--hx,32%) var(--hy,30%),#d9ffe8 0%,#7fe3a8 14%,var(--accent) 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 18px 40px #43c07a3d,inset -14px -20px 34px #00000066,inset 6px 8px 18px #ffffff22;
+}
+.orb u{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%),radial-gradient(circle at 62% 80%,#0002 0 3%,transparent 4%),radial-gradient(circle at 40% 22%,#0002 0 2%,transparent 3%);
+}
+.orb .squish{animation:squish .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes squish{0%{scale:1 1}25%{scale:1.28 .74}50%{scale:.86 1.18}75%{scale:1.06 .95}100%{scale:1 1}}
+.orb::after{content:"";position:absolute;left:14%;right:14%;bottom:-9px;height:14px;border-radius:50%;background:#000;opacity:.45;filter:blur(6px);z-index:-1}
+.light .orb::after{opacity:.2}
+.landing{position:relative}
+.landing .orb{width:360px;height:360px;z-index:0}
+.landing .orb i{box-shadow:0 40px 90px #43c07a44,inset -24px -34px 60px #00000066,inset 10px 14px 30px #ffffff22}
+.landing .orb::after{bottom:-30px;height:26px;filter:blur(10px)}
+.ring{position:absolute;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:ring .8s ease-out forwards;z-index:0}
+@keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
+
+/* footer ------------------------------------------------------------------- */
+.foot{margin-top:64px;padding-top:16px;border-top:1px solid var(--rule);display:flex;gap:22px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--ink-3)}
+.foot span:last-child{margin-left:auto}
+
+.board{--sp-on:#08130d;min-height:0}
+.board.light{--sp-on:#ffffff}
+:where(.board) svg:where([aria-hidden]){width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-i{display:inline-grid;place-items:center;flex:none}
+.sp-i svg,.sp-ico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-ico{width:28px;height:28px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);flex:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s}
+section:hover>.sechead .sp-ico,.sp-find:hover .ev{color:var(--accent)}
+section:hover>.sechead .sp-ico{transform:rotate(-8deg) scale(1.08)}
+.sp-read{min-height:18px;margin-top:12px;font:500 12px/1.5 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-read b{color:var(--ink);font-weight:500}
+
+/* a finding lights the block that holds its evidence ------------------------ */
+[data-block]{transition:opacity .25s,outline-color .25s;outline:1px solid transparent;outline-offset:14px;border-radius:6px;scroll-margin-top:140px}
+.sp-focus [data-block]:not(.sp-lit){opacity:.3}
+[data-block].sp-lit{outline-color:var(--accent)}
+.sp-finds{display:flex;flex-direction:column;border-top:1px solid var(--rule);margin-top:26px}
+.sp-find{display:grid;grid-template-columns:22px 28px 1fr auto 24px;gap:0 12px;align-items:center;min-height:46px;padding:6px 6px 6px 0;box-sizing:border-box;border-bottom:1px solid var(--rule-soft);text-decoration:none;color:inherit;border-radius:0 6px 6px 0;transition:background .15s}
+.sp-find:hover,.sp-find.arrived{background:var(--surface);color:inherit}
+.sp-find .mark{width:8px;height:8px;border-radius:50%;justify-self:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.sp-find:hover .mark{transform:scale(1.6)}
+.sp-find.crit .mark{background:var(--neg)}.sp-find.watch .mark{background:var(--warn)}.sp-find.opp .mark{background:var(--accent)}
+.sp-find.arrived .mark{animation:sp-ping 1.6s ease-out infinite}
+@keyframes sp-ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--warn) 60%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+.sp-find .ev{color:var(--ink-3);transition:color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-find:hover .ev{transform:translateY(3px)}
+.sp-find .what{font-weight:600;font-size:14px}
+.sp-find .more{grid-column:3/5;max-height:0;overflow:hidden;opacity:0;font-size:12.5px;color:var(--ink-2);transition:max-height .28s ease,opacity .2s,margin .28s}
+.sp-find:hover .more,.sp-find.arrived .more{max-height:60px;opacity:1;margin:2px 0 4px}
+.sp-find .amt{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.sp-find .amt small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em}
+.sp-find .go{color:var(--ink-3);display:grid;place-items:center;transition:transform .2s,color .15s}
+.sp-find:hover .go{color:var(--accent);transform:translateY(3px)}
+.sp-find.extra{display:none}.sp-finds.all .sp-find.extra{display:grid;animation:rowin .3s ease}
+.sp-findmore{margin:10px 0 0;font-size:12.5px;color:var(--ink-3)}
+
+/* the head: a lamp says whether the doors are open --------------------------- */
+.sp-lamp{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block;margin-left:12px;vertical-align:3px;animation:sp-glow 2.4s ease-in-out infinite}
+.sp-lamp.off{background:var(--neg);animation:none}
+@keyframes sp-glow{50%{box-shadow:0 0 0 5px var(--accent-soft)}}
+.sp-pre{display:inline-flex;gap:6px;margin-left:14px;vertical-align:-7px}
+.sp-pre span{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--accent);background:var(--accent-soft);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-pre span.no{color:var(--neg);background:color-mix(in srgb,var(--neg) 14%,transparent);animation:sp-nag 2.2s ease-in-out infinite}
+.sp-pre span:hover{transform:translateY(-3px)}
+@keyframes sp-nag{0%,88%,100%{transform:none}92%{transform:rotate(-7deg)}96%{transform:rotate(7deg)}}
+
+/* where this site stands: its place by the last seven days' profit -------------- */
+.sp-rank{display:inline-flex;align-items:center;gap:9px;margin-left:16px;vertical-align:4px;padding:5px 10px 5px 9px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 13px/1 "IBM Plex Mono",monospace;letter-spacing:0;color:var(--ink);cursor:default;transition:border-color .15s,transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-rank small{font-size:11px;color:var(--ink-3)}
+.sp-rank.top{border-color:var(--accent);color:var(--accent)}
+.sp-rank:hover{transform:translateY(-2px);border-color:var(--ink-3)}
+.sp-rank .ladder{display:inline-flex;align-items:flex-end;gap:1px;height:12px}
+.sp-rank .ladder i{width:2px;border-radius:1px;background:var(--ink-3);opacity:.55;height:calc(3px + var(--t)*9px);transition:height .3s}
+.sp-rank .ladder i.me{background:currentColor;opacity:1;height:12px;width:3px}
+.sp-rank:hover .ladder i{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*12ms)}
+
+/* tiles ------------------------------------------------------------------------ */
+.sstat{position:relative}
+.sstat .v small{font-size:12px;color:var(--ink-3);margin-left:6px;letter-spacing:0}
+.sstat .chip{vertical-align:3px;margin-left:8px}
+.sstat .chip svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sp-flag{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%;background:var(--neg);animation:sp-ping2 1.6s ease-out infinite}
+@keyframes sp-ping2{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--neg) 60%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+.sp-cost{display:flex;height:6px;gap:1px;margin-top:14px;border-radius:3px;overflow:hidden}
+.sp-cost i{display:block;height:100%;min-width:2px;background:color-mix(in srgb,var(--ink) var(--k,40%),var(--surface));transition:transform .15s,filter .15s;transform-origin:bottom}
+.sp-cost i:hover{transform:scaleY(2);filter:brightness(1.25)}
+.sp-cost i.p{background:var(--accent)}.sp-cost i.l{background:var(--neg)}
+.sp-tread{min-height:15px;margin-top:6px;font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.04em;color:var(--ink-3)}
+.sp-tread b{color:var(--ink);font-weight:500}
+
+/* standards -------------------------------------------------------------------- */
+.sp-std{display:flex;align-items:flex-end;gap:30px;flex-wrap:wrap}
+.sp-big{font:500 38px/1 "IBM Plex Mono",monospace;letter-spacing:-.03em}
+.sp-big small{font-size:14px;color:var(--ink-3);margin-left:2px}
+.sp-eq{position:relative;display:flex;gap:16px;align-items:flex-end;padding:0 6px}
+.sp-eq .th{position:absolute;left:0;right:-14px;bottom:72px;border-top:1px dashed var(--ink-3);opacity:.7;pointer-events:none}
+.sp-eq .th::after{content:"80";position:absolute;right:0;top:-13px;font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-eqb{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink-3);cursor:default;min-width:24px}
+.sp-eqb .t{position:relative;width:14px;height:60px;border-radius:4px;background:var(--raised);overflow:hidden}
+.sp-eqb .t b{position:absolute;left:0;right:0;bottom:0;height:var(--v);background:var(--accent);border-radius:4px;transform-origin:bottom;transform:scaleY(0);transition:transform .7s cubic-bezier(.34,1.56,.64,1)}
+.rv.in .sp-eqb .t b{transform:none}
+.sp-eqb.low .t b{background:var(--warn)}.sp-eqb.bad .t b{background:var(--neg)}
+.sp-eqb.low{color:var(--warn)}.sp-eqb.bad{color:var(--neg)}
+.sp-eqb:hover .t b{transform:scaleY(1.06)}
+.sp-lamps{display:grid;gap:10px;margin-left:auto}
+.sp-lamprow{display:flex;gap:10px;align-items:center}
+.sp-lampb{position:relative;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;border:1px solid transparent;cursor:default;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-lampb svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sp-lampb.miss{border-color:var(--neg);color:var(--neg);background:color-mix(in srgb,var(--neg) 12%,transparent)}
+.sp-lampb.miss::after{content:"";position:absolute;left:5px;right:5px;top:50%;border-top:1.5px solid var(--neg);transform:rotate(-45deg)}
+.sp-lampb:hover{transform:translateY(-3px) scale(1.06)}
+.sp-lampb:hover svg{animation:sp-wiggle .5s ease-in-out}
+.sp-lampb.music:hover svg{animation:sp-bounce .32s ease-in-out infinite alternate}
+.sp-lampb.door:hover svg{animation:sp-swing .7s ease-in-out}
+.sp-lampb .drip{transition:none}
+.sp-lampb.sink:hover .drip{animation:sp-drip .7s ease-in infinite}
+@keyframes sp-wiggle{25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}
+@keyframes sp-bounce{to{transform:translateY(-4px) rotate(-6deg)}}
+@keyframes sp-swing{50%{transform:perspective(60px) rotateY(-38deg)}}
+@keyframes sp-drip{0%{transform:translateY(-2px);opacity:0}30%{opacity:1}100%{transform:translateY(6px);opacity:0}}
+.sp-role{font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;padding:4px 6px;border-radius:4px;border:1px solid var(--warn);color:var(--warn)}
+.sp-sep{width:1px;height:28px;background:var(--rule);margin:0 4px}
+
+/* pull ------------------------------------------------------------------------- */
+.sp-promorow{display:flex;align-items:center;gap:16px}
+.sp-promo{position:relative;flex:1;display:flex;height:16px;border-radius:8px;border:1px dashed var(--rule);overflow:hidden}
+.sp-promo i{display:block;height:100%;transform-origin:left;transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+.rv.in .sp-promo i{transform:none}
+.sp-promo .tr{background:var(--ink-2)}.sp-promo .mk{background:var(--accent);transition-delay:.25s}
+.sp-promo i:hover{filter:brightness(1.2)}
+.sp-promo u{position:absolute;top:5px;right:12px;width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:0}
+section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
+.sp-promo u:nth-of-type(2){right:34px;animation-delay:.35s!important}.sp-promo u:nth-of-type(3){right:58px;animation-delay:.7s!important}
+@keyframes sp-pull{0%{transform:translateX(30px);opacity:0}40%{opacity:.9}100%{transform:translateX(-46px);opacity:0}}
+section:hover>.sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
+.sp-minis{display:flex;gap:22px;margin-top:16px;font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sp-minis span{display:inline-flex;align-items:center;gap:7px;cursor:default}
+.sp-minis .sp-i{color:var(--ink-3)}
+.sp-wave{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-soft);font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
+.sp-wave .sp-i{color:var(--warn)}
+.sp-wave:hover .sp-i svg{animation:sp-surf 1s ease-in-out infinite}
+@keyframes sp-surf{50%{transform:translateX(3px) translateY(-2px)}}
+.sp-wavebar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--rule-soft)}
+.sp-wavebar .base{background:var(--ink-2)}
+.sp-wavebar .lift{background:repeating-linear-gradient(135deg,var(--warn) 0 4px,transparent 4px 7px)}
+.sp-pips{display:inline-flex;gap:3px;align-items:center}
+.sp-pips i{width:6px;height:6px;border-radius:50%;background:var(--rule)}
+.sp-pips i.on{background:var(--warn)}
+
+/* hours ------------------------------------------------------------------------ */
+.hc.slack{background-image:repeating-linear-gradient(135deg,transparent 0 3px,color-mix(in srgb,var(--ink) 35%,transparent) 3px 4.5px)}
+.hours.sp-showcap .hc:not(.cap),.hours.sp-showidle .hc:not(.slack){opacity:.2}
+.hours.sp-showcap .hc.cap,.hours.sp-showidle .hc.slack{animation:sp-cell .8s ease-in-out infinite}
+@keyframes sp-cell{50%{transform:scale(1.22)}}
+.sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.sp-hchip{display:inline-flex;align-items:center;gap:9px;min-height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default;transition:border-color .15s,transform .2s}
+.sp-hchip:hover{border-color:var(--ink-3);transform:translateY(-2px)}
+.sp-hchip b{color:var(--ink);font-weight:500}
+.sp-hchip .sp-sw{width:12px;height:12px;border-radius:3px;flex:none}
+.sp-hchip.cap .sp-sw{box-shadow:inset 0 0 0 1.5px var(--neg)}
+.sp-hchip.cap .sp-i{color:var(--neg)}
+.sp-hchip.idle .sp-sw{background-image:repeating-linear-gradient(135deg,transparent 0 3px,var(--ink-2) 3px 4.5px);background-color:var(--raised)}
+.sp-hchip .fix{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
+
+/* crew ------------------------------------------------------------------------- */
+.person .sp-i{color:var(--warn);margin-left:-2px}
+.person .sp-i svg{width:12px;height:12px}
+.sp-dems{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.sp-dem{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 10px;border-radius:6px;background:var(--raised);font-size:12.5px;color:var(--ink-2);cursor:default;transition:transform .2s}
+.sp-dem:hover{transform:translateY(-2px)}
+.sp-dem b{font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sp-dem.quit{background:color-mix(in srgb,var(--neg) 14%,transparent);color:var(--neg)}
+.sp-dem.quit b{color:var(--neg)}
+.sp-dem:hover .sp-i svg{animation:sp-wiggle .5s ease-in-out}
+.sp-pri{display:inline-flex;gap:2px;align-items:flex-end;height:11px}
+.sp-pri i{width:3px;border-radius:1px;background:var(--rule)}
+.sp-pri i:nth-child(1){height:5px}.sp-pri i:nth-child(2){height:8px}.sp-pri i:nth-child(3){height:11px}
+.sp-pri i.on{background:var(--warn)}.sp-pri.hi i.on{background:var(--neg)}
+
+/* the roster: the plan to type, on the hour grid's own columns ------------------------ */
+.sp-ba{display:flex;gap:40px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px}
+.sp-ba>div{cursor:default}
+.sp-ba .lab{display:block;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.sp-ba .v{font:500 22px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.sp-ba .v s{font-size:14px;color:var(--ink-3);text-decoration-thickness:1px}
+.sp-ba .v .sp-i{color:var(--ink-3)}
+.sp-typed{margin-left:auto;display:flex;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-typed b{color:var(--ink);font-weight:500}
+.sp-ring{width:30px;height:30px;border-radius:50%;background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--rule) 0);display:grid;place-items:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sp-ring::after{content:"";width:22px;height:22px;border-radius:50%;background:var(--ground)}
+.sp-ring.bump{transform:scale(1.25)}
+.sp-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.sp-step{display:inline-flex;align-items:center;gap:9px;min-height:36px;padding:0 12px 0 9px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,transform .2s}
+.sp-step:hover{border-color:var(--ink-3);transform:translateY(-1px)}
+.sp-step .box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--rule);display:grid;place-items:center;color:var(--sp-on);transition:all .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-step .box svg{width:10px;height:10px;stroke-width:2.6;opacity:0}
+.sp-step.done .box{background:var(--accent);border-color:var(--accent)}.sp-step.done .box svg{opacity:1}
+.sp-step.done{color:var(--ink-3)}
+.sp-step small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sp-daytabs a{position:relative;min-width:30px;text-align:center}
+.sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
+.sp-day{display:none}.sp-day.on{display:block}
+.sp-grow{position:relative;display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center;min-height:38px}
+.sp-grow::before{content:"";grid-column:2/-1;grid-row:1;height:32px;border-radius:7px;background:var(--raised);opacity:.45}
+.sp-grow .lab{grid-column:1;grid-row:1;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-3);cursor:default}
+.sp-grow .hh{font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:center;padding-bottom:6px}
+.sp-grow.need{min-height:30px;align-items:end;margin-bottom:4px}
+.sp-grow.need::before{display:none}
+.sp-grow.need .lab{align-self:end;padding-bottom:2px}
+.sp-need{grid-row:1;height:calc(var(--n)*8px);border-radius:2px;background:var(--ink-2);transition:transform .15s;transform-origin:bottom}
+.sp-need:hover{transform:scaleY(1.2)}
+.sp-shift{grid-row:1;z-index:1;height:32px;min-width:0;border-radius:7px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);color:var(--ink);display:flex;align-items:center;gap:7px;padding:0 10px;font:500 12.5px/1 Archivo,sans-serif;white-space:nowrap;overflow:hidden;cursor:pointer;transition:opacity .3s,transform .35s cubic-bezier(.34,1.56,.64,1),outline-color .15s;outline:1.5px solid transparent;outline-offset:1px;transform-origin:left;box-sizing:border-box}
+.sp-shift small{margin-left:auto;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-shift .sp-i svg{width:12px;height:12px}
+.sp-shift.clean,.sp-shift.security{background:var(--raised);border-color:var(--rule)}
+.sp-shift.hire{background:none;border:1px dashed var(--warn);color:var(--warn);cursor:default}.sp-shift.hire small{color:var(--warn)}
+.sp-shift .pin{color:var(--warn)}
+.sp-shift:hover{transform:translateY(-2px)}
+.sp-shift.done{opacity:.4;text-decoration:line-through}
+.sp-shift .tick{display:none;color:var(--accent)}.sp-shift.done .tick{display:inline-grid;animation:pop .35s cubic-bezier(.34,1.56,.64,1)}
+.sp-me{outline-color:var(--accent)!important}
+.person.sp-me{outline:1.5px solid var(--accent);outline-offset:1px}
+.sp-hc{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-soft)}
+.sp-hc>span{display:inline-flex;align-items:center;gap:9px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
+.sp-hc .code{width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-hc .sp-dots{padding:0;gap:4px}
+.sp-dot.bench{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-2);position:relative}
+.sp-dot.bench::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink-2)}
+.sp-dot.hire{background:none;box-shadow:none;border:1.5px dashed var(--warn);box-sizing:border-box}
+.sp-hc .new{color:var(--warn)}
+.sp-hc .new b{font-weight:600}
+
+.sp-hit{animation:sp-hit .9s ease-in-out infinite}
+@keyframes sp-hit{50%{box-shadow:0 0 0 6px var(--accent-soft)}}
+.sp-pre span.unk{color:var(--ink-3);background:none;box-shadow:inset 0 0 0 1px var(--rule)}
+.sp-rank.none{border-style:dashed;color:var(--ink-3)}
+.chip.none{border:1px dashed var(--rule);color:var(--ink-3)}
+.sp-spark{display:flex;align-items:flex-end;gap:3px;height:24px;margin-top:10px}
+.sp-spark i{flex:1;height:var(--v);border-radius:1.5px;background:var(--rule);transition:transform .15s;transform-origin:bottom}
+.sp-spark i.l{background:var(--ink-2)}.sp-spark.dn i.l{background:var(--neg)}.sp-spark.up i.l{background:var(--accent)}
+.sp-spark i:hover{transform:scaleY(1.15)}
+.sp-meter{height:6px;border-radius:3px;background:var(--rule);margin-top:14px;overflow:hidden}
+.sp-meter i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:3px}
+.sp-meter.bad i{background:var(--neg)}
+.sp-ceil{display:flex;gap:10px;margin-top:11px;color:var(--ink-3)}
+.sp-ceil .on{color:var(--neg)}
+.sp-eqb.unk .t{background:none;border:1px dashed var(--rule);box-sizing:border-box}
+.sp-lampb.ok{background:var(--accent-soft);color:var(--accent)}
+.sp-lampb.unk{border:1px dashed var(--rule);color:var(--ink-3)}
+.sp-wavebar.unk{background:repeating-linear-gradient(135deg,var(--ink-3) 0 4px,transparent 4px 7px);opacity:.6}
+.sp-ba .sp-meter{width:150px;margin-top:0}
+.sp-ba .sp-meter i{background:var(--ink-2)}
+.sp-need.c{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px);box-shadow:inset 0 0 0 1px var(--neg)}
+.sp-need.s{background:none;box-shadow:inset 0 0 0 1px var(--ink-3);border:0}
+.sp-frag{grid-row:1;z-index:1;height:32px;border-radius:4px;background:color-mix(in srgb,var(--ink) 22%,var(--surface));opacity:0;transform:scaleX(.6);transition:opacity .3s,transform .4s cubic-bezier(.34,1.56,.64,1);transition-delay:calc(var(--k)*14ms);pointer-events:none}
+.sp-gantt.now .sp-frag{opacity:1;transform:none}
+.sp-gantt.now .sp-shift{opacity:0;transform:scaleX(.9);pointer-events:none}
+.sp-gantt.now .sp-grow.need{opacity:.35}
+.sp-gantt.none .sp-grow::before{background:none;box-shadow:inset 0 0 0 1px var(--rule);opacity:1;border-radius:7px}
+
+/* a big roster: one row a role, one dot a person ------------------------------------ */
+.sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sp-rrow{display:grid;grid-template-columns:200px 1fr 240px;gap:18px;align-items:center;min-height:48px;border-bottom:1px solid var(--rule-soft)}
+.sp-rbtn{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;cursor:pointer;text-align:left}
+.sp-rbtn i{width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
+.sp-rbtn .sp-i{color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sp-rbtn:hover .sp-i{color:var(--accent);transform:translateX(2px)}
+.sp-rrow.open .sp-rbtn .sp-i{transform:rotate(90deg)}
+.sp-dots{display:flex;flex-wrap:wrap;gap:5px;padding:8px 0}
+.sp-dot{width:11px;height:11px;border-radius:50%;background:var(--ink-2);cursor:default;transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .15s}
+.sp-dot.off{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.sp-dot:hover{transform:scale(1.7);background:var(--accent)}
+.sp-dot.off:hover{background:none;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.sp-rrow:hover .sp-dot{animation:sp-hop .5s ease-in-out;animation-delay:calc(var(--k)*18ms)}
+@keyframes sp-hop{40%{transform:translateY(-4px)}}
+.sp-rrow .c{font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right;white-space:nowrap}
+.sp-rrow .c b{color:var(--ink);font-weight:500}
+.sp-rpeople{display:none;grid-column:1/-1;padding:4px 0 14px}
+.sp-rrow.open .sp-rpeople{display:block;animation:rowin .3s ease}
+
+/* shelves, stock, inputs --------------------------------------------------------- */
+.sp-noplan{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px dashed var(--warn);border-radius:4px;color:var(--warn);font-size:11px}
+.sp-noplan svg{width:11px;height:11px}
+.sp-red{color:var(--neg)}
+.sub.sp-red{color:var(--neg)}
+.sp-up{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;border:1px solid var(--rule);font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2);background:var(--surface)}
+.sp-up.bad{border-color:var(--neg);color:var(--neg)}
+.sp-up svg{width:12px;height:12px}
+.sp-rail{position:relative;display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;height:28px;align-items:end;padding-bottom:4px;box-sizing:border-box;vertical-align:middle}
+.sp-rail i{display:block;height:6px;border-radius:2px;background:var(--rule)}
+.sp-rail i.c{background:var(--accent)}
+.sp-rail i.d{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px)}
+.sp-rail .trk{position:absolute;top:0;left:calc(var(--d)*23px + 2px);color:var(--ink);transition:left 1.2s cubic-bezier(.2,.7,.2,1) .3s}
+.rv:not(.in) .sp-rail .trk{left:-26px}
+.sp-rail .trk svg{width:16px;height:16px}
+.sp-rail .trk.held{color:var(--ink-3)}
+.sp-rail .trk.held::after{content:"";position:absolute;left:0;right:0;top:50%;border-top:1.5px solid var(--neg);transform:rotate(-35deg)}
+tr:hover .sp-rail .trk:not(.held) svg{animation:sp-drive .5s ease-in-out infinite}
+@keyframes sp-drive{50%{transform:translateY(-1.5px)}}
+.sp-days{display:inline-grid;grid-template-columns:repeat(7,20px);gap:3px;text-align:center}
+.sp-days b{font-weight:500}.sp-days b.now{color:var(--ink)}
+.sp-zz{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);letter-spacing:.1em}
+tr:hover .sp-zz{animation:sp-zz 1.2s ease-in-out infinite}
+@keyframes sp-zz{50%{transform:translateY(-2px);opacity:.5}}
+.sp-feeds{display:flex;flex-direction:column;gap:9px}
+.sp-feed{display:grid;grid-template-columns:24px 1fr 90px 64px;gap:10px;align-items:center;font-size:13px}
+.sp-feed .tr{height:6px;border-radius:3px;background:var(--rule-soft);overflow:hidden}
+.sp-feed .tr i{display:block;height:100%;width:var(--w);background:var(--ink-2);border-radius:3px;transition:background .2s}
+.sp-feed:hover .tr i{background:var(--accent)}
+.sp-feed .c{font:500 12px "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+
+/* factory lines -------------------------------------------------------------------- */
+.sp-line{display:grid;grid-template-columns:230px 116px 1fr 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
+.sp-line.head{padding:0 0 8px;border-bottom:1px solid var(--rule);font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.sp-line .n{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
+.sp-line.head .n{font-size:10.5px}
+.sp-line .n small{display:block;font-size:10.5px;color:var(--ink-3)}
+.sp-lines.dim .sp-line:not(.lit):not(.head){opacity:.3}
+.sp-mach{display:flex;gap:6px}
+.sp-m{position:relative;width:32px;height:32px;border-radius:8px;background:var(--raised);overflow:hidden;display:grid;place-items:center;color:var(--sp-on);cursor:default}
+.sp-m::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--h,100%);background:var(--accent)}
+.sp-m svg{position:relative;width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sp-line:hover .sp-m:not(.q):not(.z) svg,.sp-line.lit .sp-m:not(.q):not(.z) svg{animation:sp-spin 2.4s linear infinite}
+@keyframes sp-spin{to{transform:rotate(360deg)}}
+.sp-m.q,.sp-m.z{background:none;box-sizing:border-box}
+.sp-m.q{border:1px dashed var(--warn);color:var(--warn);font:600 14px/1 "IBM Plex Mono",monospace}
+.sp-m.z{border:1px dashed var(--rule);color:var(--ink-3);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.06em}
+.sp-m.q::before,.sp-m.z::before{display:none}
+.sp-belt{height:2px;background-image:repeating-linear-gradient(90deg,var(--ink-3) 0 6px,transparent 6px 12px);opacity:.45}
+.sp-line:hover .sp-belt,.sp-line.lit .sp-belt{opacity:1;background-image:repeating-linear-gradient(90deg,var(--accent) 0 6px,transparent 6px 12px);animation:sp-belt .5s linear infinite}
+.sp-belt.stop{background-image:repeating-linear-gradient(90deg,var(--neg) 0 2px,transparent 2px 12px)!important;animation:none!important}
+@keyframes sp-belt{to{background-position:12px 0}}
+.sp-pile{display:inline-flex;align-items:center;gap:5px;color:var(--warn)}
+.sp-pick{font:inherit;font-size:12.5px;color:var(--ink);background:var(--surface);border:1px solid var(--warn);border-radius:6px;padding:5px 8px;min-height:30px}
+
+/* profit with its two weeks ------------------------------------------------------------ */
+.sp-band{fill:var(--ink);opacity:.05;transition:opacity .15s;cursor:default}
+.sp-band.last{opacity:.09}
+.sp-band:hover{opacity:.16}
+
+/* a home ------------------------------------------------------------------------------- */
+.sp-home{display:grid;grid-template-columns:400px 1fr;gap:32px;align-items:stretch;margin-top:26px}
+.sp-house{border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);display:grid;place-items:end center;padding:20px 20px 0;overflow:hidden;cursor:default}
+.sp-house svg{width:100%;height:auto;overflow:visible}
+.sp-house .wall{fill:var(--raised);stroke:var(--rule);stroke-width:1.5}
+.sp-house .win{fill:var(--ground);stroke:var(--rule);stroke-width:1.2;transition:fill .35s}
+.sp-house .win.on{fill:var(--warn)}
+.sp-house:hover .win{fill:var(--warn)}
+.sp-house:hover .win.late{fill:var(--ground)}
+.sp-house .doorleaf{fill:var(--accent);transform-origin:183px 0;transform-box:fill-box;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.sp-house:hover .doorleaf{transform:perspective(200px) scaleX(.55)}
+.sp-house .moon{fill:var(--ink-2);transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
+.sp-house:hover .moon{transform:translate(18px,-8px)}
+.sp-house .star{fill:var(--ink-3)}
+.sp-house:hover .star{animation:blink 1.4s steps(1) infinite}
+.sp-house .ground{stroke:var(--rule);stroke-width:1.5}
+.sp-house .tree{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.3}
+.sp-house:hover .tree{animation:sp-sway 1.8s ease-in-out infinite;transform-origin:50% 100%;transform-box:fill-box}
+@keyframes sp-sway{50%{transform:rotate(3deg)}}
+.sp-hometiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start}
+@media (prefers-reduced-motion:reduce){.board *{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+
+.board{min-height:0}
+.board.phone{min-width:0}
+.feature-new{display:inline-block;flex:none;margin-left:6px;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+.sb-i{display:inline-grid;place-items:center;flex:none}
+.sb-i svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+button{font:inherit;color:inherit}
+
+/* the three objects, with what each still needs ------------------------------ */
+.sb-sub{display:flex;align-items:center;gap:14px;margin-top:28px}
+.sb-sub .aside{margin-left:auto;display:flex;gap:10px;align-items:center}
+.sb-tabs a{display:inline-flex;align-items:center;gap:8px;padding:7px 12px 7px 11px}
+.sb-tabs a svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sb-tabs a:hover svg{transform:translateY(-2px) rotate(-8deg)}
+.sb-n{display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--neg);color:#fff;font:600 10.5px/1 "IBM Plex Mono",monospace;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.sb-n.bump{transform:scale(1.35)}
+.sb-n.zero{background:var(--accent-soft);color:var(--accent);padding:0}
+.sb-n.zero svg{width:11px;height:11px;stroke-width:2.6}
+.seg a.on .sb-n.zero{background:var(--accent);color:var(--ground)}
+.sb-view a{display:inline-grid;place-items:center;width:34px;padding:6px 0}
+.sb-view a svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* the checklist, now one line for the whole page: a road, a truck, a copy ------ */
+.sb-tray{display:flex;align-items:center;gap:16px;margin-top:18px;padding:9px 10px 9px 16px;border:1px solid var(--rule-soft);border-radius:10px;background:var(--surface)}
+.sb-tray .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.sb-tray .txt{font:500 12.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);white-space:nowrap}
+.sb-tray .txt b{color:var(--ink);font-weight:500}
+.sb-road{position:relative;flex:1;min-width:120px;height:26px}
+.sb-road::before{content:"";position:absolute;left:0;right:22px;top:17px;border-top:2px dashed var(--rule)}
+.sb-road>i{position:absolute;left:0;top:17px;height:2px;background:var(--accent);border-radius:2px;width:calc((100% - 22px) * var(--p));transition:width .7s cubic-bezier(.2,.7,.2,1)}
+.sb-road .trk{position:absolute;top:2px;left:calc((100% - 22px) * var(--p) - 10px);color:var(--ink);transition:left .7s cubic-bezier(.34,1.56,.64,1)}
+.sb-road .trk svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sb-road .home{position:absolute;right:0;top:3px;color:var(--ink-3)}
+.sb-road .home svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sb-tray:hover .sb-road .trk svg{animation:sp-drive .45s ease-in-out infinite}
+.sb-tray.done .sb-road .trk{color:var(--accent)}
+.sb-tray.done .sb-road .home{color:var(--accent);animation:sb-honk .6s ease-in-out 2}
+@keyframes sb-honk{30%{transform:translateY(-4px) rotate(-8deg)}60%{transform:translateY(0) rotate(6deg)}}
+.sb-tray .btn2 small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-tray .btn2.copied{border-color:var(--accent);color:var(--accent)}
+.sb-tabdots{display:flex;gap:10px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-tabdots span{display:inline-flex;align-items:center;gap:5px}
+.sb-tabdots svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* the one line that says what the tab found ------------------------------------ */
+.sb-verdict{display:flex;align-items:baseline;gap:10px;margin:22px 0 14px;font-size:13.5px;color:var(--ink-2);flex-wrap:wrap}
+.sb-verdict b{color:var(--ink);font-weight:600}
+.sb-verdict .check{flex:none;align-self:center}
+.sb-crumb{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:3px 4px 3px 10px;border-radius:14px;background:var(--accent-soft);color:var(--accent);font:500 11.5px/1 "IBM Plex Mono",monospace;white-space:nowrap}
+.sb-crumb button{width:20px;height:20px;border:0;border-radius:50%;background:none;color:inherit;display:grid;place-items:center;cursor:pointer}
+.sb-crumb button:hover{background:var(--accent-soft)}
+.sb-crumb svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+
+/* rows: a tick, the object, its numbers, the setting to type, one word ------------ */
+.sb-t{table-layout:auto}
+.sb-t.fixed{table-layout:fixed}
+.sb-t td.nm,.sb-t th.nm{white-space:normal}
+.sb-t td{vertical-align:middle}
+.sb-t th.sb-tk,.sb-t td.sb-tk{width:34px;padding-left:6px;padding-right:0}
+.sb-t td.st{white-space:normal;min-width:190px;max-width:290px;text-align:left}
+.sb-t td.nm{white-space:normal}
+.sb-t tr.sb-ev{display:none}
+.board.sb-every .sb-t tr.sb-ev{display:table-row;animation:rowin .3s ease}
+.board.sb-every .sb-only{display:none}
+.board:not(.sb-every) .sb-evonly{display:none}
+.sb-t tr.sb-kid{display:none}
+.sb-t.open-kids tr.sb-kid{display:table-row;animation:rowin .3s ease}
+.sb-t tr.sb-edge td{border-top:1px dashed var(--rule)}
+.sb-t tr.sb-edge ~ tr.sb-edge td{border-top-style:none}
+.sb-t tr.sb-lit td{background:var(--accent-soft)}
+.sb-t tr.sb-arrived td{background:var(--surface)}
+.sb-t tr.sb-arrived td.sb-tk{box-shadow:inset 3px 0 0 var(--accent)}
+.sb-t tr.sb-arrived .sb-v{animation:sb-ping 1.6s ease-out infinite}
+@keyframes sb-ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--info) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
+.sb-t tr.sb-done td:not(.sb-tk){opacity:.42}
+.sb-t tr.sb-done .sb-chg b{text-decoration:line-through;text-decoration-thickness:1.5px}
+.sb-t th button.supply-sort{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.sb-t th button.supply-sort:hover{color:var(--ink)}
+.sb-t th button.supply-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.sb-t th[data-dir] button{color:var(--ink)}
+.sb-t th .arr{display:inline-block;width:8px;opacity:0}
+.sb-t th[data-dir] .arr{opacity:1}
+.sb-t th[data-dir="desc"] .arr::before{content:"\2193"}
+.sb-t th[data-dir="asc"] .arr::before{content:"\2191"}
+.sb-more{display:flex;gap:14px;align-items:center;margin:12px 0 0;font-size:12.5px;color:var(--ink-3)}
+
+/* the tick: same as the checklist's, now at the head of the row ------------------ */
+.sb-tick{width:22px;height:22px;border-radius:50%;border:1px solid var(--ink-3);background:none;display:grid;place-items:center;color:var(--sp-on,#08130d);cursor:pointer;padding:0;transition:transform .25s cubic-bezier(.34,1.56,.64,1),background .2s,border-color .2s}
+.sb-tick svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .28s ease}
+.sb-tick:hover{border-color:var(--accent);transform:scale(1.12)}
+.sb-tick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sb-done .sb-tick{background:var(--accent);border-color:var(--accent)}
+.sb-done .sb-tick svg{stroke-dashoffset:0}
+.sb-done .sb-tick{animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+
+/* the setting, where the change is typed: now, arrow, set --------------------- */
+.sb-chg{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
+.sb-chg s{color:var(--ink-3);text-decoration:none}
+.sb-chg .to{color:var(--ink-3);display:inline-grid;align-self:center}
+.sb-chg .to svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sb-chg b{color:var(--accent);font-weight:600}
+.sb-chg small{font-size:10.5px;color:var(--ink-3)}
+.sb-uses{border-bottom:1px dotted var(--ink-3);cursor:help}
+.sb-rated{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--warn);color:var(--warn);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
+.sb-in{width:70px;padding:3px 6px;border:1px solid var(--rule);border-radius:5px;background:var(--ground);color:var(--accent);font:600 13.5px/1.3 "IBM Plex Mono",monospace;text-align:right}
+.sb-in:hover{border-color:var(--ink-3)}
+.sb-in:focus{outline:2px solid var(--accent);outline-offset:1px}
+td .sub.r{text-align:right}
+
+/* one word per fact ------------------------------------------------------------ */
+.sb-v{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font:500 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;white-space:nowrap;cursor:default}
+.sb-v svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sb-v.ok{background:var(--accent-soft);color:var(--accent)}
+.sb-v.warn{background:#f0913a22;color:var(--warn)}
+.sb-v.bad{background:#ff625722;color:var(--neg)}
+.sb-v.plan{box-shadow:inset 0 0 0 1px var(--neg);color:var(--neg);background:none}
+.sb-v.idle{background:color-mix(in srgb,var(--info) 16%,transparent);color:var(--info)}
+.sb-v.new{box-shadow:inset 0 0 0 1px var(--rule);color:var(--ink-3);background:none}
+.sb-v.made{background:var(--raised);color:var(--ink-2)}
+.sb-why{display:block;margin-top:4px;font:400 12px/1.35 Archivo,sans-serif;color:var(--ink-3)}
+.sb-why a{color:var(--ink-2);border-bottom:1px solid var(--rule);text-decoration:none}
+.sb-why a:hover{color:var(--ink)}
+tr:hover .sb-v.idle svg{animation:sp-zz 1.2s ease-in-out infinite}
+tr:hover .sb-v.bad svg,tr:hover .sb-v.plan svg{animation:sp-wiggle .5s ease-in-out}
+
+/* a site's name is a way to its page, the pin a way to the map ---------------- */
+.sb-site{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.sb-site a.nm{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .15s}
+.sb-site a.nm:hover{border-bottom-color:var(--ink-3)}
+.sb-map{width:22px;height:22px;border-radius:5px;border:1px solid var(--rule);background:var(--surface);display:grid;place-items:center;color:var(--ink-3);cursor:pointer;padding:0}
+.sb-map:hover{color:var(--ink);border-color:var(--ink-3)}
+.sb-map svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* a pressure gauge for a daily round, the week's rail for a weekly import ------- */
+.sb-g{display:inline-flex;align-items:center;gap:8px}
+.sb-g .tr{position:relative;width:64px;height:4px;border-radius:3px;background:var(--rule);overflow:visible}
+.sb-g .tr i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--accent);width:min(100%,var(--w))}
+.sb-g .tr u{position:absolute;left:calc(var(--m,100%) - 1.5px);top:-3px;height:10px;border-right:1.5px solid var(--ink-3)}
+.sb-g.bad .tr u{border-right-color:var(--ink)}
+.sb-g.warn .tr i{background:var(--warn)}.sb-g.bad .tr i{background:var(--neg)}
+.sb-g b{font-weight:500;min-width:34px;text-align:right}
+.sb-g.bad b{color:var(--neg)}
+.sb-g.none .tr{background:none;border:1px dashed var(--neg);height:6px;box-sizing:border-box}
+.sb-rail .sp-rail{grid-template-columns:repeat(7,14px);gap:2px}
+.sb-rail .sp-rail .trk{left:calc(var(--d)*16px - 1px)}
+.sb-rail .sp-rail .trk svg{width:14px;height:14px}
+.sb-days{display:inline-grid;grid-template-columns:repeat(7,14px);gap:2px;text-align:center;font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3);letter-spacing:0}
+.sb-days b{font-weight:500}.sb-days b.now{color:var(--ink)}
+
+/* a warehouse or factory: one head, its rows under it ------------------------- */
+.sb-obj{margin-top:18px;border-top:1px solid var(--rule)}
+.sb-obj>summary{list-style:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto 28px;gap:18px;align-items:center;padding:14px 4px 14px 0;cursor:pointer}
+.sb-obj>summary::-webkit-details-marker{display:none}
+.sb-obj .ic{width:34px;height:34px;border-radius:9px;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s}
+.sb-obj .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sb-obj>summary:hover .ic{color:var(--accent);transform:rotate(-8deg) scale(1.06)}
+.sb-obj.fac>summary:hover .ic svg{animation:sp-spin 2.4s linear infinite}
+.sb-obj .who{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sb-obj .who .sb-site{font-size:15px;font-weight:600}
+.sb-obj .who .sb-site .go{font:500 11.5px/1 Archivo,sans-serif;color:var(--ink-3);text-decoration:none;margin-left:4px}
+.sb-obj .who .sb-site .go:hover{color:var(--accent)}
+.sb-obj .how{font-size:12.5px;color:var(--ink-3);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
+.sb-obj .how span{display:inline-flex;align-items:center;gap:6px}
+.sb-obj .how b{color:var(--ink-2);font-weight:500}
+.sb-obj .how em{font-style:normal}
+.sb-obj .how .sb-i svg{width:13px;height:13px}
+.sb-stats{display:flex;gap:26px}
+.sb-stat{display:flex;flex-direction:column;gap:6px;text-align:right;cursor:default}
+.sb-stat .lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sb-stat .v{font:500 17px/1 "IBM Plex Mono",monospace;letter-spacing:-.01em}
+.sb-stat .v small{font-size:11px;color:var(--ink-3);margin-left:4px;letter-spacing:0}
+.sb-stat.take .v{color:var(--ink)}
+.sb-obj .cnt{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.sb-obj .cnt.red{color:var(--neg)}
+.sb-obj .tog{width:26px;height:26px;border-radius:50%;border:1px solid var(--rule);display:grid;place-items:center;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.sb-obj .tog svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sb-obj[open] .tog{transform:rotate(90deg)}
+.sb-obj>.body{padding:0 0 10px 52px}
+.sb-obj.lit{outline:1px solid var(--accent);outline-offset:6px;border-radius:6px}
+.sb-part{margin:14px 0 6px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);display:flex;gap:10px;align-items:center}
+.sb-part .why{text-transform:none;letter-spacing:0}
+.sb-clear{display:flex;align-items:center;gap:10px;padding:12px 0;font-size:13px;color:var(--ink-3);border-bottom:1px solid var(--rule-soft)}
+.sb-clear .check{flex:none}
+.sb-flat{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center;padding:13px 4px 13px 0;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+.sb-flat .ic{width:34px;height:34px;border-radius:9px;background:var(--raised);display:grid;place-items:center;color:var(--ink-3)}
+.sb-flat .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sb-flat .sb-site{font-size:14px;font-weight:600;color:var(--ink-2)}
+.sb-flat .sb-site a.nm{color:var(--ink-2)}
+
+/* bundle rows: one cause, one line -------------------------------------------- */
+.sb-kids{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:1px 7px;border-radius:10px;border:1px solid var(--rule);background:none;color:var(--ink-2);font:500 11px/1.5 "IBM Plex Mono",monospace;cursor:pointer}
+.sb-kids:hover{border-color:var(--ink-3);color:var(--ink)}
+.sb-kids svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.2;transition:transform .25s}
+.open-kids .sb-kids svg{transform:rotate(90deg)}
+tr.sb-kid td.nm{padding-left:26px;color:var(--ink-2)}
+
+/* a factory's day: one cell an hour; staffed, needed, spare -------------------- */
+.sb-day{display:inline-grid;grid-template-columns:repeat(24,5px);gap:1px;height:14px;vertical-align:middle;cursor:default}
+.sb-day i{display:block;border-radius:1px;background:var(--rule-soft)}
+.sb-day i.on{background:var(--accent)}
+.sb-day i.slack{background:repeating-linear-gradient(135deg,var(--accent) 0 1.5px,transparent 1.5px 3.5px);opacity:.75}
+.sb-day i.miss{background:none;box-shadow:inset 0 0 0 1px var(--neg)}
+tr:hover .sb-day i.on{animation:sb-tick 1.2s steps(1) infinite;animation-delay:calc(var(--k)*50ms)}
+@keyframes sb-tick{50%{filter:brightness(1.35)}}
+.sb-hrs{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.sb-hrs .n{font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sb-hrs .n b{color:var(--ink);font-weight:500}
+.sb-t .sp-mach{gap:4px}
+.sb-t .sp-m{width:24px;height:24px;border-radius:6px}
+.sb-t .sp-m svg{width:13px;height:13px}
+.sb-t tr:hover .sp-m svg{animation:sp-spin 2.4s linear infinite}
+
+/* an idea, not a fault: a quiet strip ------------------------------------------- */
+.sb-hint{display:flex;align-items:center;gap:14px;margin-top:22px;padding:12px 16px;border-radius:10px;border:1px dashed var(--rule);font-size:13px;color:var(--ink-2)}
+.sb-hint b{color:var(--ink);font-weight:600}
+.sb-hint .ic{width:30px;height:30px;border-radius:50%;background:color-mix(in srgb,var(--info) 16%,transparent);color:var(--info);display:grid;place-items:center;flex:none;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.sb-hint .ic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-hint:hover .ic{transform:rotate(-25deg)}
+.sb-hint .link{margin-left:auto;white-space:nowrap}
+
+/* nothing to change: a shelf that is fine -------------------------------------- */
+.sb-empty{display:grid;grid-template-columns:260px 1fr;gap:36px;align-items:center;margin-top:30px;padding:26px 30px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft)}
+.sb-empty h3{margin:0 0 8px;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.sb-empty p{margin:0 0 16px;font-size:13.5px;color:var(--ink-2);max-width:560px}
+.sb-empty p b{color:var(--ink);font-weight:500}
+.sb-empty svg.art{width:100%;height:auto;overflow:visible;cursor:default}
+.sb-empty .art .shelf{stroke:var(--rule);stroke-width:2;fill:none}
+.sb-empty .art .box{fill:var(--raised);stroke:var(--ink-3);stroke-width:1.2;transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
+.sb-empty .art .box.g{fill:var(--accent-soft);stroke:var(--accent)}
+.sb-empty:hover .art .box{transform:translateY(-3px)}
+.sb-empty:hover .art .box:nth-of-type(2n){transform:translateY(-5px) rotate(-2deg)}
+.sb-empty .art .van{transition:transform 1.4s cubic-bezier(.2,.7,.2,1)}
+.sb-empty:hover .art .van{transform:translateX(34px)}
+.sb-empty .art .van path,.sb-empty .art .van circle{stroke:var(--ink-2);stroke-width:1.6;fill:var(--surface)}
+.sb-empty .art .tickc{fill:var(--accent)}
+.sb-empty .art .tickp{stroke:var(--sp-on,#08130d);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+/* goods flow ------------------------------------------------------------------ */
+.sb-flowbox{margin-top:8px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);padding:14px 20px 12px}
+.sb-flowbox svg{width:100%;height:auto;display:block}
+.sb-flowbox .flow .node{cursor:pointer}
+.flow .sb-dot{stroke:var(--surface);stroke-width:2}
+.flow .sb-dot.bad{fill:var(--neg)}.flow .sb-dot.warn{fill:var(--warn)}.flow .sb-dot.idle{fill:var(--info)}.flow .sb-dot.ok{fill:var(--accent)}
+.flow .pipe.noplan{stroke:var(--neg);stroke-opacity:.8;stroke-dasharray:3 6}
+.flow .pipe.noplan:hover{stroke-dasharray:3 6}
+.flow .plab{font:500 10px "IBM Plex Mono",monospace;fill:var(--ink-3)}
+.flow .plab.bad{fill:var(--neg)}
+.flow .node.sb-on rect{stroke:var(--accent);stroke-width:1.5}
+.sb-flowleg{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-flowleg span{display:inline-flex;align-items:center;gap:7px}
+.sb-flowleg i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.sb-flowleg u{width:22px;border-top:2px dashed var(--ink-3);display:inline-block;text-decoration:none}
+.sb-flowleg u.d{border-top-style:solid}
+.board:not(.sb-diag) .sb-diagonly{display:none}
+.board.sb-diag .sb-listonly{display:none}
+.sb-detail{margin-top:26px}
+.sb-detail .head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.sb-detail .head h3{margin:0;font-size:16px;font-weight:600}
+.sb-io{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin:6px 0 4px}
+
+/* one word, everywhere (R8) ---------------------------------------------------- */
+.sb-voc{display:grid;grid-template-columns:380px minmax(0,1fr);gap:44px;margin-top:34px;align-items:start}
+.sb-words{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sb-word{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--rule-soft);font-size:13px;color:var(--ink-2)}
+.sb-word b{color:var(--ink);font-weight:500}
+.sb-word small{display:block;margin-top:3px;font-size:11.5px;color:var(--ink-3)}
+.sb-where{display:flex;flex-direction:column;gap:16px}
+.sb-place{padding:14px 16px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
+.sb-place .tag{display:inline-flex;align-items:center;gap:7px;margin-bottom:10px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sb-place .tag svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sb-place .find{padding:6px 6px 6px 0;border-bottom:none}
+.sb-place table{font-size:13px}
+.sb-place td,.sb-place th{padding:7px 10px}
+.sb-place td.l{white-space:normal}
+.sb-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.sb-place{min-width:0}
+.sb-place .sb-t td.st{min-width:0}
+.sb-quiet{display:flex;align-items:center;gap:10px;padding:10px 0;color:var(--ink-3);font-size:12.5px}
+.sb-quiet .dash{width:30px;border-top:1px dashed var(--rule)}
+.sb-node{display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--rule);background:var(--ground);font-size:12.5px}
+.sb-node .d{width:9px;height:9px;border-radius:50%}
+.sb-node small{font:400 10.5px "IBM Plex Mono",monospace;color:var(--ink-3)}
+
+/* phone ---------------------------------------------------------------------- */
+.phone .wrap{width:calc(100% - 32px)}
+.phone .mast{height:auto;flex-wrap:wrap;gap:12px 10px;padding:16px 0 10px;position:static}
+.phone .wordmark{font-size:22px}
+.phone .clock{margin-left:auto}
+.phone .clock b{font-size:13px}
+.phone .clock small{font-size:9.5px}
+.phone .nav{order:3;width:100%;margin:0;justify-content:space-between}
+.phone .nav a{padding:9px 11px}
+.phone .nav a span,.phone .nav .feature-new{display:none}
+.phone .nav a.on{background:var(--raised)}
+.phone .sb-sub{flex-direction:column;align-items:stretch;gap:10px;margin-top:16px}
+.phone .sb-sub .aside{margin-left:0}
+.phone .sb-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.phone .sb-tabs a{justify-content:center;padding:9px 4px;font-size:12px;gap:6px}
+.phone .sb-tray{flex-wrap:wrap;gap:10px 12px;padding:10px 12px}
+.phone .sb-tray .lab{display:none}
+.phone .sb-road{flex:1 1 100%;order:3}
+.phone .sb-tray .btn2{margin-left:auto}
+.phone .sb-tray .why{display:none}
+.phone .sb-tray .btn2 small{display:none}
+.phone .sb-sub .aside{display:block}
+.phone .sb-mode{display:grid;grid-template-columns:1fr 1fr;width:100%;box-sizing:border-box}
+.phone p.more3{margin:10px 0 0;padding:0 0 12px 42px;font-size:12px;color:var(--ink-3);border-bottom:1px solid var(--rule-soft)}
+.phone .sb-mode a{text-align:center}
+.phone .sb-verdict{font-size:13px;margin:16px 0 8px}
+.sb-grp{display:flex;align-items:center;gap:10px;margin-top:18px;padding:10px 0 8px;border-bottom:1px solid var(--rule)}
+.sb-grp .sb-site{font-weight:600;font-size:14px}
+.sb-grp .cnt{margin-left:auto;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-grp + .how{margin:0;font-size:12px;color:var(--ink-3);padding:8px 0 2px}
+.sb-card{display:grid;grid-template-columns:34px 1fr;gap:4px 8px;padding:14px 0;border-bottom:1px solid var(--rule-soft)}
+.sb-card .sb-tick{margin-top:1px;width:26px;height:26px}
+.sb-card .top{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.sb-card .top b{font-weight:600;font-size:14px}
+.sb-card .sb-why{margin-top:5px}
+.sb-card .facts{grid-column:2;display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sb-card .facts b{color:var(--ink-2);font-weight:500}
+.sb-card .set{grid-column:2;display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:10px;padding:9px 10px;border-radius:8px;background:var(--surface);font:500 13px/1.2 "IBM Plex Mono",monospace}
+.sb-card .set .where{font:400 11.5px/1.3 Archivo,sans-serif;color:var(--ink-3);text-align:right}
+.sb-card.sb-done>*:not(.sb-tick){opacity:.42}
+.sb-card.sb-done .sb-chg b{text-decoration:line-through}
+.sb-card.sb-ev{display:none}
+.board.sb-every .sb-card.sb-ev{display:grid}
+
+@media (prefers-reduced-motion:reduce){.board *{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+</style>
+</helmet>
+<div class="board {{theme}} " style="width: 1440px; height: 1720px;">
+<div class="wrap">
+<header class="mast">
+  <div class="brand"><span class="wordmark">HART. YT</span><span class="dot"></span></div>
+  <nav class="nav" id="nav"><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.600 5.600l1.400 1.400M17 17l1.400 1.400M5.600 18.400 7 17M17 7l1.400-1.400"></path></svg><span>Today</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span>Company</span></a><a class="on" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.500 8.500 12 4l8.500 4.500v8L12 21l-8.500-4.500z"></path><path d="M3.500 8.500 12 13l8.500-4.500M12 13v8"></path></svg><span>Supply</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span>Growth</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg><span>Map</span><em class="feature-new">NEW</em></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 7h6M9 11h6M9 15h4"></path></svg><span>Wiki</span><em class="feature-new">NEW</em></a><i class="ink"></i></nav>
+  <div class="clock" data-tip="Game time when the save was written. Day 1 was a Monday."><b>Day 73<i>·</i>Wed 11:13</b><small>YEAR 2 · 26 SITES · 529 STAFF</small></div>
+</header>
+
+<div class="sb-sub"><nav class="seg sb-tabs" aria-label="Supply"><a class="" href="Main.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v10h16V10"></path><path d="M3 10l2-6h14l2 6"></path><path d="M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path><path d="M10 20v-5h4v5"></path></svg><span>Shops</span><span class="sb-n" data-tab="Shops" data-tip="8 changes to type in">8</span></a><a class="on" href="Warehouses.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg><span>Warehouses</span><span class="sb-n" data-tab="Warehouses" data-tip="7 changes to type in">7</span></a><a class="" href="Factories.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V11l6 3.500V11l6 3.500V5h5v16z"></path><path d="M7 18h2M12 18h2M16.500 9v.01"></path></svg><span>Factories</span><span class="sb-n" data-tab="Factories" data-tip="2 changes to type in">2</span></a></nav><div class="aside"><span class="seg sb-mode" aria-label="Which rows to list"><a class="on" href="#" data-mode="changes">Needs a change</a><a class="" href="#" data-mode="all">Everything</a></span></div></div>
+
+<div class="sb-tray" data-total="19" data-other="2" style="--p:0.105">
+  <span class="lab">Change checklist</span>
+  <span class="txt"><b class="d">2</b> of 19 typed in</span>
+  <span class="sb-road" aria-hidden="true"><i></i><span class="trk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><span class="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg></span></span>
+  <span class="why" data-tip="Tick a row once you have typed its setting in the game. Ticks are your own notes, kept on this device per character; a row goes once a newer save shows the change. Amounts are units, not boxes." tabindex="0"><i>?</i></span>
+  <button type="button" class="btn2 sb-copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path></svg><span>Copy remaining</span><small class="l">17</small></button>
+  <button type="button" class="ibtn sb-reset" aria-label="Clear your ticks" data-tip="Clear your ticks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.300-5.700"></path><path d="M20 4v5h-5"></path></svg></button>
+</div>
+<p class="sb-verdict"><span><b>2 settings fall short and 4 import levels sit inside their 12% margin</b>; 29 of 35 lines reach their next delivery with room. <b>7,000 drinks and 5,000 Metal Band sit idle</b>.</span><span class="sb-crumb">from Today · Idle stock<button type="button" aria-label="Back to all rows" data-crumb><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></span></p>
+<div class="sb-listonly">
+
+<details class="sb-obj" data-obj="whClo" open>
+  <summary><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg></span>
+    <span class="who"><span class="sb-site"><span class="hood">GD</span><a class="nm" href="#" data-tip="Open its page">Clothing Distr.</a><button type="button" class="sb-map" aria-label="Show Clothing Distr. on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button><a class="go" href="#">page ›</a></span><span class="how"><span><span class="sb-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><em>each morning from <b>Factory Clothing</b> and <b>Factory Jewelry</b></em></span><span><span class="sb-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><em>feeds 7 clothing shops</em></span></span></span>
+    <span class="sb-stats"><span class="sb-stat "><span class="lab">On the floor</span><span class="v">13,653</span></span><span class="sb-stat take" data-tip="What the rounds into here have to bring, and on its busiest day"><span class="lab">Takes / day</span><span class="v">8,973<small>Sat 10,590</small></span></span></span><span class="cnt red">1 to change</span><span class="tog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span></summary>
+  <div class="body"><div class="scrollx"><table class="sb-t fixed" id="whClo"><colgroup><col style="width:34px"><col style="width:180px"><col style="width:75px"><col style="width:80px"><col style="width:95px"><col style="width:125px"><col style="width:200px"><col style="width:120px"><col></colgroup><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l" data-col="0"><button type="button" class="supply-sort">Product<span class="arr"></span></button></th><th data-col="1"><button type="button" class="supply-sort">On hand<span class="arr"></span></button></th><th data-tip="What leaves each day: the logistics rounds out of here" data-col="2"><button type="button" class="supply-sort">Draw / day<span class="arr"></span></button></th><th data-col="3"><button type="button" class="supply-sort">Busiest<span class="arr"></span></button></th><th class="l" data-tip="A weekly import: the week from today, a cell a day, the truck on import day. A daily round: the busiest day against what the round brings.">Cover</th><th data-tip="The setting that refills this line: the import contract, or the delivery plan of the site that sends it. With a change, the figure to type." data-col="5"><button type="button" class="supply-sort">Order / top-up<span class="arr"></span></button></th><th data-tip="What the ends of the routes use in a week: shop sales, other depots&#x27; draw and factory lines, summed along the logistics routes to here. One-off stock fills are not counted. Hover a figure for the sites behind it." data-col="6"><button type="button" class="supply-sort">Uses / week<span class="arr"></span></button></th><th class="l" data-col="7"><button type="button" class="supply-sort">Status<span class="arr"></span></button></th></tr></thead><tbody><tr data-chg="w1"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Paper Bag: typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Paper Bag">Paper Bag</td><td data-v="2997.0">2,997</td><td data-v="2139.0">2,139</td><td data-v="2540.0">Sat 2,540</td><td class="l"><span class="sb-g bad" style="--w:100%;--m:79%" data-tip="The busiest day takes 127% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>127%</b></span></td><td><span class="sb-chg"><s>2,000</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><b>2,600</b><small>/day</small></span><span class="sub r">round from Factory Clothing</span></td><td data-v="14970.0">14,970</td><td class="l st" data-v="short"><span class="sb-v bad" data-tip="The 7 clothing shops draw more bags on a Saturday than the morning round leaves here."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"></path></svg>short</span><span class="sb-why">Saturdays draw 2,540; Factory Clothing's round brings 2,000</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="Clothing (Classic Cheap Female)">Clothing (Classic Cheap Female)</td><td data-v="1170.0">1,170</td><td data-v="872.0">872</td><td data-v="1030.0">Sat 1,030</td><td class="l"><span class="sb-g " style="--w:52%" data-tip="The busiest day takes 52% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>52%</b></span></td><td>2,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small><span class="sub r">from Factory Clothing</span></td><td data-v="6100.0">6,100</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="Clothing (Modern Cheap Male)">Clothing (Modern Cheap Male)</td><td data-v="1166.0">1,166</td><td data-v="876.0">876</td><td data-v="1035.0">Sat 1,035</td><td class="l"><span class="sb-g " style="--w:52%" data-tip="The busiest day takes 52% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>52%</b></span></td><td>2,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small></td><td data-v="6130.0">6,130</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="Clothing (Classic Expensive Female)">Clothing (Classic Expensive Female)</td><td data-v="1256.0">1,256</td><td data-v="767.0">767</td><td data-v="905.0">Sat 905</td><td class="l"><span class="sb-g " style="--w:45%" data-tip="The busiest day takes 45% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>45%</b></span></td><td>2,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small></td><td data-v="5370.0">5,370</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="100.0">100</td><td data-v="205.0">205</td><td data-v="242.0">Sat 242</td><td class="l"><span class="sb-g " style="--w:24%" data-tip="The busiest day takes 24% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>24%</b></span></td><td>1,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small><span class="sub r">from Factory Jewelry</span></td><td data-v="1440.0">1,440</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span></td></tr></tbody></table></div></div>
+</details>
+
+<details class="sb-obj lit" data-obj="whJew" open>
+  <summary><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg></span>
+    <span class="who"><span class="sb-site"><span class="hood">GD</span><a class="nm" href="#" data-tip="Open its page">Jewelry Distrib.</a><button type="button" class="sb-map" aria-label="Show Jewelry Distrib. on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button><a class="go" href="#">page ›</a></span><span class="how"><span><span class="sb-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><em>each morning from <b>Factory Jewelry</b> and <b>Factory Electronics</b></em></span><span><span class="sb-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><em>feeds 7 jewelry shops</em></span></span></span>
+    <span class="sb-stats"><span class="sb-stat "><span class="lab">On the floor</span><span class="v">10,307</span></span><span class="sb-stat take"><span class="lab">Takes / day</span><span class="v">1,696<small>Fri 1,970</small></span></span></span><span class="cnt red">1 to change</span><span class="tog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span></summary>
+  <div class="body"><div class="scrollx"><table class="sb-t fixed" id="whJew"><colgroup><col style="width:34px"><col style="width:180px"><col style="width:75px"><col style="width:80px"><col style="width:95px"><col style="width:125px"><col style="width:200px"><col style="width:120px"><col></colgroup><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l" data-col="0"><button type="button" class="supply-sort">Product<span class="arr"></span></button></th><th data-col="1"><button type="button" class="supply-sort">On hand<span class="arr"></span></button></th><th data-tip="What leaves each day: the logistics rounds out of here" data-col="2"><button type="button" class="supply-sort">Draw / day<span class="arr"></span></button></th><th data-col="3"><button type="button" class="supply-sort">Busiest<span class="arr"></span></button></th><th class="l" data-tip="A weekly import: the week from today, a cell a day, the truck on import day. A daily round: the busiest day against what the round brings.">Cover</th><th data-tip="The setting that refills this line: the import contract, or the delivery plan of the site that sends it. With a change, the figure to type." data-col="5"><button type="button" class="supply-sort">Order / top-up<span class="arr"></span></button></th><th data-tip="What the ends of the routes use in a week: shop sales, other depots&#x27; draw and factory lines, summed along the logistics routes to here. One-off stock fills are not counted. Hover a figure for the sites behind it." data-col="6"><button type="button" class="supply-sort">Uses / week<span class="arr"></span></button></th><th class="l" data-col="7"><button type="button" class="supply-sort">Status<span class="arr"></span></button></th></tr></thead><tbody><tr class="sb-arrived" data-chg="w2"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Metal Band: typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Metal Band">Metal Band</td><td data-v="5000.0">5,000</td><td>—</td><td>—</td><td class="l"><span class="sp-zz">zzz</span></td><td><span class="sb-chg"><s>5,000</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><b>0</b></span><span class="sub r">Factory Jewelry's plan</span></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle" data-tip="A raw material routed to a warehouse where no line and no shop uses it: the target on that route is almost certainly a slip."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span><span class="sb-why">nothing here uses it; Factory Jewelry keeps 5,000 here</span></td></tr><tr class="sb-edge"><td class="sb-tk"></td><td class="l nm" data-v="Jewelry (Cheap)">Jewelry (Cheap)</td><td data-v="152.0">152</td><td data-v="724.0">724</td><td data-v="840.0">Fri 840</td><td class="l"><span class="sb-g " style="--w:84%" data-tip="The busiest day takes 84% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>84%</b></span></td><td>1,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small><span class="sub r">from Factory Jewelry</span></td><td data-v="5070.0">5,070</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">Fridays take 84% of the round</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="Jewelry (Expensive)">Jewelry (Expensive)</td><td data-v="750.0">750</td><td data-v="210.0">210</td><td data-v="244.0">Fri 244</td><td class="l"><span class="sb-g " style="--w:24%" data-tip="The busiest day takes 24% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>24%</b></span></td><td>1,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small></td><td data-v="1470.0">1,470</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="Paper Bag">Paper Bag</td><td data-v="4107.0">4,107</td><td data-v="762.0">762</td><td data-v="885.0">Fri 885</td><td class="l"><span class="sb-g " style="--w:18%" data-tip="The busiest day takes 18% of what the round brings; the mark is the round"><span class="tr"><i></i><u></u></span><b>18%</b></span></td><td>5,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small></td><td data-v="5330.0">5,330</td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span></td></tr><tr class="sb-ev"><td class="sb-tk"></td><td class="l nm" data-v="ZanaMan Smartwatch">ZanaMan Smartwatch</td><td data-v="148.0">148</td><td>—</td><td>—</td><td class="l"><span class="sp-zz">new</span></td><td>300<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">/day</small><span class="sub r">from Factory Electronics</span></td><td>—</td><td class="l st" data-v="new"><span class="sb-v new"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.800 5.200L19 10l-5.200 1.800L12 17l-1.800-5.200L5 10l5.200-1.800z"></path><path d="M18.500 16v4M16.500 18h4"></path></svg>new</span><span class="sb-why">first delivery day 73; no shop sells it yet</span></td></tr></tbody></table></div></div>
+</details>
+
+<details class="sb-obj" data-obj="whHub" open>
+  <summary><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"></path><path d="M7 21v-8h10v8M7 17h10"></path></svg></span>
+    <span class="who"><span class="sb-site"><span class="hood">GD</span><a class="nm" href="#" data-tip="Open its page">Import Hub</a><button type="button" class="sb-map" aria-label="Show Import Hub on the map" data-tip="Show on the map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.500v13.500L9 17.500l6 2.500 6-2.500V4l-6 2.500z"></path><path d="M9 4v13.500M15 6.500V20"></path></svg></button><a class="go" href="#">page ›</a></span><span class="how"><span><span class="sb-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15l1.500 5h13L20 15z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path></svg></span><em>weekly from <b>7 Pier</b> and <b>1 Pier</b>, Monday · 4.5 days</em></span><span><span class="sb-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><em>feeds 3 factories</em></span></span></span>
+    <span class="sb-stats"><span class="sb-stat "><span class="lab">On the floor</span><span class="v">750,709</span></span><span class="sb-stat take" data-tip="What a week uses along every route out of here, factory lines at their rated rate: what the two import contracts have to bring, before the margin"><span class="lab">Uses / week</span><span class="v">321,000<small>rated</small></span></span></span><span class="cnt red">5 to change</span><span class="tog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span></summary>
+  <div class="body"><div class="scrollx"><table class="sb-t fixed" id="whHub"><colgroup><col style="width:34px"><col style="width:180px"><col style="width:75px"><col style="width:80px"><col style="width:95px"><col style="width:125px"><col style="width:200px"><col style="width:120px"><col></colgroup><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l" data-col="0"><button type="button" class="supply-sort">Product<span class="arr"></span></button></th><th data-col="1"><button type="button" class="supply-sort">On hand<span class="arr"></span></button></th><th data-tip="What leaves each day: the logistics rounds out of here" data-col="2"><button type="button" class="supply-sort">Draw / day<span class="arr"></span></button></th><th data-col="3"><button type="button" class="supply-sort">Busiest<span class="arr"></span></button></th><th class="l" data-tip="A weekly import: the week from today, a cell a day, the truck on import day. A daily round: the busiest day against what the round brings.">Cover</th><th data-tip="The setting that refills this line: the import contract, or the delivery plan of the site that sends it. With a change, the figure to type." data-col="5"><button type="button" class="supply-sort">Order / top-up<span class="arr"></span></button></th><th data-tip="What the ends of the routes use in a week: shop sales, other depots&#x27; draw and factory lines, summed along the logistics routes to here. One-off stock fills are not counted. Hover a figure for the sites behind it." data-col="6"><button type="button" class="supply-sort">Uses / week<span class="arr"></span></button></th><th class="l" data-col="7"><button type="button" class="supply-sort">Status<span class="arr"></span></button></th></tr></thead><tbody><tr data-chg="w0"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Uncut Gems (Expensive): typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Uncut Gems (Expensive)">Uncut Gems (Expensive)</td><td data-v="4342.0">4,342</td><td data-v="488.0">488</td><td data-v="488.0">488</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td><span class="sb-chg"><s>4,800</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><input class="sb-in" value="5,700" aria-label="Smart Delivery stock to set"></span><span class="sub r">5,040 + 12% · 7 Pier</span></td><td data-v="5040"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. Factory Jewelry: Jewelry (Expensive), 1 machine × 30 an hour × 24 h × 7 = 5,040 · Factory lines at their rated rate, 24 hours a day, 7 days">5,040</span><span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, not at what they measurably use. Peter has not settled which.">rated</span></td><td class="l st" data-v="short"><span class="sb-v bad" data-tip="Holdings reach Monday&#x27;s import, but the Smart Delivery level refills less than a week of what the jewelry line uses."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"></path></svg>short</span><span class="sb-why">uses 5,040 a week; the level brings 4,800</span></td></tr><tr data-chg="w3"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Fabric (Cheap): typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Fabric (Cheap)">Fabric (Cheap)</td><td data-v="63824.0">63,824</td><td data-v="7770.0">7,770</td><td data-v="7770.0">7,770</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td><span class="sb-chg"><s>80,700</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><input class="sb-in" value="90,400" aria-label="Smart Delivery stock to set"></span><span class="sub r">80,640 + 12% · 7 Pier</span></td><td data-v="80640"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. Factory Clothing: 4 cheap lines, 4 machines × 60 an hour × 24 h × 7 = 80,640 · Factory lines at their rated rate, 24 hours a day, 7 days">80,640</span><span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, not at what they measurably use. Peter has not settled which.">rated</span></td><td class="l st" data-v="tight"><span class="sb-v warn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.500"></circle><path d="M12 7v5l3.500 2"></path></svg>tight</span><span class="sb-why">covers the 80,640 a week it uses, not the 12% margin</span></td></tr><tr data-chg="w4"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Fabric (Expensive): typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Fabric (Expensive)">Fabric (Expensive)</td><td data-v="65354.0">65,354</td><td data-v="6612.0">6,612</td><td data-v="6612.0">6,612</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td><span class="sb-chg"><s>80,700</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><input class="sb-in" value="90,400" aria-label="Smart Delivery stock to set"></span><span class="sub r">80,640 + 12% · 7 Pier</span></td><td data-v="80640"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. Factory Clothing: 4 expensive lines, 8 machines × 30 an hour × 24 h × 7 = 80,640 · Factory lines at their rated rate, 24 hours a day, 7 days">80,640</span><span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, not at what they measurably use. Peter has not settled which.">rated</span></td><td class="l st" data-v="tight"><span class="sb-v warn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.500"></circle><path d="M12 7v5l3.500 2"></path></svg>tight</span><span class="sb-why">covers the 80,640 a week it uses, not the 12% margin</span></td></tr><tr data-chg="w5"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Metal Band: typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Metal Band">Metal Band</td><td data-v="12442.0">12,442</td><td data-v="1644.0">1,644</td><td data-v="1644.0">1,644</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td><span class="sb-chg"><s>15,200</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><input class="sb-in" value="17,000" aria-label="Smart Delivery stock to set"></span><span class="sub r">15,120 + 12% · 7 Pier</span></td><td data-v="15120"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. Factory Jewelry: Jewelry (Expensive) 30 an hour and Jewelry (Cheap) 60 an hour, × 24 h × 7 = 15,120 · Not counted: the one-off 5,000 filled into Jewelry Distrib. on days 66 to 68 · Factory lines at their rated rate, 24 hours a day, 7 days">15,120</span><span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, not at what they measurably use. Peter has not settled which.">rated</span></td><td class="l st" data-v="tight"><span class="sb-v warn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.500"></circle><path d="M12 7v5l3.500 2"></path></svg>tight</span><span class="sb-why">covers the 15,120 a week it uses, not the 12% margin</span></td></tr><tr data-chg="w6"><td class="sb-tk"><button type="button" class="sb-tick" aria-pressed="false" aria-label="Uncut Gems (Cheap): typed in" data-tip="Tick once it is typed in the game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg></button></td><td class="l nm" data-v="Uncut Gems (Cheap)">Uncut Gems (Cheap)</td><td data-v="8200.0">8,200</td><td data-v="897.0">897</td><td data-v="897.0">897</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td><span class="sb-chg"><s>10,200</s><span class="to"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><input class="sb-in" value="11,300" aria-label="Smart Delivery stock to set"></span><span class="sub r">10,080 + 12% · 7 Pier</span></td><td data-v="10080"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. Factory Jewelry: Jewelry (Cheap), 1 machine × 60 an hour × 24 h × 7 = 10,080 (rostered 12 h today) · Factory lines at their rated rate, 24 hours a day, 7 days">10,080</span><span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, not at what they measurably use. Peter has not settled which.">rated</span></td><td class="l st" data-v="tight"><span class="sb-v warn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.500"></circle><path d="M12 7v5l3.500 2"></path></svg>tight</span><span class="sb-why">covers the 10,080 a week it uses, not the 12% margin</span></td></tr><tr><td class="sb-tk"></td><td class="l nm" data-v="Energy Drink">Energy Drink</td><td data-v="4000.0">4,000</td><td>—</td><td>—</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span> <span class="sp-zz">zzz</span></span></td><td>4,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small><span class="sub r">Smart Delivery · 1 Pier</span></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span><span class="sb-why">nothing draws it; <a href="Main.dc.html">3 gyms sell 554 a day with no plan</a></span></td></tr><tr><td class="sb-tk"></td><td class="l nm" data-v="Soda Can">Soda Can</td><td data-v="3000.0">3,000</td><td>—</td><td>—</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span> <span class="sp-zz">zzz</span></span></td><td>3,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small><span class="sub r">Smart Delivery · 1 Pier</span></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span><span class="sb-why">nothing draws it; <a href="Main.dc.html">the same gyms sell 369 a day</a></span></td></tr><tr><td class="sb-tk"></td><td class="l nm" data-v="Capacitors">Capacitors<button type="button" class="sb-kids" data-kids="elec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>+9</button></td><td data-v="127900.0">127,900</td><td data-v="3086.0">3,086</td><td data-v="3086.0">3,086</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>151,300<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small><span class="sub r">Smart Delivery · 7 Pier</span></td><td data-v="20160"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. Factory Electronics: 2 smartwatch lines, 2 machines × 2 capacitors × 30 an hour × 24 h × 7 = 20,160 · Factory lines at their rated rate, 24 hours a day, 7 days">20,160</span><span class="sb-rated" data-tip="Open decision: factory lines are counted at their rated 24/7 rate here, not at what they measurably use. Peter has not settled which.">rated</span></td><td class="l st" data-v="idle"><span class="sb-v idle" data-tip="Smart Delivery keeps these at levels 5 to 7 times what a week uses."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span><span class="sb-why">10 electronics parts hold 6 weeks: 572,160 units</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Resistors">Resistors</td><td data-v="127900.0">127,900</td><td data-v="3086.0">3,086</td><td data-v="3086.0">3,086</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>151,300<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Transistors">Transistors</td><td data-v="127900.0">127,900</td><td data-v="3086.0">3,086</td><td data-v="3086.0">3,086</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>151,300<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Speaker">Speaker</td><td data-v="50960.0">50,960</td><td data-v="1234.0">1,234</td><td data-v="1234.0">1,234</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>60,500<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Integrated Circuits">Integrated Circuits</td><td data-v="42400.0">42,400</td><td data-v="1029.0">1,029</td><td data-v="1029.0">1,029</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>50,500<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Microphone">Microphone</td><td data-v="33700.0">33,700</td><td data-v="829.0">829</td><td data-v="829.0">829</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>40,400<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Copper Clad Laminate">Copper Clad Laminate</td><td data-v="20800.0">20,800</td><td data-v="514.0">514</td><td data-v="514.0">514</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>25,300<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Battery">Battery</td><td data-v="16300.0">16,300</td><td data-v="429.0">429</td><td data-v="429.0">429</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>20,200<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Plastic">Plastic</td><td data-v="14350.0">14,350</td><td data-v="343.0">343</td><td data-v="343.0">343</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>16,900<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-kid" data-kid="elec"><td class="sb-tk"></td><td class="l nm" data-v="Glass">Glass</td><td data-v="9950.0">9,950</td><td data-v="243.0">243</td><td data-v="243.0">243</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>11,800<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small></td><td>—</td><td class="l st" data-v="idle"><span class="sb-v idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h5l-5 6h5M13 11h6l-6 7h6"></path></svg>idle</span></td></tr><tr class="sb-edge"><td class="sb-tk"></td><td class="l nm" data-v="Paper Bag">Paper Bag</td><td data-v="17387.0">17,387</td><td data-v="2790.0">2,790</td><td data-v="3236.0">Fri 3,236</td><td class="l"><span class="sb-rail"><span class="sp-rail"><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><i class="c"></i><span class="trk" style="--d:5"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span></span></span></td><td>25,000<small style="margin-left:5px;font-size:10.5px;color:var(--ink-3)">in stock</small><span class="sub r">Smart Delivery · 1 Pier</span></td><td data-v="20300"><span class="sb-uses" data-tip="Uses a week, summed up the logistics routes. 7 clothing shops 14,970 · via Clothing Distr. ← Factory Clothing ← here · 7 jewelry shops 5,330 · via Jewelry Distrib. ← Factory Jewelry ← here · The factories only pass bags on, so they add nothing of their own">20,300</span></td><td class="l st" data-v="covered"><span class="sb-v ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.500l4.500 4.500L19 7"></path></svg>covered</span><span class="sb-why">uses 20,300 a week; the level holds that and 12% more</span></td></tr></tbody></table></div></div>
+</details>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1440,"height":1720}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light' }; }
+  componentDidMount() {
+    const $ = (s, r) => (r || document).querySelector(s);
+    const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+    const board = $('.board');
+    document.addEventListener('click', (e) => { const a = e.target.closest('a'); if (a && (a.getAttribute('href') || '#').charAt(0) === '#') e.preventDefault(); });
+
+    const rv = $$('.rv');
+    rv.forEach((el) => el.classList.add('in'));
+
+    const nav = $('#nav');
+    if (nav) { const ink = (a) => { if (!a) return; const r = a.getBoundingClientRect(), n = nav.getBoundingClientRect();
+        nav.style.setProperty('--nx', (r.left - n.left) + 'px'); nav.style.setProperty('--nw', r.width + 'px'); };
+      const homeInk = () => ink($('a.on', nav));
+      $$('a', nav).forEach(a => a.addEventListener('mouseenter', () => ink(a))); nav.addEventListener('mouseleave', homeInk);
+      setTimeout(homeInk, 50); setTimeout(homeInk, 600); }
+
+    // Needs a change / Everything, for the whole page
+    const setMode = (m) => { board.classList.toggle('sb-every', m === 'all');
+      $$('.sb-mode a').forEach(a => a.classList.toggle('on', a.dataset.mode === m)); };
+    $$('[data-mode]').forEach(a => a.addEventListener('click', () => setMode(a.dataset.mode)));
+    // list / diagram
+    $$('[data-view]').forEach(a => a.addEventListener('click', () => { const d = a.dataset.view === 'diagram';
+      board.classList.toggle('sb-diag', d); $$('.sb-view a').forEach(x => x.classList.toggle('on', x.dataset.view === a.dataset.view)); }));
+    $$('.flow [data-node]').forEach(g => g.addEventListener('click', () => {
+      if (!$('.sb-view')) return; board.classList.remove('sb-diag'); $$('.sb-view a').forEach(x => x.classList.toggle('on', x.dataset.view === 'list'));
+      const map = { cd: 'whClo', jd: 'whJew', hub: 'whHub' }; const o = $('[data-obj="' + (map[g.dataset.node] || '') + '"]');
+      if (o) { o.open = true; o.classList.add('lit'); o.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => o.classList.remove('lit'), 2400); } }));
+
+    // ticks: one checklist for the page, counted on the road
+    const tray = $('.sb-tray');
+    const count = () => { if (!tray) return; const all = $$('[data-chg]').filter(r => !r.closest('.sb-place'));
+      const mine = all.filter(r => r.classList.contains('sb-done')).length;
+      const total = +tray.dataset.total, other = +tray.dataset.other - (tray.dataset.base ? +tray.dataset.base : 0);
+      const done = Math.min(total, other + mine), left = total - done;
+      $('.d', tray).textContent = done; $('.l', tray).textContent = left; tray.style.setProperty('--p', total ? done / total : 1);
+      tray.classList.toggle('done', !left); $('.sb-copy', tray).disabled = !left; $('.sb-reset', tray).disabled = !done;
+      const tab = $('.sb-tabs a.on .sb-n:not(.zero)'); if (tab) { if (!tab.dataset.start) tab.dataset.start = tab.textContent;
+        tab.textContent = Math.max(0, +tab.dataset.start - (mine - +(tray.dataset.base || 0))); tab.classList.add('bump'); setTimeout(() => tab.classList.remove('bump'), 260); } };
+    if (tray) tray.dataset.base = $$('[data-chg].sb-done').length;
+    $$('.sb-tick').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); const r = b.closest('[data-chg]'); if (!r) return;
+      const on = r.classList.toggle('sb-done'); b.setAttribute('aria-pressed', on ? 'true' : 'false'); count(); }));
+    if (tray) {
+      $('.sb-copy', tray).addEventListener('click', () => { const c = $('.sb-copy', tray); c.classList.add('copied');
+        const lab = $('span', c); const was = lab.textContent; lab.textContent = 'Copied';
+        setTimeout(() => { c.classList.remove('copied'); lab.textContent = was; }, 1600); });
+      $('.sb-reset', tray).addEventListener('click', () => { $$('[data-chg].sb-done').forEach(r => { r.classList.remove('sb-done'); const t = $('.sb-tick', r); if (t) t.setAttribute('aria-pressed', 'false'); });
+        const tb = $('.sb-tabs a.on .sb-n:not(.zero)'); if (tb && tb.dataset.start) tb.dataset.start = +tb.dataset.start + +(tray.dataset.base || 0);
+        tray.dataset.other = 0; tray.dataset.base = 0; count(); });
+      count(); }
+
+    // bundle rows open into their parts
+    $$('.sb-kids').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); b.closest('table').classList.toggle('open-kids'); }));
+    // the crumb from a finding clears the lit row
+    $$('[data-crumb]').forEach(b => b.addEventListener('click', () => { b.closest('.sb-crumb').remove(); $$('.sb-arrived').forEach(r => r.classList.remove('sb-arrived')); $$('.sb-obj.lit').forEach(o => o.classList.remove('lit')); }));
+
+    // sortable columns, per table; "usual order" puts the rows back
+    $$('table.sb-t').forEach(t => { const tb = $('tbody', t); $$('tr', tb).forEach((r, i) => r.dataset.i = i);
+      $$('th[data-col] button', t).forEach(btn => btn.addEventListener('click', () => { const th = btn.closest('th'), col = +th.dataset.col + 1;
+        const dir = th.dataset.dir === 'desc' ? 'asc' : th.dataset.dir === 'asc' ? null : (th.classList.contains('l') ? 'asc' : 'desc');
+        $$('th', t).forEach(x => { if (x !== th) delete x.dataset.dir; });
+        if (!dir) delete th.dataset.dir; else th.dataset.dir = dir;
+        const rows = $$('tr', tb);
+        rows.sort((a, b) => { if (!dir) return a.dataset.i - b.dataset.i; const x = a.children[col] && a.children[col].dataset.v, y = b.children[col] && b.children[col].dataset.v;
+          if (x == null || x === '') return 1; if (y == null || y === '') return -1; const nx = parseFloat(x), ny = parseFloat(y);
+          const c = (!isNaN(nx) && !isNaN(ny)) ? nx - ny : String(x).localeCompare(String(y)); return dir === 'asc' ? c : -c; });
+        rows.forEach(r => tb.appendChild(r)); t.classList.toggle('sorted', !!dir); })); });
+  }
+}
+</script>
+</body>
+</html>

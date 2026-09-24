@@ -1,0 +1,263 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-24T12:00:00Z"
+ },
+ "title": "Big Copilot Fold low-value views",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "RhythmBefore.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1290,
+   "title": "Before · Company › Results",
+   "is_interactive": true
+  },
+  "Main.dc.html": {
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 1630,
+   "title": "After · By weekday",
+   "is_interactive": true
+  },
+  "RhythmAfterDay.dc.html": {
+   "x": 3120,
+   "y": 0,
+   "w": 1440,
+   "h": 1180,
+   "title": "After · by day, the default",
+   "is_interactive": true
+  },
+  "RhythmNoCycle.dc.html": {
+   "x": 4680,
+   "y": 0,
+   "w": 1440,
+   "h": 1040,
+   "title": "After · no cycle yet",
+   "is_interactive": true
+  },
+  "RhythmPhone.dc.html": {
+   "x": 6240,
+   "y": 0,
+   "w": 390,
+   "h": 1100,
+   "title": "After · phone",
+   "is_interactive": true
+  },
+  "PeaksBefore.dc.html": {
+   "x": 0,
+   "y": 2050,
+   "w": 1440,
+   "h": 560,
+   "title": "Before · three places name a peak",
+   "is_interactive": true
+  },
+  "PeaksAfter.dc.html": {
+   "x": 1560,
+   "y": 2050,
+   "w": 1440,
+   "h": 650,
+   "title": "After · each names its series",
+   "is_interactive": true
+  },
+  "MovesBefore.dc.html": {
+   "x": 0,
+   "y": 3120,
+   "w": 1440,
+   "h": 1060,
+   "title": "Before · Today › Next moves",
+   "is_interactive": true
+  },
+  "MovesCount.dc.html": {
+   "x": 1560,
+   "y": 3120,
+   "w": 1440,
+   "h": 1310,
+   "title": "Option A · a live count",
+   "is_interactive": true
+  },
+  "MovesDropped.dc.html": {
+   "x": 3120,
+   "y": 3120,
+   "w": 1440,
+   "h": 1040,
+   "title": "Option B · the card goes",
+   "is_interactive": true
+  },
+  "MovesPhone.dc.html": {
+   "x": 4680,
+   "y": 3120,
+   "w": 390,
+   "h": 840,
+   "title": "Option A · phone",
+   "is_interactive": true
+  },
+  "MilestonesBefore.dc.html": {
+   "x": 0,
+   "y": 4850,
+   "w": 1440,
+   "h": 1040,
+   "title": "Before · Company › Milestones",
+   "is_interactive": true
+  },
+  "MilestonesAfter.dc.html": {
+   "x": 1560,
+   "y": 4850,
+   "w": 1440,
+   "h": 940,
+   "title": "After · Milestones",
+   "is_interactive": true
+  },
+  "DiffMast.dc.html": {
+   "x": 3120,
+   "y": 4850,
+   "w": 1440,
+   "h": 850,
+   "title": "Placement 1 · masthead build line",
+   "is_interactive": true
+  },
+  "DiffFoot.dc.html": {
+   "x": 4680,
+   "y": 4850,
+   "w": 1440,
+   "h": 940,
+   "title": "Placement 2 · footer stamp",
+   "is_interactive": true
+  },
+  "DiffPhone.dc.html": {
+   "x": 6240,
+   "y": 4850,
+   "w": 390,
+   "h": 1160,
+   "title": "Placement 2 · phone",
+   "is_interactive": true
+  },
+  "CompanyTabs.dc.html": {
+   "x": 0,
+   "y": 6430,
+   "w": 1440,
+   "h": 1080,
+   "title": "Proposal · Company in three tabs",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "RhythmBefore.dc.html",
+  "Main.dc.html",
+  "RhythmAfterDay.dc.html",
+  "RhythmNoCycle.dc.html",
+  "RhythmPhone.dc.html",
+  "PeaksBefore.dc.html",
+  "PeaksAfter.dc.html",
+  "MovesBefore.dc.html",
+  "MovesCount.dc.html",
+  "MovesDropped.dc.html",
+  "MovesPhone.dc.html",
+  "MilestonesBefore.dc.html",
+  "MilestonesAfter.dc.html",
+  "DiffMast.dc.html",
+  "DiffFoot.dc.html",
+  "DiffPhone.dc.html",
+  "CompanyTabs.dc.html"
+ ],
+ "notes": {
+  "row0": {
+   "x": 0,
+   "y": -300,
+   "text": "1 · Weekly rhythm folds into Daily result",
+   "kind": "title1",
+   "maxW": 6630
+  },
+  "removed0": {
+   "x": -700,
+   "y": 0,
+   "w": 580,
+   "maxH": 520,
+   "text": "Removed: the Weekly rhythm section and its heading; its sentence \"Not enough history to separate a weekly cycle from noise\" (the By weekday option is simply absent until a series clears the test); the separate Customers / Revenue / Profit switch (now the chart's legend chips; a series that fails the test gets no chip). Moved: \"site by site\" becomes the type chips under the bars, each opening the same table for its type; today's and yesterday's weekday reading moves into the ? on the series line. Kept: the bars, pills, today's outline, the table.",
+   "fill": "orange"
+  },
+  "row1": {
+   "x": 0,
+   "y": 1750,
+   "text": "1b · Where a peak is named",
+   "kind": "title1",
+   "maxW": 3000
+  },
+  "removed1": {
+   "x": -700,
+   "y": 2050,
+   "w": 580,
+   "maxH": 520,
+   "text": "Nothing removed here: labels only. Every weekday chart says which series and how many weeks it reads, so Friday (company revenue over 8 weeks, most of them before the clothing shops opened), Saturday (one shop's revenue over 3 weeks) and Sat +37 (clothes, in units) stop looking like three answers to one question. The type chips on the company chart show the shops' own Saturday beside the company's Friday.",
+   "fill": "orange"
+  },
+  "row2": {
+   "x": 0,
+   "y": 2820,
+   "text": "2 · The Plan imports card",
+   "kind": "title1",
+   "maxW": 5070
+  },
+  "removed2": {
+   "x": -700,
+   "y": 3120,
+   "w": 580,
+   "maxH": 520,
+   "text": "Option A removes: the static sentence \"Plan weekly orders and get a checklist of settings to enter in-game.\" and the CHECKLIST badge; the card now says the first change and counts what is left, like its two siblings. Option B removes: the whole Plan imports card, and its sentence in the Next moves ?; Supply › Orders is unchanged. Caution for B: this save's one change (Metal Band, Smart Delivery stock) is not a Today finding, so B would hide it from Today.",
+   "fill": "orange"
+  },
+  "row3": {
+   "x": 0,
+   "y": 4550,
+   "text": "3 · Milestones, and where the difficulty lives",
+   "kind": "title1",
+   "maxW": 6630
+  },
+  "removed3": {
+   "x": -700,
+   "y": 4850,
+   "w": 580,
+   "maxH": 520,
+   "text": "Removed from Milestones: \"Every building owned 0 / 885\" as a goal (it becomes \"0 buildings owned\" in the totals line, or goes entirely: your call); the ten difficulty chips; the head's \"playing on custom settings, 10 settings harder than Normal, started on $0\"; the ? about presets. All but the buildings move into the difficulty chip's popover. On a phone the masthead's clock is hidden (under 500 px), so placement 1 needs the footer as its phone fallback.",
+   "fill": "orange"
+  },
+  "row4": {
+   "x": 0,
+   "y": 6130,
+   "text": "Proposal, not a decision · Company in three tabs",
+   "kind": "title1",
+   "maxW": 1440
+  },
+  "removed4": {
+   "x": -700,
+   "y": 6430,
+   "w": 580,
+   "maxH": 520,
+   "text": "A proposal only. After the folds, Milestones is four rows and a line. It could join the difficulty popover as \"Career\", and Payroll become Staff (R14), leaving Results · Products · Staff. Removes the Milestones tab; nothing else.",
+   "fill": "purple"
+  },
+  "try-main": {
+   "x": 1560,
+   "y": 1670,
+   "w": 560,
+   "maxH": 160,
+   "text": "Try it: 30 days / All / By weekday switches the chart; Revenue and Profit pick the series; a type chip opens that type's sites. Hover a weekday: it reads out on the series line.",
+   "fill": "green"
+  },
+  "try-diffmast": {
+   "x": 3120,
+   "y": 5740,
+   "w": 560,
+   "maxH": 160,
+   "text": "Hover the chip for the one-line tooltip; click it to open and close the detail. Hover a setting for its tooltip.",
+   "fill": "green"
+  }
+ },
+ "designSystems": []
+}

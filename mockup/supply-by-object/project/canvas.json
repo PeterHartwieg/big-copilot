@@ -1,0 +1,199 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-24T12:00:00Z"
+ },
+ "title": "Big Copilot Supply by object",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 560,
+   "w": 1440,
+   "h": 1100,
+   "title": "Shops",
+   "is_interactive": true
+  },
+  "Warehouses.dc.html": {
+   "x": 1560,
+   "y": 560,
+   "w": 1440,
+   "h": 1720,
+   "title": "Warehouses \u00b7 arrived from a finding",
+   "is_interactive": true
+  },
+  "Factories.dc.html": {
+   "x": 3120,
+   "y": 560,
+   "w": 1440,
+   "h": 930,
+   "title": "Factories",
+   "is_interactive": true
+  },
+  "FactoriesAll.dc.html": {
+   "x": 0,
+   "y": 2840,
+   "w": 1440,
+   "h": 2250,
+   "title": "Factories \u00b7 Everything",
+   "is_interactive": true
+  },
+  "ShopsEmpty.dc.html": {
+   "x": 1560,
+   "y": 2840,
+   "w": 1440,
+   "h": 830,
+   "title": "Shops \u00b7 nothing to change",
+   "is_interactive": true
+  },
+  "Phone.dc.html": {
+   "x": 3120,
+   "y": 2840,
+   "w": 390,
+   "h": 1620,
+   "title": "Phone \u00b7 Warehouses",
+   "is_interactive": true
+  },
+  "FlowToggle.dc.html": {
+   "x": 0,
+   "y": 5650,
+   "w": 1440,
+   "h": 930,
+   "title": "Goods flow A \u00b7 a diagram view on each tab",
+   "is_interactive": true
+  },
+  "FlowTab.dc.html": {
+   "x": 1560,
+   "y": 5650,
+   "w": 1440,
+   "h": 1300,
+   "title": "Goods flow B \u00b7 a fourth tab",
+   "is_interactive": true
+  },
+  "Words.dc.html": {
+   "x": 0,
+   "y": 7510,
+   "w": 1440,
+   "h": 1010,
+   "title": "One word per supply fact (R8)",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Warehouses.dc.html",
+  "Factories.dc.html",
+  "FactoriesAll.dc.html",
+  "ShopsEmpty.dc.html",
+  "Phone.dc.html",
+  "FlowToggle.dc.html",
+  "FlowTab.dc.html",
+  "Words.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": 280,
+   "w": 620,
+   "maxH": 230,
+   "text": "Shops: every shelf against tomorrow morning's round. It opens on the 10 rows that need a change; Everything lists all 100. The checklist is the tick at the head of each row, and the figure to type sits where the setting lives (Daily top-up). Tick a row: the truck drives along the road, the tab badge counts down. Two gym rows are ticked already. Click a heading to sort; a third click puts the usual order back."
+  },
+  "try-warehouses": {
+   "x": 1560,
+   "y": 280,
+   "w": 620,
+   "maxH": 230,
+   "text": "Warehouses: every depot, including the second tier that no import reaches (#78). Each head says what fills it and what it takes a day, which is what the site upstream has to deliver. A daily round reads as a gauge, a weekly import as the rail from the depot page. An import's figure to type is what the routes use plus a 12% margin; hover Uses / week for the sites behind it. This board arrived from the Today finding on Metal Band: that row and its depot are lit, and the crumb clears it."
+  },
+  "try-factories": {
+   "x": 3120,
+   "y": 280,
+   "w": 620,
+   "maxH": 230,
+   "text": "Factories: lines with the hours they are staffed against the hours they need for what ships (the top vote, 42), then Factory inputs. A factory with nothing to change folds to one line. The dashed strip is an idea, not a fault."
+  },
+  "try-factoriesall": {
+   "x": 0,
+   "y": 2560,
+   "w": 620,
+   "maxH": 230,
+   "text": "Everything on Factories: each line's day, a cell an hour. Hatched hours are staffed but more than what ships needs; red outlines are needed and not staffed. Fabric reads covered here and everywhere else: the lines stop at Produce up to, so they draw what ships."
+  },
+  "try-shopsempty": {
+   "x": 1560,
+   "y": 2560,
+   "w": 620,
+   "maxH": 230,
+   "text": "A tab with nothing to change: the badge turns into a tick, the shelf gets its moment, and the three closest to the edge still show, so the all-clear has something to stand on. Hover the drawing."
+  },
+  "try-phone": {
+   "x": 3120,
+   "y": 2560,
+   "w": 620,
+   "maxH": 230,
+   "text": "390 px: rows become cards, the setting to type gets its own line, the tabs fill the width. The same ticks and the same words."
+  },
+  "try-flowtoggle": {
+   "x": 0,
+   "y": 5370,
+   "w": 620,
+   "maxH": 230,
+   "text": "Option A: Goods flow is a view of the tab you are on (the icon pair by Needs a change). Click a site and the list opens on its rows, lit. Nothing on the diagram has its own table any more."
+  },
+  "try-flowtab": {
+   "x": 1560,
+   "y": 5370,
+   "w": 620,
+   "maxH": 230,
+   "text": "Option B: Goods flow stays a fourth tab. Its node detail is no longer Held against need with its own verdicts; it is the object's own rows, the same words."
+  },
+  "try-words": {
+   "x": 0,
+   "y": 7230,
+   "w": 620,
+   "maxH": 230,
+   "text": "R8, drawn: one status word per (site, item), with its reason, computed once and shown the same on Today, Supply, the site page and Goods flow."
+  },
+  "open-rated": {
+   "x": 2240,
+   "y": 280,
+   "w": 620,
+   "maxH": 230,
+   "fill": "orange",
+   "text": "Open decision (Peter): the weekly order is now what the ends of the routes use plus a 12% margin, rounded up (R8). Factory lines are drawn here at their rated 24/7 rate, flagged 'rated'. At measured use they draw far less (fabric about 46k and 54k a week, not 80,640), and the four 'tight' import rows would read covered. Which one counts is not settled."
+  },
+  "title-0": {
+   "x": 0,
+   "y": 40,
+   "text": "Supply by object: Shops, Warehouses, Factories",
+   "kind": "title1",
+   "maxW": 4560
+  },
+  "title-1": {
+   "x": 0,
+   "y": 2320,
+   "text": "States: everything, nothing to change, phone",
+   "kind": "title1",
+   "maxW": 4560
+  },
+  "title-2": {
+   "x": 0,
+   "y": 5130,
+   "text": "Goods flow: pick one",
+   "kind": "title1",
+   "maxW": 4560
+  },
+  "title-3": {
+   "x": 0,
+   "y": 6990,
+   "text": "One word per supply fact",
+   "kind": "title1",
+   "maxW": 4560
+  }
+ },
+ "designSystems": []
+}

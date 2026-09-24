@@ -1,0 +1,280 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-24T16:00:00Z"
+ },
+ "title": "Big Copilot Site pages and search",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 2760,
+   "title": "R9 · Shop page at its own address",
+   "is_interactive": true
+  },
+  "SiteFactory.dc.html": {
+   "x": 1560,
+   "y": 0,
+   "w": 1440,
+   "h": 1780,
+   "title": "R9 · Factory page, arrived from a finding",
+   "is_interactive": true
+  },
+  "SitePhone.dc.html": {
+   "x": 3120,
+   "y": 0,
+   "w": 390,
+   "h": 4480,
+   "title": "R9 · Shop page, phone",
+   "is_interactive": true
+  },
+  "SiteFactoryPhone.dc.html": {
+   "x": 3630,
+   "y": 0,
+   "w": 390,
+   "h": 2180,
+   "title": "R9 · Factory page, phone, arrived",
+   "is_interactive": true
+  },
+  "SiteLinks.dc.html": {
+   "x": 4140,
+   "y": 0,
+   "w": 1440,
+   "h": 1260,
+   "title": "R9 · Every site name is a link",
+   "is_interactive": true
+  },
+  "PaletteEmpty.dc.html": {
+   "x": 0,
+   "y": 5300,
+   "w": 1440,
+   "h": 1060,
+   "title": "R10 · Search, empty: the questions",
+   "is_interactive": true
+  },
+  "PaletteFab.dc.html": {
+   "x": 1560,
+   "y": 5300,
+   "w": 1440,
+   "h": 1060,
+   "title": "R10 · Search, typing 'fab'",
+   "is_interactive": true
+  },
+  "PaletteHire.dc.html": {
+   "x": 3120,
+   "y": 5300,
+   "w": 1440,
+   "h": 1060,
+   "title": "R10 · Search, a synonym: 'hire'",
+   "is_interactive": true
+  },
+  "PaletteNone.dc.html": {
+   "x": 4680,
+   "y": 5300,
+   "w": 1440,
+   "h": 1060,
+   "title": "R10 · Search, nothing found",
+   "is_interactive": true
+  },
+  "PalettePhone.dc.html": {
+   "x": 6240,
+   "y": 5300,
+   "w": 390,
+   "h": 844,
+   "title": "R10 · Search on a phone, 'gym'",
+   "is_interactive": true
+  },
+  "PaletteLive.dc.html": {
+   "x": 6750,
+   "y": 5300,
+   "w": 1440,
+   "h": 1060,
+   "title": "R10 · Search, working",
+   "is_interactive": true
+  },
+  "TodayAsk.dc.html": {
+   "x": 0,
+   "y": 7180,
+   "w": 1440,
+   "h": 1700,
+   "title": "R11 · Ask the board on Today",
+   "is_interactive": true
+  },
+  "TodayUsed.dc.html": {
+   "x": 1560,
+   "y": 7180,
+   "w": 1440,
+   "h": 1200,
+   "title": "R11 · After first use",
+   "is_interactive": true
+  },
+  "AskLanding.dc.html": {
+   "x": 3120,
+   "y": 7180,
+   "w": 1440,
+   "h": 800,
+   "title": "R11 · Where a question lands",
+   "is_interactive": true
+  },
+  "TodayPhone.dc.html": {
+   "x": 4680,
+   "y": 7180,
+   "w": 390,
+   "h": 1900,
+   "title": "R11 · Today on a phone",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "SiteFactory.dc.html",
+  "SitePhone.dc.html",
+  "SiteFactoryPhone.dc.html",
+  "SiteLinks.dc.html",
+  "PaletteEmpty.dc.html",
+  "PaletteFab.dc.html",
+  "PaletteHire.dc.html",
+  "PaletteNone.dc.html",
+  "PalettePhone.dc.html",
+  "PaletteLive.dc.html",
+  "TodayAsk.dc.html",
+  "TodayUsed.dc.html",
+  "AskLanding.dc.html",
+  "TodayPhone.dc.html"
+ ],
+ "notes": {
+  "row0": {
+   "x": 0,
+   "y": -560,
+   "text": "R9 · Every site has a page, with an address",
+   "kind": "title1",
+   "maxW": 4000
+  },
+  "try-main": {
+   "x": 0,
+   "y": -330,
+   "w": 560,
+   "maxH": 250,
+   "text": "The site page on its own route, #site/57-fifth-avenue, opened from the portfolio. Company stays lit in the nav. The chart, rhythm and portfolio are gone while it is up; ‹ Portfolio goes back to them, and the prev / select / next picker moved out of the head into the crumb row. The blocks below are the live panel, unchanged. A reload keeps it open. The supplier in the sub-line is a link to its own page now."
+  },
+  "try-sitefactory": {
+   "x": 1560,
+   "y": -330,
+   "w": 560,
+   "maxH": 250,
+   "text": "Arrived from Today's 'Fabric (Expensive)' row. The back crumb names where you came from (‹ Today, browser Back), the trail still names the portfolio. The finding opens as .arrived, Inputs is lit and the other blocks dim, as the site-panel canvas has it; 'From: Import Hub' is a link to the warehouse's page."
+  },
+  "try-sitephone": {
+   "x": 3120,
+   "y": -330,
+   "w": 390,
+   "maxH": 250,
+   "text": "On a phone the crumb row sticks under the masthead: ‹ Portfolio, then the picker as ‹ select ›. Tiles pair up, the two-column blocks stack, the hour grid and the day plan scroll sideways inside their own box, never the page."
+  },
+  "try-sitefactoryphone": {
+   "x": 3630,
+   "y": -330,
+   "w": 390,
+   "maxH": 250,
+   "text": "The same arrival on a phone. The lines table keeps a readable width and scrolls inside its box."
+  },
+  "try-sitelinks": {
+   "x": 4140,
+   "y": -330,
+   "w": 560,
+   "maxH": 250,
+   "text": "Where names become links: Today's finding rows (the row still opens its details, the name opens the page, the map button stays), Supply › Checks rows, the Goods flow node you picked, the map's own list and card, and the portfolio row. Hover shows the address the link goes to."
+  },
+  "row1": {
+   "x": 0,
+   "y": 4740,
+   "text": "R10 · One search for the whole board",
+   "kind": "title1",
+   "maxW": 4000
+  },
+  "try-paletteempty": {
+   "x": 0,
+   "y": 4970,
+   "w": 560,
+   "maxH": 250,
+   "text": "The field sits in the masthead between the nav and the clock; / or Ctrl+K opens it anywhere. Empty, it offers the Ask-the-board questions and the last three places you opened, so it is useful before a word is typed."
+  },
+  "try-palettefab": {
+   "x": 1560,
+   "y": 4970,
+   "w": 560,
+   "maxH": 250,
+   "text": "Grouped, best group first, the lit row answers Enter. Fabric (Expensive) is a product, and also why Factory Clothing (it eats Fabric) and Feed the factories (2 Fabric inputs short) come up: a match in the second line is marked where it is. Amber dots are live findings; the map button on a site row works as it does elsewhere."
+  },
+  "try-palettehire": {
+   "x": 3120,
+   "y": 4970,
+   "w": 560,
+   "maxH": 250,
+   "text": "The game has no 'hire' page, so the words players use reach the view that answers them, and the row says so: hire → Staffing. The same for debt → Cash on hand, difficulty → Game settings, prices → Prices in your save, floor size → Find a location, break even → Portfolio."
+  },
+  "try-palettenone": {
+   "x": 4680,
+   "y": 4970,
+   "w": 560,
+   "maxH": 250,
+   "text": "Nothing on the board or in the wiki: the sphere looks left and right and shrugs. A near word, the wiki, and a way to tell us what was missing; the questions stay under it."
+  },
+  "try-palettephone": {
+   "x": 6240,
+   "y": 4970,
+   "w": 390,
+   "maxH": 250,
+   "text": "On a phone the masthead's search button opens a full-screen sheet: the field on top with Cancel, rows 56 px tall, three a group."
+  },
+  "try-palettelive": {
+   "x": 6750,
+   "y": 4970,
+   "w": 560,
+   "maxH": 250,
+   "text": "This one works: type anything (try fab, hire, gym, debt, difficulty, floor size, break even, zeppelin). Arrow keys move the lit row, Enter shows where it would open, Esc clears. The index and the matching are the generator's own, so the drawn states and this one agree."
+  },
+  "row2": {
+   "x": 0,
+   "y": 6620,
+   "text": "R11 · Ask the board",
+   "kind": "title1",
+   "maxW": 4000
+  },
+  "try-todayask": {
+   "x": 0,
+   "y": 6850,
+   "w": 560,
+   "maxH": 250,
+   "text": "One quiet row under Next moves, not a card grid: seven questions as links, each landing on the view that answers it with the answer lit. The green dot rolls to the question under the pointer. The row goes away after the first question is used (next artboard)."
+  },
+  "try-todayused": {
+   "x": 1560,
+   "y": 6850,
+   "w": 560,
+   "maxH": 250,
+   "text": "Once a question has been used, the row folds into one button in the Next moves head. It opens search on its empty state, which holds the same questions."
+  },
+  "try-asklanding": {
+   "x": 3120,
+   "y": 6850,
+   "w": 560,
+   "maxH": 250,
+   "text": "'What am I playing on?' lands on Company › Milestones with the game settings lit and the rest dimmed. The question stays in a strip on top with the way back, so the player knows why they are here."
+  },
+  "try-todayphone": {
+   "x": 4680,
+   "y": 6850,
+   "w": 390,
+   "maxH": 250,
+   "text": "On a phone the questions are one row of pills that scrolls sideways. The search button in the masthead is the palette's way in."
+  }
+ },
+ "designSystems": []
+}
