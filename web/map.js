@@ -76,12 +76,15 @@ async function loadCityMap(){
   return cityMapAssets;
 }
 function mapBusinesses(){ return new Map((D?.businesses || []).map(b => [b.key,b])); }
+/* A site's findings, as Needs attention holds them: a kind the player (or its
+   default) switched off leaves the count, the pip and the card, so a site is
+   never coloured by a finding the list has put away. */
 function mapFindings(){
   const result = new Map();
   // The findings of the sizing on screen, as Today lists them (alertLines()).
   if(!D) return result;
   for(const a of [...alertLines(), ...(alertMinor().rows || [])]){
-    if(!a.siteKey) continue;
+    if(!a.siteKey || kindOff(a)) continue;
     if(!result.has(a.siteKey)) result.set(a.siteKey, []);
     result.get(a.siteKey).push(a);
   }

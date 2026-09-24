@@ -26,7 +26,9 @@ hash, so a live refresh and a reopened tab both land where you left off.
 **Map** shows the city with your business footprints in green, buildings you own dashed
 blue, homes you rent in white, and a floating list of places over the right edge. Five
 chips above the map are layers that add up: your businesses, buildings you own, homes you
-rent, sites with a finding from Today, and every address (off by default, drawn as faint
+rent, sites with a finding from Today (any finding of a kind still switched on, the ones
+under the list included; board search colours a site's dot from the list alone, above the
+gate and of a kind still on), and every address (off by default, drawn as faint
 outlines). Clicking a chip switches that
 layer off; off is dimmed, never removed. The search field narrows the list and shows its
 count; the `?` mark explains the layers. Drag to pan, scroll or pinch to zoom, or use the
@@ -69,8 +71,8 @@ the map.
   switched off, by the player or by default, naming each kind with its count and worth in
   the tune panel's order ("15 in kinds switched off: Overstaffed hours (15, $17k/day)"). The tune button chooses which kinds of finding
   make the list; switching one off moves its findings to the second line rather than
-  hiding them, and nothing is ever dropped. *At capacity* is on by default and *Overstaffed
-  hours* off; a device keeps only the kinds its player switched, so a later change of
+  hiding them, and nothing is ever dropped. *At capacity* is on by default, and *Overstaffed
+  hours* and *Demand wave ending* are off; a device keeps only the kinds its player switched, so a later change of
   default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
   site: the spare staff-hours of the whole week, its wages summed, with the days and hours
   named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-12;
@@ -241,6 +243,7 @@ What is on the list is what moves the number:
   days left, because the shop's takings under hype are one number: *hype on 10 lines (7 end
   in 4 days, 3 in 13 days)*. The line's level follows the soonest end, and its baseline is
   the first wave's, since the shop's days before a later wave already carry the earlier one.
+  Its kind, *Demand wave ending*, is off by default.
 - **Week on week per site.** Any trading site whose seven-day revenue moved more than 15%
   against the seven days before it, with both figures. Sites open under two weeks have no
   previous week to be compared with and are left out.
@@ -335,7 +338,7 @@ grid and three lines meet.
   a per-hour limit, not a daily total.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
-Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red,
+Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
 and hours with capacity doing nothing in blue.
 
 Every kind of furniture whose help text says it is an *employee station* with a Customer
@@ -392,9 +395,10 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
 hour is judged on its own roster, and each role on the roster that was on for it. Where the
-door cap is at or below the site's staffed capacity the building is the limit, and the
-answer is a bigger site or a second shop nearby (for an office, a bigger office or a second
-one). Otherwise every role standing at the site's own minimum is named, and only those: a
+door cap is at or below the site's staffed capacity the building is the limit. That is
+not raised as a finding: plenty of well-run sites sit at their building's capacity, and
+there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
+building capacity") and neutral rings on its hours in the grid. Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
 standing empty is short of people; one with every station manned is short of stations. A
@@ -430,9 +434,8 @@ Both are grouped before they are shown. Six shops hitting the same 30/h ceiling 
 same hours is one line about six shops. Offices group only with offices.
 
 A hype wave arriving at a shop already within 10% of its ceiling is added to that wave's
-line rather than raised separately, because it is the same event. Where pricing is
-handled by pricing staff, capacity is the only lever the wave leaves open, and it comes
-with the wave's end date attached.
+line rather than raised separately, because it is the same event: the door is turning
+part of the wave away, until the wave's end date.
 
 ### The week the board would copy into BizMan
 
@@ -848,7 +851,9 @@ and dims the rest; clicking scrolls there.
   riding on the wave and a pip a day left; with no baseline to measure the wave against,
   the bar is hatched rather than guessed.
 - **Customers by hour.** The two things the grid can say that a daily total cannot are
-  chips under it: what the ceiling costs, with the fix, and what idle hours cost. The idle
+  chips under it: what the ceiling costs, with the fix, and what idle hours cost. Hours
+  held by the building's own capacity get a neutral chip with no fix, since that is not a
+  warning. The idle
   chip is the site's *Overstaffed hours* line: the whole week's spare staff-hours, hours
   and wages. Hovering a chip picks its own hours out of the grid.
 - **Staffing** (a shop). The week the board would copy into BizMan, on the customer grid's

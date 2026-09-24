@@ -49,7 +49,7 @@ async function today(width, {debt = 0, profitSum7 = 70000} = {}) {
       businesses: [{key: KEY, name: 'HART. Gifts', code: 'HK', status: 'retail'}],
       alerts: [
         finding('feed', 'warn', 'HART. Gifts Clothing (Classic Expensive Female) arrives at 6,612/day against 11,520 needed while Import Hub holds 65,354; the line is not drawing it', null, ''),
-        finding('atcap', 'warn', 'HART. Gifts is at the 50/h building capacity Mon-Fri 9-16, 35 hours a week at the ceiling', 9000, '/day trade'),
+        finding('atcap', 'warn', 'HART. Gifts fills the counters Mon-Fri 9-16, 35 hours a week at 3/h and $9,000/day through the ceiling', 9000, '/day trade'),
       ],
       minor: {gate: 500, rows: [
         finding('hype', 'info', 'Wave ending', 120, '/day revenue'),
