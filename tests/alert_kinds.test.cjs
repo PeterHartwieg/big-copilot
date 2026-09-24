@@ -91,12 +91,12 @@ test('the gate and the switches are two lines, not one "smaller" count (issue #5
 
 test('the switched-off line names each kind with its count and worth', () => {
   const kinds = vm.runInContext('switchedOffKinds', context);
-  const label = id => ({atcap: 'At capacity', idlestaff: 'Overstaffed hours', dead: 'Stock not moving'})[id];
+  const label = id => ({atcap: 'At capacity', idlestaff: 'Overstaffed hours', dead: 'Idle stock'})[id];
   const money = n => `$${Math.round(n / 1000)}k`;
   const rows = [row('atcap', 97000, 'a'), row('atcap', 31000, 'b'), row('atcap', 8000, 'c'),
                 row('idlestaff', 400, 'd'), row('dead', null, 'e')];
   assert.equal(kinds(rows, label, money),
-    'At capacity (3, $136k/day), Overstaffed hours (1, $0k/day), Stock not moving (1)');
+    'At capacity (3, $136k/day), Overstaffed hours (1, $0k/day), Idle stock (1)');
 });
 
 test('the switched-off line lists its kinds in the tune panel order', () => {
@@ -195,4 +195,14 @@ test('a cut at a comma leaves the variant bracket whole in the detail', () => {
   const {what, more} = vm.runInContext('splitFinding', splitting)({site: 'X', text: t});
   assert.equal(what, 'Shelves run dry at 3 shops');
   assert.equal(more, 'Clothing (Classic Cheap Female) sells out first every Saturday');
+});
+
+/* The renames of R12 change what a kind is called, never its id: the id is
+   what a stored switch is keyed by, so a player's choices carry over. */
+test('idle stock has one name, and a renamed kind keeps its id', () => {
+  const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*label:"([^"]+)"`)) || [])[1];
+  const view = (source.match(/\r?\n  idle: \{\r?\n    label: "([^"]+)"/) || [])[1];
+  assert.equal(kind('dead'), 'Idle stock');
+  assert.equal(view, kind('dead'), 'the Checks view and the finding kind share one name');
+  assert.equal(kind('staff'), 'Nobody on shift');
 });

@@ -15976,7 +15976,7 @@ const SP_DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
    those days are unknown rather than dry: nothing says when it is topped up
    again. */
 function spRail(cover, truck, held, dead, early, known){
-  if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz">zzz</span>`;
+  if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz" data-tip="Idle stock: nothing draws on this">zzz</span>`;
   const c = Math.max(0, Math.min(SP_RAIL_DAYS, Math.floor(cover || 0)));
   const end = truck === null ? (held || known ? SP_RAIL_DAYS : c) : held ? SP_RAIL_DAYS : truck;
   const cells = [...Array(SP_RAIL_DAYS).keys()].map(k =>
@@ -16144,7 +16144,7 @@ function spStockRows(b){
       rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, r.dead, null, false),
       act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
       el: [spKeyTok(r.slug, r.item), r.dead ? "dead" : "target"],
-      read: r.dead ? "<b>Nothing draws</b> on these" : `<b>${spNum(r.weeks)}</b> weeks on hand`,
+      read: r.dead ? "<b>Idle stock</b> · nothing draws on these" : `<b>Idle stock</b> · <b>${spNum(r.weeks)}</b> weeks on hand`,
     });
   });
   /* Everything else on the floor. A line nothing imports is made in-house or
@@ -16163,7 +16163,7 @@ function spStockRows(b){
       act: "", feeds: draw.sites,
       order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>` : "—",
       el: [spKeyTok(l.slug, l.item), draw.perDay ? "" : "dead"].filter(Boolean),
-      read: !draw.perDay ? "<b>Nothing draws</b> on these"
+      read: !draw.perDay ? "<b>Idle stock</b> · nothing draws on these"
         : cover >= SP_RAIL_DAYS ? "Covered through the week"
         : `<b>${cover.toFixed(1)}</b> days on hand`,
     });
@@ -16874,14 +16874,14 @@ function drawSite(){
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
-        ${sechead("Standards", {icon: "standards", why: office
+        ${sechead("Satisfaction", {icon: "standards", why: office
           ? "What clients make of the firm. Offices are not asked about bathrooms, music or uniforms."
           : "What customers find when they walk in. A lit lamp was found in place, a struck one was looked for and missed, and a dashed one is not known: the game scores a shop only once customers have walked it."})}
         ${spStandards(b)}
       </section>${
         kind === "retail" ? `
       <section class="rv" data-block="pull" id="sp-pull" data-readzone>
-        ${sechead("Pull", {icon: "magnet", iconCls: "magnet", why: "Promotion against the game's 100% cap: what the street brings, and what campaigns add."})}
+        ${sechead("Promotion", {icon: "magnet", iconCls: "magnet", why: "Foot traffic and marketing against the game's 100% cap: what the street brings, and what campaigns add."})}
         ${spPull(b)}
       </section>` : desks ? `
       <section class="rv" data-block="desks" id="sp-desks" data-readzone>
@@ -16894,7 +16894,7 @@ function drawSite(){
     ${/* Only a shop and an office have an hourly grid, so this block is always
           the shop and office one. */""}
     ${grid ? `<section class="sec rv" data-block="hours" id="sp-hours">
-      ${sechead("Hours", {icon: "hours", why: `${
+      ${sechead("Customers by hour", {icon: "hours", why: `${
         Math.min(...grid.weeks.filter(w => w))} week${
         Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
         grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
@@ -17527,7 +17527,7 @@ function drawLogistics(){
     : `${amount(r.inGame, r.smart)}${aroundLevel(r)}${r.paused ? ` ${chipHtml(r.covered ? "dim" : "warn", "paused")}` : ""}`;
   /* What the box is about: the board's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
-  const verdict = r => r.covered ? chipHtml("ok", "route brings it", routeTip(r))
+  const verdict = r => r.covered ? chipHtml("ok", "covered by route", routeTip(r))
     : r.setTo === null ? chipHtml("dim", "nothing draws it")
     : r.paused ? chipHtml("warn", "resume import")
     : r.edited ? ""
@@ -19108,7 +19108,7 @@ const ALERT_GROUPS = [
   {id:"notrading",    label:"Not trading yet",        note:"Open, but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
-  {id:"staff",        label:"Staffing",               note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
+  {id:"staff",        label:"Nobody on shift",        note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
   {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
   {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
   {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
@@ -19131,7 +19131,7 @@ const ALERT_GROUPS = [
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
   {id:"atcap",        label:"At capacity",            note:"Hours a week the door, staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
-  {id:"dead",         label:"Stock not moving",       note:"Goods sitting in a depot no line draws from", on:true},
+  {id:"dead",         label:"Idle stock",             note:"Goods sitting in a depot no line draws from", on:true},
   {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
@@ -20081,7 +20081,7 @@ const SS_VIEWS = [
           "payback": "no payback figure yet · Company › Results · profit and loss by chain"},
    go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
   {id: "ops", t: "Portfolio · Operations", p: "Company › Results · satisfaction, promotion, traffic", ic: "company",
-   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security"],
+   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull"],
    go(){ view = "ops"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
   /* Weekly rhythm is By weekday in the Daily result chart now (R15). */
   {id: "rhythm", t: "By weekday", p: "Company › Results · Daily result", ic: "week",
@@ -20136,9 +20136,10 @@ const SS_VIEWS = [
 ];
 /* The words players use for a kind of finding. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "door cap", "turned away"],
-  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "nobody on shift", "hire"],
+  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
-  dead: ["dead stock", "idle stock"], target: ["overstock"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
+  dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
+  satisfaction: ["standards"], promotion: ["pull"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
 /* ...and for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
   "Employee Schedule": ["schedule", "shifts"], "Loans / Investments": ["debt", "loan", "interest"],
