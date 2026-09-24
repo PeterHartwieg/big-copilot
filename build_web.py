@@ -169,6 +169,11 @@ button.btn{border:0;cursor:pointer}
 .strip .st{min-width:0;flex-wrap:wrap}
 .strip #srcStatus:not(.err),.strip .file,.strip .right > *{white-space:nowrap}
 .strip .right{flex:none}
+/* On the board the file line is the strip's one long piece of text: it wraps
+   inside the status block rather than running under the buttons or pushing
+   a phone's page sideways. */
+.source-row .strip .st{flex:1 1 0}
+.source-row .strip .file{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 .strip #srcStatus.err{flex:1 1 0;min-width:200px}
 .landing .strip{width:560px;margin:0}
 .landing #updateBtn:disabled{display:none}

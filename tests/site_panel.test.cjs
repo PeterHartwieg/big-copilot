@@ -1368,3 +1368,155 @@ test('a save with no home at all opens nothing and throws nothing', async () => 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
+
+// Overstaffed hours. The site's Today line prices and names its whole week, so
+// the hours block has to tell that same week: the same staff-hours, the same
+// hours lit, the same wages. Grid, finding and Today row all come out of the
+// real Python (tests/idle_week_fixture.py), so the two halves cannot drift.
+const idleFixture = (...args) => {
+  const r = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.idle_week_fixture', ...args],
+    {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
+  assert.equal(r.status, 0, r.stderr?.toString());
+  return JSON.parse(r.stdout.toString());
+};
+const IDLE = idleFixture();
+const idleSite = (findings = IDLE.findings, fx = IDLE) => site({
+  shop: {key: fx.grid.key, name: fx.grid.name, type: 'Gym'},
+  hours: [fx.grid], hourFindings: findings, minor: [fx.row],
+});
+// The grid's cells wearing `cls`, as "weekday:hour"; its rows run Monday first.
+const cellsWith = (page, cls) => page.evaluate(cls => {
+  const rows = [1, 2, 3, 4, 5, 6, 0];
+  return [...document.querySelectorAll('#sp-hours .hc')]
+    .map((e, i) => e.classList.contains(cls) ? `${rows[Math.floor(i / 24)]}:${i % 24}` : null)
+    .filter(Boolean);
+}, cls);
+const hoursOf = (days, from, to) =>
+  days.flatMap(wd => Array.from({length: to - from}, (_, k) => `${wd}:${from + k}`));
+
+test('the hours block tells the overstaffed week the Today line tells', async () => {
+  const page = await idleSite();
+  try {
+    const worth = await page.evaluate(w => fmt(w), IDLE.row.worth);
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(),
+      `72 staff-hours a week · 3 fitness planning boards Mon-Wed 8-20 · ${worth}/day of wages`);
+    // The sentence is the Today line's, less the site the page already names.
+    assert.equal(await chip.getAttribute('data-tip'),
+      `${IDLE.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
+    // The chip lights the week's hours, all three days of them.
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2, 3], 8, 20));
+    // Not arrived from the line, the read-out opens on the grid's own hour.
+    assert.doesNotMatch(await page.locator('#hourRead').textContent(), /^Overstaffed/);
+    // The finding's row lights the hours block and pulses the same week.
+    const row = page.locator(`.sp-find[data-id="${IDLE.row.id}"]`);
+    assert.equal(await row.getAttribute('data-ev'), 'hours');
+    assert.equal(await row.getAttribute('data-hit'), 'idle');
+    await row.hover();
+    assert.equal(await page.locator('#sp-hours.sp-lit').count(), 1);
+    assert.deepEqual(await cellsWith(page, 'sp-hit'), hoursOf([1, 2, 3], 8, 20));
+  } finally { await page.close(); }
+});
+
+test('arrived from the Today line, the hours block opens on its week', async () => {
+  const page = await idleSite();
+  try {
+    await page.evaluate(([key, id]) => openSite(key, false, id), [IDLE.grid.key, IDLE.row.id]);
+    const worth = await page.evaluate(w => fmt(w), IDLE.row.worth);
+    assert.equal(await page.locator(`.sp-find.arrived`).getAttribute('data-id'), IDLE.row.id);
+    assert.equal((await page.locator('#hourRead').textContent()).trim(),
+      `Overstaffed · 72 staff-hours a week · 3 fitness planning boards Mon-Wed 8-20 · ${worth}/day of wages`);
+  } finally { await page.close(); }
+});
+
+test('a roster that differs by day is told one headcount at a time, on the page as on Today', async () => {
+  // Two trainers on Monday, four on Tuesday: never "4 ... Mon, Tue".
+  const MIXED = idleFixture('mixed');
+  const page = await idleSite(MIXED.findings, MIXED);
+  try {
+    const worth = await page.evaluate(w => fmt(w), MIXED.row.worth);
+    const runs = '2 fitness planning boards Mon 8-20; 4 fitness planning boards Tue 8-20';
+    assert.match(MIXED.row.text, new RegExp(`: ${runs} for `));
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(), `48 staff-hours a week · ${runs} · ${worth}/day of wages`);
+    assert.equal(await chip.getAttribute('data-tip'),
+      `${MIXED.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2], 8, 20));
+  } finally { await page.close(); }
+});
+
+test('a week of three headcounts names the biggest two, on the page as on Today, and wraps on a phone', async () => {
+  // Two, three and four trainers on Monday, Tuesday and Wednesday.
+  const MANY = idleFixture('many');
+  const page = await idleSite(MANY.findings, MANY);
+  try {
+    const worth = await page.evaluate(w => fmt(w), MANY.row.worth);
+    const runs = '3 fitness planning boards Tue 8-20; 4 fitness planning boards Wed 8-20 (and 1 more)';
+    assert.ok(MANY.row.text.includes(`: ${runs} for `), MANY.row.text);
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(), `72 staff-hours a week · ${runs} · ${worth}/day of wages`);
+    assert.equal(await chip.getAttribute('data-tip'),
+      `${MANY.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
+    // "(and 1 more)": every hour of the week is still lit, Monday's included.
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2, 3], 8, 20));
+    // On a phone the chip wraps inside the page rather than pushing it sideways.
+    await page.setViewportSize({width: 390, height: 900});
+    await page.evaluate(() => drawSite());
+    const fit = await page.evaluate(() => {
+      const c = document.querySelector('#sp-hours .sp-hchip.idle').getBoundingClientRect();
+      return {right: c.right, width: innerWidth, scroll: document.documentElement.scrollWidth,
+              client: document.documentElement.clientWidth, tall: c.height > 40};
+    });
+    assert.ok(fit.right <= fit.width, `chip ends at ${fit.right} of ${fit.width}`);
+    assert.ok(fit.scroll <= fit.client, `page scrolls sideways: ${fit.scroll} > ${fit.client}`);
+    assert.equal(fit.tall, true, 'the chip wraps onto more than one line');
+  } finally { await page.close(); }
+});
+
+test('a finding written before the week existed reads as a week of its one run', async () => {
+  const old = IDLE.findings.map(({week, ...f}) => f);
+  const page = await idleSite(old);
+  try {
+    const worth = await page.evaluate(w => fmt(w), old[0].worth);
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(),
+      `24 staff-hours a week · 3 fitness planning boards Mon 8-20 · ${worth}/day of wages`);
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1], 8, 20));
+  } finally { await page.close(); }
+});
+
+/* A factory's and a depot's page on a phone: the lines and the stock keep a
+   width they can be read at and scroll inside their own box, never the page. */
+test('a factory and a depot on a phone scroll their wide blocks inside themselves', async () => {
+  const slots = Array.from({length: 40}, (_, i) => i + 1);
+  const busy = {...FACTORY_SITE, machines: 40, lines: [{...FACTORY_SITE.lines[0], slots, machines: 40}]};
+  for (const [kind, over] of [
+    ['factory', {shop: FACTORY, supply: {day: 29, factories: factories({sites: [busy]})}}],
+    ['depot', {shop: DEPOT, supply: {day: 29, imports: [importRow()], idle: [deadRow]}}],
+  ]) {
+    const page = await site(over);
+    try {
+      await page.setViewportSize({width: 390, height: 844});
+      await page.evaluate(() => drawSite());
+      const seen = await page.evaluate(() => {
+        const W = document.documentElement.getBoundingClientRect().width;
+        const spill = [...document.querySelectorAll('#sitePanel *')].filter(el => {
+          if (el.getBoundingClientRect().right <= W + 1) return false;
+          for (let a = el.parentElement; a && a.id !== 'sitePanel'; a = a.parentElement)
+            if (/(auto|scroll|hidden)/.test(getComputedStyle(a).overflowX)) return false;
+          return true;
+        }).map(el => el.tagName + '.' + el.className);
+        const lines = document.querySelector('#sp-lines .sp-lines');
+        return {page: document.documentElement.scrollWidth, W, spill,
+                lines: lines ? lines.parentElement.scrollWidth > lines.parentElement.clientWidth : null};
+      });
+      assert.ok(seen.page <= seen.W, `${kind}: nothing pushes the page sideways`);
+      assert.deepEqual(seen.spill, [], `${kind}: nothing wider than the screen outside a scrolling box`);
+      if (kind === 'factory') assert.equal(seen.lines, true, 'the lines scroll inside their own box');
+    } finally { await page.close(); }
+  }
+});

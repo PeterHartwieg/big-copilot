@@ -272,6 +272,22 @@ test('every wiki route survives the trip through the hash and back', () => {
   assert.equal(w.call(`wikiHref({kind:"home", query:""})`), '#wiki');
 });
 
+test('a link into a guide section is a route of its own, and a page id is never cut short', () => {
+  const w = wiki();
+  const got = w.call(`wikiParse("wiki/businesstypes-giftshop/prices")`);
+  assert.deepEqual({kind: got.kind, id: got.id, section: got.section},
+    {kind: 'page', id: 'businesstypes-giftshop', section: 'prices'});
+  assert.equal(w.call(`wikiHref(wikiParse("wiki/businesstypes-giftshop/prices"))`), '#wiki/businesstypes-giftshop/prices');
+  // Only a section the wiki knows is read off the end; anything else is the id.
+  const other = w.call(`wikiParse("wiki/topic/how-rent-works")`);
+  assert.deepEqual({id: other.id, section: other.section}, {id: 'topic/how-rent-works', section: ''});
+  // The board reaches a guide by the type slug the save carries.
+  assert.equal(w.call(`wikiTypeHref("ba:businesstype_giftshop", "prices")`), '#wiki/businesstypes-giftshop/prices');
+  assert.equal(w.call(`wikiTypeHref("ba:businesstype_lawfirm")`), '#wiki/businesstypes-lawfirm');
+  assert.equal(w.call(`wikiTypeHref("")`), '');
+  assert.equal(w.call(`wikiTypeHref(null, "prices")`), '');
+});
+
 test('opening another page starts at its own top, however far down its link was', async () => {
   const w = wiki();
   await w.load('wiki');

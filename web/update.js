@@ -44,7 +44,7 @@
       const hasChange = latest && typeof latest.title === 'string' && latest.title.trim() &&
         typeof latest.summary === 'string' && typeof latest.date === 'string' && Number.isInteger(latest.pr) &&
         (!previous || latest.date > previous.date ||
-          (latest.date === previous.date && latest.pr > previous.pr) ||
+          (latest.date === previous.date && latest.pr !== previous.pr) ||
           (latest.pr === previous.pr && (latest.title !== previous.title || latest.summary !== previous.summary)));
       $('releaseDetails').hidden = !hasChange;
       $('releaseDetails').open = false;

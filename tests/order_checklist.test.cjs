@@ -356,14 +356,36 @@ test('a paused level shows the level in game', () => {
    route figures _supply() measured: routed and drawWeek a week, and covered. */
 const routedRow = (factoryWeek, otherWeek, contract, edit) => {
   const week = JSON.parse(JSON.stringify(context.importWeek(factoryWeek, otherWeek, contract)));
-  return {s:0, item:'Water', factoryWeek, otherWeek, total: factoryWeek + otherWeek, ...week,
-          ...setting(week.need, contract, edit)};
+  return {s:0, item:'Water', factoryWeek, otherWeek: Math.max(0, week.gross - factoryWeek), total: week.gross,
+          ...week, ...setting(week.need, contract, edit)};
 };
 const ROUTE_ALL = {routed:25200, covered:true, drawWeek:25200};
 
-test('a line with no route is sized on everything that leaves, as before', () => {
-  assert.deepEqual(JSON.parse(JSON.stringify(context.importWeek(1000, 450, {weekly:1000}))),
-    {routed:0, covered:false, need:1450});
+const weekOf = (...args) => JSON.parse(JSON.stringify(context.importWeek(...args)));
+
+test('a line with no measured draw is sized on everything that leaves, as before', () => {
+  assert.deepEqual(weekOf(1000, 450, {weekly:1000}), {routed:0, covered:false, gross:1450, need:1450});
+});
+
+test('a routed line is sized on the measured draw, not on the log net of the route', () => {
+  // The shops draw 25,200 a week and a route brings 12,600 every day, the
+  // import's day too: the log nets both off what left and reads 10,800. The
+  // import answers for the draw less the route, 12,600.
+  assert.equal(weekOf(0, 10800, {weekly:5000, routed:12600, covered:false, drawWeek:25200}).need, 12600);
+  // The factories' full-rate week stays a floor under a draw a starved
+  // factory holds down.
+  assert.equal(weekOf(18000, 0, {weekly:5000, routed:1000, covered:false, drawWeek:15000}).need, 17000);
+});
+
+test('a depot line no contract covers asks for no import when a route brings its draw', () => {
+  // _depot_routes: the route figures alone, with no weekly amount.
+  const r = routedRow(1680, 0, {routed:1680, covered:true, drawWeek:1680});
+  assert.deepEqual([r.covered, r.need, r.setTo, r.inGame], [true, 0, null, null]);
+  assert.deepEqual(build({imports:[{s:0, rows:[r]}]}), []);
+  // Half of it by route: the import is asked for the other half.
+  const [half] = build({imports:[{s:0, rows:[routedRow(1680, 0, {routed:840, covered:false, drawWeek:1680})]}]});
+  assert.deepEqual([half.current, half.proposed], [null, 900]);
+  assert.match(half.reason, /less the 840 a week a route brings/);
 });
 
 test('a paused backup beside a route that brings the week is neither short nor resumed', () => {
@@ -392,7 +414,7 @@ test('a route covering part of the draw leaves the import the rest, not the whol
   const [action] = build({imports:[{s:0, rows:[r]}]});
   assert.equal(action.kind, 'Weekly imports');
   assert.deepEqual([action.current, action.proposed], [5000, 12600]);
-  assert.match(action.reason, /Full-rate factory inputs, less the 12[,.]600 a week a route brings;/);
+  assert.match(action.reason, /Full-rate factory inputs plus shop deliveries, less the 12[,.]600 a week a route brings;/);
   // Only a depot's shops: what the log counts as leaving is already net of
   // the route, so it is not taken off twice.
   assert.equal(routedRow(0, 12600, contract).need, 12600);
@@ -413,4 +435,72 @@ test('a route covering what a starved factory draws does not cover its full-rate
   // it; at full rate it eats 25,200, so the import still answers for 23,800.
   const r = routedRow(25200, 0, {weekly:5000, routed:1400, covered:true, drawWeek:1400});
   assert.deepEqual([r.covered, r.need, r.fit], [false, 23800, 'short']);
+});
+
+/* Today's Plan imports card, from the same rows and ticks as the checklist:
+   one change said in full, several counted, all ticked, and nothing to do. */
+const names = {0: 'Import Hub', 1: 'Factory', 2: 'Shop'};
+const card = (rows, ticked = [], gaps = {complete: true, unnamed: 0}) => JSON.parse(JSON.stringify(
+  context.planImportsState(rows, new Set(ticked), s => names[s] ?? null, gaps)));
+
+test('the Plan imports card has four states, and counts what the checklist has to do', () => {
+  const one = build({imports:[{s:0, rows:[order({item:'Metal Band', smart:true, current:15200, setTo:20200,
+    inGame:15200, levelName:'Import Hub'})]}]});
+  assert.equal(one.length, 1);
+  assert.deepEqual(card(one), {badge:'1 TO CHANGE', live:true,
+    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock ${(15200).toLocaleString()} \u2192 ${(20200).toLocaleString()}.`});
+
+  const many = build({
+    imports:[{s:0, rows:[order({item:'Sugar'}), order({item:'Flour'})]}],
+    shops:[{s:2, item:'Paper Bag', from:0, peakSold:400, target:100, peakDay:'Saturday'}],
+  });
+  assert.equal(many.length, 3);
+  assert.deepEqual(card(many), {badge:'3 TO CHANGE', live:true,
+    what:'<b>3 changes</b> at Import Hub and Shop, starting with Sugar.'});
+  // A tick takes a row off the count, as it takes it off the checklist's "to do".
+  const left = card(many, [many[0].key]);
+  assert.equal(left.badge, '2 TO CHANGE');
+  assert.match(left.what, /starting with Flour\.$/);
+  assert.equal(card(many, [many[0].key, many[2].key]).badge, '1 TO CHANGE');
+
+  assert.deepEqual(card(many, many.map(r => r.key)), {badge:'ALL TICKED', live:false,
+    what:'You ticked all 3. A change the game has taken leaves the list with the next save.'});
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0}),
+    {badge:'ALL SET', live:false, what:'No changes found in the supply data.'});
+});
+
+test('an empty checklist that could not see everything does not say ALL SET', () => {
+  // The same caveats the checklist gives: recipes still unnamed, or no game text.
+  assert.deepEqual(card([], [], {complete: true, unnamed: 3}), {badge:'NONE FOUND', live:false,
+    what:'No changes found, but 3 factory recipes are still unnamed and not included.'});
+  assert.deepEqual(card([], [], {complete: true, unnamed: 1}).what,
+    'No changes found, but 1 factory recipe is still unnamed and not included.');
+  assert.deepEqual(card([], [], {complete: false, unnamed: 0}), {badge:'NONE FOUND', live:false,
+    what:"No changes found, but factory lines need the game's text to be included."});
+  // Both gaps at once are both named.
+  assert.equal(card([], [], {complete: false, unnamed: 2}).what,
+    "No changes found, but 2 factory recipes are still unnamed and not included, and factory lines need the game's text to be included.");
+});
+
+test('a paused import with a figure reads as a resume, not an order from "not set"', () => {
+  const rows = build({imports:[{s:0, rows:[
+    order({item:'Sugar', paused:true, total:1400, edited:true, value:1600, pausedWeekly:1000}),
+    order({item:'Salt', smart:true, paused:true, total:900, edited:true, value:1200, pausedWeekly:700}),
+  ]}]});
+  assert.equal(rows.length, 2);
+  // The row says it is paused; the card reads that, not the reason's wording.
+  assert.deepEqual(rows.map(r => r.paused), [true, true]);
+  assert.equal(card(rows.map(r => ({...r, reason: 'Anything.'})), [rows[1].key]).what,
+    `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
+  assert.equal(build({imports:[{s:0, rows:[order({})]}]})[0].paused, undefined, 'an ordinary order carries no flag');
+  assert.equal(card(rows, [rows[1].key]).what,
+    `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
+  assert.equal(card(rows, [rows[0].key]).what,
+    `<b>Salt</b> at Import Hub: resume the paused import, Smart Delivery stock ${(1200).toLocaleString()}.`);
+});
+
+test('the card says a review in the checklist\u2019s own words, and escapes a save\u2019s names', () => {
+  const rows = build({loose:[{item:'<Glue>', week:700}]});
+  assert.deepEqual(card(rows), {badge:'1 TO CHANGE', live:true,
+    what:'<b>&lt;Glue></b>: choose a supplying depot before setting an order.'});
 });

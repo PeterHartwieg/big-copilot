@@ -29,7 +29,7 @@ function currentPage() {
     fs.readFileSync(path.join(root, 'wiki.js'), 'utf8').trim());
 }
 
-async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', changeData} = {}) {
+async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', changeData, holdData} = {}) {
   const context = await browser.newContext({viewport:{width,height:900}, colorScheme:theme, reducedMotion:motion});
   t.after(() => context.close());
   await context.addInitScript(() => {
@@ -40,8 +40,9 @@ async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', c
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.route('**/*', route => {
+  await page.route('**/*', async route => {
     const url = new URL(route.request().url());
+    if(holdData && url.pathname === '/wiki-data.json') await holdData;
     if(url.hostname !== 'wiki.test') return route.abort();
     if(url.pathname.startsWith('/api/')) return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[],online:0})});
     const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
@@ -84,6 +85,178 @@ test('a cold Wiki article link and reload work without a save', async t => {
   await page.reload();
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   assert.match(page.url(), /#wiki\/businesstypes-giftshop$/);
+  assert.deepEqual(errors, []);
+});
+
+test('a link into Prices in your save lands on that section, and only once', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop/prices'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  // The shelves' "Compare with market prices" lands here: the section's head
+  // at the top of the window, under the sticky masthead, not the guide's top.
+  await page.waitForFunction(() => {
+    const el = document.getElementById('wk-prices');
+    return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+  });
+  assert.match(await page.locator('#wk-prices h2').innerText(), /Prices in your save/);
+  assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
+  // A redraw afterwards leaves the reader where they have scrolled to.
+  await page.evaluate(() => { scrollTo(0, 0); drawWiki(); });
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('the same section link followed again, after leaving the Wiki, lands again', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop/prices'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  const landed = () => page.waitForFunction(() => {
+    const el = document.getElementById('wk-prices');
+    return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+  });
+  await landed();
+  // Off to another page, then the shelves' link again: the route is the one
+  // the Wiki still holds, and it has to land all the same.
+  await page.evaluate(() => { showPage('today'); scrollTo(0, 0); });
+  assert.equal(await page.evaluate(() => [page, scrollY].join(' ')), 'today 0');
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  await page.waitForFunction(() => page === 'wiki');
+  await landed();
+  // A redraw while the Wiki is up still leaves the reader where they are.
+  await page.evaluate(() => { scrollTo(0, 0); drawWiki(); wikiVisit(); });
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+/* Back and Forward follow the one rule too: coming into the Wiki, or onto
+   another route inside it, lands on the route's section. */
+const landedOnPrices = page => page.waitForFunction(() => {
+  const el = document.getElementById('wk-prices');
+  return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
+});
+
+// A landing scrolls for a few frames while the sections above it paint;
+// the reader's own scroll waits for that, or the landing would undo it.
+const settled = page => page.waitForTimeout(500);
+
+test('Back and Forward onto a prices entry land on Prices, and a plain guide starts at its top', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  await landedOnPrices(page);
+  // Each step below starts from the top, so the browser's own restoration of
+  // the entry's scroll position cannot pass for a landing.
+  await settled(page);
+  await page.evaluate(() => { scrollTo(0, 0); showPage('today'); });
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => page === 'wiki');
+  await landedOnPrices(page);
+  assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
+  // Another guide, then Back: another route, so it lands on Prices again.
+  await settled(page);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-bookstore'; });
+  await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
+  await page.evaluate(() => history.back());
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  await landedOnPrices(page);
+  // Forward to the other guide, which names no section: its top.
+  await page.evaluate(() => history.forward());
+  await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  // Back to Prices, Back again to the plain guide entry, then Forward: Prices.
+  await page.evaluate(() => history.back());
+  await landedOnPrices(page);
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop');
+  await settled(page);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.evaluate(() => history.forward());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop/prices');
+  await landedOnPrices(page);
+  // A redraw of the route on screen does not land again.
+  await settled(page);
+  await page.evaluate(() => { scrollTo(0, 0); drawWiki(); wikiVisit(); });
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('a guide with no section, come back to from another page, starts at its top each time', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  for (let visit = 0; visit < 2; visit++) {
+    // A long Today, read well down, and then the same guide again.
+    await page.evaluate(() => {
+      showPage('today');
+      document.getElementById('pageToday').style.minHeight = '5000px';
+      scrollTo(0, 1500);
+    });
+    assert.equal(await page.evaluate(() => scrollY), 1500);
+    await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop'; });
+    await page.waitForFunction(() => page === 'wiki');
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => scrollY), 0, `visit ${visit + 1}`);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('a landing still waiting for the catalogue is dropped when the reader moves on', async t => {
+  let release;
+  const holdData = new Promise(r => { release = r; });
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop/prices', holdData});
+  // Before the catalogue is in, the reader follows a link to another guide.
+  await page.waitForFunction(() => page === 'wiki');
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-bookstore'; });
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-bookstore');
+  release();
+  await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
+  await settled(page);
+  // Its own top, not the Prices section the first link asked for.
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('Back to the same guide with no section drops a landing still waiting for the catalogue', async t => {
+  let release;
+  const holdData = new Promise(r => { release = r; });
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop', holdData});
+  await page.waitForFunction(() => page === 'wiki');
+  // The prices link, then Back to the guide itself, all before the catalogue is in.
+  await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop/prices'; });
+  // The Wiki has taken the route and holds the landing, waiting for the data.
+  await page.waitForFunction(() => wikiRoute.section === 'prices' && wikiLanding === 'prices');
+  assert.equal(await page.evaluate(() => wikiStatus), 'loading');
+  await page.evaluate(() => history.back());
+  await page.waitForFunction(() => location.hash === '#wiki/businesstypes-giftshop' && wikiRoute.section === '');
+  // Back on the sectionless route, the waiting landing is gone before the data is in.
+  assert.equal(await page.evaluate(() => wikiLanding), '');
+  release();
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  await settled(page);
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('a page without the section a link names starts at its top, not where the last page was', async t => {
+  // The same help page before and after, so only entering the Wiki moves the scroll.
+  const {page, errors} = await fixture(t, {hash:'#wiki/general-energy'});
+  await page.getByRole('heading', {name:'Energy',exact:true,level:1}).waitFor();
+  // A long Today read well down, and a Wiki tall enough to keep that scroll.
+  await page.evaluate(() => {
+    document.getElementById('pageWiki').style.minHeight = '6000px';
+    showPage('today');
+    document.getElementById('pageToday').style.minHeight = '5000px';
+    scrollTo(0, 1500);
+  });
+  assert.equal(await page.evaluate(() => scrollY), 1500);
+  // A help page has no Prices in your save.
+  await page.evaluate(() => { location.hash = '#wiki/general-energy/prices'; });
+  await page.getByRole('heading', {name:'Energy',exact:true,level:1}).waitFor();
+  await settled(page);
+  assert.equal(await page.locator('#wk-prices').count(), 0);
+  assert.equal(await page.evaluate(() => scrollY), 0);
   assert.deepEqual(errors, []);
 });
 

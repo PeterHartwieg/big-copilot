@@ -84,7 +84,8 @@ test('a type cell is the average demand of its range, and a one-product type rea
       /average demand 55 across the 2 of its 3 products with a reading here, 2 sellers on average$/);
     assert.equal((await cell(page, 0, 1).innerText()).trim(), '90');
     assert.match(await cell(page, 0, 1).getAttribute('data-tip'), /demand 90 for its one product/);
-    assert.match(await page.locator('#market .r[data-r="0"] small').innerText(), /^1 product$/);
+    // The row ends on the way to the type's setup guide in the Wiki.
+    assert.match(await page.locator('#market .r[data-r="0"] small').innerText(), /^1 product · Setup guide ›$/);
   } finally { await page.close(); }
 });
 

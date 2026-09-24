@@ -180,6 +180,11 @@ for (const scenario of [
   {name: 'an active backup below the week the route covers', args: '1.0,[contract(2000,0,smart=False)]'},
   {name: 'a line the route covers half of', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,)'},
   {name: 'a paused import on a line the route covers half of', args: '0.5,[contract(13000,13000,smart=False,active=False)],import_days=(7,)'},
+  // The route also runs the day the import lands, so the log nets both off it.
+  {name: 'a line the route covers half of every day', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,),route_from=3'},
+  {name: 'a covered backup with a figure typed in', args: '1.0,[contract(2000,0,smart=False)]', typed: 2500},
+  // No route: the log loses the import's day, the measured draw does not.
+  {name: 'a line only the import feeds', args: '0.0,[contract(5000,5000,smart=False)],import_days=(7,)'},
 ]) {
   test(`routed supply: ${scenario.name}`, async () => {
     const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
@@ -189,22 +194,38 @@ for (const scenario of [
     try {
       await page.route('https://**', route => route.abort());
       await page.setContent(html, {waitUntil: 'load'});
-      await page.evaluate(data => {
+      await page.evaluate(([data, typed]) => {
         D = data; stockView = 'imports'; showAllStock = true; logisticsView = 'all';
         const draw = drawOrderChecklist;
         drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+        if (typed) {
+          const line = D.supply.factories.depots[1]['ba:itemname_frozenfood'];
+          impSetKeep(impSetId(D.businesses[1].key, 'ba:itemname_frozenfood'), {value: typed, inGame: line.weekly});
+        }
         drawStock(); drawLogistics();
-      }, data);
+      }, [data, scenario.typed || 0]);
       const actions = await page.evaluate(() => window.fixtureActions);
       const imports = await page.locator('#importPlan').textContent();
       const stock = await page.locator('#stock').textContent();
       const row = data.supply.imports.find(r => r.s === 1);
       const weekly = actions.filter(a => a.kind === 'Weekly imports');
-      if (row.covered) {
+      if (row.covered && scenario.typed) {
+        // The player's own figure goes to the checklist; the chip still says why.
+        assert.match(imports, /route brings it/);
+        assert.doesNotMatch(imports, /nothing draws it/);
+        assert.equal(weekly.length, 1);
+        assert.equal(weekly[0].proposed, scenario.typed);
+      } else if (row.covered) {
         assert.match(imports, /route brings it/);
         assert.doesNotMatch(imports, /resume import|raise|nothing draws it/);
         assert.deepEqual(actions, []);
         assert.equal(row.level, 'ok');
+      } else if (!row.routed) {
+        // The Stock view's week, 25,200, not the log's 21,600.
+        assert.equal(row.weekNeed, 25200);
+        assert.equal(weekly.length, 1);
+        assert.equal(weekly[0].proposed, row.weekNeed);
+        assert.match(imports, /25[,.\s]?200/);
       } else if (row.paused) {
         assert.match(imports, /resume import/);
         assert.equal(weekly.length, 1);
@@ -212,14 +233,44 @@ for (const scenario of [
           /Resume the paused import contract.*after the 12[,.\s]?600 a week a route brings, is 12[,.\s]?600\./);
         assert.equal(row.weekNeed, 12600);
       } else {
-        // The table's suggestion is the Stock view's week for the import.
+        // The table's suggestion is the Stock view's week for the import,
+        // and what it shows as used is the draw the route is taken off.
         assert.equal(row.weekNeed, 12600);
         assert.match(stock, /after 1[,.\s]?800\/day by route/);
         assert.match(imports, /raise/);
+        assert.match(imports, /25[,.\s]?200/);
         assert.equal(weekly.length, 1);
-        assert.equal(weekly[0].proposed, 12600);
+        assert.equal(weekly[0].proposed, row.weekNeed);
         assert.match(weekly[0].reason, /less the 12[,.\s]?600 a week a route brings/);
       }
     } finally { await page.close(); }
   });
 }
+
+test('a depot line with no import that a route feeds is not asked to import', async () => {
+  // A factory drawing 1,680 water a week from a depot with no import
+  // contract; a route from another of the company's depots brings that
+  // depot the whole draw (_depot_routes).
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_import_routes import ImportRoutesTests; '
+    + 'print(json.dumps(ImportRoutesTests().build([],routed=True)))'));
+  const page = await browser.newPage();
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    const run = routes => page.evaluate(([data, routes]) => {
+      D = data; logisticsView = 'all';
+      D.supply.factories.depotRoutes = routes;
+      const draw = drawOrderChecklist;
+      drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+      drawLogistics();
+      return {actions: window.fixtureActions, imports: document.getElementById('importPlan').textContent};
+    }, [data, routes]);
+    const slug = data.supply.factories.sites[0].needs[0].slug;
+    const without = await run({});
+    assert.equal(without.actions.filter(a => a.kind === 'Weekly imports').length, 1, 'no route: an import to add');
+    const fed = await run({1: {[slug]: {routed: 1680, covered: true, drawWeek: 1680}}});
+    assert.equal(fed.actions.filter(a => a.kind === 'Weekly imports').length, 0);
+    assert.match(fed.imports, /route brings it/);
+  } finally { await page.close(); }
+});

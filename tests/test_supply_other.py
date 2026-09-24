@@ -230,6 +230,10 @@ class DepotOtherTests(unittest.TestCase):
         self.assertEqual(other[WATER], 700)
 
     def test_a_parking_depot_the_hub_also_fills_is_read_net(self):
+        """What else leaves the hub is read over the six days the import cannot
+        have landed on (day 7 is its day, whose arrival the log nets off what
+        left): 100 a day the factory's intake is read net of, and the one-off
+        100 to the distributor on day 5, 700 over six days, 817 a week."""
         log = {}
         for day in range(3, 10):
             ship(log, day, HUB, FACTORY, {WATER: 340})
@@ -237,7 +241,7 @@ class DepotOtherTests(unittest.TestCase):
         ship(log, 5, HUB, DISTRIB, {WATER: 100})
         other = depot_other(log, [(HUB, FACTORY, WATER, 400), (HUB, DISTRIB, WATER, 100),
                                   (FACTORY, DISTRIB, WATER, 700)], [imports(HUB, WATER, 2480)])
-        self.assertEqual(other[WATER], 800)
+        self.assertEqual(other[WATER], 817)
 
     def test_a_shop_that_sells_other_goods_does_not_use_the_item(self):
         """The depot passes the water on to a shop that sells only beer:

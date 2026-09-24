@@ -304,18 +304,18 @@ class RoutedSupplyTests(unittest.TestCase):
         texts = [a["text"] for a in result["lines"] + result["minor"]["rows"]]
         [text] = [t for t in texts if "Frozen Food" in t]
         self.assertIn("a route brings the week's draw (3,600/day)", text)
-        self.assertIn("before its next round", text)
+        # The headline is cut at the first comma: when it runs dry, and why.
+        self.assertRegex(text, r"^Frozen Food[^,;]* runs dry [^,;]+, before the route's next round; ")
         self.assertNotIn("import", text)
 
     def test_the_shortfall_kind_is_named_for_a_route_s_round_too(self):
         """The Saturday above stays a `shortfall`, so a player's switch for the
-        kind keeps what it meant; the kind's name and description, and the
-        line three of them condense into, name the next delivery, import or
-        route round, rather than an import alone."""
+        kind keeps what it meant; the kind's description, and the line three
+        of them condense into, name the next import or route round, or the
+        next delivery, rather than an import alone."""
         self.assertNotIn("import", SUMMARIES["shortfall"])
         [kind] = [line for line in TEMPLATE.splitlines() if 'id:"shortfall"' in line]
         self.assertIn("import or route round", kind)
-        self.assertNotIn("Import shortfall", kind)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
         """The same Saturday with the backup paused: there is no drop to reach,
@@ -348,6 +348,27 @@ class RoutedSupplyTests(unittest.TestCase):
         brought nothing."""
         row, _item = depot_row(1.0, [contract(5200, 0, smart=True, due=12)], route_from=7)
         self.assertEqual((row["routed"], row["covered"], row["level"]), (DRAW, True, "ok"))
+
+    def test_what_leaves_for_the_shops_leaves_out_the_import_s_day(self):
+        """The day the import lands, the log nets its arrival off what left, so
+        the shops' 3,600 that day read as nothing and the week as 21,600. That
+        day is left out, as the route's own figure leaves it out: the week the
+        Weekly imports table sizes the import on is 25,200, the Stock view's."""
+        supply, _ = depot_supply(0.0, [contract(5000, 5000, smart=False)], import_days=(7,))
+        self.assertEqual(supply["factories"]["depotOther"][1][FOOD], 7 * DRAW)
+        row = next(r for r in supply["imports"] if r["s"] == 1)
+        self.assertEqual(row["weekNeed"], 7 * DRAW)
+
+    def test_a_depot_line_a_route_feeds_with_no_import_is_given_to_the_table(self):
+        """No import contract, and the factory's route brings the whole draw:
+        the line is listed with its route, so the table asks for no import."""
+        supply, _ = depot_supply(1.0, [])
+        self.assertFalse(supply["imports"])
+        self.assertEqual(dict(supply["factories"]["depotRoutes"]),
+                         {1: {FOOD: {"routed": 7 * DRAW, "covered": True, "drawWeek": 7 * DRAW}}})
+        # A depot line an import covers is not listed twice.
+        supply, _ = depot_supply(1.0, [contract(5200, 0, smart=True)])
+        self.assertEqual(dict(supply["factories"]["depotRoutes"]), {})
 
     def test_a_depot_fed_only_by_imports_reads_as_before(self):
         """No route into the depot: the whole draw is the import's, and a 5,000

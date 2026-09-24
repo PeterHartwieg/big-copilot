@@ -21,6 +21,19 @@ function mapButton(key, label = "this building"){
 function mapRef(b, label){
   return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
 }
+/* A site's name, wherever the board prints it, is a way to the site's own
+   page (siteHref() in the board script): plain text until the pointer is on
+   it. `label` is text, not markup. A site the board cannot address stays
+   text. The map button, where there is one, sits beside the link, never in it. */
+function siteLink(b, label){
+  if(!b) return "—";
+  const text = mapText(label === undefined ? shortName(b) : label);
+  const href = typeof siteHref === "function" ? siteHref(b.key) : "";
+  return href ? `<a class="ss-sl" href="${attr(href)}" data-tip="Open its page">${text}</a>` : text;
+}
+/* The labelled way to a site's page where a name alone would be easy to miss:
+   the map card, the goods-flow panel. */
+const SS_PAGE = '<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>';
 let cityMapAssets = null, cityMapPage = null, cityMapOverlay = null, cityMapCharacter;
 const mapViews = new Set();
 const mapText = value => String(value ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -242,10 +255,11 @@ class CityMapView {
       if(action === 'reset') this.reset(true);
       if(action === 'full') this.toggleFullscreen();
       if(action === 'close') this.deselect();
-      if(action === 'details'){
+      // "its page" carries the site's address, which the board opens itself.
+      if(action === 'details' && !inSiteLink(e)){
         e.preventDefault();
         if($('locationMapDialog').open) $('locationMapDialog').close();
-        openSite(this.selected);
+        siteOpenOver(this.selected);
       }
     });
     // The column headers carry a button role, so they answer to a button's keys.
@@ -278,16 +292,18 @@ class CityMapView {
     const a = this.assets, id = this.root.id;
     const clipId = `${id}-clip`;
     // The whole header belongs to the plain map: the finder's own switch lives
-    // in the map window and its filters in the panel.
+    // in the map window and its filters in the panel. A chip's accessible name
+    // is what it shows, "Mine 2", so a spoken command matches the word on it;
+    // the note says the rest.
     const head = this.panel ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
+      <span class="why" data-tip="The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
@@ -297,7 +313,7 @@ class CityMapView {
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2" href="#detail" data-action="details" aria-label="Open business details"${this.panel ? ' data-tip="Open business details"' : ''}>${ICON.go}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details">${SS_PAGE}its page</a></div>
       </div>
       ${this.panel ? this.finderControls() : ""}
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
@@ -355,7 +371,9 @@ class CityMapView {
      thing rather than as chrome scattered over the map. */
   finderControls(){
     if(!premises()) return "";
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" aria-label="Find a location" data-tip="Find a location">${ICON.pin}</button></div>`;
+    /* A chip with its name on it: a bare pin in the corner was the most
+       hidden way into a headline feature. */
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-tip="Rank the buildings you could take for a business type">${ICON.pin}<span>Find a location</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
@@ -828,7 +846,8 @@ class CityMapView {
   renterOf(b){
     const who = b.occupant;
     // A place you rent is yours whether or not a business trades from it.
-    if(b.status === 'mine') return who?.name ? `${mapText(who.name)} (you)` : 'You';
+    // Your own is named by a way to its page.
+    if(b.status === 'mine') return who?.name ? `${siteLink({key: b.key, name: who.name}, who.name)} (you)` : 'You';
     if(!who) return 'Nobody';
     // A hospital or a casino is occupied while still being unavailable, so the
     // occupant is named whatever the status says about taking the place.
@@ -1184,7 +1203,11 @@ class CityMapView {
     // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
-    card.querySelector('h3').textContent = title.replace(/^\[\w+\]\s*/, '');
+    /* A business's or a home's name is a way to its own page, as it is
+       everywhere else on the board. */
+    const siteAddr = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
+    const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
+    card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="Open its page">${shown}</a>` : shown;
     const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}`
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText(loc?.hood || loc?.address || '');
@@ -1199,12 +1222,12 @@ class CityMapView {
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
-    /* The arrow opens the site panel. A business has always had one; a home
-       has one too now, and it is the only way in — a flat is in no picker. */
+    /* "its page" opens the site's own page, at its address. A business has
+       always had one; a home has one too, and it is the only way in — a flat
+       is in no picker. */
     const go = card.querySelector('.go2');
     go.hidden = !b && !home;
-    go.setAttribute('aria-label', b ? 'Open business details' : 'Open home details');
-    if(this.panel) go.dataset.tip = b ? 'Open business details' : 'Open home details';
+    go.setAttribute('href', siteAddr || '#detail');
     this.paintFacts(key);
     if(card.classList.contains('in')) this.placeCard();
   }

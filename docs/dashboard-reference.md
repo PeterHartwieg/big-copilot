@@ -58,15 +58,27 @@ the map.
 - **Today**: four tiles and the *Needs attention* list, nothing else. Profit yesterday
   with its seven-day average and trend, revenue with customers served, cash on hand
   with where the profit went, and the daily fixed-cost base (rent plus payroll). Net
-  worth takes the fourth tile whenever the game reports it again. Bank debt only
-  appears, in the cash tile, when there is some. Site and staff counts sit in the
-  masthead. Sparklines cover the last 61 days.
+  worth takes the fourth tile whenever the game reports it again. The Profit tile opens
+  Company › Results at the daily result. Bank debt appears in the cash tile's note when
+  there is some, and on its sub line after the period ("this week · $1.89M owed on loans")
+  once it is more than the last seven days' profit. Site and staff counts sit in the masthead. Sparklines cover
+  the last 61 days. On a phone the tiles pair up two by two and the Next moves cards stack.
 - **Needs attention**: only what you can act on, each line with a number and a deadline
-  where one exists. Below the list, a count of everything too small to be worth a line.
-  *Filter kinds* chooses which kinds of finding make the list; switching one off moves its
-  findings down into that count rather than hiding them, the count line says how many were
-  moved, and nothing is ever dropped. Every *details ›* link opens the page and view the
-  finding is spelt out on and scrolls to it.
+  where one exists. Below the list, two lines, each with its own *show*: how many findings
+  fall below the materiality line ("1 below the $6,239/day line"), and how many sit in kinds
+  switched off, by the player or by default, naming each kind with its count and worth in
+  the tune panel's order ("15 in kinds switched off: Overstaffed hours (15, $17k/day)"). The tune button chooses which kinds of finding
+  make the list; switching one off moves its findings to the second line rather than
+  hiding them, and nothing is ever dropped. *At capacity* is on by default and *Overstaffed
+  hours* off; a device keeps only the kinds its player switched, so a later change of
+  default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
+  site: the spare staff-hours of the whole week, its wages summed, with the days and hours
+  named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-12;
+  4 counters Mon 12-20"), the two with the most spare hours named and the rest counted
+  ("(and 2 more)"); the site's own hours block reads out the same week and lights all of it.
+  A finding's headline never drops an item's variant: "Fabric (Expensive)", not "Fabric".
+  Every *details ›* link opens the page and view the finding is spelt out on and scrolls
+  to it.
   *Uniforms / locker* checks retail sites for an installed Uniform Locker. Gym
   Lockers and boxed Uniform Lockers do not count. With a locker installed, the
   warning names the roles working a station shift here that have no uniform set,
@@ -88,13 +100,19 @@ the map.
   - *Daily result*: a seven-day rolling profit line over the daily ones. Daily profit
     swings by a million between a weekend and a Tuesday purely because that is when the
     week's goods are paid for, so the rolling line is the one that says whether trading
-    moved. Click a legend entry to add or drop a line.
-  - *Weekly rhythm*: one sentence when most sites share a peak day; the weekday bars
-    and the site-by-site table each wait behind a button.
+    moved. Click a legend entry to add or drop a line. *By weekday*, the switch's third
+    option, draws the company's own week instead: each weekday against a normal day over
+    the last four weeks, one series at a time (Revenue, Profit, and Customers once it
+    clears the noise test; a series that does not has no chip, and with none the option
+    is not offered). The line above the bars names the series and its weeks; its tooltip
+    carries the sites' verdict and what today and yesterday are normally worth, and
+    *site by site* opens the table of every site's own week.
   - *Portfolio*: grouped by chain, with each chain's combined revenue, cost and margin
     on one line and its sites folded underneath. A week-on-week revenue column sits
     beside yesterday's takings. Every column sorts. Click a chain to open it, then a
-    site to open its detail.
+    site to open its detail. Under the sites' total, *Company costs outside sites* (loan
+    payments, health insurance, homes, parking; itemised on hover) leads to *Company
+    profit*, the figure on Today's Profit tile.
   - *Business detail*: nothing until a site is opened from the portfolio or a finding;
     then that site alone, with its profit history, cost breakdown, crew and shelves, and
     an hour-by-hour grid comparing historical customers with capacity from the
@@ -158,9 +176,11 @@ the map.
   - *Plan a chain*: machines run flat out, so the answer is the weekly raw material
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
-- **Company / Products, Payroll, Milestones**: the reference tables and house
-  rules. There is no debt page; loans cap at $2M, which is beside the point at this
-  stage.
+- **Company / Products, Payroll, Milestones**: the reference tables and the career
+  checklist. Payroll names its two wage figures: "at today's rates" is every hourly wage
+  times its assigned weekly hours over seven, "booked yesterday" is what the statements
+  recorded (the Portfolio's Wages total); its ? names the sites where the two differ.
+  There is no debt page; loans cap at $2M, which is beside the point at this stage.
 
 - **Wiki**: browse the game's help without loading a save, starting with a shelf
   of categories and searchable pages. The Gift Shop guide presents setup
@@ -244,16 +264,21 @@ plan around. Every weekday is scored against a normal day: 100 is ordinary, 116 
 that weekday runs 16% busier. A supermarket chain might read roughly Wed 80 / Sat 115, a
 cinema Mon 83 / Sat 113, while a food factory runs the other way and peaks Monday.
 
-It appears in five places: the chain view with its own section, a per-site week in each
+It appears in five places: the Daily result chart's *By weekday*, a per-site week in each
 business tab, the Products table, and, most usefully, inside all three supply-chain
 calculations, which is where it changes decisions rather than just describing them.
 Stock needs follow the peak day, not the average one, and the size of a weekly order is
 judged against the week ahead charged day by day at each weekday's own rate.
 
-Its own section is one sentence when there is one pattern to report, such as *8 sites
-peak Saturday, +30 to +41 points between their best and worst day; Factory - Food peaks
-Monday*, with the nine-row table a click away. Nine rows saying the same thing is a
-sentence, not a table.
+Each chart names the series it reads, because they are different questions: the
+company's *By weekday* is the whole company's revenue (or profit) over its last four
+weeks, a site's *Its week* is that site's own revenue, and the Products *Peaks · units*
+column is units sold across every store that carries the line. A company that opened a
+line of clothing shops a month ago can peak Friday while every one of those shops peaks
+Saturday. The sites' verdict is one sentence when there is one pattern to report, such
+as *8 sites peak Saturday, +30 to +41 points between their best and worst day; Factory -
+Food peaks Monday*, on the series line's tooltip, with the table a click away (*site by
+site*). Nine rows saying the same thing is a sentence, not a table.
 
 In the Products table the weekday peak only gets a column when at least half the rows
 have one; below that it moves into the row's own tooltip, since a column that is empty
@@ -812,8 +837,9 @@ and dims the rest; clicking scrolls there.
   and a pip a day left; with no baseline to measure the wave against, the bar is hatched
   rather than guessed.
 - **Hours.** The two things the grid can say that a daily total cannot are chips under it:
-  what the ceiling costs, with the fix, and what idle hours cost. Hovering a chip picks
-  its own hours out of the grid.
+  what the ceiling costs, with the fix, and what idle hours cost. The idle chip is the
+  site's *Overstaffed hours* line: the whole week's spare staff-hours, hours and wages.
+  Hovering a chip picks its own hours out of the grid.
 - **Staffing** (a shop). The week the board would copy into BizMan, on the customer grid's
   own 24 columns: a strip of what the measured hours ask for, then one row a station with
   the entries to set. A bar is a person and an hour range; a dashed one is a
@@ -1101,18 +1127,21 @@ Two tables, one per number a logistics manager is set with.
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
   *Used / week* is what all the factories drawing on it eat in a week (from their lines,
   machines times recipe draw times 24 times 7) plus what else leaves for the shops
-  (measured from the delivery log). *Arrived last week* sums every contract's
+  (measured from the delivery log, leaving out the days an import can have landed, when
+  the log nets the arrival off what left). *Arrived last week* sums every contract's
   `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
   cap shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
   *Set to* is a box: where the setting falls short of the week it holds the
-  suggestion, elsewhere the figure in game. What a logistics route from your own site
-  brings the depot, measured as the Stock view measures it and named on hover over *Used /
-  week*, is not the import's to bring: it goes first to the shops' part of the draw and
-  the rest comes off the factories'. A route that brings the whole draw marks the line
-  *route brings it*: the import is a backup, with nothing to raise or resume, unless the
-  factories' full-rate week is more than the depot's measured draw (a starved factory),
-  when the import still answers for what the route leaves. For a plain order the
+  suggestion, elsewhere the figure in game. Where a logistics route from your own site
+  also feeds the line, *Used / week* is the depot's measured draw, as the Stock view
+  measures it (never less than the factories eat at full rate), and what the route brings,
+  named on hover, comes off it: the import answers for the rest. A route that brings the
+  whole draw marks the line *route brings it*: the import is a backup, with nothing to
+  raise or resume, unless the factories' full-rate week is more than the depot's measured
+  draw (a starved factory), when the import still answers for what the route leaves. The
+  same holds for a depot line with no import contract at all that a route feeds: it is not
+  asked for an import the route already brings. For a plain order the
   suggestion is the import's week rounded up to the hundred. For Smart Delivery it names
   one contract, the one whose level holds: the last that still brings something when the
   game's delivery pass runs into an empty depot. A plain amount delivered before that
@@ -1160,7 +1189,9 @@ need or not arriving, and *Everything* shows the full set-up.
   shaded by demand, with a dot per seller, yours included (ten at most), under each
   figure. An outlined cell means you already run that type, or sell that product,
   there. Three views: *By type*, *What I sell*, and *Not yet* (ranked by strongest
-  unserved demand, so it doubles as a shortlist of what to offer next).
+  unserved demand, so it doubles as a shortlist of what to offer next). On a phone the
+  name column narrows, a neighbourhood heads its column by its two-letter code (the full
+  name is in its tooltip), and a long row name wraps.
 
 ### Grouped by business type
 
