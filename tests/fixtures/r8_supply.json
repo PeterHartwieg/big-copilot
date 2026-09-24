@@ -214,8 +214,7 @@
      "stock": 0,
      "short": 0,
      "tight": 0,
-     "low": 0,
-     "unsupplied": 0
+     "low": 0
     },
     {
      "id": "hub#1",
@@ -327,8 +326,7 @@
      "stock": 22700,
      "short": 1,
      "tight": 1,
-     "low": 0,
-     "unsupplied": 1
+     "low": 0
     },
     {
      "id": "factory#2",
@@ -424,8 +422,7 @@
      "stock": 2330,
      "short": 2,
      "tight": 0,
-     "low": 0,
-     "unsupplied": 0
+     "low": 0
     },
     {
      "id": "shop#3",
@@ -489,8 +486,7 @@
      "stock": 250,
      "short": 0,
      "tight": 0,
-     "low": 0,
-     "unsupplied": 0
+     "low": 0
     },
     {
      "id": "shop#4",
@@ -522,8 +518,7 @@
      "stock": 60,
      "short": 0,
      "tight": 0,
-     "low": 0,
-     "unsupplied": 0
+     "low": 0
     },
     {
      "id": "gym#5",
@@ -555,8 +550,7 @@
      "stock": 30,
      "short": 1,
      "tight": 0,
-     "low": 0,
-     "unsupplied": 0
+     "low": 0
     }
    ],
    "links": [

@@ -194,6 +194,14 @@ test('a factory reads out the machine that makes nothing, else the least staffed
       'Least staffed · Bottle of Wine · Machine 3 · 144 of 168 h rostered: nobody on it on Sundays');
     assert.equal(await readOf(page, 'inputs'), 'Every input arrives in step');
   } finally { await page.close(); }
+  // Covered because Produce up to holds the wine back says so, not "in step".
+  page = await board({shop: FACTORY, supply: {factories: factories({...FACTORY_SITE, unnamed: [],
+    lines: FACTORY_SITE.lines.map(l => ({...l, limitHeld: l.slug === 'wine'})),
+    needs: [FACTORY_SITE.needs[0]]}), facts: {0: {...INPUT_FACTS[0],
+      grapes: sf('covered', 'limit', {role: 'input', cad: 'daily', use: 2400, need: 2400, have: 2400})}}}});
+  try {
+    assert.equal(await readOf(page, 'inputs'), 'Produce up to holds 1 line back; the inputs arrive as they make');
+  } finally { await page.close(); }
 });
 
 // --- cross-links -------------------------------------------------------------

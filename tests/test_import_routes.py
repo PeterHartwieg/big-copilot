@@ -199,7 +199,8 @@ class ImportRoutesTests(unittest.TestCase):
                 data = self.build(orders, routed=True, target=100)
                 row = self.held(data)
                 self.assertEqual((row["cadence"], row["provision"], row["fit"]), ("daily", 100, "short"))
-                self.assertEqual((self.node(data)["short"], self.node(data)["unsupplied"]), (1, 0))
+                self.assertEqual(self.node(data)["short"], 1)
+                self.assertNotEqual(self.held(data)["st"], "noplan")
 
     def test_factory_panel_judges_a_covering_import_on_its_week_beside_a_route(self):
         """As the factory view does: a fill-to target ships nothing while the
@@ -291,7 +292,7 @@ class ImportRoutesTests(unittest.TestCase):
         data = self.build([])
         row = self.held(data)
         self.assertEqual((row["fit"], row["why"]), ("short", "unplanned"))
-        self.assertEqual((self.node(data)["short"], self.node(data)["unsupplied"]), (1, 1))
+        self.assertEqual((self.node(data)["short"], row["st"]), (1, "noplan"))
 
     def test_factory_panel_counts_the_factories_it_tops_up(self):
         """An import to one factory that also feeds another has to cover both."""
