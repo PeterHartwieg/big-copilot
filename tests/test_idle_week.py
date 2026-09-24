@@ -3,7 +3,8 @@
 The hour grid used to hand Today one idle run per site, the worst weekday, so a
 gym overstaffed every evening read as one Monday's worth of wages. Every run is
 now kept under the finding's `week`, and _alerts() prices and names them all in
-one line, while the run the site page reads out stays the worst one.
+one line. The site page's hours block reads the same `week`, and lights its
+`cells`; tests/site_panel.test.cjs checks the page against this Python.
 """
 import unittest
 
@@ -59,7 +60,7 @@ class IdleWeekTests(unittest.TestCase):
     def test_every_idle_weekday_is_kept_and_the_worst_still_leads(self):
         grid = gym([MONDAY, TUESDAY, WEDNESDAY])
         [idle] = _hour_findings([grid], [business()], WAGES)
-        # The site page's run is unchanged: one weekday, first past the post.
+        # The worst run is still one weekday, first past the post.
         # Three trainers where one would do leave two spare for twelve hours.
         self.assertEqual((idle["day"], idle["from"], idle["to"], idle["spare"]),
                          ("Monday", 8, 20, 24))
@@ -69,6 +70,9 @@ class IdleWeekTests(unittest.TestCase):
         self.assertEqual(week["worth"], money(72 * 105.0 / 7))
         self.assertEqual(week["parts"], [
             {"noun": "fitness planning boards", "staff": 3, "when": "Mon-Wed 8-20"}])
+        # The hours the line names, each once, for the site page to light.
+        self.assertEqual(week["cells"], [
+            [wd, h] for wd in (MONDAY, TUESDAY, WEDNESDAY) for h in range(8, 20)])
 
     def test_one_site_is_one_line_with_the_week_summed(self):
         grid = gym([MONDAY, TUESDAY, WEDNESDAY])

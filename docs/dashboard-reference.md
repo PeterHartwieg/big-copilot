@@ -73,7 +73,7 @@ the map.
   hours* off; a device keeps only the kinds its player switched, so a later change of
   default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
   site: the spare staff-hours of the whole week, its wages summed, with the days and hours
-  named as a shape ("Mon-Wed 8-20"); the site's own page still reads out its worst run.
+  named as a shape ("Mon-Wed 8-20"); the site's own hours block reads out the same week.
   A finding's headline never drops an item's variant: "Fabric (Expensive)", not "Fabric".
   Every *details ›* link opens the page and view the finding is spelt out on and scrolls
   to it.
@@ -825,8 +825,9 @@ and dims the rest; clicking scrolls there.
   and a pip a day left; with no baseline to measure the wave against, the bar is hatched
   rather than guessed.
 - **Hours.** The two things the grid can say that a daily total cannot are chips under it:
-  what the ceiling costs, with the fix, and what idle hours cost. Hovering a chip picks
-  its own hours out of the grid.
+  what the ceiling costs, with the fix, and what idle hours cost. The idle chip is the
+  site's *Overstaffed hours* line: the whole week's spare staff-hours, hours and wages.
+  Hovering a chip picks its own hours out of the grid.
 - **Staffing** (a shop). The week the board would copy into BizMan, on the customer grid's
   own 24 columns: a strip of what the measured hours ask for, then one row a station with
   the entries to set. A bar is a person and an hour range; a dashed one is a
@@ -1167,7 +1168,9 @@ need or not arriving, and *Everything* shows the full set-up.
   shaded by demand, with a dot per seller, yours included (ten at most), under each
   figure. An outlined cell means you already run that type, or sell that product,
   there. Three views: *By type*, *What I sell*, and *Not yet* (ranked by strongest
-  unserved demand, so it doubles as a shortlist of what to offer next).
+  unserved demand, so it doubles as a shortlist of what to offer next). On a phone the
+  name column narrows, a neighbourhood heads its column by its two-letter code (the full
+  name is in its tooltip), and a long row name wraps.
 
 ### Grouped by business type
 

@@ -150,3 +150,62 @@ test('at 390 px Today pairs its tiles, stacks its cards and never scrolls sidewa
     assert.ok(m.sentenceBelowSite, 'the sentence has a line of its own');
   } finally { await page.close(); }
 });
+
+test('at 390 px the Growth grid narrows its names, never its cells or the page', async () => {
+  const page = await browser.newPage({viewport: {width: 390, height: 900}});
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    await page.emulateMedia({reducedMotion: 'reduce'});
+    const draw = () => page.evaluate(() => {
+      document.body.classList.add('has-board');
+      const hoods = ['Garment District', "Hell's Kitchen", 'Industry City', 'Lower Manhattan',
+                     'Midtown', 'Murray Hill', 'The Hamptons'];
+      // "100" and ten sellers in every cell: the widest a cell's contents get.
+      const cells = () => hoods.map(hood => ({hood, demand: 100, count: 1, providers: 10, sell: 0, here: false}));
+      D = {meta: {character: 'growth-fixture', day: 30}, market: {
+        hoods, trendDays: 0, noOffices: [], rows: [], offices: [], hype: [], shortages: [], movers: [],
+        types: [
+          {type: 'Fruit And Vegetable Store', slug: 'ba:businesstype_fruitandvegetablestore', products: 6,
+            mine: true, peak: 100, cells: cells()},
+          {type: 'Cinema', slug: 'ba:businesstype_cinema', products: 1, mine: false, peak: 100, cells: cells()}]}};
+      document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageGrowth'; });
+      document.querySelectorAll('#pageGrowth section').forEach(el => {
+        el.hidden = el.id !== 'secMarket'; el.classList.add('measured'); });
+      marketView = 'types';
+      drawMarket();
+      const box = e => e.getBoundingClientRect();
+      const cellEls = [...document.querySelectorAll('#market .cell')];
+      const heads = [...document.querySelectorAll('#market .h')];
+      const name = document.querySelector('#market .r .mk-name');
+      return {
+        scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth,
+        label: Math.round(box(document.querySelector('#market .r')).width),
+        cell: Math.min(...cellEls.map(e => box(e).width)),
+        // Every seller's dot stays inside its own cell.
+        dotsInside: cellEls.every(c => { const o = box(c), d = box(c.querySelector('.rv2'));
+          return d.left >= o.left && d.right <= o.right; }),
+        heads: heads.map(h => h.innerText.trim()),
+        tips: heads.map(h => h.dataset.tip.split(':')[0]),
+        short: shortHood(hoods[0]),
+        nameWhole: name.scrollHeight <= name.clientHeight + 1 && name.textContent === 'Fruit And Vegetable Store',
+      };
+    });
+    const phone = await draw();
+    assert.equal(phone.scroll, phone.width, 'no sideways scroll');
+    assert.ok(phone.label < 120, `the name column narrows (${phone.label}px)`);
+    assert.ok(phone.cell >= 28, `a cell keeps room for "100" (${phone.cell}px)`);
+    assert.ok(phone.dotsInside, 'the seller dots stay inside their cell');
+    // The board's two-letter pill heads each column; the full name is in its tip.
+    assert.deepEqual(phone.heads, ['GD', 'HK', 'IC', 'LM', 'MT', 'MH', 'HA']);
+    assert.deepEqual(phone.tips, ['Garment District', "Hell's Kitchen", 'Industry City',
+                                  'Lower Manhattan', 'Midtown', 'Murray Hill', 'The Hamptons']);
+    assert.ok(phone.nameWhole, 'a long type name wraps rather than losing its end');
+    // A desk keeps its 200px names and its spelt-out heads.
+    await page.setViewportSize({width: 1440, height: 900});
+    const desk = await draw();
+    assert.equal(desk.label, 200);
+    assert.equal(desk.heads[0], desk.short.toUpperCase());
+    assert.notEqual(desk.short, 'GD');
+  } finally { await page.close(); }
+});

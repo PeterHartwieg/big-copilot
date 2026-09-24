@@ -1368,3 +1368,76 @@ test('a save with no home at all opens nothing and throws nothing', async () => 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
+
+// Overstaffed hours. The site's Today line prices and names its whole week, so
+// the hours block has to tell that same week: the same staff-hours, the same
+// hours lit, the same wages. Grid, finding and Today row all come out of the
+// real Python (tests/idle_week_fixture.py), so the two halves cannot drift.
+const IDLE = (() => {
+  const r = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.idle_week_fixture'],
+    {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
+  assert.equal(r.status, 0, r.stderr?.toString());
+  return JSON.parse(r.stdout.toString());
+})();
+const idleSite = (findings = IDLE.findings) => site({
+  shop: {key: IDLE.grid.key, name: IDLE.grid.name, type: 'Gym'},
+  hours: [IDLE.grid], hourFindings: findings, minor: [IDLE.row],
+});
+// The grid's cells wearing `cls`, as "weekday:hour"; its rows run Monday first.
+const cellsWith = (page, cls) => page.evaluate(cls => {
+  const rows = [1, 2, 3, 4, 5, 6, 0];
+  return [...document.querySelectorAll('#sp-hours .hc')]
+    .map((e, i) => e.classList.contains(cls) ? `${rows[Math.floor(i / 24)]}:${i % 24}` : null)
+    .filter(Boolean);
+}, cls);
+const hoursOf = (days, from, to) =>
+  days.flatMap(wd => Array.from({length: to - from}, (_, k) => `${wd}:${from + k}`));
+
+test('the hours block tells the overstaffed week the Today line tells', async () => {
+  const page = await idleSite();
+  try {
+    const worth = await page.evaluate(w => fmt(w), IDLE.row.worth);
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(),
+      `72 staff-hours a week · 3 fitness planning boards Mon-Wed 8-20 · ${worth}/day of wages`);
+    // The sentence is the Today line's, less the site the page already names.
+    assert.equal(await chip.getAttribute('data-tip'),
+      `${IDLE.row.text.replace(/^Pump runs /, '')}; about ${worth}/day of wages.`);
+    // The chip lights the week's hours, all three days of them.
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1, 2, 3], 8, 20));
+    // Not arrived from the line, the read-out opens on the grid's own hour.
+    assert.doesNotMatch(await page.locator('#hourRead').textContent(), /^Overstaffed/);
+    // The finding's row lights the hours block and pulses the same week.
+    const row = page.locator(`.sp-find[data-id="${IDLE.row.id}"]`);
+    assert.equal(await row.getAttribute('data-ev'), 'hours');
+    assert.equal(await row.getAttribute('data-hit'), 'idle');
+    await row.hover();
+    assert.equal(await page.locator('#sp-hours.sp-lit').count(), 1);
+    assert.deepEqual(await cellsWith(page, 'sp-hit'), hoursOf([1, 2, 3], 8, 20));
+  } finally { await page.close(); }
+});
+
+test('arrived from the Today line, the hours block opens on its week', async () => {
+  const page = await idleSite();
+  try {
+    await page.evaluate(([key, id]) => openSite(key, false, id), [IDLE.grid.key, IDLE.row.id]);
+    const worth = await page.evaluate(w => fmt(w), IDLE.row.worth);
+    assert.equal(await page.locator(`.sp-find.arrived`).getAttribute('data-id'), IDLE.row.id);
+    assert.equal((await page.locator('#hourRead').textContent()).trim(),
+      `Overstaffed · 72 staff-hours a week · 3 fitness planning boards Mon-Wed 8-20 · ${worth}/day of wages`);
+  } finally { await page.close(); }
+});
+
+test('a finding written before the week existed reads as a week of its one run', async () => {
+  const old = IDLE.findings.map(({week, ...f}) => f);
+  const page = await idleSite(old);
+  try {
+    const worth = await page.evaluate(w => fmt(w), old[0].worth);
+    const chip = page.locator('#sp-hours .sp-hchip.idle');
+    assert.equal((await chip.textContent()).trim(),
+      `24 staff-hours a week · 3 fitness planning boards Mon 8-20 · ${worth}/day of wages`);
+    await chip.hover();
+    assert.deepEqual(await cellsWith(page, 'sp-lit'), hoursOf([1], 8, 20));
+  } finally { await page.close(); }
+});

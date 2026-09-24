@@ -6805,10 +6805,10 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # Overstaffing is a property of the roster that was on, so each role is
         # read on its own: a gym's spare trainer-hours are real even on an hour
         # when the site was held up by another role. The best run across roles
-        # and weekdays wins, first past the post on a tie; it is what the site
-        # page's hours block reads out. Every run of a role with a known wage is
-        # kept beside it in `runs`, so the site's one Today line can price and
-        # name the whole week rather than its worst day.
+        # and weekdays wins, first past the post on a tie. Every run of a role
+        # with a known wage is kept beside it in `runs`, so the site's one Today
+        # line and its page's hours block both price and name the whole week
+        # rather than its worst day.
         wages_here = wages.get(grid["key"], {})
         best = None
         runs_here = []
@@ -6886,7 +6886,8 @@ def _idle_week(runs: list) -> dict:
     too; one cause is one line, so the runs are summed into a week and each
     role's hours are named as a shape ("Tue, Wed 0-24"). `seen` is the
     customers an hour over every hour named, each hour counted once however
-    many roles were idle in it.
+    many roles were idle in it. `cells` is every weekday-hour named, as
+    [weekday, hour] pairs, so the site page lights the hours the line names.
     """
     parts = collections.OrderedDict()
     seen = {}
@@ -6900,6 +6901,7 @@ def _idle_week(runs: list) -> dict:
         "spare": sum(r["spare"] for r in runs),
         "worth": money(sum(r["worth"] for r in runs)),
         "seen": round(sum(seen.values()) / len(seen)) if seen else 0,
+        "cells": [list(cell) for cell in sorted(seen)],
         "parts": [
             {"noun": p["noun"], "staff": p["staff"], "when": _hour_phrase(p["hours"])}
             for p in parts.values()
@@ -9725,6 +9727,7 @@ g[data-series].off{opacity:0}
 .heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
 .heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s}
 .heat .h.hl{color:var(--ink)}
+.heat .mk-tag{display:none}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
 .heat .r.hl{color:var(--accent)}
 .heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
@@ -10020,6 +10023,9 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .hours.sp-dim .hc:not(.sp-lit){opacity:.2}
 .hours.sp-dim .hc.sp-lit{animation:sp-cell .8s ease-in-out infinite}
 @keyframes sp-cell{50%{transform:scale(1.22)}}
+/* a finding pulsing its hours: the cells swell, as a chip's do, rather than
+   each wearing the halo a row gets */
+.hours .hc.sp-hit{animation:sp-cell .8s ease-in-out infinite}
 .sp-hchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .sp-hchip{display:inline-flex;align-items:center;gap:9px;min-height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);font:500 12px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default;transition:border-color .15s,transform .2s}
 .sp-hchip:hover{border-color:var(--ink-3);transform:translateY(-2px)}
@@ -10523,9 +10529,22 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #alertSection .find .what{grid-column:2/-1;grid-row:2}
   #alertSection .find .more{grid-column:2/-1}
   #secDaily .legend{flex-wrap:wrap}
-  /* drawMarket() sets the grid's columns inline; the neighbourhood heads
-     break inside their own column instead of running past the last one. */
+  /* drawMarket() sets the grid's columns inline, the label column through
+     --mk-label: narrower here, so seven neighbourhoods keep cells wide enough
+     for "100". A head shows its neighbourhood's two-letter pill, the full name
+     in its tip; one without a pill breaks inside its own column. A row's name
+     wraps, up to three lines, so two variants of one product still read apart;
+     past that it ends in an ellipsis and the full name leads each cell's tip. */
+  #market{--mk-label:clamp(84px,26vw,200px)}
   .heat .h{min-width:0;font-size:8px;letter-spacing:0;overflow-wrap:anywhere;overflow:hidden}
+  .heat .h.mk-tagged{font-size:10px;letter-spacing:.04em}
+  .heat .h.mk-tagged .mk-long{display:none}
+  .heat .h.mk-tagged .mk-tag{display:inline}
+  .heat .r{min-width:0;padding-right:6px;font-size:12px;line-height:1.25;overflow-wrap:anywhere}
+  .heat .r .mk-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+  .heat .r small{font-size:10px}
+  .heat .cell .rv2{left:2px;right:2px;gap:1px;justify-content:flex-end;overflow:hidden}
+  .heat .cell .rv2 i{width:2px;height:2px}
   .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
   #planBody > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
 }
@@ -12240,7 +12259,7 @@ const ALERT_EVIDENCE = {
   loss: {block: "tiles"},
   trend: {block: "profit"},
   atcap: {block: "hours"},
-  idlestaff: {block: "hours"},
+  idlestaff: {block: "hours", hit: "idle"},
   staff: {block: "crew"},
   jobdemand: {block: "crew"},
   /* Never on a site's own list; the link picks the site (ALERT_SITE_PICK) and
@@ -12834,10 +12853,13 @@ function hourLeadCell(g){
   });
   return best;
 }
-/* `lead`, when given, gets the read of hourLeadCell()'s cell and its label. */
-function hourGrid(g, todayWd, lead = null){
+/* `lead`, when given, gets the read of hourLeadCell()'s cell and its label.
+   `idle` is the overstaffed week's [weekday, hour] pairs (spIdleWeek()); those
+   cells carry the `idle` token its chip and its finding light. */
+function hourGrid(g, todayWd, lead = null, idle = []){
   const peak = Math.max(g.peak, 1);
   const top = lead ? hourLeadCell(g) : null;
+  const week = new Set(idle.map(([wd, h]) => `${wd}:${h}`));
   let cells = `<div></div>${[...Array(24).keys()].map(h => `<div class="hh">${h % 3 === 0 ? h : ""}</div>`).join("")}`;
   HOUR_ROWS.forEach(wd => {
     cells += `<div class="dd${wd === todayWd ? " now" : ""}">${WEEK_SHORT[wd].toUpperCase()}${g.thin[wd] ? "*" : ""}</div>`;
@@ -12879,7 +12901,7 @@ function hourGrid(g, todayWd, lead = null){
       const held = atCap ? spCellLimit(g, wd, h) : "";
       if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap ? "Worst hour" : "Busiest hour"; }
       cells += `<div class="hc${atCap ? " cap" : slack && !atCap ? " slack" : ""}"${
-        held ? ` data-caps="${attr(held)}"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
+        held ? ` data-caps="${attr(held)}"` : ""}${week.has(`${wd}:${h}`) ? ` data-el="idle"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
   });
   return `<div class="hours">${cells}</div>`;
@@ -12945,6 +12967,20 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
 const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
+/* This site's overstaffed week, in the words of its Today line (_alerts() in
+   the Python): the spare staff-hours of every idle run, their wages summed,
+   who was on and when, and the weekday-hours named. A finding written before
+   `week` existed is a week of its one run, as _alerts() reads it. */
+function spIdleWeek(n){
+  const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
+  const w = n.week || {spare: n.spare, worth: n.worth, seen: n.seen,
+    cells: [...Array(Math.max(long, 0)).keys()].map(k => [wd, n.from + k]),
+    parts: [{noun: n.noun, staff: n.staff,
+             when: `${WEEK_SHORT[wd]} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
+  const noun = n.office ? "workstations" : "counters";
+  return {spare: w.spare, worth: w.worth, seen: w.seen, cells: w.cells || [],
+          runs: (w.parts || []).map(p => `${p.staff} ${p.noun || noun} ${p.when}`).join(" and ")};
+}
 /* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
    the door if it was reached, else every role standing at the site's own
    minimum that hour, each of them short of people where it has stations
@@ -14969,10 +15005,15 @@ function drawSite(){
   const capSentence = n => `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
          hours; the save records nothing about what is turned away above them.`;
-  const idleSentence = idleNote ? `${idleNote.staff} ${idleNote.noun || (idleNote.office ? "workstations are staffed" : "counters are on")} ${
-         String(idleNote.from).padStart(2,"0")}:00-${
-         String(idleNote.to).padStart(2,"0")}:00 on a ${idleNote.day} for ${idleNote.seen} customers an hour;
-         ${idleNote.spare} staff-hours a week, about ${fmt(idleNote.worth)}/day of wages.` : "";
+  /* The idle chip reads the whole week, as the site's Today line does: the
+     same staff-hours, the same hours and the same wages. */
+  const idleWeek = idleNote ? spIdleWeek(idleNote) : null;
+  const idleSentence = idleWeek ? `${idleWeek.spare} staff-hours a week that buy nothing: ${idleWeek.runs} for ${
+         idleWeek.seen} customers an hour; about ${fmt(idleWeek.worth)}/day of wages.` : "";
+  const idleRead = idleWeek ? `<b>${idleWeek.spare} staff-hours a week</b> · ${spEsc(idleWeek.runs)} · ${
+    fmt(idleWeek.worth)}/day of wages` : "";
+  /* Arrived from that line, the hours block opens on the week it names. */
+  const idleArrived = !!idleWeek && finds.some(a => a.id === spArrived && a.group === "idlestaff");
 
   /* The costs behind the profit tile, on hover. */
   const costs = [
@@ -15154,9 +15195,8 @@ function drawSite(){
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at the ceiling · ${n.when} · ${
       fmt(n.throughput)}/day through it<span class="fix">${spI("right")}${n.fix}</span></span>`).join("") +
-    (idleNote ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spI(idleNote.office ? "monitor" : "counter")}<b>${idleNote.staff} on</b> ${
-      String(idleNote.from).padStart(2,"0")}:00–${String(idleNote.to).padStart(2,"0")}:00 a ${idleNote.day} · ${fmt(idleNote.worth)}/day of wages</span>` : "")}</div>`;
+    (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
+      spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
   const desks = sp && office && grid && grid.stationCount ? spDesks(grid) : null;
   /* hourGrid() fills this with the hour its read-out opens on. */
@@ -15322,8 +15362,9 @@ function drawSite(){
               ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
               : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
         grid.door ? `, ${grid.door}/h building capacity` : ", no building capacity"}`})}
-      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7, hourLead)}<div class="sp-read sp-readout" id="hourRead">${
-        hourLead.read ? `${hourLead.label} · ${hourLead.read}` : "No hour reported yet"}</div></div>
+      <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7, hourLead, idleWeek ? idleWeek.cells : [])}<div class="sp-read sp-readout" id="hourRead">${
+        idleArrived ? `Overstaffed · ${idleRead}`
+        : hourLead.read ? `${hourLead.label} · ${hourLead.read}` : "No hour reported yet"}</div></div>
       ${hourChips}
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
@@ -16110,7 +16151,7 @@ function drawMovers(){
    that product's own demand. */
 function typeRow(r, i, hoods){
   const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
+  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.type}</span><small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
     guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
@@ -16133,7 +16174,7 @@ function typeRow(r, i, hoods){
    say so. */
 function officeRow(r, i, hoods, trendDays, noOffices){
   const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}">${r.type}<small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
+  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.type}</span><small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
     guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
@@ -16152,7 +16193,7 @@ function officeRow(r, i, hoods, trendDays, noOffices){
 function productRow(r, i, hoods, trendDays){
   const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
   const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
-  let h = `<div class="r" data-r="${i}">${r.item}<small>${tag}</small></div>`;
+  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.item}</span><small>${tag}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
@@ -16231,11 +16272,16 @@ function drawMarket(){
     : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
 
   const grid = $("market");
-  grid.style.gridTemplateColumns = `200px repeat(${m.hoods.length},minmax(0,1fr))`;
+  /* The label column is 200px on a desk; a phone narrows it (--mk-label, in
+     the phone rules) so the neighbourhood cells keep room for their number. */
+  grid.style.gridTemplateColumns = `var(--mk-label,200px) repeat(${m.hoods.length},minmax(0,1fr))`;
   const any = shown.length + offices.length;
+  /* A head carries the neighbourhood's two-letter pill as well, which is what
+     a phone shows; the full name stays in its tip. */
   grid.innerHTML = any
-    ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
-        attr(`${h}: click to sort by demand here`)}">${shortHood(h)}</div>`).join("")
+    ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}${HOOD_TAGS[h] ? " mk-tagged" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
+        attr(`${h}: click to sort by demand here`)}"><span class="mk-long">${shortHood(h)}</span>${
+        HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
       + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
         + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
@@ -17975,8 +18021,9 @@ const wireSiteChips = once(() => {
     g.classList.toggle("sp-dim", on);
     const want = (c.dataset.show || "").split(" ").filter(Boolean);
     $$(".hc", g).forEach(cell => {
+      /* The idle chip names the week's hours, so it lights those. */
       const has = c.dataset.show === "idle"
-        ? cell.classList.contains("slack")
+        ? (cell.dataset.el || "").split(" ").includes("idle")
         : want.length && want.every(t => (cell.dataset.caps || "").split(" ").includes(t));
       cell.classList.toggle("sp-lit", on && has);
     });
