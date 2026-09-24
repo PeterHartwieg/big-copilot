@@ -9559,6 +9559,10 @@ button.ibtn{padding:0;font:inherit;appearance:none;-webkit-appearance:none}
 .gw-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .gw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:18px 20px;flex:none}
 .gw-gap{margin-left:auto}
+/* a control whose change the game is being asked about */
+.gw-dlg .gw-busy{cursor:progress;animation:gw-wait 1s ease-in-out infinite}
+@keyframes gw-wait{50%{opacity:.55}}
+.gw-body[aria-busy="true"]{cursor:progress}
 .gw-hint{margin-right:auto;flex:1 1 120px;min-width:0;font-size:12px;line-height:1.4;color:var(--ink-3);max-width:230px;text-wrap:pretty}
 .gw-hint.gw-warn{color:var(--warn)}
 .gw-b{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--rule);background:transparent;color:var(--ink);font:600 13.5px/1 Archivo,sans-serif;cursor:pointer;white-space:nowrap;transition:transform .2s cubic-bezier(.34,1.56,.64,1),border-color .15s,filter .15s}
@@ -18391,8 +18395,19 @@ function gwUniforms(keys){
     },
     refusedHint: answer => many ? "Every shop is set, or none: leave a refused shop out, or fix it first." : "Nothing was changed.",
     bind: (dlg, replan) => {
-      dlg.querySelectorAll("[data-gw-preset]").forEach(b => { b.onclick = () => { presetId = b.dataset.gwPreset; replan(); }; });
-      dlg.querySelectorAll("[data-gw-leave]").forEach(b => { b.onclick = () => { out.add(b.dataset.gwLeave); replan(); }; });
+      dlg.querySelectorAll("[data-gw-preset]").forEach(b => { b.onclick = () => {
+        if(b.getAttribute("aria-pressed") === "true") return;
+        presetId = b.dataset.gwPreset;
+        /* Said at once on the pill; the rest waits for the game's answer. */
+        dlg.querySelectorAll("[data-gw-preset]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+        replan(b);
+      }; });
+      dlg.querySelectorAll("[data-gw-leave]").forEach(b => { b.onclick = () => {
+        out.add(b.dataset.gwLeave);
+        const row = b.closest(".gw-shop");
+        if(row) row.classList.add("out");
+        replan(b);
+      }; });
     },
     object: gwSiteName,
     applyLabel: answer => { const n = answer ? toSet(answer) : 0; return n ? `Set ${plural(n, "uniform")}` : "Set uniforms"; },
@@ -18601,6 +18616,7 @@ function gwPaint(dlg, v){
   if(!v.keepTick){ clearInterval(dlg._gwTick); dlg._gwTick = null; }
   dlg.querySelector(".gw-verdict").innerHTML = `${gwWire(v.wire || "ask")}<span>${v.say || ""}</span>${v.meta ? `<span class="gw-meta">${v.meta}</span>` : ""}`;
   dlg.querySelector(".gw-body").innerHTML = v.body || "";
+  dlg.querySelector(".gw-body").removeAttribute("aria-busy");
   const list = (v.buttons || []).slice();
   if(!v.hint && !list.includes("|")) list.unshift("|");
   const parts = [];
@@ -18730,8 +18746,10 @@ function gwFailed(dlg, spec, res, retry, recheck){
      inline                    optional: refusals are drawn in draw(), not
                                as cards above it
      refusedHint(answer)       optional: the foot's note when the game refuses
-     bind(dlg, replan)         optional: wiring for any control in the drawing
-                               (replan() dry-runs again)
+     bind(dlg, replan)         optional: wiring for any control in the drawing;
+                               replan(control) dry-runs again in place: the
+                               drawing stays, the wire asks, and the control
+                               that changed shows it is busy
      applyLabel(answer), applying   the Apply button's words, and the verdict
                                while it applies
      done(answer)              one line after an apply, and after its undo;
@@ -18747,6 +18765,9 @@ function gwFailed(dlg, spec, res, retry, recheck){
                                leaves this site (skipped, not written...) and
                                go, absent on the last, opens the next
      onDone(answer)            optional: heard once an apply went through
+     onUndo()                  optional: heard once its undo went through
+     startUndo                 optional: the dialog opens by undoing the
+                               kind's last write, then asks the game afresh
    The dialog dry-runs as it opens, offers Apply only when the game would take
    every row, and after an apply offers Undo until the next write of the kind. */
 function gwConfirm(spec){
@@ -18773,35 +18794,53 @@ function gwConfirm(spec){
       + `<div class="gw-skel" aria-hidden="true"><i></i><i></i>${allowed ? "" : "<i></i>"}</div>`,
     hint: allowed ? "Next: the game's answer." : "Apply waits for the game's answer.",
     buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
-  /* `asked`: the approval the game gave for an Apply just now, so the dry run
-     that follows it does not ask a second time. */
-  const plan = async asked => {
+  /* How plan() runs: `asked`, the approval the game gave for an Apply just
+     now, so the dry run that follows it does not ask a second time; `soft`,
+     a control changed in a dialog that shows the game's answer, so the
+     drawing stays where it is while the wire asks, `from` being the control;
+     `undone`, the undo just made, said once above the fresh answer. */
+  const plan = async (o = {}) => {
     const mine = ++seq;
     judged = "";
     gwHead(dlg, title(), where());
     const none = spec.nothing ? spec.nothing() : "";
     if(none) return nothing(none);
-    asking();
+    if(o.undone) dlg._gwUndone = o.undone;
+    if(o.soft && (dlg.dataset.phase === "ready" || dlg.dataset.phase === "applying")) quietly(o.from);
+    else asking();
     const body = spec.body();
     const sent = JSON.stringify(body), game = gwWhose();
-    const res = await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof asked === "string" ? asked : ""});
+    const res = await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof o.asked === "string" ? o.asked : ""});
     if(!dlg.open || mine !== seq) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
-    if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
+    if(res.error){ allowed = false; dlg._gwUndone = ""; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
     /* The answer on screen and the body it judged go together. */
     const answer = last = res.body || {};
     judged = sent;
     whose = game;
     if(spec.learn) spec.learn(answer);
+    const undone = dlg._gwUndone ? `<div class="gw-reread done">${gwSvg("undo")}<span>${dlg._gwUndone}</span></div>` : "";
+    dlg._gwUndone = "";
     gwPaint(dlg, {phase: "ready", wire: answer.ok ? "ok" : "no", say: spec.verdict(answer), meta: spec.meta ? spec.meta(answer) : gwNow(),
-      body: (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
+      body: undone + (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
       hint: answer.ok ? spec.hint || "Nothing changes until you apply." : spec.refusedHint ? spec.refusedHint(answer) : "Nothing was changed.",
       warn: !answer.ok && !!spec.refusedHint,
       /* Refused, nothing is left to cancel: the dialog closes. */
       buttons: [...(answer.ok || spec.next ? left : [["Close", () => dlg.close(), {kind: "ghost"}]]),
         [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]]});
     allowed = false;
-    if(spec.bind) spec.bind(dlg, () => plan());
+    if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
+  };
+  /* The game asked again from a dialog that shows its answer: the answer on
+     screen stays until the new one replaces it; the wire asks, Apply waits,
+     and the control that changed says it is busy. */
+  const quietly = from => {
+    dlg.dataset.phase = "asking";
+    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Asking the game…</b></span><span class="gw-meta">dry run</span>`;
+    dlg.querySelector(".gw-body").setAttribute("aria-busy", "true");
+    const go = dlg.querySelector('.gw-foot [data-gw-b="apply"]');
+    if(go){ go.disabled = true; go.title = "Apply waits for the game's answer"; }
+    if(from && from.classList) from.classList.add("gw-busy");
   };
   const apply = async () => {
     if(applying) return;
@@ -18811,7 +18850,7 @@ function gwConfirm(spec){
     /* Apply sends only what the game has judged: a board read again since, a
        changed control, or another company in the game asks the game again
        first. */
-    if(!judged || JSON.stringify(spec.body()) !== judged || gwWhose() !== whose) return plan();
+    if(!judged || JSON.stringify(spec.body()) !== judged || gwWhose() !== whose) return plan({soft: true});
     applying = true;
     gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
       buttons: ["|", ["Applying", null, {kind: "go", busy: true, disabled: true}]]});
@@ -18823,10 +18862,11 @@ function gwConfirm(spec){
       applying = false;
       /* Approved again mid-apply: the apply was not sent twice; the player
          reviews the game's answer afresh first, on the same approval. */
-      if(res.error === "reapproved" && dlg.open) return plan(res.asked);
+      if(res.error === "reapproved" && dlg.open) return plan({asked: res.asked});
       allowed = false;
       return dlg.open ? gwFailed(dlg, spec, res, () => plan(), () => plan()) : gwToast();
     }
+    applying = false;  // done: after an undo the write can be applied again
     const answer = res.body || {};
     /* An apply replaces its kind's undo, with nothing when it changed nothing. */
     const undoable = !spec.changed || spec.changed(answer);
@@ -18845,14 +18885,25 @@ function gwConfirm(spec){
       buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : "Undo", () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
         spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : ["Close", () => dlg.close(), {kind: "go"}]]});
   };
-  plan();
+  /* After an undo in this dialog, the write is offered again: the game is
+     asked afresh, and the undo is said once above its answer. */
+  dlg._gwReplan = undone => plan({undone, soft: true});
+  if(spec.startUndo) gwUndo(spec, dlg); else plan();
 }
+/* Undo the kind's last write. In the write's own dialog the dialog goes back
+   to that write, asked afresh; from the strip, the dialog it opens says what
+   was undone and closes. */
 async function gwUndo(spec, dlg){
   if(!(dlg && dlg.open)){
     dlg = gwDialog(spec.icon, `Undo: ${typeof spec.title === "function" ? spec.title() : spec.title}`,
       typeof spec.where === "function" ? spec.where() : spec.where || "");
   }
-  gwPaint(dlg, {phase: "applying", wire: "ask", say: "<b>Undoing in the game…</b>", buttons: ["|", ["Undoing", null, {kind: "go", busy: true, disabled: true}]]});
+  if(dlg._gwReplan && dlg.dataset.phase){
+    /* In the write's own dialog the drawing stays while the game undoes it. */
+    dlg.dataset.phase = "applying";
+    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Undoing in the game…</b></span>`;
+    dlg.querySelectorAll(".gw-foot button").forEach(b => { b.disabled = true; });
+  } else gwPaint(dlg, {phase: "applying", wire: "ask", say: "<b>Undoing in the game…</b>", buttons: ["|", ["Undoing", null, {kind: "go", busy: true, disabled: true}]]});
   const res = await SOURCE.write("undo", {kind: spec.kind}, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
   /* Gone for good once the game says so; kept for a retry when it only could
      not take it now. */
@@ -18863,6 +18914,8 @@ async function gwUndo(spec, dlg){
   if(res.error) return gwFailed(dlg, Object.assign({}, spec, {next: null}), res, () => gwUndo(spec, dlg), null);
   dlg._gwBoard = D;
   const answer = res.body || {};
+  if(spec.onUndo) spec.onUndo();
+  if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer));
   gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
     buttons: ["|", ["Close", () => dlg.close(), {kind: "go"}]]});
@@ -19291,7 +19344,7 @@ function gwImports(depotKey){
        with the split it allows, a few times at most. */
     bind: (dlg, replan) => {
       if(board !== D){ board = D; replans = 0; }  // a new board, new terms: counted afresh
-      if(replans < 3 && JSON.stringify(gwImportBody(lines())) !== JSON.stringify(sent)){ replans++; replan(); }
+      if(replans < 3 && JSON.stringify(gwImportBody(lines())) !== JSON.stringify(sent)){ replans++; replan(null); }
     },
     applyLabel: () => `Apply ${plural(changes(), "change")}`,
     applying: "Changing the imports in the game…",
@@ -19415,19 +19468,22 @@ function gwAddBox(add, staffed){
    after another; `run` is what became of the ones before. The game keeps one
    undo per kind, so each apply's Undo is for its own shop until the next one
    is written. */
-function gwSchedule(keys, i = 0, run = []){
+function gwSchedule(keys, i = 0, run = [], o = {}){
   const key = keys[i];
-  const many = keys.length > 1, lastOne = i === keys.length - 1;
+  /* The shop after this one the run has not seen yet: a shop reopened from
+     the end of the run goes back to the end, not through the rest again. */
+  const after = keys.findIndex((k, j) => j > i && !run[j]);
+  const many = keys.length > 1, lastOne = after < 0;
   const site = () => (D.businesses || []).find(x => x.key === key) || null;
   const b = site();
   /* Leaving this shop (skipped, not written, nothing to write) goes on to
      the next, or after the last to the end of the run. */
   const pass = (what = "skipped") => {
     run[i] = {name: b ? spEsc(shortName(b)) : "A shop", plain: b ? shortName(b) : "A shop", what, ok: false};
-    if(i + 1 < keys.length) gwSchedule(keys, i + 1, run); else gwRunEnd(keys, run);
+    if(!lastOne) gwSchedule(keys, after, run); else gwRunEnd(keys, run);
   };
-  const next = many ? {label: `Next shop · ${i + 2} of ${keys.length}`, skip: "Skip this shop", pass,
-                       go: lastOne ? null : () => gwSchedule(keys, i + 1, run)} : null;
+  const next = many ? {label: `Next shop · ${after + 1} of ${keys.length}`, skip: "Skip this shop", pass,
+                       go: lastOne ? null : () => gwSchedule(keys, after, run)} : null;
   if(!b) return next && pass("gone");
   const name = spEsc(shortName(b));
   let openAll = true, last = null;
@@ -19495,11 +19551,21 @@ function gwSchedule(keys, i = 0, run = []){
     },
     bind: (dlg, replan) => {
       const sw = dlg.querySelector("[data-gw-open]");
-      if(sw) sw.onclick = () => { openAll = !openAll; replan(); };
+      if(sw) sw.onclick = () => {
+        openAll = !openAll;
+        sw.classList.toggle("on", openAll);
+        sw.setAttribute("aria-checked", openAll ? "true" : "false");
+        const box = sw.closest(".gw-toggle");
+        if(box) box.classList.toggle("off", !openAll);
+        replan(sw);
+      };
     },
     applyLabel: () => "Write the week",
     applying: "Writing the week in the game…",
     changed: answer => (answer.before || {}).print !== (answer.after || {}).print || !!answer.openedHours,
+    startUndo: !!o.startUndo,
+    /* Undone, the shop is back to be written, in the run too. */
+    onUndo: () => { delete run[i]; },
     onDone: answer => { run[i] = {name, plain: shortName(b), what: plural(Number(answer.added) || 0, "entry", "entries"), ok: true}; },
     doneBody: (answer, spec) => {
       const shop = name;  // the board's name for it: the game's carries the [code] prefix
@@ -19545,7 +19611,9 @@ function gwRunEnd(keys, run){
   gwPaint(dlg, {phase: "done", wire: written.length ? "ok" : "no", say: `<b>All ${keys.length} seen</b>`, meta: gwNow(),
     body: `<p class="gw-said${written.length ? " ok" : ""}">${plural(written.length, "shop")} written${left ? `, ${left} left out` : ""}.</p>${gwRunList(keys, run)}${
       undo ? gwCall("info", "undo", `Undo holds the last shop written, <b>${written[written.length - 1].name}</b>: the game keeps one schedule change to take back.`) : ""}`,
-    buttons: [...(undo ? [[`Undo ${written[written.length - 1].plain}`, () => gwUndo(undo.spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
+    /* Undo reopens that shop inside the run, undone and asked afresh. */
+    buttons: [...(undo ? [[`Undo ${written[written.length - 1].plain}`, () => gwSchedule(keys, run.lastIndexOf(written[written.length - 1]), run, {startUndo: true}),
+      {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
       ["Close", () => dlg.close(), {kind: "go"}]]});
 }
 
