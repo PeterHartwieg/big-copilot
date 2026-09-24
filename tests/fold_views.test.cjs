@@ -297,6 +297,35 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
+  // Focus on the open popover's own chip, which the resize hides: it still
+  // counts as the popover's, and moves to the chip now shown (both directions).
+  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
+  try {
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    assert.equal((await state(page)).focus, 'mast');
+    await page.setViewportSize({width: 1280, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'foot', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+  ({page, errors} = await board({width: 390}));
+  try {
+    const foot = page.locator('#footDiff .fv-diff');
+    await foot.scrollIntoViewIfNeeded();
+    await foot.click();
+    await foot.focus();
+    assert.equal((await state(page)).focus, 'foot');
+    await page.setViewportSize({width: 1440, height: 1000});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'mast', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
   // Focus the reader put elsewhere while it was open stays there.
   ({page, errors} = await board({width: 1440}));
   try {
@@ -367,6 +396,9 @@ test('a preset says its name, Normal included, and lists what differs', async ()
   const none = await board({houseRules: null});
   try {
     assert.equal(await none.page.locator('.fv-diff').count(), 0, 'with neither, no chip');
+    // And the empty footer slot takes no room (no flex gap beside the build).
+    await none.page.setViewportSize({width: 390, height: 1000});
+    assert.equal(await none.page.locator('#footDiff').evaluate(el => getComputedStyle(el).display), 'none');
   } finally { await none.page.close(); }
   const unmoved = await board({houseRules: {label: 'Custom', slot: 0, harder: 0, easier: 0, startingMoney: 0,
     rules: [rule('Public prices', 0.7, 0.7, 'level')]}});

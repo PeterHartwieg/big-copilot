@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=5fefb8c2c9">
+<link rel="stylesheet" href="community.css?v=fc898ea1da">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=5fefb8c2c9">
+<link rel="stylesheet" href="fonts/fonts.css?v=fc898ea1da">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -934,6 +934,8 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .clock .fv-diff{display:none}
 .fv-diff.fv-plain{cursor:default}
 .fv-footdiff{display:inline-flex}
+/* A board with no difficulty to show adds no gap to the footer's line. */
+.fv-footdiff:empty{display:none}
 .fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
 @media(min-width:1301px){
   .fv-footdiff{display:none}
@@ -2855,8 +2857,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "5fefb8c2c9";</script>
-<script>window.LEDGER_RELEASE = {"version":"5fefb8c2c9","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "fc898ea1da";</script>
+<script>window.LEDGER_RELEASE = {"version":"fc898ea1da","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2925,8 +2927,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=5fefb8c2c9"></script>
-<script src="community.js?v=5fefb8c2c9"></script>
+<script src="app.js?v=fc898ea1da"></script>
+<script src="community.js?v=fc898ea1da"></script>
 
 <script>
 
@@ -9127,6 +9129,11 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
+/* Whether focus is on a chip or inside the popover, kept from focus events
+   rather than read off document.activeElement: a resize that hides the chip
+   holding focus lets the browser drop focus to <body> before any resize
+   handler runs. */
+let fvFocusOurs = false;
 /* The chip the popover can hang from right now: the masthead's at 1301 px
    and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
@@ -9140,7 +9147,7 @@ function fvPlaceDiffPop(){
      anywhere else stays where it is. */
   if(!fvDiffAnchor.getClientRects().length){
     const active = document.activeElement;
-    const ours = !!active && (fvDiffPop.contains(active) || active === fvDiffAnchor);
+    const ours = fvFocusOurs || (!!active && (fvDiffPop.contains(active) || active === fvDiffAnchor));
     const shown = fvShownChip();
     fvCloseDiff(false);
     if(shown) fvDiffAnchor = shown;
@@ -9217,6 +9224,14 @@ function drawDifficulty(){
     document.addEventListener("keydown", e => {
       if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
       fvCloseDiff(true);
+    });
+    /* Focus arriving anywhere says whose it is. Leaving for nowhere counts
+       only while the element left is still drawn: one hidden by a resize
+       loses focus without the reader moving it, and it is still ours. */
+    const isOurs = el => !!el && el.nodeType === 1 && (fvDiffPop.contains(el) || !!el.closest("button.fv-diff"));
+    document.addEventListener("focusin", e => { fvFocusOurs = isOurs(e.target); });
+    document.addEventListener("focusout", e => {
+      if(!e.relatedTarget && isOurs(e.target) && e.target.getClientRects().length) fvFocusOurs = false;
     });
     window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
     window.addEventListener("scroll", e => {

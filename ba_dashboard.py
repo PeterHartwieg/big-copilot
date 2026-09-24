@@ -9417,6 +9417,8 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .clock .fv-diff{display:none}
 .fv-diff.fv-plain{cursor:default}
 .fv-footdiff{display:inline-flex}
+/* A board with no difficulty to show adds no gap to the footer's line. */
+.fv-footdiff:empty{display:none}
 .fv-footdiff .fv-diff{font-size:11px;letter-spacing:.04em;padding:4px 8px}
 @media(min-width:1301px){
   .fv-footdiff{display:none}
@@ -17094,6 +17096,11 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
+/* Whether focus is on a chip or inside the popover, kept from focus events
+   rather than read off document.activeElement: a resize that hides the chip
+   holding focus lets the browser drop focus to <body> before any resize
+   handler runs. */
+let fvFocusOurs = false;
 /* The chip the popover can hang from right now: the masthead's at 1301 px
    and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
@@ -17107,7 +17114,7 @@ function fvPlaceDiffPop(){
      anywhere else stays where it is. */
   if(!fvDiffAnchor.getClientRects().length){
     const active = document.activeElement;
-    const ours = !!active && (fvDiffPop.contains(active) || active === fvDiffAnchor);
+    const ours = fvFocusOurs || (!!active && (fvDiffPop.contains(active) || active === fvDiffAnchor));
     const shown = fvShownChip();
     fvCloseDiff(false);
     if(shown) fvDiffAnchor = shown;
@@ -17184,6 +17191,14 @@ function drawDifficulty(){
     document.addEventListener("keydown", e => {
       if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
       fvCloseDiff(true);
+    });
+    /* Focus arriving anywhere says whose it is. Leaving for nowhere counts
+       only while the element left is still drawn: one hidden by a resize
+       loses focus without the reader moving it, and it is still ours. */
+    const isOurs = el => !!el && el.nodeType === 1 && (fvDiffPop.contains(el) || !!el.closest("button.fv-diff"));
+    document.addEventListener("focusin", e => { fvFocusOurs = isOurs(e.target); });
+    document.addEventListener("focusout", e => {
+      if(!e.relatedTarget && isOurs(e.target) && e.target.getClientRects().length) fvFocusOurs = false;
     });
     window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
     window.addEventListener("scroll", e => {
