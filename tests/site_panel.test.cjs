@@ -256,7 +256,7 @@ test('a big role in a narrow Crew block keeps its name, its count and its dots i
   }
 });
 
-test('a silent shop shows the five pre-flight checks in the order it needs them', async () => {
+test('a silent shop shows the six pre-flight checks in the order it needs them', async () => {
   // Prices, stock and shelves are one chain in _alerts(): only the first of
   // them can fail, and the ones behind it were never looked at.
   const page = await site({shop: {revenue: 0, notTrading: ['prices', 'plan']}});
@@ -264,7 +264,7 @@ test('a silent shop shows the five pre-flight checks in the order it needs them'
     const checks = await page.$$eval('#sitePanel .sp-pre [data-check]', els =>
       els.map(e => [e.dataset.check, e.className]));
     assert.deepEqual(checks, [
-      ['staff', 'ok'], ['prices', 'no'],
+      ['closed', 'ok'], ['staff', 'ok'], ['prices', 'no'],
       // Never checked: the chain stops at prices.
       ['stock', 'unk'], ['shelves', 'unk'], ['plan', 'no'],
     ]);
@@ -275,15 +275,28 @@ test('a silent shop shows the five pre-flight checks in the order it needs them'
     const checks = await stock.$$eval('#sitePanel .sp-pre [data-check]', els =>
       els.map(e => [e.dataset.check, e.className]));
     assert.deepEqual(checks, [
-      ['staff', 'ok'], ['prices', 'ok'], ['stock', 'no'], ['shelves', 'unk'], ['plan', 'no'],
+      ['closed', 'ok'], ['staff', 'ok'], ['prices', 'ok'], ['stock', 'no'], ['shelves', 'unk'],
+      ['plan', 'no'],
     ]);
   } finally { await stock.close(); }
+
+  // Shut with the game's switch and otherwise ready: the door is the one red
+  // lamp, and its tip says closed rather than "missing: open".
+  const closed = await site({shop: {revenue: 0, notTrading: ['closed']}});
+  try {
+    const checks = await closed.$$eval('#sitePanel .sp-pre [data-check]', els =>
+      els.map(e => [e.dataset.check, e.className, e.dataset.tip]));
+    assert.deepEqual(checks.map(c => c[1]), ['no', 'ok', 'ok', 'ok', 'ok', 'ok']);
+    assert.equal(checks[0][0], 'closed');
+    assert.equal(checks[0][2], 'temporarily closed');
+    assert.equal(checks[1][2], 'staffed');
+  } finally { await closed.close(); }
 
   // Every check passed and the site simply has not booked a day yet.
   const ready = await site({shop: {revenue: 0, notTrading: []}});
   try {
     const checks = await ready.$$eval('#sitePanel .sp-pre [data-check]', els => els.map(e => e.className));
-    assert.deepEqual(checks, ['ok', 'ok', 'ok', 'ok', 'ok']);
+    assert.deepEqual(checks, ['ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
   } finally { await ready.close(); }
 
   // An older shop with a $0 day was never looked at by that finding, so it has
@@ -301,7 +314,7 @@ test('a silent shop shows the five pre-flight checks in the order it needs them'
   try {
     const checks = await office.$$eval('#sitePanel .sp-pre [data-check]', els =>
       els.map(e => [e.dataset.check, e.className]));
-    assert.deepEqual(checks, [['staff', 'no'], ['prices', 'no']]);
+    assert.deepEqual(checks, [['closed', 'ok'], ['staff', 'no'], ['prices', 'no']]);
   } finally { await office.close(); }
 
   const trading = await site();

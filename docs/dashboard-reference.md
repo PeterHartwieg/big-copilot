@@ -217,7 +217,8 @@ into a counted line with the worst of them underneath. Six shops holding a thous
 cupcakes each is not six findings, it is one top-up target set too high, and it reads as
 the action: *lower the target*. A site that opened this week with no staff, no stock or
 no delivery plan is one line naming all of it, not a separate loss alert and a separate
-staffing alert for the same empty shop.
+staffing alert for the same empty shop. A site shut with the game's *temporarily closed*
+switch says so first, because it books no day however ready it is.
 
 **It has to be news.** An order that exactly matched last week's consumption is a
 correctly sized order. What the board asks instead is whether the standing order covers
@@ -808,10 +809,11 @@ hovering a finding lights the block that holds its evidence, pulses the thing in
 and dims the rest; clicking scrolls there.
 
 - **The head.** A lamp says whether the doors are open. A site that is not trading adds
-  the five pre-flight checks that say why — staffed, prices set, stock, shelves,
-  delivery plan — red for a failing one, green for one in place, and grey for one that
-  was never checked, because the check stops at the first of prices, stock and shelves
-  that fails. The chip beside them is the site's place by the profit of its last seven
+  the six pre-flight checks that say why — open (the game's temporarily-closed switch
+  off), staffed, prices set, stock, shelves, delivery plan — red for a failing one, green
+  for one in place, and grey for one that was never checked, because the check stops at
+  the first of prices, stock and shelves that fails. An office shows open, staffed and
+  prices set. The chip beside them is the site's place by the profit of its last seven
   days, among the sites that trade; a site with under seven days of trading has no place
   and reads `–`.
 - **Needs attention here.** The findings about this site alone, loud ones first and the

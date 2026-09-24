@@ -1371,9 +1371,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         addr = (b["StreetName"], b["StreetNumber"])
         if addr in residential:
             continue
-        businesses.append(
-            _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
-        )
+        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
+        # The game's own switch that shuts a site's doors, which the
+        # not-trading finding names as a reason of its own.
+        row["closed"] = bool(b.get("temporarilyClosed"))
+        businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
     _job_demands(save, names, businesses)
 
@@ -8751,11 +8753,16 @@ def _alerts(
         silent.add(b["key"])
         priced = [l for l in b["lines"] if l["price"] > 0]
         stocked = [l for l in priced if l["units"] > 0]
-        # Which of the five pre-flight checks fail is the finding, so the slugs
+        # Which of the six pre-flight checks fail is the finding, so the slugs
         # are kept on the business beside the words: the site panel reads the
         # same list and the two cannot drift apart. An office sells hours, not
-        # goods, so it has nothing to stock or deliver.
+        # goods, so it has nothing to stock or deliver. A site shut with the
+        # game's temporarily-closed switch books no day however ready it is,
+        # so that reason comes first.
         failed, reasons = [], []
+        if b.get("closed"):
+            failed.append("closed")
+            reasons.append("temporarily closed")
         if b["staff"] == 0:
             failed.append("staff")
             reasons.append("no staff")
@@ -14851,29 +14858,32 @@ const spHypeRow = key => {
   return null;
 };
 
-/* The five pre-flight checks, in the order a shop needs them. Red is failing
-   (b.notTrading, the same list the not-trading finding reads out); grey was
-   never checked, because the alert stops at the first of prices, stock and
-   shelves that fails; green is in place. An office has nothing to stock,
-   shelve or deliver, so it shows two. Only a site the not-trading finding
-   looked at has the list at all, and an empty one means every check passed
-   and the site simply has not booked a day yet. */
+/* The six pre-flight checks, in the order a shop needs them: doors open (the
+   game's temporarily-closed switch off), then the five that make it ready. Red
+   is failing (b.notTrading, the same list the not-trading finding reads out);
+   grey was never checked, because the alert stops at the first of prices,
+   stock and shelves that fails; green is in place. An office has nothing to
+   stock, shelve or deliver, so it shows three. Only a site the not-trading
+   finding looked at has the list at all, and an empty one means every check
+   passed and the site simply has not booked a day yet. */
 function spPreflight(b){
   const failed = b.notTrading;
   const chain = ["prices", "stock", "shelves"];
   const stops = chain.findIndex(s => failed.includes(s));
-  return ["staff", "prices", "stock", "shelves", "plan"]
-    .filter(s => b.status !== "office" || s === "staff" || s === "prices")
+  return ["closed", "staff", "prices", "stock", "shelves", "plan"]
+    .filter(s => b.status !== "office" || s === "closed" || s === "staff" || s === "prices")
     .map(s => ({slug: s, state: failed.includes(s) ? "no"
       : stops >= 0 && chain.indexOf(s) > stops ? "unk" : "ok"}));
 }
 const SP_CHECK_WORD = {
-  staff: "staffed", prices: "prices set", stock: "stock on the shelves",
+  closed: "open", staff: "staffed", prices: "prices set", stock: "stock on the shelves",
   shelves: "shelves filled", plan: "delivery plan",
 };
+/* A failing check that reads better as its own words than as "missing: ". */
+const SP_CHECK_NO = {closed: "temporarily closed"};
 /* What the lamp's own state adds to that word, and the drawing it wears. */
 const SP_CHECK_STATE = {ok: "", no: "missing: ", unk: "not checked yet: "};
-const SP_CHECK_ICON = {staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
+const SP_CHECK_ICON = {closed: "door", staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
 /* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
 const SP_PRIORITY = ["nice to have", "important", "critical"];
 /* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
@@ -16722,7 +16732,7 @@ function drawSite(){
   const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
     depot ? `supplied from ${siteLink(depot)}` : ""].filter(Boolean).join(" · ");
   /* The head marks: whether the doors are open, and — where they are not — the
-     five pre-flight checks that say why, and the site's place by the profit of
+     six pre-flight checks that say why, and the site's place by the profit of
      its last seven days. */
   const headMarks = !sp ? "" : `
       <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
@@ -16731,7 +16741,8 @@ function drawSite(){
          written the list. An older silent shop has no list and no lamps. */
       b.notTrading === undefined ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
         `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
-          SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
+          p.state === "no" && SP_CHECK_NO[p.slug]
+          || SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
   /* The hour chips: one per ceiling the busy hours ran into — the site can be
      held by staffing at night and by its door by day — and one for idle
