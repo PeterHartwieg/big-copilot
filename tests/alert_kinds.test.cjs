@@ -244,6 +244,22 @@ test("Depot top-up too low is a kind, on by default, landing on the depot's own 
   assert.match(source, /depot: \{[^}]*topup: "stock"/);
 });
 
+/* A wholesale store's weekly delivery that falls short, to a shop or a
+   depot: one kind for every such finding, opening the site's page on its
+   shelves (a shop) or its Stock (a depot). Top-up stays a route's. */
+test('Wholesale delivery too low is a kind of its own, landing on the shelves or the depot\'s Stock', () => {
+  const g = run('ALERT_GROUPS').find(x => x.id === 'wholesale');
+  assert.deepEqual([g.label, g.on], ['Wholesale delivery too low', true]);
+  assert.match(g.note, /wholesale store delivers/);
+  assert.match(run('ALERT_GROUPS').find(x => x.id === 'topup').note, /route from your own site/);
+  const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
+  assert.match(links, /wholesale: \{sec:"secDetail", site:true\}/);
+  const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
+  assert.match(evidence, /wholesale: \{block: "shelves"\}/);
+  assert.match(source, /depot: \{[^}]*wholesale: "stock"/);
+  assert.match(source, /wholesale: \["wholesale", "contract", "delivery"\]/);
+});
+
 /* Today reads the findings of the sizing on screen: Python runs the list
    twice, and Demand has its own (alertsDemand). */
 test('Today, the kinds popover and the map read the list of the sizing on screen', () => {

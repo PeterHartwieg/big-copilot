@@ -3842,6 +3842,11 @@ def _supply(
             row["status"], row["why"], row["level"] = fact["st"], fact["why"], fact["lvl"]
             row["raiseTarget"] = (fact["setTo"] if row["target"] and fact["cad"] == "daily"
                                   else None)
+            # The factory's own contract, paused while the top-up falls short
+            # without it: the input's finding names it as the other way out.
+            own = fact.get("import") or {}
+            if own.get("st") == "paused" and own.get("lvl") != "info":
+                row["ownPaused"] = True
             at = row["importSite"] if row["importSite"] is not None else site["s"]
             upstream_fact = facts.get(str(at), {}).get(row["slug"]) or {}
             row["raiseImport"] = (upstream_fact.get("setTo")
@@ -10276,8 +10281,8 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                         f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
                         f"against the {fact['use']:,} it sells")
                 notes.append(_finding(
-                    fact["lvl"], b["name"], "outruns", text, key=b["key"],
-                    rank=-round(fact["use"] / fact["have"] * 100) if fact["have"] else 0,
+                    fact["lvl"], b["name"], "wholesale", text, key=b["key"],
+                    rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                     subject=line["item"], ev={"slug": slug}))
             elif fact["st"] == "short" and fact["why"] == "target":
                 peak = (rows.get((s, slug)) or {}).get("peakDay")
@@ -10331,8 +10336,9 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if fact["cad"] != "weekly" or fact["role"] not in ("depot", "input"):
                 continue
             st, why = fact["st"], fact["why"]
-            # A paused contract the depot's top-up covers is no finding.
-            if st == "paused" and why == "topup":
+            # A factory's own paused contract beside a top-up is said with the
+            # input (_feed_notes), once; one the top-up covers is no finding.
+            if st == "paused" and whole is not fact:
                 continue
             if not (st == "paused" or (st == "short" and why in ("order", "shortfall"))
                     or (st == "noplan" and fact["lvl"] != "info")):
@@ -10351,23 +10357,19 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 # A depot a wholesale store delivers to: its contract, said on
                 # the depot's own page (Weekly imports does not list it).
                 notes.append(_finding(
-                    fact["lvl"], site, "feed" if parts.get("lines") else "topup",
+                    fact["lvl"], site, "wholesale",
                     f"{item}'s wholesale delivery brings {fact['have']:,} a week against "
                     f"{fact['use']:,} used"
+                    + (f" beyond the {parts['route']:,} a week a route brings"
+                       if parts.get("route") else "")
                     + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
-                    key=key, rank=-round(fact["use"] / 7), subject=item, ev=ev))
+                    key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
+                    subject=item, ev=ev))
                 continue
             smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
-                source = businesses[fact["from"]]["name"] if fact.get("from") is not None else None
-                if (st == "paused" and fact["role"] == "input" and whole is not fact
-                        and whole["st"] == "short" and whole.get("setTo") and source):
-                    # Paused, with a top-up beside it that falls short: both ways out.
-                    text = (f"{item} import to {site} is paused and {source}'s top-up of "
-                            f"{whole['have']:,} falls short; resume the contract or raise the "
-                            f"top-up to {whole['setTo']:,}")
-                elif st == "paused":
+                if st == "paused":
                     text = f"{item} import is paused; resume the contract supplying {site}"
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
@@ -10549,6 +10551,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
                         f"the line is not drawing it")
             else:
                 continue
+            if row.get("ownPaused"):
+                text += f"; or resume the paused {row['item']} import to {business['name']}"
             notes.append(
                 _finding(
                     row["level"], business["name"], "feed", text,
@@ -10694,6 +10698,7 @@ SUMMARIES = {
     "paused": "{n} imports are paused; soonest to run out is {subject}",
     "outruns": "{n} products outsell their daily top-up; worst {subject}",
     "topup": "{n} products outrun the depot's daily top-up; worst {subject}",
+    "wholesale": "{n} products' wholesale deliveries fall short; worst {subject}",
     "unplanned": "{n} stocked products are on no distribution plan; largest {subject}",
     "dead": "{n} products sit idle; largest {subject}",
     "notrouted": "{n} products are held where no plan sends them on; largest {subject}",
@@ -14749,6 +14754,8 @@ const ALERT_LINKS = {
   notrouted: {sec:"secStock", view:"idle"},
   /* A depot only a route from your own site feeds: its page's Stock. */
   topup: {sec:"secDetail", site:true},
+  /* A wholesale store's weekly delivery, to a shop or a depot: its page. */
+  wholesale: {sec:"secDetail", site:true},
   feed: {sec:"secStock", view:"feed"}, staff: {sec:"secStock", view:"lines"},
   unnamed: {sec:"secStock", view:"lines"}, unset: {sec:"secStock", view:"lines"},
   atcap: {sec:"secDetail", site:true}, idlestaff: {sec:"secDetail", site:true},
@@ -14906,6 +14913,8 @@ const ALERT_EVIDENCE = {
   /* About the depot that holds the stock; its shelves-to-be are named in the sentence. */
   notrouted: {block: "stock"},
   topup: {block: "stock"},
+  /* On a shop, its shelves; on a depot, its Stock (SP_EVIDENCE_KIND). */
+  wholesale: {block: "shelves"},
   shortfall: {block: "stock"},
   order: {block: "stock"},
   paused: {block: "stock"},
@@ -16173,7 +16182,7 @@ const SP_BLOCKS = {
    - neither draws a profit chart, so a trend lands on the tiles. */
 const SP_EVIDENCE_KIND = {
   depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
-          topup: "stock", shortfall: "stock", order: "stock", paused: "stock"},
+          topup: "stock", wholesale: "stock", shortfall: "stock", order: "stock", paused: "stock"},
   factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
             feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
 };
@@ -20450,6 +20459,7 @@ const ALERT_GROUPS = [
   {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
   {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import or route round", on:true},
   {id:"topup",        label:"Depot top-up too low",   note:"A depot fed only by a route from your own site, whose busiest day outruns its daily top-up", on:true},
+  {id:"wholesale",    label:"Wholesale delivery too low", note:"A shop or depot a wholesale store delivers to each week, whose delivery brings less than a week's use or runs out before the next one", on:true},
   {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
   {id:"atcap",        label:"At capacity",            note:"Hours a week the staff, registers or workstations turn people away", on:true},
   {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
@@ -21467,6 +21477,7 @@ const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: [
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
   notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],
   topup: ["top-up", "route too low", "depot top-up"],
+  wholesale: ["wholesale", "contract", "delivery"],
   satisfaction: ["standards"], promotion: ["pull"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
 /* ...and for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
