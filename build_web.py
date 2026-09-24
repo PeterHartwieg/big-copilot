@@ -114,6 +114,19 @@ button.btn,button.btn2,button.ibtn{font-family:inherit;line-height:inherit}
 .release-banner :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 body .mast{top:var(--release-height,0px)}
 @media(max-width:540px){.release-banner{gap:10px;padding-top:6px;padding-bottom:6px}.release-copy{display:block;font-size:11px}.release-copy details{margin-top:1px;border-left:0;padding-left:13px}}
+/* One-time news strip under the update banner; web/update.js shows it. It
+   sits in the flow, so it pushes the page down and scrolls away beneath the sticky
+   update banner rather than covering anything. */
+.news-strip{display:flex;align-items:center;gap:16px;padding:5px clamp(16px,2.5vw,40px);border-bottom:1px solid var(--rule-soft);background:color-mix(in srgb,var(--accent) 5%,var(--ground));color:var(--ink-2);font-size:12px;line-height:1.5}
+.news-copy{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
+.news-tag{font-weight:500;color:var(--ink);margin-right:6px}
+.news-tag::before{content:"";display:inline-block;width:5px;height:5px;margin-right:8px;border-radius:50%;background:var(--accent);vertical-align:2px}
+.news-copy a{margin-left:6px;color:var(--accent);white-space:nowrap}
+.news-dismiss{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer}
+.news-dismiss:hover{background:var(--raised);color:var(--ink)}
+.news-dismiss svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.news-strip :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:540px){.news-strip{gap:10px;padding-top:6px;padding-bottom:6px;font-size:11px}.news-copy a{white-space:normal}}
 
 /* landing (generator) ------------------------------------------------------ */
 .landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:80px 0;perspective:1000px}
@@ -304,6 +317,12 @@ details.help[open] summary::after{content:"\2013"}
     <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg>Reload</button>
     <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
   </div>
+</aside>
+<!-- One-time news strip. For the next announcement replace data-news-id and the
+     copy: a new id shows again to everyone who dismissed this one (web/update.js). -->
+<aside class="news-strip" id="newsStrip" data-news-id="link-0.2.0" aria-label="News" hidden>
+  <p class="news-copy"><b class="news-tag">New</b>Big Copilot Link 0.2.0 lets the board make changes in your game: set uniforms, apply import amounts and write staffing plans, with a preview and one-step undo.<a id="newsLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Get the mod on the Steam Workshop</a></p>
+  <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
 <section class="landing" id="landing">
   <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
