@@ -17471,7 +17471,8 @@ function drawLogistics(){
   const loose = {};
   f.sites.forEach(site => site.needs.forEach(n => {
     const own = n.factoryImportSite ?? (n.directImport ? site.s : null);
-    if(own !== null || (n.from !== null && n.from !== undefined)) return;
+    // An input named in this browser waits for the next refresh like the rest of it.
+    if(n.named || own !== null || (n.from !== null && n.from !== undefined)) return;
     const fact = szNeed(site, n);
     const row = loose[n.slug] = loose[n.slug] || {item: n.item, slug: n.slug, week: 0, users: [], fact};
     row.week += szWeek(fact, n.perWeek); row.users.push({s: site.s, perDay: szUse(fact, n.perDay)});
