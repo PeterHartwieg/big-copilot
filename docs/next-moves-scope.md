@@ -88,7 +88,7 @@ Start with customer-service/register businesses, where the current model exists.
 
 **Card copy:** “Compare premises for your next business by demand, competition, rent and customer capacity.”
 
-**First release:** Choose a business type, optional neighbourhood and budget; show a short ranked list and compare up to three addresses. Each row explains its demand evidence, primary versus optional products, competing providers, own existing presence, traffic, verified door cap, rent and availability. Mark temporary hype separately from longer-running demand. Link an existing capped business into the same workflow as a relocation case.
+**First release:** Choose a business type, optional neighbourhood and budget; show a short ranked list and compare up to three addresses. Each row explains its demand evidence, primary versus optional products, competing providers, own existing presence, traffic, verified door cap, rent and availability. Mark temporary hype separately from longer-running demand. (A relocation case for a business at its building's capacity was dropped on 24 Sep 2026: the game does not work that way.)
 
 Rank eligible premises transparently using visible factors. Keep strong measured evidence for an existing site distinct from inferred opportunity for an unopened one. Budget comparisons should say whether they cover rent only or include a user-entered fit-out estimate. Do not manufacture precise expected profit, payback or competitor-response probabilities.
 
