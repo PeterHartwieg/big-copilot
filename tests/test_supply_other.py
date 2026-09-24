@@ -38,7 +38,7 @@ def imports(site, item, amount):
                           "assignedWarehouse": site}]}
 
 
-def depot_other(log, targets, contracts, distrib2_lines=()):
+def depot_other(log, targets, contracts, distrib2_lines=(), shop_rate=100):
     """_supply() over two factories (each line eats water, 240 a day), the hub,
     a second depot and a shop selling water; returns the hub's depotOther."""
     save = SaveStub([[RID], [RID]], hours=24)
@@ -70,7 +70,7 @@ def depot_other(log, targets, contracts, distrib2_lines=()):
                  [{"slug": WATER, "item": "Water", "units": 3000, "rate": 0, "price": 0}]),
         business(DISTRIB, "Distrib", "warehouse", "support", []),
         business(SHOP, "Shop", "kiosk", "retail",
-                 [{"slug": WATER, "item": "Water", "units": 20, "rate": 100, "price": 1}]),
+                 [{"slug": WATER, "item": "Water", "units": 20, "rate": shop_rate, "price": 1}]),
         business(FACTORY2, "Factory Two", "factory", "support", factory_lines),
         business(DISTRIB2, "Distrib Two", "warehouse", "support", list(distrib2_lines)),
         business(BEER_SHOP, "Beer Shop", "kiosk", "retail",
@@ -351,6 +351,30 @@ class DepotOtherTests(unittest.TestCase):
                                   (DISTRIB, DISTRIB2, WATER, 300)], [imports(HUB, WATER, 2380)],
                             distrib2_lines=[{"slug": WATER, "item": "Water", "units": 20,
                                              "rate": 50, "price": 1}])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_leaf_depot_that_ships_the_item_is_not_idle(self):
+        """The depot has no onward route for water but logs 100 leaving each
+        day: something draws it, so the factory is read net, as main: 700."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+            ship(log, day, DISTRIB, None, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700)],
+                            [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_shelf_listing_the_item_without_sales_still_uses_it(self):
+        """As the shelf route that shipped nothing, with the shop's water line
+        at no sales: a shop listing the item can sell it, so it reads net: 700."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
+                                  (DISTRIB, SHOP, WATER, 150)], [imports(HUB, WATER, 2380)],
+                            shop_rate=0)
         self.assertEqual(other[WATER], 700)
 
 
