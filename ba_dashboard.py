@@ -12781,9 +12781,9 @@ function drawFlowDetail(){
    `dem` holds only what the Demand sizing changes, merged in by the one
    accessor, so the switch needs no new extract. */
 const SIZING_KEY = "ba_dash_sizing";
-/* cap (24/7, the default) or dem (Demand), set from storage once the page's
-   remember() helpers exist (see SUBS). */
-let sizing = "cap";
+/* cap (24/7, the default) or dem (Demand), per device and not per character.
+   Read here, before remembered() exists; szSwitch() writes it with remember(). */
+let sizing = (() => { try{ return localStorage.getItem(SIZING_KEY) === "dem" ? "dem" : "cap"; }catch(e){ return "cap"; } })();
 function supplyFact(s, slug){
   const f = ((((typeof D !== "undefined" && D) || {}).supply || {}).facts || {})[s];
   const fact = f && f[slug];
@@ -18748,8 +18748,6 @@ const SUBS = {
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
 const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
-/* The sizing switch is per device, not per character (supplyFact). */
-sizing = remembered(SIZING_KEY) === "dem" ? "dem" : "cap";
 let page = "today";
 const sub = {};
 Object.entries(SUBS).forEach(([id, sv]) => {
