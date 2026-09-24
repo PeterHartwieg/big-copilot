@@ -17096,14 +17096,14 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
-/* Whether focus is on a chip or inside the popover, kept from focus events
-   rather than read off document.activeElement: a resize that hides the chip
-   holding focus lets the browser drop focus to <body> before any resize
-   handler runs. */
-let fvFocusOurs = false;
-/* Which chip held focus ("mast" or "foot"), so a redraw that replaces it can
-   give focus to its replacement. */
-let fvFocusedAt = null;
+/* Which chip has focus right now ("mast" or "foot"), or null. renderAll()
+   asks before drawMast() and drawFooter() replace the chips, and hands the
+   answer to drawDifficulty(), so a refresh gives focus back to the chip that
+   had it and to nothing else. */
+const fvChipFocus = () => {
+  const a = document.activeElement;
+  return a && a.matches && a.matches("button.fv-diff") ? a.dataset.fvAt : null;
+};
 /* The chip the popover can hang from right now: the masthead's at 1301 px
    and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
@@ -17111,13 +17111,15 @@ function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
   /* A resize across 1300 px hides the chip it hung from and shows the other,
      which may be a page away (the footer's). Following it could leave the
-     popover off screen, so it closes instead. Focus moves only if it was the
-     popover's or its chip's, and then to the chip now shown when that is in
-     the window, else back to the page without scrolling; focus the reader put
-     anywhere else stays where it is. */
+     popover off screen, so it closes instead. Focus moves only if it is in
+     the popover or on a chip right now, and then to the chip now shown when
+     that is in the window, else back to the page without scrolling. Focus the
+     reader put anywhere else stays where it is, and so does focus the browser
+     already dropped to the page with the chip it hid. */
   if(!fvDiffAnchor.getClientRects().length){
     const active = document.activeElement;
-    const ours = fvFocusOurs || (!!active && (fvDiffPop.contains(active) || active === fvDiffAnchor));
+    const ours = !!active && active !== document.body
+      && (fvDiffPop.contains(active) || !!(active.matches && active.matches("button.fv-diff")));
     const shown = fvShownChip();
     fvCloseDiff(false);
     if(shown) fvDiffAnchor = shown;
@@ -17168,7 +17170,9 @@ function fvOpenDiff(anchor){
   /* Into the dialog, so a keyboard reads it and tabs through its settings. */
   fvDiffPop.focus({preventScroll: true});
 }
-function drawDifficulty(){
+/* `hadFocus` is fvChipFocus() as it stood before this render replaced the
+   chips. */
+function drawDifficulty(hadFocus = null){
   if(!fvDiffPop){
     fvDiffPop = document.createElement("div");
     fvDiffPop.className = "fv-pop";
@@ -17195,27 +17199,6 @@ function drawDifficulty(){
       if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
       fvCloseDiff(true);
     });
-    /* Focus arriving anywhere says whose it is. Leaving for nowhere counts
-       only while the element left is still drawn: one hidden by a resize
-       loses focus without the reader moving it, and it is still ours. */
-    const isOurs = el => !!el && el.nodeType === 1 && (fvDiffPop.contains(el) || !!el.closest("button.fv-diff"));
-    document.addEventListener("focusin", e => {
-      fvFocusOurs = isOurs(e.target);
-      const chip = e.target.closest && e.target.closest("button.fv-diff");
-      fvFocusedAt = chip ? chip.dataset.fvAt : null;
-    });
-    /* The window losing focus (another app, another tab) is not the reader
-       moving it on the page, so it changes nothing. Neither is a chip that a
-       redraw removed or a resize hid: the browser fires focusout for those
-       too, while the element is still in place, so the verdict waits until
-       the current task is done and then asks whether it is still there. */
-    document.addEventListener("focusout", e => {
-      if(e.relatedTarget || !document.hasFocus() || !isOurs(e.target)) return;
-      const left = e.target;
-      queueMicrotask(() => {
-        if(left.isConnected && left.getClientRects().length && !isOurs(document.activeElement)) fvFocusOurs = false;
-      });
-    });
     window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
     window.addEventListener("scroll", e => {
       if(!fvDiffPop.classList.contains("on")) return;
@@ -17223,12 +17206,10 @@ function drawDifficulty(){
       fvPlaceDiffPop();
     }, true);
   }
-  /* A live refresh (drawMast, drawFooter) replaced the chip that had focus,
-     and the browser dropped focus to the page: give it to the replacement, so
-     focus and fvFocusOurs agree again. */
-  const active = document.activeElement;
-  if(fvFocusOurs && fvFocusedAt && (!active || active === document.body)){
-    const again = document.querySelector(`button.fv-diff[data-fv-at="${fvFocusedAt}"]`);
+  /* A live refresh (drawMast, drawFooter) replaced the chip that had focus
+     just before it: give focus to the replacement, and only then. */
+  if(hadFocus && !fvChipFocus()){
+    const again = document.querySelector(`button.fv-diff[data-fv-at="${hadFocus}"]`);
     if(again && again.getClientRects().length){ again.focus({preventScroll: true}); hideTip(); }
   }
   /* A redraw replaced the chip the popover hung from: follow the chip in the
@@ -17252,13 +17233,15 @@ function drawDifficulty(){
 /*__WIKI_SCRIPT__*/
 
 function renderAll(){
+  /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
+  const diffFocus = fvChipFocus();
   indexTrends();
   drawMast(); drawKpis(); drawAlerts();
   drawChart(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawOptimizeStaffing(); drawFooter();
-  drawDifficulty();
+  drawDifficulty(diffFocus);
   wireAll();
   refreshCityMaps();
   /* The wiki is the game's own text and does not move with a save, but the one

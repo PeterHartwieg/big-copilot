@@ -297,8 +297,9 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
-  // Focus on the open popover's own chip, which the resize hides: it still
-  // counts as the popover's, and moves to the chip now shown (both directions).
+  // Focus on the open popover's own chip, which the resize hides: the browser
+  // drops it to the page before the handler runs, and it stays there (both
+  // directions). The popover closes and nothing reads as open.
   ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
   try {
     await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
@@ -306,10 +307,11 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await mast.click();
     await mast.focus();
     assert.equal((await state(page)).focus, 'mast');
+    await page.mouse.move(5, 600);
     await page.setViewportSize({width: 1280, height: 1000});
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
     const s = await state(page);
-    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'foot', ['false', 'false'], false]);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
   ({page, errors} = await board({width: 390}));
@@ -319,35 +321,11 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await foot.click();
     await foot.focus();
     assert.equal((await state(page)).focus, 'foot');
+    await page.mouse.move(5, 5);
     await page.setViewportSize({width: 1440, height: 1000});
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
     const s = await state(page);
-    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'mast', ['false', 'false'], false]);
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
-
-  // A live refresh replaces the focused chip: focus goes to the new one, and
-  // a resize after it still hands focus on across the switch.
-  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
-  try {
-    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
-    const mast = page.locator('#clock .fv-diff');
-    await mast.click();
-    await mast.focus();
-    await page.evaluate(() => { document.activeElement.dataset.old = '1'; });
-    // The pointer away from the chip, so a tooltip could only come from focus.
-    await page.mouse.move(5, 600);
-    // What renderAll() does to these two, with a save that has moved on.
-    await page.evaluate(() => { D.meta.minute = 14; drawMast(); drawFooter(); drawDifficulty(); });
-    assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.fvAt, document.activeElement.dataset.old,
-      document.activeElement.isConnected]), ['mast', undefined, true]);
-    assert.equal((await state(page)).tip, false);
-    assert.equal((await state(page)).open, true, 'the popover stays open, hung from the new chip');
-    assert.deepEqual((await state(page)).expanded, ['true', 'false']);
-    await page.setViewportSize({width: 1280, height: 1000});
-    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
-    const s = await state(page);
-    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'foot', ['false', 'false'], false]);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
@@ -373,6 +351,62 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
     const s = await state(page);
     assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'mast', ['false', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// What renderAll() does to the chips: ask which one has focus, redraw the
+// masthead and the footer (a save that has moved on), then drawDifficulty().
+const refresh = page => page.evaluate(() => {
+  const had = fvChipFocus();
+  D.meta.minute = (D.meta.minute + 1) % 60;
+  drawMast(); drawFooter(); drawDifficulty(had);
+});
+
+test('a live refresh gives focus back to the chip that had it, and to nothing else', async () => {
+  // The focused chip is replaced: its replacement gets focus, the popover
+  // stays open on it, and no tooltip opens.
+  let {page, errors} = await board({width: 1440});
+  try {
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    await page.evaluate(() => { document.activeElement.dataset.old = '1'; });
+    await page.mouse.move(5, 600);
+    await refresh(page);
+    assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.fvAt, document.activeElement.dataset.old,
+      document.activeElement.isConnected]), ['mast', undefined, true]);
+    const s = await state(page);
+    assert.deepEqual([s.open, s.expanded, s.tip], [true, ['true', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // Focus elsewhere, or on the page itself, is left where it is.
+  ({page, errors} = await board({width: 1440}));
+  try {
+    await page.evaluate(() => document.querySelector('#nav a').focus());
+    await refresh(page);
+    assert.equal((await state(page)).focus, 'A');
+    await page.evaluate(() => document.activeElement.blur());
+    await refresh(page);
+    assert.equal((await state(page)).focus, 'body');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+
+  // A resize hides the focused chip (the footer's is off screen), the reader
+  // clicks the page, then a refresh: focus is not pulled back to a chip.
+  ({page, errors} = await board({width: 1440, ...LONG_PAGE}));
+  try {
+    await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, 400); });
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    await page.setViewportSize({width: 1200, height: 800});
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    await page.mouse.click(600, 500);
+    await refresh(page);
+    const s = await state(page);
+    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=9541c654c0">
+<link rel="stylesheet" href="community.css?v=7cb34475b6">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=9541c654c0">
+<link rel="stylesheet" href="fonts/fonts.css?v=7cb34475b6">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2857,8 +2857,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "9541c654c0";</script>
-<script>window.LEDGER_RELEASE = {"version":"9541c654c0","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "7cb34475b6";</script>
+<script>window.LEDGER_RELEASE = {"version":"7cb34475b6","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -2927,8 +2927,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=9541c654c0"></script>
-<script src="community.js?v=9541c654c0"></script>
+<script src="app.js?v=7cb34475b6"></script>
+<script src="community.js?v=7cb34475b6"></script>
 
 <script>
 
@@ -9129,14 +9129,14 @@ function drawFooter(){
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
 let fvDiffPop = null, fvDiffAnchor = null;
-/* Whether focus is on a chip or inside the popover, kept from focus events
-   rather than read off document.activeElement: a resize that hides the chip
-   holding focus lets the browser drop focus to <body> before any resize
-   handler runs. */
-let fvFocusOurs = false;
-/* Which chip held focus ("mast" or "foot"), so a redraw that replaces it can
-   give focus to its replacement. */
-let fvFocusedAt = null;
+/* Which chip has focus right now ("mast" or "foot"), or null. renderAll()
+   asks before drawMast() and drawFooter() replace the chips, and hands the
+   answer to drawDifficulty(), so a refresh gives focus back to the chip that
+   had it and to nothing else. */
+const fvChipFocus = () => {
+  const a = document.activeElement;
+  return a && a.matches && a.matches("button.fv-diff") ? a.dataset.fvAt : null;
+};
 /* The chip the popover can hang from right now: the masthead's at 1301 px
    and over, the footer's at 1300 px and under, whichever the stylesheet shows. */
 const fvShownChip = () => [...document.querySelectorAll("button.fv-diff")].find(b => b.getClientRects().length) || null;
@@ -9144,13 +9144,15 @@ function fvPlaceDiffPop(){
   if(!fvDiffPop || !fvDiffAnchor) return;
   /* A resize across 1300 px hides the chip it hung from and shows the other,
      which may be a page away (the footer's). Following it could leave the
-     popover off screen, so it closes instead. Focus moves only if it was the
-     popover's or its chip's, and then to the chip now shown when that is in
-     the window, else back to the page without scrolling; focus the reader put
-     anywhere else stays where it is. */
+     popover off screen, so it closes instead. Focus moves only if it is in
+     the popover or on a chip right now, and then to the chip now shown when
+     that is in the window, else back to the page without scrolling. Focus the
+     reader put anywhere else stays where it is, and so does focus the browser
+     already dropped to the page with the chip it hid. */
   if(!fvDiffAnchor.getClientRects().length){
     const active = document.activeElement;
-    const ours = fvFocusOurs || (!!active && (fvDiffPop.contains(active) || active === fvDiffAnchor));
+    const ours = !!active && active !== document.body
+      && (fvDiffPop.contains(active) || !!(active.matches && active.matches("button.fv-diff")));
     const shown = fvShownChip();
     fvCloseDiff(false);
     if(shown) fvDiffAnchor = shown;
@@ -9201,7 +9203,9 @@ function fvOpenDiff(anchor){
   /* Into the dialog, so a keyboard reads it and tabs through its settings. */
   fvDiffPop.focus({preventScroll: true});
 }
-function drawDifficulty(){
+/* `hadFocus` is fvChipFocus() as it stood before this render replaced the
+   chips. */
+function drawDifficulty(hadFocus = null){
   if(!fvDiffPop){
     fvDiffPop = document.createElement("div");
     fvDiffPop.className = "fv-pop";
@@ -9228,27 +9232,6 @@ function drawDifficulty(){
       if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
       fvCloseDiff(true);
     });
-    /* Focus arriving anywhere says whose it is. Leaving for nowhere counts
-       only while the element left is still drawn: one hidden by a resize
-       loses focus without the reader moving it, and it is still ours. */
-    const isOurs = el => !!el && el.nodeType === 1 && (fvDiffPop.contains(el) || !!el.closest("button.fv-diff"));
-    document.addEventListener("focusin", e => {
-      fvFocusOurs = isOurs(e.target);
-      const chip = e.target.closest && e.target.closest("button.fv-diff");
-      fvFocusedAt = chip ? chip.dataset.fvAt : null;
-    });
-    /* The window losing focus (another app, another tab) is not the reader
-       moving it on the page, so it changes nothing. Neither is a chip that a
-       redraw removed or a resize hid: the browser fires focusout for those
-       too, while the element is still in place, so the verdict waits until
-       the current task is done and then asks whether it is still there. */
-    document.addEventListener("focusout", e => {
-      if(e.relatedTarget || !document.hasFocus() || !isOurs(e.target)) return;
-      const left = e.target;
-      queueMicrotask(() => {
-        if(left.isConnected && left.getClientRects().length && !isOurs(document.activeElement)) fvFocusOurs = false;
-      });
-    });
     window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
     window.addEventListener("scroll", e => {
       if(!fvDiffPop.classList.contains("on")) return;
@@ -9256,12 +9239,10 @@ function drawDifficulty(){
       fvPlaceDiffPop();
     }, true);
   }
-  /* A live refresh (drawMast, drawFooter) replaced the chip that had focus,
-     and the browser dropped focus to the page: give it to the replacement, so
-     focus and fvFocusOurs agree again. */
-  const active = document.activeElement;
-  if(fvFocusOurs && fvFocusedAt && (!active || active === document.body)){
-    const again = document.querySelector(`button.fv-diff[data-fv-at="${fvFocusedAt}"]`);
+  /* A live refresh (drawMast, drawFooter) replaced the chip that had focus
+     just before it: give focus to the replacement, and only then. */
+  if(hadFocus && !fvChipFocus()){
+    const again = document.querySelector(`button.fv-diff[data-fv-at="${hadFocus}"]`);
     if(again && again.getClientRects().length){ again.focus({preventScroll: true}); hideTip(); }
   }
   /* A redraw replaced the chip the popover hung from: follow the chip in the
@@ -12901,13 +12882,15 @@ window.BigCopilotWiki = {
 
 
 function renderAll(){
+  /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
+  const diffFocus = fvChipFocus();
   indexTrends();
   drawMast(); drawKpis(); drawAlerts();
   drawChart(); drawPortfolio(); drawSitePicker(); drawSite();
   drawLogistics(); drawStock(); drawFlow();
   drawMovers(); drawMarket(); drawPlan();  // changed for growth: no drawExpansion()
   drawProducts(); drawPayroll(); drawGoals(); drawFindLocation(); drawOptimizeStaffing(); drawFooter();
-  drawDifficulty();
+  drawDifficulty(diffFocus);
   wireAll();
   refreshCityMaps();
   /* The wiki is the game's own text and does not move with a save, but the one
