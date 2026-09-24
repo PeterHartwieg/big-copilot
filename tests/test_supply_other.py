@@ -38,7 +38,7 @@ def imports(site, item, amount):
                           "assignedWarehouse": site}]}
 
 
-def depot_other(log, targets, contracts):
+def depot_other(log, targets, contracts, distrib2_lines=()):
     """_supply() over two factories (each line eats water, 240 a day), the hub,
     a second depot and a shop selling water; returns the hub's depotOther."""
     save = SaveStub([[RID], [RID]], hours=24)
@@ -72,7 +72,7 @@ def depot_other(log, targets, contracts):
         business(SHOP, "Shop", "kiosk", "retail",
                  [{"slug": WATER, "item": "Water", "units": 20, "rate": 100, "price": 1}]),
         business(FACTORY2, "Factory Two", "factory", "support", factory_lines),
-        business(DISTRIB2, "Distrib Two", "warehouse", "support", []),
+        business(DISTRIB2, "Distrib Two", "warehouse", "support", list(distrib2_lines)),
         business(BEER_SHOP, "Beer Shop", "kiosk", "retail",
                  [{"slug": BEER, "item": "Beer", "units": 20, "rate": 100, "price": 1}]),
     ]
@@ -241,7 +241,8 @@ class DepotOtherTests(unittest.TestCase):
 
     def test_a_shop_that_sells_other_goods_does_not_use_the_item(self):
         """The depot passes the water on to a shop that sells only beer:
-        nothing uses it there either, so it is parked, not shop use."""
+        nothing uses it there either, so it is parked, not shop use. This
+        relies on the shop listing no line for water."""
         log = {}
         for day in range(3, 10):
             ship(log, day, HUB, FACTORY, {WATER: 340})
@@ -319,6 +320,37 @@ class DepotOtherTests(unittest.TestCase):
             ship(log, day, FACTORY, DISTRIB, {WATER: 100})
         other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
                                   (DISTRIB, SHOP, WATER, 150)], [imports(HUB, WATER, 2380)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_factory_with_a_second_routed_source_is_read_net(self):
+        """The hub sends the factory 200 a day and the shops 100; a depot
+        also sends the factory 100 a day, and the factory parks 100 at an
+        idle depot. Whose 100 it parked is unknown, so it is read net, as
+        main: 700."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 200})
+            ship(log, day, HUB, None, {WATER: 100})
+            ship(log, day, DISTRIB2, FACTORY, {WATER: 100})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        # The depot's route comes first, so the hub's is the one the factory's
+        # target names, and the factory counts among what the hub feeds.
+        other = depot_other(log, [(DISTRIB2, FACTORY, WATER, 200), (HUB, FACTORY, WATER, 300),
+                                  (HUB, SHOP, WATER, 150), (FACTORY, DISTRIB, WATER, 700)],
+                            [imports(HUB, WATER, 2100)])
+        self.assertEqual(other[WATER], 700)
+
+    def test_a_site_whose_line_shows_sales_uses_the_item(self):
+        """The depot passes the water on to a site of another type whose
+        water line shows sales: that is use, so the factory is read net: 700."""
+        log = {}
+        for day in range(3, 10):
+            ship(log, day, HUB, FACTORY, {WATER: 340})
+            ship(log, day, FACTORY, DISTRIB, {WATER: 100})
+        other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, DISTRIB, WATER, 700),
+                                  (DISTRIB, DISTRIB2, WATER, 300)], [imports(HUB, WATER, 2380)],
+                            distrib2_lines=[{"slug": WATER, "item": "Water", "units": 20,
+                                             "rate": 50, "price": 1}])
         self.assertEqual(other[WATER], 700)
 
 

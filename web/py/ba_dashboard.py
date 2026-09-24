@@ -3119,8 +3119,11 @@ def _supply(
         "byDay": lambda key, item: by_day[key][item],
         "outByDay": lambda key, item: out_by_day[key][item],
         "inByDay": lambda key, item: in_by_day[key][item],
-        "sells": lambda key, item: (
-            key in index and businesses[index[key]]["status"] == "retail" and item in sold.get(key, {})),
+        # A shop listing the item sells it, and so does any site whose line
+        # for it shows sales, whatever its type.
+        "sells": lambda key, item: key in index and (
+            sold.get(key, {}).get(item, 0) > 0
+            or (businesses[index[key]]["status"] == "retail" and item in sold.get(key, {}))),
         "roundDays": lambda key: round_days.get(key, set()),
     }
     factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
@@ -3541,7 +3544,8 @@ def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
     up to what its clean idle depots received that day. It is read net for the
     whole window, as before, where it also feeds an idle depot that is not
     clean (another source fills it), or imports the item itself (what it sent
-    on may have been that import).
+    on may have been that import), or is fed the item by more than one
+    routed source (what it sent on may not have been the depot's).
 
     This assumes a send and its receipt carry the same dayOfDelivery. The
     routes are today's while the log is the week's, so a route changed
@@ -3567,7 +3571,7 @@ def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
                     routes[source].add(dest)
     added = collections.defaultdict(dict)
     for factory in _in_order(routes):
-        if (factory, slug) in flow["imports"]:
+        if (factory, slug) in flow["imports"] or len(sources[factory]) > 1:
             continue
         idle_at = [dest for dest in _in_order(routes[factory]) if idle(dest)]
         clean = [dest for dest in idle_at
