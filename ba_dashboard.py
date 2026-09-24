@@ -11106,6 +11106,10 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-step.sp-done{color:var(--ink-3)}
 .sp-step small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sp-daytabs a{position:relative;min-width:30px;text-align:center}
+/* The two controls stretch to the height of the steps beside them, and a step
+   whose line wraps (who to add) is taller than a pill: centred, not left at the
+   top of the stretched pill. */
+.sp-nowplan a,.sp-daytabs a{display:flex;align-items:center;justify-content:center}
 .sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
 .sp-day{display:none}
 .sp-day.sp-on{display:block}
