@@ -206,3 +206,37 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
   assert.equal(view, kind('dead'), 'the Checks view and the finding kind share one name');
   assert.equal(kind('staff'), 'Nobody on shift');
 });
+
+/* R8: stock a depot holds that no plan sends on, while the company's own
+   sites sell or need it, is a kind of its own, and every map that routes a
+   kind knows it. */
+test('Not routed is a kind, on by default, linked to Idle stock and the depot\'s Stock', () => {
+  const g = run('ALERT_GROUPS').find(x => x.id === 'notrouted');
+  assert.deepEqual([g.label, g.on], ['Not routed', true]);
+  const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
+  assert.match(links, /notrouted: \{sec:"secStock", view:"idle"\}/);
+  const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
+  assert.match(evidence, /notrouted: \{block: "stock"\}/);
+  assert.match(source, /depot: \{[^}]*notrouted: "stock"/);
+});
+
+/* Today reads the findings of the sizing on screen: Python runs the list
+   twice, and Demand has its own (alertsDemand). */
+test('Today, the kinds popover and the map read the list of the sizing on screen', () => {
+  const at = source.indexOf('const alertLines =');
+  const ctx = vm.createContext({});
+  vm.runInContext('let sizing = "cap"; let D = null;\n' + source.slice(at, source.indexOf('/* The sizing switch.', at)), ctx);
+  const lines = ctx => JSON.parse(vm.runInContext('JSON.stringify(alertLines().map(a => a.id))', ctx));
+  vm.runInContext(`D = {alerts: [{id: 'feed'}, {id: 'paused'}], minor: {rows: [{id: 'm'}]},
+    alertsDemand: {lines: [{id: 'paused'}], minor: {rows: []}}}`, ctx);
+  assert.deepEqual(lines(ctx), ['feed', 'paused']);
+  vm.runInContext('sizing = "dem"', ctx);
+  assert.deepEqual(lines(ctx), ['paused']);
+  assert.deepEqual(vm.runInContext('alertMinor().rows.length', ctx), 0);
+  // A payload from before the second pass keeps the 24/7 list under Demand.
+  vm.runInContext('delete D.alertsDemand', ctx);
+  assert.deepEqual(lines(ctx), ['feed', 'paused']);
+  assert.match(DRAW, /alertLines\(\), alertMinor\(\)\.rows/);
+  const map = fs.readFileSync(path.join(__dirname, '..', 'web', 'map.js'), 'utf8');
+  assert.match(map, /\.\.\.alertLines\(\), \.\.\.\(alertMinor\(\)\.rows/);
+});

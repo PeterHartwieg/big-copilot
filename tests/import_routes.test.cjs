@@ -160,6 +160,33 @@ test('a recipe named in this browser reads new until the next refresh', async ()
   } finally { await page.close(); }
 });
 
+test('Checks, Goods flow and Today read the same facts, by sizing', async () => {
+  const page = await board(fixture());
+  try {
+    const view = async v => page.evaluate(v => { stockView = v; drawStock(); return document.getElementById('stock').textContent; }, v);
+    // One status word per row; tight shows on Checks.
+    assert.match(await view('imports'), /tight/);
+    const idle = await view('idle');
+    assert.match(idle, /not routed/);
+    assert.match(idle, /Garden Gym\s*53\/day/);
+    assert.match(await view('shops'), /no plan[\s\S]*top-up to 70 from\s*Import Hub/);
+    // The switch sits in the Checks toolbar for the sized views only.
+    assert.equal(await page.locator('#stockSizing').count(), 0, 'not on Idle stock');
+    await view('feed');
+    assert.equal(await page.locator('#stockSizing').count(), 1);
+    // Goods flow counts the hub's facts; Today has no tight, and Not routed is a kind.
+    const flow = await page.evaluate(() => { drawFlow(); flowPickId = 'hub#1'; drawFlowDetail();
+      return document.getElementById('flowDetail').textContent; });
+    assert.match(flow, /1 paused/);
+    assert.match(flow, /2 idle, 1 tight/);
+    const today = async mode => page.evaluate(mode => { sizing = mode; drawAlerts();
+      return [...document.querySelectorAll('#alerts .find')].map(f => f.dataset.id); }, mode);
+    assert.deepEqual(await today('cap'), ['r8feed', 'r8paused', 'r8notrouted', 'r8dead']);
+    assert.deepEqual(await today('dem'), ['r8paused', 'r8notrouted', 'r8dead']);
+    assert.doesNotMatch(await page.locator('#alerts').textContent(), /tight/i);
+  } finally { await page.close(); }
+});
+
 /* Real extraction, from the Python builders. Once _supply() sends facts, the
    tables and the checklist say exactly what they say; a payload without them
    (the board ahead of the extraction) has nothing to hold the board to. */

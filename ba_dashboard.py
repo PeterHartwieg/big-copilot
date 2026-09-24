@@ -17463,7 +17463,9 @@ function drawLogistics(){
       // A route from the company's own site brings everything that leaves: the import is a backup.
       const covered = fact.st === "covered" && fact.why === "route";
       return {item: label(s, slug), slug, s, fact, total: fact.use, use: fact.use, parts: fact.parts || {}, margin,
-              covered, need: covered ? 0 : fact.need, users: drawers[`${s}|${slug}`] || [], ...setting, impId,
+              /* What the import must bring: none where a route covers it, and none
+                 to resume where the contract is paused and Python does not call it so. */
+              covered, need: covered || (setting.paused && fact.st !== "paused") ? 0 : fact.need, users: drawers[`${s}|${slug}`] || [], ...setting, impId,
               arrived: contract.arrivedLastWeek, contracts: contract.contracts || [], stock: held(s, slug)};
     }).sort((a, b) => (b.total || 0) - (a.total || 0));
     if(rows.length) importRows.push({s, rows});
