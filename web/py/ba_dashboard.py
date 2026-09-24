@@ -2342,12 +2342,16 @@ def _import_catch_up(stock, per_day, weekly, day, arrives, left_today):
 
     Use the same weekday demand and partial current day as the coverage walk;
     the delivery day is supplied by the recurring order, not this one-off.
+    A day's use can be negative (a route's surplus beyond it stays on the
+    shelf), so the answer is the deepest the stock goes below nothing on the
+    way, not the net over the stretch: a quiet Sunday does not refill a
+    shelf emptied on Saturday.
     """
-    need = sum(
-        per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
-        for ahead in range(max(0, arrives - day))
-    )
-    return max(0, math.ceil(need - stock))
+    need = deepest = 0.0
+    for ahead in range(max(0, arrives - day)):
+        need += per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
+        deepest = max(deepest, need)
+    return max(0, math.ceil(deepest - stock))
 
 
 def _import_setting(supply: dict) -> dict:
@@ -2578,9 +2582,10 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today):
     cover, runs_out, deficit = walk(0)
     catch_up = math.ceil(deficit)
     if deficit > 0 and any(d.get("smart") for same_day in drops.values() for d in same_day):
-        # Enough to cover every day with no delivery at all always works.
+        # Enough to cover every day with no delivery at all always works,
+        # counting no day's use below nothing.
         lo, hi = 0, math.ceil(sum(
-            per_day * weekly[when % 7] * (left_today if when == day else 1.0)
+            max(0.0, per_day * weekly[when % 7] * (left_today if when == day else 1.0))
             for when in range(day, until)
         ))
         while lo < hi:
@@ -2765,9 +2770,9 @@ def _supply(
         keeps only its last sixty transactions, so once a log is full the
         oldest day it holds is partial; the days counted start after it in
         the depot's log and in every sender's, since a day not on record is
-        not a day nothing came. They start too at the senders' first shipment of the item in
-        the window, so a route set up on Thursday is not read as a route that
-        brought nothing on Monday.
+        not a day nothing came. They start too at the first day a sender
+        shipped the item and it arrived here, so a route set up on Thursday
+        is not read as a route that brought nothing on Monday.
         """
         routes = route_targets.get((key, item))
         if not routes:
@@ -2779,8 +2784,10 @@ def _supply(
                 return oldest + 1
             return day - SHIPPED_WINDOW
 
+        arrived = in_by_day[key][item]
         first_sent = [d for source, _amount in routes
-                      for d, units in out_by_day[source][item].items() if units > 0]
+                      for d, units in out_by_day[source][item].items()
+                      if units > 0 and arrived.get(d, 0.0) > 0]
         if not first_sent:
             return 0.0
         opens = max([opening(key), min(first_sent)]
@@ -2957,6 +2964,7 @@ def _supply(
     # --- 2. depots: does the holding reach the next delivery?
     import_rows = []
     weekly_use = {}  # (depot, item) -> a week of the draw the rows below judge
+    route_week = {}  # (site index, item) -> a week of what routes bring, unrounded
     for business in businesses:
         if business["status"] not in ("overhead", "support"):
             continue
@@ -3009,13 +3017,15 @@ def _supply(
                     if drop["day"] for back in range(3)
                 }
                 routed = min(routed_per_day(business["key"], item, landings), gross)
-            covered = bool(routed) and routed >= gross * (1 - FIT_TIGHT)
+            week_draw = sum(gross * weekly[wd] for wd in range(7))
+            covered = bool(routed) and 7 * routed >= week_draw * (1 - FIT_TIGHT)
             import_avg = gross
             if routed:
                 weekly = {wd: gross * weekly[wd] - routed for wd in range(7)}
                 per_day = 1.0
-                import_avg = 0.0 if covered else max(0.0, sum(weekly.values()) / 7)
+                import_avg = 0.0 if covered else max(0.0, week_draw / 7 - routed)
             weekly_use[(business["key"], item)] = import_avg * 7
+            route_week[(index[business["key"]], item)] = routed * 7
             remaining, cover, runs_out = line["units"], 0.0, None
             for ahead in range(60):
                 share = left_today if ahead == 0 else 1.0
@@ -3038,6 +3048,12 @@ def _supply(
                 if supply["active"]
                 else None
             )
+            # A paused backup beside a route that brings the week has no drop
+            # to reach; the shelf is judged over a week instead, which the
+            # route's few percent of drift cannot empty.
+            horizon = covered and due is None
+            if horizon:
+                due = 7.0 - spent_today
 
             # Is the standing order the right size? Last week's draw is not the
             # test — an order that exactly matched last week's use is a well
@@ -3066,8 +3082,9 @@ def _supply(
                 "short" if short_by > slack else "tight" if short_by > 0 else "ok"
             )
             catch_up = _import_catch_up(
-                line["units"], per_day, weekly, day, supply["arrives"], left_today
-            ) if supply["active"] and basis != "order" else None
+                line["units"], per_day, weekly, day,
+                day + 7 if horizon else supply["arrives"], left_today
+            ) if (supply["active"] or horizon) and basis != "order" else None
             schedule = _scheduled_import_gap(
                 line["units"], per_day, weekly, day, supply["deliveries"], left_today
             ) if basis != "order" else None
@@ -3144,7 +3161,8 @@ def _supply(
                     "due": round(due, 2) if due is not None else None,
                     "shortBy": round(short_by, 2),
                     "catchUp": catch_up,
-                    "coverageUntil": schedule["until"] if schedule else supply["arrives"],
+                    "coverageUntil": schedule["until"] if schedule
+                    else day + 7 if horizon else supply["arrives"],
                     "paused": not supply["active"],
                     "arrives": supply["arrives"],
                     "from": supply["from"],
@@ -3157,7 +3175,8 @@ def _supply(
     # and whether that is all of it: the factory view sizes the import on
     # the rest, as the rows above do.
     routed_in = {
-        (businesses[r["s"]]["key"], r["slug"]): (r["routed"] * 7, r["covered"])
+        (businesses[r["s"]]["key"], r["slug"]): (route_week[(r["s"], r["slug"])], r["covered"],
+                                                  r["perDay"] * 7)
         for r in import_rows if r["routed"]
     }
 
@@ -3462,8 +3481,12 @@ def _supply(
             elif depot:
                 # The import's share of the draw: what a route from the
                 # company's own factory brings every morning is not its to cover.
-                need = round(depot["importPerDay"] * max(depot_days, 0.0)
-                             * (1.0 if depot["routed"] else factor))
+                peak = (
+                    0.0 if depot["covered"]
+                    else max(0.0, depot["perDay"] * factor - depot["routed"]) if depot["routed"]
+                    else depot["importPerDay"] * factor
+                )
+                need = round(peak * max(depot_days, 0.0))
                 provision = depot["weekly"]
                 # The order arrives weekly, so it has to cover a week — comparing
                 # it with the days left until the next one would flatter it.
@@ -3722,10 +3745,11 @@ def _depot_flow(flow: dict, index: dict, machines: dict, depot_need: dict) -> tu
     depots = collections.defaultdict(dict)
     for (depot, slug), supply in flow["imports"].items():
         if depot in index:
-            routed_week, covered = flow.get("routed", {}).get((depot, slug), (0, False))
+            routed_week, covered, draw_week = flow.get("routed", {}).get(
+                (depot, slug), (0, False, 0))
             depots[index[depot]][slug] = {
                 "weekly": supply["weekly"], "pausedWeekly": supply.get("pausedWeekly", 0),
-                "routed": round(routed_week), "covered": covered,
+                "routed": round(routed_week), "covered": covered, "drawWeek": round(draw_week),
                 **_import_setting(supply),
             }
     # Contracts set up at zero that brought nothing: listed at zero for the
@@ -4092,10 +4116,16 @@ def _factories(
                 supply.get("levelName", supply.get("levelImporter")) if row["importSmart"] else None)
             # A route from the company's own site into the depot brings part
             # of the week, or all of it; the import answers for the rest.
-            routed_week, covered = flow.get("routed", {}).get((source, row["slug"]), (0, False))
+            # depotNeed is the factories' part of what leaves the depot; the
+            # route goes to the whole, so only what it brings beyond the rest
+            # (the shops' part of the measured draw) comes off the factories'.
+            routed_week, covered, draw_week = flow.get("routed", {}).get(
+                (source, row["slug"]), (0, False, 0))
             row["importRouted"] = round(routed_week)
             row["importCovered"] = covered
-            weekly_need = 0.0 if covered else max(weekly_need - routed_week, 0.0)
+            row["importDrawWeek"] = round(draw_week)
+            to_factories = max(0.0, routed_week - max(0.0, draw_week - weekly_need))
+            weekly_need = 0.0 if covered else max(weekly_need - to_factories, 0.0)
             row["importPaused"] = bool(supply and not supply["weekly"] and supply.get("pausedWeekly")
                                        and not covered)
             row["importFit"] = (
@@ -11926,7 +11956,9 @@ function feedVerdict(n){
   const ceil100 = v => Math.ceil(v / 100) * 100;
   /* A route from the company's own site into the depot brings part of the
      week, or all of it; the import answers for the rest (_factories). */
-  const need = n.importCovered ? 0 : Math.max(0, n.depotNeed - (n.importRouted || 0));
+  const toFactories = Math.max(0, (n.importRouted || 0)
+    - Math.max(0, (n.importDrawWeek || 0) - n.depotNeed));
+  const need = n.importCovered ? 0 : Math.max(0, n.depotNeed - toFactories);
   n.importFit = n.importWeekly !== null
     ? need && !n.importWeekly ? "short" : feedFit(need, n.importWeekly) : null;
   n.raiseTarget = n.raiseImport = null;
@@ -12003,6 +12035,7 @@ function feedRoute(site, n, view, held){
   n.importPass = supply && supply.smart ? supply.pass || [] : [];
   n.importLevelAt = supply && supply.smart ? supply.levelAt ?? null : null;
   n.importRouted = supply ? supply.routed || 0 : 0;
+  n.importDrawWeek = supply ? supply.drawWeek || 0 : 0;
   n.importCovered = !!(supply && supply.covered);
   n.importPaused = !!(supply && !supply.weekly && supply.pausedWeekly && !supply.covered);
 }
@@ -12052,6 +12085,7 @@ function factoryView(){
             row.importPlainAfter = d && d.smart ? d.plainAfter || 0 : 0;
             row.importPlainBefore = d && d.smart ? d.plainBefore || 0 : 0;
             row.importRouted = d ? d.routed || 0 : 0;
+            row.importDrawWeek = d ? d.drawWeek || 0 : 0;
             row.importCovered = !!(d && d.covered);
             row.importPaused = !!(d && !d.weekly && d.pausedWeekly && !d.covered);
           }
@@ -15431,7 +15465,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   imports.forEach(r => {
     if(r.paused && !r.covered && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if(!r.paused && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
+    else if((!r.paused || r.covered) && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
       Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
       `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });

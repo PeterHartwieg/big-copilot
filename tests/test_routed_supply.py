@@ -8,7 +8,9 @@ draw. A depot fed by imports alone reads exactly as before.
 """
 import unittest
 
-from ba_dashboard import WEEKDAYS, Names, _supply, site_key
+from ba_dashboard import WEEKDAYS, History, Names, _factories, _supply, site_key
+from test_recipe_identity import BEER, RID, WATER
+from test_recipe_identity import SaveStub as FactoryStub
 
 DAY = 10  # the save's day; days 3 to 9 are the log's window
 FACTORY, DEPOT, SHOP = ("factory", 0), ("depot", 1), ("shop", 2)
@@ -180,14 +182,13 @@ class RoutedSupplyTests(unittest.TestCase):
         """The route brings 720 a day; the factory ships 5,000 a day elsewhere
         too, and 14,000 land on day 5 from no route (a contract since
         removed). The route can claim no more that day than the factory
-        sent: 5,720 on day 5, 720 on days 4, 6, 8 and 9, and nothing on day
-        3, when the factory already shipped elsewhere but the route had not
-        begun (day 7 is the import's): 1,433 a day. That over-reads the
-        route, but most of the import's week stays the import's, and a 5,200
-        level against it is still critical."""
+        sent: 5,720 on day 5 and 720 on days 4, 6, 8 and 9 (the route's
+        first day here is day 4, and day 7 is the import's): 1,720 a day.
+        That over-reads the route, but most of the import's week stays the
+        import's, and a 5,200 level against it is still critical."""
         row, _item = depot_row(0.2, [contract(5200, 0, smart=True)],
                                arrivals=((5, 14000),), sent_elsewhere=5000)
-        self.assertEqual(row["routed"], 1433)
+        self.assertEqual(row["routed"], 1720)
         self.assertEqual((row["covered"], row["level"], row["reason"]), (False, "critical", "order"))
 
     def test_a_route_claims_no_more_than_its_target(self):
@@ -211,13 +212,29 @@ class RoutedSupplyTests(unittest.TestCase):
 
     def test_a_covering_route_can_still_be_outrun_by_a_busy_day(self):
         """The route brings the average draw every morning, but Saturday draws
-        three times it: 2,700 on the shelf cannot carry that to Sunday's round.
-        The week is covered; the day is not."""
-        rhythm = [100, 100, 100, 100, 100, 100, 300]
-        row, _item = depot_row(1.0, [contract(5200, 0, smart=True)], rhythm=rhythm)
+        four times a quiet day: the 2,700 on the shelf, and what the quiet
+        days leave on it, cannot carry Saturday to Sunday's round. The week
+        is covered; the day is not, and the catch-up bridges the day, not
+        the week's net: the backup is next due on Tuesday, and the quiet
+        Sunday and Monday before it do not refill Saturday's empty shelf."""
+        rhythm = [70] * 6 + [280]
+        row, _item = depot_row(1.0, [contract(5200, 0, smart=True, due=16)], rhythm=rhythm)
         self.assertEqual((row["covered"], row["weekNeed"], row["orderFit"]), (True, 0, "ok"))
         self.assertEqual((row["coverFit"], row["runsOut"]), ("short", "Saturday"))
         self.assertEqual((row["level"], row["reason"]), ("critical", "shortfall"))
+        # Wednesday afternoon, Thursday and Friday leave 2,700 on top of the
+        # 2,700 held; Saturday takes 6,480 beyond the route.
+        self.assertEqual(row["catchUp"], 6480 - 2700 - 2700)
+
+    def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
+        """The same Saturday with the backup paused: there is no drop to reach,
+        so the shelf is judged over a week, and it still runs dry."""
+        rhythm = [70] * 6 + [280]
+        row, _item = depot_row(1.0, [contract(5200, 0, smart=True, active=False)], rhythm=rhythm)
+        self.assertEqual((row["covered"], row["paused"]), (True, True))
+        self.assertEqual((row["coverFit"], row["runsOut"]), ("short", "Saturday"))
+        self.assertEqual((row["level"], row["reason"]), ("critical", "shortfall"))
+        self.assertEqual(row["catchUp"], 6480 - 2700 - 2700)
 
     def test_a_full_log_s_partial_oldest_day_is_left_out(self):
         """The depot's log is at its sixty and its oldest day, day 3, has lost
@@ -246,6 +263,46 @@ class RoutedSupplyTests(unittest.TestCase):
                          (9900, "Thursday", 0.8, 2.75))
         self.assertEqual((item["fit"], item["short"], item["low"], item["need"], item["cycleNeed"]),
                          ("short", True, True, 12600, 7 * DRAW))
+
+
+class RoutedFactoryViewTests(unittest.TestCase):
+    """A factory drawing water from a depot with a 1,000 a week import; its one
+    machine eats 240 a day, 1,680 a week."""
+
+    def need(self, routed=None):
+        depot = "depot#1"
+        flow = {
+            "index": {site_key(("factory", 0)): 0, depot: 1},
+            "held": {}, "edges": {},
+            "targets": {(site_key(("factory", 0)), WATER): (100, depot)},
+            "imports": {(depot, WATER): {"weekly": 1000}},
+            "shipped": lambda *args: None, "received": lambda *args: None,
+            "byDay": lambda *args: {}, "roundDays": lambda *args: [],
+            "routed": {(depot, WATER): routed} if routed else {},
+        }
+        recipes = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
+                          "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
+        result = _factories(FactoryStub([[RID]]), Names({}), [], recipes, flow,
+                            History(None), "company")
+        return result["sites"][0]["needs"][0]
+
+    def test_without_a_route_the_import_is_short(self):
+        self.assertEqual(self.need()["importFit"], "short")
+
+    def test_a_route_into_the_depot_takes_its_share_off_the_import(self):
+        """The depot's whole draw is the factory's, and a route brings 1,000 of
+        it a week: the import answers for 680."""
+        row = self.need((1000, False, 1680))
+        self.assertEqual((row["importFit"], row["importRouted"]), ("ok", 1000))
+
+    def test_the_route_goes_first_to_what_else_leaves_the_depot(self):
+        """Shops take another 7,000 a week from the depot; a 1,000 a week route
+        does not reach the factory's part, which stays the import's."""
+        self.assertEqual(self.need((1000, False, 8680))["importFit"], "short")
+
+    def test_a_covering_route_leaves_the_import_nothing(self):
+        row = self.need((1680, True, 1680))
+        self.assertEqual((row["importFit"], row["importCovered"]), ("ok", True))
 
 
 if __name__ == "__main__":
