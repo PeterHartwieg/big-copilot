@@ -3482,11 +3482,13 @@ def _supply(
             elif depot:
                 # The import's share of the draw: what a route from the
                 # company's own factory brings every morning is not its to cover.
-                # A route refills the line every morning, so what the shelf has
-                # to carry past it is one busy day's draw beyond the route, not
-                # the days to the import's drop.
+                # A route that brings the week refills the line every morning,
+                # so what the shelf has to carry past it is one busy day's draw
+                # beyond the route, not the days to the import's drop. A route
+                # that brings part of it leaves the import's share (importPerDay,
+                # the route already off) to build up until the drop.
                 need = round(
-                    max(0.0, depot["perDay"] * factor - depot["routed"]) if depot["routed"]
+                    max(0.0, depot["perDay"] * factor - depot["routed"]) if depot["covered"]
                     else depot["importPerDay"] * max(depot_days, 0.0) * factor
                 )
                 provision = depot["weekly"]
@@ -4126,7 +4128,8 @@ def _factories(
             # the need is no more than that draw.
             routed_week, covered, draw_week = flow.get("routed", {}).get(
                 (source, row["slug"]), (0, False, 0))
-            covered = covered and weekly_need <= draw_week * (1 + FIT_TIGHT)
+            # Judged on the rounded figures the page gets, so feedVerdict agrees.
+            covered = covered and round(weekly_need) <= round(draw_week) * (1 + FIT_TIGHT)
             row["importRouted"] = round(routed_week)
             row["importCovered"] = covered
             row["importDrawWeek"] = round(draw_week)
@@ -11679,7 +11682,10 @@ const SUPPLY_VIEWS = {
     },
     verdict: rows => {
       if(!rows.length) return "Nothing here is filled by import.";
-      const short = rows.filter(r => r.coverFit === "short").length;
+      /* A paused backup beside a route that brings the week has no import to
+         reach; one a busy day empties runs dry before the route's next round. */
+      const routeDry = rows.filter(r => r.coverFit === "short" && r.paused && r.covered).length;
+      const short = rows.filter(r => r.coverFit === "short").length - routeDry;
       const close = rows.filter(r => r.coverFit === "tight").length;
       const tight = rows.filter(r => r.orderFit === "tight").length;
       const small = rows.filter(r => r.orderFit === "short").length;
@@ -11690,10 +11696,11 @@ const SUPPLY_VIEWS = {
         paused ? `${paused} import${paused===1?" is":"s are"} paused` : "",
         small ? `${small} order${small===1?" is":"s are"} too small` : "",
         short ? `${short} holding${short===1?" does":"s do"} not reach the import` : "",
+        routeDry ? `${routeDry} holding${routeDry===1?"":"s"} fed by route run${routeDry===1?"s":""} dry on a busy day` : "",
         close ? `${close} land within half a day of it` : "",
         tight ? `${tight} order${tight===1?" is":"s are"} within 5% of the week they cover` : "",
       ].filter(Boolean);
-      return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - short} of ${rows.length} holdings</b> reach ${
+      return `${problems.length ? `<b>${problems.join("; ")}</b>; ` : ""}<b>${rows.length - short - routeDry} of ${rows.length} holdings</b> reach ${
         D.supply.nextImportWeekday || "the next"}'s import, ${
         D.supply.hoursToImport} days off; thinnest ${worst.item} at ${
         mapRef(D.businesses[worst.s])}, ${worst.stockCover ?? worst.cover} days from stock on hand.`;

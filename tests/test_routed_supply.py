@@ -161,6 +161,13 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual(row["weekNeed"], 7 * DRAW // 2)
         self.assertEqual((row["orderFit"], row["level"], row["covered"]), ("ok", "ok", False))
 
+    def test_a_partial_route_leaves_the_node_the_import_s_days(self):
+        """Half the draw by route and 2,700 on the shelf: the import's 1,800 a
+        day builds up over the 3.5 days to its drop, 6,300, so the goods-flow
+        node reads the depot low, not the one day a covering route asks."""
+        _row, item = depot_row(0.5, [contract(13000, 13000, smart=False)], import_days=(7,))
+        self.assertEqual((item["need"], item["low"]), (6300, True))
+
     def test_an_import_before_the_route_s_first_arrival_does_not_dilute_it(self):
         """The import landed on day 4 and the route's first round on day 5:
         the route still brings the whole draw on the days it ran."""
