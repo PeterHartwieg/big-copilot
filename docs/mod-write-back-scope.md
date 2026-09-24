@@ -474,7 +474,7 @@ the two differ.
    have landed. The fix to build: web/app.js tags every board build with the moment its `/save`
    fetch started (or a fetch sequence number). The gate opens only on a build whose fetch started
    after the undo answer arrived, instead of comparing stamps. gpt-6-sol's findings are saved in
-   `research/write-back-handover/undo-gate-r7-sol.md`. The earlier review briefs are beside them
+   `research/write-back-handover/undo-gate-r7-sol.md`, and Opus's in `undo-gate-r7-opus.md`, which adds a mod fix: stamps must never repeat within one second ("last + 1", as the mock does). The earlier review briefs are beside them
    (`review_*.md`). It keeps re-checking on every build
    until the player clicks, and closes again on a source or company switch. The stamp should be
    committed (`lastLinkStamp`) only after the board accepts a build. Then run a scoped review round.
