@@ -4230,7 +4230,8 @@ def _supply_status(p: dict) -> tuple:
                a factory input, order for a depot; severity `noplanLvl`)
     new     -- too young to judge (`young` is the why: young or firstFill)
     short   -- `short` lists what falls short, most telling first: order,
-               shortfall (cover to the drop), target, dry; critical, or
+               shortfall (cover to the drop), target, dry (a wholesale shelf
+               puts shortfall before order); critical, or
                `shortLvl` (a wholesale order whose stock reaches the drop: warn)
     stalled -- planned, the source holds it, little arrives, and neither a
                Produce up to limit nor staffing explains it (`stalled`:
