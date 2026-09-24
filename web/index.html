@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=65e8c46b1c">
+<link rel="stylesheet" href="community.css?v=298c50e8d6">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=65e8c46b1c">
+<link rel="stylesheet" href="fonts/fonts.css?v=298c50e8d6">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2054,6 +2054,153 @@ select.linepick.sp-pick{border-color:var(--warn);font-size:12.5px;padding:5px 8p
 .ring{position:absolute;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:ring .8s ease-out forwards;z-index:0}
 @keyframes ring{from{transform:scale(.6);opacity:.8}to{transform:scale(1.6);opacity:0}}
 
+/* search the board: one field in the masthead, between the nav and the clock.
+   Where the nav leaves no room for it and the sphere both, the field steps down
+   to its icon (.ss-tight, set by ssFitMast()); on a phone the icon opens the
+   palette as a whole-screen sheet. Every class here is ss-, after the canvas. */
+.mast .ss-q{margin-left:auto;display:flex;align-items:center;gap:9px;flex:none;width:236px;height:38px;padding:0 7px 0 12px;border:1px solid var(--rule);border-radius:9px;background:var(--surface);color:var(--ink-3);font:inherit;font-size:13px;text-align:left;cursor:text;transition:border-color .15s,color .15s,box-shadow .2s;position:relative;z-index:7}
+.mast .ss-q .ss-ql{flex:1;white-space:nowrap}
+.mast .ss-q:hover{border-color:var(--ink-3);color:var(--ink-2)}
+.mast .ss-q:hover .ss-lens{animation:ss-peek .6s ease-in-out}
+.mast .ss-q.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);color:var(--ink)}
+.mast .ss-q:focus-visible,.mast .ss-qbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes ss-peek{30%{transform:translate(-2px,-1px) rotate(-12deg)}70%{transform:translate(2px,1px) rotate(8deg)}}
+.ss-lens{display:inline-grid;place-items:center;flex:none}
+.ss-lens svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mast .ss-qbtn{display:none;margin-left:auto;width:36px;height:36px;border-radius:9px;flex:none;position:relative;z-index:7}
+.mast .ss-q ~ .clock{margin-left:0}
+.mast.ss-tight .ss-q{display:none}
+.mast.ss-tight .ss-qbtn{display:grid}
+@media(max-width:760px){
+  .mast .ss-q{display:none}
+  .mast .ss-qbtn{display:grid}
+}
+.ss-kbd{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;background:var(--raised);font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2);flex:none}
+
+/* the palette hangs off <body>, like #tip: a section's content-visibility
+   would clip it anywhere else */
+body.ss-open{overflow:hidden}
+.ss-scrim{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--ground) 55%,transparent);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.ss-pal{position:fixed;z-index:41;top:clamp(16px,13vh,136px);left:50%;transform:translateX(-50%);width:min(700px,calc(100vw - 32px));max-height:calc(100vh - clamp(16px,13vh,136px) - 24px);display:flex;flex-direction:column;border-radius:14px;border:1px solid var(--rule);background:var(--surface);box-shadow:0 30px 90px #0000006b;overflow:hidden;animation:ss-drop .35s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes ss-drop{from{opacity:0;transform:translate(-50%,-10px) scale(.98)}}
+.ss-pal svg{stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ss-in{display:flex;align-items:center;gap:12px;flex:none;height:60px;padding:0 16px 0 18px;border-bottom:1px solid var(--rule)}
+.ss-in .ss-lens{color:var(--accent)}
+.ss-in .ss-lens svg{width:19px;height:19px}
+.ss-in input{flex:1;min-width:0;border:0;outline:none;background:none;color:var(--ink);font:500 17px/1 Archivo,sans-serif;caret-color:var(--accent);-webkit-appearance:none;appearance:none}
+.ss-in input::placeholder{color:var(--ink-3);font-weight:400}
+.ss-in input::-webkit-search-cancel-button{display:none}
+.ss-count{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.ss-res{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 0 8px;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.ss-grp{padding:4px 0}
+.ss-gh{display:flex;align-items:center;gap:8px;padding:10px 20px 6px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.ss-gh em{font-style:normal;margin-left:auto;letter-spacing:.04em;text-transform:none}
+.ss-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:0 13px;align-items:center;min-height:48px;padding:5px 16px 5px 18px;text-decoration:none;color:inherit;cursor:pointer;position:relative}
+.ss-row:hover{background:color-mix(in srgb,var(--raised) 60%,transparent);color:inherit}
+.ss-row.on{background:var(--raised)}
+.ss-row .ic{width:30px;height:30px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s,background .2s}
+.ss-row .ic svg{width:15px;height:15px}
+.ss-row .ic.hood{font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;border:1px solid var(--rule);height:24px;border-radius:5px}
+.ss-row.on .ic{color:var(--accent);background:var(--surface);transform:rotate(-8deg) scale(1.06)}
+.ss-row.on .ic.hood{transform:none;color:var(--ink)}
+.ss-row .t{display:block;font-size:14px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ss-row .p{display:block;margin-top:2px;font:400 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ss-row mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 1px;margin:0 -1px}
+.ss-side{display:flex;align-items:center;gap:8px}
+.ss-side .map-shortcut{margin:0}
+.ss-go{display:none;align-items:center;gap:6px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.ss-go svg{width:13px;height:13px}
+.ss-row.on .ss-go{display:inline-flex}
+.ss-row.on .ss-tag{display:none}
+.ss-tag{font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.ss-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:1px}
+.ss-dot.watch{background:var(--warn)}.ss-dot.crit{background:var(--neg)}.ss-dot.opp{background:var(--accent)}.ss-dot.off{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.ss-syn{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:2px 6px;border:1px dashed var(--rule);border-radius:4px;font:500 10px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);vertical-align:1px}
+.ss-syn b{color:var(--accent);font-weight:500}
+.ss-more{display:block;width:100%;padding:6px 20px 8px 61px;border:0;background:none;text-align:left;font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);cursor:pointer}
+.ss-more:hover,.ss-more.on{color:var(--ink)}
+.ss-foot{display:flex;align-items:center;flex-wrap:wrap;flex:none;gap:8px 18px;padding:11px 18px;border-top:1px solid var(--rule);font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.ss-foot > span{display:inline-flex;align-items:center;gap:6px}
+.ss-foot .ss-say{flex:1 1 120px;min-width:0;text-align:right;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.ss-foot .ss-say b{color:var(--accent);font-weight:500}
+/* the empty palette: the questions, then where you have been */
+.ss-q2 .ic{border-radius:50%;background:var(--accent-soft);color:var(--accent);font:600 13px/1 "IBM Plex Mono",monospace}
+.ss-q2:hover .ic,.ss-q2.on .ic{animation:ss-hop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes ss-hop{40%{transform:translateY(-4px) rotate(-10deg)}}
+.ss-hint{margin:0;padding:10px 20px 4px;font-size:12.5px;color:var(--ink-3)}
+.ss-hint b{color:var(--ink-2);font-weight:500}
+/* nothing found: the sphere looks for it, then shrugs */
+.ss-none{display:grid;justify-items:center;gap:10px;padding:34px 30px 22px;text-align:center}
+.ss-none p{margin:0;font-size:14px;color:var(--ink-2);max-width:460px;overflow-wrap:anywhere}
+.ss-none p b{color:var(--ink);font-weight:600}
+.ss-ball{position:relative;width:46px;height:46px;animation:ss-look 2.8s ease-in-out infinite}
+.ss-ball i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 30%,#d9ffe8 0%,#7fe3a8 14%,var(--accent) 38%,#146b3c 78%,#0b3d23 100%);box-shadow:inset -7px -10px 16px #00000066}
+.ss-ball::after{content:"?";position:absolute;right:-16px;top:-12px;font:600 16px/1 "IBM Plex Mono",monospace;color:var(--ink-3);animation:ss-shrug 2.8s ease-in-out infinite}
+@keyframes ss-look{0%,100%{transform:translateX(-26px) rotate(-40deg)}45%,55%{transform:translateX(26px) rotate(40deg)}}
+@keyframes ss-shrug{0%,40%{opacity:0}55%,90%{opacity:1}}
+.ss-sugg{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:6px}
+.ss-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);font:inherit;font-size:12.5px;color:var(--ink-2);text-decoration:none;cursor:pointer;transition:border-color .15s,color .15s,transform .2s}
+.ss-chip:hover,.ss-chip.on{border-color:var(--accent);color:var(--ink);transform:translateY(-2px)}
+.ss-chip svg{width:14px;height:14px}
+.ss-chip mark{background:none;color:var(--accent)}
+.ss-back,.ss-cancel{display:none}
+/* on a phone the palette is the whole screen */
+@media(max-width:560px){
+  .ss-pal{inset:0;left:0;top:0;transform:none;width:auto;max-height:none;height:100dvh;border:0;border-radius:0;background:var(--ground);box-shadow:none;animation:none}
+  .ss-pal .ss-in{height:64px;padding:0 12px 0 8px;gap:8px}
+  .ss-pal .ss-in .ss-lens,.ss-pal .ss-in .ss-kbd,.ss-pal .ss-foot{display:none}
+  .ss-res{padding-bottom:20px}
+  .ss-row{min-height:56px;padding:6px 14px 6px 16px;gap:0 12px}
+  .ss-gh{padding:14px 16px 6px}
+  .ss-more{padding-left:58px}
+  .ss-back{width:40px;height:40px;border:0;background:none;color:var(--ink-2);display:grid;place-items:center;border-radius:8px;cursor:pointer;flex:none}
+  .ss-back svg{width:20px;height:20px}
+  .ss-cancel{display:block;border:0;background:none;color:var(--accent);font:500 14px/1 Archivo,sans-serif;padding:12px 6px;cursor:pointer;flex:none}
+}
+
+/* Ask the board: one quiet row under Next moves, folded into a button in its
+   head once a question has been used */
+.ss-ask{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;margin-top:26px;padding:14px 0 16px;border-top:1px solid var(--rule-soft)}
+.ss-asklead{flex:none;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.ss-asklead i{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;animation:ss-idle 3.2s ease-in-out infinite}
+@keyframes ss-idle{0%,80%,100%{transform:none}85%{transform:translateY(-5px)}90%{transform:none}94%{transform:translateY(-2px)}}
+.ss-aq{position:relative;font-size:13.5px;color:var(--ink-2);text-decoration:none;padding:4px 0;border-bottom:1px solid var(--rule);transition:color .15s,border-color .15s}
+.ss-aq:hover,.ss-aq:focus-visible{color:var(--ink);border-bottom-color:var(--accent);outline:none}
+.ss-aq::after{content:"\2192";display:inline-block;margin-left:5px;opacity:0;transform:translateX(-4px);transition:opacity .15s,transform .2s;color:var(--accent)}
+.ss-aq:hover::after,.ss-aq:focus-visible::after{opacity:1;transform:none}
+.ss-roll{position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:50%;background:var(--accent);opacity:0;pointer-events:none;transition:transform .45s cubic-bezier(.34,1.4,.64,1),opacity .2s}
+.ss-ask:hover .ss-roll{opacity:1}
+.ss-askmini{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 8px 0 11px;border:1px solid var(--rule);border-radius:7px;background:var(--surface);font:500 12.5px/1 Archivo,sans-serif;color:var(--ink-2);cursor:pointer;transition:color .15s,border-color .15s}
+.ss-askmini i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.ss-askmini:hover{color:var(--ink);border-color:var(--ink-3)}
+@media(max-width:640px){
+  .ss-ask{flex-wrap:nowrap;overflow-x:auto;margin:22px -16px 0;padding:14px 16px 16px;gap:10px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  .ss-ask .ss-aq{flex:none;white-space:nowrap;border:1px solid var(--rule);border-radius:999px;padding:8px 13px;background:var(--surface)}
+  .ss-ask .ss-aq::after,.ss-roll{display:none}
+  .ss-askmini .ss-kbd{display:none}
+}
+
+/* where a question lands: the question stays in view, the answer is lit and
+   the rest dims, the site panel's lighting rule */
+.ss-asked{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin:22px 0 0;scroll-margin-top:116px;padding:12px 14px 12px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--rule));background:color-mix(in srgb,var(--accent-soft) 60%,var(--surface))}
+.ss-asked .ic{width:28px;height:28px;flex:none;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:600 14px/1 "IBM Plex Mono",monospace}
+.ss-asked b{font-size:14.5px;font-weight:600}
+.ss-asked small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);letter-spacing:.04em}
+.ss-asked .go{margin-left:auto;display:flex;gap:14px;align-items:center}
+.ss-asked .go button{border:0;padding:0;background:none;font:inherit;font-size:12.5px;color:var(--ink-2);border-bottom:1px solid var(--rule);cursor:pointer}
+.ss-asked .go button:hover{color:var(--ink)}
+section.ss-host{content-visibility:visible}
+.ss-lit{outline:1px solid var(--accent);outline-offset:12px;border-radius:6px}
+#sitePanel [data-block].ss-lit{outline-color:var(--accent)}
+.ss-litpos{position:relative}
+.ss-lit::before{content:"the answer";position:absolute;z-index:2;top:-24px;right:-8px;padding:3px 7px;border-radius:4px;background:var(--accent);color:var(--on-accent);font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;pointer-events:none}
+.page .ss-dim.ss-dim{opacity:.32;transition:opacity .25s}
+/* a palette entry that lands on one tile or row rings it once */
+.ss-ring{animation:sp-arrive 2.4s ease-out}
+tr.ss-ring{animation:none}
+tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
+@keyframes ss-flash{from{background:var(--accent-soft)}}
+
 /* footer ------------------------------------------------------------------- */
 /* After the "Big Copilot Footer" canvas. Built by footer_html() and placed
    twice, so every rule here serves the board and the landing alike; the landing
@@ -2935,8 +3082,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "65e8c46b1c";</script>
-<script>window.LEDGER_RELEASE = {"version":"65e8c46b1c","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
+<script>window.LEDGER_BUILD = "298c50e8d6";</script>
+<script>window.LEDGER_RELEASE = {"version":"298c50e8d6","latest":{"pr":77,"date":"2026-09-23","title":"Full cover for a new shop, and a demand plan after 9 days","summary":"A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game's rules allow, and a step to open every day 0 to 24. Nine days after the shop's first customer the board has the shop's own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3005,8 +3152,8 @@ document.addEventListener('click', event => {
   check();
 })();
 </script>
-<script src="app.js?v=65e8c46b1c"></script>
-<script src="community.js?v=65e8c46b1c"></script>
+<script src="app.js?v=298c50e8d6"></script>
+<script src="community.js?v=298c50e8d6"></script>
 
 <script>
 
@@ -4511,12 +4658,13 @@ function goToAlert(a){
     const b = alertSite(a);
     const pick = !b ? ALERT_SITE_PICK[a.group] || null : null;
     const picked = pick ? pick.site(a) : null;
-    if(b || picked) openSite((b || picked).key, false, a.id);
     /* A picked site does not list the finding, so there is no row of its own
-       to mark: the link lands on the block that shows it instead. */
+       to mark: the link lands on the block that shows it instead. Every site
+       is opened through ssOpenSite(), the one way into a site. */
     const ev = ALERT_EVIDENCE[a.group];
-    if(picked && ev){ xlArrive(`#sp-${ev.block}`, ev.hit || ""); return; }
-    if(pick && !picked){ reveal(pick.otherwise); return; }
+    if(picked && ev){ ssOpenSite(picked.key, `#sp-${ev.block}`, {finding: a.id, hit: ev.hit || ""}); return; }
+    if(b || picked){ ssOpenSite((b || picked).key, "", {finding: a.id}); return; }
+    if(pick){ reveal(pick.otherwise); return; }
   }
   reveal(link.sec);
 }
@@ -8956,8 +9104,10 @@ function drawPlan(){
 /* The top of the list is the money; the full list is what a factory planner
    needs, every product with its week of sales across all stores. The revenue
    bar sits in the cell so the shape of the range reads before the figures do. */
+/* How many products the table shows before "all n". */
+const PRODUCTS_TOP = 14;
 function drawProducts(){
-  const TOP = 14, all = D.products;
+  const TOP = PRODUCTS_TOP, all = D.products;
   if(!all.length){
     $("secProducts").innerHTML = sechead("Products")
       + `<p class="quiet">No products sold in this save yet.</p>`;
@@ -13143,6 +13293,8 @@ function renderAll(){
   /* The wiki is the game's own text and does not move with a save, but the one
      strip on it that does is redrawn with everything else. */
   if(page === "wiki") wikiVisit();
+  ssDataChanged();
+  ssCheckLanding();
 }
 
 /* --- pages ------------------------------------------------------------ */
@@ -13955,12 +14107,20 @@ function wireSphere(){
   /* The shelf runs to the masthead's right edge. Balls may roll behind the
      clock, which keeps itself readable over them; past the edge they would
      widen the page. */
-  const room = () => p0.width - base.x;
+  /* ...but never under the search field: it sits between the nav and the
+     clock, so the shelf ends a gap short of it wherever it shares their row. */
+  const wall = () => {
+    const f = typeof ssMastControl === "function" ? ssMastControl() : null;
+    if(!f) return p0.width;
+    const r = f.getBoundingClientRect(), m = parent.getBoundingClientRect();
+    return r.top >= m.bottom || r.bottom <= m.top ? p0.width : r.left - m.left - GAP;
+  };
+  const room = () => wall() - base.x;
   const maxRun = () => {
     /* Include pointer/animation movement. During an entrance the newest
        ball is still on the left, so measure the actual rightmost one. */
     const right = Math.max(...balls.map(b => b.rest + b.px + b.size));
-    return balls.length ? Math.max(0, p0.width - right) : 0;
+    return balls.length ? Math.max(0, wall() - right) : 0;
   };
   const paint = (b) => {
     const roll = Math.min(maxRun(), REDUCED ? 0 : window.scrollY * .6);
@@ -14083,6 +14243,974 @@ function wireSphere(){
   window.addEventListener('resize', relayout);
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
 }
+
+/* --- search the board, and ask it ---------------------------------------------
+   One field in the masthead, between the nav and the clock, opens a palette over
+   the board; / or Ctrl+K opens it from anywhere but a field being typed in. It
+   finds pages and views, sites, products, finding kinds, Find-a-location presets
+   and the wiki's own pages, grouped, best group first, keyboard first. The
+   palette hangs off <body> with position:fixed, the #tip rule: inside a section
+   its content-visibility would clip it.
+
+   Ask the board is the same seven questions twice: a quiet row under Today's
+   Next moves (folded into a button in that head once one has been used), and the
+   palette's empty state. Each lands on the view that answers it, with the answer
+   lit and the rest dimmed, the site panel's lighting rule.
+
+   The board script, web/map.js and web/wiki.js share one scope, so every
+   top-level name here starts with ss or SS. */
+const SS_GROUPS = [["views", "Pages & views"], ["sites", "Sites"], ["products", "Products"],
+  ["kinds", "Finding kinds"], ["finder", "Find a location"], ["wiki", "Wiki"]];
+/* Your own sites lead a tie; the wiki is reference, and waits. */
+const SS_BIAS = {sites: 10, wiki: -15};
+const SS_PER = 4, SS_PER_PHONE = 3;
+const SS_RECENT_KEY = "ba_dash_search_recent";
+const SS_ASK_KEY = "ba_dash_ask_used";
+const SS_ICON = {
+  search: '<circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path>',
+  enter: '<path d="M20 5v6a3 3 0 0 1-3 3H5"></path><path d="M9 10l-4 4 4 4"></path>',
+  back: '<path d="M15 6l-6 6 6 6"></path>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"></path>',
+};
+const ssSvg = name => SS_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SS_ICON[name]}</svg>`
+  : SP_ICON[name] ? spIcon(name) : icon(name);
+const ssEsc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const ssPhone = () => !!(window.matchMedia && matchMedia("(max-width:560px)").matches);
+const ssTyping = t => !!t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ""));
+const ssNum = n => Math.round(n || 0).toLocaleString("en-US");
+
+/* --- where things land ----------------------------------------------------- */
+/* Every way into one site goes through here. The site pages (R9) take it over in
+   this one place; today it opens the site's panel under Company › Results, and
+   with `into` lands on one block of it, ringed. `o.finding` marks the finding a
+   landing came from, `o.hit` the rows in the block to pulse. */
+function ssOpenSite(key, into = "", o = {}){
+  if(!key || !hasData() || !D.businesses.some(b => b.key === key)){ reveal("secPortfolio"); return false; }
+  openSite(key, !into, o.finding || null);
+  if(into) xlArrive(into, o.hit || "");
+  return true;
+}
+/* One of the Supply checks, as a finding's link opens it. */
+function ssStock(v){
+  stockView = v; showAllStock = false;
+  drawStock(); wireAll();
+  reveal("secStock");
+}
+/* The Plan imports card's own landing: the change checklist, open. */
+function ssChecklist(){
+  showSub("supply", "orders"); showPage("supply");
+  $("orderChecklist").open = true;
+  settleScroll($("orderChecklist"));
+}
+function ssFinder(preset){
+  if(typeof premises === "function" && premises()) openFinder(preset);
+  else showPage("map");
+}
+/* A hash the board already routes (#wiki/...): the hash listener opens it. */
+function ssHash(h){
+  if(location.hash === h) openHash(h.slice(1), "none");
+  else location.hash = h;
+}
+/* The shop type with the most revenue: its guide is where prices are read. */
+function ssTopType(){
+  const by = {};
+  (hasData() ? D.businesses : []).filter(b => b.status === "retail" && b.typeSlug).forEach(b => {
+    by[b.typeSlug] = by[b.typeSlug] || {slug: b.typeSlug, type: b.type, revenue: 0};
+    by[b.typeSlug].revenue += b.revenue || 0;
+  });
+  return Object.values(by).sort((a, z) => z.revenue - a.revenue || a.type.localeCompare(z.type))[0] || null;
+}
+function ssPrices(){
+  const t = ssTopType();
+  const href = t && typeof wikiTypeHref === "function" ? wikiTypeHref(t.slug, "prices") : "";
+  if(href) ssHash(href); else showPage("wiki");
+}
+/* The site Optimize staffing would open, as its card names it. */
+const ssStaffingSite = () => ($("optimizeStaffingCard") || {dataset: {}}).dataset.site || "";
+/* Whose crew to show: a site with unmet staff demands, else the first that trades. */
+function ssCrewSite(){
+  const a = (D.alerts || []).find(x => x.group === "jobdemand" && x.siteKey);
+  const b = (a && D.businesses.find(x => x.key === a.siteKey))
+    || D.businesses.find(x => x.status === "retail" || x.status === "office");
+  return b ? b.key : "";
+}
+/* Ring one tile or row a palette entry landed on, the way the Roster rings. */
+function ssRing(el){
+  if(!el) return;
+  el.classList.remove("ss-ring"); void el.offsetWidth; el.classList.add("ss-ring");
+  setTimeout(() => el.classList.remove("ss-ring"), 2600);
+}
+
+/* --- Ask the board ----------------------------------------------------------
+   The seven questions and where each lands: `go` navigates, `page` is the page it
+   has to arrive on, `lit` is the block that answers (a selector, or a function
+   returning the element), `wait` gives a block drawn after a file loads time to
+   appear, `dim: false` keeps the page around it at full strength, and `holds`,
+   given the landing ({hash, site}), says whether what is lit is still the
+   answer to it (see ssLandingHolds()). One table, so a question can move
+   in one place: "What am I playing on?" moves to the difficulty chip (R15), and
+   "Is my factory fed?" and "Whom should I hire?" move once the factory pages (R8)
+   and the company-wide Staff list (R14) exist. */
+const SS_QUESTIONS = [
+  {id: "profit", q: "Why did profit move?", lands: "Company › Results · the portfolio sorted by week on week", page: "company",
+   go(){
+     view = "pnl";
+     const i = VIEWS.pnl.cols.findIndex(c => c[0] === "Wk / wk");
+     sortKey = i >= 0 ? i : null; sortDir = -1;
+     drawPortfolio();
+     reveal("secPortfolio");
+   },
+   lit: "#secPortfolio", holds: () => view === "pnl"},
+  {id: "open", q: "Where should I open next?", lands: "Map › Find a location · ranked by demand", page: "map",
+   go: () => ssFinder({cat: "retail", type: "", hoods: null}), lit: "#cityMapPage .places", dim: false, wait: true,
+   holds: () => !!(cityMapPage && cityMapPage.finderOn())},
+  {id: "fed", q: "Is my factory fed?", lands: "Supply › Checks › Feed the factories", page: "supply",
+   go: () => ssStock("feed"), lit: "#secStock", holds: () => stockView === "feed"},
+  {id: "hire", q: "Whom should I hire?", page: "company",
+   lands: () => { const b = D.businesses.find(x => x.key === ssStaffingSite());
+     return b ? `Staffing on ${b.name} · hiring lines` : "Company › Results · the sites"; },
+   go: () => ssOpenSite(ssStaffingSite(), "#sp-roster"),
+   lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio"),
+   holds: a => a.site === (siteOpen ? siteKey : null)},
+  {id: "prices", q: "Are my prices right?", page: "wiki",
+   lands: () => { const t = ssTopType(); return t ? `Wiki › ${t.type} › Prices in your save` : "Wiki"; },
+   go: ssPrices, lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash},
+  {id: "import", q: "What should I import this week?", lands: "Supply › Orders › Change checklist", page: "supply",
+   go: ssChecklist, lit: "#orderChecklist", holds: () => $("orderChecklist").open},
+  {id: "playing", q: "What am I playing on?", lands: "Company › Milestones · game settings", page: "company",
+   go: () => reveal("secGoals"), lit: () => q("#secGoals .rules") || q("#secGoals .sechead")},
+];
+const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
+
+/* The row under Next moves, and the button it folds into once used. Mounted
+   from here rather than written into the template, so the cards above it are
+   left as they are. */
+function ssAskMount(){
+  const sec = $("secMoves");
+  if(!sec || $("ssAsk")) return;
+  const row = document.createElement("nav");
+  row.className = "ss-ask"; row.id = "ssAsk"; row.setAttribute("aria-label", "Ask the board");
+  row.innerHTML = `<span class="ss-asklead"><i></i>Ask the board</span>${SS_QUESTIONS.map(x =>
+    `<a class="ss-aq" href="#" data-ask="${x.id}">${ssEsc(x.q)}</a>`).join("")}<span class="ss-roll" aria-hidden="true"></span>`;
+  sec.appendChild(row);
+  const head = q(".sechead", sec);
+  if(head){
+    const aside = document.createElement("div");
+    aside.className = "aside"; aside.id = "ssAskMini";
+    aside.innerHTML = `<button type="button" class="ss-askmini" aria-label="Ask the board (press /)" aria-keyshortcuts="/"><i></i>Ask the board<span class="ss-kbd" aria-hidden="true">/</span></button>`;
+    head.appendChild(aside);
+    q("button", aside).addEventListener("click", () => ssOpen());
+  }
+  row.addEventListener("click", e => {
+    const a = e.target.closest("[data-ask]");
+    if(!a) return;
+    e.preventDefault();
+    ssAsk(a.dataset.ask);
+  });
+  /* The dot rolls to the question under the pointer. */
+  const ball = q(".ss-roll", row);
+  row.addEventListener("mouseover", e => {
+    const a = e.target.closest(".ss-aq");
+    if(!a || !ball) return;
+    const r = a.getBoundingClientRect(), s = row.getBoundingClientRect();
+    ball.style.transform = `translate(${(r.left - s.left + r.width / 2 - 4).toFixed(1)}px,${(r.top - s.top - 16).toFixed(1)}px) rotate(${Math.round(r.left)}deg)`;
+  });
+  ssAskPaint();
+}
+function ssAskUsed(){
+  let used = false;
+  try{ used = localStorage.getItem(SS_ASK_KEY) === "1"; }catch(e){}
+  return used;
+}
+function ssAskPaint(){
+  const used = ssAskUsed();
+  if($("ssAsk")) $("ssAsk").hidden = used;
+  if($("ssAskMini")) $("ssAskMini").hidden = !used;
+}
+
+/* The landing on screen ({qn, strip, lit, litId, host, hash, site}), and the
+   landing still on its way, with the address its question opened. */
+let ssAsked = null, ssTicket = 0, ssPending = null;
+function ssAsk(id){
+  const qn = SS_QUESTIONS.find(x => x.id === id);
+  if(!qn || !hasData()) return;
+  const from = page;
+  try{ localStorage.setItem(SS_ASK_KEY, "1"); }catch(e){}
+  ssAskPaint();
+  ssClearAsked();
+  const ticket = ++ssTicket;
+  qn.go();
+  ssPending = {ticket, hash: location.hash};
+  ssLand(qn, from, ticket);
+}
+function ssLand(qn, from, ticket, tries = 0){
+  /* A later question, a search that went elsewhere, or the reader's own
+     navigation takes over from a landing still on its way. */
+  if(ticket !== ssTicket || !ssPending || ssPending.ticket !== ticket){
+    /* Only a guard: every ssTicket++ elsewhere clears ssPending itself. */
+    if(ssPending && ssPending.ticket === ticket) ssPending = null;
+    return;
+  }
+  if(location.hash !== ssPending.hash){ ssPending = null; return; }
+  const host = $((PAGES.find(p => p.id === qn.page) || {}).host);
+  /* Only the answer on the page the question opened, and on screen: a copy
+     left in a hidden page from last time is not it. */
+  const arrived = page === qn.page && !!host;
+  const found = arrived ? (typeof qn.lit === "function" ? qn.lit() : q(qn.lit)) : null;
+  const el = found && host.contains(found) && found.getClientRects().length ? found : null;
+  /* The wiki opens its page once the address has changed, and draws its guide
+     once its file is in; the map draws its finder once its file is: wait. */
+  if(!el && qn.wait && tries < 40){ setTimeout(() => ssLand(qn, from, ticket, tries + 1), 100); return; }
+  ssPending = null;
+  /* No answer on screen, nothing to point at. */
+  if(!el) return;
+  const strip = document.createElement("div");
+  strip.className = "ss-asked"; strip.setAttribute("role", "status");
+  const back = PAGES.find(p => p.id === from) || PAGES[0];
+  strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>YOU ASKED</small><br><b>${ssEsc(qn.q)}</b></span>`
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(back.label)}</button>`
+    + `<button type="button" data-ss="another">Ask another</button></span>`;
+  strip.addEventListener("click", e => {
+    const b = e.target.closest("[data-ss]");
+    if(!b) return;
+    if(b.dataset.ss === "another"){ ssOpen(); return; }
+    ssClearAsked();
+    showPage(back.id);
+  });
+  ssAsked = {qn, strip, lit: el, litId: el.id || "", host, hash: location.hash, site: siteOpen ? siteKey : null};
+  ssPlace();
+  settleScroll(strip);
+}
+/* The strip sits right above the section that answers, so the two are read
+   together. An answer outside any section (the finder beside the map) has it
+   on top of the page. Then the answer is lit. */
+function ssPlace(){
+  const {strip, lit, host, qn} = ssAsked;
+  const anchor = lit.closest("section");
+  if(anchor && host.contains(anchor) && anchor !== host) anchor.parentElement.insertBefore(strip, anchor);
+  else host.insertBefore(strip, host.firstChild);
+  ssUnlight();
+  ssLight(lit, qn.dim !== false, host);
+}
+/* The site panel's lighting rule, anywhere: the answer outlined and tagged, and
+   everything beside it on the way up to the page dimmed, except heads. Sections
+   on the way up show their overflow while lit, or their paint containment would
+   cut the outline and the tag off. */
+function ssLight(el, dim, host){
+  el.classList.add("ss-lit");
+  if(getComputedStyle(el).position === "static") el.classList.add("ss-litpos");
+  for(let s = el.closest("section"); s; s = s.parentElement && s.parentElement.closest("section")) s.classList.add("ss-host");
+  if(!dim) return;
+  /* A section's head stays lit, bare or in the box a draw fills with it alone. */
+  const keep = c => c.matches(".sechead, .subhead, .sitehead, .ss-asked, script, style")
+    || (c.children.length === 1 && c.firstElementChild.matches(".sechead"));
+  for(let node = el; node && node !== host && node.parentElement; node = node.parentElement)
+    Array.from(node.parentElement.children).forEach(c => {
+      if(c !== node && !c.hidden && !keep(c)) c.classList.add("ss-dim");
+    });
+}
+const ssUnlight = () => $$(".ss-lit, .ss-litpos, .ss-host, .ss-dim")
+  .forEach(el => el.classList.remove("ss-lit", "ss-litpos", "ss-host", "ss-dim"));
+function ssClearAsked(){
+  if(ssAsked && ssAsked.strip) ssAsked.strip.remove();
+  ssAsked = null;
+  ssUnlight();
+}
+/* The one rule a landing lives by: it stays while what is lit is still the
+   answer. That is its block on the page and on screen, and its question's
+   `holds` still true (the Checks still on Feed the factories, the portfolio
+   still on profit and loss, the same site open, the finder still on). A block
+   its own page has drawn again (a live refresh, the roster's plan pick) is
+   found again and lit again, strip and all: the same block, by the id it had
+   when it was lit, and only a block with no id is asked of the question again
+   (whose answer may since have moved, as the staffing card's pick does). */
+function ssLandingHolds(){
+  const a = ssAsked;
+  if(!a) return false;
+  if(a.qn.holds && !a.qn.holds(a)) return false;
+  if(!a.lit.isConnected || !a.strip.isConnected){
+    const again = a.litId ? $(a.litId) : typeof a.qn.lit === "function" ? a.qn.lit() : q(a.qn.lit);
+    if(!again || !a.host.contains(again)) return false;
+    a.lit = again;
+    ssPlace();
+  }
+  return a.lit.getClientRects().length > 0;
+}
+function ssCheckLanding(){
+  if(ssAsked && !ssLandingHolds()) ssClearAsked();
+}
+/* Checked after anything that can change what is on screen has done its work:
+   every click, every change of a form control (the site picker, by keyboard or
+   touch), a change of address, and every render (renderAll() calls it). A
+   landing still on its way is dropped once the address has moved on. */
+const ssAfter = () => setTimeout(() => {
+  if(ssPending && location.hash !== ssPending.hash){ ssTicket++; ssPending = null; }
+  ssCheckLanding();
+}, 0);
+document.addEventListener("click", ssAfter);
+document.addEventListener("change", ssAfter);
+window.addEventListener("popstate", ssAfter);
+window.addEventListener("hashchange", ssAfter);
+
+/* --- the index ----------------------------------------------------------------
+   Built each time the palette opens, from what is already on the page, so the
+   counts on it are today's. Each entry: g group, t title, p the line under it,
+   ic icon, syn the words players use for it, kw words its line does not show,
+   tag/dot the live state beside it, map a key for the map button, land where
+   Enter goes (said in the footer), go what Enter does. */
+function ssEntry(o){
+  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: ""}, o);
+  e.lt = e.t.toLowerCase(); e.lp = e.p.toLowerCase();
+  e.kwRaw = e.kw.map(s => String(s));
+  e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kwRaw.map(s => s.toLowerCase());
+  if(!e.land) e.land = e.p;
+  return e;
+}
+const SS_SEV = {critical: "crit", warn: "watch", info: "opp"};
+const SS_SEV_RANK = {crit: 3, watch: 2, opp: 1};
+const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
+  .sort((a, z) => SS_SEV_RANK[z] - SS_SEV_RANK[a])[0] || "";
+/* The board's pages and views, and the words players use for them. Kept by
+   hand, next to what they name: `need` is false for what works without a save. */
+const SS_VIEWS = [
+  {id: "alerts", t: "Needs attention", p: "Today", ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
+   live: () => ({tag: `${(D.alerts || []).length} today`}), go: () => reveal("alertSection")},
+  {id: "moves", t: "Next moves", p: "Today", ic: "today", syn: ["tools", "what next"],
+   go(){ showPage("today", false); settleScroll($("secMoves")); }},
+  {id: "cash", t: "Cash on hand", p: "Today", ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
+   live(){ const debt = (D.loans || []).reduce((s, l) => s + (l.remaining || 0), 0);
+     return debt ? {p: `Today · ${compact(debt)} owed on loans`} : {}; },
+   go(){ showPage("today"); ssRing($$("#kpis .kpi").find(k => /cash on hand/i.test(k.textContent))); }},
+  {id: "daily", t: "Daily result", p: "Company › Results", ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
+   go: () => reveal("secDaily")},
+  {id: "portfolio", t: "Portfolio", p: "Company › Results · profit and loss by chain", ic: "company",
+   syn: ["sites", "chains", "margin", "break even", "payback", "losing money"],
+   /* The board has no break-even figure yet, and says so rather than land the
+      player on a table that looks as if it should hold one. */
+   synP: {"break even": "no break-even figure yet · Company › Results · profit and loss by chain",
+          "payback": "no payback figure yet · Company › Results · profit and loss by chain"},
+   go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
+  {id: "ops", t: "Portfolio · Operations", p: "Company › Results · satisfaction, promotion, traffic", ic: "company",
+   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security"],
+   go(){ view = "ops"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
+  {id: "rhythm", t: "Weekly rhythm", p: "Company › Results", ic: "week", syn: ["weekday", "busiest day", "peak day"],
+   go: () => reveal("secRhythm")},
+  {id: "products", t: "Products", p: "Company › Products", ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells"],
+   live: () => ({p: `Company › Products · ${(D.products || []).length} sold`}), go: () => reveal("secProducts")},
+  {id: "payroll", t: "Payroll", p: "Company › Payroll", ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
+   live: () => D.staff && D.staff.total ? {p: `Company › Payroll · ${ssNum(D.staff.total)} people`} : {}, go: () => reveal("secPayroll")},
+  {id: "milestones", t: "Milestones · Game settings", p: "Company › Milestones", ic: "flag",
+   syn: ["difficulty", "settings", "house rules", "custom", "tax rate", "what am i playing on"],
+   live: () => D.meta && D.meta.difficulty ? {p: `Company › Milestones · ${D.meta.difficulty}`} : {}, go: () => reveal("secGoals")},
+  {id: "checklist", t: "Change checklist", p: "Supply › Orders", ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist"],
+   go: ssChecklist},
+  {id: "imports", t: "Weekly imports", p: "Supply › Orders", ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import"],
+   go: () => reveal("secLogistics", "push", "#importPlan")},
+  {id: "topups", t: "Daily top-ups", p: "Supply › Orders", ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan"],
+   go: () => reveal("secLogistics", "push", "#topupPlan")},
+  {id: "shops", check: "shops", p: "Supply › Checks · shop shelves", ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf"]},
+  {id: "stockimports", check: "imports", p: "Supply › Checks · warehouse stock", ic: "crate", syn: ["warehouse", "depot", "cover", "second-tier"]},
+  {id: "idle", check: "idle", p: "Supply › Checks", ic: "crate", syn: ["dead stock", "not moving", "overstock", "too much stock"]},
+  {id: "lines", check: "lines", p: "Supply › Checks · machines and staffed hours", ic: "gear", syn: ["machines", "recipes", "24/7", "staffed hours"]},
+  {id: "feed", check: "feed", p: "Supply › Checks", ic: "pipe", syn: ["inputs", "ingredients", "fed", "factory inputs", "is my factory fed"],
+   live(){ const short = (D.alerts || []).filter(a => a.group === "feed");
+     return short.length ? {p: `Supply › Checks · ${plural(short.length, "input")} short`, dot: ssWorst(short), kw: ssShortInputs()} : {}; }},
+  {id: "flow", t: "Goods flow", p: "Supply › Goods flow", ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
+   go: () => reveal("secFlow")},
+  {id: "market", t: "Market demand", p: "Growth › Demand", ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood"],
+   go: () => reveal("secMarket")},
+  {id: "plan", t: "Plan a chain", p: "Growth › Plan a chain", ic: "growth", syn: ["new factory", "recipe plan", "expand"],
+   go: () => reveal("secPlan")},
+  {id: "finder", t: "Find a location", p: "Map", ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
+   live(){ const n = ((D.premises || {}).buildings || []).filter(b => b.type === "retail" && b.status === "vacant").length;
+     return n ? {p: `Map · ${n} vacant`} : {}; },
+   go: () => ssFinder({cat: "retail", type: "", hoods: null})},
+  {id: "map", t: "Map", p: "Map · the city", ic: "map", syn: ["city", "address", "where is"], go: () => showPage("map")},
+  {id: "staffing", t: "Staffing", p: "each shop's page", ic: "roster",
+   syn: ["hire", "hiring", "schedule", "shifts", "roster", "bizman", "overstaffed", "whom should i hire"],
+   live(){ const b = D.businesses.find(x => x.key === ssStaffingSite());
+     return b ? {p: `each shop's page · first: ${b.name}`, land: `${b.name} › Staffing`} : {}; },
+   go: () => ssOpenSite(ssStaffingSite(), "#sp-roster")},
+  {id: "crew", t: "Crew", p: "each site's page · who works there, what they want", ic: "crew", syn: ["hire", "demands", "quit", "people"],
+   go: () => ssOpenSite(ssCrewSite(), "#sp-crew")},
+  {id: "prices", t: "Prices in your save", p: "Wiki", ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
+   live(){ const t = ssTopType(); return t ? {p: `Wiki › ${t.type} guide`} : {}; }, go: ssPrices},
+  {id: "wiki", t: "Wiki", p: "the game's own help", ic: "wiki", syn: ["help", "guide", "manual"], need: false, go: () => showPage("wiki")},
+  {id: "changelog", t: "Changelog", p: "footer · what is new", ic: "list", syn: ["new", "updates", "release notes"], need: false,
+   go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
+];
+/* The words players use for a kind of finding. */
+const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "door cap", "turned away"],
+  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "nobody on shift", "hire"],
+  jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
+  dead: ["dead stock", "idle stock"], target: ["overstock"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
+/* ...and for the wiki's pages, by title. */
+const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
+  "Employee Schedule": ["schedule", "shifts"], "Loans / Investments": ["debt", "loan", "interest"],
+  "Sizes / Types": ["floor size", "m²", "building size"], "IRS / Taxes": ["tax"],
+  "How rent works": ["rent", "break even"], "Customer Capacity": ["capacity", "door cap"]};
+/* Where a kind of finding is spelt out, in the words of the page it opens. */
+function ssKindLands(id){
+  const link = ALERT_LINKS[id] || {};
+  if(link.site) return "its site's page";
+  if(link.view && SUPPLY_VIEWS[link.view]) return `Supply › Checks › ${SUPPLY_VIEWS[link.view].label}`;
+  if(link.port) return "Company › Portfolio › Operations";
+  return {secMarket: "Growth › Demand", secPortfolio: "Company › Portfolio"}[link.sec] || "Today";
+}
+function ssKindGo(id){
+  const rows = [...(D.alerts || []), ...((D.minor || {}).rows || [])].filter(a => a.group === id);
+  /* The finding's own link: goToAlert() opens any site through ssOpenSite(). */
+  if(rows.length){ goToAlert(rows[0]); return; }
+  /* Nothing of the kind today: the list's own switch for it, so the player
+     sees what it is and whether it is on. */
+  reveal("alertSection");
+  setTimeout(() => {
+    const t = q(KINDS_TOGGLE);
+    if(!t) return;
+    openKindsPanel(t);
+    const sw = kindsPop && q(`.sw[data-kind="${id}"]`, kindsPop);
+    const row = sw && sw.closest(".kind");
+    if(row){ row.scrollIntoView({block: "nearest"}); ssRing(row); }
+  }, 450);
+}
+/* The inputs arriving short of what the machines eat, by name. */
+function ssShortInputs(){
+  const names = [];
+  ((D.supply && D.supply.factories && D.supply.factories.sites) || []).forEach(f => (f.needs || []).forEach(n => {
+    if(((f.arrivals || {})[n.slug] || 0) < n.perDay && !names.includes(n.item)) names.push(n.item);
+  }));
+  return names;
+}
+function ssBuild(){
+  const out = [];
+  const data = hasData();
+  SS_VIEWS.forEach(v => {
+    if(v.need !== false && !data) return;
+    const sv = v.check ? SUPPLY_VIEWS[v.check] : null;
+    if(v.check && !sv) return;
+    const e = {id: `view:${v.id}`, g: "views", t: sv ? sv.label : v.t, p: v.p, ic: v.ic, syn: v.syn, synP: v.synP || null,
+      go: sv ? () => ssStock(v.check) : v.go};
+    if(v.live) try{ Object.assign(e, v.live() || {}); }catch(err){}
+    out.push(ssEntry(e));
+  });
+  if(data){
+    const fac = D.supply && D.supply.factories;
+    const facSites = (fac && fac.sites) || [];
+    const eats = {};
+    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); });
+    const siteRows = {};
+    (D.alerts || []).forEach(a => { if(a.siteKey) (siteRows[a.siteKey] = siteRows[a.siteKey] || []).push(a); });
+    D.businesses.forEach((b, i) => {
+      const inputs = eats[i] || [];
+      out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
+        p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
+          : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
+        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood, b.type, b.name, ...inputs].filter(Boolean),
+        dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name,
+        go: () => ssOpenSite(b.key)}));
+    });
+    /* One entry per item: what the factories eat first, then what sells, then
+       what they make, with anything sitting idle said after it. */
+    const items = new Map();
+    const item = name => { if(!items.has(name)) items.set(name, {parts: []}); return items.get(name); };
+    facSites.forEach(f => {
+      const site = D.businesses[f.s];
+      if(!site) return;
+      (f.needs || []).forEach(n => {
+        const got = (f.arrivals || {})[n.slug] || 0;
+        const it = item(n.item);
+        if(it.kind) return;
+        Object.assign(it, {kind: "input", ic: "pipe", dot: got < n.perDay ? "watch" : "",
+          land: `${shortName(site)} › Inputs`, go: () => ssOpenSite(site.key, "#sp-inputs")});
+        it.parts.unshift(`Input · ${shortName(site)} eats ${ssNum(n.perDay)}/day · ${ssNum(got)} arrive`);
+      });
+    });
+    (D.products || []).forEach(p => {
+      if(!p.stores && !p.units) return;
+      const it = item(p.item);
+      it.parts.push(`Sold in ${plural(p.stores, "store")} · ${ssNum(p.units)} a day · ${compact(p.revenue)}`);
+      if(!it.kind) Object.assign(it, {kind: "sold", ic: "shelves", land: `Company › Products · ${p.item}`, go(){
+        const at = D.products.findIndex(x => x.item === p.item);
+        if(at >= PRODUCTS_TOP && !showAllProducts){ showAllProducts = true; drawProducts(); }
+        reveal("secProducts");
+        ssRing($$("#secProducts tbody tr").find(tr => (tr.querySelector("td") || {}).textContent === p.item));
+      }});
+    });
+    facSites.forEach(f => {
+      const site = D.businesses[f.s];
+      if(!site) return;
+      (f.lines || []).forEach(l => {
+        if(!l.item) return;
+        const it = item(l.item);
+        if(it.made) return;
+        it.made = true;
+        it.parts.push(`Made in ${shortName(site)}`);
+        if(!it.kind) Object.assign(it, {kind: "made", ic: "gear", land: `${shortName(site)} › Lines`,
+          go: () => ssOpenSite(site.key, "#sp-lines")});
+      });
+    });
+    (D.supply && D.supply.idle || []).forEach(r => {
+      const site = D.businesses[r.s];
+      if(!site || !r.item) return;
+      const it = item(r.item);
+      it.parts.push(`${ssNum(r.stock)} idle at ${shortName(site)}`);
+      if(!it.dot) it.dot = "opp";
+      if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: "Supply › Checks › Idle stock", go: () => ssStock("idle")});
+    });
+    items.forEach((it, name) => out.push(ssEntry({id: `product:${name}`, g: "products", t: name,
+      p: it.parts.slice(0, 2).join(" · "), ic: it.ic, dot: it.dot || "", land: it.land, go: it.go})));
+    const counts = kindCounts();
+    ALERT_GROUPS.forEach(g => {
+      const n = counts[g.id] || 0, on = !!alertGroupPrefs[g.id];
+      const rows = [...(D.alerts || []), ...((D.minor || {}).rows || [])].filter(a => a.group === g.id);
+      out.push(ssEntry({id: `kind:${g.id}`, g: "kinds", t: g.label, p: `lands on ${ssKindLands(g.id)}`, ic: "list",
+        syn: SS_KIND_SYN[g.id] || [], kw: g.id === "feed" ? ssShortInputs() : [],
+        tag: !on ? `switched off${n ? ` · ${n}` : ""}` : n ? `${n} today` : "",
+        dot: !on ? "off" : n ? ssWorst(rows) : "", go: () => ssKindGo(g.id)}));
+    });
+    /* A preset per business type the save reports demand for: the
+       neighbourhood that wants it most. */
+    const best = new Map();
+    Object.entries((D.premises || {}).demand || {}).forEach(([hood, list]) => (list || []).forEach(d => {
+      const had = best.get(d.slug);
+      if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
+    }));
+    [...best.values()].sort((a, z) => z.demand - a.demand || a.type.localeCompare(z.type)).forEach(d => {
+      out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
+        p: `best fit: ${d.hood} · demand ${d.demand}`, ic: "pin",
+        syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
+        go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
+    });
+    if(D.premises) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: "Rent a warehouse",
+      p: "Map › Find a location · Warehouse · by m²", ic: "crate", syn: ["depot", "storage", "floor size", "warehouse"],
+      go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
+  }
+  /* The wiki's own index (wikiIndex() in web/wiki.js), once its file is in. */
+  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w =>
+    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
+      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${w.title}`,
+      go: () => ssHash(wikiHref({kind: "page", id: w.id}))})));
+  return out;
+}
+
+/* --- matching -------------------------------------------------------------
+   The canvas's search(): a title that starts with the words beats one where
+   they start a word, which beats one that only holds them; a synonym comes in
+   between, and a word of a site's address, neighbourhood or type counts almost
+   as its title. The line under a title, and the words it does not show, only
+   count from three letters. A match in those words ("kw") names the word. */
+const ssRx = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function ssScore(e, qq, ws){
+  if(e.lt.startsWith(qq)) return [100, "t", ""];
+  if(ws.test(e.lt)) return [85, "t", ""];
+  if(e.lt.includes(qq)) return [60, "t", ""];
+  for(const s of e.syn) if(s.startsWith(qq) || (qq.length >= 4 && s.includes(qq))) return [70, "syn", s];
+  const k = e.kw.findIndex(w => ws.test(w));
+  if(e.g === "sites" && k >= 0) return [75, "kw", e.kwRaw[k]];
+  if(qq.length >= 3 && ws.test(e.lp)) return [40, "p", ""];
+  if(qq.length >= 3 && k >= 0) return [40, "kw", e.kwRaw[k]];
+  return [0, "", ""];
+}
+/* Grouped hits, best group first; each group keeps its best `per` unless it
+   has been opened in full. */
+function ssSearch(query, index, per = SS_PER, whole = {}){
+  const qq = String(query || "").trim().toLowerCase();
+  if(!qq) return [];
+  const ws = new RegExp("(^|[\\s(·/-])" + ssRx(qq));
+  const order = SS_GROUPS.map(([g]) => g);
+  const out = [];
+  SS_GROUPS.forEach(([g]) => {
+    const hits = [];
+    index.forEach(e => {
+      if(e.g !== g) return;
+      const [s, where, syn] = ssScore(e, qq, ws);
+      if(s) hits.push({s, e, where, syn});
+    });
+    if(!hits.length) return;
+    hits.sort((a, z) => z.s - a.s);
+    out.push({g, hits: whole[g] ? hits : hits.slice(0, per), n: hits.length});
+  });
+  out.sort((a, z) => (z.hits[0].s + (SS_BIAS[z.g] || 0)) - (a.hits[0].s + (SS_BIAS[a.g] || 0))
+    || order.indexOf(a.g) - order.indexOf(z.g));
+  return out;
+}
+/* The text with its first match marked, escaped either side. */
+function ssMark(text, qq, wordStart = false){
+  const low = String(text).toLowerCase();
+  let k = -1;
+  if(wordStart){ const m = new RegExp("(^|[\\s(·/-])" + ssRx(qq)).exec(low); if(m) k = m.index + m[1].length; }
+  if(k < 0) k = low.indexOf(qq);
+  if(k < 0 || !qq) return ssEsc(text);
+  return ssEsc(text.slice(0, k)) + "<mark>" + ssEsc(text.slice(k, k + qq.length)) + "</mark>" + ssEsc(text.slice(k + qq.length));
+}
+/* A near word for a search that found nothing: the closest word the index
+   knows, within a letter or two. */
+function ssNear(query, index){
+  const qq = String(query || "").trim().toLowerCase();
+  if(qq.length < 3) return "";
+  const words = new Set();
+  index.forEach(e => {
+    e.lt.split(/[^a-z0-9²]+/).forEach(w => { if(w.length >= 3) words.add(w); });
+    e.syn.forEach(s => words.add(s));
+  });
+  const limit = qq.length <= 4 ? 1 : 2;
+  let best = "", bestD = limit + 1;
+  words.forEach(w => {
+    if(Math.abs(w.length - qq.length) > limit) return;
+    const d = ssDistance(qq, w);
+    if(d < bestD || (d === bestD && w < best)){ best = w; bestD = d; }
+  });
+  return bestD <= limit ? best : "";
+}
+function ssDistance(a, b){
+  let prev = Array.from({length: b.length + 1}, (_, j) => j);
+  for(let i = 1; i <= a.length; i++){
+    const cur = [i];
+    for(let j = 1; j <= b.length; j++)
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/* --- the masthead field and the palette ------------------------------------------ */
+const ssField = document.createElement("button");
+ssField.type = "button"; ssField.className = "ss-q"; ssField.id = "ssField";
+ssField.setAttribute("aria-label", "Search the board (/ or Ctrl+K)");
+ssField.setAttribute("aria-keyshortcuts", "/ Control+K");
+ssField.innerHTML = `<span class="ss-lens">${ssSvg("search")}</span><span class="ss-ql">Search the board</span><span class="ss-kbd" aria-hidden="true">/</span>`;
+const ssFieldBtn = document.createElement("button");
+ssFieldBtn.type = "button"; ssFieldBtn.className = "ibtn ss-qbtn"; ssFieldBtn.id = "ssFieldBtn";
+ssFieldBtn.setAttribute("aria-label", "Search the board");
+ssFieldBtn.innerHTML = ssSvg("search");
+if($("mast")){ $("mast").insertBefore(ssField, $("clock")); $("mast").insertBefore(ssFieldBtn, $("clock")); }
+ssField.addEventListener("click", () => ssOpen());
+ssFieldBtn.addEventListener("click", () => ssOpen());
+/* Whichever of the two is showing: the sphere keeps clear of it. */
+const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length) || null;
+/* The field needs the room between the nav and the clock, and so does the
+   sphere's first ball: the gap after the nav, the ball, and a gap before the
+   field. Where they cannot both have it the field narrows, down to SS_FIELD_MIN,
+   and below that it steps down to its icon. Measured at full width each time,
+   whatever the last measure decided. */
+const SS_BALL_ROOM = 40 + 100 + 12, SS_FIELD_MIN = 180;
+function ssFitMast(){
+  const mast = $("mast"), nav = $("nav");
+  if(!mast || !nav) return;
+  mast.classList.remove("ss-tight");
+  ssField.style.width = "";
+  if(!ssField.getClientRects().length) return;
+  const n = nav.getBoundingClientRect(), f = ssField.getBoundingClientRect();
+  /* The nav on a row of its own (a narrow window) leaves the field its row. */
+  if(n.top >= f.bottom || f.top >= n.bottom) return;
+  const room = Math.floor(f.right - (n.right + SS_BALL_ROOM));
+  if(room >= f.width) return;
+  if(room >= SS_FIELD_MIN) ssField.style.width = room + "px";
+  else mast.classList.add("ss-tight");
+}
+window.addEventListener("resize", ssFitMast);
+if(window.ResizeObserver) ["nav", "brand", "clock"].forEach(id => { if($(id)) new ResizeObserver(ssFitMast).observe($(id)); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(ssFitMast);
+
+const ssScrim = document.createElement("div");
+ssScrim.className = "ss-scrim"; ssScrim.hidden = true;
+const ssPal = document.createElement("div");
+ssPal.className = "ss-pal"; ssPal.id = "ssPal"; ssPal.hidden = true;
+ssPal.setAttribute("role", "dialog"); ssPal.setAttribute("aria-modal", "true"); ssPal.setAttribute("aria-label", "Search the board");
+ssPal.innerHTML = `<div class="ss-in"><button type="button" class="ss-back" aria-label="Close search">${ssSvg("back")}</button>`
+  + `<span class="ss-lens">${ssSvg("search")}</span>`
+  + `<input type="search" id="ssInput" aria-label="Search the board" placeholder="Search sites, products, findings, pages and the wiki"`
+  + ` autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="ssRes" aria-autocomplete="list">`
+  + `<span class="ss-count" id="ssCount"></span><span class="ss-kbd" aria-hidden="true">esc</span>`
+  + `<button type="button" class="ss-cancel">Cancel</button></div>`
+  + `<div class="ss-res" id="ssRes" role="listbox" aria-label="Results"></div>`
+  + `<div class="ss-foot"><span><span class="ss-kbd">↑</span><span class="ss-kbd">↓</span>move</span>`
+  + `<span><span class="ss-kbd">↵</span>open</span><span><span class="ss-kbd">⇧↵</span>on the map</span>`
+  + `<span><span class="ss-kbd">esc</span>close</span><span class="ss-say" id="ssSay"></span></div>`;
+document.body.append(ssScrim, ssPal);
+const ssInput = $("ssInput"), ssRes = $("ssRes");
+
+let ssIndex = [], ssRows = [], ssWhole = {}, ssReturn = null, ssWikiWait = null, ssPointer = null;
+const ssIsOpen = () => !ssPal.hidden;
+function ssOpen(text = ""){
+  if(ssIsOpen()){ ssInput.focus(); return; }
+  ssReturn = document.activeElement;
+  ssWhole = {};
+  ssPointer = null;
+  ssIndex = ssBuild();
+  if(typeof kindsPop !== "undefined" && kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
+  /* The wiki's pages join once its file is in: ask for it now, and look again
+     while it loads. */
+  if(typeof loadWikiData === "function" && typeof wikiStatus !== "undefined" && wikiStatus === "idle") loadWikiData();
+  ssWatchWiki();
+  ssScrim.hidden = ssPal.hidden = false;
+  document.body.classList.add("ss-open");
+  ssField.classList.add("on");
+  if(typeof hideTip === "function") hideTip();
+  ssInput.value = text;
+  ssWatchViewport(true);
+  ssFitSheet();
+  ssRender();
+  ssInput.focus({preventScroll: true});
+}
+/* A live refresh, or another save, while the palette is open: the index is
+   today's again, and the lit row stays lit if it is still there. The next
+   open rebuilds anyway. renderAll() calls this. */
+function ssDataChanged(){
+  if(!ssIsOpen()) return;
+  ssIndex = ssBuild();
+  ssRender(true);
+}
+/* On a phone the sheet is the visible viewport, so the on-screen keyboard
+   never covers the results. */
+function ssFitSheet(){
+  const vv = window.visualViewport;
+  const fit = ssIsOpen() && ssPhone() && vv;
+  ssPal.style.height = fit ? `${Math.round(vv.height)}px` : "";
+  ssPal.style.top = fit ? `${Math.round(vv.offsetTop)}px` : "";
+}
+function ssWatchViewport(on){
+  const vv = window.visualViewport;
+  if(!vv) return;
+  ["resize", "scroll"].forEach(type => on ? vv.addEventListener(type, ssFitSheet) : vv.removeEventListener(type, ssFitSheet));
+}
+function ssClose(restore = true){
+  if(!ssIsOpen()) return;
+  ssScrim.hidden = ssPal.hidden = true;
+  document.body.classList.remove("ss-open");
+  ssField.classList.remove("on");
+  ssWatchViewport(false);
+  ssFitSheet();
+  clearTimeout(ssWikiWait);
+  /* Focus must not stay in the hidden field, or the next / would be read as
+     typing in it. */
+  if(ssPal.contains(document.activeElement)) document.activeElement.blur();
+  const back = ssReturn;
+  ssReturn = null;
+  if(restore && back && back.isConnected && back !== document.body && typeof back.focus === "function")
+    try{ back.focus({preventScroll: true}); }catch(e){}
+}
+function ssWatchWiki(){
+  clearTimeout(ssWikiWait);
+  if(typeof wikiStatus === "undefined" || wikiStatus !== "loading") return;
+  ssWikiWait = setTimeout(() => {
+    if(!ssIsOpen()) return;
+    if(wikiStatus === "ready"){ ssIndex = ssBuild(); ssRender(true); }
+    else ssWatchWiki();
+  }, 250);
+}
+
+/* Where you were: the last three places the palette opened, newest first. */
+function ssRecent(){
+  let list = [];
+  try{ list = JSON.parse(localStorage.getItem(SS_RECENT_KEY)) || []; }catch(e){}
+  return Array.isArray(list) ? list.filter(x => x && typeof x.id === "string") : [];
+}
+function ssRemember(e){
+  const list = [{id: e.id, g: e.g, t: e.t, p: e.p}, ...ssRecent().filter(x => x.id !== e.id)].slice(0, 3);
+  try{ localStorage.setItem(SS_RECENT_KEY, JSON.stringify(list)); }catch(err){}
+}
+/* A remembered place still has to be on this board; a wiki page read before its
+   file is in comes back from what was remembered. */
+function ssRecentEntries(){
+  return ssRecent().map(r => {
+    const live = ssIndex.find(e => e.id === r.id);
+    if(live) return live;
+    if(r.id.startsWith("wiki:") && typeof wikiHref === "function") return ssEntry({id: r.id, g: "wiki", t: String(r.t || ""),
+      p: String(r.p || "Wiki"), ic: "wiki", go: () => ssHash(wikiHref({kind: "page", id: r.id.slice(5)}))});
+    return null;
+  }).filter(Boolean);
+}
+
+/* One row. Its index in ssRows is what the keys and the pointer act on. */
+function ssRow(item, qq){
+  const k = ssRows.push(item) - 1;
+  if(item.more) return `<button type="button" class="ss-more" id="ssr-${k}" data-k="${k}" role="option" aria-selected="false">${
+    item.more} more ${ssEsc(item.label.toLowerCase())} ›</button>`;
+  if(item.ask){
+    const x = item.ask;
+    return `<div class="ss-row ss-q2" id="ssr-${k}" data-k="${k}" role="option" aria-selected="false"><span class="ic" aria-hidden="true">?</span>`
+      + `<span><span class="t">${ssEsc(x.q)}</span><span class="p">${ssEsc(ssLands(x))}</span></span>`
+      + `<span class="ss-side"><span class="ss-go">${ssSvg("enter")}open</span></span></div>`;
+  }
+  const {e, where, syn} = item;
+  let title = where === "t" ? ssMark(e.t, qq, true) : ssEsc(e.t);
+  if(where === "syn") title += `<span class="ss-syn" title="${ssEsc(`The word you typed; the board calls it ${e.t}`)}"><b>≈</b> ${ssMark(syn, qq, true)}</span>`;
+  let line = where === "syn" && e.synP && e.synP[syn] ? e.synP[syn] : e.p;
+  /* A word the line does not show (a neighbourhood, say) joins it, so the
+     reader sees what matched. */
+  if(where === "kw" && !line.toLowerCase().includes(syn.toLowerCase())) line += ` · ${syn}`;
+  const sub = where === "p" || where === "kw" ? ssMark(line, qq, true) : ssEsc(line);
+  const ic = e.hood ? `<span class="ic hood" aria-hidden="true">${ssEsc(e.hood)}</span>` : `<span class="ic" aria-hidden="true">${ssSvg(e.ic)}</span>`;
+  let side = "";
+  if(e.tag || e.dot) side += `<span class="ss-tag">${e.dot ? `<i class="ss-dot ${e.dot}"></i>` : ""}${ssEsc(e.tag)}</span>`;
+  if(e.map && typeof mapButton === "function") side += mapButton(e.map, e.mapLabel || e.t);
+  side += `<span class="ss-go">${ssSvg("enter")}open</span>`;
+  return `<div class="ss-row" id="ssr-${k}" data-k="${k}" role="option" aria-selected="false">${ic}`
+    + `<span><span class="t">${title}</span><span class="p">${sub}</span></span><span class="ss-side">${side}</span></div>`;
+}
+function ssRender(keep = false){
+  const qq = ssInput.value.trim().toLowerCase();
+  const was = keep ? ssRows[ssLitIndex()] : null;
+  ssRows = [];
+  const names = Object.fromEntries(SS_GROUPS);
+  const per = ssPhone() ? SS_PER_PHONE : SS_PER;
+  const data = hasData();
+  /* Rows are numbered as they are written, so the questions are written only
+     where they show. */
+  const asks = () => data ? SS_QUESTIONS.map(x => ssRow({ask: x}, qq)).join("") : "";
+  let html = "", say = "", count = "";
+  if(!qq){
+    const ask = asks();
+    const recent = ssRecentEntries().map(e => ssRow({e, where: "", syn: ""}, qq)).join("");
+    html = (ask ? `<div class="ss-grp" role="group" aria-label="Ask the board"><div class="ss-gh">Ask the board</div>${ask}</div>` : "")
+      + (recent ? `<div class="ss-grp" role="group" aria-label="Where you were"><div class="ss-gh">Where you were</div>${recent}</div>` : "")
+      + (data ? `<p class="ss-hint">Type a site, a product, a finding, a page, or a word the game uses: <b>hire</b>, <b>debt</b>, <b>difficulty</b>.</p>`
+          : `<p class="ss-hint">Open a save to search your sites, products and findings. The wiki is here without one: try <b>rent</b>, <b>hire</b> or <b>gym</b>.</p>`);
+  } else {
+    const groups = ssSearch(qq, ssIndex, per, ssWhole);
+    const total = groups.reduce((s, g) => s + g.n, 0);
+    count = `${total} found`;
+    groups.forEach(g => {
+      html += `<div class="ss-grp" role="group" aria-label="${ssEsc(names[g.g])}"><div class="ss-gh">${ssEsc(names[g.g])}<em>${
+        g.hits.length < g.n ? `${g.hits.length} of ${g.n}` : g.n}</em></div>`;
+      g.hits.forEach(h => { html += ssRow(h, qq); });
+      if(g.hits.length < g.n) html += ssRow({more: g.n - g.hits.length, label: names[g.g], g: g.g}, qq);
+      html += "</div>";
+    });
+    if(!total){
+      const near = ssNear(qq, ssIndex);
+      const feedback = $$("a").find(a => /bugs and feedback/i.test(a.textContent || ""));
+      html = `<div class="ss-none"><div class="ss-ball" aria-hidden="true"><i></i></div>`
+        + `<p>Nothing on the board or in the wiki is called <b>${ssEsc(ssInput.value.trim())}</b>.</p><div class="ss-sugg">`
+        + (near ? `<button type="button" class="ss-chip" data-near="${ssEsc(near)}">${ssSvg("search")}<span>Did you mean <mark>${ssEsc(near)}</mark>?</span></button>` : "")
+        + (typeof showWikiRoute === "function" ? `<button type="button" class="ss-chip" data-wiki>${ssSvg("wiki")}Browse the wiki</button>` : "")
+        + (feedback ? `<a class="ss-chip" href="${ssEsc(feedback.href)}" target="_blank" rel="noopener">${ssSvg("flag")}Tell us what you looked for</a>` : "")
+        + `</div></div>`;
+      const ask = asks();
+      if(ask) html += `<div class="ss-grp" role="group" aria-label="Or ask the board"><div class="ss-gh">Or ask the board</div>${ask}</div>`;
+      say = "nothing to open";
+    }
+  }
+  ssRes.innerHTML = html;
+  $("ssCount").textContent = count;
+  const same = r => r === was || (r.e && was.e && r.e.id === was.e.id)
+    || (r.ask && was.ask && r.ask.id === was.ask.id) || (r.more && was.more && r.g === was.g);
+  let at = was ? ssRows.findIndex(same) : -1;
+  /* Nothing found: the list below is a way on, not an answer, so nothing is lit. */
+  if(at < 0 && (!qq || ssRows.some(r => r.e))) at = ssRows.findIndex(r => !r.more);
+  ssPick(at, false);
+  if(say) $("ssSay").textContent = say;
+}
+const ssLitIndex = () => { const r = q(".ss-row.on, .ss-more.on", ssRes); return r ? +r.dataset.k : -1; };
+function ssPick(k, scroll = true){
+  $$(".ss-row.on, .ss-more.on", ssRes).forEach(r => { r.classList.remove("on"); r.setAttribute("aria-selected", "false"); });
+  const el = k >= 0 ? $(`ssr-${k}`) : null;
+  const say = $("ssSay");
+  if(!el){ ssInput.removeAttribute("aria-activedescendant"); say.textContent = ""; return; }
+  el.classList.add("on"); el.setAttribute("aria-selected", "true");
+  ssInput.setAttribute("aria-activedescendant", el.id);
+  if(scroll) el.scrollIntoView({block: "nearest"});
+  const item = ssRows[k];
+  const land = item.more ? `every ${item.label.toLowerCase()}` : item.ask ? ssLands(item.ask) : item.e.land;
+  say.innerHTML = `${item.more ? "↵ shows" : "↵ opens"} <b>${ssEsc(land)}</b>`;
+}
+function ssGoTo(k, onMap = false){
+  const item = ssRows[k];
+  if(!item) return;
+  if(item.more){
+    /* The group opens in full, and the first row it had kept back is lit. */
+    ssWhole[item.g] = true;
+    ssRender();
+    const rows = ssRows.map((r, i) => r.e && r.e.g === item.g ? i : -1).filter(i => i >= 0);
+    ssPick(rows[ssPhone() ? SS_PER_PHONE : SS_PER] ?? rows[0] ?? -1);
+    return;
+  }
+  if(item.ask){ ssClose(false); ssAsk(item.ask.id); return; }
+  const e = item.e;
+  if(onMap && e.map && typeof openLocationMap === "function"){ openLocationMap(e.map, $(`ssr-${k}`)); return; }
+  ssRemember(e);
+  ssClose(false);
+  ssClearAsked();
+  ssTicket++; ssPending = null;
+  e.go();
+}
+
+ssInput.addEventListener("input", () => { ssRender(); ssRes.scrollTop = 0; });
+ssInput.addEventListener("keydown", e => {
+  /* Keys that pick a word in an input method are that method's. */
+  if(e.isComposing || e.keyCode === 229) return;
+  const n = ssRows.length, at = ssLitIndex();
+  if(e.key === "ArrowDown"){ e.preventDefault(); if(n) ssPick(at < 0 ? 0 : Math.min(n - 1, at + 1)); }
+  else if(e.key === "ArrowUp"){ e.preventDefault(); if(n) ssPick(Math.max(0, at - 1)); }
+  else if(e.key === "Enter"){ e.preventDefault(); if(at >= 0) ssGoTo(at, e.shiftKey); }
+  else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); ssClose(); }
+});
+/* Keyboard first: focus stays in the field, and Tab does not wander off behind
+   the scrim. */
+ssPal.addEventListener("keydown", e => {
+  if(e.key === "Escape" && e.target !== ssInput){ e.preventDefault(); e.stopPropagation(); ssClose(); return; }
+  if(e.key !== "Tab") return;
+  const stops = $$("input, button, a[href]", ssPal).filter(el => el.getClientRects().length && !el.closest(".ss-row"));
+  if(!stops.length) return;
+  const i = stops.indexOf(document.activeElement);
+  e.preventDefault();
+  stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
+});
+/* The pointer lights a row only when it moves: a pointer resting where the
+   rows are redrawn or scrolled under it must not take the light from the keys.
+   The first move after opening only says where it is. */
+ssRes.addEventListener("pointermove", e => {
+  if(e.pointerType !== "mouse" && e.pointerType !== "pen") return;
+  const at = `${e.clientX},${e.clientY}`;
+  const moved = ssPointer !== null && ssPointer !== at;
+  ssPointer = at;
+  if(!moved) return;
+  const r = e.target.closest("[data-k]");
+  if(r && !r.classList.contains("on")) ssPick(+r.dataset.k, false);
+});
+ssRes.addEventListener("click", e => {
+  if(e.target.closest("[data-map-key]")) return;  // the map button does its own job
+  const chip = e.target.closest(".ss-chip");
+  if(chip){
+    if(chip.dataset.near !== undefined){ e.preventDefault(); ssInput.value = chip.dataset.near; ssRender(); ssInput.focus(); }
+    else if(chip.hasAttribute("data-wiki")){ e.preventDefault(); ssClose(false); if(hasData()) showPage("wiki"); else window.BigCopilotBoard.browseWiki(); }
+    return;
+  }
+  const r = e.target.closest("[data-k]");
+  if(!r) return;
+  e.preventDefault();
+  ssGoTo(+r.dataset.k);
+});
+ssScrim.addEventListener("click", () => ssClose());
+/* The map a site row opens sits over the palette; closing it hands the keys back. */
+if($("locationMapDialog")) $("locationMapDialog").addEventListener("close", () => { if(ssIsOpen()) setTimeout(() => ssInput.focus({preventScroll: true}), 0); });
+q(".ss-back", ssPal).addEventListener("click", () => ssClose());
+q(".ss-cancel", ssPal).addEventListener("click", () => ssClose());
+/* / and Ctrl+K (Cmd+K on a Mac; the K key's place on a layout without Latin
+   letters, never on one whose K sits elsewhere) from anywhere on the
+   board; / is left alone while a field is being typed in. Nothing opens or
+   closes under a dialog (the map a row opened sits over the palette), or
+   before the board itself is on screen. */
+document.addEventListener("keydown", e => {
+  if(e.defaultPrevented || e.altKey) return;
+  const mast = $("mast");
+  const dialog = !!document.querySelector("dialog[open]");
+  const ready = !!mast && mast.getClientRects().length > 0 && !dialog;
+  const kKey = e.key === "k" || e.key === "K" || (!/^[a-z]$/i.test(e.key || "") && e.code === "KeyK");
+  if(kKey && (e.ctrlKey || e.metaKey) && !e.shiftKey){
+    if(dialog || (!ready && !ssIsOpen())) return;
+    e.preventDefault();
+    if(ssIsOpen()) ssClose(); else ssOpen();
+    return;
+  }
+  if(e.key === "/" && !e.ctrlKey && !e.metaKey && ready && !ssIsOpen() && !ssTyping(e.target)){
+    e.preventDefault();
+    ssOpen();
+  }
+});
+ssAskMount();
 
 /* nav underline follows the pointer, then goes home --------------------------- */
 function inkHome(){
