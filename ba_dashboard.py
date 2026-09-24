@@ -4585,6 +4585,17 @@ def _supply_facts(ctx: dict) -> dict:
                 ip, ifields, _icad = weekly(key, slug, mode, stock)
                 ist, iwhy, ilvl = _supply_status(ip)
                 ifields.pop("imp", None)
+                if not entry.get("weekly") and entry.get("pausedWeekly"):
+                    # A paused contract beside a top-up: paused, and only a
+                    # warning where the input is short without it. Where the
+                    # top-up covers the line, the player most likely paused
+                    # it because the depot feeds the line now (why topup).
+                    if st in ("short", "noplan", "stalled"):
+                        cover = stock / row["perDay"] if row["perDay"] else 60
+                        ist, iwhy, ilvl = "paused", "order", "warn" if cover >= 7 else "critical"
+                    else:
+                        ist, iwhy, ilvl = "paused", "topup", "info"
+                    ifields["from"] = row.get("from")
                 if ist not in SET_WORDS:
                     ifields["setTo"] = None
                 fact["import"] = {"st": ist, "why": iwhy, "lvl": ilvl, "role": "input",
@@ -5214,9 +5225,9 @@ def _factories(
             direct_weekly = own_import["weekly"] if own_import else 0
             mixed = bool(own_import and target and source)
             # Beside a top-up, the factory's own contract answers for its own
-            # amount, a paused one for the amount it would bring resumed, so
-            # its week is not moved onto the depot.
-            share = direct_weekly or ((own_import or {}).get("pausedWeekly") or 0)
+            # amount. A paused one brings nothing, so its share is none and the
+            # top-up (and the import behind it) carries the whole week.
+            share = direct_weekly
             direct_need = min(share, row["perDay"] * 7) if mixed else row["perDay"] * 7 if own_import else 0
             warehouse_need = max(row["perDay"] * 7 - direct_need, 0) if source and (mixed or not own_import) else 0
             # A paused contract never makes an input direct: beside a top-up the
@@ -10319,6 +10330,9 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if fact["cad"] != "weekly" or fact["role"] not in ("depot", "input"):
                 continue
             st, why = fact["st"], fact["why"]
+            # A paused contract the depot's top-up covers is no finding.
+            if st == "paused" and why == "topup":
+                continue
             if not (st == "paused" or (st == "short" and why in ("order", "shortfall"))
                     or (st == "noplan" and fact["lvl"] != "info")):
                 continue
@@ -13991,6 +14005,7 @@ const szRank = f => { const i = SZ_RANK.indexOf(f.st); return i < 0 ? SZ_RANK.le
    SZ_NONE. */
 const SZ_WHY = {
   "paused:order": "The import is paused, and no route from your own site brings it",
+  "paused:topup": "Paused; a depot's daily top-up feeds the line",
   "noplan:target": "No daily top-up plan brings it",
   "noplan:order": "No standing import brings it",
   "new:young": "Too young to judge yet",
@@ -18803,6 +18818,10 @@ function drawLogistics(){
      nothing where the box already says what to change it to. */
   const verdict = r => r.edited ? ""
     : r.covered ? chipHtml("ok", "covered by route", routeTip(r))
+    /* A factory's own contract paused while a depot's top-up feeds the line. */
+    : r.fit === "paused" && r.fact.why === "topup" ? chipHtml("dim", "paused", `paused — ${
+        D.businesses[r.fact.from] ? shortName(D.businesses[r.fact.from]) : "a depot"}'s top-up covers ${
+        D.businesses[r.s] ? shortName(D.businesses[r.s]) : "the factory"}`)
     : r.fit === "paused" ? chipHtml(SZ_CHIP[r.fact.lvl] || "warn", "resume import", szTip(r.fact))
     : r.setTo !== null ? up(r.inGame === null ? "add" : "raise", r.fit === "tight" ? SZ_STATE.tight : szTip(r.fact))
     : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${r.lower.toLocaleString()} would do`)

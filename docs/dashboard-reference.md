@@ -1071,8 +1071,10 @@ a short one is a finding (*Depot top-up too low*, opening the depot's page), and
 lists the change under *Depot daily top-ups*, naming the site whose plan sets it. A depot a
 wholesale store delivers to is judged on that contract's week, as an import is. A factory input topped up from a depot and imported to the
 factory as well keeps its daily word, and its own contract is judged on the week in Weekly
-imports beside the depots'; paused, it reads **paused**, and the depot answers only for the
-rest. Only **short**, **tight** and **no plan** suggest a figure to set.
+imports beside the depots'. Paused, it brings nothing, so the depot's top-up and the
+import behind it carry the input's whole week; the contract still reads **paused**, a
+quiet note ("paused — Import Hub's top-up covers Mill") where the top-up covers the line,
+and a warning only where the input is short without it. Only **short**, **tight** and **no plan** suggest a figure to set.
 
 Stock held where no plan sends it on is **Not routed** wherever it sits, a depot or a
 factory, when your own sites sell or need the item with no plan feeding them: a shelf, a

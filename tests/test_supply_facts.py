@@ -784,24 +784,27 @@ class RoundOneFixTests(unittest.TestCase):
         # The Hub answers for the rest of the 1,680.
         self.assertEqual(c.fact(HUB, WATER)["use"], 680)
 
-    def test_m1_a_paused_own_import_reads_paused_and_leaves_the_hub_its_share(self):
+    def test_m1_a_paused_own_import_the_input_is_short_without_warns_and_the_hub_carries_the_week(self):
         c = Company()
         c.site(HUB, "Import Hub")
         c.factory(FACTORY, "Mill")
         c.hold(HUB, WATER, 2000)
         c.hold(FACTORY, WATER, 250)
         c.hold(FACTORY, BEER, 300)
-        c.plan(HUB, FACTORY, WATER, 300)
+        c.plan(HUB, FACTORY, WATER, 200)
         c.contract(HUB, WATER, 800)
         c.contract(FACTORY, WATER, 1000, active=False)
         for d in range(13, 20):
             c.ship(d, HUB, FACTORY, {WATER: 100})
         c.run()
+        # A top-up of 200 for a line that eats 240: short without the contract.
+        self.assertEqual(c.fact(FACTORY, WATER)["st"], "short")
         own = c.fact(FACTORY, WATER)["import"]
-        self.assertEqual((own["st"], own["use"], own["have"]), ("paused", 1000, 1000))
-        self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("covered", 680))
-        self.assertEqual([f["text"] for f in c.findings() if f["group"] in ("paused", "feed", "order")],
-                         ["Water import is paused; resume the contract supplying Mill"])
+        self.assertEqual((own["st"], own["why"], own["lvl"], own["have"]), ("paused", "order", "critical", 1000))
+        # A paused contract brings nothing: the Hub carries the Mill's whole week.
+        self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("short", 1680))
+        [paused] = [f for f in c.findings() if f["group"] == "paused"]
+        self.assertEqual((paused["level"], paused["text"]), ("critical", "Water import is paused"))
 
     def test_s2_a_depot_line_whose_only_outflow_was_a_first_fill_is_not_moving(self):
         c = Company()
@@ -1045,10 +1048,15 @@ class RoundThreeFixTests(unittest.TestCase):
             c.ship(d, HUB, FACTORY, {WATER: 240})
         c.run()
         fact = c.fact(FACTORY, WATER)
-        self.assertEqual((fact["role"], fact["cad"], fact["have"]), ("input", "daily", 300))
-        self.assertEqual((fact["import"]["st"], fact["import"]["have"]), ("paused", 2000))
+        self.assertEqual((fact["role"], fact["cad"], fact["have"], fact["st"]), ("input", "daily", 300, "covered"))
+        own = fact["import"]
+        # The top-up covers the line: paused on purpose, most likely; no finding.
+        self.assertEqual((own["st"], own["why"], own["lvl"], own["have"], own["from"]),
+                         ("paused", "topup", "info", 2000, c.index(HUB)))
         need = next(n for s in c.supply["factories"]["sites"] for n in s["needs"] if n["slug"] == WATER)
         self.assertFalse(need["directImport"])
+        self.assertEqual(c.fact(HUB, WATER)["use"], 1680)
+        self.assertFalse([f for f in c.findings() if f["group"] == "paused"])
 
     def test_a_depot_a_wholesale_store_feeds_is_judged_on_its_contract(self):
         # Distrib gets 1,000 water a week wholesale and tops the brewery up
@@ -1097,7 +1105,7 @@ class FixtureKeyTests(unittest.TestCase):
     # Every (status word, reason) _supply_status() can send, and the fields the
     # rows Python sends always carry (a row may carry more).
     WHYS = {
-        "made": {None}, "paused": {"order"}, "noplan": {"target", "order"},
+        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order"},
         "new": {"young", "firstFill"}, "short": {"order", "shortfall", "target", "dry"},
         "stalled": {"notDrawn", "waiting"},
         "idle": {"notMoving", "notRouted", "targetHigh", "importHigh", "overstock"},

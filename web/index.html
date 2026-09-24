@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=ffa77e8560">
+<link rel="stylesheet" href="community.css?v=97a5791d8c">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -13,7 +13,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=ffa77e8560">
+<link rel="stylesheet" href="fonts/fonts.css?v=97a5791d8c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3616,8 +3616,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "ffa77e8560";</script>
-<script>window.LEDGER_RELEASE = {"version":"ffa77e8560","latest":{"pr":92,"date":"2026-09-24","title":"Size supply for 24/7 or for demand, and find stock no plan sends on","summary":"Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked \"may still be ramping\". Tight means an order covers the use but not the margin; it shows on Supply and never on Today. A new Not routed finding points at stock in a warehouse that no plan sends on while your own shops sell it."}};</script>
+<script>window.LEDGER_BUILD = "97a5791d8c";</script>
+<script>window.LEDGER_RELEASE = {"version":"97a5791d8c","latest":{"pr":92,"date":"2026-09-24","title":"Size supply for 24/7 or for demand, and find stock no plan sends on","summary":"Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked \"may still be ramping\". Tight means an order covers the use but not the margin; it shows on Supply and never on Today. A new Not routed finding points at stock in a warehouse that no plan sends on while your own shops sell it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3701,8 +3701,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=ffa77e8560"></script>
-<script src="community.js?v=ffa77e8560"></script>
+<script src="app.js?v=97a5791d8c"></script>
+<script src="community.js?v=97a5791d8c"></script>
 
 <script>
 
@@ -4418,6 +4418,7 @@ const szRank = f => { const i = SZ_RANK.indexOf(f.st); return i < 0 ? SZ_RANK.le
    SZ_NONE. */
 const SZ_WHY = {
   "paused:order": "The import is paused, and no route from your own site brings it",
+  "paused:topup": "Paused; a depot's daily top-up feeds the line",
   "noplan:target": "No daily top-up plan brings it",
   "noplan:order": "No standing import brings it",
   "new:young": "Too young to judge yet",
@@ -9230,6 +9231,10 @@ function drawLogistics(){
      nothing where the box already says what to change it to. */
   const verdict = r => r.edited ? ""
     : r.covered ? chipHtml("ok", "covered by route", routeTip(r))
+    /* A factory's own contract paused while a depot's top-up feeds the line. */
+    : r.fit === "paused" && r.fact.why === "topup" ? chipHtml("dim", "paused", `paused — ${
+        D.businesses[r.fact.from] ? shortName(D.businesses[r.fact.from]) : "a depot"}'s top-up covers ${
+        D.businesses[r.s] ? shortName(D.businesses[r.s]) : "the factory"}`)
     : r.fit === "paused" ? chipHtml(SZ_CHIP[r.fact.lvl] || "warn", "resume import", szTip(r.fact))
     : r.setTo !== null ? up(r.inGame === null ? "add" : "raise", r.fit === "tight" ? SZ_STATE.tight : szTip(r.fact))
     : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${r.lower.toLocaleString()} would do`)
