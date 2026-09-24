@@ -70,7 +70,7 @@ function board({saved = {}, data = {}} = {}) {
     /* A plain or modified click caught by the board's capture listener. */
     click(href, mods = {}){
       const e = {button: 0, ...mods, prevented: false, stopped: false,
-        target:{closest: sel => sel.includes('#site/') && href.startsWith('#site/') ? {getAttribute: () => href} : null},
+        target:{closest: sel => sel.includes('#site/') && href.startsWith('#site/') ? {getAttribute: () => href, closest: () => null} : null},
         preventDefault(){this.prevented = true;}, stopImmediatePropagation(){this.stopped = true;}};
       captured.click(e);
       return e;
@@ -560,4 +560,31 @@ test("a site's name opens its page; a modified click is left to the browser", ()
   const tab = b.click('#site/fifthavenue-57', {ctrlKey: true});
   assert.ok(!tab.stopped && !tab.prevented, 'a new tab opens at the address');
   assert.equal(b.site(), null);
+});
+
+test('a search or a question that opens a site names where it was asked from, as a finding does', () => {
+  const b = board({data: sites()});
+  b.boot();
+  // ssOpenSite() passes cameFrom: no finding, and still a way back.
+  b.context.openSite(SHOP, true, null, 'push', true);
+  assert.deepEqual({...b.from()}, {label: 'Today', hash: '#today'});
+  assert.deepEqual({...b.states[1].ssFrom}, {label: 'Today', hash: '#today'});
+  // A home opens the same way.
+  b.move(-1);
+  assert.ok(b.context.openSite(FLAT, true, null, 'push', true));
+  assert.equal(b.from().label, 'Today');
+  // From one site's page to another there is nothing new to go back to.
+  b.context.openSite(SHOP, true, null, 'push', true);
+  assert.equal(b.from(), null);
+});
+
+test("an old Weekly rhythm link takes an open site's page down and opens Results", () => {
+  const b = board({data: sites()});
+  b.boot();
+  b.context.openSite(SHOP);
+  b.context.history.pushState(null, '', '#secRhythm');
+  b.move(0);
+  assert.equal(b.site(), null);
+  assert.equal(b.page(), 'company');
+  assert.equal(b.sub('company'), 'results');
 });

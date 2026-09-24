@@ -125,7 +125,13 @@ test('the index holds every group, read from the page, with the words players us
     assert.ok(by('view:staffing').syn.includes('hire'));
     assert.ok(by('view:cash').syn.includes('debt'));
     assert.equal(by('view:cash').p, 'Today · $250k owed on loans');
-    assert.ok(by('view:milestones').syn.includes('difficulty'));
+    // The game's settings are the difficulty chip now (R15), not Milestones.
+    assert.ok(by('view:difficulty').syn.includes('house rules'));
+    assert.equal(by('view:difficulty').p, 'Custom · every setting against Normal');
+    assert.ok(!by('view:milestones').syn.includes('settings'));
+    // Weekly rhythm is By weekday in the Daily result chart.
+    assert.equal(by('view:rhythm').t, 'By weekday');
+    assert.ok(by('view:rhythm').syn.includes('weekly rhythm'));
     assert.ok(by('view:portfolio').syn.includes('break even'));
     // A Supply check is named as its view is.
     assert.equal(by('view:feed').t, 'Feed the factories');
@@ -332,14 +338,14 @@ test('a question lands on its answer, lit, and the row folds into a button after
     assert.equal(await page.locator('#ssAsk').isVisible(), true);
     assert.equal(await page.locator('#ssAsk .ss-aq').count(), 7);
     assert.equal(await page.locator('#ssAskMini').isHidden(), true);
-    await page.click('#ssAsk .ss-aq[data-ask="playing"]');
+    await page.click('#ssAsk .ss-aq[data-ask="hire"]');
     assert.equal(await page.evaluate(() => page), 'company');
     const strip = page.locator('#pageCompany .ss-asked');
-    assert.match(await strip.innerText(), /What am I playing on\?/);
+    assert.match(await strip.innerText(), /Whom should I hire\?/);
     assert.match(await strip.innerText(), /Back to Today/);
-    assert.equal(await page.locator('#secGoals .rules').evaluate(el => el.classList.contains('ss-lit')), true);
-    assert.equal(await page.locator('#secGoals .miles').evaluate(el => el.classList.contains('ss-dim')), true);
-    assert.equal(await page.locator('#secGoals .sechead').evaluate(el => el.classList.contains('ss-dim')), false);
+    assert.equal(await page.locator('#sp-roster').evaluate(el => el.classList.contains('ss-lit')), true);
+    assert.equal(await page.locator('#sp-crew').evaluate(el => el.classList.contains('ss-dim')), true);
+    assert.equal(await page.locator('#sitePanel .sitehead').evaluate(el => el.classList.contains('ss-dim')), false);
     assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_ask_used')), '1');
     // Back to Today: the strip and the lighting go, and the row has folded.
     await strip.locator('[data-ss="back"]').click();
@@ -369,8 +375,8 @@ test('a question lands on its answer, lit, and the row folds into a button after
 test('with storage refused, the questions and the palette still work and nothing throws', async () => {
   const page = await board({storage: false});
   try {
-    await page.click('#ssAsk .ss-aq[data-ask="playing"]');
-    assert.equal(await page.locator('#secGoals .rules').evaluate(el => el.classList.contains('ss-lit')), true);
+    await page.click('#ssAsk .ss-aq[data-ask="import"]');
+    assert.equal(await page.locator('#orderChecklist').evaluate(el => el.classList.contains('ss-lit')), true);
     await page.click('#nav a[data-id="today"]');
     // Nothing could be remembered, so the row is still there.
     assert.equal(await page.locator('#ssAsk').isVisible(), true);
@@ -863,6 +869,128 @@ test('Ctrl+Alt+K (AltGr+K on Windows) leaves the palette alone', async () => {
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown',
       {key: 'k', code: 'KeyK', ctrlKey: true, altKey: true, bubbles: true, cancelable: true})));
     assert.equal(await page.locator('#ssPal').isHidden(), true);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// --- the seams with site pages (R9) and the folded views (R15) -------------------------
+
+/* The masthead and the footer as the board draws them, so the difficulty chip is there. */
+const withChip = page => page.evaluate(() => {
+  Object.assign(D.meta, {save: 'Fixture', hour: 9, minute: 0, cityDate: 'Year 1, day 40', build: 3682, verifiedBuild: 3682,
+    source: 'fixture.hsg', saved: 'today', generated: 'now'});
+  Object.assign(D.kpi, {businesses: 4, employees: 42, vacant: 0});
+  drawMast(); drawFooter(); drawDifficulty();
+});
+
+test('"What am I playing on?" opens the difficulty chip\'s settings where the reader is, lit while they are open', async () => {
+  const page = await board();
+  try {
+    await withChip(page);
+    await page.click('#ssAsk .ss-aq[data-ask="playing"]');
+    // No page to go to and no strip: the chip on the build line, its popover open.
+    assert.equal(await page.evaluate(() => page), 'today');
+    assert.equal(await page.locator('.ss-asked').count(), 0);
+    assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), true);
+    const chip = page.locator('#clock .fv-diff');
+    assert.equal(await chip.getAttribute('aria-expanded'), 'true');
+    assert.equal(await chip.evaluate(el => el.classList.contains('ss-lit')), true);
+    assert.equal(await page.locator('.ss-dim').count(), 0, 'nothing is dimmed around a chip');
+    // A live refresh replaces the chip: the new one is lit.
+    await page.evaluate(() => { drawMast(); drawDifficulty(); ssCheckLanding(); });
+    assert.equal(await page.locator('#clock .fv-diff.ss-lit').count(), 1);
+    // Esc closes the settings, and with them the landing.
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.ss-lit').count(), 0);
+    // The palette finds it under the words players use, and opens the same popover.
+    await page.keyboard.press('/');
+    await typed(page, 'house rules');
+    assert.equal(await lit(page), 'Difficulty≈ house rules');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), true);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('at 1300 px and under "What am I playing on?" opens the footer\'s chip, in the window', async () => {
+  const page = await board({width: 1000, height: 700});
+  try {
+    await withChip(page);
+    await page.evaluate(() => { document.body.style.paddingBottom = '3000px'; window.scrollTo(0, 0); });
+    await page.click('#ssAsk .ss-aq[data-ask="playing"]');
+    const chip = page.locator('#footDiff .fv-diff');
+    assert.equal(await chip.evaluate(el => el.classList.contains('ss-lit')), true);
+    const [c, p] = await Promise.all([chip.boundingBox(), page.locator('#fvDiffPop').boundingBox()]);
+    assert.ok(c.y >= 0 && c.y + c.height <= 700, `the chip is in the window (${c.y})`);
+    assert.ok(p.y >= 0 && p.y + p.height <= 700, `and so is its popover (${p.y})`);
+    // An outside click closes both.
+    await page.mouse.click(40, 300);
+    assert.equal(await page.locator('.ss-lit').count(), 0);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a site found in the palette is a link to its address, and opens its page with the way back', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'fitness');
+    const link = page.locator('#ssRes .ss-row.on .t a.ss-sl');
+    assert.equal(await link.getAttribute('href'), '#site/secondavenue-2');
+    // Ctrl+click and a middle click are the browser's: a new tab at the address.
+    const ctrl = await page.evaluate(() => {
+      const a = document.querySelector('#ssRes .ss-row.on .t a');
+      let prevented = null;
+      const probe = e => { prevented = e.defaultPrevented; e.preventDefault(); };
+      window.addEventListener('click', probe);
+      a.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true}));
+      window.removeEventListener('click', probe);
+      return prevented;
+    });
+    assert.equal(ctrl, false);
+    assert.equal(await page.locator('#ssPal').isVisible(), true);
+    assert.equal(await page.evaluate(() => siteOpen), false);
+    // A plain click opens it here, through the palette: remembered, closed, and
+    // the crumb names Today, where it was searched from.
+    await link.click();
+    assert.equal(await page.locator('#ssPal').isHidden(), true);
+    assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, siteKey, siteFrom && siteFrom.label]),
+      ['#site/secondavenue-2', true, GYM, 'Today']);
+    assert.deepEqual(await page.evaluate(() => ({...history.state.ssFrom})), {label: 'Today', hash: '#today'});
+    assert.deepEqual(await page.evaluate(() => ssRecent().map(r => r.id)), [`site:${GYM}`]);
+    // Back is Today again.
+    await page.goBack();
+    await page.waitForFunction(() => page === 'today' && !siteOpen);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('a question that opens a site names the page it was asked from', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="hire"]');
+    assert.deepEqual(await page.evaluate(() => [location.hash, siteFrom && siteFrom.label]), ['#site/fifthavenue-57', 'Today']);
+    // Asked from another view, the crumb names that view, as a finding's does.
+    await page.evaluate(() => { ssClearAsked(); showSub('supply', 'checks'); showPage('supply'); });
+    await page.evaluate(() => ssAsk('hire'));
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Checks');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('By weekday is found by the old section\'s name and opens the chart on it', async () => {
+  const page = await board();
+  try {
+    await page.evaluate(() => {
+      const day = (d, i) => ({day: d, short: d.slice(0, 3), index: i, n: 4});
+      D.rhythm = {recent: {days: 28, revenue: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        .map((d, i) => day(d, [106, 101, 95, 105, 116, 87, 82][i]))}};
+    });
+    await page.keyboard.press('/');
+    await typed(page, 'weekly rhythm');
+    assert.equal(await lit(page), 'By weekday≈ weekly rhythm');
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await page.evaluate(() => [page, sub.company, chartWindow]), ['company', 'results', 'wd']);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

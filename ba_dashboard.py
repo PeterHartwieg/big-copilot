@@ -10723,6 +10723,10 @@ section.ss-host{content-visibility:visible}
 .page .ss-dim.ss-dim{opacity:.32;transition:opacity .25s}
 /* a palette entry that lands on one tile or row rings it once */
 .ss-ring{animation:sp-arrive 2.4s ease-out}
+/* The difficulty chip as an answer: outlined while its popover is open, with
+   no tag, which would stand over the masthead's edge. */
+.fv-diff.ss-lit{outline-offset:3px}
+.fv-diff.ss-lit::before{content:none}
 tr.ss-ring{animation:none}
 tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 @keyframes ss-flash{from{background:var(--accent-soft)}}
@@ -17554,6 +17558,9 @@ function fvCloseDiff(restore){
     fvDiffAnchor.focus({preventScroll: true});
     hideTip();
   }
+  /* "What am I playing on?" lit the chip while the popover is its answer;
+     Esc and a resize close it without a click the landing would hear. */
+  if(typeof ssCheckLanding === "function") ssCheckLanding();
 }
 function fvOpenDiff(anchor){
   const h = D && D.meta && D.meta.houseRules;
@@ -17886,9 +17893,9 @@ function siteBySlug(slug){
   const key = siteKeyOf(slug);
   return key !== null && siteKeys().has(key) ? key : null;
 }
-/* Where a finding sent the reader from, for the crumb that leads back: the
-   view's own word where the page has views ("Checks"), else the page's
-   ("Today"), and the address that was on screen. */
+/* Where a finding (or a search, or a question) sent the reader from, for the
+   crumb that leads back: the view's own word where the page has views
+   ("Checks"), else the page's ("Today"), and the address that was on screen. */
 function siteCameFrom(){
   const p = PAGES.find(x => x.id === page);
   if(!p) return null;
@@ -17918,13 +17925,14 @@ function siteStateFrom(){
 /* A site opens from its portfolio row, its name anywhere on the board, the
    picker, a map card or a finding. `finding` is the finding's id, which the
    page lights as the reason for coming; a finding also names the page it was
-   clicked on for the crumb. `scroll` puts the page's top at the top of the
-   window; a caller landing on a block inside it passes false and reveals that
-   block itself. */
-function openSite(key, scroll = true, finding = null, historyMode = "push"){
+   clicked on for the crumb, and so does a search or a question (`cameFrom`,
+   which ssOpenSite() sets): each is asked from somewhere and leads away from
+   it. `scroll` puts the page's top at the top of the window; a caller landing
+   on a block inside it passes false and reveals that block itself. */
+function openSite(key, scroll = true, finding = null, historyMode = "push", cameFrom = finding !== null){
   if(!hasData() || !D.businesses.some(b => b.key === key) && !spHome(key)) return false;
   const from = historyMode !== "push" ? siteStateFrom()
-    : finding !== null && !(page === "company" && siteOpen) ? siteCameFrom() : null;
+    : cameFrom && !(page === "company" && siteOpen) ? siteCameFrom() : null;
   if(key !== siteKey) spFindsAll = false;
   spArrived = finding;
   siteKey = key; siteOpen = true; siteFrom = from; siteFor = siteCharacter();
@@ -17980,7 +17988,9 @@ function openSiteHash(h, historyMode = "none"){
 const inSiteLink = e => !!(e.target && e.target.closest && e.target.closest('a[href^="#site/"]'));
 function siteLinkClick(e){
   const a = e.target.closest && e.target.closest('a[href^="#site/"]');
-  if(!a || !hasData()) return;
+  /* A site's row in the search palette opens through the palette, which
+     remembers the place, closes itself and names where it was asked from. */
+  if(!a || !hasData() || a.closest(".ss-pal")) return;
   if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   const key = siteBySlug(a.getAttribute("href").slice(6));
   if(key === null) return;
@@ -18634,13 +18644,13 @@ const ssTyping = t => !!t && (t.isContentEditable || /^(input|textarea|select)$/
 const ssNum = n => Math.round(n || 0).toLocaleString("en-US");
 
 /* --- where things land ----------------------------------------------------- */
-/* Every way into one site goes through here. The site pages (R9) take it over in
-   this one place; today it opens the site's panel under Company › Results, and
-   with `into` lands on one block of it, ringed. `o.finding` marks the finding a
-   landing came from, `o.hit` the rows in the block to pulse. */
+/* Every way into one site from a finding, a search or a question goes through
+   here: the site's own page at its address (openSite()), and with `into` one
+   block of it, ringed. `o.finding` marks the finding a landing came from, `o.hit`
+   the rows in the block to pulse. Whichever it was, the page's crumb leads back
+   to where it was asked from. */
 function ssOpenSite(key, into = "", o = {}){
-  if(!key || !hasData() || !D.businesses.some(b => b.key === key)){ reveal("secPortfolio"); return false; }
-  openSite(key, !into, o.finding || null);
+  if(!key || !openSite(key, !into, o.finding || null, "push", true)){ reveal("secPortfolio"); return false; }
   if(into) xlArrive(into, o.hit || "");
   return true;
 }
@@ -18655,6 +18665,20 @@ function ssChecklist(){
   showSub("supply", "orders"); showPage("supply");
   $("orderChecklist").open = true;
   settleScroll($("orderChecklist"));
+}
+/* The difficulty chip R15 put on the masthead's build line (the footer's at
+   1300 px and under), with its popover open: every setting against Normal. A
+   board that knows only the difficulty's name has a chip with nothing to open,
+   which is rung instead. */
+const ssDiffOpen = () => !!(fvDiffPop && fvDiffPop.classList.contains("on"));
+function ssDifficulty(){
+  const chip = fvShownChip();
+  const plain = chip || [...document.querySelectorAll(".fv-diff")].find(b => b.getClientRects().length);
+  if(!plain) return;
+  const r = plain.getBoundingClientRect();
+  if(r.top < 0 || r.bottom > (window.innerHeight || 0)) plain.scrollIntoView({block: "center"});
+  if(!chip){ ssRing(plain); return; }
+  if(!ssDiffOpen() || fvDiffAnchor !== chip){ fvCloseDiff(false); fvOpenDiff(chip); }
 }
 function ssFinder(preset){
   if(typeof premises === "function" && premises()) openFinder(preset);
@@ -18701,10 +18725,12 @@ function ssRing(el){
    returning the element), `wait` gives a block drawn after a file loads time to
    appear, `dim: false` keeps the page around it at full strength, and `holds`,
    given the landing ({hash, site}), says whether what is lit is still the
-   answer to it (see ssLandingHolds()). One table, so a question can move
-   in one place: "What am I playing on?" moves to the difficulty chip (R15), and
-   "Is my factory fed?" and "Whom should I hire?" move once the factory pages (R8)
-   and the company-wide Staff list (R14) exist. */
+   answer to it (see ssLandingHolds()). A question with no `page` answers
+   outside every page, where the reader already is: "What am I playing on?" is
+   the difficulty chip (R15) and its popover, and needs no strip. One table, so
+   a question can move in one place: "Is my factory fed?" and "Whom should I
+   hire?" move once the factory pages (R8) and the company-wide Staff list (R14)
+   exist. */
 const SS_QUESTIONS = [
   {id: "profit", q: "Why did profit move?", lands: "Company › Results · the portfolio sorted by week on week", page: "company",
    go(){
@@ -18731,8 +18757,8 @@ const SS_QUESTIONS = [
    go: ssPrices, lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash},
   {id: "import", q: "What should I import this week?", lands: "Supply › Orders › Change checklist", page: "supply",
    go: ssChecklist, lit: "#orderChecklist", holds: () => $("orderChecklist").open},
-  {id: "playing", q: "What am I playing on?", lands: "Company › Milestones · game settings", page: "company",
-   go: () => reveal("secGoals"), lit: () => q("#secGoals .rules") || q("#secGoals .sechead")},
+  {id: "playing", q: "What am I playing on?", lands: "Difficulty · every setting against Normal", page: "",
+   go: ssDifficulty, lit: () => fvShownChip(), dim: false, holds: () => ssDiffOpen()},
 ];
 const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
 
@@ -18806,10 +18832,10 @@ function ssLand(qn, from, ticket, tries = 0){
     return;
   }
   if(location.hash !== ssPending.hash){ ssPending = null; return; }
-  const host = $((PAGES.find(p => p.id === qn.page) || {}).host);
+  const host = qn.page ? $((PAGES.find(p => p.id === qn.page) || {}).host) : document.body;
   /* Only the answer on the page the question opened, and on screen: a copy
      left in a hidden page from last time is not it. */
-  const arrived = page === qn.page && !!host;
+  const arrived = (!qn.page || page === qn.page) && !!host;
   const found = arrived ? (typeof qn.lit === "function" ? qn.lit() : q(qn.lit)) : null;
   const el = found && host.contains(found) && found.getClientRects().length ? found : null;
   /* The wiki opens its page once the address has changed, and draws its guide
@@ -18818,6 +18844,13 @@ function ssLand(qn, from, ticket, tries = 0){
   ssPending = null;
   /* No answer on screen, nothing to point at. */
   if(!el) return;
+  /* An answer outside the pages is lit where it is, with no strip: the
+     reader has not gone anywhere to come back from. */
+  if(!qn.page){
+    ssAsked = {qn, strip: null, lit: el, litId: "", host, hash: location.hash, site: siteOpen ? siteKey : null};
+    ssPlace();
+    return;
+  }
   const strip = document.createElement("div");
   strip.className = "ss-asked"; strip.setAttribute("role", "status");
   const back = PAGES.find(p => p.id === from) || PAGES[0];
@@ -18841,8 +18874,10 @@ function ssLand(qn, from, ticket, tries = 0){
 function ssPlace(){
   const {strip, lit, host, qn} = ssAsked;
   const anchor = lit.closest("section");
-  if(anchor && host.contains(anchor) && anchor !== host) anchor.parentElement.insertBefore(strip, anchor);
-  else host.insertBefore(strip, host.firstChild);
+  if(strip){
+    if(anchor && host.contains(anchor) && anchor !== host) anchor.parentElement.insertBefore(strip, anchor);
+    else host.insertBefore(strip, host.firstChild);
+  }
   ssUnlight();
   ssLight(lit, qn.dim !== false, host);
 }
@@ -18882,7 +18917,7 @@ function ssLandingHolds(){
   const a = ssAsked;
   if(!a) return false;
   if(a.qn.holds && !a.qn.holds(a)) return false;
-  if(!a.lit.isConnected || !a.strip.isConnected){
+  if(!a.lit.isConnected || (a.strip && !a.strip.isConnected)){
     const again = a.litId ? $(a.litId) : typeof a.qn.lit === "function" ? a.qn.lit() : q(a.qn.lit);
     if(!again || !a.host.contains(again)) return false;
     a.lit = again;
@@ -18910,10 +18945,11 @@ window.addEventListener("hashchange", ssAfter);
    Built each time the palette opens, from what is already on the page, so the
    counts on it are today's. Each entry: g group, t title, p the line under it,
    ic icon, syn the words players use for it, kw words its line does not show,
-   tag/dot the live state beside it, map a key for the map button, land where
-   Enter goes (said in the footer), go what Enter does. */
+   tag/dot the live state beside it, map a key for the map button, href a
+   site's address (its name is a link to it), land where Enter goes (said in
+   the footer), go what Enter does. */
 function ssEntry(o){
-  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: ""}, o);
+  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: ""}, o);
   e.lt = e.t.toLowerCase(); e.lp = e.p.toLowerCase();
   e.kwRaw = e.kw.map(s => String(s));
   e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kwRaw.map(s => s.toLowerCase());
@@ -18947,15 +18983,20 @@ const SS_VIEWS = [
   {id: "ops", t: "Portfolio · Operations", p: "Company › Results · satisfaction, promotion, traffic", ic: "company",
    syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security"],
    go(){ view = "ops"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
-  {id: "rhythm", t: "Weekly rhythm", p: "Company › Results", ic: "week", syn: ["weekday", "busiest day", "peak day"],
-   go: () => reveal("secRhythm")},
+  /* Weekly rhythm is By weekday in the Daily result chart now (R15). */
+  {id: "rhythm", t: "By weekday", p: "Company › Results · Daily result", ic: "week",
+   syn: ["weekly rhythm", "weekday", "busiest day", "peak day", "rhythm"],
+   go(){ if(weekdaySeries().length) chartWindow = "wd"; reveal("secDaily"); }},
   {id: "products", t: "Products", p: "Company › Products", ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells"],
    live: () => ({p: `Company › Products · ${(D.products || []).length} sold`}), go: () => reveal("secProducts")},
   {id: "payroll", t: "Payroll", p: "Company › Payroll", ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
    live: () => D.staff && D.staff.total ? {p: `Company › Payroll · ${ssNum(D.staff.total)} people`} : {}, go: () => reveal("secPayroll")},
-  {id: "milestones", t: "Milestones · Game settings", p: "Company › Milestones", ic: "flag",
-   syn: ["difficulty", "settings", "house rules", "custom", "tax rate", "what am i playing on"],
-   live: () => D.meta && D.meta.difficulty ? {p: `Company › Milestones · ${D.meta.difficulty}`} : {}, go: () => reveal("secGoals")},
+  {id: "milestones", t: "Milestones", p: "Company › Milestones · career totals", ic: "flag",
+   syn: ["goals", "diplomas", "rivals", "career", "buildings owned", "tax paid"], go: () => reveal("secGoals")},
+  /* The game's settings are the difficulty chip and its popover (R15). */
+  {id: "difficulty", t: "Difficulty", p: "every setting against Normal", ic: "tune",
+   syn: ["settings", "game settings", "house rules", "custom", "tax rate", "what am i playing on"],
+   live: () => D.meta && D.meta.difficulty ? {p: `${D.meta.difficulty} · every setting against Normal`} : {}, go: ssDifficulty},
   {id: "checklist", t: "Change checklist", p: "Supply › Orders", ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist"],
    go: ssChecklist},
   {id: "imports", t: "Weekly imports", p: "Supply › Orders", ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import"],
@@ -19060,7 +19101,7 @@ function ssBuild(){
         p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
           : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
         ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood, b.type, b.name, ...inputs].filter(Boolean),
-        dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name,
+        dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
         go: () => ssOpenSite(b.key)}));
     });
     /* One entry per item: what the factories eat first, then what sells, then
@@ -19247,20 +19288,27 @@ const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && e
    field. Where they cannot both have it the field narrows, down to SS_FIELD_MIN,
    and below that it steps down to its icon. Measured at full width each time,
    whatever the last measure decided. */
-const SS_BALL_ROOM = 40 + 100 + 12, SS_FIELD_MIN = 180;
+const SS_BALL_ROOM = 40 + 100 + 12, SS_FIELD_MIN = 180, SS_ICON_GAP = 12;
 function ssFitMast(){
   const mast = $("mast"), nav = $("nav");
   if(!mast || !nav) return;
   mast.classList.remove("ss-tight");
   ssField.style.width = "";
+  ssFieldBtn.style.marginRight = "";
   if(!ssField.getClientRects().length) return;
   const n = nav.getBoundingClientRect(), f = ssField.getBoundingClientRect();
   /* The nav on a row of its own (a narrow window) leaves the field its row. */
   if(n.top >= f.bottom || f.top >= n.bottom) return;
   const room = Math.floor(f.right - (n.right + SS_BALL_ROOM));
   if(room >= f.width) return;
-  if(room >= SS_FIELD_MIN) ssField.style.width = room + "px";
-  else mast.classList.add("ss-tight");
+  if(room >= SS_FIELD_MIN){ ssField.style.width = room + "px"; return; }
+  mast.classList.add("ss-tight");
+  /* The icon keeps out of the ball's room too. A long clock -- the difficulty
+     chip ends its last line at 1301 px and over -- can push it in there, so
+     it closes on the clock, down to the sphere's own gap. */
+  const short = Math.ceil(n.right + SS_BALL_ROOM - ssFieldBtn.getBoundingClientRect().left);
+  const give = (parseFloat(getComputedStyle(mast).columnGap) || 0) - SS_ICON_GAP;
+  if(short > 0 && give > 0) ssFieldBtn.style.marginRight = `-${Math.min(short, give)}px`;
 }
 window.addEventListener("resize", ssFitMast);
 if(window.ResizeObserver) ["nav", "brand", "clock"].forEach(id => { if($(id)) new ResizeObserver(ssFitMast).observe($(id)); });
@@ -19389,6 +19437,10 @@ function ssRow(item, qq){
   }
   const {e, where, syn} = item;
   let title = where === "t" ? ssMark(e.t, qq, true) : ssEsc(e.t);
+  /* A site's name is a link to its address, so Ctrl+click or a middle click
+     opens its page in a new tab. A plain click or Enter opens it here, through
+     ssGoTo(); the keys stay in the field, so the link takes no Tab stop. */
+  if(e.href) title = `<a class="ss-sl" href="${ssEsc(e.href)}" tabindex="-1">${title}</a>`;
   if(where === "syn") title += `<span class="ss-syn" title="${ssEsc(`The word you typed; the board calls it ${e.t}`)}"><b>≈</b> ${ssMark(syn, qq, true)}</span>`;
   let line = where === "syn" && e.synP && e.synP[syn] ? e.synP[syn] : e.p;
   /* A word the line does not show (a neighbourhood, say) joins it, so the
@@ -19525,6 +19577,8 @@ ssRes.addEventListener("pointermove", e => {
 });
 ssRes.addEventListener("click", e => {
   if(e.target.closest("[data-map-key]")) return;  // the map button does its own job
+  /* A modified click on a site's name is the browser's: a new tab at its address. */
+  if(e.target.closest("a[href]") && (e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)) return;
   const chip = e.target.closest(".ss-chip");
   if(chip){
     if(chip.dataset.near !== undefined){ e.preventDefault(); ssInput.value = chip.dataset.near; ssRender(); ssInput.focus(); }

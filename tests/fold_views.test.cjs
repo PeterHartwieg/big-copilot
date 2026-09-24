@@ -206,11 +206,15 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
 // Game save names are not capped; this one is 36 characters.
 const LONG = 'The Very Long Name Of A Company Save';
 const FLAGS = {locale: false, build: 3683};
-// The masthead as drawn: every box in it, rounded to the pixel.
-const mastBoxes = (page, [save, flags]) => page.evaluate(([save, flags, FLAGS]) => {
+// The masthead as drawn: every box in it, rounded to the pixel. Measured once
+// the search field has fitted itself to what is left (ssFitMast(), run by a
+// ResizeObserver on the clock, before the next paint): in between, the field
+// and the new clock can share a width neither of them keeps.
+const mastBoxes = (page, [save, flags]) => page.evaluate(async ([save, flags, FLAGS]) => {
   D.meta.save = save;
   if (flags) Object.assign(D.meta, FLAGS);
   drawMast();
+  await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
   const box = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round); };
   return {mast: box(document.querySelector('.mast')), brand: box(document.querySelector('.brand')),
     nav: box(document.getElementById('nav')), clock: box(document.getElementById('clock')),
@@ -234,6 +238,10 @@ test('at 1301 px and over the chip ends the clock\'s last line, inside the masth
       assert.deepEqual(lines, [...Array(lines.length - 1).fill(0), 1], what);
       assert.equal(await page.locator('#clock .fv-diff').isVisible(), true, what);
       assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, what);
+      // The search field (or its icon, where the chip leaves it no room) ends before the clock.
+      const [control, clock] = await page.evaluate(() => [ssMastControl().getBoundingClientRect().right,
+        document.getElementById('clock').getBoundingClientRect().left]);
+      assert.ok(control <= clock, `${what}: search ${control} runs into the clock ${clock}`);
       assert.deepEqual(errors, []);
     } finally { await page.close(); }
   }
@@ -258,6 +266,31 @@ test('at 1300 px and under the masthead is the board\'s own, and the chip is in 
     }
     assert.deepEqual(boxes[0], boxes[1], what);
   }
+});
+
+test("at 1440 px the search icon keeps out of the sphere's resting place, closing on the chip's clock", async () => {
+  const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0, rules: []};
+  const fit = async houseRules => {
+    const {page, errors} = await board({width: 1440, houseRules});
+    try {
+      await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+      // The first ball rests 40 px after the nav, 100 px wide, 12 px clear of the search control.
+      const out = await page.evaluate(() => ({control: ssMastControl().getBoundingClientRect().left,
+        rest: document.getElementById('nav').getBoundingClientRect().right + SS_BALL_ROOM,
+        clock: document.getElementById('clock').getBoundingClientRect().left,
+        right: ssMastControl().getBoundingClientRect().right, margin: ssFieldBtn.style.marginRight}));
+      assert.deepEqual(errors, []);
+      return out;
+    } finally { await page.close(); }
+  };
+  // A preset's chip is its name: the icon moves up to the clock and clears the ball.
+  const normal = await fit(NORMAL);
+  assert.ok(normal.control >= normal.rest - 0.5, `the icon at ${normal.control} is in the ball's room, which ends at ${normal.rest}`);
+  assert.ok(normal.clock - normal.right >= 12 - 0.5, "and stays the sphere's gap clear of the clock");
+  // A longer chip can leave less room than that: the icon gives all it can, and no more.
+  const custom = await fit(CUSTOM);
+  assert.equal(custom.margin, '-28px');
+  assert.ok(custom.clock - custom.right >= 12 - 0.5);
 });
 
 // A long page, so the footer's chip is well out of the window near the top.
@@ -501,6 +534,42 @@ test('the site page names its own week', async () => {
       return document.querySelector('#sp-week .fv-basis').textContent.replace(/\s+/g, ' ').trim();
     });
     assert.equal(line, 'This shop’s revenue · 3 weeks');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+// --- with a site's own page open (R9) -------------------------------------------
+
+test("a site's page puts By weekday aside, the chip still opens over it, and #secRhythm lands on the chart", async () => {
+  const {page, errors} = await board({recent: {days: 28, revenue: profile([106, 101, 95, 105, 116, 87, 82])}});
+  try {
+    await page.locator('#chartTools a[data-id="wd"]').click();
+    const KEY = 'ba:street_fifthavenue#1';
+    await page.evaluate(key => {
+      const shop = {key, status: 'retail', name: 'HART. Clothing', code: 'MT', type: 'Clothing Store',
+        typeSlug: 'ba:businesstype_clothingstore', address: '1 Fifth Avenue', neighbourhood: 'Midtown', opened: 3,
+        revenue: 900, customers: 30, basket: 30, profit: 200, margin: 22.2, cogs: 0, wages: 300, rent: 100, marketing: 0,
+        theft: 0, licensing: 0, staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
+        people: [], lines: [], series: [], staffDemands: [], quitWarnings: 0, daysOpen: 30,
+        satisfaction: {overall: 74, service: 88, pricing: 71, cleanliness: 62, facility: 79},
+        amenities: {bathroom: true, toiletprivacy: false, sink: true, music: false, interior: true},
+        missingUniformLocker: false, uniformGaps: [], traffic: 41, marketingIndex: 31, security: 85, capacity: 40};
+      Object.assign(D, {businesses: [shop], supply: {day: 73, shops: [], imports: [], idle: [], factories: {sites: []}},
+        hours: [], hourFindings: [], trends: [], hypeExposure: [], alerts: [], minor: {rows: []}, homes: [], chains: [], plan: null});
+      openSite(key);
+    }, KEY);
+    assert.equal(await page.evaluate(() => location.hash), '#site/fifthavenue-1');
+    assert.equal(await page.locator('#dailyBox .fv-wd').isVisible(), false, 'the company chart steps aside');
+    assert.equal(await page.locator('#secDetail').isVisible(), true);
+    // The chip is the masthead's, over any page.
+    await page.locator('#clock .fv-diff').click();
+    assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), true);
+    await page.keyboard.press('Escape');
+    // An old Weekly rhythm link takes the site's page down and lands on the chart, By weekday still chosen.
+    await page.evaluate(() => { location.hash = '#secRhythm'; });
+    await page.waitForFunction(() => !siteOpen);
+    assert.deepEqual(await page.evaluate(() => [page, sub.company, chartWindow]), ['company', 'results', 'wd']);
+    assert.equal(await page.locator('#dailyBox .fv-wd').isVisible(), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

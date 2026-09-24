@@ -238,3 +238,54 @@ test('at 390 px the Growth grid narrows its names, never its cells or the page',
     assert.notEqual(desk.short, 'GD');
   } finally { await page.close(); }
 });
+
+// --- Today with the other passes on it (site pages R9, search R10/R11, folds R15) ----
+
+test('at 390 px the count lines, the Ask row and a live Plan imports card share Today without overlap', async () => {
+  const page = await today(390);
+  try {
+    const m = await page.evaluate(() => {
+      paintPlanImports({live: true, badge: '12 TO CHANGE',
+        what: '12 import settings to change this week, 3 of them at shops that ran short yesterday.'});
+      document.querySelector('[data-td-toggle="off"]').click();
+      const box = el => { const r = el.getBoundingClientRect(); return {l: r.left, t: r.top, r: r.right, b: r.bottom}; };
+      const meets = (a, b) => a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5;
+      const blocks = [...document.querySelectorAll('#alerts .find, #alertMinor .td-count, #alertMinor .find, #kpis .kpi, #secMoves .move, #ssAsk')]
+        .filter(el => el.getClientRects().length).map(el => ({el: el.id || el.className, ...box(el)}));
+      const clashes = [];
+      blocks.forEach((a, i) => blocks.slice(i + 1).forEach(b => { if(meets(a, b)) clashes.push(`${a.el} / ${b.el}`); }));
+      const ask = document.getElementById('ssAsk'), card = document.getElementById('planImportsCard');
+      return {clashes, scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth,
+        askShown: ask.getClientRects().length > 0, askInside: box(ask).l >= -0.5 && box(ask).r <= innerWidth + 0.5,
+        askBelowCards: box(ask).t >= Math.max(...[...document.querySelectorAll('#secMoves .move')].map(c => box(c).b)) - 0.5,
+        cardText: card.querySelector('.what').textContent, cardInside: box(card).r <= innerWidth + 0.5,
+        lines: document.querySelectorAll('#alertMinor .td-count').length};
+    });
+    assert.deepEqual(m.clashes, [], 'nothing on Today overlaps');
+    assert.equal(m.scroll, m.width, 'no sideways scroll');
+    assert.equal(m.lines, 2);
+    assert.ok(m.askShown && m.askInside && m.askBelowCards, 'the Ask row sits under the cards, inside the window');
+    assert.match(m.cardText, /^12 import settings/);
+    assert.ok(m.cardInside);
+  } finally { await page.close(); }
+});
+
+test("an Overstaffed hours row, one per site, opens its site's page from its sentence and from its name", async () => {
+  const page = await today(1440);
+  try {
+    await page.evaluate(() => {
+      // Where the rows land is under test, not the site panel's draw.
+      drawSite = () => {}; drawPortfolio = () => {}; drawChart = () => {};
+    });
+    await page.click('[data-td-toggle="off"]');
+    const row = page.locator('[data-td-rows="off"] .find').first();
+    // The sentence is the finding: the site's page, with the finding lit and the way back to Today.
+    await row.locator('.what').click();
+    assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, spArrived === D.minor.rows[1].id, siteFrom && siteFrom.label]),
+      ['#site/secondavenue-10', true, true, 'Today']);
+    await page.evaluate(() => { siteShut(); showPage('today'); showSwitchedOff = true; drawAlerts(); });
+    // The name is the site's own page, with no finding.
+    await page.locator('[data-td-rows="off"] .find').first().locator('a.ss-sl').click();
+    assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, spArrived]), ['#site/secondavenue-10', true, null]);
+  } finally { await page.close(); }
+});
