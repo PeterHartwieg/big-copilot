@@ -93,12 +93,13 @@ async function board(o = {}) {
     drawChart = () => {}; drawPortfolio = () => {};
     drawSite = () => {
       $('secDetail').hidden = !siteOpen;
-      $('sitePanel').innerHTML = siteOpen ? '<div class="sitehead"><h2>site</h2></div>'
+      $('sitePanel').innerHTML = siteOpen ? `<div class="sitehead"><h2>${siteKey}</h2><aside class="seg" id="sitePick"></aside></div>`
         + '<section class="sec" data-block="crew" id="sp-crew">crew</section>'
         + '<section class="sec" data-block="roster" id="sp-roster"><span class="seg" id="probeDays">'
         + '<a href="#" class="on">MON</a><a href="#">TUE</a></span>'
         + '<button type="button" id="probePlan">Demand plan</button></section>' : '';
       /* The plan pick redraws the roster block, as the real one does. */
+      drawSitePicker();
       const pick = $('probePlan');
       if(pick) pick.onclick = () => { $('sp-roster').outerHTML = '<section class="sec" data-block="roster" id="sp-roster">plan</section>'; };
     };
@@ -769,18 +770,69 @@ test('profit: switching the portfolio to Operations takes the landing down', asy
   } finally { await page.close(); }
 });
 
-test('hire: a live redraw lights the roster again; another site takes the landing down', async () => {
+/* Everything renderAll() draws but the site panel and its picker, which the
+   test board draws itself: a live refresh then runs as the app runs it. */
+const quietRender = page => page.evaluate(() => {
+  ['indexTrends', 'drawMast', 'drawKpis', 'drawAlerts', 'drawRhythm', 'drawLogistics', 'drawStock',
+   'drawFlow', 'drawMovers', 'drawMarket', 'drawPlan', 'drawProducts', 'drawPayroll', 'drawGoals', 'drawFindLocation',
+   'drawOptimizeStaffing', 'drawFooter', 'wireAll', 'refreshCityMaps'].forEach(name => { window[name] = () => {}; });
+});
+
+test('hire: a live refresh lights the same roster again, whatever the staffing card picks by then', async () => {
   const page = await board();
   try {
     await page.click('#ssAsk .ss-aq[data-ask="hire"]');
     assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
-    // A save arrives: the panel is drawn again, and renderAll() checks the landing.
-    await page.evaluate(() => { drawSite(); ssCheckLanding(); });
+    const strip = await page.locator('.ss-asked').innerText();
+    // The next save makes the card pick another shop; the refresh redraws the panel.
+    await page.evaluate(site => { $('optimizeStaffingCard').dataset.site = site; }, GYM);
+    await quietRender(page);
+    await page.evaluate(() => renderAll());
+    assert.equal(await page.locator('#sitePanel h2').innerText(), SHOP);
     assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
+    assert.equal(await page.locator('#secPortfolio.ss-lit').count(), 0);
     assert.equal(await page.locator('#sp-crew.ss-dim').count(), 1);
     assert.equal(await page.locator('#sitePanel .ss-asked + #sp-roster').count(), 1);
-    await page.evaluate(site => { openSite(site); document.body.click(); }, GYM);
+    assert.equal(await page.locator('.ss-asked').innerText(), strip);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('hire: another site picked with the keyboard takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="hire"]');
+    assert.equal(await page.locator('#sp-roster.ss-lit').count(), 1);
+    await page.waitForTimeout(100);  // the landing's own click has been checked
+    await page.focus('#sitePick .sitepick');
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(site => siteKey === site, GYM);
     await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('import: closing the change checklist takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="import"]');
+    assert.equal(await page.locator('#orderChecklist.ss-lit').count(), 1);
+    await page.click('#orderChecklistTitle');
+    assert.equal(await page.evaluate(() => $('orderChecklist').open), false);
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('prices: moving off the guide\'s prices address takes the landing down', async () => {
+  const page = await board();
+  try {
+    await page.click('#ssAsk .ss-aq[data-ask="prices"]');
+    await page.waitForSelector('#pageWiki .ss-asked', {timeout: 5000});
+    // The same guide, without the section: the prices are still drawn, but not asked for.
+    await page.evaluate(() => { location.hash = location.hash.replace(/\/prices$/, ''); });
+    await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
+    assert.equal(await page.evaluate(() => page), 'wiki');
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

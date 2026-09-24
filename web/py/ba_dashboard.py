@@ -17890,8 +17890,8 @@ function ssAskPaint(){
   if($("ssAskMini")) $("ssAskMini").hidden = !used;
 }
 
-/* The landing on screen ({qn, strip, lit, host, hash, site}), and the landing
-   still on its way, with the address its question opened. */
+/* The landing on screen ({qn, strip, lit, litId, host, hash, site}), and the
+   landing still on its way, with the address its question opened. */
 let ssAsked = null, ssTicket = 0, ssPending = null;
 function ssAsk(id){
   const qn = SS_QUESTIONS.find(x => x.id === id);
@@ -17908,7 +17908,10 @@ function ssAsk(id){
 function ssLand(qn, from, ticket, tries = 0){
   /* A later question, a search that went elsewhere, or the reader's own
      navigation takes over from a landing still on its way. */
-  if(ticket !== ssTicket || !ssPending || ssPending.ticket !== ticket) return;
+  if(ticket !== ssTicket || !ssPending || ssPending.ticket !== ticket){
+    if(ssPending && ssPending.ticket === ticket) ssPending = null;
+    return;
+  }
   if(location.hash !== ssPending.hash){ ssPending = null; return; }
   const host = $((PAGES.find(p => p.id === qn.page) || {}).host);
   /* Only the answer on the page the question opened, and on screen: a copy
@@ -17935,7 +17938,7 @@ function ssLand(qn, from, ticket, tries = 0){
     ssClearAsked();
     showPage(back.id);
   });
-  ssAsked = {qn, strip, lit: el, host, hash: location.hash, site: siteOpen ? siteKey : null};
+  ssAsked = {qn, strip, lit: el, litId: el.id || "", host, hash: location.hash, site: siteOpen ? siteKey : null};
   ssPlace();
   settleScroll(strip);
 }
@@ -17979,13 +17982,15 @@ function ssClearAsked(){
    `holds` still true (the Checks still on Feed the factories, the portfolio
    still on profit and loss, the same site open, the finder still on). A block
    its own page has drawn again (a live refresh, the roster's plan pick) is
-   found again by the question and lit again, strip and all. */
+   found again and lit again, strip and all: the same block, by the id it had
+   when it was lit, and only a block with no id is asked of the question again
+   (whose answer may since have moved, as the staffing card's pick does). */
 function ssLandingHolds(){
   const a = ssAsked;
   if(!a) return false;
   if(a.qn.holds && !a.qn.holds(a)) return false;
   if(!a.lit.isConnected || !a.strip.isConnected){
-    const again = typeof a.qn.lit === "function" ? a.qn.lit() : q(a.qn.lit);
+    const again = a.litId ? $(a.litId) : typeof a.qn.lit === "function" ? a.qn.lit() : q(a.qn.lit);
     if(!again || !a.host.contains(again)) return false;
     a.lit = again;
     ssPlace();
@@ -17996,13 +18001,15 @@ function ssCheckLanding(){
   if(ssAsked && !ssLandingHolds()) ssClearAsked();
 }
 /* Checked after anything that can change what is on screen has done its work:
-   every click, a change of address, and every render (renderAll() calls it).
-   A landing still on its way is dropped once the address has moved on. */
+   every click, every change of a form control (the site picker, by keyboard or
+   touch), a change of address, and every render (renderAll() calls it). A
+   landing still on its way is dropped once the address has moved on. */
 const ssAfter = () => setTimeout(() => {
-  if(ssPending && location.hash !== ssPending.hash) ssTicket++;
+  if(ssPending && location.hash !== ssPending.hash){ ssTicket++; ssPending = null; }
   ssCheckLanding();
 }, 0);
 document.addEventListener("click", ssAfter);
+document.addEventListener("change", ssAfter);
 window.addEventListener("popstate", ssAfter);
 window.addEventListener("hashchange", ssAfter);
 
@@ -18586,7 +18593,7 @@ function ssGoTo(k, onMap = false){
   ssRemember(e);
   ssClose(false);
   ssClearAsked();
-  ssTicket++;
+  ssTicket++; ssPending = null;
   e.go();
 }
 
