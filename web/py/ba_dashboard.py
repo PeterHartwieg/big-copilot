@@ -18565,10 +18565,12 @@ const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar">
   gwSvg("cursor", "gw-cursor")}</div>`;
 
 /* The board could not read the game after a write: its follow read gave up
-   or its build failed. Cleared by the next board built. */
-let gwReadStuck = false;
-function gwFollowFailed(){
-  gwReadStuck = true;
+   or its build failed. The stamp that follow waited to move away from, so an
+   undo's gate hears only of its own read, not of an earlier apply's; cleared
+   by the next board built. */
+let gwReadStuck = null;
+function gwFollowFailed(stamp){
+  gwReadStuck = typeof stamp === "string" ? stamp : "";
   if(gwOpen && gwOpen._gwGate) gwOpen._gwGate();
 }
 /* Before a focused button is switched off: its place is remembered for the
@@ -18912,32 +18914,54 @@ function gwConfirm(spec){
         spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : ["Close", () => dlg.close(), {kind: "go"}]]});
   };
   /* After an undo in this dialog: the undo said, and the write offered
-     again, but only once the board has been built from bytes read after the
-     undo, since every figure a write sends comes from the board. Bytes with
-     one of `stamps` (the board's before and at the undo, the undo's own)
-     predate the undo's refresh; any other stamp is a read after it. Weighed
-     again on every board built, never on a timer; should the board's read
-     give up, a refresh is offered, and the wait goes on. */
-  dlg._gwReplan = (undone, stamps) => {
+     again, but only once the board shows the game as the undo left it, since
+     every figure a write sends comes from the board. `undo` is {readAt, stamp,
+     source, whose}: web/app.js numbers every look at the game as it starts,
+     and the board qualifies only when the look it matches (link().read) began
+     after the undo's answer came in (readAt), from the same source and
+     company as the undo, and its stamp is not the one the undo answered (the
+     stamp before the undo's own refresh). Stamps alone cannot say it: a read
+     that began before the undo may land after it with a stamp of its own.
+     Weighed again on every board built until the player clicks, and at the
+     click, never on a timer: a board read since from older bytes, another
+     source or another company closes it again. Should the read after the
+     undo give up, a refresh is offered, and the wait goes on. */
+  dlg._gwReplan = (undone, undo) => {
     const mine = ++seq;
+    dlg._gwBoard = null;  // the apply's "read again" line is this gate's now
     gwHead(dlg, title(), where());
-    const gate = () => {
-      if(!dlg.open || mine !== seq) return;
-      const stamp = (gwLink() || {}).stamp;
-      const fresh = !!stamp && !stamps.includes(stamp);
-      const stuck = !fresh && gwReadStuck;
-      if(fresh) dlg._gwGate = null;
+    const weigh = () => {
+      const l = gwLink();
+      const same = !!l && l.source === undo.source && gwWhose() === undo.whose;
+      const fresh = same && Number.isFinite(undo.readAt) && Number.isFinite(l.read) && l.read > undo.readAt
+        && !!l.stamp && l.stamp !== undo.stamp;
+      return {same, fresh, stuck: same && !fresh && gwReadStuck !== null && (gwReadStuck === "" || gwReadStuck === undo.stamp)};
+    };
+    let shown = "";
+    const gate = force => {
+      if(!dlg.open || mine !== seq){ if(dlg._gwGate === gate) dlg._gwGate = null; return; }
+      const {same, fresh, stuck} = weigh();
+      /* Drawn again only when it says something new, so a board built with
+         nothing to change leaves the keyboard and the pointer be. */
+      const key = `${same}|${fresh}|${stuck}`;
+      if(key === shown && !force) return;
+      shown = key;
       gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
-        body: `<div class="gw-reread done">${gwSvg("undo")}<span>${undone}</span></div>${fresh ? gwReread(true) : stuck
-          ? `<p class="gw-sub">The board could not read the game after the undo. Refresh it to go on.</p>` : gwReread(false)}`,
-        hint: fresh ? "" : "Offered again once the board has read the game.",
+        body: `<div class="gw-reread done">${gwSvg("undo")}<span>${undone}</span></div>${fresh ? gwReread(true)
+          : !same ? `<p class="gw-sub">The board is no longer linked to the game this was undone in.</p>`
+          : stuck ? `<p class="gw-sub">The board could not read the game after the undo. Refresh it to go on.</p>` : gwReread(false)}`,
+        hint: fresh ? "" : !same ? "" : "Offered again once the board has read the game.",
         buttons: [...left,
           ...(stuck ? [["Refresh the board", () => { if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {kind: "ghost", icon: "refresh", key: "refresh"}]] : []),
-          [spec.againLabel || "Apply again", () => { dlg._gwGate = null; plan(); },
-           {kind: "go", icon: "right", disabled: !fresh, why: "Reading the game again…", key: "again"}]]});
+          [spec.againLabel || "Apply again", () => {
+            /* Weighed once more at the click: nothing is asked of the game from a board the gate would close. */
+            if(!weigh().fresh) return gate(true);
+            dlg._gwGate = null;
+            plan();
+          }, {kind: "go", icon: "right", disabled: !fresh, why: !same ? "The board is no longer linked to this game" : "Reading the game again…", key: "again"}]]});
     };
     dlg._gwGate = gate;
-    gate();
+    gate(true);
   };
   /* The board read again at the player's word: in a run the run stays, and
      the game is asked afresh from the new board; else the dialog closes. */
@@ -18964,8 +18988,9 @@ async function gwUndo(spec, dlg){
     dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Undoing in the game…</b></span>`;
     dlg.querySelectorAll(".gw-foot button").forEach(b => { b.disabled = true; });
   } else gwPaint(dlg, {phase: "applying", wire: "ask", say: "<b>Undoing in the game…</b>", buttons: ["|", ["Undoing", null, {kind: "go", busy: true, disabled: true}]]});
-  const before = (gwLink() || {}).stamp;
-  gwReadStuck = false;  // an earlier write's failed read is not this undo's
+  /* The game and source the undo is sent to: its gate opens only on a board of the same. */
+  const sentTo = {source: (gwLink() || {}).source, whose: gwWhose()};
+  gwReadStuck = null;  // an earlier write's failed read is not this undo's
   const res = await SOURCE.write("undo", {kind: spec.kind}, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
   /* Gone for good once the game says so; kept for a retry when it only could
      not take it now. */
@@ -18980,11 +19005,18 @@ async function gwUndo(spec, dlg){
     if(res.error === "uncertain" && spec.onUndoUnknown) spec.onUndoUnknown();
     const onward = spec.backToRun ? {label: "Back to the run", go: spec.backToRun, pass: spec.backToRun}
       : spec.next ? {label: spec.next.label, go: spec.next.go, pass: () => spec.next.go()} : null;
-    return gwFailed(dlg, Object.assign({}, spec, {next: onward}), res, () => gwUndo(spec, dlg), null);
+    /* A refresh after a failed undo reads the game and leaves the write as it
+       stands: the dialog is not asked about the write again, so in a run the
+       shop stays written and the way on is the run's. */
+    const refreshBoard = () => {
+      if(!onward) dlg.close();
+      if(typeof SOURCE.refresh === "function") SOURCE.refresh();
+    };
+    return gwFailed(dlg, Object.assign({}, spec, {next: onward, refreshBoard}), res, () => gwUndo(spec, dlg), null);
   }
   const answer = res.body || {};
   if(spec.onUndo) spec.onUndo();
-  if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer), [before, (gwLink() || {}).stamp, answer.stamp]);
+  if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer), Object.assign({readAt: res.readAt, stamp: answer.stamp}, sentTo));
   dlg._gwBoard = D;
   gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
@@ -19016,7 +19048,8 @@ function gwToast(){
    says so under its drawing. */
 function gwReadBack(){
   const dlg = gwOpen;
-  if(dlg && dlg._gwGate) dlg._gwGate();
+  /* A dialog waiting on an undo's gate says only what the gate says. */
+  if(dlg && dlg._gwGate) return dlg._gwGate();
   if(!dlg || !dlg._gwBoard || dlg._gwBoard === D) return;
   dlg._gwBoard = null;
   const line = dlg.querySelector(".gw-reread:not(.done)");
@@ -19791,14 +19824,17 @@ function startWatching(){
       const first = !D;
       D = data;
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
-      gwReadStuck = false;
+      gwReadStuck = null;
       if(first) boot(); else renderAll();
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
     stale: markStale,
     /* The read that follows a write gave up, or its build failed. */
-    followFailed: () => gwFollowFailed(),
+    followFailed: stamp => gwFollowFailed(stamp),
+    /* A look at the game found the board's bytes still current: an undo's
+       gate may open on the board as it is. */
+    vouched: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
     lost(){
       const dot = $("live");
       if(dot){ dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }

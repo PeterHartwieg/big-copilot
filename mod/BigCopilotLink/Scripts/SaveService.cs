@@ -143,6 +143,9 @@ namespace BigCopilotLink
         // the main-thread path: a stall, but bytes that always arrive. After ten
         // main-thread refreshes the worker gets one more chance, so a bad minute does
         // not cost a whole evening; one more failure and it is back to the main thread.
+        // The seconds part of the last stamp published, kept across unloads so no
+        // stamp is ever issued twice. Main thread only, like the publish.
+        private long _lastStampSeconds;
         private int _backgroundFailures;
         private bool _backgroundSerialize = true;
         private int _fallbackRuns;
@@ -588,21 +591,28 @@ namespace BigCopilotLink
 
                 var now = DateTime.UtcNow;
                 var unixSeconds = (long)(now - UnixEpoch).TotalSeconds;
-                var stamp = day.ToString(CultureInfo.InvariantCulture) + "-" +
-                            hour.ToString(CultureInfo.InvariantCulture) + "-" +
-                            unixSeconds.ToString(CultureInfo.InvariantCulture);
                 var iso = now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
-                // One reference swap publishes everything at once, so a reader can
-                // never pair new bytes with an old stamp. A city unloaded meanwhile
-                // (Clear ran) gets nothing: the bytes would outlive the game.
-                var next = new Snapshot(gz, stamp, day, iso);
                 // A refused enqueue means the city unloaded: Clear() already reset
                 // Busy and dropped the bytes, so there is nothing left to publish.
                 MainThreadDispatcher.Enqueue(delegate
                 {
                     if (_cleared) return;
-                    _current = next;
+                    // The stamp is opaque, but two refreshes must never share one: an
+                    // apply's refresh and a quick undo's can land in the same second,
+                    // and a page waiting for the stamp to move would wait out its
+                    // whole deadline. So the seconds are last + 1 at least, as the
+                    // mock's are. Taken here, on the main thread, where every publish
+                    // runs one after another.
+                    var seconds = Math.Max(unixSeconds, _lastStampSeconds + 1);
+                    _lastStampSeconds = seconds;
+                    var stamp = day.ToString(CultureInfo.InvariantCulture) + "-" +
+                                hour.ToString(CultureInfo.InvariantCulture) + "-" +
+                                seconds.ToString(CultureInfo.InvariantCulture);
+                    // One reference swap publishes everything at once, so a reader can
+                    // never pair new bytes with an old stamp. A city unloaded meanwhile
+                    // (Clear ran) gets nothing: the bytes would outlive the game.
+                    _current = new Snapshot(gz, stamp, day, iso);
                     _busy = false;
                     // Any published refresh ends the failure streak: "two in a row"
                     // means two failed walks with nothing served between them. A
