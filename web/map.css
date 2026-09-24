@@ -6,7 +6,10 @@
 
 /* header row: layer chips, the ? mark, search with the live count -------------- */
 .map-head{margin-top:28px;position:relative;z-index:1} /* below the sticky masthead when scrolled */
-.layers{display:inline-flex;gap:2px}
+.layers{display:inline-flex;flex-wrap:wrap;gap:2px}
+/* Each layer names itself beside its count: "Mine 26 · Owned 0 · Homes 3". */
+.sev.lay .lw{color:var(--ink-2)}
+.sev.lay .n{color:var(--ink)}
 .sev.lay{border:1px solid transparent;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;appearance:none;-webkit-appearance:none}
 .sev.lay.off{opacity:.35}.sev.lay.off:hover{opacity:.6}
 .sev.mine i{background:var(--accent)}.sev.own i{background:var(--info)}.sev.home i{background:var(--ink)}.sev.fnd i{background:var(--warn)}.sev.all i{background:transparent;border:1px solid var(--ink-3);box-sizing:border-box}
@@ -38,7 +41,8 @@
 /* The switch sits in the map window, in the same button the zoom controls use;
    the accent marks it pressed, the way a layer chip marks itself on. */
 .fswitch{position:absolute;left:16px;top:16px;z-index:5}
-.fswitch .ibtn{box-shadow:0 2px 8px #0003}
+.fswitch .ibtn{box-shadow:0 2px 8px #0003;width:auto;display:inline-flex;align-items:center;gap:7px;padding:0 12px 0 10px;
+  font:500 12.5px/1 Archivo,"Helvetica Neue",Arial,sans-serif;white-space:nowrap}
 .fswitch .ibtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 /* The stage keeps its dark artwork in either theme, so the pressed state tints
    the button's own surface rather than replacing it with a translucent wash. */
@@ -286,6 +290,9 @@ body.map-modal-open{overflow:hidden}
  .fchip.num input,.fchip.fname input{font-size:16px}
  .fsel select{height:32px;font-size:16px}
  .map-head .aside{flex-basis:100%}
+ /* The named chips wrap onto a second line; the ? stays beside them. */
+ .map-head > .layers{flex:1 1 0;min-width:0}
+ .sev.lay{padding:6px 7px;gap:5px}
  .srch,.srch:focus-within{width:100%}
  .srch input{font-size:16px}
  .map-dialog{width:calc(100vw - 12px);max-height:calc(100dvh - 12px);padding:12px}

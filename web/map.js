@@ -281,13 +281,13 @@ class CityMapView {
     // in the map window and its filters in the panel.
     const head = this.panel ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" aria-label="Your businesses" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" aria-label="Buildings you own" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" aria-label="Your homes" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" aria-label="Sites with a finding" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" aria-label="Every address" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why" data-tip="The dots are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
+      <span class="why" data-tip="The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
@@ -355,7 +355,9 @@ class CityMapView {
      thing rather than as chrome scattered over the map. */
   finderControls(){
     if(!premises()) return "";
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" aria-label="Find a location" data-tip="Find a location">${ICON.pin}</button></div>`;
+    /* A chip with its name on it: a bare pin in the corner was the most
+       hidden way into a headline feature. */
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-tip="Rank the buildings you could take for a business type">${ICON.pin}<span>Find a location</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
