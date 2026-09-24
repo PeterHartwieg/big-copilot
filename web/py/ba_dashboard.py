@@ -11106,6 +11106,10 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-step.sp-done{color:var(--ink-3)}
 .sp-step small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sp-daytabs a{position:relative;min-width:30px;text-align:center}
+/* The two controls stretch to the height of the steps beside them, and a step
+   whose line wraps (who to add) is taller than a pill: centred, not left at the
+   top of the stretched pill. */
+.sp-nowplan a,.sp-daytabs a{display:flex;align-items:center;justify-content:center}
 .sp-daytabs a u{position:absolute;left:-4px;top:50%;width:6px;border-top:1.5px solid var(--ink-3);text-decoration:none}
 .sp-day{display:none}
 .sp-day.sp-on{display:block}
@@ -11204,6 +11208,16 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-rcount b{color:var(--ink);font-weight:500}
 .sp-rpeople{display:none;grid-column:1/-1;padding:4px 0 14px}
 .sp-rrow.open .sp-rpeople{display:block}
+/* The three columns leave the dots what the role and its count do not take.
+   Beside Fees or Shelves the Crew block is a third of the page, and a big
+   role's dots were squeezed into one column, a dot a line. Too narrow, the
+   dots take a line of their own under the role and its count, as on a phone. */
+.sp-roster{container-type:inline-size}
+@container (max-width:620px){
+  .sp-rrow{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+  .sp-rrow .sp-dots{grid-column:1/-1;grid-row:2}
+  .sp-rrow .sp-rcount{grid-column:2;grid-row:1}
+}
 
 /* shelves: the three marks a shop's own table gains */
 .sp-noplan{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px dashed var(--warn);border-radius:4px;color:var(--warn);font-size:11px}
@@ -11757,9 +11771,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sitePanel .sp-typed{margin-left:0}
   #sitePanel .sp-steps .sp-nowplan{margin-left:0!important}
   #sitePanel .sp-daytabs a{padding:6px 8px}
-  #sitePanel .sp-rrow{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
-  #sitePanel .sp-rrow .sp-dots{grid-column:1/-1;grid-row:2}
-  #sitePanel .sp-rrow .sp-rcount{grid-column:2;grid-row:1}
   #sitePanel table{font-size:12.5px}
   #sp-shelves > table{display:block;overflow-x:auto;max-width:100%}
   #sp-shelves td.l{white-space:nowrap}
