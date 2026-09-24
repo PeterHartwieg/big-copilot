@@ -26,7 +26,9 @@ hash, so a live refresh and a reopened tab both land where you left off.
 **Map** shows the city with your business footprints in green, buildings you own dashed
 blue, homes you rent in white, and a floating list of places over the right edge. Five
 chips above the map are layers that add up: your businesses, buildings you own, homes you
-rent, sites with a finding from Today, and every address (off by default, drawn as faint
+rent, sites with a finding from Today (any finding of a kind still switched on, the ones
+under the list included; board search colours a site's dot from the list alone, above the
+gate and of a kind still on), and every address (off by default, drawn as faint
 outlines). Clicking a chip switches that
 layer off; off is dimmed, never removed. The search field narrows the list and shows its
 count; the `?` mark explains the layers. Drag to pan, scroll or pinch to zoom, or use the
@@ -69,8 +71,8 @@ the map.
   switched off, by the player or by default, naming each kind with its count and worth in
   the tune panel's order ("15 in kinds switched off: Overstaffed hours (15, $17k/day)"). The tune button chooses which kinds of finding
   make the list; switching one off moves its findings to the second line rather than
-  hiding them, and nothing is ever dropped. *At capacity* is on by default and *Overstaffed
-  hours* off; a device keeps only the kinds its player switched, so a later change of
+  hiding them, and nothing is ever dropped. *At capacity* is on by default, and *Overstaffed
+  hours* and *Demand wave ending* are off; a device keeps only the kinds its player switched, so a later change of
   default reaches everyone who never touched that kind. *Overstaffed hours* is one line per
   site: the spare staff-hours of the whole week, its wages summed, with the days and hours
   named as a shape ("Mon-Wed 8-20"), one part per role and headcount ("2 counters Mon 8-12;
@@ -222,8 +224,9 @@ switch says so first, because it books no day however ready it is.
 
 **It has to be news.** An order that exactly matched last week's consumption is a
 correctly sized order. What the board asks instead is whether the standing order covers
-the *next* week, walked day by day at each weekday's own rate, and only an order that
-falls more than 5% short of that becomes a line. Factories run their books negative by
+the *next* week, and only an order short of what that week uses becomes a line. One
+that covers the use but not the 15% margin is *tight*: the Checks and Orders pages say
+so, the list never does. Factories run their books negative by
 design and their takings arrive in batches, so neither their red line nor a jump in their
 weekly total is reported. A shop whose week is up because it is riding its own hype wave
 is the line above it said twice.
@@ -240,12 +243,13 @@ What is on the list is what moves the number:
   days left, because the shop's takings under hype are one number: *hype on 10 lines (7 end
   in 4 days, 3 in 13 days)*. The line's level follows the soonest end, and its baseline is
   the first wave's, since the shop's days before a later wave already carry the earlier one.
+  Its kind, *Demand wave ending*, is off by default.
 - **Week on week per site.** Any trading site whose seven-day revenue moved more than 15%
   against the seven days before it, with both figures. Sites open under two weeks have no
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
   its next import or route round, an order too small for the week it has to cover, a
-  paused import.
+  paused import, and stock no plan sends on while your own sites sell it (*Not routed*).
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -334,7 +338,7 @@ grid and three lines meet.
   a per-hour limit, not a daily total.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
-Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red,
+Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
 and hours with capacity doing nothing in blue.
 
 Every kind of furniture whose help text says it is an *employee station* with a Customer
@@ -391,9 +395,10 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
 hour is judged on its own roster, and each role on the roster that was on for it. Where the
-door cap is at or below the site's staffed capacity the building is the limit, and the
-answer is a bigger site or a second shop nearby (for an office, a bigger office or a second
-one). Otherwise every role standing at the site's own minimum is named, and only those: a
+door cap is at or below the site's staffed capacity the building is the limit. That is
+not raised as a finding: plenty of well-run sites sit at their building's capacity, and
+there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
+building capacity") and neutral rings on its hours in the grid. Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
 standing empty is short of people; one with every station manned is short of stations. A
@@ -429,9 +434,8 @@ Both are grouped before they are shown. Six shops hitting the same 30/h ceiling 
 same hours is one line about six shops. Offices group only with offices.
 
 A hype wave arriving at a shop already within 10% of its ceiling is added to that wave's
-line rather than raised separately, because it is the same event. Where pricing is
-handled by pricing staff, capacity is the only lever the wave leaves open, and it comes
-with the wave's end date attached.
+line rather than raised separately, because it is the same event: the door is turning
+part of the wave away, until the wave's end date.
 
 ### The week the board would copy into BizMan
 
@@ -847,7 +851,9 @@ and dims the rest; clicking scrolls there.
   riding on the wave and a pip a day left; with no baseline to measure the wave against,
   the bar is hatched rather than guessed.
 - **Customers by hour.** The two things the grid can say that a daily total cannot are
-  chips under it: what the ceiling costs, with the fix, and what idle hours cost. The idle
+  chips under it: what the ceiling costs, with the fix, and what idle hours cost. Hours
+  held by the building's own capacity get a neutral chip with no fix, since that is not a
+  warning. The idle
   chip is the site's *Overstaffed hours* line: the whole week's spare staff-hours, hours
   and wages. Hovering a chip picks its own hours out of the grid.
 - **Staffing** (a shop). The week the board would copy into BizMan, on the customer grid's
@@ -1011,20 +1017,95 @@ weekly, so its order is judged against a full week, which is why an order of 13,
 read short beside a five-day need of 11,014: the week takes 13,293. The verdict column
 always states the figure it used, and by how much it misses.
 
-### Close enough counts as covered
+### One word for each item at each site
 
-Consumption is measured from play, not read off a label, so two figures within a
-rounding error of each other are the same figure. A weekly need of 17,003 against an
-order of 17,000 is not a finding. The verdict has three states rather than two:
+Every item a site holds, needs or has a plan for gets one verdict, worked out once and
+read by every view: Checks, Orders, the goods flow, the site page and the findings. The
+first of these that fits is the word:
 
-| Gap | Reads as |
+| Word | When |
 | --- | --- |
-| within 1% (or 5 units) | **covered**, the difference is measurement noise |
-| 1-5% under | **tight**, worth knowing, not worth acting on today |
-| more than 5% under | **order too small**, the order cannot cover its own cycle |
+| **made here** | the site makes it, and nothing has to bring it |
+| **paused** | its import is paused and no route covers it |
+| **no plan** | nothing brings it: a shelf with no top-up and no wholesale delivery contract, a factory input with no top-up, a depot line with no import |
+| **new** | too young to judge: a shop under five trading days, a factory input on its first fill, a depot with no round logged yet |
+| **short** | the figure in game is under what the week or the day uses, the stock runs out before the drop, or the depot behind a factory input has run dry |
+| **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor the roster explains it |
+| **idle** | stock not moving on (see *Idle stock* below) |
+| **tight** | covers the use, but not the 15% margin |
+| **covered** | everything else, with the reason where it is not the figure itself: a route brings it, the line is held by its Produce up to limit, or the roster runs the machines part of the week |
 
-The same tolerance applies to shelf pressure, so a shop selling 100.2% of its top-up on
-its peak day is not reported as running dry.
+What a figure has to cover is what the ends of the chain use (the shops' sales, the
+factory lines' draw) plus a 15% margin, added **once** over the whole chain from import
+to sale, never again at each hop. Every figure the board suggests is rounded up to the
+next ten. Consumption is measured from play, not read off a label, so two figures within
+1% (or 5 units) of each other are the same figure: a weekly use of 17,003 against an
+order of 17,000 is covered.
+
+**Factory sizing: 24/7 or Demand.** One switch, kept in this browser, on Orders, on the
+Checks factory and depot views and on factory and depot pages. **24/7** (the default)
+sizes every factory line at its rated capacity, round the clock, with no margin on top:
+the set-up for running flat out. **Demand** sizes each line on what the shops down the
+plan sell of its product (or what the log says left, where that is more), plus the
+margin, never past capacity. A shop open under a week has not settled, so Demand reads
+its coming week off a straight line through its trading days and says the figure *may
+still be ramping*, naming the shops. Switching needs no refresh: both answers are
+already on the page.
+
+A shop's week is its trading-day rate over the days it traded in the last seven, spread
+over the days since it first traded, so a shop open two days a week uses two days' worth,
+not seven, and one trading for four days is not read at four sevenths of its week; a daily
+top-up is still judged on the busiest trading day.
+
+A first fill is a factory's or a depot's first round of a new top-up target: the first
+day its whole delivery log names the item, inside the last week. What that day brought
+beyond the rounds after it is no use, so a depot whose only outflow was a first fill reads
+**idle**, not moving, and a factory input on its first fill is **new**. A depot whose plans
+feed a factory line on its first fill is not judged idle until that line has five days
+behind it. (A log that has reached its sixty entries and starts that very day may have
+lost older ones, so there it is no first fill.)
+
+A depot only a route from another of your sites feeds is judged as a shelf is, in a day's
+figures: its top-up against its busiest day's draw plus the margin, with the top-up to set;
+a short one is a finding (*Depot top-up too low*, opening the depot's page), and Orders
+lists the change under *Depot daily top-ups*, naming the site whose plan sets it. A depot a
+wholesale store delivers to is judged on that contract's week, as an import is. A factory input topped up from a depot and imported to the
+factory as well keeps its daily word, and its own contract is judged on the week in Weekly
+imports beside the depots'. Paused, it brings nothing, so the depot's top-up and the
+import behind it carry the input's whole week; the contract still reads **paused**, a
+quiet note ("paused — Import Hub's top-up covers Mill") where the top-up covers the line,
+and a warning only where the input is short without it. Only **short**, **tight** and **no plan** suggest a figure to set.
+
+Stock held where no plan sends it on is **Not routed** wherever it sits, a depot or a
+factory, when your own sites sell or need the item with no plan feeding them: a shelf, a
+factory line, or a depot whose own plans send it to shops. Where none does, it is not
+moving, and a top-up that brings it reads: add a plan to the shops that should get it, or
+stop the top-up.
+
+**Held by Produce up to.** A factory line whose machines all have *Produce up to* set stops
+at the limit and starts again as the morning round takes its output away, so through the
+day what it holds sits anywhere under the limit, and what it eats matches what it makes,
+not what it could make. Its inputs read **covered**, held by Produce up to, rather than
+**stalled**, when the line makes well under its roster's output (under three quarters)
+while every input it eats is on hand for the rest of the day at the full rate, as well as
+when the output held is at the limit. A starved line runs its input down instead, and
+stays **stalled**.
+
+**Wholesale deliveries.** A shop can be fed by a wholesale store instead of your own
+depots: a repeating delivery contract (the save's `DeliveryContracts`) brings a set amount
+of each item on its delivery day, once a week. Such a shelf is on a plan. It is judged as
+an import is, on the week: the contract's amount against a week of the shelf's sales plus
+the margin (**short** under the week, **tight** under the margin), and its stock against
+the days to the next delivery. An order under the week is a warning while the stock still
+reaches the drop, and critical once it runs out before it. Checks shows the contract
+beside the top-up column, Orders lists a change under *Wholesale deliveries*, and a short
+one is a finding. A one-off or
+urgent order, or a disabled contract, is no standing supply, and a shelf on a contract is
+never among the sites a **Not routed** finding names.
+
+A line named by hand in this browser reads **new** until the next refresh (the next save
+on the web board, a re-run or `--watch` locally), because only a fresh build works out
+its verdict.
 
 It applies to the walk to the next import too. An order sized to what you actually
 consume will always look as though it empties a few hours before the next drop. That is
@@ -1053,13 +1134,25 @@ views ask the questions that matter instead:
   twenty-three; charging a whole day would count Saturday twice and report a warehouse
   running dry that has more than enough. Both sides of the comparison are counted from
   now: the delivery lands at the start of its day, so a Saturday-night save with a Monday
-  import has 1.04 days to cover, not 2.
-- **Idle stock**: goods held far beyond what flows through them, including anything
-  with no outflow at all, shown against the top-up target that put it there. A factory
-  input is the exception: the machines neither sell nor ship it, so what the morning
-  round brings in is what yesterday used, and a holding smaller than two rounds' worth
-  (1,020 fabric against 23,040 arriving a day) is the end-of-day buffer that keeps the
-  line running, not a pile. Output that nothing collects still counts.
+  import has 1.04 days to cover, not 2. A depot whose draw is its logged rounds is
+  emptied a round at a time instead: each morning's round leaves whole, today's counts
+  only until it is in the log, and the delivery day's own round counts too, because in
+  the save it leaves before the import lands.
+- **Idle stock**: 500 or more held, four weeks or more of what draws on it (a warning
+  at eight), or 1,000 or more that nothing draws on at all. What draws on it depends on
+  where it sits: a shelf sells at its trading-day rate, once it has five trading days;
+  a factory input is eaten at its machines' need in the chosen sizing, never judged on
+  its first fill; a depot feeds the shelves and machines its plans reach, and only where
+  they reach none is its measured outflow read instead. Four weeks or more is said by
+  cause: a **top-up target too high** (a target four weeks of the busiest day deep), an
+  **import keeping too much** (a Smart Delivery level or weekly order worth four weeks of
+  what the depot feeds), or plain overstock. Nothing drawing on it is **not moving**, or,
+  where your own sites sell or need the item with no plan feeding them, **Not routed**:
+  *Import Hub holds 3,000 Soda Can no plan sends on; 3 gyms sell 369/day and hold ~7
+  days*. That one line stands for those sites, whose own no-plan findings give way to it;
+  a shelf a wholesale delivery contract feeds is not one of them.
+  A raw material a factory tops a depot up with, where nothing uses it, names the route
+  to remove.
 
 Depots and factories reached by a paused import are flagged separately, since those
 drain with nothing scheduled to refill them.
@@ -1123,6 +1216,10 @@ against what last week took. You order once a week and top up daily; an order th
 matched last week's draw exactly is the order working. Only one that falls short of the
 week ahead, walked day by day through the weekday profile, is a finding.
 
+**Sells / day** for a shelf is its trading-day rate: the last seven days after its
+opening day with at least one customer, so a new shop or one shut some days is not read
+at a fraction of its pace.
+
 **Uses / day** for a depot is measured, not inferred from the order. Every site keeps
 the game's own log of its last sixty delivery transactions (`deliveryTransactions`);
 the units a logistics round carried out, averaged over the days it ran, are the draw
@@ -1140,7 +1237,9 @@ Two tables, one per number a logistics manager is set with.
 
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
   *Used / week* is what all the factories drawing on it eat in a week (from their lines,
-  machines times recipe draw times 24 times 7) plus what else leaves for the shops
+  in the chosen sizing: machines times recipe draw times 24 times 7 at 24/7, what the
+  shops sell of their products at Demand; a factory it feeds through another factory
+  counts too) plus what else leaves for other sites
   (measured from the delivery log, leaving out the days an import can have landed, when
   the log nets the arrival off what left; on a line a route from your own site feeds,
   what left is read gross, before any arrival, so an import day is not left out for
@@ -1161,12 +1260,13 @@ Two tables, one per number a logistics manager is set with.
   same holds for a depot line with no import contract at all that a route feeds: it is not
   asked for an import the route already brings. The table suggests imports only where an
   import contract exists or a factory line needs the material; a depot line that only
-  shops draw, with no contract, is not in it. For a plain order the
-  suggestion is the import's week rounded up to the hundred. For Smart Delivery it names
+  shops draw, with no contract, is not in it. The suggestion covers the week plus the
+  margin where the shops' part is concerned (24/7 sizing adds none to the factory lines).
+  For a plain order it is that week rounded up to the ten. For Smart Delivery it names
   one contract, the one whose level holds: the last that still brings something when the
   game's delivery pass runs into an empty depot. A plain amount delivered before that
   level counts toward it (the level only tops up what is missing), one delivered after
-  it comes on top as "plus N a week". The suggested level is the least, in hundreds, at which that pass,
+  it comes on top as "plus N a week". The suggested level is the least, in tens, at which that pass,
   replayed with it, brings the week, so a plain amount that already passes the level is
   never taken off it. Enter your own figure and it is kept in this browser per character,
   depot and material, with the figure the game held when you entered it, until you reset
@@ -1187,8 +1287,9 @@ Two tables, one per number a logistics manager is set with.
   import there.
 - **Daily top-ups, per factory**: every material each factory eats a day, the lines that
   eat it (with machine counts), the top-up now on the plan feeding it, and the top-up to
-  set. A top-up below the day's need starves the machines before midnight; one far above
-  it is only cash on a shelf, and is marked as such without alarm.
+  set, rounded up to the ten (at Demand, a day's use plus the margin, never past
+  capacity). A top-up below the day's need starves the machines before midnight; one far
+  above it is only cash on a shelf, and is marked as such without alarm.
 
 Both are built from the factory lines as the board reads them, or as you named them, so
 a line named a moment ago is already in the totals. The section opens on *Needs a change*,

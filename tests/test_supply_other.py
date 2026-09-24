@@ -375,14 +375,16 @@ class DepotOtherTests(unittest.TestCase):
 
     def test_a_factory_that_eats_the_item_is_never_idle(self):
         """The first factory passes 100 a day to the second, whose line eats
-        it and which ships none on: that is use, 700 a week, as main read it."""
+        it and which ships none on: that is use, but the factory lines' part
+        of the hub's week now carries it (_factories' upstream()), so it is
+        not the hub's other sites' draw as well."""
         log = {}
         for day in range(3, 10):
             ship(log, day, HUB, FACTORY, {WATER: 340})
             ship(log, day, FACTORY, FACTORY2, {WATER: 100})
         other = depot_other(log, [(HUB, FACTORY, WATER, 400), (FACTORY, FACTORY2, WATER, 300)],
                             [imports(HUB, WATER, 2380)])
-        self.assertEqual(other[WATER], 700)
+        self.assertEqual(other[WATER], 0)
 
     def test_a_depot_routed_to_a_shelf_that_shipped_nothing_is_read_net(self):
         """The depot has a route to a shop selling water but sent none in the

@@ -1,10 +1,8 @@
 """Supply regressions for GitHub #17 and #18, using portable save fixtures."""
-import json
-import subprocess
 import unittest
 from unittest.mock import patch
 
-from ba_dashboard import Names, TEMPLATE, _feed_notes, _scheduled_import_gap, _supply, site_key
+from ba_dashboard import Names, _import_notes, _scheduled_import_gap, _supply, site_key
 from test_recipe_identity import BEER, WATER, RID, SaveStub
 
 
@@ -94,7 +92,7 @@ class ImportRoutesTests(unittest.TestCase):
         data = self.build([contract(126000)], routed=True)
         self.assertEqual(data["supply"]["factories"]["depots"][1][WATER]["weekly"], 126000)
         self.assertEqual(self.need(data)["importWeekly"], 126000)
-        self.assertEqual(self.need(data)["status"], "ok")
+        self.assertEqual(self.need(data)["status"], "covered")
 
     def test_warehouse_orders_sum_without_zero_or_paused_contract_overwriting(self):
         contracts = [contract(1000, last=1000), contract(2000, last=2000, pier=2),
@@ -104,7 +102,7 @@ class ImportRoutesTests(unittest.TestCase):
             with self.subTest(reverse=orders != contracts):
                 need = self.need(self.build(orders, routed=True))
                 self.assertEqual(need["importWeekly"], 3000)
-                self.assertEqual(need["status"], "ok")
+                self.assertEqual(need["status"], "covered")
 
     def test_paused_and_zero_history_do_not_inflate_active_fallback_draw(self):
         data = self.build([contract(1000, last=1000), contract(2000, last=2000, pier=2),
@@ -132,7 +130,7 @@ class ImportRoutesTests(unittest.TestCase):
 
     def test_direct_factory_import_covers_input_without_daily_topup(self):
         need = self.need(self.build([contract(2000, last=2000, destination=("factory", 0))]))
-        self.assertEqual(need["status"], "ok")
+        self.assertEqual(need["status"], "covered")
         self.assertEqual(need["importWeekly"], 2000)
         self.assertEqual(need["perWeek"], 1680)
         self.assertTrue(need["directImport"])
@@ -140,12 +138,13 @@ class ImportRoutesTests(unittest.TestCase):
 
     def test_short_direct_factory_order_recommends_weekly_import(self):
         need = self.need(self.build([contract(700, destination=("factory", 0))]))
-        self.assertEqual(need["status"], "import")
-        self.assertEqual(need["raiseImport"], 1700)
+        self.assertEqual((need["status"], need["why"]), ("short", "order"))
+        self.assertEqual(need["raiseImport"], 1680)
         self.assertIsNone(need["raiseTarget"])
 
     def test_unplanned_input_stays_unplanned(self):
-        self.assertEqual(self.need(self.build([]))["status"], "unplanned")
+        self.assertEqual((self.need(self.build([]))["status"], self.need(self.build([]))["why"]),
+                         ("noplan", "target"))
 
     def held(self, data, item="Water"):
         node = next(n for n in data["supply"]["graph"]["nodes"] if n["id"] == "factory#0")
@@ -200,7 +199,8 @@ class ImportRoutesTests(unittest.TestCase):
                 data = self.build(orders, routed=True, target=100)
                 row = self.held(data)
                 self.assertEqual((row["cadence"], row["provision"], row["fit"]), ("daily", 100, "short"))
-                self.assertEqual((self.node(data)["short"], self.node(data)["unsupplied"]), (1, 0))
+                self.assertEqual(self.node(data)["short"], 1)
+                self.assertNotEqual(self.held(data)["st"], "noplan")
 
     def test_factory_panel_judges_a_covering_import_on_its_week_beside_a_route(self):
         """As the factory view does: a fill-to target ships nothing while the
@@ -280,15 +280,19 @@ class ImportRoutesTests(unittest.TestCase):
         row = self.held(self.build([order]))
         self.assertEqual((row["need"], row["cycleNeed"]), (1680, 1680))
 
-    def test_factory_panel_marks_a_direct_import_just_under_the_week_tight(self):
+    def test_factory_panel_marks_a_direct_import_under_the_week_short(self):
+        # 24/7 sizing adds no margin, so a week within rounding is covered and
+        # one further under is short, not tight.
+        row = self.held(self.build([contract(1675, destination=("factory", 0))]))
+        self.assertEqual(row["fit"], "ok")
         row = self.held(self.build([contract(1600, destination=("factory", 0))]))
-        self.assertEqual(row["fit"], "tight")
+        self.assertEqual(row["fit"], "short")
 
     def test_factory_panel_names_an_input_with_no_plan(self):
         data = self.build([])
         row = self.held(data)
         self.assertEqual((row["fit"], row["why"]), ("short", "unplanned"))
-        self.assertEqual((self.node(data)["short"], self.node(data)["unsupplied"]), (1, 1))
+        self.assertEqual((self.node(data)["short"], row["st"]), (1, "noplan"))
 
     def test_factory_panel_counts_the_factories_it_tops_up(self):
         """An import to one factory that also feeds another has to cover both."""
@@ -312,7 +316,10 @@ class ImportRoutesTests(unittest.TestCase):
         data = self.build([contract(0, last=1000)], routed=True)
         self.assertFalse(data["supply"]["imports"][0]["paused"])
         self.assertEqual(self.need(data)["importWeekly"], 0)
-        self.assertEqual(self.need(data)["status"], "import")
+        # The factory's own top-up is fine; the zero order is the depot's fact.
+        self.assertEqual(self.need(data)["status"], "covered")
+        depot = data["supply"]["facts"]["1"][WATER]
+        self.assertEqual((depot["st"], depot["why"], depot["setTo"]), ("short", "order", 1680))
 
     def test_direct_and_warehouse_orders_keep_separate_destinations(self):
         data = self.build([contract(2000, destination=("factory", 0)), contract(126000)])
@@ -321,14 +328,14 @@ class ImportRoutesTests(unittest.TestCase):
 
     def test_direct_order_covers_factory_even_with_existing_daily_route(self):
         need = self.need(self.build([contract(2000, destination=("factory", 0))], routed=True))
-        self.assertEqual(need["status"], "ok")
+        self.assertEqual(need["status"], "covered")
         self.assertEqual(need["importSite"], 0)
         self.assertEqual(need["directNeed"], 1680)
         self.assertEqual(need["warehouseNeed"], 0)
 
     def test_partial_direct_order_reduces_shared_warehouse_requirement(self):
         need = self.need(self.build([contract(840, destination=("factory", 0)), contract(900)], routed=True))
-        self.assertEqual(need["status"], "ok")
+        self.assertEqual(need["status"], "covered")
         self.assertEqual(need["directNeed"], 840)
         self.assertEqual(need["warehouseNeed"], 840)
         self.assertEqual(need["depotNeed"], 840)
@@ -337,8 +344,8 @@ class ImportRoutesTests(unittest.TestCase):
     def test_partial_direct_import_does_not_lower_daily_fill_target(self):
         need = self.need(self.build([contract(840, destination=("factory", 0)), contract(900)],
                                    routed=True, target=130))
-        self.assertEqual(need["status"], "target")
-        self.assertEqual(need["raiseTarget"], 300)
+        self.assertEqual((need["status"], need["why"]), ("short", "target"))
+        self.assertEqual(need["raiseTarget"], 240)
         self.assertEqual(need["warehouseNeed"], 840)
 
     def test_staggered_deliveries_preserve_stock_cover_for_cross_row_ranking(self):
@@ -368,33 +375,9 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertEqual(row["orderFit"], "short")
         self.assertEqual(row["reason"], "order")
 
-    def test_browser_parity_for_paused_and_mixed_routes(self):
-        cases = [
-            ([contract(2000, active=False, destination=("factory", 0))], False, 300),
-            ([contract(2000, destination=("factory", 0))], True, 300),
-            ([contract(840, destination=("factory", 0)), contract(900)], True, 300),
-            ([contract(840, destination=("factory", 0)), contract(900)], True, 130),
-            ([contract(840, destination=("factory", 0)), contract(100)], True, 300),
-        ]
-        for contracts, routed, target in cases:
-            with self.subTest(contracts=contracts, routed=routed):
-                data = self.build(contracts, routed=routed, rid="unknown", target=target)
-                script = "const D = " + json.dumps(data) + "; const LIVE = false;\n"
-                script += "const localStorage = {getItem: () => " + json.dumps(json.dumps({"unknown": BEER})) + "};\n"
-                script += TEMPLATE[TEMPLATE.index("const LINE_NAMES_KEY"):TEMPLATE.index("/* --- chrome, wired up once")]
-                script += "\nconsole.log(JSON.stringify(factoryView()));"
-                result = json.loads(subprocess.run(["node", "-e", script], check=True,
-                                                   text=True, capture_output=True).stdout)
-                actual = result["sites"][0]["needs"][0]
-                expected = self.need(self.build(contracts, routed=routed, target=target))
-                for key in ("status", "importWeekly", "importPaused", "directImport", "directWeekly",
-                            "directNeed", "warehouseNeed", "dailyNeed", "depotNeed", "depotStock",
-                            "raiseImport", "raiseTarget", "importSite", "from"):
-                    self.assertEqual(actual[key], expected[key], key)
-
     def test_direct_import_finding_points_to_factory(self):
         data = self.build([contract(700, destination=("factory", 0))])
-        notes = _feed_notes(data["businesses"], data["supply"]["factories"], set())
+        notes = _import_notes(data["businesses"], data["supply"], set())
         self.assertEqual(len(notes), 1)
         self.assertIn("Factory", str(notes))
         self.assertIn("factory#0", str(notes))
@@ -403,7 +386,7 @@ class ImportRoutesTests(unittest.TestCase):
     def test_paused_direct_import_does_not_count_as_supply(self):
         need = self.need(self.build([contract(2000, last=2000, active=False,
                                               destination=("factory", 0))]))
-        self.assertNotEqual(need["status"], "ok")
+        self.assertNotEqual(need["status"], "covered")
         self.assertEqual(need["importWeekly"], 0)
 
     def test_paused_direct_contract_before_first_delivery_requires_resume(self):
@@ -436,23 +419,12 @@ class ImportRoutesTests(unittest.TestCase):
         self.assertEqual(row["orderFit"], "ok")
         self.assertEqual(row["coverFit"], "short")
         self.assertEqual(row["reason"], "shortfall")
-        # Half of day 10 plus days 11-15, minus stock and the small day-11 drop.
-        self.assertEqual(row["catchUp"], 1030)
+        # The depot is emptied a round at a time: day 10's round, not yet in
+        # the log, through day 16's, which leaves before the import lands,
+        # minus stock and the small day-11 drop.
+        self.assertEqual(row["catchUp"], 7 * 240 - 240 - 50)
         self.assertEqual(row["coverageUntil"], 16)
 
-    def test_browser_manual_recipe_choice_recognizes_direct_import(self):
-        data = self.build([contract(2000, destination=("factory", 0))], rid="unknown")
-        script = "const D = " + json.dumps(data) + "; const LIVE = false;\n"
-        script += "const localStorage = {getItem: () => " + json.dumps(json.dumps({"unknown": BEER})) + "};\n"
-        script += TEMPLATE[TEMPLATE.index("const LINE_NAMES_KEY"):TEMPLATE.index("/* --- chrome, wired up once")]
-        script += "\nconsole.log(JSON.stringify(factoryView()));"
-        result = json.loads(subprocess.run(["node", "-e", script], check=True,
-                                           text=True, capture_output=True).stdout)
-        actual = result["sites"][0]["needs"][0]
-        expected = self.need(self.build([contract(2000, destination=("factory", 0))]))
-        self.assertEqual(actual["status"], "ok")
-        for key in ("importWeekly", "depotNeed", "directImport", "raiseTarget", "status"):
-            self.assertEqual(actual[key], expected[key], key)
 
 
 if __name__ == "__main__":

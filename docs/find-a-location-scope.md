@@ -139,9 +139,11 @@ neighbourhood, building type, m², asking price. No score.
 
 ## Out of scope (decided)
 
-Relocation flow from capped shops, side-by-side compare, demand history or trend,
-rival strength, takeover price, scoring buildings for sale, per-type minimum sizes,
-residential rent.
+Side-by-side compare, demand history or trend, rival strength, takeover price,
+scoring buildings for sale, per-type minimum sizes, residential rent.
+
+A relocation flow from capped shops was listed here too; it was dropped on 24 Sep 2026,
+because the game does not work that way.
 
 ## Payload contract (Python → page)
 

@@ -1,4 +1,8 @@
-// Exercise real extraction through the rendered supply tables and checklist.
+// Weekly imports, Daily top-ups and the change checklist read Python's one
+// verdict per supply fact (supplyFact); the board works none out of its own.
+// The board tests run on the synthetic R8 fixture (tests/fixtures/r8_supply.json).
+// The parity tests render real extraction from the Python test builders and
+// hold the tables and the checklist to the facts that extraction sends.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
@@ -12,6 +16,8 @@ function python(code) {
   assert.equal(result.status, 0, result.stderr?.toString());
   return result.stdout.toString();
 }
+const FIXTURE = path.join(root, 'tests', 'fixtures', 'r8_supply.json');
+const fixture = () => JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
 let browser, html;
 before(async () => {
   html = process.env.BOARD_TARGET === 'web'
@@ -21,292 +27,344 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 
+/* The Supply page drawn from `data` under a sizing, with the checklist's rows
+   kept for the test. `names` are recipes named in this browser. */
+async function board(data, {mode = 'cap', names = null} = {}){
+  const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
+  await page.route('https://**', route => route.abort());
+  await page.route('http://board.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+  await page.goto('http://board.test/');
+  await page.evaluate(([data, mode, names]) => {
+    if(names) localStorage.setItem('ba_line_names', JSON.stringify(names));
+    D = data; sizing = mode; stockView = 'feed'; showAllStock = true; logisticsView = 'all'; supplySort = {};
+    document.body.classList.add('has-board');
+    document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
+    document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = false; el.classList.add('measured'); });
+    const draw = drawOrderChecklist;
+    drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
+    drawStock(); drawLogistics(); wireAll();
+  }, [data, mode, names]);
+  return page;
+}
+const actions = page => page.evaluate(() => window.fixtureActions.map(a =>
+  ({kind: a.kind, item: a.item, current: a.current, proposed: a.proposed, tight: !!a.tight, paused: !!a.paused})));
+/* The Weekly imports rows: material, Used / week, the Set to box and its verdict. */
+const importRows = page => page.$$eval('#importPlan tbody tr', rows => rows.map(r => ({
+  item: r.cells[0].firstChild.textContent.trim(),
+  used: r.cells[1].textContent.replace(/\s+/g, ' ').trim(),
+  box: r.cells[4].querySelector('input')?.value ?? null,
+  verdict: r.cells[4].textContent.replace(/\s+/g, ' ').trim(),
+})));
+
+test('Weekly imports lists the depot facts Python marks as import rows, with their figures', async () => {
+  const page = await board(fixture());
+  try {
+    const rows = Object.fromEntries((await importRows(page)).map(r => [r.item, r]));
+    // Soda Can is held at the hub but imported by nobody: no import row.
+    assert.deepEqual(Object.keys(rows).sort(), ['Butter', 'Coffee', 'Flour', 'Milk', 'Paper Bag', 'Sugar']);
+    // The lines' 11,200 and the other sites' 2,800; 24/7 puts the margin on the sites' part only.
+    assert.match(rows.Flour.used, /^14,000$/);
+    assert.equal(rows.Flour.box, '14420');
+    assert.match(rows.Flour.verdict, /raise/);
+    assert.match(rows.Sugar.verdict, /resume import/);
+    assert.equal(rows.Sugar.box, '2800', 'a paused contract resumes as it stands');
+    assert.match(rows['Paper Bag'].verdict, /idle/);
+    assert.match(rows.Butter.verdict, /new/);
+    assert.match(rows.Coffee.verdict, /could lower/);
+    // Used / week carries Python's split on hover.
+    const tip = await page.locator('#importPlan tbody tr', {hasText: 'Coffee'}).locator('td').nth(1).getAttribute('data-tip');
+    assert.match(tip, /shops 420 a week/);
+    const head = await page.locator('#importPlan .sechead').first().textContent();
+    assert.match(head, /1 tight/);
+    assert.match(head, /1 paused/);
+  } finally { await page.close(); }
+});
+
+test('every change on the checklist is a fact\'s figure', async () => {
+  const page = await board(fixture());
+  try {
+    assert.deepEqual(await actions(page), [
+      {kind: 'Weekly imports', item: 'Flour', current: 14000, proposed: 14420, tight: true, paused: false},
+      {kind: 'Weekly imports', item: 'Sugar', current: null, proposed: null, tight: false, paused: true},
+      // 24/7 sizes a line at capacity with no margin: a day of the machines.
+      {kind: 'Factory daily top-ups', item: 'Flour', current: 1400, proposed: 1600, tight: false, paused: false},
+      {kind: 'Check the delivery route', item: 'Milk', current: null, proposed: null, tight: false, paused: false},
+      // The gym's shelf is on no plan; the hub that holds its soda could send it.
+      {kind: 'Shop daily top-ups', item: 'Soda Can', current: 0, proposed: 70, tight: false, paused: false},
+    ]);
+    const topups = await page.locator('#topupPlan').textContent();
+    assert.match(topups, /1[,.]600/);
+    assert.match(topups, /1 short/);
+    // Today's card leaves the tight Flour order out.
+    assert.equal(await page.locator('#planImportsCard .soon').textContent(), '4 TO CHANGE');
+  } finally { await page.close(); }
+});
+
+test('Demand sizing reads the facts\' Demand figures, and says where a shop is still ramping', async () => {
+  const page = await board(fixture(), {mode: 'dem'});
+  try {
+    const flour = (await importRows(page)).find(r => r.item === 'Flour');
+    assert.match(flour.used, /^10,920 may still be ramping$/);
+    assert.equal(flour.box, '14000');
+    assert.match(flour.verdict, /covered/);
+    const ramp = await page.locator('#importPlan .sz-ramp').first().getAttribute('data-tip');
+    assert.match(ramp, /Cake Shop Midtown/);
+    assert.match(await page.locator('#topupPlan').textContent(), /1,160\s*may still be ramping/);
+    assert.deepEqual((await actions(page)).map(a => [a.kind, a.item]), [
+      ['Weekly imports', 'Sugar'], ['Check the delivery route', 'Milk'], ['Shop daily top-ups', 'Soda Can']]);
+    // The switch sits beside the Orders tools, on Demand.
+    assert.equal(await page.locator('#logisticsSizing a.on').textContent(), 'Demand');
+  } finally { await page.close(); }
+});
+
+test('the switch remembers the sizing on the device and redraws the board', async () => {
+  const page = await board(fixture());
+  try {
+    await page.evaluate(() => { window.redrawn = 0; renderAll = () => { window.redrawn++; drawLogistics(); }; });
+    await page.locator('#logisticsSizing').getByText('Demand').click();
+    assert.equal(await page.evaluate(() => [sizing, localStorage.getItem('ba_dash_sizing'), window.redrawn].join()), 'dem,dem,1');
+    assert.match(await page.locator('#importPlan').textContent(), /10,920/);
+    await page.locator('#logisticsSizing').getByText('24/7').click();
+    assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_sizing')), 'cap');
+  } finally { await page.close(); }
+});
+
+test("a shelf a wholesale store delivers each week reads its week, and its change is the contract's", async () => {
+  const data = fixture();
+  // The gym's soda comes from a wholesale store each Monday: 300 a week against 371 sold.
+  data.supply.facts[4].soda = {st: 'short', why: 'order', lvl: 'critical', role: 'shelf', cad: 'weekly',
+    use: 371, need: 427, have: 300, setTo: 430, parts: {lines: 0, sites: 371, route: 0}, imp: false,
+    wholesale: true, day: 'Monday'};
+  Object.assign(data.supply.shops.find(r => r.slug === 'soda'), {wholesale: 300, wholesaleDay: 'Monday'});
+  const page = await board(data);
+  try {
+    assert.deepEqual((await actions(page)).find(a => a.item === 'Soda Can'),
+      {kind: 'Wholesale deliveries', item: 'Soda Can', current: 300, proposed: 430, tight: false, paused: false});
+    const shops = await page.evaluate(() => { stockView = 'shops'; drawStock(); return document.getElementById('stock').textContent; });
+    assert.match(shops, /—wholesale 300 a week/);
+    assert.match(shops, /short\s*wholesale 430 a week/);
+    assert.doesNotMatch(shops, /no plan/);
+  } finally { await page.close(); }
+});
+
+test("Orders lists a route-fed depot's daily top-up from its fact, naming the site that sets it", async () => {
+  const data = fixture();
+  // The hub's soda, fed only by the bakery's plan: its busiest day outruns the top-up.
+  data.supply.facts[0].soda = {st: 'short', why: 'target', lvl: 'critical', role: 'depot', cad: 'daily',
+    use: 100, need: 115, have: 80, setTo: 120, imp: false, from: 1};
+  const page = await board(data);
+  try {
+    const act = (await page.evaluate(() => window.fixtureActions)).find(a => a.kind === 'Depot daily top-ups');
+    assert.deepEqual([act.kind, act.current, act.proposed, act.source, !!act.tight],
+      ['Depot daily top-ups', 80, 120, 1, false]);
+    assert.match(act.reason, /Bakery Factory/);
+  } finally { await page.close(); }
+});
+
+test("Orders: a factory's paused contract the top-up falls short without is a change; one it covers is not", async () => {
+  const withPaused = lvl => {
+    const data = fixture();
+    data.supply.facts[1].milk = {...data.supply.facts[1].milk, imp: true, import: {st: 'paused',
+      why: lvl === 'info' ? 'topup' : 'order', lvl, role: 'input', cad: 'weekly', use: 0, need: 0, have: 2100,
+      setTo: null, parts: {lines: 0, sites: 0, route: 0}, from: 0}};
+    const hubMilk = data.supply.factories.depots[0].milk;
+    data.supply.factories.depots[1] = {milk: {...hubMilk, weekly: 0, pausedWeekly: 2100, plain: 0,
+      contracts: [{...hubMilk.contracts[0], id: 'c7', active: false}]}};
+    return data;
+  };
+  const read = async lvl => {
+    const page = await board(withPaused(lvl));
+    try {
+      return await page.evaluate(() => {
+        logisticsView = 'changes'; drawLogistics();
+        return {head: document.querySelector('#importPlan .sechead').textContent,
+                rows: [...document.querySelectorAll('#importPlan tbody tr')].map(r => r.cells[0].textContent.trim()),
+                acts: window.fixtureActions.filter(a => a.item === 'Milk' && a.kind === 'Weekly imports')
+                  .map(a => [a.kind, !!a.paused])};
+      });
+    } finally { await page.close(); }
+  };
+  const short = await read('critical');
+  assert.match(short.head, /2 paused/);
+  assert.ok(short.rows.some(r => r.startsWith('Milk')), JSON.stringify(short.rows));
+  assert.deepEqual(short.acts, [['Weekly imports', true]]);
+  const covered = await read('info');
+  assert.match(covered.head, /1 paused/);
+  assert.ok(!covered.rows.some(r => r.startsWith('Milk')), JSON.stringify(covered.rows));
+  assert.deepEqual(covered.acts, []);
+});
+
+/* Facts shaped as extraction writes them for a real save: a gym's shelf a
+   wholesale store fills each Monday (short, a warning while its stock reaches
+   the drop), another tight, and a depot only a route from a factory fills,
+   tight against its busiest day. Orders lists each in a group of its own. */
+test('Orders shows Wholesale deliveries and Depot daily top-ups from facts shaped like a real save\'s', async () => {
+  const data = fixture();
+  data.businesses[4].lines.push({slug: 'energy', item: 'Energy Drink', units: 1026, rate: 176, price: 5},
+                                {slug: 'chips', item: 'Chips', units: 100, rate: 100, price: 2});
+  data.supply.facts[4] = {
+    energy: {st: 'short', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 1232, need: 1417,
+      have: 1200, setTo: 1420, catchUp: 50, parts: {lines: 0, sites: 1232, route: 0}, imp: false, wholesale: true,
+      day: 'Monday'},
+    soda: {st: 'tight', why: 'order', lvl: 'warn', role: 'shelf', cad: 'weekly', use: 883, need: 1015,
+      have: 900, setTo: 1020, parts: {lines: 0, sites: 883, route: 0}, imp: false, wholesale: true, day: 'Monday'},
+    // Covered for the week, but the stock runs out before Monday's delivery.
+    chips: {st: 'short', why: 'shortfall', lvl: 'critical', role: 'shelf', cad: 'weekly', use: 700, need: 805,
+      have: 900, setTo: null, catchUp: 120, parts: {lines: 0, sites: 700, route: 0}, imp: false, wholesale: true,
+      day: 'Monday'},
+  };
+  // The hub takes a wholesale store's syrup for the factory lines: 1,000 a week against 1,680.
+  data.supply.facts[0].syrup = {st: 'short', why: 'order', lvl: 'critical', role: 'depot', cad: 'weekly',
+    use: 1680, need: 1680, have: 1000, setTo: 1680, parts: {lines: 1680, sites: 0, route: 0}, imp: false,
+    wholesale: true, day: 'Monday'};
+  data.supply.shops = data.supply.shops.filter(r => r.s !== 4).concat([
+    {s: 4, item: 'Energy Drink', slug: 'energy', sold: 176, peakSold: 192, peakDay: 'Sunday', target: 0,
+     pressure: null, stock: 1026, from: null, level: 'ok', wholesale: 1200, wholesaleDay: 'Monday'},
+    {s: 4, item: 'Soda Can', slug: 'soda', sold: 126, peakSold: 137, peakDay: 'Sunday', target: 0,
+     pressure: null, stock: 817, from: null, level: 'ok', wholesale: 900, wholesaleDay: 'Monday'}]);
+  data.supply.facts[0].bread = {st: 'tight', why: 'target', lvl: 'warn', role: 'depot', cad: 'daily',
+    use: 905, need: 1041, have: 1000, setTo: 1050, imp: false, from: 1};
+  data.supply.facts[0].cups = {st: 'covered', why: 'route', lvl: 'ok', role: 'depot', cad: 'daily',
+    use: 100, need: 115, have: 200, setTo: null, imp: false, from: 1};
+  const page = await board(data);
+  try {
+    const read = view => page.evaluate(view => {
+      logisticsView = view; drawLogistics();
+      const rows = id => [...document.querySelectorAll(`#${id} tbody tr`)].map(r =>
+        [...r.cells].map(c => c.textContent.replace(/\s+/g, ' ').trim()).join(' | '));
+      return {wholesale: rows('wholesalePlan'), depot: rows('depotTopupPlan'),
+              head: document.querySelector('#wholesalePlan .sechead').textContent};
+    }, view);
+    const all = await read('all');
+    const row = text => all.wholesale.find(r => r.includes(text)) || '';
+    assert.equal(all.wholesale.length, 4);
+    // Short of the week and dry before Monday: the raise and the stock to bring in, both.
+    assert.match(row('Energy Drink'), /Energy Drink ?each Monday \| 1,232 \| 1,200 \| 1,420 ?raise ?bring in 50 \| short$/);
+    assert.match(row('Soda Can'), /Soda Can ?each Monday \| 883 \| 900 \| 1,020 ?raise \| tight$/);
+    assert.match(row('Chips'), /\| 700 \| 900 \| bring in 120 \| short$/);
+    assert.match(row('Syrup'), /Import Hub.*\| Syrup ?each Monday \| 1,680 \| 1,000 \| 1,680 ?raise \| short$/);
+    assert.match(all.head, /3 short/);
+    assert.equal(all.depot.length, 2);
+    assert.match(all.depot[0], /\| 905 \| 1,000 \| 1,050 ?raise \| .*Bakery Factory.* \| tight$/);
+    // Needs a change: the covered route-fed line drops out, both wholesale rows stay.
+    const changes = await read('changes');
+    assert.equal(changes.depot.length, 1);
+    assert.equal(changes.wholesale.length, 4);
+    // The checklist has the depot's wholesale contract, from its fact, and the
+    // shelf's stock to bring in before the delivery.
+    const acts = await page.evaluate(() => window.fixtureActions.map(a =>
+      [a.kind, a.site, a.item, a.current, a.proposed]));
+    assert.ok(acts.some(a => a.join() === 'Wholesale deliveries,0,Syrup,1000,1680'), JSON.stringify(acts));
+    assert.ok(acts.some(a => a.join() === 'Before the next delivery,4,Chips,,120'), JSON.stringify(acts));
+  } finally { await page.close(); }
+});
+
+test('a paused backup a route covers is covered by route, with nothing to resume', async () => {
+  const data = fixture();
+  data.supply.facts[0].sugar = {...data.supply.facts[0].sugar, st: 'covered', why: 'route', lvl: 'ok', setTo: null,
+    parts: {lines: 2800, sites: 0, route: 2800}};
+  const page = await board(data);
+  try {
+    const sugar = (await importRows(page)).find(r => r.item === 'Sugar');
+    assert.match(sugar.verdict, /covered by route/);
+    assert.doesNotMatch(sugar.verdict, /resume/);
+    assert.ok((await actions(page)).every(a => a.item !== 'Sugar'));
+  } finally { await page.close(); }
+});
+
+test('a recipe named in this browser reads new until the next refresh', async () => {
+  const data = fixture();
+  data.supply.factories.sites[0].unnamed = [{rid: 'r-muffin', workstation: 'Oven', slots: [5], machines: 1, idle: false,
+    candidates: [{slug: 'muffin', item: 'Muffin'}], hoursWeek: 168, fullWeek: 168, gaps: []}];
+  data.plan.recipes.push({slug: 'muffin', item: 'Muffin', out: 10, workstation: 'oven',
+    ingredients: [{slug: 'butter', item: 'Butter', per: 5}]});
+  const page = await board(data, {names: {'r-muffin': 'muffin'}});
+  try {
+    const feed = await page.locator('#stock tbody tr', {hasText: 'Butter'}).textContent();
+    assert.match(feed, /new/);
+    assert.match(feed, /named in this browser/);
+    // Its top-up has no figure until Python judges it, so nothing to set.
+    const topup = await page.locator('#topupPlan tbody tr', {hasText: 'Butter'}).textContent();
+    assert.match(topup, /new/);
+    assert.ok((await actions(page)).every(a => a.item !== 'Butter'));
+    // The line itself is named, and new.
+    await page.evaluate(() => { stockView = 'lines'; drawStock(); });
+    assert.match(await page.locator('#stock tbody tr', {hasText: 'Muffin'}).textContent(), /named by you\s*new/);
+  } finally { await page.close(); }
+});
+
+test('Checks, Goods flow and Today read the same facts, by sizing', async () => {
+  const page = await board(fixture());
+  try {
+    const view = async v => page.evaluate(v => { stockView = v; drawStock(); return document.getElementById('stock').textContent; }, v);
+    // One status word per row; tight shows on Checks.
+    assert.match(await view('imports'), /tight/);
+    const idle = await view('idle');
+    // The status word is one of the nine; "not routed" is the reason, with the shops.
+    assert.match(idle, /idle\s*not routed: Garden Gym\s*53\/day/);
+    assert.match(await view('shops'), /no plan[\s\S]*top-up to 70 from\s*Import Hub/);
+    // The switch sits in the Checks toolbar for the sized views only.
+    assert.equal(await page.locator('#stockSizing').count(), 0, 'not on Idle stock');
+    await view('feed');
+    assert.equal(await page.locator('#stockSizing').count(), 1);
+    // Goods flow counts the hub's facts; Today has no tight, and Not routed is a kind.
+    const flow = await page.evaluate(() => { drawFlow(); flowPickId = 'hub#1'; drawFlowDetail();
+      return document.getElementById('flowDetail').textContent; });
+    assert.match(flow, /1 paused/);
+    assert.match(flow, /2 idle, 1 tight/);
+    const today = async mode => page.evaluate(mode => { sizing = mode; drawAlerts();
+      return [...document.querySelectorAll('#alerts .find')].map(f => f.dataset.id); }, mode);
+    assert.deepEqual(await today('cap'), ['r8feed', 'r8paused', 'r8stalled', 'r8notrouted', 'r8dead']);
+    assert.deepEqual(await today('dem'), ['r8paused', 'r8stalled', 'r8notrouted', 'r8dead']);
+    assert.doesNotMatch(await page.locator('#alerts').textContent(), /tight/i);
+  } finally { await page.close(); }
+});
+
+/* Real extraction, from the Python builders. Once _supply() sends facts, the
+   tables and the checklist say exactly what they say; a payload without them
+   (the board ahead of the extraction) has nothing to hold the board to. */
 for (const scenario of [
-  {name: 'paused direct', expression: '[contract(2000,active=False,destination=("factory",0))]', routed: false},
-  {name: 'mixed fully covered', expression: '[contract(2000,destination=("factory",0))]', routed: true},
-  {name: 'mixed partially direct', expression: '[contract(840,destination=("factory",0)),contract(900)]', routed: true},
+  // The fixture holds the harness itself to account: it has facts today.
+  {name: 'the R8 fixture', code: 'd = json.load(open("tests/fixtures/r8_supply.json", encoding="utf-8"))'},
+  {name: 'paused direct', code: 'from test_import_routes import ImportRoutesTests,contract; '
+    + 'd = ImportRoutesTests().build([contract(2000,active=False,destination=("factory",0))])'},
+  {name: 'mixed fully covered', code: 'from test_import_routes import ImportRoutesTests,contract; '
+    + 'd = ImportRoutesTests().build([contract(2000,destination=("factory",0))],routed=True)'},
+  {name: 'mixed partially direct', code: 'from test_import_routes import ImportRoutesTests,contract; '
+    + 'd = ImportRoutesTests().build([contract(840,destination=("factory",0)),contract(900)],routed=True)'},
+  {name: 'a warehouse contract before its first delivery', code: 'from test_import_routes import ImportRoutesTests,contract; '
+    + 'd = ImportRoutesTests().build([contract(126000)],routed=True)'},
+  {name: 'a short daily top-up', code: 'from test_import_routes import ImportRoutesTests,contract; '
+    + 'd = ImportRoutesTests().build([contract(840,destination=("factory",0)),contract(900)],routed=True,target=130)'},
+  {name: 'a line the route covers half of', code: 'from test_routed_supply import board_data,contract; '
+    + 'd = board_data(0.5,[contract(5000,5000,smart=False)],import_days=(7,))'},
+  {name: 'a paused backup the route covers', code: 'from test_routed_supply import board_data,contract; '
+    + 'd = board_data(1.0,[contract(5200,0,smart=True,active=False)])'},
 ]) {
-  test(`${scenario.name} does not recommend a redundant order`, async () => {
-    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
-      + 'from test_import_routes import ImportRoutesTests,contract; '
-      + `print(json.dumps(ImportRoutesTests().build(${scenario.expression},routed=${scenario.routed ? 'True' : 'False'})))`));
-    const page = await browser.newPage();
+  test(`parity with extraction: ${scenario.name}`, async t => {
+    const data = JSON.parse(python(`import sys,json; sys.path.insert(0,"tests"); ${scenario.code}; print(json.dumps(d))`));
+    if (!data.supply.facts) { t.skip('this extraction sends no supply facts yet'); return; }
+    const page = await board(data);
     try {
-      await page.route('https://**', route => route.abort());
-      await page.setContent(html, {waitUntil: 'load'});
-      await page.evaluate(data => {
-        D = data; stockView = 'feed'; showAllStock = true; logisticsView = 'all';
-        const draw = drawOrderChecklist;
-        drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
-        drawStock(); drawLogistics();
-      }, data);
-      const actions = await page.evaluate(() => window.fixtureActions);
-      const imports = await page.locator('#importPlan').textContent();
-      if (scenario.name === 'paused direct') {
-        assert.match(imports, /2[,.\s]?000\s*a week\s*paused/);
-        assert.match(imports, /resume import/);
-        assert.equal(actions.length, 1);
-        assert.match(actions[0].reason, /Resume the paused import/);
-        assert.equal(actions[0].proposed, null);
-        assert.doesNotMatch(await page.locator('#stock').textContent(), /raise the weekly import/);
-      } else {
-        assert.equal(actions.filter(a => a.kind === 'Weekly imports').length, 0);
-        assert.doesNotMatch(imports, /nothing draws it|not imported/);
-        assert.match(await page.locator('#stock').textContent(), /covered/);
-      }
+      const seen = await page.evaluate(() => {
+        const facts = D.supply.facts, out = {imports: [], wanted: [], topups: []};
+        Object.keys(facts).forEach(s => Object.keys(facts[s]).forEach(slug => {
+          const f = supplyFact(s, slug), imp = f.import || f;
+          if(f.imp) out.imports.push(slug);
+          if(f.imp && Number.isFinite(imp.setTo) && imp.st !== 'paused') out.wanted.push([+s, slug, imp.setTo]);
+          if(f.role === 'input' && f.cad === 'daily' && Number.isFinite(f.setTo)) out.topups.push([+s, slug, f.setTo]);
+        }));
+        out.rows = gwImportRows.map(r => [r.s, r.slug, r.setTo]);
+        return out;
+      });
+      assert.equal(seen.rows.length, seen.imports.length, 'one Weekly imports row per import fact');
+      const acts = await page.evaluate(() => window.fixtureActions);
+      const weekly = acts.filter(a => a.kind === 'Weekly imports' && a.proposed !== null);
+      assert.equal(weekly.length, seen.wanted.length);
+      for (const [s, , setTo] of seen.wanted)
+        assert.ok(weekly.some(a => a.site === s && a.proposed === setTo), `weekly ${setTo} at ${s}`);
+      const daily = acts.filter(a => a.kind === 'Factory daily top-ups');
+      assert.deepEqual(daily.map(a => [a.site, a.proposed]).sort(), seen.topups.map(([s, , v]) => [s, v]).sort());
     } finally { await page.close(); }
   });
 }
-
-test('126000-unit warehouse contract is visible before its first delivery', async () => {
-  const data = JSON.parse(python(
-    'import sys,json; sys.path.insert(0,"tests"); from test_import_routes import ImportRoutesTests,contract; '
-    + 'print(json.dumps(ImportRoutesTests().build([contract(126000)],routed=True)))'));
-  const page = await browser.newPage();
-  try {
-    await page.route('https://**', route => route.abort());
-    await page.setContent(html, {waitUntil: 'load'});
-    await page.evaluate(data => {
-      D = data; stockView = 'feed'; showAllStock = true; logisticsView = 'all';
-      drawStock(); drawLogistics();
-    }, data);
-    const imports = await page.locator('#importPlan').textContent();
-    assert.match(imports, /WH Import Hub/);
-    assert.match(imports, /126[,.\s]?000/);
-    assert.doesNotMatch(imports, /not imported/);
-    assert.match(await page.locator('#stock').textContent(), /126[,.\s]?000/);
-  } finally { await page.close(); }
-});
-
-for (const amount of [700, 2000]) {
-  test(`direct factory import ${amount} reaches tables and weekly checklist`, async () => {
-    const data = JSON.parse(python(
-      'import sys,json; sys.path.insert(0,"tests"); from test_import_routes import ImportRoutesTests,contract; '
-      + `print(json.dumps(ImportRoutesTests().build([contract(${amount},destination=("factory",0))])))`));
-    const page = await browser.newPage();
-    try {
-      await page.route('https://**', route => route.abort());
-      await page.setContent(html, {waitUntil: 'load'});
-      await page.evaluate(data => {
-        D = data;
-        stockView = 'feed'; showAllStock = true; logisticsView = 'all';
-        const drawChecklist = drawOrderChecklist;
-        drawOrderChecklist = (rows, factories) => {
-          window.fixtureActions = rows;
-          drawChecklist(rows, factories);
-        };
-        drawStock(); drawLogistics();
-      }, data);
-      const feed = await page.locator('#stock').textContent();
-      assert.match(feed, /Direct import/);
-      assert.doesNotMatch(feed, /no top-up|put Water on a plan/);
-      assert.equal(await page.locator('#topupPlan tbody tr').count(), 0);
-      const imports = await page.locator('#importPlan').textContent();
-      assert.match(imports, /Factory/);
-      assert.doesNotMatch(imports, /not imported|on no plan/);
-      const actions = await page.evaluate(() => window.fixtureActions);
-      if (amount === 700) {
-        const weekly = actions.filter(row => row.kind === 'Weekly imports');
-        assert.equal(weekly.length, 1);
-        assert.equal(weekly[0].site, 0);
-        assert.equal(weekly[0].current, 700);
-        assert.equal(weekly[0].proposed, 1700);
-      }
-      assert.ok(actions.every(row => row.kind !== 'Factory daily top-ups'));
-    } finally { await page.close(); }
-  });
-}
-
-for (const target of [130, 300]) {
-  test(`mixed imports keep a full-day fill target when target is ${target}`, async () => {
-    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
-      + 'from test_import_routes import ImportRoutesTests,contract; '
-      + `print(json.dumps(ImportRoutesTests().build([contract(840,destination=("factory",0)),contract(900)],routed=True,target=${target})))`));
-    const page = await browser.newPage();
-    try {
-      await page.route('https://**', route => route.abort());
-      await page.setContent(html, {waitUntil: 'load'});
-      await page.evaluate(data => {
-        D = data; logisticsView = 'all';
-        const draw = drawOrderChecklist;
-        drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
-        drawLogistics();
-      }, data);
-      const topups = await page.locator('#topupPlan').textContent();
-      assert.match(topups, /240/);
-      assert.doesNotMatch(topups, /after direct imports|could lower/);
-      const actions = await page.evaluate(() => window.fixtureActions);
-      const daily = actions.filter(a => a.kind === 'Factory daily top-ups');
-      if (target === 130) {
-        assert.equal(daily.length, 1);
-        assert.equal(daily[0].proposed, 300);
-        assert.match(topups, /raise/);
-      } else {
-        assert.equal(daily.length, 0);
-        assert.match(topups, /covered/);
-      }
-      assert.equal(actions.filter(a => a.kind === 'Weekly imports').length, 0);
-    } finally { await page.close(); }
-  });
-}
-
-test('unused paused contract stays paused without a resume recommendation', async () => {
-  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
-    + 'from test_import_routes import ImportRoutesTests,contract; '
-    + 'print(json.dumps(ImportRoutesTests().build([contract(5000,active=False)])))'));
-  data.supply.factories.sites = [];
-  const page = await browser.newPage();
-  try {
-    await page.route('https://**', route => route.abort());
-    await page.setContent(html, {waitUntil: 'load'});
-    await page.evaluate(data => {
-      D = data; logisticsView = 'all';
-      const draw = drawOrderChecklist;
-      drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
-      drawLogistics();
-    }, data);
-    const imports = await page.locator('#importPlan').textContent();
-    assert.match(imports, /nothing draws it/);
-    assert.doesNotMatch(imports, /resume import/);
-    assert.equal((await page.evaluate(() => window.fixtureActions)).length, 0);
-  } finally { await page.close(); }
-});
-
-/* A depot a factory's route tops up (tests/test_routed_supply.py): the Weekly
-   imports table sizes the import on what the route leaves, and the table,
-   the checklist and the Stock view say the same thing. */
-for (const scenario of [
-  {name: 'a paused backup the route covers', args: '1.0,[contract(5200,0,smart=True,active=False)]'},
-  {name: 'an active backup below the week the route covers', args: '1.0,[contract(2000,0,smart=False)]'},
-  {name: 'a line the route covers half of', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,)'},
-  {name: 'a paused import on a line the route covers half of', args: '0.5,[contract(13000,13000,smart=False,active=False)],import_days=(7,)'},
-  // The route also runs the day the import lands: the route's own figure
-  // leaves that day out, and what leaves for the shops is read gross.
-  {name: 'a line the route covers half of every day', args: '0.5,[contract(5000,5000,smart=False)],import_days=(7,),route_from=3'},
-  {name: 'a covered backup with a figure typed in', args: '1.0,[contract(2000,0,smart=False)]', typed: 2500},
-  // No route: the log loses the import's day, the measured draw does not.
-  {name: 'a line only the import feeds', args: '0.0,[contract(5000,5000,smart=False)],import_days=(7,)'},
-]) {
-  test(`routed supply: ${scenario.name}`, async () => {
-    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
-      + 'from test_routed_supply import board_data,contract; '
-      + `print(json.dumps(board_data(${scenario.args})))`));
-    const page = await browser.newPage();
-    try {
-      await page.route('https://**', route => route.abort());
-      await page.setContent(html, {waitUntil: 'load'});
-      await page.evaluate(([data, typed]) => {
-        D = data; stockView = 'imports'; showAllStock = true; logisticsView = 'all';
-        const draw = drawOrderChecklist;
-        drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
-        if (typed) {
-          const line = D.supply.factories.depots[1]['ba:itemname_frozenfood'];
-          impSetKeep(impSetId(D.businesses[1].key, 'ba:itemname_frozenfood'), {value: typed, inGame: line.weekly});
-        }
-        drawStock(); drawLogistics();
-      }, [data, scenario.typed || 0]);
-      const actions = await page.evaluate(() => window.fixtureActions);
-      const imports = await page.locator('#importPlan').textContent();
-      const stock = await page.locator('#stock').textContent();
-      const row = data.supply.imports.find(r => r.s === 1);
-      const weekly = actions.filter(a => a.kind === 'Weekly imports');
-      if (row.covered && scenario.typed) {
-        // The player's own figure goes to the checklist; the chip still says why.
-        assert.match(imports, /covered by route/);
-        assert.doesNotMatch(imports, /nothing draws it/);
-        assert.equal(weekly.length, 1);
-        assert.equal(weekly[0].proposed, scenario.typed);
-      } else if (row.covered) {
-        assert.match(imports, /covered by route/);
-        assert.doesNotMatch(imports, /resume import|raise|nothing draws it/);
-        assert.deepEqual(actions, []);
-        assert.equal(row.level, 'ok');
-      } else if (!row.routed) {
-        // The Stock view's week, 25,200, not the log's 21,600.
-        assert.equal(row.weekNeed, 25200);
-        assert.equal(weekly.length, 1);
-        assert.equal(weekly[0].proposed, row.weekNeed);
-        assert.match(imports, /25[,.\s]?200/);
-      } else if (row.paused) {
-        assert.match(imports, /resume import/);
-        assert.equal(weekly.length, 1);
-        assert.match(weekly[0].reason,
-          /Resume the paused import contract.*after the 12[,.\s]?600 a week a route brings, is 12[,.\s]?600\./);
-        assert.equal(row.weekNeed, 12600);
-      } else {
-        // The table's suggestion is the Stock view's week for the import,
-        // and what it shows as used is the draw the route is taken off.
-        assert.equal(row.weekNeed, 12600);
-        assert.match(stock, /after 1[,.\s]?800\/day by route/);
-        assert.match(imports, /raise/);
-        assert.match(imports, /25[,.\s]?200/);
-        assert.equal(weekly.length, 1);
-        assert.equal(weekly[0].proposed, row.weekNeed);
-        assert.match(weekly[0].reason, /less the 12[,.\s]?600 a week a route brings/);
-      }
-    } finally { await page.close(); }
-  });
-}
-
-test('a depot line with no import that a route feeds is not asked to import', async () => {
-  // A factory drawing 1,680 water a week from a depot with no import
-  // contract; a route from another of the company's depots brings that
-  // depot the whole draw (_depot_routes).
-  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
-    + 'from test_import_routes import ImportRoutesTests; '
-    + 'print(json.dumps(ImportRoutesTests().build([],routed=True)))'));
-  const page = await browser.newPage();
-  try {
-    await page.route('https://**', route => route.abort());
-    await page.setContent(html, {waitUntil: 'load'});
-    const run = routes => page.evaluate(([data, routes]) => {
-      D = data; logisticsView = 'all';
-      D.supply.factories.depotRoutes = routes;
-      const draw = drawOrderChecklist;
-      drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
-      drawLogistics();
-      // The factory view's verdict on the same input, as the page redoes it.
-      const view = JSON.parse(JSON.stringify(D.supply.factories));
-      const site = view.sites[0], n = site.needs[0];
-      const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
-      feedRoute(site, n, view, held);
-      Object.assign(n, {depotNeed: n.perWeek, madeAt: [], waitingOn: []});
-      feedVerdict(n);
-      return {actions: window.fixtureActions, imports: document.getElementById('importPlan').textContent,
-              status: n.status, share: n.importRoutedFactories, need: n.importNeed};
-    }, [data, routes]);
-    const slug = data.supply.factories.sites[0].needs[0].slug;
-    const without = await run({});
-    assert.equal(without.actions.filter(a => a.kind === 'Weekly imports').length, 1, 'no route: an import to add');
-    assert.equal(without.status, 'noimport');
-    const fed = await run({1: {[slug]: {routed: 1680, covered: true, drawWeek: 1680}}});
-    assert.equal(fed.actions.filter(a => a.kind === 'Weekly imports').length, 0);
-    assert.match(fed.imports, /covered by route/);
-    assert.equal(fed.status, 'ok');
-    // A route bringing 400 of the 1,680: the page works out the route's share
-    // to the factories itself, as feedVerdict does, not the payload's.
-    const part = await run({1: {[slug]: {routed: 400, covered: false, drawWeek: 1680}}});
-    assert.deepEqual([part.status, part.share, part.need], ['noimport', 400, 1280]);
-  } finally { await page.close(); }
-});
-
-test('the factory inputs view counts the weeks at the depot against what a route leaves', async () => {
-  // As _feed_notes() says it: 1,000 at the depot against the 840 a week the
-  // import has to bring beyond the route's 840 to the factories, 1.2 weeks.
-  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
-    + 'from test_import_routes import ImportRoutesTests; '
-    + 'print(json.dumps(ImportRoutesTests().build([],routed=True)))'));
-  Object.assign(data.supply.factories.sites[0].needs[0], {status: 'noimport', level: 'warn',
-    depotStock: 1000, depotNeed: 1680, importNeed: 840, importRoutedFactories: 840});
-  const page = await browser.newPage();
-  try {
-    await page.route('https://**', route => route.abort());
-    await page.setContent(html, {waitUntil: 'load'});
-    const text = await page.evaluate(data => {
-      D = data; stockView = 'feed'; showAllStock = true;
-      drawStock();
-      return document.getElementById('stock').textContent;
-    }, data);
-    assert.match(text, /holds 1\.2 weeks of it beyond the 840 a week a route brings the factories/);
-  } finally { await page.close(); }
-});

@@ -126,11 +126,15 @@ const kinds = vm.createContext({});
 vm.runInContext(KINDS, kinds);
 const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, kinds));
 
-test('At capacity is on by default; Overstaffed hours stays off', () => {
+test('At capacity is on by default; Overstaffed hours and Demand wave ending are off', () => {
   const on = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.on]));
   assert.equal(on.atcap, true);
   assert.equal(on.idlestaff, false);
+  assert.equal(on.hype, false);
   assert.equal(run('kindPrefs({})').atcap, true);
+  assert.equal(run('kindPrefs({})').hype, false);
+  // A player who switched Demand wave ending on keeps it on.
+  assert.equal(run('kindPrefs(readKindChoices({v: 2, set: {hype: true}}))').hype, true);
 });
 
 test('a stored whole map keeps only what differs from the defaults it was saved under', () => {
@@ -143,6 +147,11 @@ test('a stored whole map keeps only what differs from the defaults it was saved 
   assert.equal(prefs.atcap, true, 'never touched: the new default applies');
   assert.equal(prefs.hype, false, 'a real choice survives');
   assert.equal(prefs.idlestaff, false);
+  // The first boards had Demand wave ending on, so a stored true was only a
+  // copy of that default: it is dropped, and the new default (off) applies.
+  const copied = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.id !== 'atcap' && g.id !== 'idlestaff']));
+  assert.deepEqual(run(`readKindChoices(${JSON.stringify(copied)})`), {});
+  assert.equal(run(`kindPrefs(readKindChoices(${JSON.stringify(copied)}))`).hype, false);
 });
 
 test('a player who had switched At capacity on keeps it on, and an explicit off survives', () => {
@@ -154,10 +163,12 @@ test('a player who had switched At capacity on keeps it on, and an explicit off 
 });
 
 test('a switch set back to its default stops being a stored choice', () => {
-  assert.deepEqual(run('setKindChoice({}, "hype", false)'), {hype: false});
-  assert.deepEqual(run('setKindChoice({hype: false}, "hype", true)'), {});
+  assert.deepEqual(run('setKindChoice({}, "trend", false)'), {trend: false});
+  assert.deepEqual(run('setKindChoice({trend: false}, "trend", true)'), {});
   assert.deepEqual(run('setKindChoice({}, "idlestaff", true)'), {idlestaff: true});
-  assert.deepEqual(run('setKindChoice({idlestaff: true, hype: false}, "idlestaff", false)'), {hype: false});
+  assert.deepEqual(run('setKindChoice({idlestaff: true, trend: false}, "idlestaff", false)'), {trend: false});
+  assert.deepEqual(run('setKindChoice({}, "hype", true)'), {hype: true});
+  assert.deepEqual(run('setKindChoice({hype: true}, "hype", false)'), {});
   // Dropped, the kind follows its default again.
   assert.equal(run('kindPrefs(setKindChoice({atcap: false}, "atcap", true))').atcap, true);
 });
@@ -205,4 +216,80 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
   assert.equal(kind('dead'), 'Idle stock');
   assert.equal(view, kind('dead'), 'the Checks view and the finding kind share one name');
   assert.equal(kind('staff'), 'Nobody on shift');
+});
+
+/* R8: stock a depot holds that no plan sends on, while the company's own
+   sites sell or need it, is a kind of its own, and every map that routes a
+   kind knows it. */
+test('Not routed is a kind, on by default, linked to Idle stock and the depot\'s Stock', () => {
+  const g = run('ALERT_GROUPS').find(x => x.id === 'notrouted');
+  assert.deepEqual([g.label, g.on], ['Not routed', true]);
+  const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
+  assert.match(links, /notrouted: \{sec:"secStock", view:"idle"\}/);
+  const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
+  assert.match(evidence, /notrouted: \{block: "stock"\}/);
+  assert.match(source, /depot: \{[^}]*notrouted: "stock"/);
+});
+
+/* A depot only a route from the company's own site feeds, whose busiest day
+   outruns its daily top-up: a kind of its own, opening the depot's page on
+   its Stock, since Before the import never lists such a depot. */
+test("Depot top-up too low is a kind, on by default, landing on the depot's own Stock", () => {
+  const g = run('ALERT_GROUPS').find(x => x.id === 'topup');
+  assert.deepEqual([g.label, g.on], ['Depot top-up too low', true]);
+  const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
+  assert.match(links, /topup: \{sec:"secDetail", site:true\}/);
+  const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
+  assert.match(evidence, /topup: \{block: "stock"\}/);
+  assert.match(source, /depot: \{[^}]*topup: "stock"/);
+});
+
+/* A wholesale store's weekly delivery that falls short, to a shop or a
+   depot: one kind for every such finding, opening the site's page on its
+   shelves (a shop) or its Stock (a depot). Top-up stays a route's. */
+test('Wholesale delivery too low is a kind of its own, landing on the shelves or the depot\'s Stock', () => {
+  const g = run('ALERT_GROUPS').find(x => x.id === 'wholesale');
+  assert.deepEqual([g.label, g.on], ['Wholesale delivery too low', true]);
+  assert.match(g.note, /wholesale store delivers/);
+  assert.match(run('ALERT_GROUPS').find(x => x.id === 'topup').note, /route from your own site/);
+  const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
+  assert.match(links, /wholesale: \{sec:"secDetail", site:true\}/);
+  const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
+  assert.match(evidence, /wholesale: \{block: "shelves"\}/);
+  assert.match(source, /depot: \{[^}]*wholesale: "stock"/);
+  assert.match(source, /wholesale: \["wholesale", "contract", "delivery"\]/);
+});
+
+test('a wholesale finding shows the week used, or the units left, in the amount column', () => {
+  const at = source.indexOf('const amtHtml =');
+  const ctx = vm.createContext({money: String, fmt: String});
+  vm.runInContext(source.slice(at, source.indexOf('/* A finding whose kind is switched off', at)), ctx);
+  const amount = a => vm.runInContext('findingAmount', ctx)(a);
+  assert.equal(amount({group: 'wholesale', text: "Soda's wholesale delivery brings 600 a week against the 700 it sells"}),
+    '700<small>/week used</small>');
+  assert.equal(amount({group: 'wholesale', text: "Water's wholesale delivery brings 1,000 a week against 1,680 used"}),
+    '1,680<small>/week used</small>');
+  assert.equal(amount({group: 'wholesale', text: "Beer runs out before Tuesday's wholesale delivery: 150 left at 100/day"}),
+    '150<small>left</small>');
+});
+
+/* Today reads the findings of the sizing on screen: Python runs the list
+   twice, and Demand has its own (alertsDemand). */
+test('Today, the kinds popover and the map read the list of the sizing on screen', () => {
+  const at = source.indexOf('const alertLines =');
+  const ctx = vm.createContext({});
+  vm.runInContext('let sizing = "cap"; let D = null;\n' + source.slice(at, source.indexOf('/* The sizing switch.', at)), ctx);
+  const lines = ctx => JSON.parse(vm.runInContext('JSON.stringify(alertLines().map(a => a.id))', ctx));
+  vm.runInContext(`D = {alerts: [{id: 'feed'}, {id: 'paused'}], minor: {rows: [{id: 'm'}]},
+    alertsDemand: {lines: [{id: 'paused'}], minor: {rows: []}}}`, ctx);
+  assert.deepEqual(lines(ctx), ['feed', 'paused']);
+  vm.runInContext('sizing = "dem"', ctx);
+  assert.deepEqual(lines(ctx), ['paused']);
+  assert.deepEqual(vm.runInContext('alertMinor().rows.length', ctx), 0);
+  // A payload from before the second pass keeps the 24/7 list under Demand.
+  vm.runInContext('delete D.alertsDemand', ctx);
+  assert.deepEqual(lines(ctx), ['feed', 'paused']);
+  assert.match(DRAW, /alertLines\(\), alertMinor\(\)\.rows/);
+  const map = fs.readFileSync(path.join(__dirname, '..', 'web', 'map.js'), 'utf8');
+  assert.match(map, /\.\.\.alertLines\(\), \.\.\.\(alertMinor\(\)\.rows/);
 });
