@@ -228,6 +228,17 @@ class TradingDayTests(unittest.TestCase):
         self.assertEqual(line["rate"], round((50 + 4 * 225) / 7, 1))
         self.assertEqual(b["tradeDays"], 4)
 
+    def test_a_week_is_the_trading_days_of_the_days_open(self):
+        # Open since day 1, on day 8: six whole days open, four of them traded
+        # at 225, so its week is 225 x 4 spread over the six days it has been open.
+        b = business(self.week(), day=8)
+        self.assertEqual(next(l for l in b["lines"] if l["slug"] == ROSE)["weekSold"], 1050)
+        # A shop a month old trading on Saturdays and Sundays only: two days' worth.
+        weekends = [sale_day(d, 30 if d % 7 in (6, 0) else 0, 100 if d % 7 in (6, 0) else 0)
+                    for d in range(2, 30)]
+        b = business(weekends, day=30)
+        self.assertEqual(next(l for l in b["lines"] if l["slug"] == ROSE)["weekSold"], 200)
+
     def test_a_site_under_a_week_old_keeps_its_trading_days(self):
         b = business(self.week()[:6], day=6)
         line = next(l for l in b["lines"] if l["slug"] == ROSE)
@@ -546,14 +557,14 @@ class IdleRuleTests(unittest.TestCase):
         return c
 
     def test_6_a_new_shop_is_read_at_its_trading_day_rate(self):
-        # 4,000 is 3.6 weeks of the 1,125 its five trading days sold; at the
-        # calendar rate the zero days and the half opening day make of it, 4.2.
-        c = self.shop(4000, 4500)
+        # 4,455 is 2.8 weeks at 225 a trading day; at the calendar rate the
+        # zero days and the half opening day make of it, 4.7.
+        c = self.shop(4455, 4500)
         self.assertEqual(self.idle(c, SHOP_A, SODA), [])
         self.assertEqual(self.found(c, SHOP_A), [])
 
     def test_7_a_target_28_busiest_days_deep_is_a_target_finding(self):
-        c = self.shop(6300, 28 * 225, trade_days=30)
+        c = self.shop(6300, 28 * 225)
         [row] = self.idle(c, SHOP_A, SODA)
         self.assertEqual((row["why"], row["weeks"]), ("targetHigh", 4.0))
         self.assertEqual([f["group"] for f in self.found(c, SHOP_A)], ["target"])
@@ -768,10 +779,29 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertEqual((fact["role"], fact["cad"], fact["imp"]), ("input", "daily", True))
         own = fact["import"]
         self.assertEqual((own["cad"], own["have"], own["use"]), ("weekly", 1000, 1000))
-        self.assertIn(own["st"], ("covered", "tight", "short"))
+        self.assertEqual(own["st"], "covered")
         self.assertEqual(set(own) - FACT_KEYS, set())
         # The Hub answers for the rest of the 1,680.
         self.assertEqual(c.fact(HUB, WATER)["use"], 680)
+
+    def test_m1_a_paused_own_import_reads_paused_and_leaves_the_hub_its_share(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Mill")
+        c.hold(HUB, WATER, 2000)
+        c.hold(FACTORY, WATER, 250)
+        c.hold(FACTORY, BEER, 300)
+        c.plan(HUB, FACTORY, WATER, 300)
+        c.contract(HUB, WATER, 800)
+        c.contract(FACTORY, WATER, 1000, active=False)
+        for d in range(13, 20):
+            c.ship(d, HUB, FACTORY, {WATER: 100})
+        c.run()
+        own = c.fact(FACTORY, WATER)["import"]
+        self.assertEqual((own["st"], own["use"], own["have"]), ("paused", 1000, 1000))
+        self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("covered", 680))
+        self.assertEqual([f["text"] for f in c.findings() if f["group"] in ("paused", "feed", "order")],
+                         ["Water import is paused; resume the contract supplying Mill"])
 
     def test_s2_a_depot_line_whose_only_outflow_was_a_first_fill_is_not_moving(self):
         c = Company()
@@ -881,6 +911,100 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertNotIn(str(c.index(HUB)), c.supply["facts"])
 
 
+class RoundTwoFixTests(unittest.TestCase):
+    """Review round 2: the fixes each on a company of its own."""
+
+    def test_a_new_sites_first_fill_is_no_draw_at_the_depot_behind_it(self):
+        # The Hub tops a brewery that opened on day 16 up with 2,000, then
+        # 240 a day; the brewery's log starts on the fill.
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Brewery")
+        c.hold(HUB, WATER, 2000)
+        c.hold(FACTORY, WATER, 1900)
+        c.hold(FACTORY, BEER, 300)
+        c.plan(HUB, FACTORY, WATER, 2000)
+        c.contract(HUB, WATER, 1700)
+        c.ship(16, HUB, FACTORY, {WATER: 2000})
+        for d in (17, 18, 19):
+            c.ship(d, HUB, FACTORY, {WATER: 240})
+        c.run()
+        row = next(r for r in c.supply["imports"] if r["slug"] == WATER)
+        self.assertEqual(row["perDay"], 240)
+        self.assertNotEqual(c.fact(HUB, WATER)["st"], "short")
+        self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(HUB)])
+        # The brewery's own input is on its first fill, by the same rule.
+        self.assertEqual((c.fact(FACTORY, WATER)["st"], c.fact(FACTORY, WATER)["why"]), ("new", "firstFill"))
+
+    def test_a_depot_only_a_route_feeds_carries_its_day_and_a_figure_to_set(self):
+        short = RoundOneFixTests().depot_fed(80)
+        # A day's figures: its busiest day's draw of 100, 115 with the margin,
+        # against the 80 the top-up holds, and the top-up to set.
+        self.assertEqual((short["cad"], short["use"], short["need"], short["have"], short["setTo"]),
+                         ("daily", 100, 115, 80, 120))
+        self.assertNotIn("parts", short)
+        tight = RoundOneFixTests().depot_fed(104)
+        self.assertEqual((tight["st"], tight["setTo"]), ("tight", 120))
+
+    def test_a_short_route_fed_depot_is_a_finding_and_a_tight_one_is_not(self):
+        for target, found in ((80, 1), (104, 0), (200, 0)):
+            with self.subTest(target=target):
+                c = Company()
+                c.site(HUB, "Import Hub")
+                c.site(DISTRIB, "Distrib")
+                c.shop(SHOP_A, "Soda Shop")
+                c.hold(HUB, SODA, 5000)
+                c.hold(DISTRIB, SODA, 300)
+                c.hold(SHOP_A, SODA, 100, 100)
+                c.plan(HUB, DISTRIB, SODA, target)
+                c.plan(DISTRIB, SHOP_A, SODA, 150)
+                for d in range(13, 20):
+                    c.ship(d, HUB, DISTRIB, {SODA: 50})
+                    c.ship(d, DISTRIB, SHOP_A, {SODA: 100})
+                c.run()
+                notes = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
+                self.assertEqual(len(notes), found, notes)
+                if found:
+                    self.assertEqual((notes[0]["level"], notes[0]["group"]), ("critical", "shortfall"))
+                    self.assertIn("raise the top-up to 120", notes[0]["text"])
+
+    def test_stock_a_factory_holds_that_a_depots_plans_need_is_not_routed(self):
+        # The factory is topped up with soda nothing there uses; the Distrib
+        # sends soda to a shop but nothing brings the Distrib any.
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Brewery")
+        c.site(DISTRIB, "Distrib")
+        c.shop(SHOP_A, "Soda Shop")
+        c.hold(HUB, SODA, 100)
+        c.hold(FACTORY, SODA, 2000)
+        c.hold(SHOP_A, SODA, 50, 100)
+        c.plan(HUB, FACTORY, SODA, 2000)
+        c.plan(DISTRIB, SHOP_A, SODA, 150)
+        c.run()
+        fact = c.fact(FACTORY, SODA)
+        self.assertEqual((fact["st"], fact["why"]), ("idle", "notRouted"))
+        self.assertEqual([u[0] for u in fact["unfed"]], [c.index(DISTRIB)])
+        [note] = [f for f in c.findings() if f["siteKey"] == site_key(FACTORY)
+                  and f["group"] in ("notrouted", "dead")]
+        self.assertEqual(note["group"], "notrouted")
+        self.assertIn("Distrib needs 100/day", note["text"])
+
+    def test_a_top_up_nothing_uses_offers_a_plan_or_stopping_it(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Brewery")
+        c.hold(HUB, SODA, 100)
+        c.hold(FACTORY, SODA, 2000)
+        c.plan(HUB, FACTORY, SODA, 2000)
+        c.run()
+        [note] = [f for f in c.findings() if f["siteKey"] == site_key(FACTORY)
+                  and f["group"] in ("notrouted", "dead")]
+        self.assertIn("no plan sends it on: add a plan to the shops that should get it, "
+                      "or stop the top-up", note["text"])
+        self.assertNotIn("remove", note["text"])
+
+
 class StableOrderTests(unittest.TestCase):
     def test_the_facts_do_not_depend_on_the_hash_seed(self):
         script = ("import json, test_supply_facts as t;"
@@ -943,7 +1067,7 @@ class FixtureKeyTests(unittest.TestCase):
                         self.assertLessEqual(set(base.get("dem", {})), FACT_KEYS - {"dem"})
                         self.assertIn(fact["why"], self.WHYS[fact["st"]])
                         # A week's figures carry the week's split; a day's none.
-                        weekly = fact["role"] == "depot" or fact["cad"] == "weekly"
+                        weekly = fact["cad"] == "weekly"
                         self.assertEqual("parts" in base, weekly)
                         if fact["role"] == "output":
                             self.assertEqual((fact["use"], fact["need"], fact["setTo"]), (0, 0, None))

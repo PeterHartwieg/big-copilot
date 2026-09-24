@@ -340,8 +340,9 @@ class RouteAdviceTests(unittest.TestCase):
         self.assertEqual(row["routedFrom"], 0)
         notes = _idle_notes(f.businesses, f.supply["idle"], set())
         text = next(n["text"] for n in notes if n["site"] == "Distrib")
-        self.assertIn("Factory tops it up to 250 here and nothing here uses it", text)
-        self.assertIn("remove that target", text)
+        # The stock may be meant for sites no plan reaches yet: both ways out.
+        self.assertIn("Factory tops it up to 250 here and no plan sends it on: add a plan to the "
+                      "shops that should get it, or stop the top-up", text)
 
     def test_no_route_advice_where_the_depot_sends_it_on(self):
         f = forwarding_fixture()

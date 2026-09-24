@@ -110,12 +110,12 @@ Four indirect routes an agent would otherwise miss:
   Python twin is `_supply_fact()`, which the findings use. The findings themselves come
   twice, `alerts`/`minor` and `alertsDemand`, and `alertLines()` picks the pair by the same
   switch. A fact's figures (`use`, `need`, `have`, `setTo`, `lower`) are a week's where
-  an import or a wholesale delivery brings the item (`role` depot, or `cad` weekly: a
-  factory input imported direct, a shelf on a wholesale contract) and a day's where a
-  daily top-up does (a shelf, a factory input topped up each morning); `parts` is on a
-  week's facts only. The board reads the unit through `szWeekly()`, `szDaily()` and
-  `szWeekOf()`, never from `cad` alone: a depot fed by a route from another depot has
-  `cad` daily and a week's figures. Every (`st`, `why`) pair `_supply_status()` can send
+  `cad` is weekly (an import or a wholesale delivery brings the item: a depot line, a
+  factory input imported direct, a factory's own contract under `import`, a shelf on a
+  wholesale contract) and a day's otherwise (a daily top-up brings it: a shelf, a depot
+  fed only by a route from your own site, a factory input topped up each morning);
+  `parts` is on a week's facts only. The board reads the unit through `szWeekly()`,
+  `szDaily()` and `szWeekOf()`. Every (`st`, `why`) pair `_supply_status()` can send
   has a line in `SZ_WHY`; `named` and `unjudged` are the board's own, for a row Python
   has not judged. `tests/fixtures/r8_supply.json` is the board's synthetic payload, and
   `tests/test_supply_facts.py` holds its keys, units and reasons to what `extract()`

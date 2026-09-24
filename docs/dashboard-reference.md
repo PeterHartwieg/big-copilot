@@ -1047,16 +1047,30 @@ its coming week off a straight line through its trading days and says the figure
 still be ramping*, naming the shops. Switching needs no refresh: both answers are
 already on the page.
 
-A shop's week is its trading-day rate over the days it traded in the last seven, so a
-shop open two days a week uses two days' worth, not seven; a daily top-up is still judged
-on the busiest trading day. A first fill, the first round of a new top-up target, is no
-use: a depot whose only outflow was one reads **idle**, not moving, and a factory input on
-its first fill is **new** only when the site's whole delivery log names the item nowhere
-before. A depot only a route from another of your sites feeds is judged on that top-up
-against a day of what leaves it. A factory input topped up from a depot and imported to
-the factory as well keeps its daily word, and its own contract is judged on the week in
-Weekly imports beside the depots'. Only **short**, **tight** and **no plan** suggest a
-figure to set.
+A shop's week is its trading-day rate over the days it traded in the last seven, spread
+over the days it has been open, so a shop open two days a week uses two days' worth, not
+seven, and one open four days is not read at four sevenths of its week; a daily top-up is
+still judged on the busiest trading day.
+
+A first fill is a factory's or a depot's first round of a new top-up target: the first
+day its whole delivery log names the item, inside the last week. What that day brought
+beyond the rounds after it is no use, so a depot whose only outflow was a first fill reads
+**idle**, not moving, and a factory input on its first fill is **new**. (A log that has
+reached its sixty entries and starts that very day may have lost older ones, so there it
+is no first fill.)
+
+A depot only a route from another of your sites feeds is judged as a shelf is, in a day's
+figures: its top-up against its busiest day's draw plus the margin, with the top-up to set;
+a short one is a finding. A factory input topped up from a depot and imported to the
+factory as well keeps its daily word, and its own contract is judged on the week in Weekly
+imports beside the depots'; paused, it reads **paused**, and the depot answers only for the
+rest. Only **short**, **tight** and **no plan** suggest a figure to set.
+
+Stock held where no plan sends it on is **Not routed** wherever it sits, a depot or a
+factory, when your own sites sell or need the item with no plan feeding them: a shelf, a
+factory line, or a depot whose own plans send it to shops. Where none does, it is not
+moving, and a top-up that brings it reads: add a plan to the shops that should get it, or
+stop the top-up.
 
 **Held by Produce up to.** A factory line whose machines all have *Produce up to* set stops
 at the limit and starts again as the morning round takes its output away, so through the
@@ -1073,8 +1087,9 @@ of each item on its delivery day, once a week. Such a shelf is on a plan. It is 
 an import is, on the week: the contract's amount against a week of the shelf's sales plus
 the margin (**short** under the week, **tight** under the margin), and its stock against
 the days to the next delivery. An order under the week is a warning while the stock still
-reaches the drop, and critical once it runs out before it. Checks shows the contract beside the top-up column, Orders
-lists a change under *Wholesale deliveries*, and a short one is a finding. A one-off or
+reaches the drop, and critical once it runs out before it. Checks shows the contract
+beside the top-up column, Orders lists a change under *Wholesale deliveries*, and a short
+one is a finding. A one-off or
 urgent order, or a disabled contract, is no standing supply, and a shelf on a contract is
 never among the sites a **Not routed** finding names.
 
