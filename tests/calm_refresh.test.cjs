@@ -347,7 +347,7 @@ test('a draw that throws on the way in leaves the view out of date, not the read
   await page.click('#nav a[data-id="company"]');
   assert.equal(await stale(), false);
   assert.match(await page.locator('#secPayroll').textContent(), /\b4 people\b/, 'drawn on the next visit');
-  assert.deepEqual(await liveDot(page), {stale: false, says: 'Live', why: ''});
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
 });
 
 // The masthead's Live dot: marked Stale or not, what it says, and why.
@@ -387,7 +387,7 @@ test('one row that throws on a view does not keep the others from drawing, and i
   assert.deepEqual(await due(), []);
   assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'rebuild broke'});
   await page.evaluate(() => window.calmWatch.stale(''));
-  assert.deepEqual(await liveDot(page), {stale: false, says: 'Live', why: ''});
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
 
   // The next board clears a row's mark too; the row is tried again on its visit.
   await page.evaluate(() => {
@@ -399,7 +399,15 @@ test('one row that throws on a view does not keep the others from drawing, and i
   assert.equal((await liveDot(page)).stale, true);
   await page.evaluate(() => { window.drawPortfolio = window.calmDraw; showSub('company', 'products'); });
   await deliver(page, later);
-  assert.deepEqual(await liveDot(page), {stale: false, says: 'Live', why: ''});
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
+});
+
+test('a render keeps a Stale mark on the fresh dot, and a lost source replaces it', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { window.calmWatch.stale('rebuild broke'); renderCalm(); });
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'rebuild broke'});
+  await page.evaluate(() => window.calmWatch.lost());
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'Not live', why: ''});
 });
 
 test('a refresh settles the board, not an open dialog', async t => {

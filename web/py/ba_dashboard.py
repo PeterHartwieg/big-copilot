@@ -18776,14 +18776,19 @@ function renderAll(){
   const diffFocus = fvChipFocus();
   const here = calmLazy ? viewOf(page) : null;
   indexTrends();
+  /* Painted back straight after the fresh dot, so a row that throws below
+     cannot leave it green, and again once the rows that drew have cleared
+     their marks. */
+  const marked = !!(staleSource || staleDraws.size);
   drawMast();
+  if(marked) paintStale();
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
     row[1]();
     staleDraws.delete(row);
   });
-  if(staleSource || staleDraws.size) paintStale();
+  if(marked) paintStale();
   drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
@@ -18937,7 +18942,7 @@ function paintStale(){
   const drew = staleDraws.size ? [...staleDraws.values()][0] : "";
   const stale = !!(staleSource || drew);
   dot.classList.toggle("stale", stale);
-  dot.querySelector("em").textContent = stale ? "Stale" : SOURCE.label;
+  dot.querySelector("em").textContent = stale ? "Stale" : String(SOURCE.label).toUpperCase();
   dot.title = staleSource ? "The save moved on but the board would not rebuild: " + staleSource
     : drew ? "A page could not be drawn with the latest numbers and shows older ones: " + drew : "";
   window.BigCopilotCommunity?.paintOnline();
@@ -23273,7 +23278,8 @@ function startWatching(){
     linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
     lost(){
       const dot = $("live");
-      if(dot){ dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
+      /* "Not live" replaces a Stale mark: nothing repaints an off dot. */
+      if(dot){ dot.classList.remove("stale"); dot.title = ""; dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
     },
   });
 }

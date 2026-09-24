@@ -340,7 +340,8 @@ view.
 
 A live refresh of the same company enters through `renderCalm()`, which also runs the
 entrance animations the rebuild started to their end, so nothing slides in again. Only the
-board is settled: an open dialog and the game-link write toast are left alone. It draws
+board is settled, the search palette with it since a refresh rebuilds its list: an open
+dialog and the game-link write toast are left alone. It draws
 only the rows tagged for the view on screen, plus the `""` rows, and marks the rest in
 `pageStale`; `drawStale()`, called from `showPage()` and `showSub()`, draws them as their
 view opens. A row that throws there stays in `pageStale` and is tried again on the next
