@@ -9982,6 +9982,10 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .seg a{padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
 .seg a:hover{color:var(--ink)}
 .seg a.on{background:var(--ink);color:var(--ground)}
+/* The sizing switch (supplyFact): the seg with its name in front, and the
+   note a figure built on a shop open under a week carries under Demand. */
+.sz-switch::before{content:"Sizing";align-self:center;padding:0 4px 0 8px;font-size:11px;font-weight:500;color:var(--ink-3)}
+.sz-ramp{display:inline-block;margin-left:6px;font-size:11px;color:var(--warn);white-space:nowrap;cursor:help}
 .ibtn{
   width:32px;height:32px;border-radius:7px;border:1px solid var(--rule);background:var(--surface);
   display:grid;place-items:center;color:var(--ink-2);cursor:pointer;transition:color .15s,border-color .15s;
@@ -11909,7 +11913,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 
   <div class="page" id="pageSupply" hidden>
     <div class="sechead subhead"><nav class="seg" id="supplyNav" aria-label="Supply views"></nav>
-      <div class="aside" data-sub="orders"><span class="seg" id="logisticsTools" aria-label="Which orders to list"></span></div></div>
+      <div class="aside" data-sub="orders"><span class="seg" id="logisticsTools" aria-label="Which orders to list"></span><span class="seg" id="logisticsSizing"></span></div></div>
 
     <section class="sec rv" id="secLogistics" data-sub="orders">
       <details class="order-checklist" id="orderChecklist">
@@ -12698,7 +12702,7 @@ function drawFlow(){
 /* A site's facts, one per item it holds (graph items carry the slug). An
    import node is no site and has none. */
 function flowFacts(node){
-  const s = D.businesses.findIndex(b => b.key === node.id);
+  const s = Number.isInteger(node.site) ? node.site : D.businesses.findIndex(b => b.key === node.id);
   return s < 0 ? [] : (node.items || []).map(i => szFact(s, i.slug));
 }
 /* "2 short, 1 paused": a set of facts counted by their status word. */
@@ -12731,11 +12735,11 @@ function drawFlowDetail(){
         l.paused ? ` ${chipHtml("bad", "paused")}` : ""}</td><td>${l.perDay.toLocaleString()}</td></tr>`).join("")
       : `<tr><td class="l quiet" colspan="2">${empty}</td></tr>`}</tbody></table>`;
   /* Each item's verdict is its fact, with the figure to set where there is one. */
-  const s = D.businesses.findIndex(b => b.key === node.id);
+  const s = Number.isInteger(node.site) ? node.site : D.businesses.findIndex(b => b.key === node.id);
   const fitCell = i => {
     const f = s < 0 ? SZ_NEW : szFact(s, i.slug);
     return `${szChip(f)}${f.setTo !== null && f.setTo !== undefined
-      ? ` <span class="sub" style="display:inline">set to ${f.setTo.toLocaleString()}</span>` : ""}`;
+      ? ` <span class="sub" style="display:inline">set to ${f.setTo.toLocaleString()}</span>` : ""}${szRamp(f)}`;
   };
   const facts = flowFacts(node);
   const bad = facts.filter(f => f.lvl === "critical"), watch = facts.filter(f => f.lvl === "warn");
@@ -12825,9 +12829,10 @@ const SZ_STATE = {
   made: "Made at this site", new: "Too young to judge",
 };
 const szTip = f => SZ_WHY[f.why] || SZ_STATE[f.st] || "";
-const szChip = (f, word) => chipHtml(SZ_CHIP[f.lvl] || "dim", word || SZ_WORD[f.st] || f.st, szTip(f)) + szRamp(f);
+const szChip = (f, word) => chipHtml(SZ_CHIP[f.lvl] || "dim", word || SZ_WORD[f.st] || f.st, szTip(f));
 /* Under Demand, a figure built on a shop open under a week is its coming
-   week's straight-line average, and says so; the tip names the shops. */
+   week's straight-line average, and says so beside the figure; the tip names
+   the shops. */
 function szRamp(f){
   if(sizing !== "dem" || !f || !(f.ramp || []).length) return "";
   const names = f.ramp.map(s => D.businesses[s] ? shortName(D.businesses[s]) : null).filter(Boolean);
@@ -12986,7 +12991,7 @@ const SUPPLY_VIEWS = {
       ].filter(Boolean);
       return `${problems.length ? `<b>${problems.join("; ")}</b>; ${clear}`
         : `<b>${clear} ${clear===1?"shelf":"shelves"}</b>`} ${clear===1?"clears its":"clear their"} top-up${
-        notes.length ? ` (${notes.join(", ")})` : ""}${worst
+        notes.length ? `; ${notes.join("; ")}` : ""}${worst
         ? `; tightest ${worst.item} at ${mapRef(D.businesses[worst.s])}, ${
             worst.pressure}% on a ${worst.peakDay || "normal day"}` : ""}.`;
     },
@@ -13236,7 +13241,7 @@ const SUPPLY_VIEWS = {
       return `
       <td class="l">${siteTd(D.businesses[r.s])}</td>
       <td class="l">${r.item}<span class="sub">${factoryLineText(factoryView().sites.find(s => s.s === r.s), r)}</span></td>
-      <td>${szUse(f, r.perDay).toLocaleString()}</td>
+      <td>${szUse(f, r.perDay).toLocaleString()}${szRamp(f)}</td>
       <td>${szWeek(f, r.perWeek).toLocaleString()}</td>
       <td>${r.directImport ? '<span class="sub" data-tip="Weekly import delivered to this factory; assessed against weekly input demand, not daily logistics rounds.">Direct import</span>' : r.target ? r.target.toLocaleString() : "—"}${r.from !== null && r.from !== undefined
           ? `<span class="sub"> from ${depot}</span>` : ""}</td>
@@ -17002,101 +17007,72 @@ function drawStock(){
 
 /* --- logistics set-up ------------------------------------------------ */
 /* The two numbers a logistics manager is set with: the weekly import order
-   at each depot, consolidated across every factory drawing on it, and the
-   daily top-up into each factory. Both come from the factory lines as the
-   board reads them (or as you named them), so a line named a minute ago is
-   already in the totals. */
-const ceil100 = v => Math.ceil(v / 100) * 100;
+   at each depot and the daily top-up into each factory. Both are Python's:
+   every depot line that belongs in Weekly imports and every factory input is
+   a fact, with its use summed up the routes, the one margin over the chain,
+   and the figure to set, rounded up (supplyFact). A line named in this
+   browser has no figure until the next refresh. */
 let logisticsView = "changes";
 
-/* One import row's setting: what the game holds, what the board suggests, and
-   what the Set to box shows. Pure, so it can be checked without a page.
-   A Smart Delivery contract (isTarget) keeps a stock level: the purchasing
-   agent tops the depot up to it each Monday, so a level of T carries at most
-   T of use through a week, and the fit compares it with the week as a plain
-   order's amount is compared. `weekly` is that capacity, `target` the level
-   the box in game shows. A high level only holds stock, so a Smart Delivery
-   row is never told it could lower. `edit` is the player's own figure, if any,
-   as {value, inGame}: what they typed and what the game held when they did. */
-function importSetting(total, contract, edit){
+/* One import row's setting: what the game holds, what the board suggests,
+   and what the Set to box shows. Pure, so it can be checked without a page.
+   The verdict and the suggestion are the fact's (`st`, `setTo`); this keeps
+   the book around them. A Smart Delivery contract keeps a stock level, the
+   figure in the game's own box; a plain one an amount a week. A paused
+   contract is resumed as it stands, so its box keeps the game's figure.
+   `edit` is the player's own figure, if any, as {value, inGame}: what they
+   typed and what the game held when they did. */
+function importSetting(fact, contract, edit){
   const smart = !!contract.smart;
   const current = contract.weekly, pausedWeekly = contract.pausedWeekly || 0;
   const paused = !current && pausedWeekly > 0;
-  const fit = paused ? "paused" : current === undefined ? (total ? "none" : "idle")
-    : current === 0 && total > 0 ? "short" : feedFit(total, current);
-  /* The level a week needs is found by replaying the delivery pass with the
-     named contract's level (importLevelFor): a plain amount before the level
-     counts toward it, one after it comes on top. Without a pass (a
-     hand-built row) the plain amount after the level is taken off. */
+  const setTo = Number.isFinite(fact.setTo) ? fact.setTo : null;
   const plainAfter = smart ? contract.plainAfter || 0 : 0;
   const plainBefore = smart ? contract.plainBefore || 0 : 0;
-  const replay = smart && (contract.pass || []).length && Number.isInteger(contract.levelAt);
-  const setTo = !total ? null
-    : replay ? importLevelFor(contract.pass, contract.levelAt, total)
-    : ceil100(Math.max(0, total - plainAfter));
   // The number in the game's own box: the level for Smart Delivery, the amount otherwise.
   const level = smart && Number.isFinite(contract.target) ? contract.target : null;
   const inGame = current === undefined ? null
     : level !== null ? level
     : paused ? pausedWeekly : current;
-  const wants = !paused && setTo !== null
-    && (fit === "none" || fit === "short" || fit === "tight" || current === 0);
-  const suggested = wants ? setTo : inGame;
+  const suggested = setTo !== null && fact.st !== "paused" ? setTo : inGame;
   /* A typed figure answers the game as it stood when it was typed. Once the
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
-     board's own verdict, and the caller forgets it. Until then it stands,
+     board's own suggestion, and the caller forgets it. Until then it stands,
      including the figure in game typed to turn a suggestion down. */
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
   const stale = typed && edit.inGame !== inGame;
   const edited = typed && !stale;
   const value = edited ? edit.value : suggested;
-  // A weekly order carries a buffer by design; only half again over is worth a word.
-  const surplus = !smart && current !== undefined && !!total && current > total * 1.5;
-  return {smart, current, pausedWeekly, paused, fit, setTo, inGame, suggested, value, edited,
+  return {smart, current, pausedWeekly, paused, fit: fact.st, setTo, inGame, suggested, value, edited,
           stale, plainAfter, plainBefore, levelImporter: smart ? contract.levelImporter ?? null : null,
           levelName: smart ? contract.levelName ?? contract.levelImporter ?? null : null,
-          changed: value !== null && value !== inGame, surplus};
+          changed: value !== null && value !== inGame,
+          // Python's word that a plain order is half again the week: the figure that would do.
+          lower: !smart && Number.isFinite(fact.lower) ? fact.lower : null};
 }
 
-/* What a depot line's import has to bring a week, once the company's own
-   routes into the depot are counted: the Weekly imports table sizes its
-   suggestion on it, and the checklist says it. `factoryWeek` is what the
-   factory lines draw at full rate, `otherWeek` what else leaves (depotOther:
-   on a line a route feeds, read gross, so the route is not in it). `contract`
-   carries what _supply() measured on such a line: `drawWeek`, the week's
-   gross draw, `routed`, what routes brought a week, and `covered`, a route
-   bringing that draw. A routed line's week is the larger of that draw and
-   the factories' full-rate week plus the rest (a starved factory holds the
-   draw down, and the shops' share must not go with it), and the route's
-   week comes off it once; a line no route feeds is sized as it always was.
-   A covered line asks nothing of the import, which is a backup, provided the
-   factories' full-rate week is no more than the draw: a starved factory
-   draws less than it needs, and a route covering what it draws does not
-   cover what it needs. `gross` is the week before the route, the figure the
-   table shows as used. Pure, so the figure can be checked without a page. */
-function importWeek(factoryWeek, otherWeek, contract){
-  const routed = contract.routed || 0, draw = contract.drawWeek || 0;
-  const covered = !!contract.covered && factoryWeek <= draw * 1.05;
-  const gross = routed && draw ? Math.max(draw, factoryWeek + otherWeek) : factoryWeek + otherWeek;
-  return {routed, covered, gross, need: covered ? 0 : Math.max(0, gross - (draw ? routed : 0))};
-}
-
-/* A checklist of existing recommendations, not a second forecasting engine.
-   Keep this pure so changes can be checked without a browser or a save file. */
+/* A checklist of the facts' figures, not a second forecasting engine: every
+   proposed figure is a fact's setTo, or the player's own. Each row passed in
+   carries its `fact`. A change that only restores the margin (tight) is
+   marked so, and Today's card leaves it out. Keep this pure so changes can be
+   checked without a browser or a save file. */
 function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses){
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
-  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false) => {
+  const set = f => f && Number.isFinite(f.setTo);
+  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false, tight = false) => {
     const group = `${kind} · ${address(s)}`;
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]
                                .concat(mode === "smart" ? ["smart"] : []));
     rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode,
-               ...(paused ? {paused: true} : {})});
+               ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {})});
   };
+  /* What a figure was sized on, in the words of the sizing on screen. */
+  const margin = m => Number.isFinite(m) ? `, plus a ${Math.round(m * 100)}% margin` : ", plus the margin";
   importRows.forEach(d => d.rows.forEach(r => {
     // The Set to box: the player's figure where they typed one, else the suggestion.
     const value = r.value !== undefined ? r.value : r.setTo;
@@ -17107,53 +17083,57 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       : `Set the weekly order to ${n.toLocaleString()}.`;
     const yours = `Your own figure${r.setTo !== null && r.setTo !== undefined
       ? `; the board suggests ${r.setTo.toLocaleString()}` : ""}.`;
-    // What a route from the company's own site brings is off the week (importWeek).
-    const byRoute = r.routed ? `, less the ${r.routed.toLocaleString()} a week a route brings` : "";
-    if(r.paused && (r.need > 0 || r.edited)){
+    // What a route from the company's own site brings is off the week already.
+    const p = r.parts || {};
+    const byRoute = p.route ? `, less the ${p.route.toLocaleString()} a week a route brings` : "";
+    const sized = `${r.use ? `Uses ${r.use.toLocaleString()} a week${p.lines && p.sites ? " (factory lines and shops)"
+      : p.lines ? " (factory lines)" : p.sites ? " (shops)" : ""}` : "Sized"}${byRoute}${margin(r.margin)}`;
+    if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited)){
       const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString()} in stock`
         : `configured for ${r.pausedWeekly.toLocaleString()} units/week`;
       add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
-          : `The estimated requirement${r.routed ? `, after the ${r.routed.toLocaleString()} a week a route brings,` : ""} is ${
-            ceil100(r.need).toLocaleString()}. Review the quantity after resuming.`}`,
+          : `${sized}: ${(r.setTo ?? r.need).toLocaleString()} a week. Review the quantity after resuming.`}`,
         null, mode, true);
-    } else if(r.edited ? r.changed : r.setTo !== null
-        && (r.fit === "none" || r.fit === "short" || r.fit === "tight" || r.current === 0)){
-      const why = r.edited ? yours : r.factoryWeek
-        ? `Full-rate factory inputs${r.otherWeek ? " plus shop deliveries" : ""}${byRoute}; confirm the production plan before increasing.`
-        : `Based on recorded shop deliveries over a week${byRoute}.`;
+    } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
+      const why = r.edited ? yours : `${sized}${r.fit === "tight" ? "; the order covers the use but not the margin" : ""}.`;
       add("Weekly imports", r.s, r.item, r.inGame ?? r.current ?? null, value,
-        `${setting(value)} ${why}`, null, mode);
+        `${setting(value)} ${why}`, null, mode, false, !r.edited && r.fit === "tight");
     }
   }));
   looseRows.forEach(r => add("Weekly imports", null, r.item, null, null,
-    `Choose a supplying depot before setting an order. Full-rate factory inputs need ${ceil100(r.week).toLocaleString()} units/week.`));
+    `Choose a supplying depot before setting an order. The factory lines use ${Math.round(r.week).toLocaleString()} units/week.`));
   imports.forEach(r => {
-    if(r.paused && !r.covered && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
+    const f = r.fact || {};
+    const catchUp = Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null;
+    if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if(r.covered && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
-      Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
-      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
+    else if(f.st === "short" && f.why === "shortfall" && r.covered) add("Before the next delivery", r.s, r.item, null, catchUp,
+      `${catchUp ? `Bring in ${catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
         ? `, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply, raise the route's stock target, or resume the import.`
         : `. Arrange a one-off supply, or raise the route's stock target.`}`);
-    else if(!r.paused && r.coverFit === "short") add("Before the next delivery", r.s, r.item, null,
-      Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null,
-      `${Number.isFinite(r.catchUp) && r.catchUp > 0 ? `Bring in ${r.catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
+    else if(f.st === "short" && f.why === "shortfall") add("Before the next delivery", r.s, r.item, null, catchUp,
+      `${catchUp ? `Bring in ${catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });
   sites.forEach(s => s.rows.forEach(r => {
-    if(r.status === "unplanned" || r.status === "target") add("Factory daily top-ups", s.s,
-      r.item, r.target || 0, ceil100(r.dailyNeed ?? r.perDay),
-      `${r.from === null ? "Choose a supplying depot" : `From ${address(r.from)}`}. Full-rate input requirement; confirm staffing and output limits.`, r.from);
-    if(r.stalled) add("Check the delivery route", s.s, r.item, null, null,
-      `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from);
+    const f = r.fact || {};
+    if(set(f)) add("Factory daily top-ups", s.s, r.item, r.target || 0, f.setTo,
+      `${r.from === null || r.from === undefined ? "Choose a supplying depot" : `From ${address(r.from)}`}. ${
+        r.sizedFor || "Full-rate input requirement"}${margin(r.margin)}; confirm staffing and output limits.`,
+      r.from ?? null, null, false, f.st === "tight");
+    if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r.item, null, null,
+      `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from ?? null);
   }));
   shops.forEach(r => {
-    // Without a known route, this can be a made-to-order product (coffee,
-    // for example), not an item that a warehouse can deliver.
-    if(r.from !== null && r.from !== undefined && r.peakSold > 0
-      && (!r.target || feedFit(r.peakSold, r.target) !== "ok")) add("Shop daily top-ups", r.s, r.item, r.target || 0,
-      ceil100(r.peakSold), `From ${address(r.from)}. `
-        + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}; check shelf space.`, r.from);
+    const f = r.fact || {};
+    /* Without a known route, this can be a made-to-order product (coffee,
+       for example), not an item that a warehouse can deliver. A shelf on no
+       plan names the depot that could send it (via). */
+    const from = r.from ?? f.via ?? null;
+    if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+      f.setTo, `From ${address(from)}. `
+        + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
+      from, null, false, f.st === "tight");
   });
   const groups = new Map();
   rows.forEach(r => {
@@ -17202,6 +17182,9 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
       gaps.complete === false ? "factory lines need the game's text to be included" : "",
     ].filter(Boolean).join(", and ");
     return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
+      /* Only margin changes are left: nothing falls short, and Orders has them. */
+      : gaps.margin ? {badge: "ALL SET", live: false, what: `Nothing falls short. Supply › Orders lists ${
+          gaps.margin === 1 ? "one change" : `${gaps.margin} changes`} that would restore the margin.`}
       : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
   }
   if(!left.length) return {badge: "ALL TICKED", live: false,
@@ -17277,7 +17260,8 @@ function drawOrderChecklist(rows, factories){
     groups.get(r.site).push({...r, i});
   });
   const help = "Tick after applying a change in-game. Checkmarks are your notes, not confirmation from the save. Changed settings or estimated quantities need a fresh checkmark. Amounts are units, not boxes. Storage and transport limits are not checked."
-    + (hasFactories ? " Factory quantities assume full-rate production; check staffing and output limits." : "");
+    + (hasFactories ? sizing === "dem" ? " Factory quantities are sized for what the shops at the end of each chain use; check staffing and output limits."
+      : " Factory quantities assume full-rate production; check staffing and output limits." : "");
   const actionLabel = r => r.kind === "Before the next delivery" ? "Top up early"
     : r.kind === "Check the delivery route" ? "Check route"
     : r.site === null ? "Choose depot" : "Review import";
@@ -17319,8 +17303,11 @@ function drawOrderChecklist(rows, factories){
     $("resetOrderMarks").disabled = !done;
     $("orderCopyFallback").hidden = true;
     $("orderCopyStatus").textContent = "";
-    paintPlanImports(planImportsState(rows, marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null,
-      {complete, unnamed: unnamedRecipes}));
+    /* Tight never reaches Today: a change that only restores the margin
+       stays on Orders, and the card counts the rest. */
+    const urgent = rows.filter(r => !r.tight);
+    paintPlanImports(planImportsState(urgent, marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null,
+      {complete, unnamed: unnamedRecipes, margin: rows.length - urgent.length}));
   };
   body.querySelectorAll("input[data-order-mark]").forEach(input => {
     input.onchange = () => {
@@ -17391,15 +17378,18 @@ function impSetKeep(id, entry){
 function drawLogistics(){
   const changesOnly = logisticsView === "changes";
   const f = factoryView();
-  const other = (D.supply.factories && D.supply.factories.depotOther) || {};
+  const facts = D.supply.facts || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
-  const routesOnly = (D.supply.factories && D.supply.factories.depotRoutes) || {};
   const held = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).units || 0;
   const label = (s, slug) => (D.businesses[s].lines.find(l => l.slug === slug) || {}).item || itemName(slug);
+  const margin = D.supply.margin;
+  /* What the figures were sized for, said the way the switch says it. */
+  const sizedFor = sizing === "dem" ? "What the shops at the end of the chain use" : "Full-rate input requirement";
   const lines = f.sites.reduce((n, s) => n + s.lines.length, 0);
   const whyText = (f.sites.length
     ? `What to set the logistics managers to, from ${f.machines} machines on ${lines} lines${
-        f.unnamed ? `, ${f.unnamed} still unnamed` : ""}.`
+        f.unnamed ? `, ${f.unnamed} still unnamed` : ""}, sized ${sizing === "dem"
+        ? "for what the shops at the end of each chain use" : "for rated output, round the clock"}.`
     : D.meta.locale === false
       ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them. Current import contracts are shown below."
       : "No factory to feed; current import contracts are shown below.")
@@ -17409,74 +17399,78 @@ function drawLogistics(){
   const set = n => `<span class="set">${n.toLocaleString()}</span>`;
   const users = r => r.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ");
 
-  /* --- imports, one group per depot ------------------------------------ */
-  const depots = {}, loose = {};
-  f.sites.forEach(s => s.needs.forEach(n => {
-    const own = n.factoryImportSite ?? (n.directImport ? s.s : null);
-    if(own === null && n.from === null){
-      const row = loose[n.slug] = loose[n.slug] || {item: n.item, slug: n.slug, week: 0, users: []};
-      row.week += n.perWeek; row.users.push({s: s.s, perDay: n.perDay, lines: n.lines});
-      return;
-    }
-    for(const [source, week] of [[own, n.directNeed ?? n.perWeek], [n.from, n.warehouseNeed ?? n.perWeek]]){
-      if(source === null || !week) continue;
-      const d = depots[source] = depots[source] || {};
-      const row = d[n.slug] = d[n.slug] || {item: n.item, slug: n.slug, factoryWeek: 0, users: []};
-      row.factoryWeek += week; row.users.push({s: s.s, perDay: Math.round(week / 7), lines: n.lines});
-    }
+  /* Who draws each depot line: the factories topped up from it or importing
+     it themselves, and the shops it tops up. Only for the tooltip; the week
+     is the fact's. */
+  const drawers = {};
+  const draws = (s, slug, who, perDay) => {
+    if(s === null || s === undefined || !(perDay > 0)) return;
+    (drawers[`${s}|${slug}`] = drawers[`${s}|${slug}`] || []).push({s: who, perDay: Math.round(perDay)});
+  };
+  f.sites.forEach(site => site.needs.forEach(n => {
+    const use = szUse(szNeed(site, n), n.perDay);
+    const own = n.factoryImportSite ?? (n.directImport ? site.s : null);
+    draws(n.from, n.slug, site.s, use);
+    if(own !== n.from) draws(own, n.slug, site.s, use);
   }));
-  Object.entries(depotsKnown).forEach(([si, items]) => {
-    const d = depots[si] = depots[si] || {};
-    Object.keys(items).forEach(slug => {
-      d[slug] = d[slug] || {item: label(+si, slug), slug, factoryWeek: 0, users: []};
-    });
-  });
+  (D.supply.shops || []).forEach(r => draws(r.from, r.slug, r.s, r.sold));
+
+  /* --- imports, one group per depot: the depot facts Python marks `imp` --- */
   const importRows = [];
   const {edits} = impSetEdits();
-  Object.entries(depots).forEach(([si, items]) => {
+  Object.keys(facts).forEach(si => {
     const s = +si;
-    const rows = Object.values(items).map(r => {
-      const otherWeek = (other[si] || {})[r.slug] || 0;
-      const contract = (depotsKnown[si] || {})[r.slug] || {};
-      // A line no import contract covers may still be fed by a route (_depot_routes).
-      const route = {...((routesOnly[si] || {})[r.slug] || {}), ...contract};
-      const impId = impSetId(D.businesses[s] ? D.businesses[s].key : si, r.slug);
-      // The import is sized on what the routes into the depot leave it.
-      const {routed, covered, gross, need} = importWeek(r.factoryWeek, otherWeek, route);
-      // What leaves in a week, as measured: the shops' part is what the factories do not take.
-      const total = Math.round(gross), shopsWeek = Math.round(Math.max(0, gross - r.factoryWeek));
-      let setting = importSetting(need, contract, edits[impId]);
+    if(!D.businesses[s]) return;
+    const rows = Object.keys(facts[si]).filter(slug => facts[si][slug].imp).map(slug => {
+      const fact = szFact(s, slug);
+      const contract = (depotsKnown[si] || {})[slug] || {};
+      const impId = impSetId(D.businesses[s].key, slug);
+      let setting = importSetting(fact, contract, edits[impId]);
       // The game's figure has moved since this was typed: the answer is stale.
-      if(setting.stale){ impSetKeep(impId, null); setting = importSetting(need, contract, undefined); }
-      return {...r, s, otherWeek: shopsWeek, total, routed, covered, need, ...setting, impId, arrived: contract.arrivedLastWeek,
-              contracts: contract.contracts || [], stock: held(s, r.slug)};
-    }).sort((a, b) => b.total - a.total);
-    importRows.push({s, rows});
+      if(setting.stale){ impSetKeep(impId, null); setting = importSetting(fact, contract, undefined); }
+      // A route from the company's own site brings everything that leaves: the import is a backup.
+      const covered = fact.st === "covered" && fact.why === "route";
+      return {item: label(s, slug), slug, s, fact, total: fact.use, use: fact.use, parts: fact.parts || {}, margin,
+              covered, need: covered ? 0 : fact.need, users: drawers[`${s}|${slug}`] || [], ...setting, impId,
+              arrived: contract.arrivedLastWeek, contracts: contract.contracts || [], stock: held(s, slug)};
+    }).sort((a, b) => (b.total || 0) - (a.total || 0));
+    if(rows.length) importRows.push({s, rows});
   });
   gwImportRows = importRows.flatMap(d => d.rows);
+  /* A factory input no depot tops up and no import brings: nothing to set
+     until a depot is chosen. */
+  const loose = {};
+  f.sites.forEach(site => site.needs.forEach(n => {
+    const own = n.factoryImportSite ?? (n.directImport ? site.s : null);
+    if(own !== null || (n.from !== null && n.from !== undefined)) return;
+    const fact = szNeed(site, n);
+    const row = loose[n.slug] = loose[n.slug] || {item: n.item, slug: n.slug, week: 0, users: [], fact};
+    row.week += szWeek(fact, n.perWeek); row.users.push({s: site.s, perDay: szUse(fact, n.perDay)});
+  }));
   const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
   const count = fit => importRows.reduce((n, d) => n + d.rows.filter(fit).length, 0);
-  const short = count(r => r.fit === "short" || r.fit === "none");
+  const short = count(r => r.fit === "short" || r.fit === "noplan");
   const tight = count(r => r.fit === "tight");
-  const pausedCount = count(r => r.paused && r.need > 0);
+  const pausedCount = count(r => r.fit === "paused" && r.need > 0);
   const importAll = count(() => true);
   // A figure the player typed is a change they want to see, so it stays in view.
+  const wanted = r => r.edited || (r.fit === "paused" && r.need > 0) || r.setTo !== null;
   const shown = (changesOnly
-    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(r => (r.paused && r.need > 0) || r.edited
-        || r.fit === "short" || r.fit === "none" || r.fit === "tight")}))
+    ? importRows.map(d => ({s: d.s, rows: d.rows.filter(wanted)}))
     : importRows).filter(d => d.rows.length);
   /* The thin line under the depot figure: how much of a day's draw it holds,
      from the delivery log's measured draw where one is on record, else from
-     what this table says leaves in a week. */
+     the week the fact says is used. */
   const depotDays = r => {
-    const imp = (D.supply.imports || []).find(i => i.s === r.s && i.item === r.item);
+    const imp = (D.supply.imports || []).find(i => i.s === r.s && (i.slug === r.slug || i.item === r.item));
     if(imp && imp.daysOnHand !== null && imp.daysOnHand !== undefined) return imp.daysOnHand;
     return r.total ? r.stock / (r.total / 7) : null;
   };
   const depotCell = r => {
     const days = depotDays(r);
+    const low = r.fact.why === "shortfall" || r.fact.why === "dry";
     return days === null ? `<td>${r.stock.toLocaleString()}</td>`
-      : `<td class="gauge${days < 1 ? " low" : ""}"><i><b style="--w:${Math.min(100, days * 100).toFixed(0)}%"></b></i>${
+      : `<td class="gauge${low ? " low" : ""}"><i><b style="--w:${Math.min(100, days * 100).toFixed(0)}%"></b></i>${
           r.stock.toLocaleString()}</td>`;
   };
   /* A Smart Delivery figure is a stock level and a plain one a weekly amount;
@@ -17503,25 +17497,25 @@ function drawLogistics(){
         r.plainBefore.toLocaleString()} a week delivered first counts toward it</span>`)
     + (r.plainAfter ? `<span class="sub" data-tip="${attr(
         "A plain contract the game delivers after the level brings this on top of it")}">plus ${r.plainAfter.toLocaleString()} a week</span>` : "");
-  const gameCell = r => r.inGame === null ? r.covered ? chipHtml("dim", "not imported", routeTip(r)) : chipHtml("bad", "not imported")
-    : `${amount(r.inGame, r.smart)}${aroundLevel(r)}${r.paused ? ` ${chipHtml(r.covered ? "dim" : "warn", "paused")}` : ""}`;
-  /* What the box is about: the board's verdict on the figure in game, or
+  const gameCell = r => r.inGame === null ? r.covered ? chipHtml("dim", "not imported", routeTip(r))
+      : chipHtml(SZ_CHIP[r.fact.lvl] || "dim", "not imported", szTip(r.fact))
+    : `${amount(r.inGame, r.smart)}${aroundLevel(r)}${r.paused ? ` ${chipHtml(r.fit === "paused" ? "warn" : "dim", "paused")}` : ""}`;
+  /* What the box is about: the fact's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
-  const verdict = r => r.covered ? chipHtml("ok", "covered by route", routeTip(r))
-    : r.setTo === null ? chipHtml("dim", "nothing draws it")
-    : r.paused ? chipHtml("warn", "resume import")
-    : r.edited ? ""
-    : r.fit === "none" ? up("add")
-    : r.fit === "short" ? up("raise")
-    : r.fit === "tight" ? up("raise", "Within 5% of the week it has to cover")
-    : r.surplus ? chipHtml("dim", "could lower", `More than half again what leaves in a week; ${r.setTo.toLocaleString()} would do`)
-    : chipHtml("ok", "covered");
+  const verdict = r => r.edited ? ""
+    : r.covered ? chipHtml("ok", "covered by route", routeTip(r))
+    : r.fit === "paused" ? chipHtml(SZ_CHIP[r.fact.lvl] || "warn", "resume import", szTip(r.fact))
+    : r.setTo !== null ? up(r.inGame === null ? "add" : "raise", r.fit === "tight" ? SZ_STATE.tight : szTip(r.fact))
+    : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${r.lower.toLocaleString()} would do`)
+    : szChip(r.fact);
   /* What the box holds, said per state: the board's suggestion, the figure
      already in game, or the player's own. */
   const boardSays = r => (r.smart
-    ? `the level${r.levelName ? ` at ${r.levelName}` : ""} at which the week's deliveries, in the game's order, run everything this depot feeds at full capacity`
-    : "a week of everything this depot feeds at full capacity")
-    + (r.routed ? `, less the ${r.routed.toLocaleString()} a week a route brings` : "");
+    ? `the level at which the week's deliveries, in the game's order, bring ${sizing === "dem"
+      ? "what the shops at the end of each chain use" : "everything this depot feeds at full capacity"}`
+    : sizing === "dem" ? "a week of what the shops at the end of each chain use" : "a week of everything this depot feeds at full capacity")
+    + (r.parts.route ? `, less the ${r.parts.route.toLocaleString()} a week a route brings` : "")
+    + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
     ? `Your own figure. ${suggests(r) ? `The board suggests ${r.suggested.toLocaleString()}` : `The game holds ${r.inGame.toLocaleString()}`}`
@@ -17544,38 +17538,33 @@ function drawLogistics(){
   const contractLines = r => r.contracts.length < 2 ? ""
     : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
         c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
-  /* Who draws the material, and how the week splits between the factory
-     lines and the shops, stay on hover: the material name says who, the
-     Used / week figure says how much of each. */
-  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line draws it; what leaves goes to the shops";
-  const splitTip = r => [r.factoryWeek && r.otherWeek
-    ? `Factories ${r.factoryWeek.toLocaleString()} · shops ${r.otherWeek.toLocaleString()} a week`
-    : r.factoryWeek ? `All ${r.factoryWeek.toLocaleString()} a week to the factory lines`
-    : r.otherWeek ? `All ${r.otherWeek.toLocaleString()} a week to the shops` : "",
-    r.routed ? `A route from your own site brings ${r.routed.toLocaleString()} a week here; the import is sized on what it leaves` : ""]
-    .filter(Boolean).join(". ");
+  /* Who draws the material, and how Python's week splits between the
+     factory lines and the shops, stay on hover: the material name says who,
+     the Used / week figure says how much of each. */
+  const drawnBy = r => r.users.length ? `Drawn by ${users(r)}` : "No factory line or shop on a plan draws it";
+  const splitTip = r => szParts(r.parts);
   const importRow = r => `<tr${r.changed ? ` class="imp-changed"` : ""}>
       <td class="l" data-tip="${attr(drawnBy(r))}">${r.item}${contractLines(r)}</td>
-      <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}</td>
+      <td${splitTip(r) ? ` data-tip="${attr(splitTip(r))}"` : ""}>${r.total ? r.total.toLocaleString() : "—"}${szRamp(r.fact)}</td>
       <td>${Number.isFinite(r.arrived) ? r.arrived.toLocaleString() : "—"}</td>
       <td>${gameCell(r)}</td>
       ${setCell(r)}
       ${depotCell(r)}</tr>`;
   const looseRow = r => `<tr>
       <td class="l" data-tip="${attr(`Drawn by ${users(r)}`)}">${r.item}</td>
-      <td data-tip="${attr(`All ${r.week.toLocaleString()} a week to the factory lines`)}">${r.week.toLocaleString()}</td>
+      <td data-tip="${attr(`All ${Math.round(r.week).toLocaleString()} a week to the factory lines`)}">${Math.round(r.week).toLocaleString()}</td>
       <td>—</td>
       <td>${chipHtml("bad", "not imported")}</td>
-      <td>${set(ceil100(r.week))}${up("add")}</td>
+      <td>${szChip(r.fact)}<span class="sub">choose a depot</span></td>
       <td>—</td></tr>`;
   /* Rows sort inside their depot; the depots keep their own order. A row on no
      plan has nothing ordered and nothing held, so it shares the columns. What
      to set an import to is an action, not a figure, and does not sort. */
   const importCols = [["Material", r => r.item, "l"],
-    ["Used / week", r => (r.total ?? r.week) || null, "", "What leaves the depot in a week, factory lines and shops together; hover a figure for the split"],
+    ["Used / week", r => (r.total ?? r.week) || null, "", "What the ends use a week, factory lines and shops together, summed up the routes to this depot; hover a figure for the split"],
     ["Arrived last week", r => r.arrived ?? null, "", "What the importers delivered here last week, every contract together"],
     ["Set in game", r => r.inGame ?? null, "", "The figure in the purchasing agent's plan: a stock level with Smart Delivery, else the amount each week"],
-    ["Set to", null, "", "What to enter in game: the board's suggestion where the setting falls short of the week, as a stock level with Smart Delivery or a weekly amount without, else the figure in game. Enter your own figure to change it"],
+    ["Set to", null, "", "What to enter in game: the board's suggestion where the setting falls short of the week plus the margin, as a stock level with Smart Delivery or a weekly amount without, else the figure in game. Enter your own figure to change it"],
     ["At depot", r => r.stock ?? null]];
   const importOrder = supplySort.imports, importHead = supplyHead(importCols, importOrder);
   /* In linked mode the changes go to the game from here: one button for the
@@ -17595,44 +17584,46 @@ function drawLogistics(){
     + (looseRows.length ? supplyLocation("imports", null, looseRows.length,
       `<div class="scrollx"><table>${importHead}<tbody>${supplySorted(looseRows, importCols, importOrder).map(looseRow).join("")}</tbody></table></div>`, !shown.length) : "");
   const importState = !importRows.length && !looseRows.length ? {quiet: "No depot imports anything yet"}
-    : !short && !tight && !pausedCount && !looseRows.length ? check(importAll, "cover what leaves")
+    : !short && !tight && !pausedCount && !looseRows.length ? check(importAll, "cover the week and the margin")
     : {after: (short ? chipHtml("bad", `${short} short`) : "")
-      + (tight ? chipHtml("warn", `${tight} tight`, "Within 5% of the week the order has to cover") : "")
+      + (tight ? chipHtml("warn", `${tight} tight`, SZ_STATE.tight) : "")
       + (pausedCount ? chipHtml("warn", `${pausedCount} paused`) : "")
       + (looseRows.length ? chipHtml("bad", `${looseRows.length} on no plan`, "Needed by a factory line, but no depot imports it") : "")};
   $("importPlan").innerHTML = sechead("Weekly imports", {...importState, why: whyText,
     aside: importTable ? supplySortNote(importCols, importOrder) : ""}) + applyHere(toGame.length, null) + importTable;
   seg($("logisticsTools"), [["changes", "Needs a change"], ["all", "Everything"]],
     () => logisticsView, v => logisticsView = v, () => { drawLogistics(); wireAll(); });
+  szSwitch("logisticsSizing");
 
-  /* --- top-ups, one group per factory ----------------------------------- */
-  const needsChange = r => r.status === "unplanned" || r.status === "target" || r.stalled;
-  const allSites = f.sites.map(s => ({s: s.s, rows: s.needs.filter(n => !n.directImport).sort((a, b) => b.perDay - a.perDay)}))
+  /* --- top-ups, one group per factory: each input's own fact ------------ */
+  const needsChange = r => Number.isFinite(r.fact.setTo) || r.fact.st === "stalled" || r.fact.st === "noplan";
+  const allSites = f.sites.map(s => ({s: s.s, rows: s.needs.filter(n => !n.directImport)
+      .map(n => ({...n, fact: szNeed(s, n), sizedFor, margin}))
+      .sort((a, b) => szUse(b.fact, b.perDay) - szUse(a.fact, a.perDay))}))
     .filter(x => x.rows.length);
-  const topShort = allSites.reduce((n, x) => n + x.rows.filter(r => r.status === "unplanned" || r.status === "target").length, 0);
-  const topStalled = allSites.reduce((n, x) => n + x.rows.filter(r => r.stalled && r.status !== "unplanned" && r.status !== "target").length, 0);
+  const topShort = allSites.reduce((n, x) => n + x.rows.filter(r => r.fact.st === "short" || r.fact.st === "noplan").length, 0);
+  const topStalled = allSites.reduce((n, x) => n + x.rows.filter(r => r.fact.st === "stalled").length, 0);
+  const topTight = allSites.reduce((n, x) => n + x.rows.filter(r => r.fact.st === "tight").length, 0);
   const topAll = allSites.reduce((n, x) => n + x.rows.length, 0);
   const sites = changesOnly
     ? allSites.map(x => ({s: x.s, rows: x.rows.filter(needsChange)})).filter(x => x.rows.length)
     : allSites;
   const topupRow = (site, r) => {
-    const dailyNeed = r.dailyNeed ?? r.perDay;
-    const over = r.target && r.target > dailyNeed * 1.5;
+    const fc = r.fact, eats = szUse(fc, r.perDay), to = Number.isFinite(fc.setTo) ? fc.setTo : null;
     return `<tr>
       <td class="l">${r.item}<span class="sub">${factoryLineText(site, r)}</span></td>
-      <td>${dailyNeed.toLocaleString()}</td>
-      <td data-now="${r.target || 0}" data-to="${ceil100(dailyNeed)}">${r.target ? r.target.toLocaleString() : chipHtml("bad", "none")}</td>
-      <td>${r.status === "unplanned" ? `${set(ceil100(dailyNeed))}${up("add")}`
-        : r.status === "target" ? `${set(ceil100(dailyNeed))}${up("raise")}`
-        : over ? `${ceil100(dailyNeed).toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line draws from this route")}`
-        : chipHtml("ok", "covered")}</td>
-      <td class="l">${r.from !== null ? mapRef(D.businesses[r.from]) : "—"}</td>
-      <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.status === "waiting"
+      <td>${eats.toLocaleString()}${szRamp(fc)}</td>
+      <td data-now="${r.target || 0}"${to !== null ? ` data-to="${to}"` : ""}>${r.target ? r.target.toLocaleString() : chipHtml(SZ_CHIP[fc.lvl] || "dim", "none")}</td>
+      <td>${to !== null ? `${set(to)}${up(r.target ? "raise" : "add", fc.st === "tight" ? SZ_STATE.tight : szTip(fc))}`
+        : Number.isFinite(fc.lower) ? `${fc.lower.toLocaleString()} ${chipHtml("dim", "could lower", "More than half again what the line draws from this route")}`
+        : szChip(fc)}</td>
+      <td class="l">${r.from !== null && r.from !== undefined ? mapRef(D.businesses[r.from]) : "—"}</td>
+      <td>${r.known ? r.arrives.toLocaleString() : "—"}${fc.st === "stalled" && fc.why === "waiting"
         ? ` ${chipHtml("dim", "waiting", `${r.lines.join(", ")} stand${r.lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`)}`
-        : r.status === "staffing" ? ` ${chipHtml("warn", "understaffed", `The roster runs these machines ${Math.round(r.staffedShare * 100)}% of the week`)}`
-        : r.stalled ? ` ${chipHtml("warn", "none arrived", "Nothing arrived last week, though the depot holds it")}` : ""}</td></tr>`;
+        : fc.why === "staffing" ? ` ${chipHtml("dim", "understaffed", `The roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`)}`
+        : fc.st === "stalled" ? ` ${chipHtml(SZ_CHIP[fc.lvl] || "warn", "none arrived", szTip(fc))}` : ""}</td></tr>`;
   };
-  const topupCols = [["Material", r => r.item, "l"], ["Eats / day", r => r.dailyNeed ?? r.perDay],
+  const topupCols = [["Material", r => r.item, "l"], ["Eats / day", r => szUse(r.fact, r.perDay)],
     ["Top-up now", r => r.target || null], ["Set top-up to", null], ["From", null, "l"],
     ["Arrives / day", r => r.known ? r.arrives : null]];
   const topupOrder = supplySort.topups, topupHead = supplyHead(topupCols, topupOrder);
@@ -17642,8 +17633,9 @@ function drawLogistics(){
       `<div class="scrollx"><table>${topupHead}<tbody>${supplySorted(x.rows, topupCols, topupOrder).map(r => topupRow(site, r)).join("")}</tbody></table></div>`, i === 0);
   }).join("");
   const topupState = !allSites.length ? {quiet: f.sites.length ? "No daily factory top-ups needed" : "No factory line to feed"}
-    : !topShort && !topStalled ? check(topAll, "cover their day")
+    : !topShort && !topStalled && !topTight ? check(topAll, "cover their day and the margin")
     : {after: (topShort ? chipHtml("bad", `${topShort} short`, "Below the day's need, or on no plan") : "")
+      + (topTight ? chipHtml("warn", `${topTight} tight`, SZ_STATE.tight) : "")
       + (topStalled ? chipHtml("warn", `${topStalled} none arrived`) : "")};
   $("topupPlan").innerHTML = sechead("Daily top-ups", {...topupState,
     aside: (topupTable ? supplySortNote(topupCols, topupOrder) : "")
@@ -17652,7 +17644,8 @@ function drawLogistics(){
   if($("topupAll")) $("topupAll").onclick = e => {
     e.preventDefault(); logisticsView = changesOnly ? "all" : "changes"; drawLogistics(); wireAll(); };
   drawOrderChecklist(buildOrderChecklist(importRows, looseRows, allSites,
-    D.supply.shops || [], D.supply.imports || [], D.businesses), f);
+    (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
+    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses), f);
   wireSupplyLocations($("importPlan"));
   wireSupplyLocations($("topupPlan"));
   const redraw = () => { drawLogistics(); wireAll(); };
