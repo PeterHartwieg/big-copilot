@@ -1099,8 +1099,13 @@ Two tables, one per number a logistics manager is set with.
 
 - **Weekly import orders, per depot**: every material the depot ships, consolidated.
   *Used / week* is what all the factories drawing on it eat in a week (from their lines,
-  machines times recipe draw times 24 times 7) plus what else leaves for the shops
-  (measured from the delivery log). *Arrived last week* sums every contract's
+  machines times recipe draw times 24 times 7) plus what else leaves for other sites
+  (measured from the delivery log: the depot's rounds out, day by day, less what the
+  factories it tops up took in that day; both gross, so a factory passing goods on, or an
+  import landing the day a round leaves, changes nothing. A factory's own import is
+  recognised as its contract's delivery, on the delivery weekday at last week's amount,
+  and is not counted as taken. A factory takes an item only where one of its lines eats
+  it, so paper bags it passes on count as other sites). *Arrived last week* sums every contract's
   `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly
   cap shows as an order cut short. *Set in game* is the figure in the purchasing
   agent's plan: "in stock" for a Smart Delivery level, "a week" for a plain amount.
