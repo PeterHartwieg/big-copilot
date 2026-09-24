@@ -349,3 +349,40 @@ test('a paused level shows the level in game', () => {
   const paused = setting(1400, {weekly:0, pausedWeekly:1400, smart:true, target:1000, plainAfter:400});
   assert.deepEqual([paused.paused, paused.inGame], [true, 1000]);
 });
+
+/* Today's Plan imports card, from the same rows and ticks as the checklist:
+   one change said in full, several counted, all ticked, and nothing to do. */
+const names = {0: 'Import Hub', 1: 'Factory', 2: 'Shop'};
+const card = (rows, ticked = []) => JSON.parse(JSON.stringify(context.planImportsState(
+  rows, new Set(ticked), s => names[s] ?? null)));
+
+test('the Plan imports card has four states, and counts what the checklist has to do', () => {
+  const one = build({imports:[{s:0, rows:[order({item:'Metal Band', smart:true, current:15200, setTo:20200,
+    inGame:15200, levelName:'Import Hub'})]}]});
+  assert.equal(one.length, 1);
+  assert.deepEqual(card(one), {badge:'1 TO CHANGE', live:true,
+    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock ${(15200).toLocaleString()} \u2192 ${(20200).toLocaleString()}.`});
+
+  const many = build({
+    imports:[{s:0, rows:[order({item:'Sugar'}), order({item:'Flour'})]}],
+    shops:[{s:2, item:'Paper Bag', from:0, peakSold:400, target:100, peakDay:'Saturday'}],
+  });
+  assert.equal(many.length, 3);
+  assert.deepEqual(card(many), {badge:'3 TO CHANGE', live:true,
+    what:'<b>3 settings</b> at Import Hub and Shop, starting with Sugar.'});
+  // A tick takes a row off the count, as it takes it off the checklist's "to do".
+  const left = card(many, [many[0].key]);
+  assert.equal(left.badge, '2 TO CHANGE');
+  assert.match(left.what, /starting with Flour\.$/);
+  assert.equal(card(many, [many[0].key, many[2].key]).badge, '1 TO CHANGE');
+
+  assert.deepEqual(card(many, many.map(r => r.key)), {badge:'ALL TICKED', live:false,
+    what:'You ticked all 3. A change the game has taken leaves the list with the next save.'});
+  assert.deepEqual(card([]), {badge:'ALL SET', live:false, what:'Every import and top-up covers its week.'});
+});
+
+test('the card says a review in the checklist\u2019s own words, and escapes a save\u2019s names', () => {
+  const rows = build({loose:[{item:'<Glue>', week:700}]});
+  assert.deepEqual(card(rows), {badge:'1 TO CHANGE', live:true,
+    what:'<b>&lt;Glue></b>: choose a supplying depot before setting an order.'});
+});

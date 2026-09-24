@@ -98,9 +98,13 @@ the map.
   - *Daily result*: a seven-day rolling profit line over the daily ones. Daily profit
     swings by a million between a weekend and a Tuesday purely because that is when the
     week's goods are paid for, so the rolling line is the one that says whether trading
-    moved. Click a legend entry to add or drop a line.
-  - *Weekly rhythm*: one sentence when most sites share a peak day; the weekday bars
-    and the site-by-site table each wait behind a button.
+    moved. Click a legend entry to add or drop a line. *By weekday*, the switch's third
+    option, draws the company's own week instead: each weekday against a normal day over
+    the last four weeks, one series at a time (Revenue, Profit, and Customers once it
+    clears the noise test; a series that does not has no chip, and with none the option
+    is not offered). The line above the bars names the series and its weeks; its tooltip
+    carries the sites' verdict and what today and yesterday are normally worth, and
+    *site by site* opens the table of every site's own week.
   - *Portfolio*: grouped by chain, with each chain's combined revenue, cost and margin
     on one line and its sites folded underneath. A week-on-week revenue column sits
     beside yesterday's takings. Every column sorts. Click a chain to open it, then a
@@ -170,8 +174,8 @@ the map.
   - *Plan a chain*: machines run flat out, so the answer is the weekly raw material
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
-- **Company / Products, Payroll, Milestones**: the reference tables and house
-  rules. Payroll names its two wage figures: "at today's rates" is every hourly wage
+- **Company / Products, Payroll, Milestones**: the reference tables and the career
+  checklist. Payroll names its two wage figures: "at today's rates" is every hourly wage
   times its assigned weekly hours over seven, "booked yesterday" is what the statements
   recorded (the Portfolio's Wages total); its ? names the sites where the two differ.
   There is no debt page; loans cap at $2M, which is beside the point at this stage.
@@ -257,16 +261,21 @@ plan around. Every weekday is scored against a normal day: 100 is ordinary, 116 
 that weekday runs 16% busier. A supermarket chain might read roughly Wed 80 / Sat 115, a
 cinema Mon 83 / Sat 113, while a food factory runs the other way and peaks Monday.
 
-It appears in five places: the chain view with its own section, a per-site week in each
+It appears in five places: the Daily result chart's *By weekday*, a per-site week in each
 business tab, the Products table, and, most usefully, inside all three supply-chain
 calculations, which is where it changes decisions rather than just describing them.
 Stock needs follow the peak day, not the average one, and the size of a weekly order is
 judged against the week ahead charged day by day at each weekday's own rate.
 
-Its own section is one sentence when there is one pattern to report, such as *8 sites
-peak Saturday, +30 to +41 points between their best and worst day; Factory - Food peaks
-Monday*, with the nine-row table a click away. Nine rows saying the same thing is a
-sentence, not a table.
+Each chart names the series it reads, because they are different questions: the
+company's *By weekday* is the whole company's revenue (or profit) over its last four
+weeks, a site's *Its week* is that site's own revenue, and the Products *Peaks · units*
+column is units sold across every store that carries the line. A company that opened a
+line of clothing shops a month ago can peak Friday while every one of those shops peaks
+Saturday. The sites' verdict is one sentence when there is one pattern to report, such
+as *8 sites peak Saturday, +30 to +41 points between their best and worst day; Factory -
+Food peaks Monday*, on the series line's tooltip, with the table a click away (*site by
+site*). Nine rows saying the same thing is a sentence, not a table.
 
 In the Products table the weekday peak only gets a column when at least half the rows
 have one; below that it moves into the row's own tooltip, since a column that is empty

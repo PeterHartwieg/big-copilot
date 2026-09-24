@@ -622,9 +622,11 @@ test('finding map buttons remain visible beside long business names',async()=>{
 test('weekly rhythm tooltip keeps off-peak business references as plain text',async()=>{
   const {page,errors}=await fixture();
   try{
+    // The verdict rides on By weekday's series line now, the Daily result chart's third option.
     const tip=await page.evaluate(()=>{
       const b=D.businesses[0];D.businesses=Array.from({length:8},(_,i)=>({...b,key:b.key+'-'+i,name:'Shop '+i,rhythm:[],peakDay:i===7?'Tuesday':'Monday',swing:20}));
-      D.rhythm={};drawRhythm();return $('rhythmHead').querySelector('.why').dataset.tip;
+      const week=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day,i)=>({day,short:day.slice(0,3),index:[106,101,95,105,116,87,82][i],n:4}));
+      D.rhythm={recent:{revenue:week}};chartWindow='wd';drawChart();return $('dailyBox').querySelector('.fv-basis').dataset.tip;
     });
     assert.match(tip,/Shop 7/);assert.doesNotMatch(tip,/<button|<svg|data-map-key/);
     assert.deepEqual(errors,[]);

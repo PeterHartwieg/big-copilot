@@ -95,7 +95,7 @@ test('a Today finding opens Company on Results, and Back returns to Today', () =
 });
 
 test('every Company section deep link opens the view that holds it', () => {
-  for (const [hash, view] of [['#secDaily','results'], ['#secRhythm','results'], ['#secPortfolio','results'],
+  for (const [hash, view] of [['#secDaily','results'], ['#secPortfolio','results'],
                               ['#secProducts','products'], ['#secPayroll','payroll'], ['#secGoals','milestones']]) {
     const b = board();
     b.context.location.hash = hash;
@@ -104,6 +104,26 @@ test('every Company section deep link opens the view that holds it', () => {
     assert.equal(b.sub('company'), view, hash);
     assert.equal(b.context.location.hash, hash, 'the deep link survives the normalising replace');
   }
+});
+
+/* Weekly rhythm is Daily result's By weekday now: a link saved to the old
+   section still opens Results, and lands on the chart that took its place. */
+test('an old #secRhythm link lands on Daily result', () => {
+  const b = board();
+  b.context.location.hash = '#secRhythm';
+  b.boot();
+  assert.equal(b.page(), 'company');
+  assert.equal(b.sub('company'), 'results');
+  // Followed from the page, as a clicked link or a typed hash is.
+  b.context.showPage('today');
+  const asked = [];
+  const $ = b.context.$;
+  b.context.$ = id => { asked.push(id); return $(id); };
+  b.context.openHash('secRhythm', 'none');
+  assert.equal(b.page(), 'company');
+  assert.equal(b.sub('company'), 'results');
+  assert.ok(asked.includes('secDaily'), 'reveal() looks for the section that replaced it');
+  assert.ok(!asked.includes('secRhythm'));
 });
 
 test('the old #results hash still opens Company on its Results view', () => {
