@@ -833,6 +833,8 @@ test('prices: moving off the guide\'s prices address takes the landing down', as
     await page.evaluate(() => { location.hash = location.hash.replace(/\/prices$/, ''); });
     await page.waitForFunction(() => !document.querySelector('.ss-asked, .ss-lit, .ss-dim'));
     assert.equal(await page.evaluate(() => page), 'wiki');
+    // The block is still there and on screen: holds() is what took the landing down.
+    assert.equal(await page.locator('#wk-prices').isVisible(), true);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

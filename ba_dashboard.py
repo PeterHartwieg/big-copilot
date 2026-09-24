@@ -17909,6 +17909,7 @@ function ssLand(qn, from, ticket, tries = 0){
   /* A later question, a search that went elsewhere, or the reader's own
      navigation takes over from a landing still on its way. */
   if(ticket !== ssTicket || !ssPending || ssPending.ticket !== ticket){
+    /* Only a guard: every ssTicket++ elsewhere clears ssPending itself. */
     if(ssPending && ssPending.ticket === ticket) ssPending = null;
     return;
   }
