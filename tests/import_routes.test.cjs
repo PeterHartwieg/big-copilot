@@ -307,6 +307,6 @@ test('the factory inputs view counts the weeks at the depot against what a route
       drawStock();
       return document.getElementById('stock').textContent;
     }, data);
-    assert.match(text, /holds 1\.2 weeks of it beyond the 840 a week a route brings them/);
+    assert.match(text, /holds 1\.2 weeks of it beyond the 840 a week a route brings the factories/);
   } finally { await page.close(); }
 });

@@ -130,9 +130,9 @@ class DepotOtherTests(unittest.TestCase):
         day 7, the day of a top-up, and the hub's own import lands on day 5.
         The log does not say who delivered, so on day 7 the factory's 940 is
         not what the hub sent it: that day is left out, and the shops' 100 a
-        day stay 700 a week, with a route into the hub or without, with the
-        factory's import paused (its day is left out though nothing came),
-        and beside a second factory the hub tops up that imports none."""
+        day stay 700 a week, with a route into the hub or without, and beside
+        a second factory the hub tops up that imports none. A paused factory
+        import changes nothing."""
         for routed, paused, second in ((False, False, False), (True, False, False),
                                        (False, True, False), (False, False, True),
                                        (True, False, True)):
