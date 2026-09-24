@@ -113,6 +113,17 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
 
 const button = (page, key, label = 'Set Default uniforms') =>
   page.locator(`#alerts [data-gw="uniforms"][data-gw-sites*='${JSON.stringify(key).slice(1, -1)}']`, {hasText: label}).first();
+// Holds the board's next read of the save until the test lets it go.
+async function holdSave(page) {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route(`${mockUrl}/save`, async (route) => {
+    const res = await route.fetch();
+    await held;
+    await route.fulfill({response: res});
+  });
+  return release;
+}
 const dialog = (page) => page.locator('dialog.gw-dlg');
 // The game's approval is asked inside the write's own dialog, while it waits.
 const pair = (page) => page.locator('dialog.gw-dlg[data-phase="approval"]');
@@ -176,8 +187,9 @@ test('a dry run, the game\'s approval, an apply that rebuilds the board, and und
   await page.waitForFunction((n) => window.builds > n, builds);
   assert.equal(await dialog(page).isVisible(), true);
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  // Undone, the dialog is the write again: the game asked afresh, the undo said once above.
+  // Undone: said, and the write offered again once the board has read the game after it.
   await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await dialog(page).getByRole('button', {name: 'Set again'}).click();
   await ready(page);
   assert.equal(await dialog(page).locator('.gw-role.to').count(), 1, 'the role is to dress again');
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
@@ -942,33 +954,48 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   assert.deepEqual((await applied()).map((w) => w.kind), ['imports', 'undo']);
 });
 
-test('imports: after an undo the amounts expected are the undo\'s own, even with the board read after the write', async (t) => {
+test('imports: after an undo, Apply again asks from the board read after it', async (t) => {
   const page = await linked(t, {approved: true});
+  // The fake board holds each contract amount the game answers after a write or its undo.
+  const follow = async (route) => {
+    const req = route.request();
+    const sent = JSON.parse(req.postData() || '{}');
+    if (req.method() !== 'POST' || sent.dryRun || (sent.kind && sent.kind !== 'imports')) return route.fallback();
+    const res = await route.fetch();
+    const body = await res.json();
+    if (res.status() === 200) await page.evaluate((rows) => {
+      const d = JSON.parse(window.buildData || window.baseData);
+      const walk = (o, slug) => {
+        if (Array.isArray(o)) return o.forEach((x) => walk(x, slug));
+        if (!o || typeof o !== 'object') return;
+        rows.forEach((r) => (r.products || []).forEach((p) => { if (o.id === r.id && slug === p.itemName) o.amount = p.amount; }));
+        Object.entries(o).forEach(([k, v]) => walk(v, k.startsWith('ba:itemname_') ? k : slug));
+      };
+      walk(d, null);
+      window.buildData = JSON.stringify(d);
+    }, body.rows || []);
+    await route.fulfill({response: res, json: body});
+  };
+  await page.route(`${mockUrl}/write/imports`, follow);
+  await page.route(`${mockUrl}/write/undo`, follow);
   await supply(page);
   await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();
   await ready(page);
-  // The board's read after the write holds another amount than the game will after the undo.
-  await page.evaluate(() => {
-    const d = JSON.parse(window.baseData);
-    const walk = (o) => {
-      if (Array.isArray(o)) return o.forEach(walk);
-      if (!o || typeof o !== 'object') return;
-      if (o.id === 'CONTRACTone' && o.amount === 3800) o.amount = 4100;
-      Object.values(o).forEach(walk);
-    };
-    walk(d);
-    window.buildData = JSON.stringify(d);
-  });
-  const builds = await page.evaluate(() => window.builds);
   await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
   await dialog(page).getByText('1 amount set in the game.').waitFor();
-  await page.waitForFunction((n) => window.builds > n && gwImportRows.some((r) => r.contracts.some((c) => c.id === 'CONTRACTone' && c.amount === 4100)), builds);
-  const reask = dryRunOf(page, 'imports');
+  // The board reads the write: the contract holds 4,200.
+  await page.waitForFunction(() => gwImportRows.some((r) => r.contracts.some((c) => c.id === 'CONTRACTone' && c.amount === 4200)));
+  const release = await holdSave(page);
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  const products = JSON.parse((await reask).postData()).contracts[0].products;
-  assert.deepEqual(products.map((x) => [x.itemName, x.expect]), [['ba:itemname_paperbag', 3800]], 'the undo\'s amount, not the board\'s 4,100');
   await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: 'Apply again'}).isDisabled(), true);
+  release();
+  await page.waitForFunction(() => gwImportRows.some((r) => r.contracts.some((c) => c.id === 'CONTRACTone' && c.amount === 3800)));
+  const reask = dryRunOf(page, 'imports');
+  await dialog(page).getByRole('button', {name: 'Apply again'}).click();
+  const products = JSON.parse((await reask).postData()).contracts[0].products;
+  assert.deepEqual(products.map((x) => [x.itemName, x.amount, x.expect]), [['ba:itemname_paperbag', 4200, 3800]]);
   await ready(page);
   assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isEnabled(), true);
 });
@@ -1212,11 +1239,14 @@ async function followPrints(page, key, {undo = true} = {}) {
     const res = await route.fetch();
     const body = await res.json();
     if (res.status() === 200 && body.after && body.after.print) {
-      await page.evaluate(({key, print}) => {
+      await page.evaluate(({key, print, undo, opened}) => {
         const d = JSON.parse(window.buildData || window.baseData);
         d.businesses.find((b) => b.key === key).shiftPrint = print;
+        // The opening hours a full-cover write opens, and its undo closes again.
+        const full = (d.staffing.find((r) => r.key === key) || {}).fullCover;
+        if (full && (undo || opened)) full.openNow = !undo;
         window.buildData = JSON.stringify(d);
-      }, {key, print: body.after.print});
+      }, {key, print: body.after.print, undo: !!body.undo, opened: !!body.openedHours});
     }
     await route.fulfill({response: res, json: body});
   };
@@ -1259,47 +1289,75 @@ test('schedule: the roster is written with only the people working here, and und
   // Neither Dee's entry (not assigned here yet) nor the hire's goes to the game.
   assert.deepEqual(writes[0].body, {dryRun: false, address: GIFTS_ADDRESS, expect: '9c98d93a', openAllHours: false,
     days: [{d: 1, shifts: [{f: 8, t: 20, employeeId: BEN, itemInstanceId: REGISTER}]}]});
-  // Undone, the game is asked again at once, the print it expects taken from
-  // the undo's own answer: the board still holds the write's.
-  const reask = dryRunOf(page, 'schedule');
+  // Undone: Write again waits while the board shows the write's bytes (or older),
+  // and asks the game from the board read after the undo. That read is held here.
+  const release = await holdSave(page);
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  assert.equal(JSON.parse((await reask).postData()).expect, '9c98d93a');
   await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
+  const again = dialog(page).getByRole('button', {name: 'Write again'});
+  assert.equal(await again.isDisabled(), true);
+  assert.equal(await again.getAttribute('title'), 'Reading the game again…');
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
-  // Back to the write: the week can be written again, and is.
+  release();
+  await page.waitForFunction(() => { const b = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((x) => x.textContent === 'Write again'); return b && !b.disabled; });
+  assert.equal(await page.evaluate((key) => D.businesses.find((b) => b.key === key).shiftPrint, GIFTS), '9c98d93a');
+  const reask = dryRunOf(page, 'schedule');
+  await again.click();
+  assert.equal(JSON.parse((await reask).postData()).expect, '9c98d93a', 'the print of the board read after the undo');
   await ready(page);
-  assert.match(await dialog(page).locator('.gw-verdict').textContent(), /The game takes the week/);
   await dialog(page).getByRole('button', {name: 'Write the week'}).click();
   await dialog(page).getByText('HART. Gifts: 1 entry set in place of 2.').waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo', 'schedule']);
 });
 
-test('schedule: the undo\'s own print serves until the board has read the game after it', async (t) => {
+test('schedule: a board read that fails after an undo offers a refresh, and the re-do waits for it', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
-  // The board follows the write, but never learns what the undo restored.
-  await followPrints(page, GIFTS, {undo: false});
+  await followPrints(page, GIFTS);
   const block = await roster(page, GIFTS);
   await block.getByRole('button', {name: 'Write this roster to the game'}).click();
   await ready(page);
-  const builds = await page.evaluate(() => window.builds);
   await dialog(page).getByRole('button', {name: 'Write the week'}).click();
   await dialog(page).getByText('HART. Gifts: 1 entry set in place of 2.').waitFor();
-  await page.waitForFunction(({n, key}) => window.builds > n && D.businesses.find((b) => b.key === key).shiftPrint !== '9c98d93a',
-    {n: builds, key: GIFTS});
-  const written = await page.evaluate((key) => D.businesses.find((b) => b.key === key).shiftPrint, GIFTS);
-  const reask = dryRunOf(page, 'schedule');
+  await page.waitForFunction((key) => D.businesses.find((b) => b.key === key).shiftPrint !== '9c98d93a', GIFTS);
+  // The save is not served after the undo: the board's follow read gives up.
+  await page.route(`${mockUrl}/save`, (route) => route.fulfill({status: 500, json: {error: 'broken'},
+    headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  assert.equal(JSON.parse((await reask).postData()).expect, '9c98d93a', 'the undo\'s print, not the board\'s');
+  await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
+  await dialog(page).getByRole('button', {name: 'Refresh the board'}).waitFor({timeout: 20000});
+  assert.equal(await dialog(page).getByRole('button', {name: 'Write again'}).isDisabled(), true, 'never on stale bytes');
+  // Served again, a refresh brings the board up to date and the re-do on.
+  await page.unroute(`${mockUrl}/save`);
+  await dialog(page).getByRole('button', {name: 'Refresh the board'}).click();
+  await page.waitForFunction(() => { const b = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((x) => x.textContent === 'Write again'); return b && !b.disabled; }, null, {timeout: 20000});
+  assert.equal(await dialog(page).getByRole('button', {name: 'Refresh the board'}).count(), 0);
+  // The game changes between the undo and the re-do: the dry run says so, and the way on is a refresh.
+  await page.route(`${mockUrl}/write/schedule`, (route) => route.fulfill({status: 200, headers: {'Access-Control-Allow-Origin': ORIGIN},
+    json: {ok: false, kind: 'schedule', dryRun: true, business: 'HART. Gifts', siteError: 'changed', rows: [],
+           before: {shifts: 2, print: 'x'}, after: {shifts: 1, print: 'y'}, removed: 2, added: 1, leftWithout: [], warnings: []}}));
+  await dialog(page).getByRole('button', {name: 'Write again'}).click();
   await ready(page);
-  assert.equal(await dialog(page).getByRole('button', {name: 'Write the week'}).isEnabled(), true);
-  // Once the board has read the game after the undo, its own print is used again:
-  // here a stale one, so the game says it moved on, and the way on is a refresh.
-  await page.waitForFunction(() => gwUndoExpect === null || !gwUndoExpect.stamps.includes(SOURCE.link().stamp));
-  const again = dryRunOf(page, 'schedule');
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  assert.equal(JSON.parse((await again).postData()).expect, written);
   await dialog(page).getByRole('button', {name: 'Refresh the board'}).waitFor();
-  assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
+  assert.equal(await dialog(page).getByRole('button', {name: 'Write the week'}).count(), 0);
+});
+
+test('schedule: a full-cover week undone and written again opens the hours again', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters()});
+  await followPrints(page, GIFTS);
+  const block = await roster(page, GIFTS, 'full');
+  await block.getByRole('button', {name: 'Write this roster to the game'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText(/^HART\. Gifts: 2 entries set in place of 2, open 0 to 24 every day\.$/).waitFor();
+  assert.equal((await applied())[0].body.openAllHours, true);
+  // The board reads the write: the shop is open around the clock now.
+  await page.waitForFunction((key) => D.staffing.find((r) => r.key === key).fullCover.openNow === true, GIFTS);
+  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).getByRole('button', {name: 'Write again'}).waitFor();
+  const reask = dryRunOf(page, 'schedule');
+  await dialog(page).getByRole('button', {name: 'Write again'}).click();
+  assert.equal(JSON.parse((await reask).postData()).openAllHours, true, 'the board read after the undo: shut again');
+  await ready(page);
 });
 
 test('schedule: full cover opens every day 0 to 24, unless the player opts out', async (t) => {
@@ -1427,9 +1485,10 @@ test('schedule: a run ends with its summary when its last shop fails or is skipp
   // Undo from the end of the run reopens that shop inside the run, ready to be written again.
   await dialog(page).getByRole('button', {name: 'Undo HART. Corner'}).click();
   await dialog(page).getByText('Undone: the schedule at HART. Corner is back as it was.').waitFor();
-  await ready(page);
   assert.match(await dialog(page).locator('.gw-where').textContent(), /1 of 2 · HART\. Corner/);
   assert.deepEqual(await dialog(page).locator('.gw-steps i').evaluateAll((dots) => dots.map((d) => d.className)), ['c', 's']);
+  await dialog(page).getByRole('button', {name: 'Write again'}).click();
+  await ready(page);
   assert.equal(await dialog(page).getByRole('button', {name: 'Write the week'}).isEnabled(), true);
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
   // Written again, the run goes back to its end, not through the skipped shop.
@@ -1452,13 +1511,58 @@ test('schedule: Undo on a shop in the middle of a run puts it back to be written
   assert.deepEqual(await dialog(page).locator('.gw-steps i').evaluateAll((dots) => dots.map((d) => d.className)), ['d', '']);
   await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: the schedule at HART. Corner is back as it was.').waitFor();
-  await ready(page);
-  // Its entry is cleared: the dot is the current one again, and it can be written or skipped.
+  // Its entry is cleared: the dot is the current one again, and it can be written again or skipped.
   assert.deepEqual(await dialog(page).locator('.gw-steps i').evaluateAll((dots) => dots.map((d) => d.className)), ['c', '']);
   await dialog(page).getByRole('button', {name: 'Skip this shop'}).click();
   await dialog(page).locator('.gw-where', {hasText: '2 of 2 · HART. Gifts'}).waitFor();
   assert.deepEqual(await dialog(page).locator('.gw-steps i').evaluateAll((dots) => dots.map((d) => d.className)), ['s', 'c']);
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
+});
+
+test('schedule: an undo with no answer in a run marks the shop unknown and the run goes on; a failed one reopened from the end goes back there', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters()});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText('HART. Corner: 1 entry set in place of 1.').waitFor();
+  // The undo reaches the game, but no answer comes back.
+  await page.route(`${mockUrl}/write/undo`, (route) => (route.request().method() === 'POST' ? route.abort() : route.continue()));
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).getByText('The board is up to date').waitFor({timeout: 20000});
+  await dialog(page).getByRole('button', {name: 'Next shop · 2 of 2'}).click();
+  await dialog(page).locator('.gw-where', {hasText: '2 of 2 · HART. Gifts'}).waitFor();
+  await ready(page);
+  await page.unroute(`${mockUrl}/write/undo`);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText(/^HART\. Gifts: 1 entry set in place of 2\./).waitFor();
+  await dialog(page).getByRole('button', {name: 'See the run'}).click();
+  assert.deepEqual(await dialog(page).locator('.gw-run small').allTextContents(), ['unknown, see the board', '1 entry']);
+  // Undo reopens the Gifts shop from the end of the run; the game refuses it now: back to the run.
+  await page.route(`${mockUrl}/write/undo`, (route) => (route.request().method() === 'POST'
+    ? route.fulfill({status: 409, json: {error: 'nothing_to_undo'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}) : route.continue()));
+  await dialog(page).getByRole('button', {name: 'Undo HART. Gifts'}).click();
+  await dialog(page).getByText('There is nothing left to undo').waitFor();
+  await dialog(page).getByRole('button', {name: 'Back to the run'}).click();
+  await dialog(page).getByText('All 2 seen').waitFor();
+  assert.deepEqual(await dialog(page).locator('.gw-run small').allTextContents(), ['unknown, see the board', '1 entry'], 'still written');
+});
+
+test('schedule: Refresh the board inside a run keeps the run and asks the game again', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters()});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
+  await ready(page);
+  await configure({refuseWrite: 'changed'});
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText('The game has moved on since this board was read. Nothing was changed.').waitFor();
+  await configure({refuseWrite: null});
+  const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
+  await dialog(page).getByRole('button', {name: 'Refresh the board'}).click();
+  await refresh;
+  await ready(page, 20000);
+  assert.match(await dialog(page).locator('.gw-where').textContent(), /1 of 2 · HART\. Corner/);
+  assert.equal(await dialog(page).getByRole('button', {name: 'Write the week'}).isEnabled(), true);
 });
 
 test('schedule: a cover-only plan keeps the serving entries in the game', async (t) => {

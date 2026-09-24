@@ -1170,7 +1170,9 @@
   // after Update. A read already under way may have read the bytes before
   // the change, so the follow waits for it to finish and then looks: an apply
   // and its undo in quick succession must leave the board on the undo. One
-  // follow waits at a time, for the newest write's stamp.
+  // follow waits at a time, for the newest write's stamp. A follow that ends
+  // in the bad state (no new state, the save not served, the build failed,
+  // the game gone) is told to the board, which offers a refresh.
   let followBefore = null;
   async function followWrite(before) {
     const gen = sourceGen;
@@ -1183,6 +1185,7 @@
     if (gen !== sourceGen || !linkUrl || !startAttempt(gen)) return;
     state("busy", "Reading the game after the change", linkUrl);
     await awaitNewStamp(stamp, gen);
+    if (gen === sourceGen && strip.tone === "bad" && handlers && handlers.followFailed) handlers.followFailed();
   }
 
   // A write that got no answer: ask the game for its state, as Update does,
@@ -1273,6 +1276,9 @@
       lastGoodDir = dir || "";
       lastGoodSource = gen;
       company = (data.meta && data.meta.save) || company;
+      // The board on screen is these bytes from here: said before the board
+      // hears of them, so what it asks of the link (link().stamp) is theirs.
+      if (file.linkStamp) lastLinkStamp = file.linkStamp;
       note("");
       if (handlers) { handlers.stale(""); handlers.changed(data); }
       enterBoard();
