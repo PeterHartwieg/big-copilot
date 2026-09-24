@@ -3900,7 +3900,14 @@ def _supply(
             made = not (feed or shop or depot or ordered) and own in made_here
             fit = why = None
             backed = keeps = False
-            if shop:
+            if shop and shop.get("wholesale") and not shop["target"]:
+                # A wholesale store delivers the week: the sales to its next
+                # drop against what the delivery brings.
+                deal = wholesale[(business["key"], line["slug"])]
+                need = round(shop["sold"] * (deal["days"] or 0))
+                provision = deal["weekly"]
+                cycle_need, cadence = round(shop["sold"] * 7), "weekly"
+            elif shop:
                 need = shop["peakSold"]
                 provision = shop["target"]
                 # A shelf is refilled daily, so a day's peak is the whole test.
@@ -17096,11 +17103,12 @@ function spStockRows(b){
     });
   });
   /* Everything else on the floor. A line nothing imports is made in-house or
-     bought elsewhere; its use a day is its fact's week, and it has no truck
-     to draw. */
+     bought elsewhere, and has no truck to draw. What leaves a day is what the
+     plans from here carry (a figure: a route-fed line's fact uses nothing of
+     an import), else the fact's use; the verdict is the fact's. */
   ((b && b.lines) || []).filter(take).forEach(l => {
     const f = supplyFact(siteTab, l.slug);
-    const perDay = szDaily(f, 0);
+    const perDay = spItemDraw(l.slug, l.item).perDay || szDaily(f, 0);
     const units = Number.isFinite(l.units) ? l.units : 0;
     if(!units && !perDay) return;
     const made = spMadeAt(l.slug, l.item);
