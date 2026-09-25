@@ -30,7 +30,7 @@ const build = (overrides = {}) => {
 // A fact as Python sends it, with only the fields a test cares about.
 const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'warn', setTo: null,
   use: 1300, need: 1500, parts: {lines: 1000, sites: 300, route: 0}, ...extra});
-// A Weekly imports row as drawLogistics() builds it: the fact's figures, then the setting.
+// A Weekly imports row as supplyChecklistRows() builds it: the fact's figures, then the setting.
 const order = changes => ({s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
   fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes});
 
@@ -217,7 +217,7 @@ const heldNow = c => c.smart && Number.isFinite(c.target) ? c.target : c.weekly 
 const typed = (contract, edit) => typeof edit === 'number' ? {value: edit, inGame: heldNow(contract)} : edit;
 const setting = (f, contract, edit) => JSON.parse(JSON.stringify(
   context.importSetting(f, contract, typed(contract, edit))));
-// A row as drawLogistics builds it: the fact's figures, then the setting.
+// A row as supplyChecklistRows builds it: the fact's figures, then the setting.
 const row = (f, contract, edit, extra = {}) => ({s:0, item:'Sugar', use:f.use, parts:f.parts, margin:0.15,
   need:f.need, ...setting(f, contract, edit), ...extra});
 
@@ -371,11 +371,11 @@ test('the Plan imports card has four states, and counts what the checklist has t
 });
 
 test('tight never reaches Today: with only margin changes left, the card says nothing falls short', () => {
-  // drawOrderChecklist() hands the card the rows that are not tight, and how many are.
+  // drawSupplyStrip() hands the card the rows that are not tight, and how many are.
   assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:'ALL SET', live:false,
-    what:'Nothing falls short. Supply › Orders lists 2 changes that would restore the margin.'});
+    what:'Nothing falls short. Supply lists 2 changes that would restore the margin.'});
   assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
-  const drawn = source.slice(source.indexOf('function drawOrderChecklist('), source.indexOf('/* The Set to figures the player typed'));
+  const drawn = source.slice(source.indexOf('function drawSupplyStrip('), source.indexOf('/* The Set to figures the player typed'));
   assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight\);/);
   assert.match(drawn, /planImportsState\(urgent,/);
 });
@@ -422,4 +422,22 @@ test('the board keeps no verdict engine of its own', () => {
   for(const name of ['function feedVerdict(', 'function feedRoute(', 'const feedFit =', 'function importLevelFor(',
                      'const importRaise =', 'function importWeek(', 'const ceil100 ='])
     assert.equal(source.indexOf(name), -1, name);
+});
+
+test('a factory line short of its hours is one "Factory run hours" row; more hours than needed is none', () => {
+  const lines = [
+    {s: 1, item: 'Cake', fact: {st: 'short', why: 'hours', lvl: 'warn'}, hoursNow: 12, need: 24, machines: 2,
+     sizedFor: 'Full-rate input requirement'},
+    {s: 1, item: 'Bread', fact: {st: 'covered', why: null, lvl: 'ok', lower: 10}, hoursNow: 24, need: 10, machines: 2},
+  ];
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, r.mode]),
+    [['Factory run hours', 'Cake', 12, 24, 'hours']]);
+  assert.match(rows[0].reason, /24 hours a day, on each of its 2 machines; the roster has them 12\. Sized 24\/7/);
+  // The old kinds' keys are unchanged, so ticks made before carry over.
+  assert.equal(rows[0].key, JSON.stringify(['Factory run hours', 'factory#2', 'Cake', 12, 24, null]));
+  assert.match(context.orderChecklistText(rows, 'Company'), /Cake: run 12 -> 24 hours\/day/);
+  assert.match(context.orderChecklistText(rows, 'Company', 'dem'), /sized for what the shops at the end of each chain use/);
+  assert.match(context.orderChecklistText(rows, 'Company'), /assume the lines run round the clock/);
+  assert.equal(card(rows).what, '<b>Cake</b> at Factory: run hours 12 \u2192 24 a day.');
 });

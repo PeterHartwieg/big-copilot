@@ -18848,7 +18848,15 @@ function sbPaintTools(){
 function sbPlaceFlow(){
   const box = $("sbFlowBox");
   if(!box || typeof sub === "undefined") return;
-  const host = sbViewMode() === "diagram" ? q(`#${SB_SEC[sub.supply]} .sb-diag`) : null;
+  const diagram = sbViewMode() === "diagram";
+  Object.values(SB_SEC).forEach(id => {
+    const sec = $(id);
+    if(!sec) return;
+    const diag = q(".sb-diag", sec), list = q(".sb-list", sec);
+    if(diag) diag.hidden = !diagram;
+    if(list) list.hidden = diagram;
+  });
+  const host = diagram ? q(`#${SB_SEC[sub.supply]} .sb-diag`) : null;
   const home = host || $("sbFlowHome");
   if(box.parentElement !== home) home.appendChild(box);
 }
@@ -18880,6 +18888,9 @@ function sbAfterDraw(tab, rows, kept){
    crumb back. */
 function sbLand(tab, s, slug, crumb){
   sbArrive = {tab, s: s ?? null, slug: slug ?? null, crumb: crumb || ""};
+  /* An earlier landing's light goes out, on whichever tab it was. */
+  $$("#pageSupply [data-sb-at]").forEach(el => { el.removeAttribute("data-sb-at"); el.classList.remove("sb-arrived", "lit"); });
+  $$("#pageSupply .sb-crumb").forEach(el => el.remove());
   if(s !== null && s !== undefined) sbOpenObj.delete(`${tab}|${(D.businesses[s] || {}).key || "none"}`);
   drawSupplyTab(tab); wireAll();
   reveal(SB_SEC[tab], "push", `#${SB_SEC[tab]} [data-sb-at]`);
