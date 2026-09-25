@@ -18861,7 +18861,7 @@ function sbUpdateStrip(){
   const unnamed = d.f.sites.reduce((n, s) => n + (s.unnamed || []).length, 0);
   const urgent = rows.filter(r => !r.tight && !r.lower);
   paintPlanImports(planImportsState(urgent, d.marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null,
-    {complete: d.complete, unnamed, margin: rows.filter(r => r.tight).length, lower: rows.filter(r => r.lower).length}));
+    {complete: d.complete, unnamed, margin: rows.filter(r => r.tight && !d.marks.has(r.key)).length, lower: rows.filter(r => r.lower && !d.marks.has(r.key)).length}));
 }
 /* A tab's badge: what is left to type there, or a tick once nothing is. */
 function sbBadge(tab){
