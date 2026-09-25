@@ -24755,17 +24755,26 @@ function ssHash(h){
   if(location.hash === h) openHash(h.slice(1), "none");
   else location.hash = h;
 }
-/* The shop type with the most revenue: its guide is where prices are read. */
-function ssTopType(){
+/* The company's own shop types, the best-selling first: each has its own
+   price guide in the wiki. */
+function ssOwnTypes(){
   const by = {};
   (hasData() ? D.businesses : []).filter(b => b.status === "retail" && b.typeSlug).forEach(b => {
     by[b.typeSlug] = by[b.typeSlug] || {slug: b.typeSlug, type: b.type, revenue: 0};
     by[b.typeSlug].revenue += b.revenue || 0;
   });
-  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type))[0] || null;
+  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type));
 }
-function ssPrices(){
-  const t = ssTopType();
+/* The type "Are my prices right?" answers for: the one last picked on its
+   strip while the company still runs it, else the best-selling one. */
+let ssPricesPick = "";
+function ssPricesType(){
+  const own = ssOwnTypes();
+  return own.find(t => t.slug === ssPricesPick) || own[0] || null;
+}
+/* A company with no shop lands on the wiki itself. */
+function ssPrices(slug){
+  const t = (slug && ssOwnTypes().find(x => x.slug === slug)) || ssPricesType();
   const href = t && typeof wikiTypeHref === "function" ? wikiTypeHref(t.slug, "prices") : "";
   if(href) ssHash(href); else showPage("wiki");
 }
@@ -24791,12 +24800,14 @@ function ssRing(el){
    returning the element), `wait` gives a block drawn after a file loads time to
    appear, `dim: false` keeps the page around it at full strength, and `holds`,
    given the landing ({hash, site}), says whether what is lit is still the
-   answer to it (see ssLandingHolds()). A question with no `page` answers
-   outside every page, where the reader already is: "What am I playing on?" is
-   the difficulty chip (R15) and its popover, and needs no strip. One table, so
-   a question can move in one place: "Is my factory fed?" and "Whom should I
-   hire?" move once the factory pages (R8) and the company-wide Staff list (R14)
-   exist. */
+   answer to it (see ssLandingHolds()). `choices`, where a question can answer
+   for more than one thing, lists them ({id, label, on}) for its strip, and
+   `choose(id)` takes the pick before the question is asked again. A question
+   with no `page` answers outside every page, where the reader already is:
+   "What am I playing on?" is the difficulty chip (R15) and its popover, and
+   needs no strip. One table, so a question can move in one place: "Is my
+   factory fed?" and "Whom should I hire?" move once the factory pages (R8) and
+   the company-wide Staff list (R14) exist. */
 const SS_QUESTIONS = [
   {id: "profit", get q(){ return tt("nav.ask.profit.q", "Why did profit move?"); },
    lands: () => tt("nav.ask.profit.lands", "Company › Results · the portfolio sorted by week on week"), page: "company",
@@ -24823,9 +24834,13 @@ const SS_QUESTIONS = [
    lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio"),
    holds: a => a.site === (siteOpen ? siteKey : null)},
   {id: "prices", get q(){ return tt("nav.ask.prices.q", "Are my prices right?"); }, page: "wiki",
-   lands: () => { const t = ssTopType();
+   lands: () => { const t = ssPricesType();
      return t ? tt("nav.ask.prices.lands.type", "Wiki › {type} › Prices in your save", {type: t.type}) : tt("nav.ask.prices.lands.none", "Wiki"); },
-   go: ssPrices, lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash},
+   go: () => ssPrices(), lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash,
+   /* A company with several kinds of shop picks which one's prices to read. */
+   choices(){ const own = ssOwnTypes(), t = ssPricesType();
+     return own.length > 1 ? own.map(x => ({id: x.slug, label: x.type, on: !!t && x.slug === t.slug})) : null; },
+   choose(slug){ ssPricesPick = slug; }},
   {id: "import", get q(){ return tt("nav.ask.import.q", "What should I import this week?"); },
    lands: () => tt("nav.ask.import.lands", "Supply › Change checklist"), page: "supply",
    go: ssChecklist, lit: "#sbStrip", holds: () => page === "supply"},
@@ -24885,10 +24900,9 @@ function ssAskPaint(){
 /* The landing on screen ({qn, strip, lit, litId, host, hash, site}), and the
    landing still on its way, with the address its question opened. */
 let ssAsked = null, ssTicket = 0, ssPending = null;
-function ssAsk(id){
+function ssAsk(id, from = page){
   const qn = SS_QUESTIONS.find(x => x.id === id);
   if(!qn || !hasData()) return;
-  const from = page;
   try{ localStorage.setItem(SS_ASK_KEY, "1"); }catch(e){}
   ssAskPaint();
   ssClearAsked();
@@ -24934,14 +24948,21 @@ function ssLand(qn, from, ticket, tries = 0){
   const onSite = siteOpen && page === "company";
   const viaSite = onSite && siteFrom ? siteFrom : null;
   const backLabel = viaSite ? viaSite.label : onSite ? tt("nav.ask.portfolio", "Portfolio") : back.label;
+  const choices = qn.choices ? qn.choices() : null;
+  const pickLabel = tt("nav.ask.pick", "Answer for");
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>${tt("nav.ask.asked", "YOU ASKED")}</small><br><b>${ssEsc(qn.q)}</b></span>`
-    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">${
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span>`
+    + (choices ? `<span class="seg ss-pick" role="group" aria-label="${attr(pickLabel)}">${choices.map(c =>
+      `<a href="#" data-ss="pick" data-pick="${attr(c.id)}"${c.on ? ` class="on" aria-current="true"` : ""}>${ssEsc(c.label)}</a>`).join("")}</span>` : "")
+    + `<span class="go"><button type="button" data-ss="back">${
       ssEsc(tt("nav.ask.back", "‹ Back to {page}", {page: backLabel}))}</button>`
     + `<button type="button" data-ss="another">${tt("nav.ask.another", "Ask another")}</button></span>`;
   strip.addEventListener("click", e => {
     const b = e.target.closest("[data-ss]");
     if(!b) return;
     if(b.dataset.ss === "another"){ ssOpen(); return; }
+    /* Another of the question's answers: asked again, with the same way back. */
+    if(b.dataset.ss === "pick"){ e.preventDefault(); qn.choose(b.dataset.pick); ssAsk(qn.id, from); return; }
     ssClearAsked();
     /* The crumb's own rule: Back while the entry carries the way back, else
        its address, else the portfolio. */
@@ -25053,7 +25074,9 @@ const SS_SEV_RANK = {crit: 3, watch: 2, opp: 1};
 const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
   .sort((a, z) => SS_SEV_RANK[z] - SS_SEV_RANK[a])[0] || "";
 /* The board's pages and views, and the words players use for them. Kept by
-   hand, next to what they name: `need` is false for what works without a save. */
+   hand, next to what they name: `need` is false for what works without a save,
+   and `each`, where one view answers for several things, gives one entry per
+   thing (its own id, line and go) in place of the view's single one. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Today"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
@@ -25165,7 +25188,9 @@ const SS_VIEWS = [
    go: () => ssOpenSite(ssCrewSite(), "#sp-crew")},
   {id: "prices", get t(){ return tt("nav.search.prices.title", "Prices in your save"); },
    get p(){ return tt("nav.search.prices.line", "Wiki"); }, ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
-   live(){ const t = ssTopType(); return t ? {p: tt("nav.search.prices.guide", "Wiki › {type} guide", {type: t.type})} : {}; }, go: ssPrices},
+   /* One entry for each kind of shop the company runs, each opening its own guide. */
+   each: () => ssOwnTypes().map(t => ({id: `view:prices:${t.slug}`, p: tt("nav.search.prices.guide", "Wiki › {type} guide", {type: t.type}),
+     kw: [t.type, ...ssEnglish([t.slug])], go: () => ssPrices(t.slug)})), go: () => ssPrices()},
   {id: "wiki", get t(){ return tt("nav.search.wiki.title", "Wiki"); },
    get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual"], need: false, go: () => showPage("wiki")},
   {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
@@ -25237,7 +25262,9 @@ function ssBuild(){
     if(v.need !== false && !data) return;
     const e = {id: `view:${v.id}`, g: "views", t: v.t, p: v.p, ic: v.ic, syn: v.syn, synP: v.synP || null, go: v.go};
     if(v.live) try{ Object.assign(e, v.live() || {}); }catch(err){}
-    out.push(ssEntry(e));
+    const each = v.each ? v.each() : [];
+    if(each.length) each.forEach(x => out.push(ssEntry({...e, ...x})));
+    else out.push(ssEntry(e));
   });
   if(data){
     const fac = D.supply && D.supply.factories;
