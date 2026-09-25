@@ -18672,8 +18672,12 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
           gaps.lower ? `${gaps.lower === 1 ? "one top-up" : `${gaps.lower} top-ups`} to lower` : ""].filter(Boolean).join(" and ")}.`}
       : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
   }
+  /* Tight and lowering rows stay off Today by rule; the card still says how
+     many Supply lists beside these, so its count and the strip's add up. */
+  const also = [gaps.margin ? "restore the margin" : "", gaps.lower ? "lower a target" : ""].filter(Boolean);
+  const more = also.length ? ` ${(gaps.margin || 0) + (gaps.lower || 0)} more on Supply only ${also.join(" or ")}.` : "";
   if(!left.length) return {badge: "ALL TICKED", live: false,
-    what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.`};
+    what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.${more}`};
   const n = v => v === null || v === undefined ? "not set" : v.toLocaleString();
   /* A paused import the player gave a figure has no current setting: it is
      a resume, not an order going from "not set". */
@@ -18688,13 +18692,13 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
   const where = r => r.site === null || r.site === undefined ? null : nameOf(r.site);
   if(left.length === 1){
     const r = left[0], at = where(r);
-    return {badge: "1 TO CHANGE", live: true, what: `<b>${esc(r.item)}</b>${at ? ` at ${esc(at)}` : ""}: ${esc(change(r))}.`};
+    return {badge: "1 TO CHANGE", live: true, what: `<b>${esc(r.item)}</b>${at ? ` at ${esc(at)}` : ""}: ${esc(change(r))}.${more}`};
   }
   const places = [...new Set(left.map(where).filter(Boolean))];
   const at = !places.length ? "" : places.length <= 2 ? ` at ${places.map(esc).join(" and ")}`
     : ` at ${places.slice(0, 2).map(esc).join(", ")} and ${places.length - 2} more`;
   return {badge: `${left.length} TO CHANGE`, live: true,
-    what: `<b>${left.length} changes</b>${at}, starting with ${esc(left[0].item)}.`};
+    what: `<b>${left.length} changes</b>${at}, starting with ${esc(left[0].item)}.${more}`};
 }
 
 const orderMarkCache = new Map();
@@ -19609,6 +19613,22 @@ function sbSizingRow(id){
     ? `<b>Demand</b>: sized for what the shops at the end of each chain use, plus one margin${Number.isFinite(D.supply.margin) ? ` of ${Math.round(D.supply.margin * 100)}%` : ""}, import to sale.`
     : "<b>24/7</b>: every line, its factory inputs and the imports behind them are sized for the machines' rated output, round the clock."}</span></div>`;
 }
+/* Ships, held and what the plans take are a product's, not a line's: where
+   two lines on screen make one item, the first drawn (after the filter and
+   the sort) carries them and the others say where they are. A line shown
+   alone carries them itself. */
+function sbSharedOnce(shown, row){
+  const on = {}, first = new Map();
+  shown.forEach(r => { if(!r.unnamed) on[r.slug] = (on[r.slug] || 0) + 1; });
+  return (r, kid) => {
+    r.later = null;
+    if(!r.unnamed && on[r.slug] > 1){
+      if(first.has(r.slug)) r.later = first.get(r.slug);
+      else first.set(r.slug, slotText(r).replace(/^ · /, "") || "the first");
+    }
+    return row(r, kid);
+  };
+}
 function sbLineRow(d, r, site){
   const f = r.fact, b = D.businesses[r.s];
   if(r.unnamed) return `${sbTr(d, r, [], null)}<td class="sb-tk"></td>
@@ -19643,8 +19663,8 @@ function sbLineRow(d, r, site){
     <td class="l">${hours}</td>
     <td>${(r.makes ?? 0).toLocaleString()}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
       : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${(r.atRoster ?? 0).toLocaleString()} at this roster</span>` : ""}</td>
-    ${r.later ? `<td colspan="2"><span class="sub" data-tip="${attr(`Ships, held and what the plans take are ${r.item}'s, shared by every line making it; they are shown on the first`)}">shared with the ${
-      r.item} line above</span></td>` : `<td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
+    ${r.later ? `<td colspan="2"><span class="sub" data-tip="${attr(`Ships, held and what the plans take are ${r.item}'s, shared by every line making it; they are on the other ${r.item} line, at ${r.later}`)}">shared with the other ${
+      spEsc(r.item)} line</span></td>` : `<td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
       ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
       ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}${r.makers > 1
       ? `<span class="sub" data-tip="${attr(`Shared by the ${r.makers} lines making ${r.item}`)}">all ${r.makers} ${spEsc(r.item)} lines</span>` : ""}</td>
@@ -19685,10 +19705,8 @@ function drawFactoriesTab(){
        where two lines make one item they are shown once, on the first. */
     const makers = {};
     site.lines.forEach(l => { makers[l.slug] = (makers[l.slug] || 0) + 1; });
-    const firstOf = new Set();
     const lines = site.lines.map(l => {
-      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], later: firstOf.has(l.slug)};
-      firstOf.add(l.slug);
+      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug]};
       r.chk = sbChk(d, claimed, s, l.item, SB_LINE_KINDS, l.rid);
       r.keep = sbWorth(r.fact, r.chk);
       return r;
@@ -19721,7 +19739,7 @@ function drawFactoriesTab(){
     const part = (title, rows, all, clearText, table) => `<p class="sb-part">${title}</p>${rows.length ? table
       : all.length ? `<div class="sb-clear"><span class="check">${icon("tick")}</span>${clearText}</div>` : ""}`;
     const body = part("Lines", shownLines, lines, `All ${plural(lines.length, "line")} run the hours they need${sizing === "cap" ? ", as sized 24/7" : ""}`,
-        sbTable("factory-lines", SB_LINE_COLS, shownLines, r => sbLineRow(d, r, site)))
+        sbTable("factory-lines", SB_LINE_COLS, shownLines, sbSharedOnce(shownLines, r => sbLineRow(d, r, site))))
       + part("Factory inputs", shownInputs, inputs, `All ${plural(inputs.length, "factory input")} cover what the lines need, with the chain margin`,
         sbTable("factory-inputs", SB_INPUT_COLS, shownInputs, r => sbInputRow(d, r, site)))
       + (imports.length ? part("Its own imports", shownImports, imports, `${plural(imports.length, "import")}, nothing to change`,
@@ -22083,8 +22101,11 @@ function ssTopupTab(){
   return ["shops", "warehouses", "factories"].reduce((a, t) => left(t) > left(a) ? t : a, "shops");
 }
 /* One of the Supply tabs, from the top. */
-function ssSupply(tab){
+function ssSupply(tab, keepView = false){
   sbArrive = null;
+  /* A tab opened from search or Ask the board is read as a list, as a
+     finding's landing is; only the diagram's own entry keeps the diagram. */
+  if(!keepView && sbViewMode() === "diagram"){ sbViewOn = "list"; remember(SB_VIEW_KEY, "list"); sbPaintTools(); sbPlaceFlow(); }
   reveal(SB_SEC[tab] || "secShops");
 }
 /* The Plan imports card's own landing: the change checklist, on the tab with
@@ -22468,7 +22489,7 @@ const SS_VIEWS = [
   {id: "factorystaff", t: "Staffing for factory lines", p: "Supply › Factories", ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
    go(){ ssSupply("factories"); setTimeout(() => { const el = $("sbStaff"); if(el) settleScroll(el); }, 60); }},
   {id: "flow", t: "Goods flow", p: "Supply · the diagram view of each tab", ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
-   go(){ sbViewOn = "diagram"; remember(SB_VIEW_KEY, "diagram"); drawSupplyTab(sub.supply); wireAll(); ssSupply(sub.supply); }},
+   go(){ sbViewOn = "diagram"; remember(SB_VIEW_KEY, "diagram"); drawSupplyTab(sub.supply); wireAll(); ssSupply(sub.supply, true); }},
   {id: "market", t: "Market demand", p: "Growth › Demand", ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood"],
    go: () => reveal("secMarket")},
   {id: "plan", t: "Plan a chain", p: "Growth › Plan a chain", ic: "growth", syn: ["new factory", "recipe plan", "expand"],

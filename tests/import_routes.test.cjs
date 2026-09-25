@@ -128,8 +128,11 @@ test('every change on the checklist is a fact\'s figure, and sits on its object\
     // Every change has its tick; none is left to the "Other changes" list.
     assert.equal(await page.locator('#pageSupply .sb-tick').count(), 10);
     assert.equal(await page.locator('#pageSupply .sb-part', {hasText: 'Other changes'}).count(), 0);
-    // Today's card leaves the tight Flour order and the three top-ups to lower out.
+    // Today's card leaves the tight Flour order and the three top-ups to lower out, and says so:
+    // 6 on the card and 4 more make the strip's 10.
     assert.equal(await page.locator('#planImportsCard .soon').textContent(), '6 TO CHANGE');
+    assert.match(await page.locator('#planImportsCard .what').textContent(),
+      /6 changes.*\. 4 more on Supply only restore the margin or lower a target\.$/);
   } finally { await page.close(); }
 });
 
@@ -326,8 +329,47 @@ test('two lines making one item at a factory each keep their own change and tick
     const cells = await page.$$eval('#secFactories tr[data-slug="cake"]', trs => trs.map(t => t.innerText.replace(/\s+/g, ' ')));
     assert.match(cells[0], /tops up to 270/);
     assert.match(cells[0], /all 2 Cake lines/);
-    assert.match(cells[1], /shared with the Cake line above/);
+    assert.match(cells[1], /shared with the other Cake line/);
     assert.doesNotMatch(cells[1], /tops up to/);
+    assert.match(await page.locator('#secFactories tr[data-slug="cake"]').nth(1).locator('.sub[data-tip]').last().getAttribute('data-tip'),
+      /on the other Cake line, at list positions/);
+  } finally { await page.close(); }
+});
+
+test('shared product figures sit on the first line shown, after the sort and the filter', async () => {
+  const data = fixture();
+  const site = data.supply.factories.sites[0];
+  site.lines.push({...site.lines[0], rid: 'r-cake-2', slots: [9, 10], makes: 9999, status: 'covered', why: null, level: 'ok'});
+  // Sorted by Makes / day, high first: the second line comes first and carries them.
+  const page = await board(data, {which: 'all'});
+  try {
+    await page.evaluate(() => { supplySort['factory-lines'] = {col: 3, dir: -1}; drawFactoriesTab(); });
+    const cells = await page.$$eval('#secFactories tr[data-slug="cake"]', trs => trs.map(t => t.innerText.replace(/\s+/g, ' ')));
+    assert.match(cells[0], /9,999/);
+    assert.match(cells[0], /tops up to 270/);
+    assert.match(cells[1], /shared with the other Cake line/);
+  } finally { await page.close(); }
+  // Needs a change shows only the short line: it carries the figures itself.
+  const changes = await board(data, {which: 'changes'});
+  try {
+    const cells = await changes.$$eval('#secFactories tr[data-slug="cake"]', trs => trs.map(t => t.innerText.replace(/\s+/g, ' ')));
+    assert.equal(cells.length, 1);
+    assert.match(cells[0], /tops up to 270/);
+    assert.doesNotMatch(cells[0], /shared with/);
+  } finally { await changes.close(); }
+});
+
+test('search and Ask the board open a Supply tab as a list, the diagram entry keeps the diagram', async () => {
+  const page = await board(fixture(), {which: 'changes', tab: 'shops'});
+  try {
+    await page.locator('#sbView a[data-id="diagram"]').click();
+    await page.evaluate(() => { showPage('today'); ssSupply('factories'); });
+    assert.equal(await page.evaluate(() => sbViewMode()), 'list');
+    assert.equal(await page.locator('#secFactories .sb-list').isHidden(), false);
+    assert.equal(await page.locator('#sbFlowHome #flow').count(), 1);
+    assert.equal(await page.locator('#sbView a[data-id="list"]').getAttribute('class'), 'on');
+    await page.evaluate(() => SS_VIEWS.find(v => v.id === 'imports').go());
+    assert.equal(await page.evaluate(() => [sbViewMode(), sub.supply].join()), 'list,warehouses');
   } finally { await page.close(); }
 });
 

@@ -393,6 +393,11 @@ test('a top-up target set too high is a change to lower, never tight and never o
     what:'Nothing falls short. Supply lists one top-up to lower.'});
   assert.equal(card([], [], {complete: true, unnamed: 0, margin: 1, lower: 3}).what,
     'Nothing falls short. Supply lists one change that would restore the margin and 3 top-ups to lower.');
+  // Beside changes to type, the card says what else Supply lists, so its count and the strip's add up.
+  const one = build({imports:[{s:0, rows:[order({})]}]});
+  assert.match(card(one, [], {complete: true, unnamed: 0, margin: 1, lower: 2}).what, / 3 more on Supply only restore the margin or lower a target\.$/);
+  assert.match(card(one, [one[0].key], {complete: true, unnamed: 0, lower: 2}).what, /next save\. 2 more on Supply only lower a target\.$/);
+  assert.doesNotMatch(card(one, [], {complete: true, unnamed: 0}).what, /more on Supply/);
 });
 
 test('an empty checklist that could not see everything does not say ALL SET', () => {
