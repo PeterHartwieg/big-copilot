@@ -2,6 +2,12 @@
  "alerts": [
   {
    "group": "staff",
+   "i18n": {
+    "text": [
+     "f.staff.none",
+     {}
+    ]
+   },
    "id": "14c67b03be",
    "level": "critical",
    "site": "HART. Bare",
@@ -195,6 +201,12 @@
   "lines": [
    {
     "group": "staff",
+    "i18n": {
+     "text": [
+      "f.staff.none",
+      {}
+     ]
+    },
     "id": "14c67b03be",
     "level": "critical",
     "site": "HART. Bare",
@@ -873,6 +885,7 @@
   "peak": 1.0,
   "priceCount": 0,
   "priceDay": null,
+  "priceFrom": null,
   "prices": {},
   "recipes": [],
   "sources": {
@@ -1131,10 +1144,12 @@
   "sites": [
    {
     "count": 2,
+    "key": "ba:street_secondavenue#10",
     "site": "HART. Gifts"
    },
    {
     "count": 1,
+    "key": "ba:street_broadway#2",
     "site": "HART. Corner"
    }
   ],
@@ -2241,7 +2256,8 @@
   "nextImportWeekday": "Monday",
   "roundTo": 10,
   "shops": [],
-  "today": "Saturday"
+  "today": "Saturday",
+  "wholesaleShops": []
  },
  "trends": [
   {
@@ -2276,6 +2292,5 @@
    "ready": false,
    "s": 3
   }
- ],
- "weekly": []
+ ]
 }

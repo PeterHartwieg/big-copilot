@@ -5334,8 +5334,9 @@
   "peak": 1.27,
   "priceCount": 1,
   "priceDay": 39,
+  "priceFrom": 33,
   "prices": {
-   "ba:itemname_water": 0.5
+   "ba:itemname_water": 0.4667
   },
   "recipes": [
    {
@@ -5695,7 +5696,7 @@
   {
    "item": "Gift (Cheap)",
    "peak": null,
-   "price": 11.96,
+   "price": 12.0,
    "revenue": 1028.57,
    "slug": "ba:itemname_cheapgift",
    "stock": 300,
@@ -5708,7 +5709,7 @@
   {
    "item": "Umbrella",
    "peak": null,
-   "price": 15.31,
+   "price": 15.0,
    "revenue": 321.43,
    "slug": "ba:itemname_umbrella",
    "stock": 30,
@@ -5885,14 +5886,17 @@
   "sites": [
    {
     "count": 3,
+    "key": "ba:street_eighthstreet#5",
     "site": "HART. Spirits"
    },
    {
     "count": 1,
+    "key": "ba:street_broadwaystreet#19",
     "site": "HART. Gifts"
    },
    {
     "count": 1,
+    "key": "ba:street_eighthavenue#8",
     "site": "HART. Brewery"
    }
   ],
@@ -8650,7 +8654,10 @@
     "target": 600
    }
   ],
-  "today": "Friday"
+  "today": "Friday",
+  "wholesaleShops": [
+   1
+  ]
  },
  "trends": [
   {
@@ -8684,33 +8691,6 @@
    "prev7": 0.0,
    "ready": true,
    "s": 3
-  }
- ],
- "weekly": [
-  {
-   "businesses": 4,
-   "day": 7,
-   "income": 9700.0
-  },
-  {
-   "businesses": 4,
-   "day": 14,
-   "income": 10400.0
-  },
-  {
-   "businesses": 4,
-   "day": 21,
-   "income": 11100.0
-  },
-  {
-   "businesses": 4,
-   "day": 28,
-   "income": 11800.0
-  },
-  {
-   "businesses": 4,
-   "day": 35,
-   "income": 12500.0
   }
  ]
 }
