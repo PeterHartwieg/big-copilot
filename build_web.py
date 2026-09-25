@@ -349,6 +349,8 @@ details.help[open] summary::after{content:"\2013"}
 .menu-heading{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);padding:6px 10px}
 .menu-panel .lg-btn{display:flex;width:100%;justify-content:flex-start;border:0;background:none;padding:10px;border-radius:3px;font-size:13px;font-weight:500;min-height:0}
 .menu-panel .lg-btn:hover{background:var(--raised)}
+/* A longer language wraps a menu line rather than running past the panel. */
+.menu-panel .lg-btn{white-space:normal;overflow-wrap:anywhere;text-align:left}
 .menu-hint{font-size:11px;color:var(--ink-2);margin:4px 10px 10px}
 .menu-divider{border-top:1px solid var(--rule);margin:6px 0 12px}
 .menu-panel .lg-chip{margin-left:9px}
@@ -363,47 +365,48 @@ details.help[open] summary::after{content:"\2013"}
 .foot-links{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
-<aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>
+<aside class="release-banner" id="releaseBanner" aria-label="App update" data-tt-aria-label="upd.banner" hidden>
   <div class="release-copy">
     <p id="releaseMessage" role="status" aria-live="polite"></p>
     <details id="releaseDetails" hidden><summary id="releaseTitle"></summary><p id="releaseSummary"></p></details>
   </div>
   <div class="release-actions">
-    <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg>Reload</button>
-    <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+    <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg><span data-tt="upd.reload">Reload</span></button>
+    <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update" data-tt-aria-label="upd.dismiss" data-tt-title="upd.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
   </div>
 </aside>
 <!-- One-time news strip. For the next announcement replace data-news-id and the
-     copy: a new id shows again to everyone who dismissed this one (web/update.js). -->
-<aside class="news-strip" id="newsStrip" data-news-id="link-0.2.0" aria-label="News" hidden>
-  <p class="news-copy"><b class="news-tag">New</b>Big Copilot Link 0.2.0 lets the board make changes in your game: set uniforms, apply import amounts and write staffing plans, with a preview and one-step undo.<a id="newsLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Get the mod on the Steam Workshop</a></p>
-  <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+     copy, and give the copy a new data-tt key: a new id shows again to everyone
+     who dismissed this one (web/update.js). -->
+<aside class="news-strip" id="newsStrip" data-news-id="link-0.2.0" aria-label="News" data-tt-aria-label="upd.news" hidden>
+  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.link-0-2-0">Big Copilot Link 0.2.0 lets the board make changes in your game: set uniforms, apply import amounts and write staffing plans, with a preview and one-step undo.</span><a id="newsLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" data-tt="upd.news.get-mod">Get the mod on the Steam Workshop</a></p>
+  <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
 <section class="landing" id="landing">
   <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
-  <p class="rv" id="welcomeLede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
-  <div class="drop rv" id="drop" role="button" tabindex="0" title="Choose the folder named Big Ambitions inside SaveGames, or drop it here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save.">
+  <p class="rv" id="welcomeLede" data-tt="land.lede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
+  <div class="drop rv" id="drop" role="button" tabindex="0" title="Choose the folder named Big Ambitions inside SaveGames, or drop it here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save." data-tt-title="land.drop.title">
     <div class="folder"><i class="tab"></i><i></i><span class="file"></span><i class="flap"></i></div>
-    <b>Drop your save folder anywhere</b>
-    <span>the newest .hsg in it opens</span>
+    <b data-tt="land.drop.head">Drop your save folder anywhere</b>
+    <span data-tt="land.drop.sub">the newest .hsg in it opens</span>
   </div>
   <div class="row rv" id="entryRow">
-    <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save.">__ICON_FOLDER__Choose the folder</button>
-    <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play.">__ICON_LINK__Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
-    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
+    <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save." data-tt-title="land.folder.title">__ICON_FOLDER__Choose the folder</button>
+    <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play." data-tt-title="land.link.title">__ICON_LINK__Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
+    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead" data-tt-title="land.onefile.title"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
   <div class="save-location rv" id="saveLocation">
-    <label for="savePlatform">Save folder <select id="savePlatform" aria-label="Operating system for save folder help"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected>Other / unknown</option></select></label>
+    <label for="savePlatform"><span data-tt="land.where.label">Save folder</span> <select id="savePlatform" aria-label="Operating system for save folder help" data-tt-aria-label="land.where.select"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected data-tt="land.where.other">Other / unknown</option></select></label>
     <div class="path-row" id="savePathRow" hidden><code id="savePath"></code><button type="button" class="copy" id="savePathCopy" data-copy="savePath">Copy</button></div>
     <p id="saveLocationHint">Choose Windows or macOS to see its save folder, or select a .hsg file.</p>
   </div>
   <div class="lg-src" id="srcSlot">
     <div class="strip" id="srcStrip" hidden>
-      <div class="st"><span class="led" id="srcLed" aria-hidden="true"></span><span id="srcStatus" role="status" aria-live="polite" aria-atomic="true"></span><span class="prog" id="srcProg" role="progressbar" aria-label="Loading save" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
+      <div class="st"><span class="led" id="srcLed" aria-hidden="true"></span><span id="srcStatus" role="status" aria-live="polite" aria-atomic="true"></span><span class="prog" id="srcProg" role="progressbar" aria-label="Loading save" data-tt-aria-label="app.strip.progress" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
       <div class="right" id="srcActions">
-        <a class="btn2" id="modLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" hidden title="Big Copilot Link on the Steam Workshop: subscribe, enable it in the game's Mods menu, load a save">Get the mod</a>
+        <a class="btn2" id="modLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" hidden title="Big Copilot Link on the Steam Workshop: subscribe, enable it in the game's Mods menu, load a save" data-tt-title="app.strip.mod.title" data-tt="app.strip.mod">Get the mod</a>
         <button type="button" class="btn2 primary" id="recoverBtn" hidden>__ICON_FOLDER__Choose the folder again</button>
-        <button type="button" class="btn2 primary" id="reloadBtn" hidden>Reload app</button>
+        <button type="button" class="btn2 primary" id="reloadBtn" hidden data-tt="app.strip.reload">Reload app</button>
         <button type="button" class="btn2" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
       </div>
     </div>
@@ -411,23 +414,23 @@ details.help[open] summary::after{content:"\2013"}
   </div>
   <!--__FOOTER__-->
   <details class="help" id="help">
-    <summary>Where is my save?</summary>
+    <summary data-tt="land.help.summary">Where is my save?</summary>
     <div class="help-content">
-      <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
-      <p>If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
-      <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
-      <p><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
+      <p id="lgHelpFolder">Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
+      <p id="lgHelpFind">If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
+      <p id="lgHelpAutosave" data-build="__BUILD__">The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build __BUILD__; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
+      <p id="lgHelpLinked"><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
         <p id="asideText">Names, recipes and station capacities come with the page, from game build __BUILD__.</p>
         <p class="quiet" id="asideQuiet">If your game is newer, click the chip and choose its <code>en.json</code>; it is remembered in this browser and wins over the built-in text.</p>
-        <div id="localeWindows" hidden><div class="path-label">en.json lives here &middot; default Windows Steam installation</div>
+        <div id="localeWindows" hidden><div class="path-label" data-tt="land.gametext.where">en.json lives here &middot; default Windows Steam installation</div>
         <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
         </div>
         <p id="localeOther" class="quiet">To find your game's <code>en.json</code>, open Steam &rarr; Manage &rarr; Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle.</p>
       </div>
-      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button> &middot; the page only reads your saves, from a folder or from the running game.</p>
+      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
     </div>
   </details>
   <div class="orb" id="lgOrb" aria-hidden="true"><i></i><u></u></div>
@@ -440,12 +443,12 @@ details.help[open] summary::after{content:"\2013"}
      the board has its own footer and carries them itself. -->
 <template id="boardControls">
   <div class="menu" id="srcMenu">
-    <button type="button" class="ibtn tr" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="More" data-tip="Change folder · one file · watch · game text · history · about">__ICON_MORE__</button>
+    <button type="button" class="ibtn tr" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="More" data-tip="Change folder · one file · watch · game text · history · about" data-tt-aria-label="app.menu.more" data-tt-tip="app.menu.tip">__ICON_MORE__</button>
     <div class="menu-panel">
-      <div class="menu-heading">Save source</div>
+      <div class="menu-heading" data-tt="app.menu.source">Save source</div>
       <div id="menuSourceSlot"></div>
       <button type="button" class="lg-btn lg-watch" id="watchBtn" hidden>Watch</button>
-      <p class="menu-hint">Pick a character or one save above and the board follows it, or link to the running game. Or drop a .hsg save anywhere.</p>
+      <p class="menu-hint" data-tt="app.menu.hint">Pick a character or one save above and the board follows it, or link to the running game. Or drop a .hsg save anywhere.</p>
       <div class="menu-divider"></div>
       <div id="menuChipSlot"></div>
       <p class="menu-hint" id="menuChipHint"></p>

@@ -147,16 +147,28 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # The game's names in another language: the tables sit beside the site's
     # page (web/names/), so only the site offers the choice; a local page gets
     # its language from --lang instead. The board script wires every copy.
+    # The control is a button and a listbox the board script hangs off <body>
+    # (gnOpen()), drawn like the Theme switch beside it. The choices are the
+    # hidden list inside it, one per entry of GAME_NAME_LANGS: the script reads
+    # them from there, so a choice is added here and nowhere else.
     names = ""
     if site:
         head = f"gnHead{'L' if landing else ''}"
-        options = "".join(f'<option value="{code}" lang="{code}">{html_escape(word)}</option>'
+        options = "".join(f'<li data-value="{code}" lang="{code}" translate="no">{html_escape(word)}</li>'
                           for code, word in GAME_NAME_LANGS.items())
+        code, word = next(iter(GAME_NAME_LANGS.items()))
         names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}" data-tt="foot.names.head">Game names</h2>\n'
-                 f'        <select class="gn-pick" data-gn-pick aria-labelledby="{head}" data-tt-title="foot.names.tip" title="The game&#39;s own '
+                 f'        <div class="gn-pick" data-gn-pick data-value="{code}">'
+                 f'<button type="button" class="gn-btn" id="{head}Btn" aria-haspopup="listbox" aria-expanded="false" '
+                 f'aria-labelledby="{head} {head}Btn" data-tt-title="foot.names.tip" title="The game&#39;s own '
                  'names for items, business types, neighbourhoods, stations and skills, in the language you '
                  'play in. Everything else on the page stays English.">'
-                 f'{options}</select>\n      </div>\n      ')
+                 '<span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16">'
+                 '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5'
+                 'c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span>'
+                 f'<span class="gn-cur" lang="{code}" translate="no">{html_escape(word)}</span>'
+                 '<svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>'
+                 f'</button><ul class="gn-opts" hidden>{options}</ul></div>\n      </div>\n      ')
     # The board script writes the words (tt("foot.build")) into every
     # [data-foot-build], so the landing's follows the UI language too.
     build = (f'<span class="sf-meta" data-foot-build="{VERIFIED_BUILD}">Game build {VERIFIED_BUILD}</span>' if landing
@@ -4990,18 +5002,114 @@ HYPE_TIGHT = 0.90  # a wave arriving at a shop already this full is being turned
 PHRASE_SHAPES = 2  # how many weekday-hour patterns to name before counting the rest
 
 
-def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
+# The staffing and hour-grid words (docs/architecture.md, "UI text"): every
+# phrase below is a message whose English is what these functions always
+# wrote, so the page can say it in the reader's language, and the board code
+# that reads a limit's English reads enOf(). Keys are sp.py.*: the site panel's
+# own script owns sp.*, so the two never write the same key.
+def _sp_list(items: list, sep: str):
+    """Phrases joined as `sep.join(items)` joined them, still a message: a
+    nested "{a}, {b}", "{a}; {b}" or "{a} and {b}" per separator, so a
+    translation joins its own way. One item is itself, none is ""."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    rest = _sp_list(items[1:], sep)
+    if sep == ", ":
+        return msg("sp.py.list.comma", "{a}, {b}", a=items[0], b=rest)
+    if sep == "; ":
+        return msg("sp.py.list.semi", "{a}; {b}", a=items[0], b=rest)
+    if sep == " and ":
+        return msg("sp.py.list.and", "{a} and {b}", a=items[0], b=rest)
+    raise ValueError(f"_sp_list(): no message joins by {sep!r}")
+
+
+def _sp_weekday(wd: int):
+    """A weekday's first three letters, 0 Sunday, as WEEKDAYS[wd][:3] wrote them."""
+    return (
+        msg("sp.py.wd.0", "Sun") if wd == 0 else msg("sp.py.wd.1", "Mon") if wd == 1
+        else msg("sp.py.wd.2", "Tue") if wd == 2 else msg("sp.py.wd.3", "Wed") if wd == 3
+        else msg("sp.py.wd.4", "Thu") if wd == 4 else msg("sp.py.wd.5", "Fri") if wd == 5
+        else msg("sp.py.wd.6", "Sat")
+    )
+
+
+def _sp_hours(start: int, end: int):
+    """One run of hours, "8-11", or "8" for a single hour."""
+    if end - start > 1:
+        return msg("sp.py.when.hours", "{a}-{b}", a=start, b=end)
+    return msg("sp.py.when.hour", "{h}", h=start)
+
+
+def _sp_days(first: int, last: int):
+    """A run of weekdays, "Mon-Wed"."""
+    return msg("sp.py.when.days", "{a}-{b}", a=_sp_weekday(first), b=_sp_weekday(last))
+
+
+def _sp_counters(office: bool):
+    """What a site's serving posts are called where no station names them."""
+    return msg("sp.py.workstations", "workstations") if office else msg("sp.py.counters", "counters")
+
+
+def _sp_station_noun(words: dict):
+    """A role's stations by their English plural, as _role_words() says them,
+    with the station's name as a token beside it (`station_name`); None where
+    the role has no station word of its own. The grid's role["noun"] stays
+    the plain str, which the page compares against a limit's English."""
+    if not words["noun"]:
+        return None
+    return msg("sp.py.noun.station", "{stations}", stations=words["noun"], station_name=words["stationName"])
+
+
+def _cap_first(text):
+    """A cap finding's limit opening a sentence ("{limit} is the limit" in
+    _alerts()): its first character upper case, as `limit[:1].upper() +
+    limit[1:]` writes it, and still a message. Call this instead of slicing,
+    which gives a plain str that stays English on every page.
+
+    A limit that already starts upper case (a role's "{role} staffing" leads
+    with a game name's token) comes back as it is. The three that start lower
+    case have a sentence-initial key of their own (sp.py.*.first: "Staffing",
+    "Registers", "Workstations"), and a join capitalises its first part only:
+    "Staffing and projection booths". A station's own plural keeps its
+    `station_name` token beside the capitalised English. German capitalises
+    its nouns anyway, so a .first key's translation is usually its plain key's."""
+    if text[:1].upper() == text[:1]:
+        return text
+    if isinstance(text, Msg):
+        rest = {k: v for k, v in text.p.items() if k != "a"}
+        if text.key == "sp.py.list.and":
+            return msg("sp.py.list.and", "{a} and {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.list.comma":
+            return msg("sp.py.list.comma", "{a}, {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.list.semi":
+            return msg("sp.py.list.semi", "{a}; {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.limit.staffing":
+            return msg("sp.py.limit.staffing.first", "Staffing")
+        if text.key == "sp.py.limit.registers":
+            return msg("sp.py.limit.registers.first", "Registers")
+        if text.key == "sp.py.workstations":
+            return msg("sp.py.workstations.first", "Workstations")
+        if text.key == "sp.py.limit.station":
+            return msg("sp.py.limit.station.first", "{stations}", stations=_cap_first(text.p["stations"]),
+                       station_name=text.p["station_name"])
+    return text[:1].upper() + text[1:]
+
+
+def _hour_phrase(hours_by_day: dict, sep: str = "; "):
     """"Mon-Sun 8-11, 18-20" — the shape of a set of weekday-hours in words.
 
     `sep` joins one day shape to the next ("Mon-Wed 8-20; Sat 10-14"); a caller
-    that lists several phrases apart by "; " passes " and " instead."""
+    that lists several phrases apart by "; " passes " and " instead. A message
+    (sp.py.when.*), or "" for no hours."""
     def runs(hours):
         out, start = [], None
         for h in range(25):
             if h in hours and start is None:
                 start = h
             elif h not in hours and start is not None:
-                out.append(f"{start}-{h}" if h - start > 1 else f"{start}")
+                out.append(_sp_hours(start, h))
                 start = None
         return out
 
@@ -5017,24 +5125,28 @@ def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
             spare += sum(len(h) for d, h in hours_by_day.items() if d in picked)
             continue
         if len(picked) == 7:
-            label = "every day"
+            label = msg("sp.py.when.everyday", "every day")
         elif len(picked) > 2 and [order.index(d) for d in picked] == list(
             range(order.index(picked[0]), order.index(picked[0]) + len(picked))
         ):
-            label = f"{WEEKDAYS[picked[0]][:3]}-{WEEKDAYS[picked[-1]][:3]}"
+            label = _sp_days(picked[0], picked[-1])
         else:
-            label = ", ".join(WEEKDAYS[d][:3] for d in picked)
-        parts.append(f"{label} {', '.join(shape)}")
-    phrase = sep.join(parts)
+            label = _sp_list([_sp_weekday(d) for d in picked], ", ")
+        parts.append(msg("sp.py.when.part", "{days} {hours}", days=label, hours=_sp_list(list(shape), ", ")))
+    phrase = _sp_list(parts, sep)
     # A list of every scattered hour is not a shape. Name the pattern and count
-    # the rest.
-    return f"{phrase} and {spare} scattered hours" if spare else phrase
+    # the rest. The English has always said "hours", one or many.
+    if spare:
+        return msg("sp.py.when.scattered", {"one": "{when} and {n} scattered hours",
+                                            "other": "{when} and {n} scattered hours"}, when=phrase, n=spare)
+    return phrase
 
 
-def _off_hours(covered: set) -> str:
-    """Group identical gaps, preserving exception days and split shifts."""
+def _off_hours(covered: set):
+    """Group identical gaps, preserving exception days and split shifts. A
+    message in _hour_phrase()'s words, or "" for none."""
     weekdays = (1, 2, 3, 4, 5, 6, 0)
-    groups = {}
+    groups, said = {}, {}
     for day, wd in enumerate(weekdays):
         gaps = [h for h in range(24) if (wd, h) not in covered]
         if not gaps:
@@ -5042,25 +5154,27 @@ def _off_hours(covered: set) -> str:
         runs, start, prev = [], gaps[0], gaps[0]
         for h in gaps[1:]:
             if h != prev + 1:
-                runs.append(f"{start}-{prev + 1}")
+                runs.append(msg("sp.py.when.hours", "{a}-{b}", a=start, b=prev + 1))
                 start = h
             prev = h
-        runs.append(f"{start}-{prev + 1}")
-        groups.setdefault(', '.join(runs), []).append(day)
+        runs.append(msg("sp.py.when.hours", "{a}-{b}", a=start, b=prev + 1))
+        hours = _sp_list(runs, ", ")
+        groups.setdefault(str(hours), []).append(day)
+        said.setdefault(str(hours), hours)
     parts = []
     for hours, days in groups.items():
         ranges, start, prev = [], days[0], days[0]
         def day_range(first, last):
-            a, b = (WEEKDAYS[weekdays[d]][:3] for d in (first, last))
-            return a if first == last else f"{a}-{b}"
+            a, b = (weekdays[d] for d in (first, last))
+            return _sp_weekday(a) if first == last else _sp_days(a, b)
         for day in days[1:]:
             if day != prev + 1:
                 ranges.append(day_range(start, prev))
                 start = day
             prev = day
         ranges.append(day_range(start, prev))
-        parts.append(f"{', '.join(ranges)} {hours}")
-    return "; ".join(parts)
+        parts.append(msg("sp.py.when.part", "{days} {hours}", days=_sp_list(ranges, ", "), hours=said[hours]))
+    return _sp_list(parts, "; ")
 
 
 def _ceil_ten(value: float) -> int:
@@ -5999,6 +6113,9 @@ def _hourly(
                 # The station of this role worth adding another of: the
                 # largest, ties broken by name so the words do not move.
                 "station": biggest,
+                # Its game key, so a sentence can carry the station's name
+                # as a token beside the English words made of it.
+                "stationKey": min(slugs[p] for p in by_skill[skill] if labels[p] == biggest),
                 "counters": sum(by_skill[skill].values()),
                 "stationCount": len(by_skill[skill]),
                 "staffed": [[0] * 24 for _ in range(7)],
@@ -7905,7 +8022,8 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         now = line.get("hoursNow") or 0
         todo.append((line, posts_of.get(("unnamed", site["s"], i)) or [],
                      24 if mode == "cap" or not now else now,
-                     f"{tok(line.get('workstationKey'), line['workstation'])}, recipe not named", True))
+                     msg("sp.py.factory.unnamed", "{workstation}, recipe not named",
+                         workstation=tok(line.get("workstationKey"), line["workstation"])), True))
     for line, posts, hours, item, unnamed in todo:
         if not posts or not hours:
             continue
@@ -7915,7 +8033,8 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         for position, post in zip(line["slots"], posts):
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
-                             "name": f"{plain(item)}, position {position}"})
+                             "name": msg("sp.py.factory.station", "{item}, position {slot}",
+                                         item=plain(item), slot=position, item_name=item)})
         lines.append({
             "slug": line.get("slug"), "item": item, "machines": line["machines"],
             "hoursNow": line.get("hoursNow"), "hours": hours, "from": start, "to": start + hours,
@@ -8788,26 +8907,37 @@ def _role_words(role: dict, office: bool) -> dict:
     if office:
         return {
             "noun": None,
-            "staffing": ("staffing", "more staff at the computers on those hours"),
-            "posts": ("workstations", "another computer workstation"),
+            "staffing": (msg("sp.py.limit.staffing", "staffing"),
+                         msg("sp.py.fix.office.staff", "more staff at the computers on those hours")),
+            "posts": (msg("sp.py.workstations", "workstations"),
+                      msg("sp.py.fix.office.post", "another computer workstation")),
         }
     if role["skill"] == SERVICE_SKILL:
         return {
             "noun": None,
-            "staffing": ("staffing", "more service staff on those hours"),
-            "posts": ("registers", "another counter"),
+            "staffing": (msg("sp.py.limit.staffing", "staffing"),
+                         msg("sp.py.fix.service.staff", "more service staff on those hours")),
+            "posts": (msg("sp.py.limit.registers", "registers"), msg("sp.py.fix.service.post", "another counter")),
         }
     station = _lower_first(role["station"])
+    role_name = tok(role["skill"], role["label"])
+    # The station's own words are the game's name, lowered and pluralised in
+    # English, and stay English: a token cannot be declined or pluralised. So
+    # every message holding them also carries the name as a token,
+    # `station_name`, for a translation to write instead.
+    station_name = tok(role.get("stationKey"), role["station"])
     return {
         "noun": _plural(station),
+        "stationName": station_name,
         # Two different answers, two different limits, the way a shop's
         # "staffing" and "registers" are two: one line is about people, the
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (f"{tok(role['skill'], role['label'])} staffing",
-                     f"another {tok(role['skill'], role['label'])} on those hours"),
-        "posts": (_plural(station), f"another {station}"),
+        "staffing": (msg("sp.py.limit.role", "{role} staffing", role=role_name),
+                     msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name)),
+        "posts": (msg("sp.py.limit.station", "{stations}", stations=_plural(station), station_name=station_name),
+                  msg("sp.py.fix.role.post", "another {station}", station=station, station_name=station_name)),
     }
 
 
@@ -8906,7 +9036,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 # has no advice for it: the finding names the ceiling and what
                 # goes through it, and no fix. _alerts() raises no line for it;
                 # it shows on the site page's hour grid and chip only.
-                finding["limit"] = "the building"
+                finding["limit"] = msg("sp.py.limit.building", "the building")
                 finding["fix"] = ""
             else:
                 # One role reads exactly as it always has, which is what keeps
@@ -8920,14 +9050,13 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     )
                     for kind, skill in limits
                 ]
-                finding["limit"] = " and ".join(w[part][0] for w, part in said)
-                finding["fix"] = " and ".join(w[part][1] for w, part in said)
+                finding["limit"] = _sp_list([w[part][0] for w, part in said], " and ")
+                finding["fix"] = _sp_list([w[part][1] for w, part in said], " and ")
                 finding["limits"] = len(said)
-                default = "workstations" if office else "counters"
                 finding["noun"] = (
-                    said[0][0]["noun"]
+                    _sp_station_noun(said[0][0])
                     if len(said) == 1
-                    else " and ".join(w["noun"] or default for w, _ in said)
+                    else _sp_list([_sp_station_noun(w) or _sp_counters(office) for w, _ in said], " and ")
                 )
             out.append(finding)
 
@@ -8973,7 +9102,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                             spare = sum(r[1] for r in piece)
                             runs_here.append(
                                 {
-                                    "noun": _role_words(role, office)["noun"],
+                                    "noun": _sp_station_noun(_role_words(role, office)),
                                     "wd": wd,
                                     "hours": [r[0] for r in piece],
                                     "staff": piece[0][3],
@@ -9002,7 +9131,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     "key": grid["key"],
                     "site": grid["name"],
                     "office": office,
-                    "noun": _role_words(best["role"], office)["noun"],
+                    "noun": _sp_station_noun(_role_words(best["role"], office)),
                     "day": WEEKDAYS[best["wd"]],
                     "from": best["from"],
                     "to": best["to"],
@@ -9059,7 +9188,7 @@ def _idle_week(runs: list) -> dict:
 IDLE_PARTS = 2  # how many parts of an overstaffed week the line names
 
 
-def _idle_parts(parts: list, default: str) -> str:
+def _idle_parts(parts: list, default):
     """The overstaffed week's parts as the line says them: the IDLE_PARTS with
     the most spare staff-hours, in the week's own order, then "(and N more)" --
     in brackets, since "; and 2 more for 10 customers an hour" would read as
@@ -9067,14 +9196,21 @@ def _idle_parts(parts: list, default: str) -> str:
 
     A part's hours can end "and 5 scattered hours" and join day shapes with
     "and", so the parts are kept apart by a semicolon. spIdleWeek() on the
-    site page says them the same way."""
+    site page says them the same way. A message (sp.py.idle.*); `default`,
+    the noun of a part whose role has none, is best _sp_counters(office), so
+    it is a message too."""
     ranked = sorted(range(len(parts)), key=lambda i: (-(parts[i].get("spare") or 0), i))
     named = sorted(ranked[:IDLE_PARTS])
-    said = "; ".join(
-        f"{parts[i]['staff']} {parts[i]['noun'] or default} {parts[i]['when']}" for i in named
-    )
+    said = _sp_list([
+        msg("sp.py.idle.part", {"one": "{n} {noun} {when}", "other": "{n} {noun} {when}"},
+            n=parts[i]["staff"], noun=parts[i]["noun"] or default, when=parts[i]["when"])
+        for i in named
+    ], "; ")
     more = len(parts) - len(named)
-    return f"{said} (and {more} more)" if more else said
+    if more:
+        return msg("sp.py.idle.more", {"one": "{parts} (and {n} more)", "other": "{parts} (and {n} more)"},
+                   parts=said, n=more)
+    return said
 
 
 GLOBAL_HOOD = "ba:neighborhood_global"
@@ -10911,11 +11047,11 @@ def _alerts(
             where=where, when=when, n=per_week, worth=worth, fix=group[0]["fix"],
             rate=msg("f.atcap.rate", "{n}/h", n=cap) if cap == top
             else msg("f.atcap.range", "{low}-{high}/h", low=cap, high=top),
-            noun=group[0].get("noun") or (msg("f.atcap.noun.office", "workstations") if office
-                                          else msg("f.atcap.noun.shop", "counters")),
+            noun=group[0].get("noun") or _sp_counters(office),
             # Only the first character: a tie joins two limits, and
             # str.capitalize() would lowercase "DJ booths" in the second.
-            limit=limit[:1].upper() + limit[1:],
+            # _cap_first() does that and keeps the limit a message.
+            limit=_cap_first(limit),
         )
         several = group[0].get("limits", 1) > 1
         if len(group) == 1:
@@ -10965,7 +11101,7 @@ def _alerts(
         if finding["key"] in silent or finding["kind"] != "idle":
             continue
         site = finding["site"]
-        default = "workstations" if finding.get("office") else "counters"
+        default = _sp_counters(finding.get("office", False))
         week = finding.get("week") or {
             "spare": finding["spare"],
             "worth": finding["worth"],
@@ -11367,19 +11503,33 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
                 share = machine["hours"] / week
                 lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
-                text = (
-                    f"{named} machine at list position {machine['slot']} is staffed "
-                    f"{machine['hours']} of {week} hours"
-                    + (" needed" if week < STAFF_HOURS else "")
-                    + f"; nobody on it {machine['off']}"
-                    + (f"; {lost:,} a day not made" if lost else "")
-                )
+                said = dict(item=named, slot=machine["slot"], hours=machine["hours"], week=week,
+                            off=machine["off"])
+                if week < STAFF_HOURS:
+                    text = (
+                        msg("sp.py.staff.needed.lost", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours needed; nobody on it {off}; {lost:,} a day not made",
+                            lost=lost, **said)
+                        if lost else
+                        msg("sp.py.staff.needed", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours needed; nobody on it {off}", **said)
+                    )
+                else:
+                    text = (
+                        msg("sp.py.staff.lost", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours; nobody on it {off}; {lost:,} a day not made",
+                            lost=lost, **said)
+                        if lost else
+                        msg("sp.py.staff", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours; nobody on it {off}", **said)
+                    )
                 notes.append(
                     _finding(
                         "critical" if share < STAFF_CRITICAL else "warn",
                         business["name"], "staff", text,
                         key=business["key"], rank=machine["hours"], subject=subject,
-                        named=f"{named} at position {machine['slot']}",
+                        named=msg("sp.py.staff.named", "{item} at position {slot}",
+                                  item=named, slot=machine["slot"]),
                         ev={"slot": machine["slot"], "slug": line.get("slug")},
                     )
                 )
@@ -14103,9 +14253,35 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-theme{align-items:flex-end}
 /* The game-names picker sits just left of it, the two settings together. */
 .sf-gn{margin-left:auto}
-.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
-  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
-.gn-pick:hover{border-color:var(--ink-3)}
+/* Drawn as the Theme switch is: the same pill, border, surface and inner 3px
+   inset, with the globe in a round well the size of a theme button. */
+.gn-pick{display:inline-flex}
+.gn-btn{display:inline-flex;align-items:center;gap:10px;box-sizing:border-box;height:42px;max-width:240px;padding:3px 14px 3px 3px;
+  border:1px solid var(--rule);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;
+  font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;transition:border-color .15s ease}
+.gn-btn:hover,.gn-btn[aria-expanded="true"]{border-color:var(--accent)}
+.gn-glyph{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent)}
+.gn-cur{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gn-chev{color:var(--ink-2);transition:transform .15s ease}
+.gn-btn:hover .gn-chev{color:var(--ink)}
+.gn-btn[aria-expanded="true"] .gn-chev{transform:rotate(180deg)}
+/* The list, hung off <body> by gnOpen() and placed against the button. */
+.gn-pop{position:fixed;left:0;top:0;z-index:60;box-sizing:border-box;min-width:200px;max-width:calc(100vw - 24px);max-height:340px;
+  overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--rule);border-radius:12px;background:var(--surface);
+  color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);scrollbar-width:thin;
+  scrollbar-color:var(--rule) transparent;animation:gnpop .14s cubic-bezier(.2,.7,.2,1)}
+.gn-pop[hidden]{display:none}
+.gn-pop:focus{outline:none}
+.gn-opt{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;padding:0 10px 0 12px;
+  border-radius:8px;font:500 13px/1.2 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;white-space:nowrap}
+.gn-opt .sf-ic{visibility:hidden;color:var(--accent);stroke-width:2.1}
+.gn-opt.gn-on{background:var(--accent-soft)}
+.gn-pop:focus-visible .gn-opt.gn-on{box-shadow:inset 0 0 0 1px var(--accent)}
+.gn-opt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.gn-opt[aria-selected="true"] .sf-ic{visibility:visible}
+@keyframes gnpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.gn-pop,.gn-chev{animation:none;transition:none}}
 /* The one-time offer of the player's own language, hung off <body>. */
 .gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
   max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
@@ -14156,7 +14332,10 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
   .sf-gn{margin-left:0}
-  .gn-pick{height:44px}
+  /* The pill keeps the Theme switch's height here too: 44px wells and a 3px inset. */
+  .gn-btn{height:52px;padding-right:16px}
+  .gn-glyph{width:44px;height:44px}
+  .gn-opt{min-height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -14908,9 +15087,14 @@ function gnCompare(a, b){
 }
 /* The languages this page can show: the picker's options, English first. */
 const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+/* A picker's choices: the hidden list footer_html() writes inside it. Its
+   value is its data-value. */
+const gnOpts = p => [...p.querySelectorAll(".gn-opts [data-value]")];
+/* The open list and the picker it belongs to; gnOpen() below. */
+let gnPop = null, gnPopFor = null, gnAt = -1, gnTyped = "", gnTypedAt = 0, gnSpace = false;
 const gnLangs = () => {
   const p = gnPickers()[0];
-  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+  return p ? gnOpts(p).map(o => [o.dataset.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
 };
 const gnKnown = lang => gnLangs().some(([code]) => code === lang);
 function gnStored(){
@@ -14930,8 +15114,20 @@ function gnLoad(lang){
   got.catch(() => gnTables.delete(lang));
   return got;
 }
-function gnPaint(){
-  gnPickers().forEach(p => { p.value = gnLang; });
+/* Every picker shows `lang`: the language on screen, or one just chosen while
+   its table loads. */
+function gnPaint(lang = gnLang){
+  gnPickers().forEach(p => {
+    p.dataset.value = lang;
+    const o = gnOpts(p).find(o => o.dataset.value === lang), cur = p.querySelector(".gn-cur");
+    if(!o || !cur) return;
+    cur.textContent = o.textContent;
+    cur.setAttribute("lang", o.getAttribute("lang") || lang);
+    /* An autonym is a name, left as it is; a choice worded in the UI's own
+       language would drop the mark. */
+    if(o.getAttribute("translate") === "no") cur.setAttribute("translate", "no"); else cur.removeAttribute("translate");
+  });
+  if(gnPopFor) gnMark();
 }
 /* Switch the game names: the whole board is drawn again, as for another save,
    from the English payload it already holds. A table that will not load leaves
@@ -15005,18 +15201,181 @@ function gnOffer(){
   document.body.appendChild(el);
   return el;
 }
+/* A language picked in the footer: kept, the offer answered, the names switched. */
+function gnChoose(lang){
+  gnRemember(lang);
+  const offer = document.querySelector(".gn-offer");
+  if(offer) gnOfferClose(offer, "picked");
+  gnPaint(lang);
+  return setGameNames(lang);
+}
 function wireGameNames(){
   gnPickers().forEach(p => {
     if(p.dataset.gnWired) return;
     p.dataset.gnWired = "1";
-    p.addEventListener("change", () => {
-      gnRemember(p.value);
-      const offer = document.querySelector(".gn-offer");
-      if(offer) gnOfferClose(offer, "picked");
-      setGameNames(p.value);
+    const btn = p.querySelector(".gn-btn");
+    if(!btn) return;
+    /* Enter and Space click the button; the arrows open the list as well. */
+    btn.addEventListener("click", () => { if(gnPopFor === p) gnClose(true); else gnOpen(p); });
+    btn.addEventListener("keydown", e => {
+      if(!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+      e.preventDefault();
+      gnOpen(p, e.key);
     });
   });
   gnPaint();
+}
+/* The picker's list: one listbox hung off <body>, as #alertPop is, so no
+   section's paint containment clips it, and placed against the button that
+   opened it. Focus sits on the list and aria-activedescendant names the row
+   the keys move over: the listbox-button pattern. */
+const GN_TICK = '<svg class="sf-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const gnRows = () => gnPop ? [...gnPop.querySelectorAll(".gn-opt")] : [];
+function gnMark(){
+  const want = gnPopFor && gnPopFor.dataset.value;
+  gnRows().forEach(r => r.setAttribute("aria-selected", String(r.dataset.value === want)));
+}
+function gnActive(i, scroll = true){
+  const rows = gnRows();
+  if(!rows.length) return;
+  gnAt = Math.max(0, Math.min(rows.length - 1, i));
+  rows.forEach((r, k) => r.classList.toggle("gn-on", k === gnAt));
+  gnPop.setAttribute("aria-activedescendant", rows[gnAt].id);
+  if(scroll) rows[gnAt].scrollIntoView({block: "nearest"});
+}
+/* Under the button while the list fits there, else above it (the footer is the
+   foot of the page), on whichever side has more room; the rows scroll. */
+function gnPlace(){
+  const btn = gnPopFor && gnPopFor.querySelector(".gn-btn");
+  if(!btn || !btn.isConnected){ gnClose(false); return; }
+  const r = btn.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  gnPop.style.minWidth = Math.round(r.width) + "px";
+  gnPop.style.maxHeight = "";
+  const h = gnPop.offsetHeight, below = vh - 12 - (r.bottom + 6), above = r.top - 6 - 12;
+  const down = h <= below || below >= above;
+  const fit = Math.max(120, Math.min(h, down ? below : above));
+  gnPop.style.maxHeight = fit + "px";
+  gnPop.style.top = Math.max(12, down ? r.bottom + 6 : r.top - 6 - fit) + "px";
+  gnPop.style.left = Math.max(12, Math.min(r.left, vw - gnPop.offsetWidth - 12)) + "px";
+}
+function gnClose(focus){
+  if(!gnPopFor) return;
+  const btn = gnPopFor.querySelector(".gn-btn");
+  gnPop.hidden = true;
+  gnPop.removeAttribute("aria-activedescendant");
+  gnPopFor = null; gnTyped = ""; gnSpace = false;
+  if(btn){ btn.setAttribute("aria-expanded", "false"); if(focus) btn.focus(); }
+}
+function gnPick(i){
+  const row = gnRows()[i], p = gnPopFor;
+  if(!row || !p) return;
+  const lang = row.dataset.value, was = p.dataset.value;
+  gnClose(true);
+  if(lang !== was) gnChoose(lang);
+}
+/* Type-ahead: letters typed within half a second of each other find the next
+   row that starts with them; one letter pressed again steps through its rows. */
+/* Whether letters typed are still being gathered; past the half second the
+   gathered ones are dropped, so Space picks again. */
+function gnTyping(){
+  if(gnTyped && Date.now() - gnTypedAt > 500) gnTyped = "";
+  return !!gnTyped;
+}
+function gnFind(ch){
+  const now = Date.now();
+  gnTyped = (gnTyping() ? gnTyped : "") + ch.toLocaleLowerCase();
+  gnTypedAt = now;
+  const rows = gnRows(), same = [...gnTyped].every(c => c === gnTyped[0]);
+  const word = same ? gnTyped[0] : gnTyped, from = same || gnTyped.length === 1 ? gnAt + 1 : gnAt;
+  for(let k = 0; k < rows.length; k++){
+    const i = (from + k) % rows.length;
+    if(rows[i].textContent.trim().toLocaleLowerCase().startsWith(word)){ gnActive(i); return; }
+  }
+}
+function gnKey(e){
+  const n = gnRows().length;
+  if(e.key === "ArrowDown") gnActive(gnAt + 1);
+  else if(e.key === "ArrowUp") gnActive(gnAt - 1);
+  else if(e.key === "Home") gnActive(0);
+  else if(e.key === "End") gnActive(n - 1);
+  else if(e.key === "PageDown") gnActive(gnAt + 8);
+  else if(e.key === "PageUp") gnActive(gnAt - 8);
+  else if(e.key === "Enter") gnPick(gnAt);
+  /* Space picks on its keyup: picked on the keydown, focus would be back on
+     the button when the key comes up, and the button would open again. */
+  else if(e.key === " " && !gnTyping()) gnSpace = true;
+  else if(e.key === "Escape"){ e.stopPropagation(); gnClose(true); }
+  else if(e.key === "Tab"){ gnClose(true); return; }
+  else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) gnFind(e.key);
+  else return;
+  e.preventDefault();
+}
+function gnBuild(){
+  gnPop = document.createElement("div");
+  gnPop.className = "gn-pop";
+  gnPop.id = "gnPop";
+  gnPop.setAttribute("role", "listbox");
+  gnPop.tabIndex = -1;
+  gnPop.hidden = true;
+  document.body.appendChild(gnPop);
+  gnPop.addEventListener("keydown", gnKey);
+  gnPop.addEventListener("keyup", e => {
+    if(e.key !== " " || !gnSpace) return;
+    gnSpace = false;
+    e.preventDefault();
+    gnPick(gnAt);
+  });
+  gnPop.addEventListener("click", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt");
+    if(row) gnPick(gnRows().indexOf(row));
+  });
+  gnPop.addEventListener("mousemove", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt"), i = gnRows().indexOf(row);
+    if(row && i !== gnAt) gnActive(i, false);
+  });
+  /* A press outside closes it; one on its own button is left to the click. */
+  document.addEventListener("pointerdown", e => {
+    if(!gnPopFor || gnPop.contains(e.target) || gnPopFor.contains(e.target)) return;
+    gnClose(false);
+  }, true);
+  gnPop.addEventListener("focusout", e => {
+    const to = e.relatedTarget;
+    if(gnPopFor && to && !gnPop.contains(to) && !gnPopFor.contains(to)) gnClose(false);
+  });
+  window.addEventListener("resize", () => { if(gnPopFor) gnPlace(); });
+  window.addEventListener("scroll", e => {
+    if(!gnPopFor || (e.target && e.target.nodeType === 1 && gnPop.contains(e.target))) return;
+    gnPlace();
+  }, true);
+}
+function gnOpen(p, key){
+  if(gnPopFor) gnClose(false);
+  if(!gnPop) gnBuild();
+  const btn = p.querySelector(".gn-btn"), head = p.closest(".sf-gn") && p.closest(".sf-gn").querySelector(".sf-head");
+  if(head && head.id) gnPop.setAttribute("aria-labelledby", head.id);
+  gnPop.textContent = "";
+  gnOpts(p).forEach((o, i) => {
+    const row = document.createElement("div");
+    row.className = "gn-opt";
+    row.id = `gnOpt${i}`;
+    row.setAttribute("role", "option");
+    row.dataset.value = o.dataset.value;
+    ["lang", "translate"].forEach(a => { if(o.getAttribute(a)) row.setAttribute(a, o.getAttribute(a)); });
+    row.innerHTML = `<span class="gn-word"></span>${GN_TICK}`;
+    row.firstChild.textContent = o.textContent;
+    gnPop.appendChild(row);
+  });
+  gnPopFor = p; gnTyped = "";
+  gnMark();
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", "gnPop");
+  gnPop.hidden = false;
+  gnPlace();
+  const rows = gnRows(), on = Math.max(0, rows.findIndex(r => r.dataset.value === p.dataset.value));
+  gnActive(key === "Home" ? 0 : key === "End" ? rows.length - 1 : on);
+  gnPop.focus({preventScroll: true});
 }
 /* Width in the units shortText() counts: a wide (CJK) character is two. */
 const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
