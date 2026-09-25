@@ -581,7 +581,10 @@ def work_tree(path: str) -> str | None:
 def _outside_repo(path: str) -> str:
     """The path, refused when it is inside any git work tree: the game's text
     is not ours to commit, in this checkout or any other."""
-    tree = work_tree(path)
+    full = os.path.normcase(os.path.realpath(os.path.abspath(path)))
+    root = os.path.normcase(os.path.realpath(ROOT))
+    # This checkout is refused even without a .git (a copy unpacked from a zip).
+    tree = root if full == root or full.startswith(root + os.sep) else work_tree(path)
     if tree is not None:
         raise SystemExit(f"{path} is inside the git work tree {tree}; the game's text is not ours to "
                          "commit. Write it to a scratch folder instead.")

@@ -367,8 +367,9 @@ is loaded, swaps each field its row's `i18n` names and keeps the English it show
 row under a symbol key (so `{...row}` copies keep it, and JSON and `Object.keys()` never
 see it). **Code that reads Python's words reads `enOf(row, field)`**: the English,
 whatever the page shows. `findingAmount()`, `spLimitShow()` (and through it
-`spLimitRole()`) and the site panel's cap chips (`limitEn()` in `drawSite()`: the
-`"the building"` tests, `capSentence`, `spLimitIcons()` and `data-limit`) do; `splitFinding()` only looks for its two English sentence shapes while
+`spLimitRole()`), the site panel's cap chips (`limitEn()` in `drawSite()`: the
+`"the building"` tests, `capSentence`, `spLimitIcons()` and `data-limit`) and its ceiling
+strip (`spBindingLimits()`, which `spCeiling()` reads) do; `splitFinding()` only looks for its two English sentence shapes while
 the row is shown in English, and its generic cut (`:`, `;`, `. `, the comma within
 `HEADLINE_MAX`) works in any language, so a translation puts its headline first and the
 detail after `: ` or `; `. Any other comparison against Python's English has to move to
@@ -391,7 +392,8 @@ never breaks anybody. `status --strict` fails on them, for a translation pull re
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German
-uses). That text is the game's, so both refuse a path inside the repository.
+uses). That text is the game's, so both refuse a path inside this checkout (with or
+without its `.git`) or inside any other git work tree.
 
 ### Converting an area
 

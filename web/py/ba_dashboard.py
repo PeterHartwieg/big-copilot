@@ -16584,7 +16584,9 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    day is held by staffing then and by the door later — so the panel lights
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
-const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
+/* Python's English limit, whatever language the chip's words are in
+   (enOf(), web/i18n.js): spCeiling() and spLimitIcons() compare it. */
+const spBindingLimits = key => spCapNotes(key).map(f => typeof enOf === "function" ? enOf(f, "limit") : f.limit);
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before

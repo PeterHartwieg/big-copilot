@@ -252,7 +252,16 @@ with tempfile.TemporaryDirectory() as tmp:
             res.append("ok")
         except SystemExit:
             res.append("refused")
+    # A checkout copied without its .git (unpacked from a zip) is still refused.
+    copy = os.path.join(tmp, "zip-copy")
+    os.makedirs(os.path.join(copy, "tools"))
+    i18n.ROOT = copy
+    try:
+        i18n._outside_repo(os.path.join(copy, "tools", "g.json"))
+        res.append("ok")
+    except SystemExit:
+        res.append("refused")
 print(json.dumps(res))`);
   assert.equal(out.status, 0, out.stderr);
-  assert.deepEqual(JSON.parse(out.stdout), ['refused', 'refused', 'refused', 'ok']);
+  assert.deepEqual(JSON.parse(out.stdout), ['refused', 'refused', 'refused', 'ok', 'refused']);
 });

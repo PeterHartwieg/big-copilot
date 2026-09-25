@@ -124,14 +124,18 @@ test('a cap chip keys on the English limit, whatever language its words are in',
     const {page, errors} = await site(t, {ui, payload});
     const got = await page.evaluate(key => {
       openSite(key, false);
-      return [...document.querySelectorAll('#sitePanel .sp-hchip.cap')].map(e =>
+      const chips = [...document.querySelectorAll('#sitePanel .sp-hchip.cap')].map(e =>
         [e.dataset.limit, e.dataset.show, e.classList.contains('sp-bcap'), e.querySelectorAll('svg').length]);
+      // The ceiling strip lights the door, counter or person each limit names.
+      const ceiling = [...document.querySelectorAll('#sitePanel .sp-ceil > span')].map(e => e.className);
+      return {chips, ceiling};
     }, findings[0].key);
     assert.deepEqual(errors, []);
     return got;
   };
   const en = await chips(''), de = await chips('de');
-  assert.ok(en.length);
+  assert.ok(en.chips.length);
+  assert.ok(en.ceiling.some(c => c.split(" ").includes("on")), `the fixture lights part of the ceiling: ${JSON.stringify(en.ceiling)}`);
   assert.deepEqual(de, en);
 });
 
