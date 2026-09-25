@@ -1,5 +1,11 @@
 [
   {
+    "pr": 0,
+    "date": "2026-09-25",
+    "title": "Order ahead for a factory still being built",
+    "summary": "Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."
+  },
+  {
     "pr": 114,
     "date": "2026-09-25",
     "title": "Supply by shop, warehouse and factory, and staffing for factory lines",

@@ -83,7 +83,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload here, by the line's place in its list) | `drawFactoryStaffing`, through `drawFactoriesTab` |
-| `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
+| `plan` | `_plan()` | `drawPlan`, `planDraw`, `planInputs`, `planPlacement`, `planOverlay`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`) |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -110,7 +110,15 @@ Four indirect routes an agent would otherwise miss:
   `supplyFact(s, slug)`: the fact for a site index and an item, its 24/7 fields with the
   fact's `dem` laid over them when the sizing switch reads Demand. The three Supply tabs, the checklist, Goods
   flow and the site page all ask it, so none of them computes a verdict of its own; the
-  Python twin is `_supply_fact()`, which the findings use. The findings themselves come
+  Python twin is `_supply_fact()`, which the findings use. A chain saved on Plan a chain
+  (`ba_dash_plans:<character>` in `localStorage`, never seen by Python) is laid over the
+  facts here and only here, by `planOverlay()` and `planApply()`: its inputs read `new`
+  with why `plan`, and the import levels and factory top-ups it needs are the facts'
+  `setTo`. `idleRows()` and `alertLines()`/`alertMinor()` (through `planHush()`, which
+  reads the `slugs` `_condense()` puts on a counted finding) drop what it orders ahead,
+  and `supplyChecklistRows()` adds its imports no depot holds yet and its first fill
+  (`planFill()`). The plan clears itself once `planPlacement()` counts every planned
+  machine running. The findings themselves come
   twice, `alerts`/`minor` and `alertsDemand`, and `alertLines()` picks the pair by the same
   switch. A fact's figures (`use`, `need`, `have`, `setTo`, `lower`) are a week's where
   `cad` is weekly (an import or a wholesale delivery brings the item: a depot line, a
