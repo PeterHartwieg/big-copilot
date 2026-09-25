@@ -160,11 +160,35 @@ the map.
   - *Plan a chain*: machines run flat out, so the answer is the weekly raw material
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
-- **Company / Products, Payroll, Milestones**: the reference tables and the career
-  checklist. Payroll names its two wage figures: "at today's rates" is every hourly wage
-  times its assigned weekly hours over seven, "booked yesterday" is what the statements
-  recorded (the Portfolio's Wages total); its ? names the sites where the two differ.
-  There is no debt page; loans cap at $2M, which is beside the point at this stage.
+- **Company / Products, Staff, Milestones**: the reference tables and the career
+  checklist. Staff (Payroll until issue #89) adds up, per role, the people each shop,
+  office and factory still needs, then fills them: spare people moved between sites
+  first, then the headhunters' candidates. Its numbers:
+  - *Needs* are the hire weeks of the plan each site follows: a shop's roster (the
+    full-cover week for a shop nobody works yet), a factory's in the sizing the Supply
+    switch shows, an office's by the office default. Each hire week is a week one new
+    person could work under the game's rules (12-hour shifts, 14 hours a day, 50 a week),
+    so the count is people, not hours divided by 40.
+  - *The office default*: three computers staffed around the clock in a building with a
+    door capacity of 50, proportionally fewer in smaller ones (at least one); every
+    computer 08-22 on weekdays; half the computers 08-22 on weekends, the round-the-clock
+    ones among them. Hours the office is shut are left out.
+  - *Spare* people are a site's own staff its plan gives no hours, in a role the plan
+    staffs. A cashier at a shop whose serving hours are not measured yet is not spare.
+  - *Candidates* are the game's list as of the save: best top skill first, then the
+    cheapest. "Hours left" is the game's countdown at the save; a candidate leaves at 0.
+  - A candidate's demand is judged three ways: hours and days against the week they would
+    get, site demands (coffee machine, clean workplace, a desk item) against the site, and
+    health insurance and a happy boss once for the company. A site or company demand not
+    met is a warning, never a reason to skip the person.
+  - A site accepts the roles the game lets you assign there: the business type's own,
+    cleaning in a shop, office, cinema or theatre, security where theft is possible.
+
+  Payroll's tables stay at the foot of Staff. They name two wage figures: "at today's
+  rates" is every hourly wage times its assigned weekly hours over seven, "booked
+  yesterday" is what the statements recorded (the Portfolio's Wages total); its ? names
+  the sites where the two differ. There is no debt page; loans cap at $2M, which is
+  beside the point at this stage.
 
 - **Wiki**: browse the game's help without loading a save, starting with a shelf
   of categories and searchable pages. The Gift Shop guide presents setup

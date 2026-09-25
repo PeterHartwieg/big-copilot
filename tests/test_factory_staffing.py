@@ -335,7 +335,10 @@ class UnnamedAndSharedLineTests(unittest.TestCase):
         people = People().add(4)
         stub.root["EmployeeInstances"] = people.save_rows
         [row] = _factory_staffing(stub, None, c.business_list, c.supply["factories"], people.staff)["cap"]
-        self.assertEqual(set(row), {"key", "s", "name", "lines", "headcount", "wageDay", "delta"})
+        # The week stays so the Staff page can write it; `_hire` is the Staff
+        # page's part, which _hiring() takes off before the payload ships.
+        self.assertEqual(set(row), {"key", "s", "name", "lines", "headcount", "wageDay", "delta",
+                                    "stations", "people", "shifts", "addPeople", "_hire"})
 
 
 class StaffFindingTests(unittest.TestCase):

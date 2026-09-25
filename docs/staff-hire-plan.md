@@ -159,8 +159,60 @@ A `<site>` for every business the player runs (the `businesses` order):
   (25 Sep 2026):** an office at 24/7 needs 3 people per computer at 50 capacity, proportionally
   fewer below that, minimum 1; weekdays every computer staffed 8-22; weekends half the computers
   8-22. Same 12 h shift, 14 h day, 50 h week, 30 h floor rules, same `headcount`/`addPeople`/
-  `hireWeeks` fields.
+  `hireWeeks` fields. **As a formula**, for every office with C computers and door capacity
+  `cap` (the building's `customerCapacity`, the office grid's `door`):
+  - `N24 = min(C, max(1, round(3 * cap / 50)))` computers (half rounds up) are staffed
+    00-24 every day;
+  - on weekdays (Mon-Fri) every computer is staffed 08-22;
+  - on weekends `ceil(C / 2)` computers are staffed 08-22, the N24 always-on ones counting
+    among them (computers are taken in station order, so the always-on ones come first);
+  - an hour the office is shut in the save is left out (the write never changes opening
+    hours): an office open 09-17 gets every staffed computer 09-17 only, always-on ones
+    included, and a closed day gets nobody. An office whose save holds no opening hours at
+    all is not clipped.
 - Shops: nothing new beyond `hireWeeks`, `spare`, `bench` on both variants.
+
+### 2.4a As built (extraction worker, 25 Sep 2026)
+
+Where the build differs from or adds to 2.1-2.4; the board worker reads these too.
+
+- **`hiring.people`** (new): `{<employeeId>: {name, skills: [{skill, level}], wage, site,
+  hours, demands}}` for everybody a site's `spare` or `bench`, or the top-level `bench`,
+  names. The page needs a moved or bench person's skills, level and wage and had no other
+  source (`staff` is only a summary). `site` is the business key or null.
+- `candidates`: `level` and each `skills[].level` are whole numbers; `age` is in the game's
+  years, `ageInDays // gameVariables.daysPerYear` (60 on every save here; retirement is at
+  67 such years), null without the field. `demands` is sorted.
+- **Size**: 1,590 candidates on the late test save are 453 KB of compact JSON (the full
+  payload 2.25 MB), not 250 KB. No candidate holds more than two skills, so the "drop
+  `skills` below the second" fallback saves nothing; left as is for the integrator.
+- The older character layout (name/skills on the instance) exists only in saves of builds
+  1714-1718, far below `MIN_BUILD`, where skill names are integers. `_character()` reads it
+  anyway; nothing supported depends on it.
+- `plans.full` is present only where the board's `spOffersFull` holds (a station to staff);
+  a failed shop row gives `plans: {}`.
+- `hireWeeks` within a role: fullest first. A role's `hire` equals its weeks by
+  construction; an empty week (`slots: []`) pads it if `min - have` ever exceeds the
+  packing, which the arithmetic rules out and no save showed.
+- `spare` counts only people usable in a role the plan staffs, so an unmeasured shop's
+  cashiers are never offered as moves.
+- `facts` covers every `site` demand: `building` and `clean` as `_job_demands()` judges
+  them, and `desk` (classed `site`, not listed in 2.3) as "the site holds such an item
+  anywhere", since a hire has no desk yet.
+- `company`: insurance tiers are met when some HR manager plan with a manager in place
+  offers that tier or better; a happy boss is `Happiness >= 50`.
+- `accepts` is the table `ASSIGN_SKILLS`, read from the businesstypes and buildingtypes
+  bundles at build 3682 (retail, office, cinema and theatre buildings need cleaning;
+  warehouses need nothing; no building requires a driver). Gym and hairdresser list
+  security among their own primary skills.
+- Sites: vacant rows and `businesstype_empty` are left out; a distribution centre counts as
+  a warehouse.
+- **Factory rows** now ship `stations`, `people`, `shifts` and `addPeople` (`placed` and
+  `shortHours` stay test-only).
+- **The office default as built** (`_office_runs()`, `_office_always_on()`): the formula in
+  2.4, for every office. The row says `alwaysOn` (N24). Offices draw on the unassigned
+  people no shop plan (either variant) counts on, in office order. `officeStaffing` rows
+  are described in `docs/architecture.md`.
 
 ### 2.5 Tests (extraction)
 

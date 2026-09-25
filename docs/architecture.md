@@ -83,6 +83,9 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload here, by the line's place in its list) | `drawFactoryStaffing`, through `drawFactoriesTab` |
+| `officeStaffing` | `_office_staffing()`, with `_office_site_plan()`, `_office_runs()` (Peter's office default) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (`_bench_claimed()`) | the Staff page (issue #89) |
+| `candidates` | `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page |
+| `hiring` | `_hiring()`, which takes each plan row's private `_hire` (`_hire_fields()`: `hireWeeks` from `_hire_weeks()`, `spare`, `bench`) off `staffing`, `staffing[].fullCover`, `factoryStaffing` and `officeStaffing`; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `company` from `_company_facts()` | the Staff page |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`) |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
@@ -149,9 +152,11 @@ wageDay, delta}` and, where it counts them, `unnamedMachines`: `lines` (each lin
 `unnamed: true` and `slug` null, all 24 hours sized 24/7 and its hours now sized for
 demand), `headcount` (`needed` machine-hours a week, `min`, `have`, `spare`, `hire`, for the
 Factory Worker role), `wageDay` (the mean day's wage of the factory's factory workers) and
-`delta` (`workers` is `hire - spare`, `perDay` that times `wageDay`). The placer's own
-tables (`stations`, `people`, `shifts`, `placed`, `shortHours`) stay in Python:
-`_factory_staffing(..., detail=True)` keeps them for the tests. A factory the placer falls
+`delta` (`workers` is `hire - spare`, `perDay` that times `wageDay`). The week itself ships
+too, in the shop row's shape, so the Staff page can write it: `stations` (each with the
+machine's item `id`), `people`, `shifts` (`d`/`s`/`f`/`t`/`p`, `p` null on an entry
+nobody here may work) and `addPeople`. The placer's other tables (`placed`, `shortHours`)
+stay in Python: `_factory_staffing(..., detail=True)` keeps them for the tests. A factory the placer falls
 over on is `{key, s, name, failed: true}`. Its lines carry the matching verdict themselves:
 `status`/`why`/`level` sized 24/7 (`short` with why `hours`, judged on the week of the
 least-rostered machine, or `covered`) and the same under `dem` sized for demand, where more
@@ -160,6 +165,47 @@ machine's week in whole hours a day and `thinDay` (`{day, hours}`) the weekday w
 hours where it is under that; `demBasis` is `none` where nothing is drawn and Demand also
 sizes the line at 24. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
+
+An `officeStaffing` row is one office planned by Peter's office default (25 Sep 2026,
+`_office_runs()`): `round(3 * door / 50)` computers (at least 1, at most all; `door` the
+building's `customerCapacity`) staffed around the clock every day, every computer 08-22
+on weekdays, half of them (rounded up, the always-on ones counting) 08-22 on weekends,
+all clipped to the hours the office opens in the save. One role, the type's
+professional skill (`ASSIGN_SKILLS[type][0]`), one station per computer. The row is
+`{key, name, typeSlug, skill, label, alwaysOn, computers,
+staffedComputers, open, openAllHours: false, stations, people, roles, need, shifts,
+headcount, shortHours, shortDays, placed, bench, slack, cost, addPeople, current}`, the
+shop row's shape where the two share a field; an office the placer falls over on is
+`{key, name, typeSlug, failed: true}`, and an office with no computer has no row.
+
+`candidates` is one row per offer in `CandidateEmployeeInstances` (an older save's
+`hired`/`declined` rows left out), best first: top skill `level` descending, then `wage`,
+then `id`. Each is `{id, name, age, skill, level, skills: [{skill, level}], wage, demands,
+hoursLeft, source}`: `age` in the game's years (`ageInDays` over
+`gameVariables.daysPerYear`), `skills` highest first, `demands` sorted, `hoursLeft` the
+game's countdown as of the save, `source` `headhunter`, `jobboard`, `agency` or `other`.
+Names are save data: they stay in the browser like employee names. `_character()` reads
+a character from `characterData` or, in an older save, from the instance itself;
+`_staff()` reads through it too.
+
+`hiring` is `{sites, bench, people, demandKinds, company}`. `sites` has one entry per
+business the player runs, in `businesses` order (vacant and `businesstype_empty` sites
+left out): `{key, name, kind (shop | office | factory | hq | warehouse), address {street,
+number}, planned, new, accepts, plans, facts}`. `plans` is keyed by variant (a shop
+`demand` and, where the full-cover plan has a station, `full`; a factory `cap` and `dem`;
+an office `office`; an HQ or warehouse `{}`), each `{hireWeeks, spare, bench}`:
+`hireWeeks` one entry per person the plan hires, `{skill, hours, days, slots: [{shift, d,
+f, t, station}]}`, where `shift` indexes the plan row's `shifts` (every `p: null` entry
+is in exactly one week, and a role's weeks number its `headcount.hire`); `spare` the
+site's own people the plan gives no hours in a role it plans (move candidates); `bench`
+the unassigned people it already counts on. The plan rows carry this as `_hire` until
+`_hiring()` takes it off. `accepts` is the game's assign check (`ASSIGN_SKILLS`, read from
+the business and building type bundles). `facts` answers each site-level demand for that
+site (a desk demand: whether the site holds such an item anywhere). Top level: `bench`
+every unassigned employee id; `people` the name, `skills`, `wage`, `site`, `hours` and
+`demands` of everybody a `bench` or `spare` list names; `demandKinds` each demand as
+`schedule`, `site` or `company`; `company` whether the company meets each company-level
+demand for a new hire.
 
 A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
 points into them by index rather than repeating an id: `s` a station, `p` a person or null.
@@ -363,7 +409,7 @@ Company's views:
 | --- | --- | --- |
 | Results | `secDaily` (its By weekday option, `drawWeekday`, replaced the Weekly rhythm section; an old `#secRhythm` link lands here through `SEC_MOVED`), `secPortfolio`, `secDetail` | `drawChart`, `drawPortfolio`, `drawSitePicker` + `drawSite` |
 | Products | `secProducts` | `drawProducts` |
-| Payroll | `secPayroll` | `drawPayroll` |
+| Staff | `secStaff` (was Payroll, `secPayroll`) | the Staff page from `hiring`, `candidates`, `staffing`, `factoryStaffing` and `officeStaffing` (issue #89, `docs/staff-hire-plan.md`), with the old Payroll tables (`drawPayroll`) at its foot |
 | Milestones | `secGoals` | `drawGoals`; the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under, the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
 
 Supply's views are three tabs, one per object (R13):

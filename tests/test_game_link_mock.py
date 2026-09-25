@@ -87,7 +87,8 @@ class MockContract(unittest.TestCase):
         status, _, body = call(self.url + "/nothing")
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
-            "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/undo",
+            "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
+            "/write/undo",
             "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
@@ -151,8 +152,8 @@ ANA, BEN = "AAAAemployeeAAAAAAAAAAAA", "BBBBemployeeBBBBBBBBBBBB"
 REGISTER, CLEAN = "REGISTERaaaaaaaaaaaaaa==ue", "CLEANcccccccccccccccccc==ue"
 
 
-class MockWrites(unittest.TestCase):
-    """POST /write/*: checked against the synthetic company in es3_fixture."""
+class LinkedMock(unittest.TestCase):
+    """The mock serving the synthetic company in es3_fixture, this test's browser approved."""
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -182,9 +183,13 @@ class MockWrites(unittest.TestCase):
     def stamp(self):
         return json.loads(call(self.url + "/health")[2])["stamp"]
 
+
+class MockWrites(LinkedMock):
+    """POST /write/*: checked against the synthetic company in es3_fixture."""
+
     def test_health_lists_the_writes_and_says_paired_only_with_a_token_for_its_origin(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule"])
+        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire"])
         self.assertIs(health["paired"], False)
         health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}"})[2])
         self.assertIs(health["paired"], True)
@@ -790,6 +795,230 @@ class MockWrites(unittest.TestCase):
         _, answer = self.post("imports", {"dryRun": True, "contracts": [{"id": "CONTRACTone", "products": [paper]}]})
         line = answer["rows"][0]["products"][0]
         self.assertEqual((line["error"], line["before"], answer["ok"]), (None, 3800, True))
+
+
+IDA, OSKAR, VERA = "IIIIcandidateIIIIIIIIIII", "OOOOcandidateOOOOOOOOOOO", "VVVVcandidateVVVVVVVVVVV"
+CY = "CCCCemployeeCCCCCCCCCCCC"
+CORNER_REGISTER = "REGISTERaaaaaaaaaaaaaa==ay"
+GIFTS_PRINT = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
+CORNER_PRINT = shift_print([(2, 8, 20, CY, CORNER_REGISTER, 1)])
+
+
+def shift(who, post, f=8, t=20):
+    return {"f": f, "t": t, "employeeId": who, "itemInstanceId": post}
+
+
+class MockHire(LinkedMock):
+    """POST /write/hire: candidates hired, staff moved, weeks written, in one call."""
+
+    def body(self, **over):
+        """Ida and Oskar hired into Gifts with a week each, Ben moved from Gifts
+        (where he has no hours) to Corner, and both weeks written."""
+        body = {"dryRun": True,
+                "sites": [{"address": GIFTS, "expect": GIFTS_PRINT, "openAllHours": False,
+                           "days": [{"d": 1, "shifts": [shift(ANA, REGISTER)]},
+                                    {"d": 3, "shifts": [shift(IDA, REGISTER)]},
+                                    {"d": 4, "shifts": [shift(OSKAR, REGISTER)]}]},
+                          {"address": CORNER, "expect": CORNER_PRINT, "openAllHours": False,
+                           "days": [{"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]},
+                                    {"d": 3, "shifts": [shift(BEN, CORNER_REGISTER)]}]}],
+                "hires": [{"candidateId": IDA, "address": GIFTS, "expect": {"wage": 26.5}, "seenHoursLeft": 71},
+                          {"candidateId": OSKAR, "address": GIFTS, "expect": {"wage": 22.0}, "seenHoursLeft": 5}],
+                "moves": [{"employeeId": BEN, "from": GIFTS, "to": CORNER}]}
+        body.update(over)
+        return body
+
+    def test_health_lists_hire(self):
+        self.assertIn("hire", json.loads(call(self.url + "/health")[2])["writes"])
+
+    def test_a_dry_run_answers_who_is_hired_and_moved_and_each_week(self):
+        before = self.stamp()
+        status, answer = self.post("hire", self.body())
+        self.assertEqual(status, 200)
+        self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"], answer["rows"]), (True, "hire", True, []))
+        # Oskar is an older save's candidate: name and skills at the top level.
+        self.assertEqual(answer["hired"], [
+            {"candidateId": IDA, "name": "Ida Nord", "business": "HART. Gifts", "wage": 26.5, "hoursLeft": 71},
+            {"candidateId": OSKAR, "name": "Oskar Lind", "business": "HART. Gifts", "wage": 22.0, "hoursLeft": 5}])
+        self.assertEqual(answer["moved"], [{"employeeId": BEN, "name": "Ben Ode", "from": "HART. Gifts",
+                                            "to": "HART. Corner", "shiftsCleared": 0}])
+        self.assertEqual((answer["skipped"], answer["wageAdded"]), ([], 48.5))
+        gifts, corner = answer["sites"]
+        self.assertEqual((gifts["business"], gifts["before"], gifts["after"]["shifts"], gifts["siteError"]),
+                         ("HART. Gifts", {"shifts": 2, "print": GIFTS_PRINT}, 3, None))
+        self.assertEqual((gifts["removed"], gifts["added"], gifts["leftWithout"]), (2, 3, []))
+        self.assertEqual(corner["after"]["print"],
+                         shift_print([(2, 8, 20, CY, CORNER_REGISTER, 1), (3, 8, 20, BEN, CORNER_REGISTER, 1)]))
+        self.assertNotIn("blocked", answer)
+        self.assertEqual(self.stamp(), before, "a dry run moves nothing")
+        self.assertEqual(self.link.applied, [])
+
+    def test_an_apply_hires_moves_and_writes_and_the_next_write_sees_it(self):
+        before = self.stamp()
+        status, answer = self.post("hire", self.body(dryRun=False))
+        self.assertEqual(status, 200, answer)
+        self.assertEqual((answer["ok"], answer["stamp"]), (True, before))
+        self.assertNotEqual(self.stamp(), before)
+        self.assertEqual([w["kind"] for w in json.loads(call(self.url + "/debug/writes")[2])["writes"]], ["hire"])
+        # Hired: gone from the candidate list, so hiring Ida again skips her.
+        _, again = self.post("hire", self.body(sites=[self.body()["sites"][0] | {"expect": answer["sites"][0]["after"]["print"],
+                                                                             "days": []}],
+                                                hires=self.body()["hires"][:1], moves=[]))
+        self.assertEqual([(s["candidateId"], s["reason"]) for s in again["skipped"]], [(IDA, "gone")])
+        # Ben is at Corner now: moving him from Gifts again is changed.
+        _, again = self.post("hire", {"dryRun": True, "hires": [], "moves": [{"employeeId": BEN, "from": GIFTS, "to": CORNER}],
+                                      "sites": [{"address": CORNER, "expect": None, "days": None}]})
+        self.assertEqual(again["rows"], [{"scope": "move", "id": BEN, "error": "changed"}])
+        # Ida works at Gifts: the schedule write takes her shift on the new print.
+        new_print = answer["sites"][0]["after"]["print"]
+        status, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": new_print,
+                                                "days": [{"d": 5, "shifts": [shift(IDA, CLEAN)]}]})
+        self.assertTrue(answer["ok"], answer)
+        # No undo, ever.
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "no_undo"}))
+        self.assertEqual(self.post("undo", {"kind": "hire", "dryRun": True}), (409, {"error": "no_undo"}))
+
+    def test_a_hire_clears_the_schedule_undo_of_a_site_it_wrote(self):
+        body = {"address": GIFTS, "expect": GIFTS_PRINT, "days": [{"d": 1, "shifts": [shift(ANA, REGISTER)]}]}
+        _, answer = self.post("schedule", body)
+        self.assertIn("schedule", self.link.undo)
+        hire = self.body(dryRun=False, moves=[], sites=[
+            {"address": GIFTS, "expect": answer["after"]["print"], "days": [{"d": 3, "shifts": [shift(IDA, REGISTER)]}]}])
+        self.assertEqual(self.post("hire", hire)[0], 200)
+        self.assertEqual(self.post("undo", {"kind": "schedule"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_a_gone_candidate_is_skipped_and_their_hours_left_empty(self):
+        self.link.configure({"hireGone": [OSKAR]})
+        status, answer = self.post("hire", self.body())
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"], "gone never refuses")
+        self.assertEqual(answer["skipped"], [{"candidateId": OSKAR, "name": "Oskar Lind", "reason": "gone", "hoursDropped": 12}])
+        self.assertEqual([h["candidateId"] for h in answer["hired"]], [IDA])
+        self.assertEqual((answer["wageAdded"], answer["sites"][0]["after"]["shifts"]), (26.5, 2))
+        status, answer = self.post("hire", self.body(dryRun=False))
+        self.assertEqual((status, [s["candidateId"] for s in answer["skipped"]]), (200, [OSKAR]))
+        self.assertEqual(self.link.schedules[("ba:street_secondavenue", 10)],
+                         [(1, 8, 20, ANA, REGISTER, 1), (3, 8, 20, IDA, REGISTER, 1)])
+        self.link.configure({"reset": True})
+        self.assertEqual(self.link.gone, set())
+
+    def test_refusals_name_their_scope(self):
+        # Every hire and move rule, and a shift naming someone the call does not bring.
+        body = self.body(
+            hires=[{"candidateId": IDA, "address": GIFTS, "expect": {"wage": 25.0}},
+                   {"candidateId": VERA, "address": GIFTS, "expect": {"wage": 30.0}}],
+            moves=[{"employeeId": "nobody", "from": None, "to": CORNER},
+                   {"employeeId": CY, "from": GIFTS, "to": CORNER}])
+        status, answer = self.post("hire", body)
+        self.assertEqual(status, 200)
+        self.assertFalse(answer["ok"])
+        self.assertEqual(answer["rows"], [
+            {"scope": "move", "id": "nobody", "error": "not_found"},
+            {"scope": "move", "id": CY, "error": "changed"},
+            {"scope": "hire", "id": IDA, "error": "changed"},
+            {"scope": "hire", "id": VERA, "error": "no_skill"},
+            {"scope": "shift", "address": GIFTS, "d": 3, "i": 0, "error": "not_assigned"},
+            {"scope": "shift", "address": GIFTS, "d": 4, "i": 0, "error": "not_assigned"},
+            {"scope": "shift", "address": CORNER, "d": 3, "i": 0, "error": "not_assigned"}])
+        status, answer = self.post("hire", dict(body, dryRun=False))
+        self.assertEqual((status, answer["error"]), (409, "changed"), "a changed row makes the refusal changed")
+        status, answer = self.post("hire", self.body(dryRun=False, hires=[
+            {"candidateId": VERA, "address": GIFTS, "expect": {"wage": 30.0}}], moves=[], sites=[
+            {"address": GIFTS, "expect": GIFTS_PRINT, "days": []}]))
+        self.assertEqual((status, answer), (409, {"error": "refused", "rows": [
+            {"scope": "hire", "id": VERA, "error": "no_skill"}]}))
+        self.assertEqual(self.link.applied, [])
+
+    def test_a_move_the_game_refuses_and_a_bench_move(self):
+        ben = self.link._save().items(self.link._save().root["EmployeeInstances"])[1]
+        ben["trainingSession"] = {"skill": "ba:skill_customerservice", "startDay": 30}
+        _, answer = self.post("hire", self.body(hires=[], sites=[{"address": CORNER, "expect": None, "days": None}]))
+        self.assertEqual(answer["rows"], [{"scope": "move", "id": BEN, "error": "in_training"}])
+        del ben["trainingSession"]
+        ben["assignedAddress"] = None  # on the bench
+        _, answer = self.post("hire", self.body(hires=[], sites=[{"address": CORNER, "expect": None, "days": None}],
+                                                moves=[{"employeeId": BEN, "from": None, "to": CORNER}]))
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["moved"][0]["from"], None)
+
+    def test_the_sites_own_refusals(self):
+        nowhere = {"street": "ba:street_nowhere", "number": 1}
+        hire = [{"candidateId": IDA, "address": nowhere, "expect": {"wage": 26.5}}]
+        _, answer = self.post("hire", {"dryRun": True, "hires": hire, "moves": [],
+                                       "sites": [{"address": nowhere, "expect": None, "days": None}]})
+        self.assertEqual(answer["rows"], [{"scope": "site", "address": nowhere, "error": "not_found"}])
+        self.assertEqual(answer["sites"][0]["siteError"], "not_found")
+        # A stale print, and a week at a headquarters.
+        _, answer = self.post("hire", self.body(sites=[dict(self.body()["sites"][0], expect="811c9dc5"),
+                                                       self.body()["sites"][1]]))
+        self.assertEqual(answer["rows"][0], {"scope": "site", "address": GIFTS, "error": "changed"})
+        regs = self.link._save().items(self.link._save().root["BuildingRegistrations"])
+        regs[0]["businessTypeName"] = HQ = "ba:businesstype_headquarters"
+        _, answer = self.post("hire", self.body())
+        self.assertEqual(answer["rows"][0], {"scope": "site", "address": GIFTS, "error": "headquarters"})
+        # Assign only at a headquarters is fine; an empty building is no business.
+        _, answer = self.post("hire", self.body(moves=[], sites=[{"address": GIFTS, "expect": None, "days": None}]))
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(regs[0]["businessTypeName"], HQ)
+        regs[0]["businessTypeName"] = "ba:businesstype_empty"
+        _, answer = self.post("hire", self.body(moves=[], sites=[{"address": GIFTS, "expect": None, "days": None}]))
+        self.assertEqual(answer["rows"], [{"scope": "site", "address": GIFTS, "error": "no_business"}])
+
+    def test_assign_only_at_a_site_with_no_station_takes_anyone(self):
+        status, answer = self.post("hire", {"dryRun": False, "moves": [],
+                                            "hires": [{"candidateId": VERA, "address": DEPOT, "expect": {"wage": 30.0}}],
+                                            "sites": [{"address": DEPOT, "expect": None, "days": None}]})
+        self.assertEqual(status, 200, answer)
+        self.assertEqual(answer["sites"], [{"address": DEPOT, "business": "HART. Depot", "before": None, "after": None,
+                                            "removed": 0, "added": 0, "openedHours": False, "leftWithout": [],
+                                            "warnings": [], "siteError": None}])
+        self.assertEqual(self.link.moved[VERA], ("ba:street_pier", 9))
+
+    def test_a_move_clears_the_persons_shifts_at_the_site_they_leave(self):
+        # Ana works both of Gifts' shifts; Gifts is not rewritten, the game's move clears them.
+        status, answer = self.post("hire", {"dryRun": False, "hires": [],
+                                            "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}],
+                                            "sites": [{"address": CORNER, "expect": None, "days": None}]})
+        self.assertEqual(status, 200, answer)
+        self.assertEqual(answer["moved"][0]["shiftsCleared"], 2)
+        _, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": "811c9dc5", "days": []})
+        self.assertTrue(answer["ok"], "Gifts' week is empty now")
+
+    def test_myemployees_open_blocks_the_dry_run_and_refuses_the_apply(self):
+        self.link.configure({"myEmployees": True})
+        status, answer = self.post("hire", self.body())
+        self.assertEqual((status, answer["ok"], answer["blocked"], answer["rows"]), (200, False, "myemployees", []))
+        self.assertEqual(self.post("hire", self.body(dryRun=False)),
+                         (409, {"error": "cannot_write", "reason": "myemployees"}))
+        self.link.configure({"myEmployees": False})
+        self.assertEqual(self.post("hire", self.body(dryRun=False))[0], 200)
+
+    def test_bad_hire_bodies(self):
+        good = self.body()
+        cases = [
+            {"dryRun": True, "sites": [], "hires": []},  # moves missing
+            dict(good, sites=good["sites"][:1]),  # Corner, a move's target, has no sites[] entry
+            dict(good, sites=good["sites"] + [{"address": BARE, "expect": None, "days": None}]),  # nobody goes to Bare
+            dict(good, sites=[dict(good["sites"][0], days=None), good["sites"][1]]),  # expect with no days
+            dict(good, sites=[dict(good["sites"][0], expect=None), good["sites"][1]]),  # days with no expect
+            dict(good, sites=[good["sites"][0], good["sites"][0], good["sites"][1]]),
+            dict(good, hires=good["hires"] + good["hires"][:1]),
+            dict(good, hires=[dict(good["hires"][0], expect=26.5)]),
+            dict(good, moves=[{"employeeId": BEN, "from": CORNER, "to": CORNER}]),
+            dict(good, moves=good["moves"] + good["moves"]),
+        ]
+        for body in cases:
+            status, answer = self.post("hire", body)
+            self.assertEqual((status, answer["error"]), (400, "bad_request"), body)
+
+    def test_refuse_write_answers_a_hire_as_a_site_refusal(self):
+        self.link.refuse_write = "refused"
+        self.assertEqual(self.post("hire", self.body(dryRun=False)),
+                         (409, {"error": "refused", "rows": [{"scope": "site", "address": GIFTS, "error": "screen_open"}]}))
+        self.link.refuse_write = "cannot_write:myemployees"
+        self.assertEqual(self.post("hire", self.body(dryRun=False)),
+                         (409, {"error": "cannot_write", "reason": "myemployees"}))
+        self.assertEqual(self.post("hire", self.body())[0], 200)
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ namespace BigCopilotLink
         };
 
         private const string EndpointsJson =
-            "[\"/health\",\"/save\",\"/refresh\",\"/pair/request\",\"/pair/status\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/undo\"]";
+            "[\"/health\",\"/save\",\"/refresh\",\"/pair/request\",\"/pair/status\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/hire\",\"/write/undo\"]";
 
         private readonly int _port;
         private readonly SaveService _saves;
@@ -216,7 +216,7 @@ namespace BigCopilotLink
             }
         }
 
-        /// <summary>"uniforms", "imports", "schedule" or "undo" for a write path, else null.</summary>
+        /// <summary>"uniforms", "imports", "schedule", "hire" or "undo" for a write path, else null.</summary>
         private static string WriteKind(string path)
         {
             switch (path)
@@ -224,6 +224,7 @@ namespace BigCopilotLink
                 case "/write/uniforms": return "uniforms";
                 case "/write/imports": return "imports";
                 case "/write/schedule": return "schedule";
+                case "/write/hire": return "hire";
                 case "/write/undo": return "undo";
                 default: return null;
             }
