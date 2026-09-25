@@ -38,7 +38,10 @@ import urllib.request
 import webbrowser
 from html import escape as html_escape
 
-from ba_save import Names, Save, bundled_locale, load_best_locale, load_locale, load_save
+from ba_save import (
+    Names, NotEnglishText, Save, bundled_locale, english_text, load_best_locale, load_locale,
+    load_save,
+)
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -10969,7 +10972,9 @@ def render(
         if catalogue:
             wiki_payload = ("window.BIG_COPILOT_WIKI="
                             + catalogue.strip().replace("</", "<\\/") + ";")
-    return "<!doctype html>" + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
+    # The <html> start tag is optional and the page never closed one, so this
+    # only names the language of the element the parser makes anyway.
+    return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
         TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
@@ -25049,10 +25054,15 @@ def browser_build(
 
     ``names_path`` is the table of display names shipped with the page; the
     player's own en.json, when given, is laid over it and adds the help pages
-    that recipes and station capacities are read from.
+    that recipes and station capacities are read from. A file in another
+    language is left out: web/app.js refuses one before keeping it, so this
+    only meets one kept before that check, and the shipped names beat
+    translated ones with every recipe and capacity missing.
     """
     locale = dict(load_locale(names_path)) if names_path else {}
-    locale.update(load_locale(locale_path))
+    own = load_locale(locale_path)
+    if english_text(own):
+        locale.update(own)
     names = Names(locale)
     try:
         save = load_save(save_path)
@@ -25291,7 +25301,7 @@ class Board:
         self.target = target
         self.link = link
         self.out = out
-        self.locale_source, locale = load_best_locale()
+        self.locale_source, locale = game_text()
         self.names = Names(locale)
         self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
         self.lock = threading.Lock()
@@ -25557,6 +25567,18 @@ def watch(
         server.shutdown()
 
 
+def game_text() -> tuple[str | None, dict[str, str]]:
+    """load_best_locale() for a local run, which stops on a non-English file.
+
+    BA_LOCALE pointed at de.json would give translated names and no recipes,
+    capacities or door caps; the run says so instead of drawing that board.
+    """
+    try:
+        return load_best_locale()
+    except NotEnglishText as exc:
+        raise SystemExit(str(exc)) from None
+
+
 def locale_note(source: str | None, locale: dict[str, str]) -> str:
     """One line naming the game text a local run used, for the CLI summary.
 
@@ -25665,7 +25687,7 @@ def main() -> None:
     # --watch has its own Board, which resolves the text itself, so a plain
     # watch run does not parse en.json here only to leave it behind.
     if args.backfill or not args.watch:
-        locale_source, locale = load_best_locale()
+        locale_source, locale = game_text()
         names = Names(locale)
 
     if args.backfill:
