@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=a91216a400">
+<link rel="stylesheet" href="community.css?v=fb8301a4c3">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=a91216a400">
+<link rel="stylesheet" href="fonts/fonts.css?v=fb8301a4c3">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3864,8 +3864,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "a91216a400";</script>
-<script>window.LEDGER_RELEASE = {"version":"a91216a400","latest":{"pr":116,"date":"2026-09-25","title":"Order ahead for a factory still being built","summary":"Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."}};</script>
+<script>window.LEDGER_BUILD = "fb8301a4c3";</script>
+<script>window.LEDGER_RELEASE = {"version":"fb8301a4c3","latest":{"pr":116,"date":"2026-09-25","title":"Order ahead for a factory still being built","summary":"Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3949,8 +3949,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=a91216a400"></script>
-<script src="community.js?v=a91216a400"></script>
+<script src="app.js?v=fb8301a4c3"></script>
+<script src="community.js?v=fb8301a4c3"></script>
 
 <script>
 
@@ -11041,6 +11041,12 @@ function drawPlan(){
   const view = factoryView(), alias = view.aliases || {};
   const norm = slug => alias[slug] || slug;  // a recipe input to the product actually traded
   const range = new Set(cat[planType].products);
+  /* What the company makes of each product, every factory, and what the
+     chosen factory has placed of it: a line supplies the shops with the
+     company's machines plus this plan's increase (the Supplies column). */
+  const companyOn = {}, hereOn = {};
+  view.sites.forEach(s => s.lines.forEach(l => { companyOn[l.slug] = (companyOn[l.slug] || 0) + (l.machines || 0); }));
+  planSites(whereAt, whereKnown).forEach(s => s.lines.forEach(l => { hereOn[l.slug] = (hereOn[l.slug] || 0) + (l.machines || 0); }));
   const baseline = {};
   planSites(whereAt, whereKnown).forEach(s => s.lines.forEach(l => {
     const r = RECIPE_BY[l.slug];
@@ -11103,7 +11109,7 @@ function drawPlan(){
         unit: unit === undefined ? null : unit, used: planUsed(norm(i.slug)),
       };
     });
-    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
+    return `<tr class="line" data-m="${machinesOn(slug)}" data-company="${companyOn[slug] || 0}" data-here="${hereOn[slug] || 0}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
       <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
         r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
@@ -18254,13 +18260,16 @@ function planDraw(){
     const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
     machines += m; made += wk;
     /* The line runs flat out; what the shops do not take is exported, and a
-       line under what they take is short. */
-    const surplus = wk - wantWeek;
+       line under what they take is short. The shops are the company's, so
+       they are measured against everything the company makes of it: its
+       machines now, plus this plan's increase over the chosen factory's. */
+    const supply = Math.max(0, (+tr.dataset.company || 0) + m - (+tr.dataset.here || 0)) * rate * HOURS * 7;
+    const surplus = supply - wantWeek;
     if(surplus > 0) exportWeek += surplus;
     if(surplus < 0) shortLines++;
     const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
     set(".step b", m); set(".made", fmtN(wk));
-    const covers = peakDay ? wk / 7 / peakDay : null;
+    const covers = peakDay ? supply / 7 / peakDay : null;
     const coversEl = q(".covers", tr);
     if(coversEl) coversEl.innerHTML = (covers === null ? "—" : `${covers.toFixed(1)} shop${covers === 1 ? "" : "s"}`)
       + (wantWeek ? `<span class="sub">shops take ${fmtN(wantWeek)} · ${surplus >= 0

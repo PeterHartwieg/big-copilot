@@ -21036,6 +21036,12 @@ function drawPlan(){
   const view = factoryView(), alias = view.aliases || {};
   const norm = slug => alias[slug] || slug;  // a recipe input to the product actually traded
   const range = new Set(cat[planType].products);
+  /* What the company makes of each product, every factory, and what the
+     chosen factory has placed of it: a line supplies the shops with the
+     company's machines plus this plan's increase (the Supplies column). */
+  const companyOn = {}, hereOn = {};
+  view.sites.forEach(s => s.lines.forEach(l => { companyOn[l.slug] = (companyOn[l.slug] || 0) + (l.machines || 0); }));
+  planSites(whereAt, whereKnown).forEach(s => s.lines.forEach(l => { hereOn[l.slug] = (hereOn[l.slug] || 0) + (l.machines || 0); }));
   const baseline = {};
   planSites(whereAt, whereKnown).forEach(s => s.lines.forEach(l => {
     const r = RECIPE_BY[l.slug];
@@ -21098,7 +21104,7 @@ function drawPlan(){
         unit: unit === undefined ? null : unit, used: planUsed(norm(i.slug)),
       };
     });
-    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
+    return `<tr class="line" data-m="${machinesOn(slug)}" data-company="${companyOn[slug] || 0}" data-here="${hereOn[slug] || 0}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
       <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
         r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
@@ -24288,13 +24294,16 @@ function planDraw(){
     const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
     machines += m; made += wk;
     /* The line runs flat out; what the shops do not take is exported, and a
-       line under what they take is short. */
-    const surplus = wk - wantWeek;
+       line under what they take is short. The shops are the company's, so
+       they are measured against everything the company makes of it: its
+       machines now, plus this plan's increase over the chosen factory's. */
+    const supply = Math.max(0, (+tr.dataset.company || 0) + m - (+tr.dataset.here || 0)) * rate * HOURS * 7;
+    const surplus = supply - wantWeek;
     if(surplus > 0) exportWeek += surplus;
     if(surplus < 0) shortLines++;
     const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
     set(".step b", m); set(".made", fmtN(wk));
-    const covers = peakDay ? wk / 7 / peakDay : null;
+    const covers = peakDay ? supply / 7 / peakDay : null;
     const coversEl = q(".covers", tr);
     if(coversEl) coversEl.innerHTML = (covers === null ? "—" : `${covers.toFixed(1)} shop${covers === 1 ? "" : "s"}`)
       + (wantWeek ? `<span class="sub">shops take ${fmtN(wantWeek)} · ${surplus >= 0
