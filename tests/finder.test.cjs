@@ -1704,3 +1704,76 @@ test('on a phone the card\'s plan fits the card and the card fits the map', asyn
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
+
+test('a Layout chip keeps the focus, and choosing every layout is no filter', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(layChip('C1')).focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.flay), 'C1');
+    assert.equal(await page.locator(layChip('C1')).getAttribute('aria-pressed'), 'true');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    // All three chosen is every layout, the row with none included.
+    await page.locator(layChip('C2')).click();
+    await page.locator(layChip('D2')).click();
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a search saved before the Layout filter still matches and clears it', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.evaluate(() => finderKeepSaved([{name: 'Old', filters: {cat: 'retail', type: '', show: 'rent', hoods: null,
+      minM2: 0, maxM2: 0, minCap: 0, maxCap: 0, minTraffic: 0, sort: 'score', sortPicked: false}}]));
+    await page.evaluate(() => cityMapPage.update());
+    // Nothing chosen: the old search is the one on screen.
+    assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').textContent(), 'Old');
+    await page.locator(layChip('C1')).click();
+    assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').count(), 0);
+    await page.locator('#cityMapPage .fsaved-list [data-saved="Old"]').click();
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a live refresh leaves the card\'s plan as it is', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await pick(page, HK[0]);
+    await page.locator(`${plan} .lp-svg`).waitFor();
+    await page.evaluate(() => { document.querySelector('#cityMapPage .site .lp-svg').dataset.marker = '1'; });
+    await page.evaluate(() => { D = {...D}; refreshCityMaps(); cityMapPage.update(); });
+    assert.equal(await page.locator(`${plan} .lp-svg[data-marker]`).count(), 1);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('on a short phone the card scrolls inside the map and its close button stays in reach', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width: 390, height: 600});
+    await openMap(page); await turnOn(page);
+    await pick(page, HK[0]);
+    await page.locator(`${plan} .lp-svg`).waitFor();
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site').classList.contains('lp-scroll'));
+    const stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    let card = await page.locator('#cityMapPage .site').boundingBox();
+    assert.ok(card.y >= stage.y && card.y + card.height <= stage.y + stage.height + 1, `card ${JSON.stringify(card)} stage ${JSON.stringify(stage)}`);
+    // Scrolled down to the plan, the close button is still on the card and on top.
+    await page.evaluate(() => { const c = document.querySelector('#cityMapPage .site'); c.scrollTop = c.scrollHeight; });
+    await page.waitForTimeout(100);
+    card = await page.locator('#cityMapPage .site').boundingBox();
+    const x = await page.locator('#cityMapPage .site .x').boundingBox();
+    assert.ok(x.y >= card.y && x.y + x.height <= card.y + card.height, `close ${JSON.stringify(x)} card ${JSON.stringify(card)}`);
+    assert.equal(await page.evaluate(({x, y}) => !!document.elementFromPoint(x, y)?.closest('.site .x'), {x: x.x + x.width / 2, y: x.y + x.height / 2}), true);
+    await page.locator('#cityMapPage .site .x').click();
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .site').hidden);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});

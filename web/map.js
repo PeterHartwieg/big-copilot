@@ -491,7 +491,10 @@ class CityMapView {
     this.root.querySelector('.flays').addEventListener('click', e => {
       const chip = e.target.closest('[data-flay]'); if(!chip) return;
       const code = chip.dataset.flay, now = this.fs.layouts || [];
-      this.fs.layouts = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
+      const next = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
+      // Every key chosen is no filter at all, as with the neighbourhoods, so a
+      // building with no layout is not dropped by choosing them all.
+      this.fs.layouts = this.layoutKeys().every(c => next.includes(c)) ? [] : next;
       changed();
     });
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
@@ -989,12 +992,13 @@ class CityMapView {
     const keys = this.layoutKeys(), layout = this.root.querySelector('.frow.flayout');
     this.fs.layouts = (this.fs.layouts || []).filter(c => keys.includes(c));
     layout.hidden = !keys.length;
-    const host = layout.querySelector('.flays'), sig = JSON.stringify([keys, this.fs.layouts]);
+    // Drawn again only when the kind's keys change, so a chip keeps the focus.
+    const host = layout.querySelector('.flays'), sig = JSON.stringify(keys);
     if(host.dataset.sig !== sig){
       host.dataset.sig = sig;
-      host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="${this.fs.layouts.includes(c)}">${mapText(c)}</button>`).join('');
-      host.querySelectorAll('.flay').forEach(chip => chip.classList.toggle('on', chip.getAttribute('aria-pressed') === 'true'));
+      host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${mapText(c)}</button>`).join('');
     }
+    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
       chip.querySelector('b').textContent = key === 'sale'
@@ -1242,7 +1246,7 @@ class CityMapView {
     box.dataset.sig = code;
     const plan = this.plans.plans[code], wh = b.type === 'warehouse', n = wh ? plan.bays : plan.doors;
     const what = wh ? (n === 1 ? 'loading bay' : 'loading bays') : (n === 1 ? 'entrance' : 'entrances');
-    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}">Layout</span><b>${mapText(code)}</b><span class="lp-n">${n} ${what}</span><span class="lp-scalehost"></span></div>`
+    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}">Layout</span><b>${mapText(code)}</b><span class="lp-count">${n} ${what}</span><span class="lp-scalehost"></span></div>`
       + `<div class="lp-planbox">${floorPlanSvg(plan, 10, `Floor plan ${code}`)}</div>`;
   }
   /* The plan takes the card's width and what height the stage leaves it, up to
@@ -1250,7 +1254,11 @@ class CityMapView {
      does not fit (a phone) scrolls rather than leave the stage. */
   sizeCardPlan(r){
     const card = this.card, box = card.querySelector('.lp-plan');
-    card.style.maxHeight = `${Math.max(120, r.height - 24)}px`;
+    // In a content-box card max-height leaves out the padding and border, so
+    // they come off it; the outer edge is what has to stay on the stage.
+    const cs = getComputedStyle(card), frame = cs.boxSizing === 'border-box' ? 0
+      : ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((t, k) => t + (parseFloat(cs[k]) || 0), 0);
+    card.style.maxHeight = `${Math.max(120, r.height - 24 - frame)}px`;
     if(box && !box.hidden && box.dataset.sig){
       const svg = box.querySelector('svg'), plan = this.plans.plans[box.dataset.sig];
       const others = card.scrollHeight - svg.getBoundingClientRect().height;
@@ -1290,6 +1298,8 @@ class CityMapView {
     this.sites = new Map((premises()?.buildings || []).map(b => [b.key, b]));
     this.counts = null;
     this.loadFinder();
+    // Fetched once the map has premises, so the first card opens at its size.
+    if(premises()) this.wantPlans();
     this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });

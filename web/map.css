@@ -335,10 +335,12 @@ body.map-modal-open{overflow:hidden}
 .lp-planhead{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
 .lp-planhead .lp-lab{cursor:help;border-bottom:1px dotted var(--rule)}
 .lp-planhead b{font:500 14px/1 "IBM Plex Mono",monospace;color:var(--ink)}
-.lp-n{font-size:11.5px;color:var(--ink-3)}
+.lp-count{font-size:11.5px;color:var(--ink-3)}
 .lp-scalehost{margin-left:auto}
 .lp-planbox{border-radius:7px;background:var(--ground);padding:6px}
 .lp-planbox .lp-svg{width:100%;height:auto;max-height:var(--lp-plan-max,160px)}
 /* a card taller than the stage (a phone) scrolls inside it */
 .city-map .site.lp-scroll{overflow-y:auto;overscroll-behavior:contain}
 .city-map .site.lp-scroll .tail{display:none}
+/* and its close button stays in reach while it scrolls */
+.city-map .site.lp-scroll .x{position:sticky;top:0;float:right;margin:-4px -6px 0 8px;z-index:1;background:var(--surface)}
