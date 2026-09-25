@@ -260,8 +260,8 @@ test('Staffing for factory lines reads the plan for the sizing on screen', async
   const cap = await board(fixture());
   try {
     const card = await text(cap, '#sbStaff');
-    assert.match(card, /14 factory workers for 672 machine-hours a week, you have 12 hire \+2/);
-    assert.match(card, /hire 2 to fill this plan/);
+    assert.match(card, /672 machine-hours a week; you have 12 factory workers hire \+2/);
+    assert.match(card, /hire 2: the week needs 14/);
     assert.match(card, /\+\$360 a day in wages/);
     assert.match(card, /Cake .*12 24 h 00–12 12 h 12–24 12 h × 2 machines/);
     assert.match(card, /Sized 24\/7: \+2 factory workers \+\$360 a day/);
@@ -270,8 +270,9 @@ test('Staffing for factory lines reads the plan for the sizing on screen', async
   const dem = await board(fixture(), {mode: 'dem'});
   try {
     const card = await text(dem, '#sbStaff');
-    assert.match(card, /10 factory workers for 476 machine-hours a week, you have 12 −2/);
-    assert.match(card, /2 workers have no hours in this plan/);
+    assert.match(card, /476 machine-hours a week; you have 12 factory workers −2/);
+    // The fewest workers that cover the week are placed; the rest could go.
+    assert.match(card, /2 could go: the week needs 10/);
     assert.match(card, /Cake .*12 10 h 06–16 10 h × 2 machines/);
     assert.match(card, /Sized for demand: −2 factory workers −\$360 a day/);
   } finally { await dem.close(); }

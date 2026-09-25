@@ -1206,9 +1206,11 @@ that would do as a suggestion, never a change.
 **Staffing for factory lines.** Under the factories, the same rules as a shop's Staffing:
 one person per machine per hour, 12 hours the longest shift. Each line's run for the sizing
 on screen is cut into shifts of at most 12 hours, placed around the workers' own shift
-demands; the factory needs its machine-hours a week ÷ 50 factory workers, rounded up, set
-against the factory workers already there (cleaners, security and unassigned staff do not
-count), with what the difference does to the wage bill a day. *Staffing on its page* opens
+demands. Each factory is given the fewest of its own factory workers that cover the week:
+its machine-hours a week ÷ 50, rounded up, and one more while a shift stays open (cleaners,
+security and unassigned staff do not count). The rest *could go*: *2 could go: the week
+needs 10*; too few reads *hire 2: the week needs 14*, with what the difference does to the
+wage bill a day. *Staffing on its page* opens
 the factory.
 
 The **weekly order** column is judged against what the coming week actually takes, not

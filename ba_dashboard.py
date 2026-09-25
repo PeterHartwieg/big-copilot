@@ -19693,7 +19693,7 @@ function drawFactoriesTab(){
    person per machine per hour, 12 hours the longest shift, and a site's
    factory workers counted from its machine-hours a week. Python builds it for
    both sizings (factoryStaffing); this reads the one on screen. */
-const SB_STAFF_WHY = "The same rules as a shop's Staffing: one person per machine per hour, one shift per person at a time, 12 hours the longest shift. A line needs its machines × the hours it must run: 24 when sized 24/7, else the hours downstream demand plus the chain margin takes. Each run is cut into shifts of at most 12 hours, placed around the workers' own demands. A site needs its machine-hours a week ÷ 50 factory workers, rounded up; only factory workers already at that factory count. Too few hours is a change to type; fewer workers is a suggestion.";
+const SB_STAFF_WHY = "The same rules as a shop's Staffing: one person per machine per hour, one shift per person at a time, 12 hours the longest shift. A line needs its machines × the hours it must run: 24 when sized 24/7, else the hours downstream demand plus the chain margin takes. Each run is cut into shifts of at most 12 hours, placed around the workers' own demands. A factory is given the fewest of its own factory workers that cover the week: its machine-hours a week ÷ 50, rounded up, and one more while a shift stays open; the rest could go. Only factory workers already at that factory count. Too few hours is a change to type; fewer workers is a suggestion.";
 function drawFactoryStaffing(){
   const rows = ((D.factoryStaffing || {})[sizing]) || [];
   if(!rows.length) return "";
@@ -19707,8 +19707,11 @@ function drawFactoryStaffing(){
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
     const chip = dl.workers ? `<span class="d ${dl.workers > 0 ? "up" : "dn"}">${dl.workers > 0 ? `hire +${dl.workers}` : `−${-dl.workers}`}</span>` : "";
-    const small = hc.spare ? `<small>${plural(hc.spare, "worker has", "workers have")} no hours in this plan: post ${hc.spare === 1 ? "them" : "them"} elsewhere</small>`
-      : hc.hire ? `<small>hire ${hc.hire} to fill this plan</small>` : "";
+    /* The week needs the workers the plan gives shifts, and any it hires. */
+    const week = (hc.have ?? 0) - (hc.spare || 0) + (hc.hire || 0);
+    const small = hc.spare ? `<small>${hc.spare} could go: the week needs ${week}</small>`
+      : hc.hire ? `<small>hire ${hc.hire}: the week needs ${week}</small>`
+      : hc.have ? `<small>the week needs all ${hc.have}</small>` : "";
     const wage = dl.perDay ? `<span class="sb-wage ${dl.perDay > 0 ? "up" : "dn"}">${dl.perDay > 0 ? "+" : "−"}${fmt(Math.abs(dl.perDay))}<small>a day in wages</small></span>` : "<span></span>";
     const lines = (r.lines || []).map(l => {
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${z - a} h</small></span>`).join("");
@@ -19716,8 +19719,8 @@ function drawFactoryStaffing(){
         Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, "h") : `<b>${l.hours} h</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${l.machines} machines</small>` : ""}</span></div>`;
     }).join("");
-    return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc"><b>${hc.min ?? "—"}</b> factory workers for ${
-      (hc.needed ?? 0).toLocaleString()} machine-hours a week, you have <b>${hc.have ?? 0}</b>${chip}${small}</span>${wage}${go}</div>${lines}</div>`;
+    return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
+      (hc.needed ?? 0).toLocaleString()} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}</span>${wage}${go}</div>${lines}</div>`;
   });
   const lead = sizing === "dem" ? "Sized for demand" : "Sized 24/7";
   const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}:</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0 ? "+" : "−"}${plural(Math.abs(workers), "factory worker")}</b>` : ""}${
