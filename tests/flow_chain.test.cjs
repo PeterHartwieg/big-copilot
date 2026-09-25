@@ -148,9 +148,10 @@ test('shops no pipe reaches share one line at the bottom', async t => {
 });
 
 test('no pipe at all: the box says so and links the wiki, at any width', async t => {
-  for(const width of [390, 1280]){
+  for(const [width, keep] of [[390, false], [1280, false], [390, true]]){
     const data = fixture();
-    data.supply.graph = {nodes: [], links: []};
+    // No site at all, or one stocked shop no delivery plan reaches.
+    data.supply.graph = {nodes: keep ? data.supply.graph.nodes.filter(n => n.id === 'shop#3') : [], links: []};
     const page = await board(t, data, width);
     assert.equal(await page.locator('#sbFlowBox').isVisible(), true, `${width}: the box stays`);
     assert.match(await page.locator('#flowChain').textContent(), /No goods move between your sites yet/);
@@ -177,18 +178,18 @@ test('following a site: in above, out below, the pipe carrying its problem colou
       D.supply.graph.links.find(l => l.from === 'hub#1' && l.to === 'factory#2').slugs = slugs;
       flowFocus('factory#2');
     }, [slugs]);
-    return (await state(page)).pipes.find(p => p.a === 'hub#1');
+    return (await state(page)).pipes.find(p => p.a === 'in:hub#1');
   };
   assert.ok(hub);
   const bad = await pipeInto([sick.slug]);
   assert.match(bad.cls, sick.lvl === 'critical' ? /\bbad\b/ : /\bwarn\b/);
-  assert.match(await page.locator('#flowChain [data-fc-card="hub#1"]').textContent(), new RegExp(`${sick.st === 'noplan' ? 'no plan' : sick.st}`));
+  assert.match(await page.locator('#flowChain [data-fc-card="in:hub#1"]').textContent(), new RegExp(`${sick.st === 'noplan' ? 'no plan' : sick.st}`));
   const fine = await pipeInto([well.slug]);
   assert.match(fine.cls, /\blit\b/);
   assert.doesNotMatch(fine.cls, /warn|bad/);
   const s = await state(page);
   assert.deepEqual(s.rails, ['Comes in', 'Here', 'Goes out']);
-  assert.deepEqual(s.cards, ['hub#1', 'here', 'shop#3', 'shop#4', 'dist#6']);
+  assert.deepEqual(s.cards, ['in:hub#1', 'here', 'out:shop#3', 'out:shop#4', 'out:dist#6']);
   assert.equal(await page.locator('#sbFlowBox .sb-flowleg').isVisible(), false);
   // Its facts in words.
   assert.match(await page.locator('#flowChain .sb-fc-why').textContent(), /Worth a look/);
@@ -235,4 +236,88 @@ test('a long Japanese site name stays inside its card, two lines at most', async
   assert.ok(nm.over <= 0, `runs ${nm.over}px past its card`);
   assert.ok(nm.lines <= 2, `${nm.lines} lines`);
   assert.ok((await state(page)).overflow <= 0);
+});
+
+/* A round trip: the hub feeds the factory and takes its output back, and
+   feeds the shops. */
+function roundTrip(){
+  const data = fixture();
+  const g = data.supply.graph;
+  g.nodes = g.nodes.filter(n => ['import:pier', 'hub#1', 'factory#2', 'shop#3', 'shop#4'].includes(n.id));
+  const f = g.nodes.find(n => n.id === 'factory#2');
+  g.links = [
+    {from: 'import:pier', to: 'hub#1', perDay: 4200, items: 2, slugs: ['flour', 'milk'], cadence: 'weekly', paused: false, arrives: 34},
+    {from: 'hub#1', to: 'factory#2', perDay: 1720, items: 2, slugs: f.items.map(i => i.slug), cadence: 'daily', paused: false, arrives: null},
+    {from: 'factory#2', to: 'hub#1', perDay: 900, items: 1, slugs: ['cake'], cadence: 'daily', paused: false, arrives: null},
+    {from: 'hub#1', to: 'shop#3', perDay: 300, items: 1, slugs: ['cake'], cadence: 'daily', paused: false, arrives: null},
+    {from: 'hub#1', to: 'shop#4', perDay: 30, items: 1, slugs: ['cake'], cadence: 'daily', paused: false, arrives: null},
+  ];
+  return data;
+}
+
+test('a depot that feeds a factory and takes its output back stays above the shops, and the way back is drawn', async t => {
+  const page = await board(t, roundTrip(), 390);
+  const s = await state(page);
+  assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops']);
+  assert.deepEqual(s.cards, ['import:pier', 'hub#1', 'factory#2', 'shop#3', 'shop#4']);
+  assert.equal(s.pipes.length, 5, 'every link is a pipe, the one back up too');
+  assert.ok(s.pipes.some(p => p.a === 'factory#2' && p.b === 'hub#1'));
+});
+
+test('a factory fed by its own depot shows the depot in and out, each with its own pipe', async t => {
+  const page = await board(t, roundTrip(), 390);
+  await page.evaluate(() => flowFocus('factory#2'));
+  const s = await state(page);
+  assert.deepEqual(s.cards, ['in:hub#1', 'here', 'out:hub#1']);
+  assert.deepEqual(s.pipes.map(p => [p.a, p.b]), [['in:hub#1', 'here'], ['here', 'out:hub#1']]);
+  // The in-pipe carries the factory's inputs, so it is the one coloured.
+  assert.match(s.pipes[0].cls, /\b(bad|warn)\b/);
+  // Both copies follow the real site.
+  assert.deepEqual(await page.$$eval('#flowChain [data-fc-id="hub#1"]', els => els.length), 2);
+});
+
+test('a factory on no pipe sits with the factories, not after the shops', async t => {
+  const data = roundTrip();
+  const g = data.supply.graph;
+  g.nodes = g.nodes.filter(n => n.id !== 'factory#2').concat([{...fixture().supply.graph.nodes.find(n => n.id === 'factory#2'), id: 'lone#9', name: 'Lone Factory'}]);
+  g.links = g.links.filter(l => l.from !== 'factory#2' && l.to !== 'factory#2');
+  const page = await board(t, data, 390);
+  const s = await state(page);
+  assert.deepEqual(s.rails, ['Importers', 'Factories', 'Depots', 'Shops']);
+  assert.equal(s.cards[1], 'lone#9');
+});
+
+test('a site followed on the chain does not dim the picture the box grows into', async t => {
+  const page = await board(t, fixture(), 600);
+  await page.evaluate(() => { flowFocus('factory#2'); flowOpenGroup = 'unfed'; });
+  await page.setViewportSize({width: 1280, height: 1000});
+  await page.waitForFunction(() => document.getElementById('flowChain').hidden);
+  assert.equal(await page.evaluate(() => flowPickId), null);
+  assert.equal(await page.locator('#flow .node.faded').count(), 0);
+});
+
+test('a live refresh keeps the site followed and the open group, and lays the pipes again', async t => {
+  const page = await board(t, depotWith(4), 390);
+  await page.evaluate(() => { showPage('supply'); sbViewOn = 'diagram'; showSub('supply', 'shops'); });
+  await page.locator('#flowChain [data-fc-group="g:dist#6"]').click();
+  /* A live refresh: fresh data, and the Supply rows of PAGE_DRAWS run the
+     calm way renderCalm() runs them (the fixture is Supply's payload only, so
+     the whole renderAll() would stop at the masthead). The old markup,
+     marked here, is replaced. */
+  const refresh = () => page.evaluate(() => {
+    document.querySelector('#flowChain .sb-fc-chain').dataset.old = '1';
+    D = JSON.parse(JSON.stringify(D));
+    rvCalm = true;
+    try{ PAGE_DRAWS.filter(r => r[0] && r[0].split(' ').includes('supply/shops')).forEach(r => r[1]()); }
+    finally{ rvCalm = false; }
+    return !document.querySelector('#flowChain [data-old]');
+  });
+  assert.equal(await refresh(), true, 'the chain was drawn again');
+  assert.equal(await page.locator('#flowChain [data-fc-group="g:dist#6"]').getAttribute('aria-expanded'), 'true');
+  assert.equal((await state(page)).pipes.length, 2, 'the pier to the depot, the depot to its group');
+  await page.evaluate(() => flowFocus('dist#6'));
+  assert.equal(await refresh(), true);
+  assert.equal(await page.evaluate(() => flowPickId), 'dist#6');
+  assert.match(await page.locator('#flowChain .sb-fc-where').textContent(), /Following Cake Distr\./);
+  assert.ok((await state(page)).pipes.length >= 2);
 });

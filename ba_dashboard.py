@@ -16095,7 +16095,10 @@ function drawFlow(){
   if(flowPickId && !g.nodes.some(n => n.id === flowPickId)) flowPickId = null;
   /* A box narrower than FLOW_CHAIN_MAX gets the chain; with no site on the
      diagram it says so at any width, rather than standing empty. */
-  const narrow = flowNarrow(), empty = !g.nodes.length;
+  const narrow = flowNarrow(), empty = !flowHasPipes(g);
+  /* The chain's focus and open group are the chain's: the picture the box
+     grows into starts whole, not dimmed round a site it cannot unpick. */
+  if(flowChainDrawn && !(narrow || empty)){ flowPickId = null; flowOpenGroup = null; }
   flowChainDrawn = narrow || empty;
   box.classList.toggle("sb-fc-on", flowChainDrawn);
   box.classList.toggle("sb-fc-empty", empty);
@@ -16206,15 +16209,19 @@ function flowWatch(){
   let last = 0;
   flowObs = new ResizeObserver(() => {
     const w = box.getBoundingClientRect().width;
-    if(!w || Math.abs(w - last) < 1 || typeof D === "undefined" || !D || !D.supply) return;
+    if(!w || typeof D === "undefined" || !D || !D.supply || flowChainDrawn === null) return;
+    const turned = Math.abs(w - last) >= 1;
     last = w;
-    if(flowChainDrawn === null) return;
-    const narrow = flowNarrow() || !D.supply.graph.nodes.length;
-    if(narrow !== flowChainDrawn){ drawFlow(); if(!narrow) applyFlow(); }
-    else if(narrow){ box.classList.toggle("sb-fc-wide", w >= 600); flowChainPipes(); }
+    const narrow = flowNarrow() || !flowHasPipes(D.supply.graph);
+    if(turned && narrow !== flowChainDrawn){ drawFlow(); if(!narrow) applyFlow(); return; }
+    /* Any other tick (a card grew a line at the same width, say) re-lays
+       the pipes, so their ends stay on the cards. */
+    if(narrow){ box.classList.toggle("sb-fc-wide", w >= 600); flowChainPipes(); }
   });
   flowObs.observe(box);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if(flowChainDrawn) flowChainPipes(); });
 }
+const flowHasPipes = g => !!((g && g.links) || []).length;
 /* A site's flag on the chain: the worst of its facts, in words. */
 function flowFlag(node){
   const facts = flowFacts(node);
@@ -16236,27 +16243,44 @@ function flowStages(g){
   const links = (g.links || []).filter(l => byId.has(l.from) && byId.has(l.to) && l.from !== l.to);
   const linked = new Set();
   links.forEach(l => { linked.add(l.from); linked.add(l.to); });
-  const rank = new Map(g.nodes.filter(n => linked.has(n.id)).map(n => [n.id, 0]));
-  // Longest paths by relaxation; a cycle stops growing at the node count.
-  for(let pass = 0; pass < g.nodes.length; pass++){
-    let moved = false;
-    links.forEach(l => {
-      const r = rank.get(l.from) + 1;
-      if(r > rank.get(l.to) && r < g.nodes.length){ rank.set(l.to, r); moved = true; }
+  /* Back edges (a factory sending its output to the depot that feeds it, a
+     common round trip) are found by a depth-first walk from the sources in
+     node order, and left out of the ranking; they are still drawn. */
+  const order = id => byId.get(id).i;
+  const outOf = new Map();
+  links.forEach(l => { if(!outOf.has(l.from)) outOf.set(l.from, []); outOf.get(l.from).push(l); });
+  outOf.forEach(ls => ls.sort((a, b) => order(a.to) - order(b.to)));
+  const hasIn = new Set(links.map(l => l.to));
+  const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || order(a.id) - order(b.id));
+  const seen = new Set(), onPath = new Set(), back = new Set(), post = [];
+  const walk = id => {
+    seen.add(id); onPath.add(id);
+    (outOf.get(id) || []).forEach(l => {
+      if(onPath.has(l.to)) back.add(l);
+      else if(!seen.has(l.to)) walk(l.to);
     });
-    if(!moved) break;
-  }
+    onPath.delete(id); post.push(id);
+  };
+  starts.forEach(n => { if(!seen.has(n.id)) walk(n.id); });
+  const rank = new Map(post.map(id => [id, 0]));
+  // Longest path over what is left, a DAG, in topological order.
+  post.slice().reverse().forEach(id => (outOf.get(id) || []).forEach(l => {
+    if(!back.has(l)) rank.set(l.to, Math.max(rank.get(l.to), rank.get(id) + 1));
+  }));
   const kindOf = id => byId.get(id).n.kind;
   const shopRanks = [...rank].filter(([id]) => kindOf(id) === "shop").map(([, r]) => r);
   if(shopRanks.length){ const r = Math.max(...shopRanks); rank.forEach((_, id) => { if(kindOf(id) === "shop") rank.set(id, r); }); }
-  const top = Math.max(0, ...rank.values());
   const unfed = [];
+  const kindRank = FLOW_KIND_ORDER;
+  const linkedRanks = [...rank];
   g.nodes.forEach(n => {
     if(linked.has(n.id)) return;
     if(n.kind === "shop"){ unfed.push(n); return; }
-    // A site on no pipe goes to the end of its own kind's stage.
-    const same = [...rank].filter(([id]) => kindOf(id) === n.kind).map(([, r]) => r);
-    rank.set(n.id, same.length ? Math.max(...same) : top);
+    /* A site on no pipe goes to its own kind's stage: the last one of its
+       kind, or else right after the kinds that come before it. */
+    const same = linkedRanks.filter(([id]) => kindOf(id) === n.kind).map(([, r]) => r);
+    const before = linkedRanks.filter(([id]) => (kindRank[kindOf(id)] ?? 9) < (kindRank[n.kind] ?? 9)).map(([, r]) => r);
+    rank.set(n.id, same.length ? Math.max(...same) : before.length ? Math.max(...before) : 0);
   });
   const bandKey = id => rank.get(id) * 10 + (FLOW_KIND_ORDER[kindOf(id)] ?? 9);
   const keys = [...new Set([...rank.keys()].map(bandKey))].sort((a, b) => a - b);
@@ -16427,9 +16451,11 @@ function drawFlowFocus(g, st, node){
   const pipes = [], parts = [];
   if(ins.size){
     const cards = [...ins].map(([id, ls]) => {
+      /* Keyed by side: a depot that feeds a factory and takes its output is
+         in both bands, and each copy has its own pipe. */
       const p = flowPipeProblem(ls, node, ins.size === 1);
-      pipes.push({from: id, to: "here", perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: p ? p.lvl : "lit"});
-      return fcCard(id, byId.get(id), {sub: pipeSub(ls), flag: p, dot: false});
+      pipes.push({from: `in:${id}`, to: "here", perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: p ? p.lvl : "lit"});
+      return fcCard(`in:${id}`, byId.get(id), {sub: pipeSub(ls), flag: p, dot: false});
     });
     parts.push(fcBand(tt("sb.flow.chain.in", "Comes in"), cards.join("")));
   }
@@ -16455,8 +16481,8 @@ function drawFlowFocus(g, st, node){
     [...outs].forEach(([id, ls]) => {
       if(fold && byId.get(id).kind === "shop") return;
       const p = flowPipeProblem(ls, byId.get(id), false);
-      pipes.push({from: "here", to: id, perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: p ? p.lvl : "lit"});
-      cards.push(fcCard(id, byId.get(id), {sub: pipeSub(ls), flag: p, dot: false}));
+      pipes.push({from: "here", to: `out:${id}`, perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: p ? p.lvl : "lit"});
+      cards.push(fcCard(`out:${id}`, byId.get(id), {sub: pipeSub(ls), flag: p, dot: false}));
     });
     parts.push(fcBand(tt("sb.flow.chain.out", "Goes out"), cards.join("")));
   }
@@ -16482,7 +16508,8 @@ function drawFlowFocus(g, st, node){
 
 /* The pipes, laid over the drawn cards: measured, so they follow the cards
    wherever the layout puts them. A pipe between two neighbouring stages is
-   one curve; one that skips a stage runs down the lane beside the cards. */
+   one curve; one that skips a stage, or runs back up (a factory's output
+   returning to the depot that feeds it), takes the lane beside the cards. */
 function flowChainPipes(){
   const host = q("#flowChain .sb-fc-chain");
   const svg = host && q(".sb-fc-pipes", host);
@@ -16495,7 +16522,7 @@ function flowChainPipes(){
     const r = el.getBoundingClientRect();
     at.set(el.dataset.fcCard, {cx: r.left - base.left + r.width / 2, top: r.top - base.top, bottom: r.bottom - base.top, band: bi});
   }));
-  const list = flowChainPipeList.filter(p => at.has(p.from) && at.has(p.to) && at.get(p.to).band > at.get(p.from).band);
+  const list = flowChainPipeList.filter(p => at.has(p.from) && at.has(p.to) && p.from !== p.to);
   const heaviest = Math.max(1, ...list.map(p => p.perDay));
   const spread = (key, other) => {
     const off = new Map(), by = new Map();
