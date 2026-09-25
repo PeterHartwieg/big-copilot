@@ -107,7 +107,7 @@ class MsgIsTheEnglish(unittest.TestCase):
     def test_the_specs_write_what_the_f_strings_wrote(self):
         cases = [
             ("{n}", 7, "7"), ("{n}", 2.5, "2.5"), ("{n:,}", 1234567, "1,234,567"),
-            ("{n:,}", 1234.6, "1,235"), ("{x:.1f}", 3.14159, "3.1"), ("{x:.2f}", 1234.5, "1234.50"),
+            ("{n:,}", 1234.6, "1,234.6"), ("{x:.1f}", 3.14159, "3.1"), ("{x:.2f}", 1234.5, "1234.50"),
             ("{x:,.1f}", 12345.67, "12,345.7"), ("{w:$}", 98.4, "$98"), ("{w:$}", 1234567, "$1,234,567"),
             ("{w:$}", -50, "-$50"), ("{w:$c}", 98, "$98"), ("{w:$c}", 751_400, "$751k"),
             ("{w:$c}", 3_574_000, "$3.57M"), ("{w:$c}", 12_345_678, "$12.3M"), ("{w:$c}", 1_125_000, "$1.13M"),
@@ -116,6 +116,30 @@ class MsgIsTheEnglish(unittest.TestCase):
         for template, value, want in cases:
             with self.subTest(template=template, value=value):
                 self.assertEqual(msg("f.x", template, n=value, x=value, w=value, d=value), want)
+
+    def test_each_spec_is_byte_for_byte_the_f_string_it_replaces(self):
+        # Fractional, negative, tiny and huge: the converted template writes
+        # what the old f-string wrote, including where "$" and "-" fall.
+        values = (0, 7, -7, 1234, -1234, 1234.5, -1234.5, 0.30000000000000004, 1234.5678, -0.04,
+                  2.675, 999999.999, 1e21, 12_345_678.9)
+        pairs = [("{x}", lambda x: f"{x}"), ("{x:,}", lambda x: f"{x:,}"), ("{x:,.0f}", lambda x: f"{x:,.0f}"),
+                 ("{x:.1f}", lambda x: f"{x:.1f}"), ("{x:,.2f}", lambda x: f"{x:,.2f}"),
+                 ("${x:,.0f}", lambda x: f"${x:,.0f}"),
+                 ("{x:$}", lambda x: ("-" if x < 0 else "") + f"${abs(x):,.0f}")]
+        for template, old in pairs:
+            for x in values:
+                with self.subTest(template=template, x=x):
+                    self.assertEqual(msg("f.x", template, x=x), old(x))
+        # Only a sign-first old string converts to {w:$}; "$-1,234" keeps its literal dollar.
+        self.assertEqual(msg("f.x", "${x:,.0f}", x=-1234.4), "$-1,234")
+        self.assertEqual(msg("f.x", "{x:$}", x=-1234.4), "-$1,234")
+
+    def test_fractions_and_decimals_travel_as_numbers(self):
+        import decimal
+        import fractions
+        m = msg("f.x", "{a} {b}", a=fractions.Fraction(1, 4), b=decimal.Decimal("2.5"))
+        self.assertEqual(m.wire(), ["f.x", {"a": 0.25, "b": 2.5}])
+        self.assertEqual(json.loads(json.dumps(m.wire())), ["f.x", {"a": 0.25, "b": 2.5}])
 
     def test_plural_english_is_chosen_by_n(self):
         en = {"one": "{n} machine runs dry", "other": "{n} machines run dry"}
@@ -219,14 +243,29 @@ class PageTests(unittest.TestCase):
     def test_the_head_carries_tt_before_any_other_script(self):
         page = ba_dashboard.render(None)
         self.assertIn("const TT_EMBED = null;", page)
+        # After the stylesheets, so the browser finds them first; before any
+        # markup of the body, so the page can be hidden before it paints.
         at = page.index("function tt(key, en, params)")
-        self.assertLess(at, page.index("</head>") if "</head>" in page else page.index("<body"))
+        self.assertLess(page.index("</style>"), at)
+        self.assertLess(at, page.index('<div class="wrap">'))
         self.assertLess(at, page.index("let D = "))
         self.assertNotIn("/*__I18N_SCRIPT__*/", page)
 
     def test_a_lang_page_carries_its_table(self):
         page = ba_dashboard.render(None, ui={"lang": "de", "table": {"nav.today": "Heute</script>"}})
         self.assertIn('const TT_EMBED = {"lang":"de","table":{"nav.today":"Heute<\\/script>"}};', page)
+
+    def test_the_table_is_spliced_last_and_only_into_the_head(self):
+        # No later placeholder runs over the table's text, and a marker in the
+        # player's own words (the payload) stays as written.
+        table = {"nav.x": "__TITLE__ <!--__FOOTER__--> /*__MAP_SCRIPT__*/"}
+        page = ba_dashboard.render(None, ui={"lang": "de", "table": table})
+        self.assertIn(json.dumps(table, separators=(",", ":")), page)
+        payload = fixtures()["es3"]
+        payload["meta"]["save"] = "Co /*__I18N_SCRIPT__*/"
+        page = ba_dashboard.render(payload)
+        self.assertEqual(page.count("function tt(key, en, params)"), 1)
+        self.assertIn('"save":"Co /*__I18N_SCRIPT__*/"', page)
 
     def test_cli_ui_table_is_none_for_english_and_an_empty_table(self):
         self.assertIsNone(ba_dashboard.cli_ui_table(None))

@@ -1,0 +1,2281 @@
+{
+ "alerts": [
+  {
+   "group": "staff",
+   "id": "14c67b03be",
+   "level": "critical",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "No staff assigned",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "uniform",
+   "id": "1c3a61868d",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_secondavenue#10",
+   "text": "No uniform set for ⟦ba:skill_customerservice|Customerservice⟧; customers judge every role on a station shift here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "bathroom",
+   "id": "86620bfd86",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_secondavenue#10",
+   "text": "No customer bathroom here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "toiletprivacy",
+   "id": "4878c3a643",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_secondavenue#10",
+   "text": "Customer bathroom has no privacy: no stall or door",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "sink",
+   "id": "357a8039e8",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_secondavenue#10",
+   "text": "No sink for customers to wash up",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "music",
+   "id": "6e763a0eae",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_secondavenue#10",
+   "text": "No music playing for customers",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "interior",
+   "id": "bfcd4ccb85",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_secondavenue#10",
+   "text": "Interior design falls short of what customers expect here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "uniform",
+   "id": "7882c54f79",
+   "level": "warn",
+   "site": "HART. Corner",
+   "siteKey": "ba:street_broadway#2",
+   "text": "No uniform set for ⟦ba:skill_customerservice|Customerservice⟧; customers judge every role on a station shift here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "bathroom",
+   "id": "b79c3c62dc",
+   "level": "warn",
+   "site": "HART. Corner",
+   "siteKey": "ba:street_broadway#2",
+   "text": "No customer bathroom here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "toiletprivacy",
+   "id": "387d6f50e8",
+   "level": "warn",
+   "site": "HART. Corner",
+   "siteKey": "ba:street_broadway#2",
+   "text": "Customer bathroom has no privacy: no stall or door",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "sink",
+   "id": "8140d1fc27",
+   "level": "warn",
+   "site": "HART. Corner",
+   "siteKey": "ba:street_broadway#2",
+   "text": "No sink for customers to wash up",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "music",
+   "id": "57afc3e9c7",
+   "level": "warn",
+   "site": "HART. Corner",
+   "siteKey": "ba:street_broadway#2",
+   "text": "No music playing for customers",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "interior",
+   "id": "e72294f80d",
+   "level": "warn",
+   "site": "HART. Corner",
+   "siteKey": "ba:street_broadway#2",
+   "text": "Interior design falls short of what customers expect here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "uniform",
+   "id": "89eb7c8130",
+   "level": "warn",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "No uniform locker installed; add one to manage employee uniforms",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "bathroom",
+   "id": "636517b3ad",
+   "level": "warn",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "No customer bathroom here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "toiletprivacy",
+   "id": "a0f5fc86d4",
+   "level": "warn",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "Customer bathroom has no privacy: no stall or door",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "sink",
+   "id": "c178947dee",
+   "level": "warn",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "No sink for customers to wash up",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "music",
+   "id": "0e5fc6dcc7",
+   "level": "warn",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "No music playing for customers",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "interior",
+   "id": "170d5a3b09",
+   "level": "warn",
+   "site": "HART. Bare",
+   "siteKey": "ba:street_fifthavenue#4",
+   "text": "Interior design falls short of what customers expect here",
+   "unit": "",
+   "worth": null
+  }
+ ],
+ "alertsDemand": {
+  "lines": [
+   {
+    "group": "staff",
+    "id": "14c67b03be",
+    "level": "critical",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "No staff assigned",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "uniform",
+    "id": "1c3a61868d",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_secondavenue#10",
+    "text": "No uniform set for ⟦ba:skill_customerservice|Customerservice⟧; customers judge every role on a station shift here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "bathroom",
+    "id": "86620bfd86",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_secondavenue#10",
+    "text": "No customer bathroom here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "toiletprivacy",
+    "id": "4878c3a643",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_secondavenue#10",
+    "text": "Customer bathroom has no privacy: no stall or door",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "sink",
+    "id": "357a8039e8",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_secondavenue#10",
+    "text": "No sink for customers to wash up",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "music",
+    "id": "6e763a0eae",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_secondavenue#10",
+    "text": "No music playing for customers",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "interior",
+    "id": "bfcd4ccb85",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_secondavenue#10",
+    "text": "Interior design falls short of what customers expect here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "uniform",
+    "id": "7882c54f79",
+    "level": "warn",
+    "site": "HART. Corner",
+    "siteKey": "ba:street_broadway#2",
+    "text": "No uniform set for ⟦ba:skill_customerservice|Customerservice⟧; customers judge every role on a station shift here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "bathroom",
+    "id": "b79c3c62dc",
+    "level": "warn",
+    "site": "HART. Corner",
+    "siteKey": "ba:street_broadway#2",
+    "text": "No customer bathroom here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "toiletprivacy",
+    "id": "387d6f50e8",
+    "level": "warn",
+    "site": "HART. Corner",
+    "siteKey": "ba:street_broadway#2",
+    "text": "Customer bathroom has no privacy: no stall or door",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "sink",
+    "id": "8140d1fc27",
+    "level": "warn",
+    "site": "HART. Corner",
+    "siteKey": "ba:street_broadway#2",
+    "text": "No sink for customers to wash up",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "music",
+    "id": "57afc3e9c7",
+    "level": "warn",
+    "site": "HART. Corner",
+    "siteKey": "ba:street_broadway#2",
+    "text": "No music playing for customers",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "interior",
+    "id": "e72294f80d",
+    "level": "warn",
+    "site": "HART. Corner",
+    "siteKey": "ba:street_broadway#2",
+    "text": "Interior design falls short of what customers expect here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "uniform",
+    "id": "89eb7c8130",
+    "level": "warn",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "No uniform locker installed; add one to manage employee uniforms",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "bathroom",
+    "id": "636517b3ad",
+    "level": "warn",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "No customer bathroom here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "toiletprivacy",
+    "id": "a0f5fc86d4",
+    "level": "warn",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "Customer bathroom has no privacy: no stall or door",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "sink",
+    "id": "c178947dee",
+    "level": "warn",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "No sink for customers to wash up",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "music",
+    "id": "0e5fc6dcc7",
+    "level": "warn",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "No music playing for customers",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "interior",
+    "id": "170d5a3b09",
+    "level": "warn",
+    "site": "HART. Bare",
+    "siteKey": "ba:street_fifthavenue#4",
+    "text": "Interior design falls short of what customers expect here",
+    "unit": "",
+    "worth": null
+   }
+  ],
+  "minor": {
+   "count": 0,
+   "gate": 500.0,
+   "rows": [],
+   "worth": 0.0
+  }
+ },
+ "businesses": [
+  {
+   "address": "10 Second Avenue",
+   "amenities": {
+    "bathroom": false,
+    "interior": false,
+    "music": false,
+    "sink": false,
+    "toiletprivacy": false
+   },
+   "basket": null,
+   "capacity": 0,
+   "closed": false,
+   "code": "HK",
+   "cogs": 0.0,
+   "costCentre": false,
+   "crew": [
+    {
+     "absent": 0,
+     "count": 2,
+     "daily": 0.0,
+     "role": "Customerservice",
+     "skill": 60.0
+    }
+   ],
+   "customerRhythm": null,
+   "customers": 0,
+   "daysOpen": 1,
+   "key": "ba:street_secondavenue#10",
+   "licensing": 0.0,
+   "lines": [],
+   "margin": null,
+   "marketing": 0.0,
+   "marketingIndex": 0,
+   "missingAmenities": [
+    "ba:customerdemand_toilet",
+    "ba:customerdemand_toiletprivacy",
+    "ba:customerdemand_sink",
+    "ba:customerdemand_music",
+    "ba:customerdemand_interiordesign"
+   ],
+   "missingUniformLocker": false,
+   "name": "HART. Gifts",
+   "neighbourhood": "ba:neighborhood_hellskitchen",
+   "opened": 0,
+   "peakDay": null,
+   "people": [
+    {
+     "absent": false,
+     "daily": 0.0,
+     "name": "Ana Silva",
+     "role": "Customerservice"
+    },
+    {
+     "absent": false,
+     "daily": 0.0,
+     "name": "Ben Ode",
+     "role": "Customerservice"
+    }
+   ],
+   "profit": 0.0,
+   "promotion": 0,
+   "quitWarnings": 0,
+   "rent": 0.0,
+   "restocks": true,
+   "revenue": 0.0,
+   "rhythm": null,
+   "satisfaction": {
+    "cleanliness": 0,
+    "facility": 0,
+    "overall": 0,
+    "pricing": 0,
+    "service": 0
+   },
+   "security": 0,
+   "series": [],
+   "shiftPrint": "9c98d93a",
+   "staff": 2,
+   "staffCost": 0.0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "retail",
+   "swing": 0,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 0,
+   "traffic": 0,
+   "type": "Giftshop",
+   "typeSlug": "ba:businesstype_giftshop",
+   "uniformGapSkills": [
+    "ba:skill_customerservice"
+   ],
+   "uniformGaps": [
+    "Customerservice"
+   ],
+   "wages": 0.0
+  },
+  {
+   "address": "2 Broadway",
+   "amenities": {
+    "bathroom": false,
+    "interior": false,
+    "music": false,
+    "sink": false,
+    "toiletprivacy": false
+   },
+   "basket": null,
+   "capacity": 0,
+   "closed": false,
+   "code": "",
+   "cogs": 0.0,
+   "costCentre": false,
+   "crew": [
+    {
+     "absent": 0,
+     "count": 1,
+     "daily": 0.0,
+     "role": "Customerservice",
+     "skill": 60.0
+    }
+   ],
+   "customerRhythm": null,
+   "customers": 0,
+   "daysOpen": 1,
+   "key": "ba:street_broadway#2",
+   "licensing": 0.0,
+   "lines": [],
+   "margin": null,
+   "marketing": 0.0,
+   "marketingIndex": 0,
+   "missingAmenities": [
+    "ba:customerdemand_toilet",
+    "ba:customerdemand_toiletprivacy",
+    "ba:customerdemand_sink",
+    "ba:customerdemand_music",
+    "ba:customerdemand_interiordesign"
+   ],
+   "missingUniformLocker": false,
+   "name": "HART. Corner",
+   "neighbourhood": "",
+   "opened": 0,
+   "peakDay": null,
+   "people": [
+    {
+     "absent": false,
+     "daily": 0.0,
+     "name": "Cy Moss",
+     "role": "Customerservice"
+    }
+   ],
+   "profit": 0.0,
+   "promotion": 0,
+   "quitWarnings": 0,
+   "rent": 0.0,
+   "restocks": true,
+   "revenue": 0.0,
+   "rhythm": null,
+   "satisfaction": {
+    "cleanliness": 0,
+    "facility": 0,
+    "overall": 0,
+    "pricing": 0,
+    "service": 0
+   },
+   "security": 0,
+   "series": [],
+   "shiftPrint": "ecdcd9ed",
+   "staff": 1,
+   "staffCost": 0.0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "retail",
+   "swing": 0,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 0,
+   "traffic": 0,
+   "type": "Giftshop",
+   "typeSlug": "ba:businesstype_giftshop",
+   "uniformGapSkills": [
+    "ba:skill_customerservice"
+   ],
+   "uniformGaps": [
+    "Customerservice"
+   ],
+   "wages": 0.0
+  },
+  {
+   "address": "4 Fifth Avenue",
+   "amenities": {
+    "bathroom": false,
+    "interior": false,
+    "music": false,
+    "sink": false,
+    "toiletprivacy": false
+   },
+   "basket": null,
+   "capacity": 0,
+   "closed": false,
+   "code": "GD",
+   "cogs": 0.0,
+   "costCentre": false,
+   "crew": [],
+   "customerRhythm": null,
+   "customers": 0,
+   "daysOpen": 1,
+   "key": "ba:street_fifthavenue#4",
+   "licensing": 0.0,
+   "lines": [],
+   "margin": null,
+   "marketing": 0.0,
+   "marketingIndex": 0,
+   "missingAmenities": [
+    "ba:customerdemand_toilet",
+    "ba:customerdemand_toiletprivacy",
+    "ba:customerdemand_sink",
+    "ba:customerdemand_music",
+    "ba:customerdemand_interiordesign"
+   ],
+   "missingUniformLocker": true,
+   "name": "HART. Bare",
+   "neighbourhood": "ba:neighborhood_garmentdistrict",
+   "opened": 0,
+   "peakDay": null,
+   "people": [],
+   "profit": 0.0,
+   "promotion": 0,
+   "quitWarnings": 0,
+   "rent": 0.0,
+   "restocks": true,
+   "revenue": 0.0,
+   "rhythm": null,
+   "satisfaction": {
+    "cleanliness": 0,
+    "facility": 0,
+    "overall": 0,
+    "pricing": 0,
+    "service": 0
+   },
+   "security": 0,
+   "series": [],
+   "shiftPrint": "811c9dc5",
+   "staff": 0,
+   "staffCost": 0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "retail",
+   "swing": 0,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 0,
+   "traffic": 0,
+   "type": "Giftshop",
+   "typeSlug": "ba:businesstype_giftshop",
+   "uniformGapSkills": [],
+   "uniformGaps": [],
+   "wages": 0.0
+  },
+  {
+   "address": "9 Pier",
+   "amenities": null,
+   "basket": null,
+   "capacity": 0,
+   "closed": false,
+   "code": "LM",
+   "cogs": 0.0,
+   "costCentre": true,
+   "crew": [],
+   "customerRhythm": null,
+   "customers": 0,
+   "daysOpen": 1,
+   "key": "ba:street_pier#9",
+   "licensing": 0.0,
+   "lines": [],
+   "margin": null,
+   "marketing": 0.0,
+   "marketingIndex": 0,
+   "missingAmenities": [],
+   "missingUniformLocker": false,
+   "name": "HART. Depot",
+   "neighbourhood": "ba:neighborhood_lowermanhattan",
+   "opened": 0,
+   "peakDay": null,
+   "people": [],
+   "profit": 0.0,
+   "promotion": 0,
+   "quitWarnings": 0,
+   "rent": 0.0,
+   "restocks": false,
+   "revenue": 0.0,
+   "rhythm": null,
+   "satisfaction": {
+    "cleanliness": 0,
+    "facility": 0,
+    "overall": null,
+    "pricing": 0,
+    "service": 0
+   },
+   "security": 0,
+   "series": [],
+   "shiftPrint": "811c9dc5",
+   "staff": 0,
+   "staffCost": 0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "overhead",
+   "swing": 0,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 0,
+   "traffic": 0,
+   "type": "Warehouse",
+   "typeSlug": "ba:businesstype_warehouse",
+   "uniformGapSkills": [],
+   "uniformGaps": [],
+   "wages": 0.0
+  }
+ ],
+ "cashFlow": null,
+ "chains": [
+  {
+   "change": null,
+   "cogs": 0.0,
+   "cost": 0.0,
+   "count": 3,
+   "external": 0.0,
+   "last7": null,
+   "licensing": 0.0,
+   "margin": null,
+   "marketing": 0.0,
+   "name": "Giftshops",
+   "prev7": null,
+   "profit": 0.0,
+   "rent": 0.0,
+   "retailRevenue": 0.0,
+   "revenue": 0.0,
+   "sites": [
+    "ba:street_secondavenue#10",
+    "ba:street_broadway#2",
+    "ba:street_fifthavenue#4"
+   ],
+   "staff": 3,
+   "suppliedBy": [],
+   "theft": 0.0,
+   "wages": 0.0
+  },
+  {
+   "change": null,
+   "cogs": 0.0,
+   "cost": 0.0,
+   "count": 1,
+   "external": 0.0,
+   "last7": null,
+   "licensing": 0.0,
+   "margin": null,
+   "marketing": 0.0,
+   "name": "Head office and support",
+   "prev7": null,
+   "profit": 0.0,
+   "rent": 0.0,
+   "retailRevenue": 0.0,
+   "revenue": 0.0,
+   "sites": [
+    "ba:street_pier#9"
+   ],
+   "staff": 0,
+   "suppliedBy": [],
+   "theft": 0.0,
+   "wages": 0.0
+  }
+ ],
+ "daily": [],
+ "factoryStaffing": {
+  "cap": [],
+  "dem": []
+ },
+ "goals": {
+  "buildingsOwned": 0,
+  "buildingsTotal": 885,
+  "completed": 0,
+  "diplomas": 0,
+  "diplomasTotal": 0,
+  "goalsDone": 0,
+  "goalsTotal": null,
+  "goodsProduced": 0,
+  "rivalsDefeated": 0,
+  "rivalsTotal": 0,
+  "taxesPaid": 0.0,
+  "typesRun": 1,
+  "typesTotal": 0
+ },
+ "homes": [],
+ "hourFindings": [],
+ "hours": [],
+ "hypeExposure": [],
+ "kpi": {
+  "businesses": 4,
+  "cash": 10000.0,
+  "customers": 0,
+  "debt": 0,
+  "employees": 3,
+  "materiality": 500.0,
+  "netWorth": null,
+  "netWorthAsOf": null,
+  "profitAvg7": 0.0,
+  "profitPrev7": 0.0,
+  "profitSum7": 0,
+  "profitYesterday": 0,
+  "rentBill": 0.0,
+  "revenue": 0,
+  "vacant": 0,
+  "wageBill": 0.0
+ },
+ "ledgerDays": 1,
+ "loans": [],
+ "market": {
+  "gaps": [],
+  "hoods": [],
+  "hype": [],
+  "movers": [],
+  "noOffices": [],
+  "offices": [],
+  "rows": [],
+  "shortages": [],
+  "trackedDays": 1,
+  "trendDays": 0,
+  "types": []
+ },
+ "meta": {
+  "build": null,
+  "character": "default",
+  "cityDate": "Year 1, day 34 of 60",
+  "day": 34,
+  "difficulty": "Unknown",
+  "generated": "<wall clock>",
+  "hour": 14,
+  "houseRules": {
+   "easier": 0,
+   "harder": 0,
+   "label": "Unknown",
+   "rules": [],
+   "slot": null,
+   "startingMoney": null
+  },
+  "locale": false,
+  "minute": 0,
+  "save": "Link Co",
+  "saved": "<wall clock>",
+  "source": "payload.hsg",
+  "verifiedBuild": 3682
+ },
+ "minor": {
+  "count": 0,
+  "gate": 500.0,
+  "rows": [],
+  "worth": 0.0
+ },
+ "names": {
+  "ba:neighborhood_garmentdistrict": "Garment District",
+  "ba:neighborhood_hellskitchen": "Hell's Kitchen",
+  "ba:neighborhood_industrycity": "Industry City",
+  "ba:neighborhood_lowermanhattan": "Lower Manhattan",
+  "ba:neighborhood_midtown": "Midtown",
+  "ba:neighborhood_murrayhill": "Murray Hill",
+  "ba:neighborhood_thehamptons": "The Hamptons"
+ },
+ "ownedBuildings": [],
+ "plan": {
+  "catalogue": {},
+  "items": {},
+  "own": {},
+  "peak": 1.0,
+  "priceCount": 0,
+  "priceDay": null,
+  "prices": {},
+  "recipes": [],
+  "sources": {
+   "ba:itemname_candle": {
+    "active": false,
+    "contracts": [
+     {
+      "active": false,
+      "from": "3 Pier",
+      "ordered": 500,
+      "smart": false,
+      "warehouse": "9 Pier"
+     }
+    ],
+    "depots": [
+     {
+      "importer": null,
+      "level": null,
+      "name": null,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "smart": false,
+      "warehouse": "9 Pier",
+      "weekly": 500
+     }
+    ],
+    "from": "3 Pier",
+    "ordered": 0,
+    "paused": 500,
+    "smart": false,
+    "warehouse": "9 Pier"
+   },
+   "ba:itemname_paperbag": {
+    "active": true,
+    "contracts": [
+     {
+      "active": true,
+      "from": "1 Pier",
+      "ordered": 3800,
+      "smart": true,
+      "warehouse": "9 Pier"
+     },
+     {
+      "active": false,
+      "from": "2 Pier",
+      "ordered": 0,
+      "smart": false,
+      "warehouse": "9 Pier"
+     }
+    ],
+    "depots": [
+     {
+      "importer": "1 Pier",
+      "level": 3800,
+      "name": "1 Pier",
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "smart": true,
+      "warehouse": "9 Pier",
+      "weekly": 3800
+     }
+    ],
+    "from": "1 Pier, 2 Pier",
+    "ordered": 3800,
+    "paused": 0,
+    "smart": true,
+    "warehouse": "9 Pier"
+   }
+  },
+  "stations": {},
+  "workstations": {}
+ },
+ "premises": {
+  "buildings": [
+   {
+    "address": "4 Fifth Avenue",
+    "cap": 30,
+    "deposit": 8110,
+    "hood": "ba:neighborhood_garmentdistrict",
+    "key": "ba:street_fifthavenue#4",
+    "layout": "C1",
+    "m2": 225,
+    "occupant": {
+     "name": "HART. Bare",
+     "type": "Giftshop",
+     "typeSlug": "ba:businesstype_giftshop"
+    },
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": 129,
+    "size": "C",
+    "status": "mine",
+    "traffic": 48,
+    "type": "retail"
+   },
+   {
+    "address": "9 Pier",
+    "cap": null,
+    "deposit": 12950,
+    "hood": "ba:neighborhood_lowermanhattan",
+    "key": "ba:street_pier#9",
+    "layout": null,
+    "m2": 690,
+    "occupant": {
+     "name": "HART. Depot",
+     "type": "Warehouse",
+     "typeSlug": "ba:businesstype_warehouse"
+    },
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": 206,
+    "size": "H",
+    "status": "mine",
+    "traffic": 18,
+    "type": "special"
+   },
+   {
+    "address": "10 Second Avenue",
+    "cap": 50,
+    "deposit": 65420,
+    "hood": "ba:neighborhood_hellskitchen",
+    "key": "ba:street_secondavenue#10",
+    "layout": "K1",
+    "m2": 660,
+    "occupant": {
+     "name": "HART. Gifts",
+     "type": "Giftshop",
+     "typeSlug": "ba:businesstype_giftshop"
+    },
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": 1041,
+    "size": "K",
+    "status": "mine",
+    "traffic": 74,
+    "type": "office"
+   }
+  ],
+  "caps": {
+   "cinema": {
+    "S": [
+     100,
+     150
+    ]
+   },
+   "office": {
+    "A": 4,
+    "C": 8,
+    "D": 10,
+    "J": 10,
+    "K": 50
+   },
+   "retail": {
+    "A": 15,
+    "C": 30,
+    "D": 40,
+    "M": 75
+   },
+   "theater": {
+    "R": [
+     150,
+     200
+    ]
+   }
+  },
+  "demand": {},
+  "forSale": [],
+  "rent": {
+   "check": {
+    "leases": 0,
+    "worst": 0
+   },
+   "constant": 30,
+   "deposit": {
+    "check": {
+     "deposits": 0,
+     "worst": 0.0
+    },
+    "factors": {
+     "lease": 62.84,
+     "warehouse": 93.61
+    }
+   },
+   "officeFactor": 1.033,
+   "rates": {
+    "ba:neighborhood_garmentdistrict": 0.00734,
+    "ba:neighborhood_hellskitchen": 0.01468,
+    "ba:neighborhood_industrycity": 0.00566,
+    "ba:neighborhood_lowermanhattan": 0.00621,
+    "ba:neighborhood_midtown": 0.02482,
+    "ba:neighborhood_murrayhill": 0.0102,
+    "ba:neighborhood_thehamptons": 0.00568
+   }
+  },
+  "rivalNames": {},
+  "rivals": 0
+ },
+ "products": [],
+ "rhythm": {
+  "basis": "revenue",
+  "customers": null,
+  "profit": null,
+  "recent": {
+   "customers": null,
+   "days": 28,
+   "profit": null,
+   "revenue": null
+  },
+  "revenue": null,
+  "today": {
+   "day": "Saturday",
+   "index": null
+  },
+  "yesterday": {
+   "day": "Friday",
+   "index": null
+  }
+ },
+ "skillNames": {
+  "ba:skill_actor": "Actor",
+  "ba:skill_cleaning": "Cleaning",
+  "ba:skill_customerservice": "Customerservice",
+  "ba:skill_dj": "Dj",
+  "ba:skill_eventplanner": "Eventplanner",
+  "ba:skill_factoryworker": "Factoryworker",
+  "ba:skill_graphicdesigner": "Graphicdesigner",
+  "ba:skill_gymtrainer": "Gymtrainer",
+  "ba:skill_hairstylist": "Hairstylist",
+  "ba:skill_headhunter": "Headhunter",
+  "ba:skill_hrmanager": "Hrmanager",
+  "ba:skill_lawyer": "Lawyer",
+  "ba:skill_logisticsmanager": "Logisticsmanager",
+  "ba:skill_pricingmanager": "Pricingmanager",
+  "ba:skill_programmer": "Programmer",
+  "ba:skill_projectionist": "Projectionist",
+  "ba:skill_purchasingagent": "Purchasingagent",
+  "ba:skill_securityguard": "Securityguard",
+  "ba:skill_stagecrew": "Stagecrew",
+  "ba:skill_travelagent": "Travelagent"
+ },
+ "staff": {
+  "absent": 0,
+  "avgSatisfaction": 0.0,
+  "complaining": 0,
+  "dailyCost": 0.0,
+  "roles": [
+   {
+    "cost": 0,
+    "count": 3,
+    "role": "Customerservice"
+   }
+  ],
+  "sites": [
+   {
+    "count": 2,
+    "site": "HART. Gifts"
+   },
+   {
+    "count": 1,
+    "site": "HART. Corner"
+   }
+  ],
+  "total": 3,
+  "unhappy": 3
+ },
+ "staffing": [
+  {
+   "addPeople": {
+    "assign": [],
+    "hire": [],
+    "hoursUncovered": 0,
+    "people": 0
+   },
+   "basis": {},
+   "bench": [],
+   "ceiling": null,
+   "cost": {
+    "current": 0.0,
+    "currentCover": 0.0,
+    "weekly": 0.0
+   },
+   "current": {
+    "cleaning": 0,
+    "coverFragments": 0,
+    "fragments": 0,
+    "list": [],
+    "security": 0,
+    "shifts": 0
+   },
+   "demandDataComplete": false,
+   "fullCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 4,
+       "role": "Cleaning",
+       "skill": "ba:skill_cleaning"
+      }
+     ],
+     "hoursUncovered": 168,
+     "people": 4
+    },
+    "bench": [],
+    "cost": {
+     "current": 0.0,
+     "currentCover": 0.0,
+     "weekly": 0.0
+    },
+    "daysMeasured": 0,
+    "daysNeeded": 9,
+    "headcount": {
+     "ba:skill_cleaning": {
+      "have": 0,
+      "hire": 4,
+      "hireHours": 120,
+      "kind": "clean",
+      "max": 5,
+      "min": 4,
+      "needed": 168,
+      "spare": 0
+     }
+    },
+    "inGame": false,
+    "open": [
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ]
+    ],
+    "openAllHours": true,
+    "openNow": false,
+    "placed": [],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 0.0,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
+   "headcount": {},
+   "key": "ba:street_fifthavenue#4",
+   "measure": {
+    "days": 0,
+    "need": 2,
+    "open": 1
+   },
+   "name": "HART. Bare",
+   "need": {},
+   "open": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "people": [],
+   "placed": [],
+   "roles": [],
+   "shifts": [],
+   "shortDays": [],
+   "shortHours": [],
+   "slack": {
+    "budget": 0.0,
+    "cost": 0.0,
+    "hours": 0.0
+   },
+   "stations": [
+    {
+     "id": null,
+     "name": "Cleaningstation",
+     "rate": null,
+     "skill": "ba:skill_cleaning"
+    }
+   ],
+   "typeSlug": "ba:businesstype_giftshop",
+   "unmeasured": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ]
+  },
+  {
+   "addPeople": {
+    "assign": [],
+    "hire": [],
+    "hoursUncovered": 0,
+    "people": 0
+   },
+   "basis": {},
+   "bench": [],
+   "ceiling": null,
+   "cost": {
+    "current": 0.0,
+    "currentCover": 0.0,
+    "weekly": 0.0
+   },
+   "current": {
+    "cleaning": 0,
+    "coverFragments": 0,
+    "fragments": 0,
+    "list": [
+     {
+      "d": 2,
+      "f": 8,
+      "p": 0,
+      "s": 1,
+      "t": 20
+     }
+    ],
+    "security": 0,
+    "shifts": 1
+   },
+   "demandDataComplete": false,
+   "fullCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 4,
+       "role": "Cleaning",
+       "skill": "ba:skill_cleaning"
+      }
+     ],
+     "hoursUncovered": 168,
+     "people": 4
+    },
+    "bench": [],
+    "cost": {
+     "current": 0.0,
+     "currentCover": 0.0,
+     "weekly": 0.0
+    },
+    "daysMeasured": 0,
+    "daysNeeded": 9,
+    "headcount": {
+     "ba:skill_cleaning": {
+      "have": 0,
+      "hire": 4,
+      "hireHours": 120,
+      "kind": "clean",
+      "max": 5,
+      "min": 4,
+      "needed": 168,
+      "spare": 0
+     }
+    },
+    "inGame": false,
+    "open": [
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ]
+    ],
+    "openAllHours": true,
+    "openNow": false,
+    "placed": [],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 0.0,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
+   "headcount": {},
+   "key": "ba:street_broadway#2",
+   "measure": {
+    "days": 0,
+    "need": 2,
+    "open": 1
+   },
+   "name": "HART. Corner",
+   "need": {},
+   "open": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "people": [
+    {
+     "id": "CCCCemployeeCCCCCCCCCCCC",
+     "name": "Cy Moss"
+    }
+   ],
+   "placed": [],
+   "roles": [],
+   "shifts": [],
+   "shortDays": [],
+   "shortHours": [],
+   "slack": {
+    "budget": 0.0,
+    "cost": 0.0,
+    "hours": 0.0
+   },
+   "stations": [
+    {
+     "id": null,
+     "name": "Cleaningstation",
+     "rate": null,
+     "skill": "ba:skill_cleaning"
+    },
+    {
+     "id": "REGISTERaaaaaaaaaaaaaa==ay",
+     "name": null,
+     "rate": null,
+     "skill": null
+    }
+   ],
+   "typeSlug": "ba:businesstype_giftshop",
+   "unmeasured": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ]
+  },
+  {
+   "addPeople": {
+    "assign": [],
+    "hire": [],
+    "hoursUncovered": 0,
+    "people": 0
+   },
+   "basis": {},
+   "bench": [],
+   "ceiling": null,
+   "cost": {
+    "current": 0.0,
+    "currentCover": 0.0,
+    "weekly": 0.0
+   },
+   "current": {
+    "cleaning": 0,
+    "coverFragments": 0,
+    "fragments": 0,
+    "list": [
+     {
+      "d": 0,
+      "f": 0,
+      "p": 0,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 8,
+      "p": 0,
+      "s": 2,
+      "t": 20
+     }
+    ],
+    "security": 0,
+    "shifts": 2
+   },
+   "demandDataComplete": false,
+   "fullCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 4,
+       "role": "Cleaning",
+       "skill": "ba:skill_cleaning"
+      }
+     ],
+     "hoursUncovered": 168,
+     "people": 4
+    },
+    "bench": [],
+    "cost": {
+     "current": 0.0,
+     "currentCover": 0.0,
+     "weekly": 0.0
+    },
+    "daysMeasured": 0,
+    "daysNeeded": 9,
+    "headcount": {
+     "ba:skill_cleaning": {
+      "have": 0,
+      "hire": 4,
+      "hireHours": 120,
+      "kind": "clean",
+      "max": 5,
+      "min": 4,
+      "needed": 168,
+      "spare": 0
+     }
+    },
+    "inGame": false,
+    "open": [
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ]
+    ],
+    "openAllHours": true,
+    "openNow": false,
+    "placed": [],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 0,
+      "t": 24
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 0.0,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
+   "headcount": {},
+   "key": "ba:street_secondavenue#10",
+   "measure": {
+    "days": 0,
+    "need": 2,
+    "open": 1
+   },
+   "name": "HART. Gifts",
+   "need": {},
+   "open": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "people": [
+    {
+     "id": "AAAAemployeeAAAAAAAAAAAA",
+     "name": "Ana Silva"
+    }
+   ],
+   "placed": [],
+   "roles": [],
+   "shifts": [],
+   "shortDays": [],
+   "shortHours": [],
+   "slack": {
+    "budget": 0.0,
+    "cost": 0.0,
+    "hours": 0.0
+   },
+   "stations": [
+    {
+     "id": null,
+     "name": "Cleaningstation",
+     "rate": null,
+     "skill": "ba:skill_cleaning"
+    },
+    {
+     "id": "CLEANcccccccccccccccccc==ue",
+     "name": null,
+     "rate": null,
+     "skill": null
+    },
+    {
+     "id": "REGISTERaaaaaaaaaaaaaa==ue",
+     "name": null,
+     "rate": null,
+     "skill": null
+    }
+   ],
+   "typeSlug": "ba:businesstype_giftshop",
+   "unmeasured": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ]
+  }
+ ],
+ "supply": {
+  "day": 34,
+  "daysToImport": 2,
+  "factories": {
+   "aliases": {},
+   "character": "default",
+   "depotOther": {},
+   "depotRoutes": {},
+   "depots": {
+    "3": {
+     "ba:itemname_candle": {
+      "arrivedLastWeek": 0,
+      "contracts": [
+       {
+        "active": false,
+        "agent": true,
+        "amount": 500,
+        "group": 2,
+        "id": "CONTRACTthree",
+        "importer": "3 Pier",
+        "lastWeek": 0,
+        "order": 2,
+        "product": 0,
+        "repeating": false,
+        "smart": false
+       }
+      ],
+      "covered": false,
+      "drawWeek": 0,
+      "levelAt": null,
+      "levelId": null,
+      "levelImporter": null,
+      "levelName": null,
+      "pass": [
+       {
+        "amount": 500,
+        "smart": false
+       }
+      ],
+      "pausedWeekly": 500,
+      "plain": 500,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "routed": 0,
+      "smart": false,
+      "target": null,
+      "weekly": 0
+     },
+     "ba:itemname_paperbag": {
+      "arrivedLastWeek": 0,
+      "contracts": [
+       {
+        "active": true,
+        "agent": true,
+        "amount": 3800,
+        "group": 0,
+        "id": "CONTRACTone",
+        "importer": "1 Pier",
+        "lastWeek": 0,
+        "order": 0,
+        "product": 0,
+        "repeating": true,
+        "smart": true
+       },
+       {
+        "active": false,
+        "agent": false,
+        "amount": 0,
+        "group": 1,
+        "id": "CONTRACTtwo",
+        "importer": "2 Pier",
+        "lastWeek": 0,
+        "order": 1,
+        "product": 0,
+        "repeating": false,
+        "smart": false
+       }
+      ],
+      "covered": false,
+      "drawWeek": 0,
+      "levelAt": 0,
+      "levelId": "CONTRACTone",
+      "levelImporter": "1 Pier",
+      "levelName": "1 Pier",
+      "pass": [
+       {
+        "amount": 3800,
+        "smart": true
+       }
+      ],
+      "pausedWeekly": 0,
+      "plain": 0,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "routed": 0,
+      "smart": true,
+      "target": 3800,
+      "weekly": 3800
+     }
+    }
+   },
+   "machines": 0,
+   "sites": [],
+   "unnamed": 0
+  },
+  "facts": {
+   "3": {
+    "ba:itemname_candle": {
+     "cad": "weekly",
+     "have": 500,
+     "imp": true,
+     "lvl": "ok",
+     "need": 0,
+     "parts": {
+      "lines": 0,
+      "route": 0,
+      "sites": 0
+     },
+     "role": "depot",
+     "setTo": null,
+     "st": "covered",
+     "use": 0,
+     "why": null
+    },
+    "ba:itemname_paperbag": {
+     "cad": "weekly",
+     "have": 3800,
+     "imp": true,
+     "lvl": "ok",
+     "need": 0,
+     "parts": {
+      "lines": 0,
+      "route": 0,
+      "sites": 0
+     },
+     "role": "depot",
+     "setTo": null,
+     "st": "covered",
+     "use": 0,
+     "why": null
+    }
+   }
+  },
+  "graph": {
+   "links": [
+    {
+     "arrives": 36,
+     "cadence": "weekly",
+     "from": "import:ba:street_pier#1",
+     "items": 1,
+     "paused": false,
+     "perDay": 0,
+     "to": "ba:street_pier#9"
+    },
+    {
+     "arrives": 29,
+     "cadence": "weekly",
+     "from": "import:ba:street_pier#3",
+     "items": 1,
+     "paused": true,
+     "perDay": 71,
+     "to": "ba:street_pier#9"
+    }
+   ],
+   "nodes": [
+    {
+     "col": 2,
+     "hood": "ba:neighborhood_lowermanhattan",
+     "id": "ba:street_pier#9",
+     "items": [],
+     "kind": "depot",
+     "low": 0,
+     "name": "HART. Depot",
+     "short": 0,
+     "site": 3,
+     "stock": 0,
+     "sub": "Warehouse",
+     "tag": "LM",
+     "tight": 0
+    },
+    {
+     "col": 0,
+     "hood": "",
+     "id": "import:ba:street_pier#1",
+     "items": [],
+     "kind": "import",
+     "low": 0,
+     "name": "1 Pier",
+     "short": 0,
+     "site": null,
+     "stock": 0,
+     "sub": "Weekly import",
+     "tag": "",
+     "tight": 0
+    },
+    {
+     "col": 0,
+     "hood": "",
+     "id": "import:ba:street_pier#3",
+     "items": [],
+     "kind": "import",
+     "low": 0,
+     "name": "3 Pier",
+     "short": 0,
+     "site": null,
+     "stock": 0,
+     "sub": "Import paused",
+     "tag": "",
+     "tight": 0
+    }
+   ]
+  },
+  "hoursToImport": 1.42,
+  "idle": [],
+  "idleWeeks": 4.0,
+  "imports": [],
+  "leftToday": 0.417,
+  "margin": 0.15,
+  "nextImportDay": 36,
+  "nextImportWeekday": "Monday",
+  "roundTo": 10,
+  "shops": [],
+  "today": "Saturday"
+ },
+ "trends": [
+  {
+   "change": null,
+   "key": "ba:street_secondavenue#10",
+   "last7": 0.0,
+   "prev7": 0.0,
+   "ready": false,
+   "s": 0
+  },
+  {
+   "change": null,
+   "key": "ba:street_broadway#2",
+   "last7": 0.0,
+   "prev7": 0.0,
+   "ready": false,
+   "s": 1
+  },
+  {
+   "change": null,
+   "key": "ba:street_fifthavenue#4",
+   "last7": 0.0,
+   "prev7": 0.0,
+   "ready": false,
+   "s": 2
+  },
+  {
+   "change": null,
+   "key": "ba:street_pier#9",
+   "last7": 0.0,
+   "prev7": 0.0,
+   "ready": false,
+   "s": 3
+  }
+ ],
+ "weekly": []
+}
