@@ -1230,6 +1230,7 @@
        "item": "Cake",
        "slug": "cake",
        "missing": [],
+       "missingSlugs": [],
        "workstation": "Oven",
        "workstationKey": "ba:factoryworkstationtype_oven",
        "slots": [
@@ -1284,6 +1285,7 @@
        "item": "Bread",
        "slug": "bread",
        "missing": [],
+       "missingSlugs": [],
        "workstation": "Oven",
        "workstationKey": "ba:factoryworkstationtype_oven",
        "slots": [
@@ -1338,6 +1340,7 @@
         "bread"
        ],
        "waitingOn": [],
+       "waitingOnSlugs": [],
        "target": 1400,
        "from": 0,
        "directImport": false,
@@ -1397,6 +1400,7 @@
         "cake"
        ],
        "waitingOn": [],
+       "waitingOnSlugs": [],
        "target": 500,
        "from": 0,
        "directImport": false,
@@ -1449,6 +1453,7 @@
         "cake"
        ],
        "waitingOn": [],
+       "waitingOnSlugs": [],
        "target": 300,
        "from": 0,
        "directImport": false,

@@ -346,7 +346,10 @@ test('a Japanese goods-flow node and a German heat-grid header stay inside their
   node.stock = 0;
   await boardOn(page, payload);
   await page.evaluate(async table => { gnTables.set('ja', Promise.resolve(table)); await setGameNames('ja'); }, ja);
-  await page.evaluate(() => { showPage('supply'); showSub('supply', 'map'); });
+  // The goods-flow diagram is a view of Supply's tabs: the depot's tab, drawn as the diagram.
+  await page.evaluate(() => { showPage('supply'); sbViewOn = 'diagram'; showSub('supply', 'warehouses'); drawSupplyTab('warehouses'); wireAll(); });
+  // On screen, so the widths below are measured and not a hidden svg's zeros.
+  assert.ok(await page.evaluate(() => document.querySelector('#flow').getBoundingClientRect().width > 0));
   const boxes = await page.$$eval('#flow .node, .flow .node', nodes => nodes.map(g => {
     const r = g.querySelector('rect').getBBox();
     return [...g.querySelectorAll('text')].map(t => ({text: t.textContent, over: t.getBBox().x + t.getBBox().width - (r.x + r.width)}));
@@ -487,6 +490,47 @@ test('a wiki guide names its skills, recipes and sellers in the language picked'
     ...product.alsoSoldByKeys])
     assert.ok(text.includes(FIX.de[key]), `${key}: ${FIX.de[key]}`);
   assert.deepEqual(errors, []);
+});
+
+/* A factory line standing still names what it waits for: the line's missing
+   inputs, and each input's waitingOn, with their keys beside them. */
+test('a stalled line names the inputs it waits for in the language picked', async t => {
+  const {page} = await site(t);
+  await boardOn(page);
+  await page.evaluate(async () => { await setGameNames('de'); });
+  const said = await page.evaluate(({line, needs}) => {
+    const L = localiseNames({names: dataEn().names, line, needs});
+    return {missing: L.line.missing, says: L.needs.map(r => szSays({st: 'stalled', why: 'waiting'}, r, 'Depot'))};
+  }, FIX.stalled);
+  assert.deepEqual(said.missing, [FIX.de['ba:itemname_water'], FIX.de['ba:itemname_sugar']]);
+  assert.ok(said.says[0].endsWith(`for want of ${FIX.de['ba:itemname_sugar']}`), said.says[0]);
+  assert.ok(said.says[1].endsWith(`for want of ${FIX.de['ba:itemname_water']}`), said.says[1]);
+});
+
+/* The help's own article links a page by its game name: shown in the language
+   picked, and linked as before. */
+test('a link in the help that names its page reads in the language picked', async t => {
+  const {page} = await site(t);
+  await page.evaluate(async () => { await setGameNames('de'); BigCopilotBoard.browseWiki(); location.hash = '#wiki/businesstypes-florist'; });
+  await page.locator('#pageWiki h1').filter({hasText: FIX.de['ba:businesstype_florist']}).waitFor();
+  const links = await page.$$eval('#pageWiki .wk-read a.wk-link, #pageWiki .wk-read .wk-link', els => els.map(e => e.textContent));
+  assert.ok(links.includes('Blume (günstig)'), links.join(' | '));
+  assert.ok(links.includes('Kundendienst'), links.join(' | '));
+  // A tip names the recipe's machines in the language picked too.
+  const tips = await page.$$eval('#pageWiki [data-tip]', els => els.map(e => e.dataset.tip).join('\n'));
+  assert.ok(tips.includes(FIX.de['ba:itemname_hydroponicplanter']), 'the production machine in the tip');
+  // A variant bracket with no space before it still ends the kind's name.
+  assert.equal(await page.evaluate(() => wikiFixKind({name: '의류 랙(사선형)', src: ''})), '의류 랙');
+});
+
+test('a requirement stated on the fixture page names the fixture in the language picked', async t => {
+  const {page} = await site(t);
+  await page.evaluate(async () => { await setGameNames('de'); BigCopilotBoard.browseWiki(); location.hash = '#wiki/businesstypes-eventplanningagency'; });
+  await page.locator('#pageWiki h1').filter({hasText: FIX.de['ba:businesstype_eventplanningagency']}).waitFor();
+  const tips = await page.$$eval('#pageWiki [data-tip]', els => els.map(e => e.dataset.tip)
+    .filter(t => /requires this on its own help page/.test(t)));
+  assert.ok(tips.length, 'the guide has a requirement stated on a fixture page');
+  assert.ok(tips.every(t => / \(DE\) requires this/.test(t)), tips.join(' | '));
 });
 
 test('the board search lists a wiki page under its name as shown, and finds it by the English', async t => {

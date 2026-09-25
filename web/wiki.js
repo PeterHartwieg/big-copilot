@@ -355,6 +355,11 @@ function wikiLink(label, target, ctx){
   const address = /^address\s*:/i.test(to) ? to.replace(/^address\s*:/i, "").trim() : "";
   if(address)
     return `<span class="wk-addr" data-addr="${attr(address)}">${wikiText(label)}</span>`;
+  /* A link worded exactly as its page's game name is that name, shown in the
+     language picked; any other wording ("Nightclubs") stays as the help wrote it. */
+  const page = wikiData && wikiData.byId && wikiData.byId.get(to);
+  if(page && page.key && String(label).trim() === String(page.title || "").trim())
+    label = wikiName(page.key, label);
   if(wikiData && wikiData.has(to) && to !== (ctx && ctx.id))
     return `<a class="wk-link" href="${attr(wikiHref({kind: "page", id: to}))}">${wikiText(label)}</a>`;
   return wikiText(label);
@@ -797,7 +802,7 @@ const wikiShown = p => wikiName(p && (p.slug || p.nameSrc), (p && p.name) || "")
 const wikiFixName = f => wikiName((/^help_(ba:itemname_.+)_content$/.exec((f && f.src) || "") || [])[1], (f && f.name) || "");
 /* A fixture as a kind of thing, without its variant: "Bookshelf" for
    "Bookshelf (Small)", in the language shown. */
-const wikiFixKind = f => wikiFixName(f).split(/ \(|（/)[0];
+const wikiFixKind = f => wikiFixName(f).split(/\s*[(（]/)[0];
 /* A business's staff skills in the language shown, by the keys beside them
    (skillKeys, index for index); the English where there is no key. */
 const wikiSkillName = (b, skill) => {
@@ -1286,7 +1291,7 @@ function wikiGuideSetup(g, page, offers, ctx){
         meta: one
           ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
           : eachNamed(members),
-        tip: `${fixtures[k].name} requires this on its own help page: “${wikiPlain(line)}”. `
+        tip: `${wikiFixName(fixtures[k])} requires this on its own help page: “${wikiPlain(line)}”. `
           + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
       }));
       members.forEach(m => covered.add(m));
@@ -1763,8 +1768,9 @@ function wikiRecipeFlow(row, g){
   return `<div class="wk-recipe rv">${roles}<div class="wk-flow">
     <div class="wk-box">${ings || `<span class="quiet">no ingredient stated</span>`}</div>
     <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
-    <div class="wk-box mid" data-tip="${attr(`${station.assembly || "An assembly machine"}`
-      + `${(station.production || []).length ? ` with ${station.production.join(", ")}` : ""}`
+    <div class="wk-box mid" data-tip="${attr(`${station.assembly ? wikiName(station.assemblyKey, station.assembly) : "An assembly machine"}`
+      + `${(station.production || []).length
+        ? ` with ${station.production.map((n, i) => wikiName((station.productionKeys || [])[i], n)).join(", ")}` : ""}`
       + `${(station.runs || []).length ? `. The same workstation runs ${station.runs.length} recipes.` : ""}`)}">
       <b>${wikiText(wikiStationName(r, station) || "Workstation")}</b>
       ${(station.runs || []).length

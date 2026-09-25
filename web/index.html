@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=7cd61bded7">
+<link rel="stylesheet" href="community.css?v=f960c3390e">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=7cd61bded7">
+<link rel="stylesheet" href="fonts/fonts.css?v=f960c3390e">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3844,8 +3844,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "7cd61bded7";</script>
-<script>window.LEDGER_RELEASE = {"version":"7cd61bded7","latest":{"pr":0,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_BUILD = "f960c3390e";</script>
+<script>window.LEDGER_RELEASE = {"version":"f960c3390e","latest":{"pr":0,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3929,8 +3929,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=7cd61bded7"></script>
-<script src="community.js?v=7cd61bded7"></script>
+<script src="app.js?v=f960c3390e"></script>
+<script src="community.js?v=f960c3390e"></script>
 
 <script>
 
@@ -4207,7 +4207,8 @@ const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", [
   ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
   ["workstationKey", ["workstation"], []]];
 /* Lists of names with their keys in a list beside them, index for index. */
-const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"]];
+const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
+  ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
 /* Every string of the payload passes here, the table or not. Python writes
    a game name inside a sentence as a token, U+27E6 key|English U+27E7 (tok()
    in Python), and it reads as that key's name in the language on screen, or
@@ -13365,6 +13366,11 @@ function wikiLink(label, target, ctx){
   const address = /^address\s*:/i.test(to) ? to.replace(/^address\s*:/i, "").trim() : "";
   if(address)
     return `<span class="wk-addr" data-addr="${attr(address)}">${wikiText(label)}</span>`;
+  /* A link worded exactly as its page's game name is that name, shown in the
+     language picked; any other wording ("Nightclubs") stays as the help wrote it. */
+  const page = wikiData && wikiData.byId && wikiData.byId.get(to);
+  if(page && page.key && String(label).trim() === String(page.title || "").trim())
+    label = wikiName(page.key, label);
   if(wikiData && wikiData.has(to) && to !== (ctx && ctx.id))
     return `<a class="wk-link" href="${attr(wikiHref({kind: "page", id: to}))}">${wikiText(label)}</a>`;
   return wikiText(label);
@@ -13807,7 +13813,7 @@ const wikiShown = p => wikiName(p && (p.slug || p.nameSrc), (p && p.name) || "")
 const wikiFixName = f => wikiName((/^help_(ba:itemname_.+)_content$/.exec((f && f.src) || "") || [])[1], (f && f.name) || "");
 /* A fixture as a kind of thing, without its variant: "Bookshelf" for
    "Bookshelf (Small)", in the language shown. */
-const wikiFixKind = f => wikiFixName(f).split(/ \(|（/)[0];
+const wikiFixKind = f => wikiFixName(f).split(/\s*[(（]/)[0];
 /* A business's staff skills in the language shown, by the keys beside them
    (skillKeys, index for index); the English where there is no key. */
 const wikiSkillName = (b, skill) => {
@@ -14296,7 +14302,7 @@ function wikiGuideSetup(g, page, offers, ctx){
         meta: one
           ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
           : eachNamed(members),
-        tip: `${fixtures[k].name} requires this on its own help page: “${wikiPlain(line)}”. `
+        tip: `${wikiFixName(fixtures[k])} requires this on its own help page: “${wikiPlain(line)}”. `
           + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
       }));
       members.forEach(m => covered.add(m));
@@ -14773,8 +14779,9 @@ function wikiRecipeFlow(row, g){
   return `<div class="wk-recipe rv">${roles}<div class="wk-flow">
     <div class="wk-box">${ings || `<span class="quiet">no ingredient stated</span>`}</div>
     <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
-    <div class="wk-box mid" data-tip="${attr(`${station.assembly || "An assembly machine"}`
-      + `${(station.production || []).length ? ` with ${station.production.join(", ")}` : ""}`
+    <div class="wk-box mid" data-tip="${attr(`${station.assembly ? wikiName(station.assemblyKey, station.assembly) : "An assembly machine"}`
+      + `${(station.production || []).length
+        ? ` with ${station.production.map((n, i) => wikiName((station.productionKeys || [])[i], n)).join(", ")}` : ""}`
       + `${(station.runs || []).length ? `. The same workstation runs ${station.runs.length} recipes.` : ""}`)}">
       <b>${wikiText(wikiStationName(r, station) || "Workstation")}</b>
       ${(station.runs || []).length

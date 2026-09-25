@@ -5344,12 +5344,13 @@ def _factories(
 
     chosen = history.named(character) if history else {}
 
-    def missing(key, slug):
-        """Inputs of a recipe that neither arrive nor are held at the site."""
+    def missing(key, slug, keys=False):
+        """Inputs of a recipe that neither arrive nor are held at the site: their
+        names, or with `keys` their game keys, in the same order."""
         if flow["received"](key, "") is None:
             return []
         return [
-            ing["item"]
+            ing["slug"] if keys else ing["item"]
             for ing in recipes[slug]["ingredients"]
             if not arrives(key, resolve(ing)) and not held(key, resolve(ing))
         ]
@@ -5460,6 +5461,8 @@ def _factories(
                     "item": rec["item"],
                     "slug": slug,
                     "missing": stopped,
+                    # Their game keys, index for index, for the page to name them.
+                    "missingSlugs": missing(key, slug, keys=True),
                     "workstation": station_name(station),
                     "workstationKey": f"ba:factoryworkstationtype_{station}",
                     "slots": sorted(slots[key][(station, rid)]),
@@ -5513,6 +5516,8 @@ def _factories(
                     and line["ships"] < line["atRoster"] * LINE_STARVED):
                 line["limitHeld"] = True
         stopped_lines = {line["item"]: line["missing"] for line in lines if line["missing"]}
+        missing_key = {name: slug for line in lines
+                       for name, slug in zip(line["missing"], line.get("missingSlugs") or [])}
         held_lines = collections.defaultdict(lambda: True)
         for line in lines:
             held_lines[line["item"]] = held_lines[line["item"]] and line["limitHeld"]
@@ -5541,6 +5546,7 @@ def _factories(
                 if all(line in stopped_lines for line in row["lines"])
                 else []
             )
+            row["waitingOnSlugs"] = [missing_key.get(name) for name in row["waitingOn"]]
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
             row["limited"] = bool(
@@ -14304,7 +14310,8 @@ const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", [
   ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
   ["workstationKey", ["workstation"], []]];
 /* Lists of names with their keys in a list beside them, index for index. */
-const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"]];
+const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
+  ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
 /* Every string of the payload passes here, the table or not. Python writes
    a game name inside a sentence as a token, U+27E6 key|English U+27E7 (tok()
    in Python), and it reads as that key's name in the language on screen, or

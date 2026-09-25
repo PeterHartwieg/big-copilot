@@ -124,6 +124,25 @@ def cut_findings(text: dict) -> list:
     return notes
 
 
+def stalled(text: dict) -> dict:
+    """A factory whose beer line stands still for want of both its inputs,
+    from _factories(): the line's `missing`, and each input's `waitingOn` (the
+    other input), each with its keys beside it."""
+    from tests.test_recipe_identity import BEER, RID, SaveStub
+    water, sugar, depot = "ba:itemname_water", "ba:itemname_sugar", "depot#1"
+    factory = ba_dashboard.site_key(("factory", 0))
+    flow = {"index": {factory: 0, depot: 1}, "held": {}, "edges": {},
+            "targets": {(factory, water): (100, depot), (factory, sugar): (100, depot)},
+            "imports": {}, "shipped": lambda *a: None, "received": lambda *a: 0,
+            "byDay": lambda *a: {}, "roundDays": lambda *a: [], "routed": {}, "routeOnly": {}}
+    recipes = {BEER: {"slug": BEER, "item": text[BEER], "out": 30, "workstation": "bottledgoods",
+                      "ingredients": [{"slug": water, "item": text[water], "per": 10},
+                                      {"slug": sugar, "item": text[sugar], "per": 5}]}}
+    site = ba_dashboard._factories(SaveStub([[RID]]), Names(text), [], recipes, flow,
+                                   ba_dashboard.History(None), "company")["sites"][0]
+    return {"line": site["lines"][0], "needs": site["needs"]}
+
+
 def fixture() -> dict:
     text = english()
     with tempfile.TemporaryDirectory() as tmp:
@@ -135,6 +154,7 @@ def fixture() -> dict:
         "payload": payload,
         "english": resolved(payload),
         "cuts": cut_findings(text),
+        "stalled": stalled(text),
         "de": ba_dashboard.name_table(text, german(text)),
         "longHood": LONG_HOOD, "longHoodName": LONG_HOOD_NAME,
         "sameInGerman": SAME_IN_GERMAN,

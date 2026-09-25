@@ -1578,7 +1578,9 @@ class Guide:
                     "name": name,
                     "src": "help_factory_workstation_%s_content" % key,
                     "assembly": None,
+                    "assemblyKey": None,
                     "production": [],
+                    "productionKeys": [],
                     "vendor": None,
                     "vendors": [],
                     "runs": [],
@@ -1598,7 +1600,11 @@ class Guide:
                 "name": name,
                 "src": "help_factory_workstation_%s_content" % key,
                 "assembly": next((ref["name"] for ref in record.get("assemblyMachines") or []), None),
+                # The machines' game keys, so the page can name them in the
+                # language picked.
+                "assemblyKey": next((ref.get("slug") for ref in record.get("assemblyMachines") or []), None),
                 "production": [ref["name"] for ref in record.get("machines") or []],
+                "productionKeys": [ref.get("slug") for ref in record.get("machines") or []],
                 "vendor": sorted(vendors.items(), key=lambda item: (-item[1], item[0]))[0][0]
                 if vendors else None,
                 "vendors": [key for key, _ in sorted(vendors.items())],

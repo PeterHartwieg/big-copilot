@@ -8821,8 +8821,12 @@
           "name": "Consumer Goods Workstation",
           "src": "help_factory_workstation_consumergoods_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -8848,8 +8852,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -8871,9 +8879,14 @@
           "name": "Electronics Workstation",
           "src": "help_factory_workstation_electronics_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Kiln Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_kilnmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -10053,9 +10066,14 @@
           "name": "Food Workstation",
           "src": "help_factory_workstation_food_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Automated Baking Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_automatedbakingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -10084,9 +10102,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -11395,9 +11418,14 @@
           "name": "Clothing Workstation",
           "src": "help_factory_workstation_clothing_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Industrial Sewing Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_industrialsewingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -11419,9 +11447,14 @@
           "name": "Jewelry Workstation",
           "src": "help_factory_workstation_jewelry_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Polishing Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_polishingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -12875,9 +12908,14 @@
           "name": "Food Workstation",
           "src": "help_factory_workstation_food_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Automated Baking Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_automatedbakingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -12906,9 +12944,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -12933,8 +12976,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -14721,9 +14768,14 @@
           "name": "Electronics Workstation",
           "src": "help_factory_workstation_electronics_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Kiln Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_kilnmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -14743,9 +14795,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -17157,9 +17214,14 @@
           "name": "Food Workstation",
           "src": "help_factory_workstation_food_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Automated Baking Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_automatedbakingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -17188,9 +17250,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -17215,8 +17282,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -18691,8 +18762,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -18714,8 +18789,12 @@
           "name": "Consumer Goods Workstation",
           "src": "help_factory_workstation_consumergoods_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -18741,9 +18820,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -20043,8 +20127,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -20066,9 +20154,14 @@
           "name": "Food Workstation",
           "src": "help_factory_workstation_food_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Automated Baking Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_automatedbakingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -21944,8 +22037,12 @@
           "name": "Consumer Goods Workstation",
           "src": "help_factory_workstation_consumergoods_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -21971,9 +22068,14 @@
           "name": "Electronics Workstation",
           "src": "help_factory_workstation_electronics_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Kiln Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_kilnmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -21993,9 +22095,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -22020,8 +22127,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -24054,9 +24165,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -25122,9 +25238,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -26138,9 +26259,14 @@
           "name": "Jewelry Workstation",
           "src": "help_factory_workstation_jewelry_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Polishing Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_polishingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -26156,9 +26282,14 @@
           "name": "Electronics Workstation",
           "src": "help_factory_workstation_electronics_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine",
             "Kiln Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine",
+            "ba:itemname_kilnmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -28510,9 +28641,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -28537,8 +28673,12 @@
           "name": "Consumer Goods Workstation",
           "src": "help_factory_workstation_consumergoods_content",
           "assembly": "Consumer Goods Assembly Machine",
+          "assemblyKey": "ba:itemname_consumergoodsassemblymachine",
           "production": [
             "Laser Cutting Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_lasercuttingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -30081,9 +30221,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -32235,9 +32380,14 @@
           "name": "Food Workstation",
           "src": "help_factory_workstation_food_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Automated Baking Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_automatedbakingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -32266,9 +32416,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -32293,8 +32448,12 @@
           "name": "Garden Workstation",
           "src": "help_factory_workstation_garden_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Hydroponic Planter"
+          ],
+          "productionKeys": [
+            "ba:itemname_hydroponicplanter"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -33630,9 +33789,14 @@
           "name": "Food Workstation",
           "src": "help_factory_workstation_food_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Automated Baking Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_automatedbakingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
@@ -33661,9 +33825,14 @@
           "name": "Bottled Goods Workstation",
           "src": "help_factory_workstation_bottledgoods_content",
           "assembly": "Food Assembly Machine",
+          "assemblyKey": "ba:itemname_foodassemblymachine",
           "production": [
             "Bottling Machine",
             "Industrial Blending Machine"
+          ],
+          "productionKeys": [
+            "ba:itemname_bottlingmachine",
+            "ba:itemname_industrialblendingmachine"
           ],
           "vendor": "ba:street_twentyfifthstreet#2",
           "vendors": [
