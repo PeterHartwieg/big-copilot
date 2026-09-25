@@ -76,6 +76,9 @@ CONVERTED = {
        for name in ("data", "game_names") for field in ("text", "detail", "site")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
+    # Supply's chrome, and the imports and schedule write dialogs, write their
+    # own words in the page (tt()); Python sends the supply facts as codes.
+    "sb": [],
 }
 
 
