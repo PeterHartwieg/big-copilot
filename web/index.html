@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "5ee3db2f88";</script>
-<link rel="stylesheet" href="community.css?v=5ee3db2f88">
+<script>window.LEDGER_BUILD = "d08364c7d7";</script>
+<link rel="stylesheet" href="community.css?v=d08364c7d7">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=5ee3db2f88">
+<link rel="stylesheet" href="fonts/fonts.css?v=d08364c7d7">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2919,9 +2919,35 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-theme{align-items:flex-end}
 /* The game-names picker sits just left of it, the two settings together. */
 .sf-gn{margin-left:auto}
-.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
-  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
-.gn-pick:hover{border-color:var(--ink-3)}
+/* Drawn as the Theme switch is: the same pill, border, surface and inner 3px
+   inset, with the globe in a round well the size of a theme button. */
+.gn-pick{display:inline-flex}
+.gn-btn{display:inline-flex;align-items:center;gap:10px;box-sizing:border-box;height:42px;max-width:240px;padding:3px 14px 3px 3px;
+  border:1px solid var(--rule);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;
+  font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;transition:border-color .15s ease}
+.gn-btn:hover,.gn-btn[aria-expanded="true"]{border-color:var(--accent)}
+.gn-glyph{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent)}
+.gn-cur{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gn-chev{color:var(--ink-2);transition:transform .15s ease}
+.gn-btn:hover .gn-chev{color:var(--ink)}
+.gn-btn[aria-expanded="true"] .gn-chev{transform:rotate(180deg)}
+/* The list, hung off <body> by gnOpen() and placed against the button. */
+.gn-pop{position:fixed;left:0;top:0;z-index:60;box-sizing:border-box;min-width:200px;max-width:calc(100vw - 24px);max-height:340px;
+  overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--rule);border-radius:12px;background:var(--surface);
+  color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);scrollbar-width:thin;
+  scrollbar-color:var(--rule) transparent;animation:gnpop .14s cubic-bezier(.2,.7,.2,1)}
+.gn-pop[hidden]{display:none}
+.gn-pop:focus{outline:none}
+.gn-opt{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;padding:0 10px 0 12px;
+  border-radius:8px;font:500 13px/1.2 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;white-space:nowrap}
+.gn-opt .sf-ic{visibility:hidden;color:var(--accent);stroke-width:2.1}
+.gn-opt.gn-on{background:var(--accent-soft)}
+.gn-pop:focus-visible .gn-opt.gn-on{box-shadow:inset 0 0 0 1px var(--accent)}
+.gn-opt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.gn-opt[aria-selected="true"] .sf-ic{visibility:visible}
+@keyframes gnpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.gn-pop,.gn-chev{animation:none;transition:none}}
 /* The one-time offer of the player's own language, hung off <body>. */
 .gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
   max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
@@ -2972,7 +2998,10 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
   .sf-gn{margin-left:0}
-  .gn-pick{height:44px}
+  /* The pill keeps the Theme switch's height here too: 44px wells and a 3px inset. */
+  .gn-btn{height:52px;padding-right:16px}
+  .gn-glyph{width:44px;height:44px}
+  .gn-opt{min-height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -3746,7 +3775,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHeadL" data-tt="foot.names.head">Game names</h2>
-        <select class="gn-pick" data-gn-pick aria-labelledby="gnHeadL" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><option value="en" lang="en">English</option><option value="cs" lang="cs">Čeština</option><option value="da" lang="da">Dansk</option><option value="de" lang="de">Deutsch</option><option value="es" lang="es">Español</option><option value="fr" lang="fr">Français</option><option value="it" lang="it">Italiano</option><option value="lt" lang="lt">Lietuvių</option><option value="hu" lang="hu">Magyar</option><option value="nl" lang="nl">Nederlands</option><option value="pl" lang="pl">Polski</option><option value="pt" lang="pt">Português (Brasil)</option><option value="ro" lang="ro">Română</option><option value="fi" lang="fi">Suomi</option><option value="tr" lang="tr">Türkçe</option><option value="el" lang="el">Ελληνικά</option><option value="ru" lang="ru">Русский</option><option value="uk" lang="uk">Українська</option><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="zh-cn" lang="zh-cn">简体中文</option><option value="zh-tw" lang="zh-tw">繁體中文</option></select>
+        <div class="gn-pick" data-gn-pick data-value="en"><button type="button" class="gn-btn" id="gnHeadLBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHeadL gnHeadLBtn" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" lang="en" translate="no">English</li><li data-value="cs" lang="cs" translate="no">Čeština</li><li data-value="da" lang="da" translate="no">Dansk</li><li data-value="de" lang="de" translate="no">Deutsch</li><li data-value="es" lang="es" translate="no">Español</li><li data-value="fr" lang="fr" translate="no">Français</li><li data-value="it" lang="it" translate="no">Italiano</li><li data-value="lt" lang="lt" translate="no">Lietuvių</li><li data-value="hu" lang="hu" translate="no">Magyar</li><li data-value="nl" lang="nl" translate="no">Nederlands</li><li data-value="pl" lang="pl" translate="no">Polski</li><li data-value="pt" lang="pt" translate="no">Português (Brasil)</li><li data-value="ro" lang="ro" translate="no">Română</li><li data-value="fi" lang="fi" translate="no">Suomi</li><li data-value="tr" lang="tr" translate="no">Türkçe</li><li data-value="el" lang="el" translate="no">Ελληνικά</li><li data-value="ru" lang="ru" translate="no">Русский</li><li data-value="uk" lang="uk" translate="no">Українська</li><li data-value="ja" lang="ja" translate="no">日本語</li><li data-value="ko" lang="ko" translate="no">한국어</li><li data-value="zh-cn" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" lang="zh-tw" translate="no">繁體中文</li></ul></div>
       </div>
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHeadL" data-tt="foot.theme.head">Theme</h2>
@@ -4001,7 +4030,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHead" data-tt="foot.names.head">Game names</h2>
-        <select class="gn-pick" data-gn-pick aria-labelledby="gnHead" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><option value="en" lang="en">English</option><option value="cs" lang="cs">Čeština</option><option value="da" lang="da">Dansk</option><option value="de" lang="de">Deutsch</option><option value="es" lang="es">Español</option><option value="fr" lang="fr">Français</option><option value="it" lang="it">Italiano</option><option value="lt" lang="lt">Lietuvių</option><option value="hu" lang="hu">Magyar</option><option value="nl" lang="nl">Nederlands</option><option value="pl" lang="pl">Polski</option><option value="pt" lang="pt">Português (Brasil)</option><option value="ro" lang="ro">Română</option><option value="fi" lang="fi">Suomi</option><option value="tr" lang="tr">Türkçe</option><option value="el" lang="el">Ελληνικά</option><option value="ru" lang="ru">Русский</option><option value="uk" lang="uk">Українська</option><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="zh-cn" lang="zh-cn">简体中文</option><option value="zh-tw" lang="zh-tw">繁體中文</option></select>
+        <div class="gn-pick" data-gn-pick data-value="en"><button type="button" class="gn-btn" id="gnHeadBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHead gnHeadBtn" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" lang="en" translate="no">English</li><li data-value="cs" lang="cs" translate="no">Čeština</li><li data-value="da" lang="da" translate="no">Dansk</li><li data-value="de" lang="de" translate="no">Deutsch</li><li data-value="es" lang="es" translate="no">Español</li><li data-value="fr" lang="fr" translate="no">Français</li><li data-value="it" lang="it" translate="no">Italiano</li><li data-value="lt" lang="lt" translate="no">Lietuvių</li><li data-value="hu" lang="hu" translate="no">Magyar</li><li data-value="nl" lang="nl" translate="no">Nederlands</li><li data-value="pl" lang="pl" translate="no">Polski</li><li data-value="pt" lang="pt" translate="no">Português (Brasil)</li><li data-value="ro" lang="ro" translate="no">Română</li><li data-value="fi" lang="fi" translate="no">Suomi</li><li data-value="tr" lang="tr" translate="no">Türkçe</li><li data-value="el" lang="el" translate="no">Ελληνικά</li><li data-value="ru" lang="ru" translate="no">Русский</li><li data-value="uk" lang="uk" translate="no">Українська</li><li data-value="ja" lang="ja" translate="no">日本語</li><li data-value="ko" lang="ko" translate="no">한국어</li><li data-value="zh-cn" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" lang="zh-tw" translate="no">繁體中文</li></ul></div>
       </div>
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHead" data-tt="foot.theme.head">Theme</h2>
@@ -4113,7 +4142,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"5ee3db2f88","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"d08364c7d7","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4197,8 +4226,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=5ee3db2f88"></script>
-<script src="community.js?v=5ee3db2f88"></script>
+<script src="app.js?v=d08364c7d7"></script>
+<script src="community.js?v=d08364c7d7"></script>
 
 <script>
 
@@ -4580,9 +4609,14 @@ function gnCompare(a, b){
 }
 /* The languages this page can show: the picker's options, English first. */
 const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+/* A picker's choices: the hidden list footer_html() writes inside it. Its
+   value is its data-value. */
+const gnOpts = p => [...p.querySelectorAll(".gn-opts [data-value]")];
+/* The open list and the picker it belongs to; gnOpen() below. */
+let gnPop = null, gnPopFor = null, gnAt = -1, gnTyped = "", gnTypedAt = 0, gnSpace = false;
 const gnLangs = () => {
   const p = gnPickers()[0];
-  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+  return p ? gnOpts(p).map(o => [o.dataset.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
 };
 const gnKnown = lang => gnLangs().some(([code]) => code === lang);
 function gnStored(){
@@ -4602,8 +4636,20 @@ function gnLoad(lang){
   got.catch(() => gnTables.delete(lang));
   return got;
 }
-function gnPaint(){
-  gnPickers().forEach(p => { p.value = gnLang; });
+/* Every picker shows `lang`: the language on screen, or one just chosen while
+   its table loads. */
+function gnPaint(lang = gnLang){
+  gnPickers().forEach(p => {
+    p.dataset.value = lang;
+    const o = gnOpts(p).find(o => o.dataset.value === lang), cur = p.querySelector(".gn-cur");
+    if(!o || !cur) return;
+    cur.textContent = o.textContent;
+    cur.setAttribute("lang", o.getAttribute("lang") || lang);
+    /* An autonym is a name, left as it is; a choice worded in the UI's own
+       language would drop the mark. */
+    if(o.getAttribute("translate") === "no") cur.setAttribute("translate", "no"); else cur.removeAttribute("translate");
+  });
+  if(gnPopFor) gnMark();
 }
 /* Switch the game names: the whole board is drawn again, as for another save,
    from the English payload it already holds. A table that will not load leaves
@@ -4677,18 +4723,175 @@ function gnOffer(){
   document.body.appendChild(el);
   return el;
 }
+/* A language picked in the footer: kept, the offer answered, the names switched. */
+function gnChoose(lang){
+  gnRemember(lang);
+  const offer = document.querySelector(".gn-offer");
+  if(offer) gnOfferClose(offer, "picked");
+  gnPaint(lang);
+  return setGameNames(lang);
+}
 function wireGameNames(){
   gnPickers().forEach(p => {
     if(p.dataset.gnWired) return;
     p.dataset.gnWired = "1";
-    p.addEventListener("change", () => {
-      gnRemember(p.value);
-      const offer = document.querySelector(".gn-offer");
-      if(offer) gnOfferClose(offer, "picked");
-      setGameNames(p.value);
+    const btn = p.querySelector(".gn-btn");
+    if(!btn) return;
+    /* Enter and Space click the button; the arrows open the list as well. */
+    btn.addEventListener("click", () => { if(gnPopFor === p) gnClose(true); else gnOpen(p); });
+    btn.addEventListener("keydown", e => {
+      if(!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+      e.preventDefault();
+      gnOpen(p, e.key);
     });
   });
   gnPaint();
+}
+/* The picker's list: one listbox hung off <body>, as #alertPop is, so no
+   section's paint containment clips it, and placed against the button that
+   opened it. Focus sits on the list and aria-activedescendant names the row
+   the keys move over: the listbox-button pattern. */
+const GN_TICK = '<svg class="sf-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const gnRows = () => gnPop ? [...gnPop.querySelectorAll(".gn-opt")] : [];
+function gnMark(){
+  const want = gnPopFor && gnPopFor.dataset.value;
+  gnRows().forEach(r => r.setAttribute("aria-selected", String(r.dataset.value === want)));
+}
+function gnActive(i, scroll = true){
+  const rows = gnRows();
+  if(!rows.length) return;
+  gnAt = Math.max(0, Math.min(rows.length - 1, i));
+  rows.forEach((r, k) => r.classList.toggle("gn-on", k === gnAt));
+  gnPop.setAttribute("aria-activedescendant", rows[gnAt].id);
+  if(scroll) rows[gnAt].scrollIntoView({block: "nearest"});
+}
+/* Under the button while the list fits there, else above it (the footer is the
+   foot of the page), on whichever side has more room; the rows scroll. */
+function gnPlace(){
+  const btn = gnPopFor && gnPopFor.querySelector(".gn-btn");
+  if(!btn || !btn.isConnected){ gnClose(false); return; }
+  const r = btn.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  gnPop.style.minWidth = Math.round(r.width) + "px";
+  gnPop.style.maxHeight = "";
+  const h = gnPop.offsetHeight, below = vh - 12 - (r.bottom + 6), above = r.top - 6 - 12;
+  const down = h <= below || below >= above;
+  const fit = Math.max(120, Math.min(h, down ? below : above));
+  gnPop.style.maxHeight = fit + "px";
+  gnPop.style.top = Math.max(12, down ? r.bottom + 6 : r.top - 6 - fit) + "px";
+  gnPop.style.left = Math.max(12, Math.min(r.left, vw - gnPop.offsetWidth - 12)) + "px";
+}
+function gnClose(focus){
+  if(!gnPopFor) return;
+  const btn = gnPopFor.querySelector(".gn-btn");
+  gnPop.hidden = true;
+  gnPop.removeAttribute("aria-activedescendant");
+  gnPopFor = null; gnTyped = ""; gnSpace = false;
+  if(btn){ btn.setAttribute("aria-expanded", "false"); if(focus) btn.focus(); }
+}
+function gnPick(i){
+  const row = gnRows()[i], p = gnPopFor;
+  if(!row || !p) return;
+  const lang = row.dataset.value, was = p.dataset.value;
+  gnClose(true);
+  if(lang !== was) gnChoose(lang);
+}
+/* Type-ahead: letters typed within half a second of each other find the next
+   row that starts with them; one letter pressed again steps through its rows. */
+function gnFind(ch){
+  const now = Date.now();
+  gnTyped = (now - gnTypedAt > 500 ? "" : gnTyped) + ch.toLocaleLowerCase();
+  gnTypedAt = now;
+  const rows = gnRows(), same = [...gnTyped].every(c => c === gnTyped[0]);
+  const word = same ? gnTyped[0] : gnTyped, from = same || gnTyped.length === 1 ? gnAt + 1 : gnAt;
+  for(let k = 0; k < rows.length; k++){
+    const i = (from + k) % rows.length;
+    if(rows[i].textContent.trim().toLocaleLowerCase().startsWith(word)){ gnActive(i); return; }
+  }
+}
+function gnKey(e){
+  const n = gnRows().length;
+  if(e.key === "ArrowDown") gnActive(gnAt + 1);
+  else if(e.key === "ArrowUp") gnActive(gnAt - 1);
+  else if(e.key === "Home") gnActive(0);
+  else if(e.key === "End") gnActive(n - 1);
+  else if(e.key === "PageDown") gnActive(gnAt + 8);
+  else if(e.key === "PageUp") gnActive(gnAt - 8);
+  else if(e.key === "Enter") gnPick(gnAt);
+  /* Space picks on its keyup: picked on the keydown, focus would be back on
+     the button when the key comes up, and the button would open again. */
+  else if(e.key === " " && !gnTyped) gnSpace = true;
+  else if(e.key === "Escape"){ e.stopPropagation(); gnClose(true); }
+  else if(e.key === "Tab"){ gnClose(true); return; }
+  else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) gnFind(e.key);
+  else return;
+  e.preventDefault();
+}
+function gnBuild(){
+  gnPop = document.createElement("div");
+  gnPop.className = "gn-pop";
+  gnPop.id = "gnPop";
+  gnPop.setAttribute("role", "listbox");
+  gnPop.tabIndex = -1;
+  gnPop.hidden = true;
+  document.body.appendChild(gnPop);
+  gnPop.addEventListener("keydown", gnKey);
+  gnPop.addEventListener("keyup", e => {
+    if(e.key !== " " || !gnSpace) return;
+    gnSpace = false;
+    e.preventDefault();
+    gnPick(gnAt);
+  });
+  gnPop.addEventListener("click", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt");
+    if(row) gnPick(gnRows().indexOf(row));
+  });
+  gnPop.addEventListener("mousemove", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt"), i = gnRows().indexOf(row);
+    if(row && i !== gnAt) gnActive(i, false);
+  });
+  /* A press outside closes it; one on its own button is left to the click. */
+  document.addEventListener("pointerdown", e => {
+    if(!gnPopFor || gnPop.contains(e.target) || gnPopFor.contains(e.target)) return;
+    gnClose(false);
+  }, true);
+  gnPop.addEventListener("focusout", e => {
+    const to = e.relatedTarget;
+    if(gnPopFor && to && !gnPop.contains(to) && !gnPopFor.contains(to)) gnClose(false);
+  });
+  window.addEventListener("resize", () => { if(gnPopFor) gnPlace(); });
+  window.addEventListener("scroll", e => {
+    if(!gnPopFor || (e.target && e.target.nodeType === 1 && gnPop.contains(e.target))) return;
+    gnPlace();
+  }, true);
+}
+function gnOpen(p, key){
+  if(gnPopFor) gnClose(false);
+  if(!gnPop) gnBuild();
+  const btn = p.querySelector(".gn-btn"), head = p.closest(".sf-gn") && p.closest(".sf-gn").querySelector(".sf-head");
+  if(head && head.id) gnPop.setAttribute("aria-labelledby", head.id);
+  gnPop.textContent = "";
+  gnOpts(p).forEach((o, i) => {
+    const row = document.createElement("div");
+    row.className = "gn-opt";
+    row.id = `gnOpt${i}`;
+    row.setAttribute("role", "option");
+    row.dataset.value = o.dataset.value;
+    ["lang", "translate"].forEach(a => { if(o.getAttribute(a)) row.setAttribute(a, o.getAttribute(a)); });
+    row.innerHTML = `<span class="gn-word"></span>${GN_TICK}`;
+    row.firstChild.textContent = o.textContent;
+    gnPop.appendChild(row);
+  });
+  gnPopFor = p; gnTyped = "";
+  gnMark();
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", "gnPop");
+  gnPop.hidden = false;
+  gnPlace();
+  const rows = gnRows(), on = Math.max(0, rows.findIndex(r => r.dataset.value === p.dataset.value));
+  gnActive(key === "Home" ? 0 : key === "End" ? rows.length - 1 : on);
+  gnPop.focus({preventScroll: true});
 }
 /* Width in the units shortText() counts: a wide (CJK) character is two. */
 const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
