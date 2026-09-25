@@ -603,7 +603,7 @@ class CityMapView {
     let hoods = Array.isArray(f.hoods) ? f.hoods.filter(h => all.includes(h)) : null;
     if(hoods && hoods.length === all.length) hoods = null;
     // A limit that is not a number, or one with no end to it, is no limit.
-    const num = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
+    const limit = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
     const cat = FINDER_CATS.some(([c]) => c === f.cat) ? f.cat : "retail";
     // The type and the sort fall back here exactly as paintControls makes the
     // live ones fall back, so a search this save cannot honour in full still
@@ -612,8 +612,8 @@ class CityMapView {
     return {...f, hoods, cat, sort, sortPicked: sort === keys[0] ? false : !!f.sortPicked,
       type: this.catTypes(cat).has(f.type) ? f.type : "",
       show: FINDER_SHOWS.some(([k]) => k === f.show) ? f.show : "rent",
-      minM2: num(f.minM2), maxM2: num(f.maxM2), minCap: num(f.minCap), maxCap: num(f.maxCap),
-      minTraffic: num(f.minTraffic),
+      minM2: limit(f.minM2), maxM2: limit(f.maxM2), minCap: limit(f.minCap), maxCap: limit(f.maxCap),
+      minTraffic: limit(f.minTraffic),
       // A layout this save's buildings of the kind do not have is dropped, and a
       // kind with fewer than two layouts has no layout filter at all, as on screen.
       layouts: this.layoutKeys(cat).length < 2 || !Array.isArray(f.layouts) ? []
@@ -868,8 +868,8 @@ class CityMapView {
       const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
       // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = wh
-        ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${b.m2.toLocaleString('en-US')}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
-        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${b.m2.toLocaleString('en-US')}</span>`;
+        ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${num(b.m2)}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
+        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
       return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${this.layoutTag(b)}${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
@@ -877,7 +877,7 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -891,7 +891,7 @@ class CityMapView {
     st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
     facts.innerHTML = `<span class="wide">Owner<b>${this.ownerOf(b)}</b></span>`
       + `<span class="wide">Renter<b>${this.renterOf(b)}</b></span>`
-      + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
+      + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${num(b.m2)} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
       + `<span>Building capacity<b>${mapText(capText(b.cap))}</b></span>`
       + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
@@ -905,16 +905,16 @@ class CityMapView {
     const why = card.querySelector('.why');
     why.hidden = !f.fit;
     if(f.fit) why.textContent = this.whyRanked(b, f);
-    const num = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
+    const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
     // The demand is the Growth grid's own reading, so it leads back to that
     // type's row there.
     const demand = f.slug
       ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
           mapText(`${f.fit} in every neighbourhood, on Growth › Demand`)}"><b class="mono">${f.demand}</b><span>demand ›</span></a>`
-      : num(f.demand, 'demand');
+      : stat(f.demand, 'demand');
     card.querySelector('.nums').innerHTML = f.score != null
-      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + demand
-      : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
+      ? stat(f.score, 'score', ' sc') + stat(b.traffic, 'traffic') + demand
+      : stat(num(b.m2), 'm²') + stat(b.traffic, 'traffic');
     const grow = card.querySelector('.mf-grow');
     if(grow) grow.onclick = e => { e.preventDefault(); showGrowthRow(grow.dataset.grow); };
     if(grow && focusGrow) grow.focus({preventScroll: true});
@@ -1381,12 +1381,12 @@ class CityMapView {
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
     card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ' · no map position' : ''}</span>`;
-    const num = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
+    const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
     card.querySelector('.nums').innerHTML = trading
-      ? num(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, 'yesterday') + num(mapText(fmt(b.rent || 0)), 'rent / day') + num(mapText(b.staff ?? '—'), 'staff')
-      : b ? num(mapText(fmt(b.rent || 0)), 'rent / day') + num('—', 'not trading')
-      : owned ? num(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid')
-      : home ? num(mapText(fmt(home.rent || 0)), 'rent / day') : '';
+      ? stat(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, 'yesterday') + stat(mapText(fmt(b.rent || 0)), 'rent / day') + stat(mapText(b.staff ?? '—'), 'staff')
+      : b ? stat(mapText(fmt(b.rent || 0)), 'rent / day') + stat('—', 'not trading')
+      : owned ? stat(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid')
+      : home ? stat(mapText(fmt(home.rent || 0)), 'rent / day') : '';
     const findings = this.findings.get(key) || [];
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');

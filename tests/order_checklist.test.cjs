@@ -16,6 +16,8 @@ const context = vm.createContext({});
 // The row setting the imports table computes, which feeds the checklist.
 const settingStart = source.indexOf('function importSetting(');
 assert.ok(settingStart >= 0 && settingStart < start);
+// The board's number formatter, which the checklist's wording goes through.
+vm.runInContext(source.slice(source.indexOf('let NUM_LOCALE'), source.indexOf('const compact =')), context);
 vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
@@ -387,7 +389,7 @@ test('the Plan imports card has four states, and counts what the checklist has t
     value:20200, inGame:15200, levelName:'Import Hub'})]}]});
   assert.equal(one.length, 1);
   assert.deepEqual(card(one), {badge:'1 TO CHANGE', live:true,
-    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock ${(15200).toLocaleString()} → ${(20200).toLocaleString()}.`});
+    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock 15,200 → 20,200.`});
 
   const many = build({
     imports:[{s:0, rows:[order({item:'Sugar'}), order({item:'Flour'})]}],
@@ -460,12 +462,12 @@ test('a paused import with a figure reads as a resume, not an order from "not se
   // The row says it is paused; the card reads that, not the reason's wording.
   assert.deepEqual(rows.map(r => r.paused), [true, true]);
   assert.equal(card(rows.map(r => ({...r, reason: 'Anything.'})), [rows[1].key]).what,
-    `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
+    `<b>Sugar</b> at Import Hub: resume the paused import, 1,600/week.`);
   assert.equal(build({imports:[{s:0, rows:[order({})]}]})[0].paused, undefined, 'an ordinary order carries no flag');
   assert.equal(card(rows, [rows[1].key]).what,
-    `<b>Sugar</b> at Import Hub: resume the paused import, ${(1600).toLocaleString()}/week.`);
+    `<b>Sugar</b> at Import Hub: resume the paused import, 1,600/week.`);
   assert.equal(card(rows, [rows[0].key]).what,
-    `<b>Salt</b> at Import Hub: resume the paused import, Smart Delivery stock ${(1200).toLocaleString()}.`);
+    `<b>Salt</b> at Import Hub: resume the paused import, Smart Delivery stock 1,200.`);
 });
 
 test('the card says a review in the checklist’s own words, and escapes a save’s names', () => {
