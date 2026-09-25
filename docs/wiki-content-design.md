@@ -1,5 +1,11 @@
 # Wiki content and presentation
 
+Status: historical design research from 13 September 2026, at game build 3675. The
+Wiki has shipped; build numbers and counts below are as they were then. The board is
+now checked against build 3682 (`VERIFIED_BUILD` in `ba_dashboard.py`). For the current
+build contract see [wiki-data-pipeline.md](wiki-data-pipeline.md); for a game update see
+[game-update.md](game-update.md).
+
 A first slice of game reference inside Big Copilot, taken directly from the
 installed game rather than from any published wiki. This document is the
 content design: what is in the game files, how trustworthy each field is, how
@@ -123,7 +129,7 @@ changes what a reader should believe:
 **The Steam buildid is not the game build number.** It is a depot revision
 counter that changes for reasons unrelated to game versioning, and it is not
 comparable with the build a save reports — the number `ba_dashboard.py` tracks
-as `MIN_BUILD = 3540` and `VERIFIED_BUILD = 3675`. Nothing should print them
+as `MIN_BUILD = 3540` and `VERIFIED_BUILD = 3675`, its value then. Nothing should print them
 side by side or infer one from the other. The install carries no readable game
 version, so an extraction cannot self-report which build it belongs to; only
 file hashes can.
@@ -334,7 +340,7 @@ than buried in a scope document.
 
 The first topic is "How rent works" (`how-rent-works`): the rent formula, the
 seven district rates and the office factor from
-[find-a-location-scope.md](find-a-location-scope.md).
+[find-a-location-scope.md](archive/find-a-location-scope.md).
 
 ## 6. Keeping it honest across patches
 
@@ -353,7 +359,7 @@ inventory. A prose reword should not raise anything; a rate change from 50 to
 60 clay should. The diff is the release note for the wiki.
 
 **Carry the extraction date and the checked-against build on the page.** The
-board already prints "board checked on build 3675" using `VERIFIED_BUILD`. The
+board already prints "board checked on build 3675" (its value then) using `VERIFIED_BUILD`. The
 wiki should print the same kind of line, sourced the same way — from a save the
 extraction was checked against, not from the installation. When a loaded save
 reports a build newer than the wiki's, say so on the page rather than staying

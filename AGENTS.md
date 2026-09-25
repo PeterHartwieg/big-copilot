@@ -21,14 +21,18 @@ Everything else:
 
 - save parser: `ba_save.py`
 - web build: `build_web.py`
-- browser shell (landing screen, save picking, owns the worker): `web/app.js`
+- landing screen markup and CSS, the news strip included: `BANNER` in `build_web.py`;
+  `BEFORE_SCRIPT` beside it lists the scripts loaded ahead of the board's
+- browser shell behaviour (save picking, the three sources, owns the worker): `web/app.js`.
+  It holds no static landing markup, but at runtime it builds the save picker and fills in
+  the recover and folder buttons and the link button's New badge
 - Pyodide worker: `web/worker.js`
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
-- wiki pipeline: the `.py` files in `tools/`, with the authored wording in
-  `tools/wiki_sample.json` and the hand-written articles in `tools/wiki_topics.json`.
-  `tools/` also holds the GLM launcher, `tools/Invoke-ZaiClaude.ps1`, which is nothing to do
-  with the wiki
+- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/` or
+  `tools/game_link_mock.py`), with the authored wording in `tools/wiki_sample.json` and the
+  hand-written articles in `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
+  `tools/Invoke-ZaiClaude.ps1`, which is nothing to do with the wiki
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
   `tools/wiki_pages.py`, from `web/wiki-data.json`
 - location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
@@ -37,10 +41,48 @@ Everything else:
   `layout` (size code plus version)
 - community API: `server/`, `migrations/`, `web/community.js`
 - changelog: `web/changelog.json`
+- supporting a new game build: `docs/game-update.md`, with its scripts in `tools/game_update/`
 - game link: the wire contract is `docs/game-link-api.md`; the mod is `mod/BigCopilotLink/`
   (C#, built only inside the modding SDK's Unity project, never here); the mock that
   serves the contract from a save on disk is `tools/game_link_mock.py`; the clients are
   the third source in `web/app.js` and `--game` in `ba_dashboard.py`
+
+Searching:
+
+- A root `.ignore` hides the generated copies (`web/py/`, `web/index.html`, `web/wiki/`,
+  `web/wiki-data.json`) and the design canvases from `rg`. `rg -uu` searches them too.
+- `rg -n "^# -{6,}|^/\* --- " ba_dashboard.py` lists the file's section banners, a table of
+  contents for both the Python and the board script.
+
+## Names on screen and in code
+
+The board's words and the code's ids often differ, so grep the id, not the word.
+
+| On screen | In code |
+| --- | --- |
+| Staffing (a site's week of hours) | `roster`: `spRoster*` in the board script; `_staffing()` (the `staffing` payload key) and `_current_roster()` in Python |
+| Idle stock | finding kind `dead` |
+| Overstaffed hours | finding kind `idlestaff` |
+| Demand wave ending | finding kind `hype`; the site panel's promotion row is `spHypeRow`, over the `hypeExposure` payload key |
+| Satisfaction (site panel block) | block `standards` |
+| Promotion (site panel block) | block `pull`, drawn by `spPull()` |
+| At capacity, building capacity | finding kind `atcap`; the capacities are `_door_caps()` and `FALLBACK_CAPS` |
+| Milestones | `secGoals`, drawn by `drawGoals()` |
+| Staffing for factory lines | `drawFactoryStaffing()`, over the `factoryStaffing` payload key from `_factory_staffing()` |
+
+Words the board does not use, in UI text, wiki text and docs alike (code ids keep their
+names):
+
+- Say "building capacity", not "door cap". The game's own label is "Customer capacity".
+- No "roster", "shift" or "post". Say staffing or scheduling, talk in hours and days, and
+  name the station (Cash register, Cleaning station, Security guard locker). Hiring is
+  counted in people. The game's own demand text ("No evening shifts") is quoted as it is.
+- Never advise opening a second location or a bigger site because one is at building
+  capacity. Being at capacity is normal in a good setup, not a finding.
+
+Older text still uses these words (the `staff` finding kind's label, the Door cap section
+of `docs/dashboard-reference.md`). Follow the rule in new text; renaming old text is its
+own task.
 
 ## Sources and generated files
 
@@ -68,12 +110,16 @@ side and rebuild — the rebuild is the resolution.
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
+| `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
+| `web/changelog.json` | `python -m unittest tests.test_release_latest`, then `python build_web.py`: the file is a build stamp input |
+| A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names |
 | `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
-| `tools/*.py`, `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
+| `tools/*.py` (the wiki pipeline, not `tools/game_update/` or `tools/game_link_mock.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
+| `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
 | `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |
 
@@ -111,12 +157,17 @@ and never attach one to an issue.
   place it against its anchor, the way `#tip` and `#alertPop` do. The
   `section.measured{content-visibility:visible}` escape hatch is for the Playwright tests,
   which add `measured` to measure a section that is off screen; it is not the fix.
-- Several tests find code by slicing the source between comment or declaration strings, so
-  when you change a comment near such an anchor, update the test to match. In
-  `ba_dashboard.py`: `tests/navigation.test.cjs`, `tests/order_checklist.test.cjs`,
-  `tests/test_import_routes.py`, `tests/test_plan_orders.py`,
-  `tests/test_recipe_identity.py`. In `web/app.js`: `tests/resume.test.cjs`,
-  `tests/save_location.test.cjs`, `tests/performance.test.cjs`.
+- Several Node tests find code by slicing the source between comment or declaration
+  strings, so when you change a comment or declaration near such an anchor, update the test
+  to match. In `ba_dashboard.py`: `tests/alert_kinds.test.cjs`, `tests/fold_views.test.cjs`,
+  `tests/milestones.test.cjs`, `tests/navigation.test.cjs`,
+  `tests/order_checklist.test.cjs`, `tests/search.test.cjs`. In `web/app.js`:
+  `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
+  `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
+  matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex.
+  Two Python tests read `TEMPLATE` as text: `tests/test_plan_orders.py` cuts
+  `function planOrder(` out of it, and `tests/test_routed_supply.py` checks the line with
+  `id:"shortfall"`.
 - Set iteration order follows Python's per-process hash seed, so when a set decides the
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
@@ -132,16 +183,20 @@ and never attach one to an issue.
 
 - Changing how Python data reaches the page, or adding a payload key, a page or a template
   placeholder → `docs/architecture.md`
+- Adding a finding kind, view, payload key, finder filter, footer link or news item → the
+  Registries section of `docs/architecture.md`
+- Supporting a new game build → `docs/game-update.md`
 - Releasing, deploying, adding a feature badge, writing a changelog entry or exporting map
   assets → `docs/contributing.md`
 - Working out what a number on the board means → `docs/dashboard-reference.md`
 - Touching the wiki build or its catalogue → `docs/wiki-data-pipeline.md`
 - Touching presence, voting or the feature list → `docs/community-features.md`
 
+Finished scopes and plans are in `docs/archive/`, for history only.
+
 <!-- Planned, not yet written: docs/domain-notes.md (Big Ambitions game rules the board
-     relies on), docs/game-update.md (what to re-check when the game updates),
-     docs/agent-workflow.md (the coordinator's worktree and review loop). Link them here
-     when they land. -->
+     relies on), docs/agent-workflow.md (the coordinator's worktree and review loop).
+     Link them here when they land. -->
 
 ## Working alongside other agents
 
@@ -155,9 +210,11 @@ stays on `main`. Edit only the files your task names.
 Do not set execution timeouts or time limits for CLI commands or subagents. Let them
 finish; non-terminating polling or output-yield intervals are fine.
 
-CLI delegation goes through `docs/agent-cli.md`: it covers GLM through
-`tools/Invoke-ZaiClaude.ps1` (default `glm-5.3-flash`, key fetched from 1Password at
-runtime) and Opus through the normal Claude Code login. Never print or persist an API key,
-and never silently substitute a model. Delegate only when the user asks.
+Implementation workers run Opus 5.5 (`claude-opus-5-5`) through the normal Claude Code
+login, as a subagent or as `claude -p --model claude-opus-5-5`. GLM through
+`tools/Invoke-ZaiClaude.ps1` (default `glm-5.3-flash`, key fetched from 1Password at runtime)
+is still available when a task asks for it. Both are covered in `docs/agent-cli.md`. Never
+print or persist an API key, and never silently substitute a model. Delegate only when the
+user asks.
 
 Commit, push and deploy only when your task authorizes it.

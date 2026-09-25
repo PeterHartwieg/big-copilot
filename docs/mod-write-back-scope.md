@@ -1,5 +1,8 @@
 # Game link write-back: scope
 
+Status: shipped (PR #82 and mod 0.2.0, 24 September 2026). Kept in place because the code
+cites it; the current contract is [game-link-api.md](game-link-api.md).
+
 Written 22 September 2026. Step 2 of `docs/mod-link-scope.md`, widened from the roster alone
 to three writes: default uniforms, weekly import amounts and the staffing roster. Game facts
 were read from build 3680's `BigAmbitions.dll` IL on 22 September 2026 and are quoted with
