@@ -371,7 +371,10 @@ hire and move staff…") was seen at least once (Forget approved browsers, then 
 3. **A gone candidate.** After the dry run, discard one candidate in the phone (then
    close MyEmployees), then confirm: the answer is partial, that one is in `skipped` with
    `hoursDropped`, the rest are hired, and that candidate's hours stay empty in the
-   schedule.
+   schedule. The done dialog counts only who was hired at that site, with the open
+   place shown apart. Then wait for the board to read the game again (the "Pick N more"
+   button comes on), press it, and confirm: the replacement is hired into that site and
+   its week is written with them on the open hours.
 4. **A move.** Move a spare from one shop to another: gone from the source's schedule,
    working at the target (MyEmployees shows the new business). A person in training
    answers `in_training`.

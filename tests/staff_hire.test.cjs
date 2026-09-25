@@ -550,6 +550,13 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   assert.equal(await more.textContent(), 'Pick 1 more');
   assert.equal(await more.isDisabled(), true, 'waits for the board to read the game');
   assert.equal(await page.locator('#gwToast').count(), 0, 'no undo strip');
+  // Bare's row counts who the game hired: Cleo and Ines, Ada's place open,
+  // and the wage bill without her.
+  const bare = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${B}"]`)});
+  assert.match(await bare.locator('.c').textContent(), /^2 hired\+1 moved1 still open/);
+  assert.equal(await bare.locator('.hr-dots i.gap').count(), 1);
+  assert.equal(await bare.locator('.hr-dots i.done').count(), 3);
+  assert.equal(await bare.locator('.cst').textContent(), await page.evaluate(() => `+${fmt((20 * 36 + 16 * 36) / 7)}`));
   // The board reads the game again: Ada is gone from the candidates, and
   // "Pick 1 more" opens the review for Bare's week alone.
   await page.evaluate(p => {

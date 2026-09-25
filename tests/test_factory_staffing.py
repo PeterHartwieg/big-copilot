@@ -111,6 +111,9 @@ class Bare:
     def items(self, value):
         return value or []
 
+    def deref(self, value):
+        return value
+
 
 def hand_rows(lines, people):
     business = [{"key": KEY, "name": "Brewery", "status": "support"}]

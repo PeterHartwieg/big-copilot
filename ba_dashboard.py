@@ -6280,8 +6280,7 @@ def _plan_people(save: Save, staff: list) -> dict:
     """
     demands, training = {}, set()
     for employee in save.items(save.root.get("EmployeeInstances")):
-        # Null, or the session (an object, or a reference to one).
-        if employee.get("trainingSession"):
+        if save.deref(employee.get("trainingSession")):
             training.add(employee.get("id"))
         demands[employee.get("id")] = [
             slug
@@ -21763,8 +21762,8 @@ function hrTotals(m){
 /* The week a touched site gets: its plan's entries with somebody on them,
    and each hire week's entries with the person put on it. A week nobody
    fills stays empty. An unassigned person the plan counts on keeps their
-   entries only when this call assigns them here (`arriving`): someone in
-   training, or a "Pick more" that sends no move, leaves them empty. The
+   entries only when this call assigns them here (`arriving`): a "Pick
+   more" that sends no move leaves them empty. The
    write replaces all seven days, so the shifts the plan does not own stay
    as the game has them, except for anyone this call moves away: a
    cover-only shop plan's serving entries, and at a factory or an office
@@ -22360,12 +22359,18 @@ function hrReviewSites(m, req, phase, gone){
     const hires = S.weeks.filter(x => x.who && x.who.type === "hire" && req.names.has(x.who.c.id));
     const extra = [...m.overs, ...m.hand].filter(o => o.S === S && req.names.has(o.c.id));
     const moves = m.moves.filter(x => !x.off && x.to === S && req.names.has(x.id));
-    const cost = hires.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
+    /* Done: only who the game hired counts; a candidate who left the list
+       is a place still open. Before that, the planned figures. */
+    const took = x => !(phase === "done" && gone.has(x.c.id));
+    const hired = hires.filter(x => took(x.who)), got = extra.filter(took);
+    const missed = phase === "done" ? hires.length - hired.length + extra.length - got.length : 0;
+    const cost = hired.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
     let k = 0;
     const dot = cls => `<i class="${cls}" style="--k:${++k}"></i>`;
     const dots = phase === "ready" ? hires.map(x => dot(gone.has(x.who.c.id) ? "gap" : "")).join("") + extra.map(() => dot("")).join("")
         + moves.map(() => dot("mv")).join("") + gaps.map(() => dot("gap")).join("")
-      : [...hires, ...extra, ...moves].map(() => dot(phase === "done" ? "done" : "wait")).join("");
+      : phase === "done" ? [...hired, ...got, ...moves].map(() => dot("done")).join("") + Array.from({length: missed}, () => dot("gap")).join("")
+      : [...hires, ...extra, ...moves].map(() => dot("wait")).join("");
     const plan = !S.planned ? "no hours: assigned only" : S.site.new ? (S.site.kind === "office" ? "new: the office default" : "new: full cover, open 24/7")
       : S.variant === "full" ? "hours from full cover" : "hours from the board's plan";
     const open = hrUi.reviewOpen === S.key;
@@ -22380,7 +22385,8 @@ function hrReviewSites(m, req, phase, gone){
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
         hrBenchSlots(S, x), `${hrSlotHours(hrBenchSlots(S, x))} h`)).join("")}${
       gaps.map(x => person("Nobody", {t: `no ${hrRole(x.w.skill)} passes your filters`}, hrRole(x.w.skill), "–", "–", x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
-    const counts = `${hires.length + extra.length} hired${moves.length ? `<span class="mvc">+${moves.length} moved</span>` : ""}${at && at.rewrite && !hires.length && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
+    const counts = `${hired.length + got.length} hired${moves.length ? `<span class="mvc">+${moves.length} moved</span>` : ""}${
+      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !hires.length && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
     return `<div class="hr-dsite${open ? " open" : ""}"><button type="button" class="hr-dhead" data-hr-site="${attr(S.key)}" aria-expanded="${open}">
       <span><span class="nm">${hoodHtml(S.b)}<span class="s">${spEsc(S.b ? shortName(S.b) : S.site.name || "?")}</span>${S.site.new ? `<span class="hr-new">new</span>` : ""}</span><span class="plan">${spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}</span></span>
       <span class="hr-dots">${dots}</span><span class="c">${counts}<span class="cst">+${fmt(cost)}</span></span>${hrSvg("chev")}</button>${people}</div>`;
@@ -22464,7 +22470,7 @@ function hrReview(o = {}){
       const emptied = hrLeftEmpty(req, answer);
       const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
       const displacedCall = displaced.length ? `<div class="gw-call">${gwI("roster")}<div><b>Hours the plan takes over</b>: shifts the plan does not own that overlap its own are cut to fit, ${
-        displaced.map(at => `${spEsc(at.S.b ? shortName(at.S.b) : "a site")} ${plural(at.lost.hours, "hour")} a week`).join(", ")}. The people on them keep the rest of their hours.</div></div>` : "";
+        displaced.map(at => `${spEsc(at.S.b ? shortName(at.S.b) : "a site")} ${plural(at.lost.hours, "hour")} a week`).join(", ")}. The people on them keep any hours outside the plan's.</div></div>` : "";
       const emptyCall = emptied.length ? `<div class="gw-call gw-warn">${gwI("alert")}<div><b>Hours left empty</b> where a move takes someone away and the week is not replaced: ${
         emptied.map(({x, n}) => `${spEsc(x.p.name || "someone")} (${plural(n, "shift")} at ${spEsc(x.from.b ? shortName(x.from.b) : "a site")})`).join(", ")}. The game clears their shifts there and adds a to-do; nobody takes those hours.</div></div>` : "";
       const goneCall = gone.size ? `<div class="gw-call gw-warn">${gwI("alert")}<div><b>${plural(gone.size, "candidate", "candidates")} left the headhunter's list</b> since this board was read: ${

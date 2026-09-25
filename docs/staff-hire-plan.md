@@ -458,7 +458,10 @@ Details for D:
       Note whether the game's "no shifts" to-do clears after the schedule part.
    2. Open MyEmployees, press Review: refused "Close MyEmployees". Close it, retry: works.
    3. Discard a candidate in the phone after the dry run, then confirm: partial, that one skipped,
-      the rest hired, their hours left empty.
+      the rest hired, their hours left empty; the site's row counts only who was hired. Wait for
+      the board to re-read the game, press "Pick N more", confirm: the replacement is hired and
+      the site's week is written with them on the open hours (the mock cannot show this: its
+      `/save` keeps serving the original bytes after an apply).
    4. A move of a spare from one shop to another: gone from the source's schedule, working at the
       target; try one in training: refused.
    5. BizMan schedule open on a target shop: `screen_open`.
