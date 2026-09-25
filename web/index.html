@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "af8652cb79";</script>
-<link rel="stylesheet" href="community.css?v=af8652cb79">
+<script>window.LEDGER_BUILD = "382b040839";</script>
+<link rel="stylesheet" href="community.css?v=382b040839">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=af8652cb79">
+<link rel="stylesheet" href="fonts/fonts.css?v=382b040839">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4145,7 +4145,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"af8652cb79","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"382b040839","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4233,8 +4233,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=af8652cb79"></script>
-<script src="community.js?v=af8652cb79"></script>
+<script src="app.js?v=382b040839"></script>
+<script src="community.js?v=382b040839"></script>
 
 <script>
 
@@ -5422,7 +5422,7 @@ const SZ_WHY = {
   "short:shortfall": "Runs dry before the next delivery lands",
   "short:target": "The daily top-up is less than a day's need",
   "short:dry": "The depot it comes from is out of it",
-  "stalled:notDrawn": "The source holds it, yet little or nothing arrives",
+  "stalled:notDrawn": "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): the line is not drawing it",
   "stalled:waiting": "The line stands still for want of another input",
   "idle:notMoving": "Nothing draws on it",
   "idle:notRouted": "No plan sends it on, though your own sites sell or need it",
@@ -5434,8 +5434,8 @@ const SZ_WHY = {
   "tight:target": "The daily top-up covers a day's use, not the margin",
   "covered:route": "A route from your own site brings it",
   "covered:limit": "Produce up to holds the line back, not the supply",
-  "covered:staffing": "The roster runs the machines only part of the week",
-  "short:hours": "Rostered fewer hours a day than the line needs",
+  "covered:staffing": "Your staffing runs the machines only part of the week",
+  "short:hours": "Staffed fewer hours a day than the line needs",
 };
 const SZ_STATE = {
   covered: "Covers the use and the margin", tight: "Covers the use, not the margin",
@@ -5580,9 +5580,9 @@ function szSays(f, r, depot){
     case "tight": return f.setTo !== null ? `${num(f.setTo)} would carry the margin` : "";
     case "stalled":
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
-      return `${depot} holds ${num(r.depotStock || 0)} but the line takes ${pct}% of its need`;
+      return `${depot} holds ${num(r.depotStock || 0)}, yet only ${pct}% of the need arrived per day over the last week`;
     case "covered":
-      if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
+      if(f.why === "staffing") return `your staffing runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
       if(f.why === "route") return "a route from your own site brings it";
       return "";
@@ -8938,7 +8938,7 @@ function spNeedRead(n, f){
       if(f.why === "waiting") return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
       return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
     case "covered":
-      if(f.why === "staffing") return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
+      if(f.why === "staffing") return `Your staffing runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
       if(f.why === "limit") return "Held back by <b>Produce up to</b>";
       return "In step";
     case "made": return "Made in-house";
@@ -10798,8 +10798,8 @@ const SB_LINE_COLS = [["Line", r => r.item || r.workstation, "l"],
   ["Status", r => r.fact ? szRank(r.fact) : null, "l"]];
 const SB_INPUT_COLS = [["Factory input", r => r.item, "l"],
   ["Eats / day", r => szUse(r.fact, r.perDay), "", "At full rate under 24/7; what the shops at the end of the chain use under Demand"],
-  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null],
-  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "What the round brings each morning. With a change, the figure to type in the sending site's plan."],
+  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null, "", "Measured: what reached the factory a day over the last week, from its delivery log (only the last round while its log is under a week old)"],
+  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "Planned: what the round brings each morning. With a change, the figure to type in the sending site's plan."],
   ["Status", r => szRank(r.fact), "l"]];
 /* The sizing switch, with what it means; remembered on this device. */
 function sbSizingRow(id){
@@ -11374,6 +11374,12 @@ function factoryCounts(type){
   return out;
 }
 let planSeed = {};
+/* The days the unit prices were read over (_ingredient_prices()): a week of
+   goods cost against the units delivered, or the one day there is. */
+const priceSpan = () => {
+  const {priceFrom: from, priceDay: to} = D.plan || {};
+  return from != null && from !== to ? `over days ${from}–${to}` : `on day ${to}`;
+};
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
@@ -11477,7 +11483,7 @@ function drawPlan(){
       meta[i.item] = {
         tip: on
           + (base ? `; your factories already eat ${num(base)} of it a week` : "")
-          + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
+          + (unit !== undefined ? `; ${fmt(unit)} each ${priceSpan()}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
@@ -11562,13 +11568,13 @@ function drawProducts(){
         showAllProducts ? tt("co.prod.top", "top {n} only", {n: TOP}) : tt("co.prod.all", "all {n}", {n: all.length})}</a>`
     : `<span class="quiet">${tt("co.prod.all", "all {n}", {n: all.length})}</span>`;
   $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"), {
-    why: tt("co.prod.why", "Revenue and units are yesterday summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
+    why: tt("co.prod.why", "Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
       + " " + (showPeak
         ? (weekRange
           ? tt("co.prod.why.peaks.range", "Peaks names the weekday that sells the most units, from {range}, and the points between best and worst day.", {range: weekRange})
           : tt("co.prod.why.peaks", "Peaks names the weekday that sells the most units and the points between best and worst day."))
         : tt("co.prod.why.notes", "Weekday peaks are on the product's own note; {n} of {total} have one.", {n: withPeak, total: rows.length})),
-    quiet: tt("co.prod.quiet", "by revenue yesterday"),
+    quiet: tt("co.prod.quiet", "by revenue a day, last 7 days"),
     aside: more,
   }) + `<table>
     <thead><tr><th class="l">${tt("co.prod.col.product", "Product")}</th><th>${tt("co.prod.col.revenue", "Revenue / day")}</th><th>${
@@ -11589,7 +11595,7 @@ function drawProducts(){
         : seller.line.revenue ? (p.stores > 1
           ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
           : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
-        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
+        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any in the last seven days", {site: shortName(seller.b)});
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
@@ -14596,11 +14602,11 @@ function wikiYours(page, extra){
       "The strongest neighbourhood for this product in your save's own demand snapshot, 0 to 100."));
   if(own && own.product){
     slots.push(wikiSlot("You sell it", `${own.product.stores} shop${own.product.stores === 1 ? "" : "s"}`,
-      "Your own sites with this product on a shelf, from yesterday's trading."));
+      "Your own sites with this product on a shelf, from the last seven days' trading."));
     slots.push(wikiSlot("Sold a day", wikiNum(own.product.units),
-      "Units your shops sold yesterday, added up."));
+      "Units your shops sold a day, averaged over the last seven days and added up."));
     slots.push(wikiSlot("Average sold price", wikiMoney(own.product.price),
-      "Your own average take per unit yesterday: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
+      "Your own average take per unit over the last seven days: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
   }
   if(own && own.sites.length)
     slots.push(wikiSlot("Yours", `${own.sites.length} site${own.sites.length === 1 ? "" : "s"}`,
@@ -15792,7 +15798,7 @@ function wikiGuideOwn(g, goods){
     `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));
   const sold = (D.products || []).filter(p => goods.some(x => x.slug === p.slug));
   if(sold.length && goods.length) slots.push(wikiSlot("Its range, sold", `${sold.length} of ${goods.length}`,
-    `${sold.map(p => p.item).join(", ")} moved in your shops yesterday.`));
+    `${sold.map(p => p.item).join(", ")} moved in your shops in the last seven days.`));
   return slots;
 }
 
@@ -19125,7 +19131,7 @@ function planDraw(){
       : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
         + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
           + (priced < total
-            ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
+            ? ` Unit prices are what you paid ${priceSpan()}; the other ${total - priced} show quantities only.` : ""));
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
