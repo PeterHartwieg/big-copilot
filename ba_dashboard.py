@@ -10984,8 +10984,7 @@ svg{display:block}
 /* The board runs to a dozen screens, most of it off-view at any moment, and it
    is read on a second monitor while the game has the GPU. Sections that are not
    on screen are skipped entirely; the reserved height keeps the scrollbar
-   honest. The daily chart opts out because it sizes its viewBox from its own
-   rendered width, which is zero while skipped. */
+   honest. */
 section{content-visibility:auto; contain-intrinsic-size:auto 620px}
 section.measured{content-visibility:visible}
 /* A finding's link scrolls to a section; the sticky masthead must not cover it. */
@@ -11969,6 +11968,7 @@ td.gauge.low i b{background:var(--neg)}
 .legend a:hover i{transform:scaleX(1.4)}
 .xh{opacity:0;transition:opacity .12s}
 .chartbox:hover .xh{opacity:1}
+.chartbox.chart-miss .xh{opacity:0}
 g[data-series]{transition:opacity .25s}
 g[data-series].off{opacity:0}
 .chart rect{transition:opacity .15s}
@@ -15318,7 +15318,8 @@ function drawChart(){
   const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
   const labels = JSON.stringify(rows.map(readout));
   $("dailyBox").innerHTML = `
-    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}">
+    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}"
+      data-plot="${(L - bw / 2).toFixed(1)},${(W - R + bw / 2).toFixed(1)}">
       <div class="readout">${readout(last)}</div>
       <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;overflow:visible">${out.join("\n")}</svg>
       <div class="legend">${Object.entries(SERIES).map(([id, s]) =>
@@ -21026,7 +21027,8 @@ buildAlertSettingsPanel();
 
    Results — wireChart, wirePortfolio, wireSiteReads, wireSiteFinds, wireSiteChips:
      .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
-                          day; inside it an svg with <g class="xh"><line/><circle/></g>,
+                          day, and data-plot "left,right", the plot's hover
+                          bounds in viewBox units; inside it an svg with <g class="xh"><line/><circle/></g>,
                           a .readout line, and .legend a[data-series] toggling
                           g[data-series] (choices kept in seriesState across renders).
      tr.chain[data-chain]  click toggles .open and .show on tr.kid[data-parent=…];
@@ -22579,8 +22581,15 @@ const bindChart = once(() => {
     if(!line || !dotc || !out) return;
     let xs, ys, labels;
     try{ xs = JSON.parse(cb.dataset.xs); ys = JSON.parse(cb.dataset.ys); labels = JSON.parse(cb.dataset.labels); }catch(err){ return; }
-    const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal;
-    const x = (e.clientX - r.left) / r.width * vb.width;
+    /* The viewBox is fixed and drawn at 1:1 in the middle of a wider box, so
+       the pointer goes through the svg's own screen transform, not the box's
+       width. Beside the plot (the y axis, the empty margins) no day is read. */
+    const ctm = svg.getScreenCTM(); if(!ctm) return;
+    const x = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse()).x;
+    const [lo, hi] = (cb.dataset.plot || "").split(",").map(Number);
+    const miss = !(x >= lo && x <= hi) || !xs.length;
+    cb.classList.toggle("chart-miss", miss);
+    if(miss){ out.innerHTML = labels[labels.length - 1] || ""; return; }
     let k = 0; for(let i = 1; i < xs.length; i++) if(Math.abs(xs[i] - x) < Math.abs(xs[k] - x)) k = i;
     line.setAttribute("x1", xs[k]); line.setAttribute("x2", xs[k]);
     dotc.setAttribute("cx", xs[k]); dotc.setAttribute("cy", ys[k]);
