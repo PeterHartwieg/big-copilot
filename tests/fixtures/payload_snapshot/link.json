@@ -961,6 +961,15 @@
    "cost": 0.0,
    "count": 3,
    "external": 0.0,
+   "i18n": {
+    "name": [
+     "co.chain.name.type",
+     {
+      "chain": "Giftshops",
+      "type": "⟦ba:businesstype_giftshop|Giftshop⟧"
+     }
+    ]
+   },
    "last7": null,
    "licensing": 0.0,
    "margin": null,
@@ -987,6 +996,12 @@
    "cost": 0.0,
    "count": 1,
    "external": 0.0,
+   "i18n": {
+    "name": [
+     "co.chain.name.support",
+     {}
+    ]
+   },
    "last7": null,
    "licensing": 0.0,
    "margin": null,

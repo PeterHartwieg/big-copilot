@@ -51,7 +51,7 @@
       $('releaseTitle').textContent = hasChange ? latest.title : '';
       $('releaseSummary').textContent = hasChange ? latest.summary : '';
       banner.hidden = false;
-      $('releaseMessage').textContent = 'Update available';
+      $('releaseMessage').textContent = tt('upd.available', 'Update available');
       measure();
     } catch (_) {
       // Offline, missing manifests and transient deploy failures stay quiet.
@@ -59,6 +59,10 @@
       checking = false;
     }
   }
+  // A change of UI language: the one line this file wrote is written again.
+  if (typeof ttOnChange === 'function') ttOnChange(() => {
+    if (!banner.hidden) $('releaseMessage').textContent = tt('upd.available', 'Update available');
+  });
   setInterval(check, 60000);
   window.addEventListener('focus', check);
   window.addEventListener('online', () => { lastCheck = -Infinity; check(); });

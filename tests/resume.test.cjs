@@ -5,6 +5,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
 const startup = source.slice(source.indexOf('    // A folder chosen on an earlier visit:'), source.lastIndexOf('  });'));
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+// How app.js hands the strip its words: say(), failure() and errWords().
+const sayHelpers = source.slice(source.indexOf('  const say = (v)'), source.indexOf('\n', source.indexOf('  const errWords')));
 // The loopback check a remembered link goes through, as app.js has it.
 const loopback = source.slice(source.indexOf('  function loopbackOrigin('), source.indexOf('  // Chrome and Edge hold a public page'));
 
@@ -25,11 +29,12 @@ async function resume(permission, options = {}) {
     runtimeReady:true, pick:{dir:'character', name:'chosen.hsg'},
     place(){}, idleState(){}, wireLanding(){}, paintStrip(){},
     startAttempt(){return true;}, finishAttempt(){}, state(){},
-    note(...args){notes.push(args);},
+    note(...args){notes.push(args.map((a) => (typeof a === 'function' ? a() : a)));},
     async loadFromHandle(value){loads.push(value);},
-    async loadFromLink(why, gen){links.push([why, gen]);},
+    async loadFromLink(why, gen){links.push([typeof why === 'function' ? why() : why, gen]);},
   });
-  await vm.runInContext(`(async () => {${loopback}\n${startup}\n})()`, context);
+  vm.runInContext(i18n, context);
+  await vm.runInContext(`(async () => {${sayHelpers}\n${loopback}\n${startup}\n})()`, context);
   return {loads, links, notes, handle, context};
 }
 
