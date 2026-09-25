@@ -812,7 +812,7 @@ class CityMapView {
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
-  paintFacts(key){
+  paintFacts(key, focusGrow = false){
     const card = this.card, st = card.querySelector('.st'), facts = card.querySelector('.facts'), fit = card.querySelector('.fit');
     const b = this.sites?.get(key);
     st.hidden = facts.hidden = fit.hidden = card.querySelector('.why').hidden = true;
@@ -848,6 +848,7 @@ class CityMapView {
       : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
     const grow = card.querySelector('.mf-grow');
     if(grow) grow.onclick = e => { e.preventDefault(); showGrowthRow(grow.dataset.grow); };
+    if(grow && focusGrow) grow.focus({preventScroll: true});
   }
   /* Who the building belongs to, and who trades from it. Both name the rival
      company where the save knows its name. */
@@ -1211,6 +1212,8 @@ class CityMapView {
   fillCard(){
     const card = this.card; if(!card) return;
     const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key), home = this.homes.get(key);
+    // A live refresh repaints the card; its Demand link keeps the focus it had.
+    const focusGrow = !!document.activeElement?.classList?.contains('mf-grow') && card.contains(document.activeElement);
     if(!key){ card.hidden = true; card.classList.remove('in'); this.paintFacts(null); return; }
     // Filled now, shown by showCard() once the camera has settled: until then
     // it stays out of the tab order and out of the live region.
@@ -1241,7 +1244,7 @@ class CityMapView {
     const go = card.querySelector('.go2');
     go.hidden = !b && !home;
     go.setAttribute('href', siteAddr || '#detail');
-    this.paintFacts(key);
+    this.paintFacts(key, focusGrow);
     if(card.classList.contains('in')) this.placeCard();
   }
   showCard(){
@@ -1327,12 +1330,20 @@ function showCityMap(){
   else cityMapPage.paintView();
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
-   category, a type and a neighbourhood already chosen. */
-function openFinder(preset = {}){
+   category, a type and a neighbourhood already chosen. `focus` hands the
+   keyboard to the first result (the switch when nothing matches), since the
+   control that opened the finder is on a page now hidden. */
+function openFinder(preset = {}, focus = false){
   if(!premises()) return;
   showPage("map");
   showCityMap();
-  cityMapPage.setFinder(preset);
+  const view = cityMapPage;
+  view.setFinder(preset);
+  if(focus) view.ready.then(ok => {
+    if(!ok) return;
+    const to = view.root.querySelector('.place.fr') || view.root.querySelector('[data-f="tog"]');
+    to?.focus({preventScroll: true});
+  });
 }
 function refreshCityMaps(){
   const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;

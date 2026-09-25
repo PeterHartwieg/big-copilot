@@ -143,6 +143,13 @@ test('a shop row carries its own way into Plan a chain; an office row has none, 
     await page.locator('#market .r[data-r="1"] .mk-plan').click();
     assert.equal(await page.evaluate(() => window.planned), 'ba:businesstype_supermarket');
     assert.equal(await page.evaluate(() => planType), 'ba:businesstype_supermarket');
+    // A second click on the type already open keeps the machines the player stepped.
+    await page.evaluate(() => { planCounts = {'ba:itemname_apple': 4}; showPage('growth'); showSub('growth', 'market'); });
+    await page.locator('#market .r[data-r="1"] .mk-plan').click();
+    assert.deepEqual(await page.evaluate(() => planCounts), {'ba:itemname_apple': 4});
+    await page.evaluate(() => showSub('growth', 'market'));
+    await page.locator('#market .r[data-r="0"] .mk-plan').click();
+    assert.deepEqual(await page.evaluate(() => [planType, planCounts]), ['ba:businesstype_cinema', {}]);
     // A product row plans the type that sells it; the office fee still plans nothing.
     await page.evaluate(() => { marketView = 'mine'; drawMarket(); });
     assert.deepEqual(await plans(), [null, 'ba:businesstype_supermarket']);

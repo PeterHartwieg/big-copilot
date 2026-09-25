@@ -1407,6 +1407,8 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
     await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="Hell\\'s Kitchen"]`).click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
+    // The cell is on a hidden page now, so the keyboard lands on the first result.
+    await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
     assert.equal(await page.locator('#cityMapPage [data-f="type"]').inputValue(), CLOTHES);
     assert.deepEqual(await rowKeys(page), [HK[0]]);   // Midtown is switched off
@@ -1449,7 +1451,14 @@ test("the finder's demand figure leads back to that type's Growth row", async ()
     assert.equal((await back.locator('b').textContent()).trim(), '77');
     assert.match(await back.getAttribute('data-tip'), /Clothing Store in every neighbourhood, on Growth › Demand/);
     // From the product views too: the link switches the grid back to By type.
-    await page.evaluate(() => { marketView = 'mine'; });
+    await page.evaluate(() => showPage('growth'));
+    await page.locator('#marketTools a[data-id="mine"]').click();
+    assert.equal(await page.locator('#marketTools a.on').textContent(), 'What I sell');
+    await page.evaluate(() => showPage('map'));
+    // A live refresh repaints the card and the link keeps the focus.
+    await back.focus();
+    await page.evaluate(() => refreshCityMaps());
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('mf-grow')), true);
     await back.click();
     assert.equal(await page.locator('#pageGrowth').isVisible(), true);
     assert.equal(await page.evaluate(() => marketView), 'types');
@@ -1460,6 +1469,31 @@ test("the finder's demand figure leads back to that type's Growth row", async ()
     const ringed = await page.$$eval(`#market .cell[data-r="${r}"]`, cs => cs.every(c => c.classList.contains('mk-arrive')));
     assert.equal(ringed, true);
     assert.equal(await page.locator('#market .mk-arrive').count(), 3);   // the label and its two cells
+    // The keyboard lands on the row's first cell that opens the finder.
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="0"][data-c="0"]')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a row the demand figure leads back to clears the sticky masthead', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.setViewportSize({width: 1440, height: 500});
+    await page.evaluate(() => { document.body.style.paddingBottom = '3000px'; });   // room to scroll the row up
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    await pick(page, HK[4]);
+    await page.locator('#cityMapPage .site .mf-grow').click();
+    // The Law Firm is the second row, so the page has to scroll to it.
+    const row = page.locator(`#market .r[data-slug="${LAW}"]`);
+    assert.equal(await row.getAttribute('data-r'), '1');
+    await page.waitForTimeout(600);   // settleScroll keeps the row in place for a few frames
+    const [top, mast] = await page.evaluate(sel => [document.querySelector(sel).getBoundingClientRect().top,
+      document.getElementById('mast').getBoundingClientRect().bottom], `#market .r[data-slug="${LAW}"]`);
+    assert.ok(top >= mast, `row top ${top} is under the masthead (${mast})`);
+    assert.ok(await page.evaluate(() => scrollY) > 0, 'the page scrolled');
+    // The focus follows, to the office row's cell that opens the finder.
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="1"]')), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

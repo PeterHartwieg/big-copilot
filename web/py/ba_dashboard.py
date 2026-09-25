@@ -12030,7 +12030,7 @@ g[data-series].off{opacity:0}
   transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,outline-color .15s,filter .15s;
 }
 .cell.hl{filter:brightness(1.18)}
-.cell:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
+.heat .cell[role=button]:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
 .heat .cell:not([role=button]){cursor:default}
 .heat .cell:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
 .cell .rv2{position:absolute;right:6px;bottom:5px;display:flex;gap:2px}
@@ -12040,6 +12040,7 @@ g[data-series].off{opacity:0}
    finder's Demand figure lands on rings once */
 .heat .r .mk-plan{font-size:11px;white-space:nowrap}
 .heat .mk-arrive{border-radius:6px;animation:sp-arrive 2.4s ease-out}
+.heat .r{scroll-margin-top:116px}  /* clears the sticky masthead, as a section does */
 
 /* waves ------------------------------------------------------------------ */
 .waves{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
@@ -13057,6 +13058,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .r{min-width:0;padding-right:6px;font-size:12px;line-height:1.25;overflow-wrap:anywhere}
   .heat .r .mk-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
   .heat .r small{font-size:10px}
+  .heat .r .mk-plan{white-space:normal}
   .heat .cell .rv2{left:2px;right:2px;gap:1px;justify-content:flex-end;overflow:hidden}
   .heat .cell .rv2 i{width:2px;height:2px}
   .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
@@ -22647,7 +22649,7 @@ const wireHeat = once(() => {
      neighbourhood left standing; Enter and Space do what a click does. */
   on("click", ".heat .cell", c => {
     const go = finderPreset(c.dataset.slug, c.dataset.hood);
-    if(go) openFinder(go);
+    if(go) openFinder(go, true);
   });
   on("keydown", ".heat .cell[role=button]", (c, e) => {
     if(e.key !== "Enter" && e.key !== " ") return;
@@ -22655,7 +22657,8 @@ const wireHeat = once(() => {
   });
   on("click", "#market .mk-plan[data-plan]", (a, e) => {
     e.preventDefault();
-    planType = a.dataset.plan; planCounts = {};
+    // The type already open keeps the machines the player stepped.
+    if(planType !== a.dataset.plan){ planType = a.dataset.plan; planCounts = {}; }
     drawPlan();
     reveal("secPlan");
   });
@@ -22695,10 +22698,16 @@ function showGrowthRow(slug){
   } else if(!q(sel)) drawMarket();
   reveal("secMarket", "push", q(sel) ? sel : null);
   const row = q(sel); if(!row) return;
-  [row, ...$$(`#market .cell[data-r="${CSS.escape(row.dataset.r)}"]`)].forEach(el => {
+  const cells = $$(`#market .cell[data-r="${CSS.escape(row.dataset.r)}"]`);
+  [row, ...cells].forEach(el => {
     el.classList.remove("mk-arrive"); void el.offsetWidth; el.classList.add("mk-arrive");
     setTimeout(() => el.classList.remove("mk-arrive"), 2600);
   });
+  /* The link that brought the player here is on a hidden page now; the
+     keyboard lands on the row it came for. */
+  const to = cells.find(c => c.getAttribute("role") === "button") || row;
+  if(!to.hasAttribute("tabindex")) to.setAttribute("tabindex", "-1");
+  to.focus({preventScroll: true});
 }
 
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */
